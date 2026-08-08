@@ -667,6 +667,28 @@ Two separate rules:
 
 2. **No inline `//` comments that explain *what* the code does** — well-named identifiers do that. Only add an inline comment when the *why* is non-obvious: a hidden constraint, a subtle invariant, a workaround for a specific quirk, or a configuration value whose purpose isn't clear from its name.
 
+### Variable declarations
+
+**Explicit types are preferred over `var`** (developer decision, 2026-08-08). This reverses the
+codebase's dominant existing pattern — a live measurement during #244 found roughly 13,298 existing
+`var` declarations across the solution, far too many to convert in one pass or even one milestone.
+
+**Boyscout rule, not a bulk rewrite:** whenever you edit a file for any other reason, convert that
+file's `var` declarations to explicit types in the same commit — mirroring the `[Subsystem - Phase]`
+logging boyscout rule below. Do not go looking for `var` usages outside files you're already
+touching, and do not defer this to a dedicated cleanup pass; #244's own measurement is why a bulk
+pass isn't the plan.
+
+**The one mandatory exception: anonymous types can never take an explicit type name** (`var x = new
+{ A = 1 };` has no other legal spelling) — leave `var` in place wherever the right-hand side is an
+anonymous type, a tuple literal relying on inferred element names, or any other construct with no
+expressible type name (e.g. some LINQ query-expression intermediates).
+
+`IDE0008` ("use explicit type") is **not** escalated in `.editorconfig` — turning it on would flag
+all ~13,298 existing occurrences as build warnings immediately, which would break the 0-warnings
+policy long before the boyscout rule could work through them. Do not escalate it without first
+reducing the outstanding count to something the build can realistically stay green against.
+
 ### Blazor code style
 
 These rules apply to all Blazor components and pages:
