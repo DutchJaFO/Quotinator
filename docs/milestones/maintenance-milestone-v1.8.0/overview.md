@@ -60,6 +60,7 @@ and #255/#256 do not carry that urgency.
 | [#277](https://github.com/DutchJaFO/Quotinator/issues/277) | Gate startup backups on each action's own real-work signal, not an inferred flag; add a storage pre-flight check | Planning | Not yet determined | No plan doc yet |
 | [#278](https://github.com/DutchJaFO/Quotinator/issues/278) | Add a startup notification system surfaced in the #263 modals | Planning | Not yet determined | No plan doc yet |
 | [#279](https://github.com/DutchJaFO/Quotinator/issues/279) | Standardise endpoint naming (WithName/WithSummary) across CRUD and action endpoints — includes breaking operationId renames | Planning | Not yet determined | No plan doc yet |
+| [#280](https://github.com/DutchJaFO/Quotinator/issues/280) | Show a startup "please wait" page while the database is created/updated/seeded, with progress if feasible | Planning | Not yet determined | No plan doc yet |
 
 ---
 
@@ -111,6 +112,11 @@ same release.
 direction (2026-08-09).** #279's endpoint-naming standardisation includes breaking `WithName`
 (OpenAPI `operationId`) renames; #278's startup notification system is the intended vehicle for
 surfacing that kind of change to operators. #279 must not land before #278 exists to announce it.
+
+**#280 depends on #278 (implementation-order) — per explicit developer direction (2026-08-09).**
+#280's bonus "current startup phase" progress display is meant to reuse #278's notification/status
+infrastructure rather than invent a second, parallel status-reporting mechanism; #280 must not land
+before #278 exists to build on.
 
 None of the remaining issues block each other beyond these relationships.
 
@@ -218,6 +224,9 @@ None of the remaining issues block each other beyond these relationships.
     endpoints, absorbing #269's own `WithName`/log-tag duplication finding; depends on #278 landing
     first so its breaking `operationId` renames can be announced via the new notification system
     (2026-08-09)
+36. **#280** — Show a startup "please wait" page while the database is created/updated/seeded, with
+    progress if feasible (split out of #269's own T1 verification, 2026-08-09); depends on #278
+    landing first so its bonus progress display can reuse the new notification/status infrastructure
 
 ---
 
