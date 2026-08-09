@@ -258,6 +258,7 @@
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/269-loggermessage-pattern-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/271-actionpayload-converteroptions-rename-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/272-audit-response-dto-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/278-startup-notification-system-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
