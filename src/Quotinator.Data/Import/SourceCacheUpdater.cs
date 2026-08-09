@@ -10,8 +10,18 @@ public sealed class SourceCacheUpdater(
     SourceCacheOptions options,
     ILogger<SourceCacheUpdater> logger) : ISourceCacheUpdater
 {
-    /// <summary>Name of the <see cref="IHttpClientFactory"/> client registered for this component, with its 5 s timeout configured at registration time.</summary>
+    /// <summary>Name of the <see cref="IHttpClientFactory"/> client registered for this component. Its timeout is configured at registration time, overridable via <c>Quotinator:SourceRefreshTimeoutSeconds</c> — see <see cref="DefaultHttpTimeoutSeconds"/>.</summary>
     public const string HttpClientName = "SourceCacheUpdater";
+
+    /// <summary>
+    /// Default <see cref="HttpClientName"/> timeout in seconds, used when <c>Quotinator:SourceRefreshTimeoutSeconds</c>
+    /// is not set. A slow/unreachable upstream must never block startup, reseed, or reset indefinitely — the
+    /// updater always falls back to the existing cached/local file on timeout. 30 s (raised from 5 s, 2026-08-09):
+    /// a cold HttpClient's first request (fresh DNS + TCP + TLS) can legitimately exceed 5 s even against a
+    /// healthy endpoint, which was tripping the fallback path more often than a genuinely unreachable upstream
+    /// warranted.
+    /// </summary>
+    public const int DefaultHttpTimeoutSeconds = 30;
 
     /// <inheritdoc/>
     public async Task<SourceCacheResolution> ResolveAsync(

@@ -184,6 +184,8 @@ var includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeD
 // downloaded copy is considered fresh before the next check re-verifies it.
 var autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoUpdateSources", true);
 var sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
+var sourceRefreshTimeoutSeconds = builder.Configuration.GetValue<int?>("Quotinator:SourceRefreshTimeoutSeconds")
+    ?? SourceCacheUpdater.DefaultHttpTimeoutSeconds;
 
 // #249: once a seeded batch reaches zero pending actions, its Import_Action (conflict-resolution)
 // rows have served their purpose and are purged automatically — separate settings per origin so a
@@ -364,9 +366,9 @@ builder.Services.AddSingleton<IUniverseNameResolver, UniverseNameResolver>();
 builder.Services.AddSingleton<IManifestSeedPlanner, ManifestSeedPlanner>();
 builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepository>();
 
-// 5 s timeout: a slow/unreachable upstream must never block startup, reseed, or reset for longer
-// than a brief, bounded check — the updater always falls back to the existing cached/local file.
-builder.Services.AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
+// Overridable via Quotinator:SourceRefreshTimeoutSeconds — see SourceCacheUpdater.DefaultHttpTimeoutSeconds
+// for why 30 s is the default.
+builder.Services.AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(sourceRefreshTimeoutSeconds));
 
 // Converters are stateless, hardcoded per source — no DI registration needed for the individual
 // plugin instances themselves (CLAUDE.md's DI policy: bare `new` is permitted for a computed value
