@@ -59,7 +59,7 @@ and #255/#256 do not carry that urgency.
 | [#276](https://github.com/DutchJaFO/Quotinator/issues/276) | Startup backup safety-net improvements: correct backup gating + notification system (parent tracking issue for #277/#278) | Planning | N/A (parent — no code of its own) | No plan doc — tracking issue only |
 | [#277](https://github.com/DutchJaFO/Quotinator/issues/277) | Gate startup backups on each action's own real-work signal, not an inferred flag; add a storage pre-flight check | Planning | Not yet determined | No plan doc yet |
 | [#278](https://github.com/DutchJaFO/Quotinator/issues/278) | Add a startup notification system surfaced in the #263 modals | Waiting for release | T1 ✅ T2 ✅ | [278-startup-notification-system-plan.md](278-startup-notification-system-plan.md) |
-| [#279](https://github.com/DutchJaFO/Quotinator/issues/279) | Standardise endpoint naming (WithName/WithSummary) across CRUD and action endpoints — includes breaking operationId renames | Planning | T1, T2 | [279-endpoint-naming-standardization-plan.md](279-endpoint-naming-standardization-plan.md) |
+| [#279](https://github.com/DutchJaFO/Quotinator/issues/279) | Standardise endpoint naming (WithName/WithSummary) across CRUD and action endpoints — includes breaking operationId renames | Waiting for release | T1 ✅ T2 ✅ | [279-endpoint-naming-standardization-plan.md](279-endpoint-naming-standardization-plan.md) |
 | [#280](https://github.com/DutchJaFO/Quotinator/issues/280) | Show a startup "please wait" page while the database is created/updated/seeded, with progress if feasible | Planning | Not yet determined | No plan doc yet |
 
 ---

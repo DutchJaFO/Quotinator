@@ -45,6 +45,7 @@ verification command here in the same commit that fixes it — the list only gro
 31. [Audit-trail bulk export, date-range discovery, and conflict-resolution data auto-purge](#31-audit-trail-bulk-export-date-range-discovery-and-conflict-resolution-data-auto-purge-249) (#249)
 32. [Reset is a full wipe with no reseed](#32-reset-is-a-full-wipe-with-no-reseed-156) (#156)
 33. [Startup notification system](#33-startup-notification-system-278) (#278)
+34. [Standardised endpoint WithName/WithSummary, including breaking operationId renames](#34-standardised-endpoint-withnamewithsummary-including-breaking-operationid-renames-279) (#279)
 
 ---
 
@@ -1476,4 +1477,38 @@ already-expired row, one already-dismissed row):**
   wiped by Reset, same as every other table).
 
 Clean up: `docker rm -f smoke278`.
+
+## 34. Standardised endpoint WithName/WithSummary, including breaking operationId renames (#279)
+
+```bash
+docker rm -f smoke279
+MSYS_NO_PATHCONV=1 docker run -d --name smoke279 -p 8080:8080 quotinator:local
+sleep 15
+curl -s "http://localhost:8080/openapi/v1.json" > /tmp/spec279.json
+grep -o '"operationId":"GetAllImportBatches"' /tmp/spec279.json
+grep -o '"operationId":"GetAllFileResources"' /tmp/spec279.json
+grep -o '"operationId":"GetImportBatches"\|"operationId":"GetFileResources"' /tmp/spec279.json
+grep -o '"summary":"List [a-z ]*"' /tmp/spec279.json | sort -u
+```
+- The spec must contain `operationId: GetAllImportBatches` and `operationId: GetAllFileResources` (the
+  two breaking renames) — and must **not** contain the old `GetImportBatches`/`GetFileResources`
+  values anywhere.
+- Every List-endpoint `summary` must read `"List x"` (lowercase plural noun) — in particular
+  `"List people"`, `"List quotes"`, and `"List series"` must appear; `"All people (paginated)"`,
+  `"All quotes (paginated)"`, and `"List Series"` (capitalised) must not.
+
+**Scalar UI**: visit `http://localhost:8080/scalar/v1` and spot-check a few GetById operations (e.g.
+Character, Quote, Import batch, Captured import file) — every summary must read `"X by ID"` with a
+capitalised `ID`, no `"...by id"` remaining.
+
+**Log tag consistency**: `GET /api/v1/quotes/{id}` against a real quote id — the container log line
+must read `[Api - GetQuoteById]`, not the old, already-mismatched `[Api - GetById]`.
+```bash
+curl -s "http://localhost:8080/api/v1/quotes/random" | grep -o '"id":"[a-f0-9-]*"' | head -1
+# use that id:
+curl -s "http://localhost:8080/api/v1/quotes/<id>" > /dev/null
+docker logs smoke279 2>&1 | grep "GetQuoteById\|Api - GetById"
+```
+
+Clean up: `docker rm -f smoke279`.
 

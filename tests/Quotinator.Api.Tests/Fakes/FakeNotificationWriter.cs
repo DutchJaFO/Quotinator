@@ -13,12 +13,16 @@ internal sealed class FakeNotificationWriter : INotificationWriter
     /// <summary>Records the trigger every <see cref="DismissByTriggerAsync"/> call was made with — lets a wiring test confirm the caller passed the right value without depending on database side effects.</summary>
     public List<NotificationDismissTrigger> DismissByTriggerCalls { get; } = [];
 
+    /// <summary>Records every message passed to <see cref="WriteAsync"/> — lets a test confirm whether a write actually happened without depending on database side effects.</summary>
+    public List<string> WrittenMessages { get; } = [];
+
     /// <summary>Registers a fixed notification for a test to look up by id.</summary>
     public void Seed(NotificationEntity notification) => _notifications[notification.Id] = notification;
 
     public Task<NotificationEntity> WriteAsync(
         NotificationType type, string message, DateTime? expiresAt = null, NotificationDismissTrigger? dismissTrigger = null)
     {
+        WrittenMessages.Add(message);
         var entity = new NotificationEntity
         {
             Type    = new SafeValue<NotificationType?>(type.ToString(), type),

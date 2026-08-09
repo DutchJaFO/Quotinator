@@ -457,6 +457,36 @@ move under `/masterdata/`.** Conversations is a *consumer* of masterdata (it emb
 reference Sources/Characters), not a masterdata entity itself. Stated explicitly here so the next reader
 doesn't reasonably assume the omission was an oversight.
 
+### Endpoint naming convention (WithName/WithSummary)
+
+Every endpoint's `.WithName(...)`/`.WithSummary(...)` pair follows one of three shapes, chosen by what
+kind of operation the endpoint performs:
+
+- **List** (returns a full/paginated collection): `WithName("GetAllX")` + `WithSummary("List x")`
+  (lowercase plural noun).
+- **GetById** (returns a single item by id): `WithName("GetXById")` + `WithSummary("X by ID")`
+  (capitalised `ID`).
+- **Action** (does something — import, decide, apply, discard, reset, dismiss, etc.): `WithName` is a
+  PascalCase verb+object matching the action; `WithSummary` is an imperative-verb-first phrase (e.g.
+  `"Reset the database"`, `"Apply every decided action in a batch"`, `"Dismiss a notification"`).
+
+A genuinely different operation shape may deviate — the point of a standard is to deviate only with a
+reason, documented at the call site. `GetRandomQuotes`/`SearchQuotes` don't return a full list, so a
+`"List X"` name/summary would misdescribe them; `ImportQuotes` is one handler deliberately doing two
+things (import a new file, or apply an already-staged batch). These stay as-is.
+
+**`WithName`'s value becomes the OpenAPI `operationId`, which a generated client can depend on —
+renaming it is a breaking change.** Treat it accordingly: batch renames into one release and call them
+out in that release's changelog highlights, the same way a security fix would be (#279).
+
+**Every endpoint's `.WithName(...)` value is held in a `private const string` referenced by both the
+`.WithName(...)` call and its own logging tag** — `logger.LogPageQuery($"[Api - {GetAllXName}]", ...)`,
+never a hardcoded `"[Api - X]"` literal typed out a second time. A `$"..."` interpolation composed
+entirely of `const string` operands is itself a compile-time `const string` in C# — this costs nothing
+at runtime and never risks CA1873, so there is no performance tradeoff for tying the two together. This
+is what actually prevents the "same name spelled out twice with no compiler link" class of drift #269
+introduced (a hardcoded tag duplicating the endpoint's own `WithName`) and #279 fixed.
+
 ### Masterdata reference shape
 
 Any FK-valued field on a masterdata response DTO (e.g. a Source's link to its Series, a Character's links

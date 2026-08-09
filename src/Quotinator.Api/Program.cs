@@ -15,6 +15,7 @@ using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
+using Quotinator.Data.Enums;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Helpers;
@@ -550,6 +551,33 @@ catch (Exception ex)
         "stopping the app, deleting the database file, and restarting.";
     startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
     dbHealth.MarkFailed(failureReason);
+}
+
+// #279: first concrete producer for #278's notification mechanism — announces the two breaking
+// operationId renames this release ships. Idempotent across restarts (checked via NotificationSeeding's
+// own dedupe-key lookup against notification history), so this call is safe to leave in place
+// indefinitely rather than needing to be removed after the first deploy. Deliberately outside the
+// critical DB-init try/catch above and in its own non-fatal guard: a failure here (e.g. a test's
+// NoOpDatabaseInitializer, which never creates System_Notification) must never mark the whole app
+// unhealthy — writing an announcement notification is inherently non-critical, unlike schema init itself.
+if (dbHealth.IsHealthy)
+{
+    try
+    {
+        await Quotinator.Api.Startup.NotificationSeeding.SeedOnceAsync(
+            app.Services.GetRequiredService<INotificationReader>(),
+            app.Services.GetRequiredService<INotificationWriter>(),
+            NotificationType.Warning,
+            dedupeKey: "GetAllImportBatches",
+            message: "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
+                      "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
+                      "This only affects a generated API client keyed by operation ID — routes and behaviour are unchanged.");
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Server] Failed to seed the #279 operation-id-rename notification — non-fatal, startup continues.");
+    }
 }
 
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();

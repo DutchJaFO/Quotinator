@@ -21,6 +21,11 @@ internal static class SoundCueEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
+    private const string GetAllSoundCuesName = "GetAllSoundCues";
+    private const string GetSoundCueByIdName = "GetSoundCueById";
+
     internal static void MapSoundCueEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/masterdata/soundcues")
@@ -28,14 +33,14 @@ internal static class SoundCueEndpoints
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
         group.MapGet("/", GetAll)
-             .WithName("GetAllSoundCues")
+             .WithName(GetAllSoundCuesName)
              .WithSummary("List sound cues")
              .WithDescription(
                  "Returns a paginated list of sound cues. Maximum `pageSize` is 500. " +
                  "`pageSize=0` returns every sound cue as a single page.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetSoundCueById")
+             .WithName(GetSoundCueByIdName)
              .WithSummary("Sound cue by ID")
              .WithDescription("Returns a single sound cue by ID. Matches case-insensitively. Returns 404 if not found.");
     }
@@ -47,7 +52,7 @@ internal static class SoundCueEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0-500). 0 means every sound cue as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogPageQuery("[Api - GetAllSoundCues]", page, pageSize);
+        logger.LogPageQuery($"[Api - {GetAllSoundCuesName}]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -71,7 +76,7 @@ internal static class SoundCueEndpoints
         ILogger<Log> logger,
         IListableRepository<SoundCueEntity> repository)
     {
-        logger.LogIdQuery("[Api - GetSoundCueById]", id);
+        logger.LogIdQuery($"[Api - {GetSoundCueByIdName}]", id);
 
         SoundCueEntity? entity = Guid.TryParse(id, out var soundCueId)
             ? await repository.GetByIdAsync(soundCueId)

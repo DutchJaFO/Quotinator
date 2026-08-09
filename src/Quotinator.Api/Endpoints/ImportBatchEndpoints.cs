@@ -62,7 +62,7 @@ internal static class ImportBatchEndpoints
                 [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
             return Results.Ok(mapped);
         })
-        .WithName("GetImportBatches")
+        .WithName("GetAllImportBatches")
         .WithSummary("List import batches")
         .Produces<PagedItems<ImportBatchResponse>>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
@@ -81,7 +81,7 @@ internal static class ImportBatchEndpoints
             return Shared.NotFoundResult.OkOrNotFound(response, localizer, ApiMessages.ImportBatchNotFound);
         })
         .WithName("GetImportBatchById")
-        .WithSummary("Import batch by id")
+        .WithSummary("Import batch by ID")
         .Produces<ImportBatchResponse>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status404NotFound)
         .WithDescription("Returns a single import batch by id. Matches case-insensitively. Returns `404` if not found.");

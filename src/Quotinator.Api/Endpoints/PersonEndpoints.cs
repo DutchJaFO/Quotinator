@@ -19,6 +19,11 @@ internal static class PersonEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
+    private const string GetAllPeopleName = "GetAllPeople";
+    private const string GetPersonByIdName = "GetPersonById";
+
     internal static void MapPersonEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/masterdata/people")
@@ -26,14 +31,14 @@ internal static class PersonEndpoints
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
         group.MapGet("/", GetAll)
-             .WithName("GetAllPeople")
-             .WithSummary("All people (paginated)")
+             .WithName(GetAllPeopleName)
+             .WithSummary("List people")
              .WithDescription(
                  "Returns a paginated list of people (real individuals who said or wrote a quote). " +
                  "No entity-specific filters yet.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetPersonById")
+             .WithName(GetPersonByIdName)
              .WithSummary("Person by ID")
              .WithDescription(
                  "Returns a single person by UUID. Returns 404 if not found. `{id}` matches case-insensitively.");
@@ -46,7 +51,7 @@ internal static class PersonEndpoints
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
         IListableRepository<PersonEntity> repository = null!)
     {
-        logger.LogPageQuery("[Api - GetAllPeople]", page, pageSize);
+        logger.LogPageQuery($"[Api - {GetAllPeopleName}]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -65,7 +70,7 @@ internal static class PersonEndpoints
         ILogger<Log> logger,
         IListableRepository<PersonEntity> repository)
     {
-        logger.LogIdQuery("[Api - GetPersonById]", id);
+        logger.LogIdQuery($"[Api - {GetPersonByIdName}]", id);
 
         PersonResponse? response = Guid.TryParse(id, out var personId)
             ? await repository.GetByIdAsync(personId) is { } person ? ToResponse(person) : null

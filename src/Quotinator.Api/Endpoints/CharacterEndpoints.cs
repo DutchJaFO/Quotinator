@@ -22,6 +22,11 @@ internal static class CharacterEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
+    private const string GetAllCharactersName = "GetAllCharacters";
+    private const string GetCharacterByIdName = "GetCharacterById";
+
     internal static void MapCharacterEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/masterdata/characters")
@@ -29,7 +34,7 @@ internal static class CharacterEndpoints
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
         group.MapGet("/", GetAll)
-             .WithName("GetAllCharacters")
+             .WithName(GetAllCharactersName)
              .WithSummary("List characters")
              .WithDescription(
                  "Returns a paginated list of characters, each with the Sources it appears in (#179) as " +
@@ -37,7 +42,7 @@ internal static class CharacterEndpoints
                  "page/pageSize semantics.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetCharacterById")
+             .WithName(GetCharacterByIdName)
              .WithSummary("Character by ID")
              .WithDescription("Returns a single character with the Sources it appears in. Returns 404 if not found. Matches `id` case-insensitively.");
     }
@@ -50,7 +55,7 @@ internal static class CharacterEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogPageQuery("[Api - GetAllCharacters]", page, pageSize);
+        logger.LogPageQuery($"[Api - {GetAllCharactersName}]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -79,7 +84,7 @@ internal static class CharacterEndpoints
         IListableRepository<CharacterEntity> repository,
         ICharacterSourceLinkReader linkReader)
     {
-        logger.LogIdQuery("[Api - GetCharacterById]", id);
+        logger.LogIdQuery($"[Api - {GetCharacterByIdName}]", id);
 
         if (!Guid.TryParse(id, out var characterId))
             return NotFoundResult.OkOrNotFound<CharacterResponse>(null, localizer, ApiMessages.CharacterNotFound);

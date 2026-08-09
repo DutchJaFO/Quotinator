@@ -65,7 +65,7 @@ internal static class ImportFileResourceEndpoints
                 [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
             return Results.Ok(mapped);
         })
-        .WithName("GetFileResources")
+        .WithName("GetAllFileResources")
         .WithSummary("List captured import files")
         .Produces<PagedItems<FileResourceResponse>>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
@@ -93,7 +93,7 @@ internal static class ImportFileResourceEndpoints
             return Results.Ok(ToResponse(fileResource, [.. batchIds.Select(b => b.ToCanonicalId())]));
         })
         .WithName("GetFileResourceById")
-        .WithSummary("Captured import file by id")
+        .WithSummary("Captured import file by ID")
         .Produces<FileResourceResponse>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status404NotFound)
         .WithDescription(

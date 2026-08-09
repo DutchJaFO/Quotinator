@@ -22,6 +22,11 @@ internal static class SeriesEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
+    private const string GetAllSeriesName = "GetAllSeries";
+    private const string GetSeriesByIdName = "GetSeriesById";
+
     internal static void MapSeriesEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/masterdata/series")
@@ -29,15 +34,15 @@ internal static class SeriesEndpoints
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
         group.MapGet("/", GetAll)
-             .WithName("GetAllSeries")
-             .WithSummary("List Series")
+             .WithName(GetAllSeriesName)
+             .WithSummary("List series")
              .WithDescription(
                  "Returns a paginated list of Series, each with the Universe it belongs to (if any) as a " +
                  "minimal {id, name} reference. Maximum `pageSize` is 500; `pageSize=0` returns every " +
                  "Series as a single page.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetSeriesById")
+             .WithName(GetSeriesByIdName)
              .WithSummary("Series by ID")
              .WithDescription(
                  "Returns a single Series by ID. Returns 404 if not found. `{id}` matches case-insensitively.");
@@ -51,7 +56,7 @@ internal static class SeriesEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogPageQuery("[Api - GetAllSeries]", page, pageSize);
+        logger.LogPageQuery($"[Api - {GetAllSeriesName}]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -82,7 +87,7 @@ internal static class SeriesEndpoints
         IListableRepository<SeriesEntity> repository,
         ISeriesUniverseReferenceReader universeReader)
     {
-        logger.LogIdQuery("[Api - GetSeriesById]", id);
+        logger.LogIdQuery($"[Api - {GetSeriesByIdName}]", id);
 
         if (!Guid.TryParse(id, out var seriesId))
             return NotFoundResult.OkOrNotFound<SeriesResponse>(null, localizer, ApiMessages.SeriesNotFound);

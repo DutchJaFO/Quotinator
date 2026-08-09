@@ -22,6 +22,11 @@ internal static class SourceEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
+    private const string GetAllSourcesName = "GetAllSources";
+    private const string GetSourceByIdName = "GetSourceById";
+
     internal static void MapSourceEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/masterdata/sources")
@@ -29,7 +34,7 @@ internal static class SourceEndpoints
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
         group.MapGet("/", GetAll)
-             .WithName("GetAllSources")
+             .WithName(GetAllSourcesName)
              .WithSummary("List sources")
              .WithDescription(
                  "Returns a paginated list of Sources — the films, television series, books, and other " +
@@ -37,7 +42,7 @@ internal static class SourceEndpoints
                  "page/pageSize semantics.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetSourceById")
+             .WithName(GetSourceByIdName)
              .WithSummary("Source by ID")
              .WithDescription("Returns a single Source by UUID. Returns 404 if not found. Matches `id` case-insensitively.");
     }
@@ -50,7 +55,7 @@ internal static class SourceEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogPageQuery("[Api - GetAllSources]", page, pageSize);
+        logger.LogPageQuery($"[Api - {GetAllSourcesName}]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -81,7 +86,7 @@ internal static class SourceEndpoints
         IListableRepository<SourceEntity> repository,
         ISourceSeriesReferenceReader seriesReader)
     {
-        logger.LogIdQuery("[Api - GetSourceById]", id);
+        logger.LogIdQuery($"[Api - {GetSourceByIdName}]", id);
 
         if (!Guid.TryParse(id, out var guid))
             return NotFoundResult.OkOrNotFound<SourceResponse>(null, localizer, ApiMessages.SourceNotFound);

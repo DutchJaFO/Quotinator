@@ -21,6 +21,11 @@ internal static class UniverseEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
+    private const string GetAllUniversesName = "GetAllUniverses";
+    private const string GetUniverseByIdName = "GetUniverseById";
+
     internal static void MapUniverseEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/masterdata/universes")
@@ -28,14 +33,14 @@ internal static class UniverseEndpoints
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
         group.MapGet("/", GetAll)
-             .WithName("GetAllUniverses")
+             .WithName(GetAllUniversesName)
              .WithSummary("List universes")
              .WithDescription(
                  "Returns a paginated list of universes. Maximum `pageSize` is 500. " +
                  "`pageSize=0` returns every universe as a single page.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetUniverseById")
+             .WithName(GetUniverseByIdName)
              .WithSummary("Universe by ID")
              .WithDescription("Returns a single universe by ID. Matches case-insensitively. Returns 404 if not found.");
     }
@@ -47,7 +52,7 @@ internal static class UniverseEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0-500). 0 means every universe as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogPageQuery("[Api - GetAllUniverses]", page, pageSize);
+        logger.LogPageQuery($"[Api - {GetAllUniversesName}]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -71,7 +76,7 @@ internal static class UniverseEndpoints
         ILogger<Log> logger,
         IListableRepository<UniverseEntity> repository)
     {
-        logger.LogIdQuery("[Api - GetUniverseById]", id);
+        logger.LogIdQuery($"[Api - {GetUniverseByIdName}]", id);
 
         UniverseEntity? entity = Guid.TryParse(id, out var universeId)
             ? await repository.GetByIdAsync(universeId)

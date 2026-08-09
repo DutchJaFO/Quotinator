@@ -21,6 +21,12 @@ internal static class QuoteEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as a const (#279) so .WithName(...) and GetById's own logging tag can never drift apart —
+    // see CLAUDE.md's "Endpoint naming convention" section. Fixes a genuine pre-existing bug, not just
+    // a DRY cleanup: the old hardcoded tag was "[Api - GetById]", which never matched
+    // WithName("GetQuoteById") in the first place.
+    private const string GetQuoteByIdName = "GetQuoteById";
+
     internal static void MapQuoteEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/quotes")
@@ -63,7 +69,7 @@ internal static class QuoteEndpoints
                  "Use `lang` to request a specific language.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetQuoteById")
+             .WithName(GetQuoteByIdName)
              .WithSummary("Quote by ID")
              .Produces<QuoteResponse>(StatusCodes.Status200OK)
              .Produces<ProblemDetails>(StatusCodes.Status404NotFound)
@@ -73,7 +79,7 @@ internal static class QuoteEndpoints
 
         group.MapGet("/", GetAll)
              .WithName("GetAllQuotes")
-             .WithSummary("All quotes (paginated)")
+             .WithSummary("List quotes")
              .Produces<PagedResult<QuoteResponse>>(StatusCodes.Status200OK)
              .WithDescription(
                  "Returns a paginated list of all quotes. " +
@@ -283,7 +289,7 @@ internal static class QuoteEndpoints
         ILogger<Log> logger,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
-        logger.LogIdWithLang("[Api - GetById]", id, lang);
+        logger.LogIdWithLang($"[Api - {GetQuoteByIdName}]", id, lang);
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 

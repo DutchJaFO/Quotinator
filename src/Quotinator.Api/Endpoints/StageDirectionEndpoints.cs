@@ -21,6 +21,11 @@ internal static class StageDirectionEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
+    private const string GetAllStageDirectionsName = "GetAllStageDirections";
+    private const string GetStageDirectionByIdName = "GetStageDirectionById";
+
     internal static void MapStageDirectionEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/masterdata/stagedirections")
@@ -28,14 +33,14 @@ internal static class StageDirectionEndpoints
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
         group.MapGet("/", GetAll)
-             .WithName("GetAllStageDirections")
+             .WithName(GetAllStageDirectionsName)
              .WithSummary("List stage directions")
              .WithDescription(
                  "Returns a paginated list of stage directions. Maximum `pageSize` is 500. " +
                  "`pageSize=0` returns every stage direction as a single page.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetStageDirectionById")
+             .WithName(GetStageDirectionByIdName)
              .WithSummary("Stage direction by ID")
              .WithDescription("Returns a single stage direction by ID. Matches case-insensitively. Returns 404 if not found.");
     }
@@ -47,7 +52,7 @@ internal static class StageDirectionEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0-500). 0 means every stage direction as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogPageQuery("[Api - GetAllStageDirections]", page, pageSize);
+        logger.LogPageQuery($"[Api - {GetAllStageDirectionsName}]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -71,7 +76,7 @@ internal static class StageDirectionEndpoints
         ILogger<Log> logger,
         IListableRepository<StageDirectionEntity> repository)
     {
-        logger.LogIdQuery("[Api - GetStageDirectionById]", id);
+        logger.LogIdQuery($"[Api - {GetStageDirectionByIdName}]", id);
 
         StageDirectionEntity? entity = Guid.TryParse(id, out var stageDirectionId)
             ? await repository.GetByIdAsync(stageDirectionId)
