@@ -1512,3 +1512,54 @@ docker logs smoke279 2>&1 | grep "GetQuoteById\|Api - GetById"
 
 Clean up: `docker rm -f smoke279`.
 
+## 35. Startup backup real-work gating and storage pre-flight check (#277)
+
+```bash
+docker volume rm smoke277-data 2>/dev/null
+docker rm -f smoke277
+MSYS_NO_PATHCONV=1 docker run -d --name smoke277 -p 8080:8080 -v smoke277-data:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest quotinator:local
+sleep 15
+docker logs smoke277 2>&1 | grep "Database - Backup"
+# Fresh baseline install must produce no [Database - Backup] lines at all.
+```
+
+```bash
+docker restart smoke277
+sleep 10
+docker logs smoke277 --since 15s 2>&1 | grep "Database - Backup\|schema is up to date"
+# A healthy restart (schema up to date, content already seeded) must show "schema is up to date"
+# and no [Database - Backup] line — /data/backups should not even exist yet:
+docker exec smoke277 sh -c "ls /data/backups 2>&1 || echo 'no backups dir — correct'"
+```
+
+```bash
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:8080/api/v1/admin/database/reset"
+docker exec smoke277 sh -c "ls /data/backups | wc -l"
+# Reset must take exactly one backup (unconditional — Reset is the highest-risk operation).
+```
+
+```bash
+docker restart smoke277
+sleep 10
+docker logs smoke277 --since 15s 2>&1 | grep "Database - Backup"
+docker exec smoke277 sh -c "ls /data/backups | wc -l"
+# The startup immediately after a Reset must ALSO take a backup — content-seed has real work to do
+# (Quotes empty again) even though the schema itself needed no migration. This is the exact case a
+# MigrationApplied-based gate was found to miss. Backup count must now be 2.
+```
+
+```bash
+docker rm -f smoke277
+docker run -d --name smoke277 -p 8080:8080 -v smoke277-data:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest -e Quotinator__MaxBackupStorageGb=0 quotinator:local
+sleep 5
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:8080/api/v1/admin/database/reset"
+docker logs smoke277 --since 10s 2>&1 | grep "LogBackupSkippedBudgetExceeded"
+docker exec smoke277 sh -c "ls /data/backups | wc -l"
+# With the budget already exceeded, Reset must still succeed (200, database rebuilt) — the backup is
+# skipped with a warning log, not an exception, and the backup count must stay unchanged at 2.
+```
+
+Clean up: `docker rm -f smoke277 && docker volume rm smoke277-data`.
+

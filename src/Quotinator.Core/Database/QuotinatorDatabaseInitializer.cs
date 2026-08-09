@@ -45,6 +45,7 @@ namespace Quotinator.Core.Database;
 /// <param name="sourceFileOverrideRegistry">Tracks which seed source files have a curator-authored override applied, so an override is not silently reapplied or skipped.</param>
 /// <param name="fileResources">Repository used to record each seeded/imported file as a <c>FileResource</c> row.</param>
 /// <param name="baseline">Optional consolidated DDL for Quotinator.Core's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
+/// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277). Defaults to a real implementation when omitted.</param>
 public sealed class QuotinatorDatabaseInitializer(
     IDbConnectionFactory factory,
     DatabaseOptions options,
@@ -64,7 +65,8 @@ public sealed class QuotinatorDatabaseInitializer(
     IRuleFileOverridePathResolver ruleFileOverridePathResolver,
     ISourceFileOverrideRegistry sourceFileOverrideRegistry,
     IFileResourceRepository fileResources,
-    SchemaBaseline? baseline = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, baseline)
+    SchemaBaseline? baseline = null,
+    IDiskSpaceProvider? diskSpaceProvider = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, baseline, diskSpaceProvider)
 {
     private readonly IReadOnlyList<SeedBatch> _batches = batches;
     private readonly IImportBatchRepository _importBatches = importBatches;
@@ -86,6 +88,17 @@ public sealed class QuotinatorDatabaseInitializer(
         await SeedIfEmptyAsync(connection, effectiveBatches);
         await ReSeedGenresIfEmptyAsync(connection, effectiveBatches);
         await LogDatabaseStatsAsync(connection);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Mirrors the two count-gates <see cref="OnInitialisedAsync"/> itself runs (#277): <see cref="SeedIfEmptyInternalAsync"/> would do real work whenever Quotes is empty, and <see cref="ReSeedGenresIfEmptyAsync"/> would do real work whenever Genres is empty but Quotes is not.</remarks>
+    protected override async Task<bool> HasPendingContentSeedAsync(SqliteConnection connection)
+    {
+        var quoteCount = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
+        if (quoteCount == 0) return true;
+
+        var genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
+        return genreCount == 0;
     }
 
     /// <inheritdoc/>

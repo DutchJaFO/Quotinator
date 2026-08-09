@@ -285,8 +285,10 @@ var dbPath     = Path.Combine(dataDir, DataPaths.DatabaseFile);
 var backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0 } customBackupPath
     ? customBackupPath
     : Path.Combine(dataDir, DataPaths.BackupsFolder);
-var dbOptions         = new DatabaseOptions { DbPath = dbPath, BackupsPath = backupsDir };
-var connectionFactory = new SqliteConnectionFactory(dbPath);
+var maxBackupStorageGb = builder.Configuration.GetValue("Quotinator:MaxBackupStorageGb", 1);
+var dbOptions          = new DatabaseOptions { DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb };
+var connectionFactory  = new SqliteConnectionFactory(dbPath);
+builder.Services.AddSingleton<IDiskSpaceProvider, DiskSpaceProvider>();
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
@@ -436,7 +438,8 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<IRuleFileOverridePathResolver>(),
         sp.GetRequiredService<ISourceFileOverrideRegistry>(),
         sp.GetRequiredService<IFileResourceRepository>(),
-        QuotinatorMigrations.Baseline);
+        QuotinatorMigrations.Baseline,
+        sp.GetRequiredService<IDiskSpaceProvider>());
 });
 builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Core.Services.SqliteQuoteService(connectionFactory, unicodeAwareSearch));
 builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp => new Quotinator.Core.Services.SqliteQuoteImportService(
@@ -540,6 +543,16 @@ var dbHealth = app.Services.GetRequiredService<Quotinator.Api.Startup.DatabaseHe
 try
 {
     await dbInitializer.InitialiseAsync();
+}
+catch (DatabaseBackupWriteException ex)
+{
+    var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    const string failureReason =
+        "Database initialisation failed while writing a pre-change safety backup. This usually " +
+        "means the data directory ran out of disk space or lost write access mid-write. Resolve " +
+        "by freeing disk space or restoring write access, then restart.";
+    startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
+    dbHealth.MarkFailed(failureReason);
 }
 catch (Exception ex)
 {

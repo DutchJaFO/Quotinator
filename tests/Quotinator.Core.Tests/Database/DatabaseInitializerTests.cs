@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -55,18 +56,20 @@ public class DatabaseInitializerTests
         IReadOnlyList<SeedBatch> batches, bool useBaseline = true,
         IRuleFileOverridePathResolver? ruleFileOverridePathResolver = null, ISourceFileOverrideRegistry? sourceFileOverrideRegistry = null,
         bool autoPurgeBundledImportActions = false, bool autoPurgeUserImportActions = false,
-        IAuditEntryWriter? auditWriter = null)
+        IAuditEntryWriter? auditWriter = null,
+        IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null)
         => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline, ruleFileOverridePathResolver, sourceFileOverrideRegistry,
-            autoPurgeBundledImportActions, autoPurgeUserImportActions, auditWriter);
+            autoPurgeBundledImportActions, autoPurgeUserImportActions, auditWriter, diskSpaceProvider, maxBackupStorageGb);
 
     private QuotinatorDatabaseInitializer CreateInitializer(
         IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline,
         IRuleFileOverridePathResolver? ruleFileOverridePathResolver = null, ISourceFileOverrideRegistry? sourceFileOverrideRegistry = null,
         bool autoPurgeBundledImportActions = false, bool autoPurgeUserImportActions = false,
-        IAuditEntryWriter? auditWriter = null)
+        IAuditEntryWriter? auditWriter = null,
+        IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null)
     {
         var factory       = new SqliteConnectionFactory(_dbPath);
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
+        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1 };
         var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         var actionReader   = new ImportActionReader(factory);
@@ -89,7 +92,8 @@ public class DatabaseInitializerTests
             ruleFileOverridePathResolver ?? NoOpRuleFileOverridePathResolver.Instance,
             sourceFileOverrideRegistry ?? NoOpSourceFileOverrideRegistry.Instance,
             NoOpFileResourceRepository.Instance,
-            useBaseline ? QuotinatorMigrations.Baseline : null);
+            useBaseline ? QuotinatorMigrations.Baseline : null,
+            diskSpaceProvider ?? NoOpDiskSpaceProvider.Instance);
     }
 
     private static SeedBatch AllFilesBatch() => new(
@@ -1988,6 +1992,170 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Identical content — no change, no action staged at all");
     }
+
+    // -------------------------------------------------------------------------
+    #region #277: backup real-work gating and storage pre-flight check
+
+    // Restoring a WAL-mode backup (RestoreBackup reopens the backup file to read it) can leave
+    // transient -shm/-wal sidecar files alongside the real backup — count only the .db files
+    // themselves, one per actual CreateBackup call.
+    private int BackupFileCount() => Directory.Exists(_backups) ? Directory.GetFiles(_backups, "*.db").Length : 0;
+
+    private SeedBatch SimpleQuoteBatch()
+    {
+        var quotesFile = Path.Combine(_tempDir, $"quotes-{Guid.NewGuid():N}.json");
+        File.WriteAllText(quotesFile,
+            $$"""[{"id":"{{Guid.NewGuid()}}","quote":"Hello there.","source":"Test Movie","type":"movie","genres":["drama"]}]""");
+        return new SeedBatch([new SeedFile(quotesFile, null)], ManifestPolicy.HardcodedDefault, "simple-test-seed");
+    }
+
+    private sealed class FakeDiskSpaceProvider(long availableBytes) : IDiskSpaceProvider
+    {
+        public long GetAvailableFreeSpaceBytes(string path) => availableBytes;
+    }
+
+    private sealed class ThrowingAuditEntryWriter : IAuditEntryWriter
+    {
+        public Task WriteAsync(AuditEntryEntity entry, IDbConnection connection, IDbTransaction? transaction = null)
+            => throw new InvalidOperationException("simulated execute-step failure");
+        public Task WriteAsync(IReadOnlyList<AuditEntryEntity> entries, IDbConnection connection, IDbTransaction? transaction = null) => Task.CompletedTask;
+        public Task WriteAsync(AuditEntryEntity entry) => Task.CompletedTask;
+        public Task ClearAsync(string? table = null) => Task.CompletedTask;
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_AlreadySeeded_TakesNoBackup()
+    {
+        var batch = SimpleQuoteBatch();
+        var db1 = CreateInitializer([batch], useBaseline: true);
+        await db1.InitialiseAsync();
+
+        var before = BackupFileCount();
+
+        var db2 = CreateInitializer([batch], useBaseline: true);
+        await db2.InitialiseAsync();
+
+        Assert.AreEqual(before, BackupFileCount(), "A restart against an already-seeded database must take no backup");
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_ContentSeedNeeded_TakesBackup()
+    {
+        var db1 = CreateInitializer([], useBaseline: true);
+        await db1.InitialiseAsync();
+        Assert.AreEqual(0, BackupFileCount(), "Sanity check — the baseline path itself never backs up");
+
+        var db2 = CreateInitializer([], useBaseline: true);
+        await db2.InitialiseAsync();
+
+        Assert.AreEqual(1, BackupFileCount(), "A database still needing content-seed work must take a backup");
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_AfterReset_ContentSeedNeeded_TakesBackup()
+    {
+        var batch = SimpleQuoteBatch();
+        var db = CreateInitializer([batch], useBaseline: true);
+        await db.InitialiseAsync();
+        Assert.AreEqual(0, BackupFileCount(), "Sanity check — the baseline path itself never backs up");
+
+        await db.ResetAsync();
+        Assert.IsNull(db.MigrationApplied, "Reset sets schema-version counters directly via the baseline path — MigrationApplied stays null even though content-seed has real work to do next");
+        var afterReset = BackupFileCount();
+        Assert.AreEqual(1, afterReset, "Reset's own backup must still fire");
+
+        await db.InitialiseAsync();
+
+        Assert.AreEqual(afterReset + 1, BackupFileCount(), "The startup immediately after a Reset must still take a backup — this is the exact case a MigrationApplied-based gate was found to miss");
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_MigrationPending_TakesBackup()
+    {
+        // Truncating QuotinatorMigrations.All would drop its own last entry (the domain-prefix
+        // rename to Quotinator_Quote), breaking every later query in this test — instead, append a
+        // harmless extra migration so db2 sees a genuinely pending migration on top of an otherwise
+        // fully-migrated, correctly-named database.
+        var db1 = CreateInitializer([], QuotinatorMigrations.All, useBaseline: true);
+        await db1.InitialiseAsync();
+
+        var extraMigration = new SchemaMigration
+        {
+            Version = QuotinatorMigrations.All.Count + 1,
+            Sql     = "CREATE TABLE IF NOT EXISTS Test_277_Dummy (Id INTEGER);",
+        };
+        var extendedMigrations = QuotinatorMigrations.All.Append(extraMigration).ToList();
+
+        var before = BackupFileCount();
+        var db2 = CreateInitializer([], extendedMigrations, useBaseline: true);
+        await db2.InitialiseAsync();
+
+        Assert.IsGreaterThan(before, BackupFileCount(), "A database with a pending migration must take a backup");
+    }
+
+    [TestMethod]
+    public async Task CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException()
+    {
+        var db1 = CreateInitializer([], useBaseline: true);
+        await db1.InitialiseAsync();
+
+        var batch = SimpleQuoteBatch();
+        var db2 = CreateInitializer([batch], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
+        await db2.InitialiseAsync();
+
+        Assert.AreEqual(0, BackupFileCount(), "Backup must be skipped, not written, when real free space is insufficient");
+
+        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote WHERE IsDeleted = 0;");
+        Assert.AreEqual(1, quoteCount, "Seeding must still proceed even when the backup was skipped");
+    }
+
+    [TestMethod]
+    public async Task CreateBackup_SufficientStorageSpace_ProceedsNormally()
+    {
+        var db1 = CreateInitializer([], useBaseline: true);
+        await db1.InitialiseAsync();
+
+        var batch = SimpleQuoteBatch();
+        var db2 = CreateInitializer([batch], useBaseline: true, diskSpaceProvider: NoOpDiskSpaceProvider.Instance);
+        await db2.InitialiseAsync();
+
+        Assert.AreEqual(1, BackupFileCount(), "Backup must be written when both budget and real free space are sufficient");
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason()
+    {
+        var db1 = CreateInitializer([], useBaseline: true);
+        await db1.InitialiseAsync();
+
+        // Blocks Directory.CreateDirectory(_backups) inside CreateBackup — a file already exists
+        // at that exact path, so creating it as a directory throws IOException.
+        File.WriteAllText(_backups, "blocker");
+
+        var db2 = CreateInitializer([], useBaseline: true);
+        var ex = await Assert.ThrowsExactlyAsync<DatabaseBackupWriteException>(() => db2.InitialiseAsync());
+
+        Assert.IsInstanceOfType<IOException>(ex.InnerException);
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_ExecuteStepFails_SurfacesDistinctFailureReason()
+    {
+        var db1 = CreateInitializer([], useBaseline: true);
+        await db1.InitialiseAsync();
+        Assert.AreEqual(0, BackupFileCount(), "Sanity check — the baseline path itself never backs up");
+
+        var batch = SimpleQuoteBatch();
+        var db2 = CreateInitializer([batch], useBaseline: true, auditWriter: new ThrowingAuditEntryWriter());
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => db2.InitialiseAsync());
+
+        Assert.AreEqual(1, BackupFileCount(), "The backup must have succeeded before the execute step failed — distinguishing this from a backup-write failure");
+    }
+
+    #endregion
 
     public TestContext TestContext { get; set; }
 }

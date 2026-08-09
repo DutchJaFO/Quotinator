@@ -24,6 +24,7 @@ namespace Quotinator.Data.Database;
 /// <param name="callerContext">Provides the agent identifier for audit entries.</param>
 /// <param name="logger">Logger for startup diagnostics.</param>
 /// <param name="baseline">Optional consolidated DDL for the consuming project's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
+/// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277). Defaults to a real <see cref="Database.DiskSpaceProvider"/> when omitted — deliberately trailing after <paramref name="baseline"/> so existing callers that stop there are unaffected.</param>
 public class DatabaseInitializer(
     IDbConnectionFactory factory,
     DatabaseOptions options,
@@ -31,8 +32,16 @@ public class DatabaseInitializer(
     IAuditEntryWriter auditWriter,
     ICallerContext callerContext,
     ILogger<DatabaseInitializer> logger,
-    SchemaBaseline? baseline = null) : IDatabaseInitializer
+    SchemaBaseline? baseline = null,
+    IDiskSpaceProvider? diskSpaceProvider = null) : IDatabaseInitializer
 {
+    // Optional trailing param defaulting to a real instance rather than a required DI-registered
+    // dependency: the ~17 existing call sites across the codebase (production and test) construct
+    // this type positionally up to baseline and have nothing to do with the storage pre-flight check
+    // (#277) — forcing them all to thread a new required parameter through would be pure churn.
+    // Program.cs's own real wiring still resolves IDiskSpaceProvider from DI and passes it explicitly.
+    private readonly IDiskSpaceProvider _diskSpaceProvider = diskSpaceProvider ?? new DiskSpaceProvider();
+
     // Quotinator.Data's own migrations, for its own tables (Audit_Entry/Audit_Change/Import_Conflict/
     // Import_Action/Import_SourceFileOverride currently; any future Import_/Audit_/System_-prefixed
     // table Quotinator.Data itself defines). Never passed through the constructor — Quotinator.Data
@@ -368,18 +377,47 @@ public class DatabaseInitializer(
     /// </summary>
     protected virtual Task OnInitialisedAsync(SqliteConnection connection) => Task.CompletedTask;
 
-    // The migration phase has its own backup/restore/rethrow net (ApplyMigrationsAsync below), but
-    // only ever fires when a migration is genuinely pending — an already-up-to-date database skips
-    // it entirely, so there is no cost on an ordinary restart. OnInitialisedAsync (seeding) has no
-    // equivalent condition to key off: it runs unconditionally on every startup (a cheap
-    // existence/count check even when there is nothing to seed), and a version/schema mismatch can
-    // only surface once that check actually runs against the live tables — there is no cheaper
-    // signal to gate on. So the only two honest options are "back up before every non-baseline
-    // startup" (this) or "never back up seeding at all" — a genuinely fresh (baseline) database has
-    // nothing to lose and is skipped, matching ApplyMigrationsAsync's own baseline short-circuit.
+    /// <summary>
+    /// Reports whether <see cref="OnInitialisedAsync"/> would perform genuine seeding work if called
+    /// right now, mirroring <see cref="ApplyMigrationsAsync"/>'s own <c>dataPending</c>/
+    /// <c>consumerPending</c> real-work gate for the migration step (#277). The base class has no
+    /// domain knowledge of what a subclass actually seeds, so the base implementation conservatively
+    /// returns <c>true</c> (always back up) — override with a real, cheap count-check once domain
+    /// tables exist to check.
+    /// </summary>
+    protected virtual Task<bool> HasPendingContentSeedAsync(SqliteConnection connection) => Task.FromResult(true);
+
+    // A failure determining whether content-seed has pending work is itself strong evidence something
+    // is structurally wrong (e.g. a domain table was dropped or renamed outside a normal migration) —
+    // exactly the case a pre-seed backup exists to protect against. Treating the determination itself
+    // as fail-open (skip backup on any exception) would remove that protection at the one moment it
+    // matters most; assume "pending" instead, so a backup is still taken before the same query is
+    // attempted again for real inside OnInitialisedAsync.
+    private async Task<bool> SafeHasPendingContentSeedAsync(SqliteConnection connection)
+    {
+        try
+        {
+            return await HasPendingContentSeedAsync(connection);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "[Database - Init] failed to determine whether content-seed has pending work — assuming yes, taking a backup before proceeding.");
+            return true;
+        }
+    }
+
+    // Startup/reset collapses into three flows — normal startup, fresh install, and Reset — and every
+    // action within them reduces to the same shape: can we perform it → back up → execute. The
+    // migration phase already gates its own backup on dataPending/consumerPending (see
+    // ApplyMigrationsAsync); this mirrors that for the content-seed step via HasPendingContentSeedAsync
+    // instead of inferring readiness from a different step's own flag (tookBaselinePath/
+    // MigrationApplied) — a flag-based gate was tried first and found to miss the startup immediately
+    // following a Reset, where MigrationApplied stays null (Reset sets schema-version counters
+    // directly via the baseline path) even though content-seed genuinely has real work to do. A
+    // genuinely fresh (baseline) database has nothing to lose and is still skipped outright.
     private async Task RunInitialisedHookAsync(SqliteConnection connection, bool tookBaselinePath)
     {
-        if (tookBaselinePath)
+        if (tookBaselinePath || !await SafeHasPendingContentSeedAsync(connection))
         {
             await OnInitialisedAsync(connection);
             return;
@@ -393,8 +431,11 @@ public class DatabaseInitializer(
         catch (Exception ex)
         {
             Logger.LogError(ex, "[Database - Init] seeding failed — restoring pre-seed backup, database left unchanged...");
-            RestoreBackup(connection, backupPath);
-            Logger.LogInformation("[Database - Init] pre-seed backup restored.");
+            if (backupPath is not null)
+            {
+                RestoreBackup(connection, backupPath);
+                Logger.LogInformation("[Database - Init] pre-seed backup restored.");
+            }
             throw;
         }
     }
@@ -505,8 +546,11 @@ public class DatabaseInitializer(
         catch (Exception ex)
         {
             Logger.LogError(ex, "[Database - Init] reset failed — restoring pre-reset backup, database left unchanged...");
-            RestoreBackup(connection, backupPath);
-            Logger.LogInformation("[Database - Init] pre-reset backup restored.");
+            if (backupPath is not null)
+            {
+                RestoreBackup(connection, backupPath);
+                Logger.LogInformation("[Database - Init] pre-reset backup restored.");
+            }
             throw;
         }
     }
@@ -541,19 +585,52 @@ public class DatabaseInitializer(
         Logger.LogLegacyFilenameMigrationComplete(_options.DbPath);
     }
 
-    private string CreateBackup(SqliteConnection connection, int fromVersion)
+    // Storage pre-flight check (#277) — two independent conditions, either enough to skip a backup
+    // (warning logged, no exception, caller proceeds without one): a hard budget on how large the
+    // BackupsPath folder's own accumulated backups may grow ("never exceed our budget," per explicit
+    // developer direction — independent of how much real disk space happens to be free), and a real
+    // free-space check via IDiskSpaceProvider (so a genuinely full disk is never written to,
+    // regardless of budget headroom). A failure writing the file itself, once both checks pass, is a
+    // distinct condition — DatabaseBackupWriteException, not a skip.
+    private string? CreateBackup(SqliteConnection connection, int fromVersion)
     {
-        Directory.CreateDirectory(_options.BackupsPath);
+        var estimatedBytes = File.Exists(_options.DbPath) ? new FileInfo(_options.DbPath).Length : 0L;
+        var budgetBytes    = _options.MaxBackupStorageGb * 1_073_741_824L;
+        var existingBytes  = Directory.Exists(_options.BackupsPath)
+            ? Directory.EnumerateFiles(_options.BackupsPath).Sum(f => new FileInfo(f).Length)
+            : 0L;
+
+        if (existingBytes + estimatedBytes > budgetBytes)
+        {
+            Logger.LogBackupSkippedBudgetExceeded(_options.MaxBackupStorageGb, existingBytes, estimatedBytes);
+            return null;
+        }
+
+        var availableBytes = _diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath);
+        if (availableBytes < estimatedBytes)
+        {
+            Logger.LogBackupSkippedInsufficientDiskSpace(availableBytes, estimatedBytes);
+            return null;
+        }
+
         var timestamp  = DateTime.UtcNow.ToString("yyyyMMddTHHmmss");
         var backupName = $"{Path.GetFileNameWithoutExtension(_options.DbPath)}_v{fromVersion}_{timestamp}Z.db";
         var backupPath = Path.Combine(_options.BackupsPath, backupName);
 
-        Logger.LogBackupStarting(fromVersion, backupPath);
-        using var dest = new SqliteConnection($"Data Source={backupPath}");
-        dest.Open();
-        connection.BackupDatabase(dest);
-        Logger.LogBackupComplete();
-        return backupPath;
+        try
+        {
+            Directory.CreateDirectory(_options.BackupsPath);
+            Logger.LogBackupStarting(fromVersion, backupPath);
+            using var dest = new SqliteConnection($"Data Source={backupPath}");
+            dest.Open();
+            connection.BackupDatabase(dest);
+            Logger.LogBackupComplete();
+            return backupPath;
+        }
+        catch (Exception ex)
+        {
+            throw new DatabaseBackupWriteException(backupPath, ex);
+        }
     }
 
     // Restores a backup file created by CreateBackup back into the live connection — the reverse

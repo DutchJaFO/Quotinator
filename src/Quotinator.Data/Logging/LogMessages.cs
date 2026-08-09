@@ -61,4 +61,12 @@ internal static partial class LogMessages
     /// <summary>Logs that a live source cache refresh was updated from its download URL.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Database - SourceRefresh] updated {File} from {Url}")]
     public static partial void LogSourceRefreshUpdated(this ILogger logger, string file, string? url);
+
+    /// <summary>Logs that a backup was skipped because writing it would exceed the configured backup-folder budget.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] skipping backup — would exceed the {MaxGb} GB backup storage budget ({ExistingBytes} existing + {EstimatedBytes} estimated bytes)")]
+    public static partial void LogBackupSkippedBudgetExceeded(this ILogger logger, int maxGb, long existingBytes, long estimatedBytes);
+
+    /// <summary>Logs that a backup was skipped because the volume does not have enough real free space.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] skipping backup — insufficient free disk space ({AvailableBytes} available, {EstimatedBytes} estimated bytes needed)")]
+    public static partial void LogBackupSkippedInsufficientDiskSpace(this ILogger logger, long availableBytes, long estimatedBytes);
 }

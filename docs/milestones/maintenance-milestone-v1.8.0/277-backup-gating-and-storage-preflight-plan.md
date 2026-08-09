@@ -1,6 +1,6 @@
 # #277 — Gate startup backups on each action's own real-work signal, not an inferred flag; add a storage pre-flight check
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #277
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -145,25 +145,78 @@ default.
 ## Steps
 
 ### 1. Content-seed real-work gate (`HasPendingContentSeedAsync`)
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 ### 2. Storage pre-flight check (`IDiskSpaceProvider`, `MaxBackupStorageGb`, nullable `CreateBackup`)
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 ### 3. Confirm Reset/fresh-install paths hold under the restructured model
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `InitialiseAsync_AfterReset_ContentSeedNeeded_TakesBackup` exercises Reset's own
+backup through the same pre-flight checks; `ApplyBaselineAsync` untouched.
 
 ### 4. Distinguishable failure reasons (`DatabaseBackupWriteException`, `Program.cs` catch split)
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 ### 5. `RunInitialisedHookAsync`'s own code comment updated for the corrected three-flow model
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 ### 6. `Quotinator:MaxBackupStorageGb` wired in `Program.cs`, `IDiskSpaceProvider` DI-registered
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 ### 7. Full verification (T1, T2)
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**T1 confirmed (2026-08-10):** developer's own Visual Studio run, against a real populated database
+(schema v6, data v8, 799 quotes, 461 sources, existing history) — clean startup, no errors. Log shows
+`schema is up to date` with no `[Database - Backup]` line: a healthy restart against real data takes
+no backup, confirming the core fix on production-shaped data, not just a synthetic test/Docker
+scenario.
+
+**T2 confirmed (2026-08-10):** `docker build` succeeded; five scenarios verified live against a real
+persistent volume:
+1. Fresh baseline install — no backup (log shows only the baseline-creation lines, no
+   `[Database - Backup]`).
+2. Healthy restart of an already-seeded database — `schema is up to date`, no backup, `/data/backups`
+   never even created.
+3. `POST /api/v1/admin/database/reset` — exactly one backup taken.
+4. Restart immediately after that Reset — a second backup taken before seeding, confirming the exact
+   case a `MigrationApplied`-based gate was found to miss (schema already up to date, but content-seed
+   genuinely has real work to do).
+5. `Quotinator:MaxBackupStorageGb=0` against an already-populated backups folder — the next Reset still
+   succeeds (200, database rebuilt), but the backup itself is skipped with a
+   `LogBackupSkippedBudgetExceeded` warning, not an exception; backup file count stays unchanged.
+
+**Regression found and fixed during the full-suite check (2026-08-10):** `HasPendingContentSeedAsync`
+queries the same domain tables `OnInitialisedAsync` itself would seed — if that query throws (e.g. the
+existing `InitialiseAsync_SeedingFailsOnAlreadyMigratedDatabase_BacksUpFirstAndRethrows` test's
+scenario, which drops `Quotinator_Quote` entirely to simulate a structurally broken database), the
+exception propagated *before* `CreateBackup` was ever reached — the real-work determination itself was
+skipping backup protection at exactly the moment it matters most. Fixed via
+`SafeHasPendingContentSeedAsync`, a wrapper that catches any exception from the real check and treats
+it as "assume pending, take the backup" rather than letting it propagate unprotected. Re-ran the full
+suite after the fix: 1074 Data.Tests + 1445 Core.Tests + 664 Api.Tests, 0 failures — the pre-existing
+test now passes again, and none of #277's own 8 new tests were affected by the fix (a healthy restart
+with genuinely no pending work still correctly determines that without ever entering the try/catch
+path at all).
+
+**Implementation notes (test design, 2026-08-10):**
+- `BackupFileCount()` (test helper) counts only `*.db` files, not `-shm`/`-wal` sidecars — a WAL-mode
+  backup that later gets reopened for a restore (the `InitialiseAsync_ExecuteStepFails_...` test) can
+  leave transient sidecar files behind; counting them inflated the apparent backup count from 1 to 3
+  until this was diagnosed and fixed.
+- `InitialiseAsync_MigrationPending_TakesBackup` cannot truncate `QuotinatorMigrations.All` to force a
+  "pending migration" state — its own last entry is the domain-prefix rename to `Quotinator_Quote`, so
+  any shorter prefix leaves the old table names in effect and every later query in the test fails with
+  `no such table: Quotinator_Quote`. Fixed by appending a harmless extra no-op migration instead of
+  truncating.
+- `ThrowingAuditEntryWriter` (the execute-step-failure test double) must throw from the
+  connection-taking `WriteAsync(entry, connection, transaction)` overload, not the standalone
+  `WriteAsync(entry)` — `SeedIfEmptyInternalAsync`'s own successful-apply audit write passes the live
+  `connection`, so the standalone overload is never actually invoked at that call site.
+- `SimpleQuoteBatch()` (test helper) must include an explicit `id` and a `genres` array — an id-less
+  quote and a database with 0 `Quotinator_QuoteGenre` rows makes `HasPendingContentSeedAsync`'s own
+  genre count-gate perpetually read "pending" even after a successful seed, since there is no genre
+  data to reseed from.
 
 ---
 
@@ -171,19 +224,19 @@ default.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | An already-seeded database restart takes no backup | Unit test | `DatabaseInitializerTests.InitialiseAsync_AlreadySeeded_TakesNoBackup` |
-| 2 | ⬜ | A database needing content-seed work takes a backup | Unit test | `DatabaseInitializerTests.InitialiseAsync_ContentSeedNeeded_TakesBackup` |
-| 3 | ⬜ | The startup immediately after a Reset (content-seed needed, `MigrationApplied` null) still takes a backup | Unit test | `DatabaseInitializerTests.InitialiseAsync_AfterReset_ContentSeedNeeded_TakesBackup` |
-| 4 | ⬜ | A database with a pending migration takes a backup | Unit test | `DatabaseInitializerTests.InitialiseAsync_MigrationPending_TakesBackup` |
-| 5 | ⬜ | Insufficient storage (budget or real free space) skips the backup with a warning, not an exception | Unit test | `DatabaseInitializerTests.CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` |
-| 6 | ⬜ | Sufficient storage proceeds normally | Unit test | `DatabaseInitializerTests.CreateBackup_SufficientStorageSpace_ProceedsNormally` |
-| 7 | ⬜ | A backup-write failure surfaces its own distinct `FailureReason`, distinguishable from an execute-step failure | Unit test | `DatabaseInitializerTests.InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason` |
-| 8 | ⬜ | An execute-step (migrate/seed) failure surfaces its own distinct `FailureReason` | Unit test | `DatabaseInitializerTests.InitialiseAsync_ExecuteStepFails_SurfacesDistinctFailureReason` |
-| 9 | ⬜ | Reset's own backup still goes through the same pre-flight checks | Unit test | Covered by the same `CreateBackup`-level tests (5, 6) — `DropAndRebuildAsync` calls the same method |
-| 10 | ⬜ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 11 | ⬜ | Full test suite green | Build | `dotnet test --configuration Release` |
-| 12 | ⬜ | T1 (developer's own Visual Studio run) | Live | Awaiting developer |
-| 13 | ⬜ | T2 (Docker smoke tests) | Live | Awaiting a Docker pass |
+| 1 | ✅ | An already-seeded database restart takes no backup | Unit test | `DatabaseInitializerTests.InitialiseAsync_AlreadySeeded_TakesNoBackup` |
+| 2 | ✅ | A database needing content-seed work takes a backup | Unit test | `DatabaseInitializerTests.InitialiseAsync_ContentSeedNeeded_TakesBackup` |
+| 3 | ✅ | The startup immediately after a Reset (content-seed needed, `MigrationApplied` null) still takes a backup | Unit test | `DatabaseInitializerTests.InitialiseAsync_AfterReset_ContentSeedNeeded_TakesBackup` |
+| 4 | ✅ | A database with a pending migration takes a backup | Unit test | `DatabaseInitializerTests.InitialiseAsync_MigrationPending_TakesBackup` |
+| 5 | ✅ | Insufficient storage (budget or real free space) skips the backup with a warning, not an exception | Unit test | `DatabaseInitializerTests.CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` |
+| 6 | ✅ | Sufficient storage proceeds normally | Unit test | `DatabaseInitializerTests.CreateBackup_SufficientStorageSpace_ProceedsNormally` |
+| 7 | ✅ | A backup-write failure surfaces its own distinct `FailureReason`, distinguishable from an execute-step failure | Unit test | `DatabaseInitializerTests.InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason` |
+| 8 | ✅ | An execute-step (migrate/seed) failure surfaces its own distinct `FailureReason` | Unit test | `DatabaseInitializerTests.InitialiseAsync_ExecuteStepFails_SurfacesDistinctFailureReason` |
+| 9 | ✅ | Reset's own backup still goes through the same pre-flight checks | Unit test | Covered by the same `CreateBackup`-level tests (5, 6) — `DropAndRebuildAsync` calls the same method |
+| 10 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 11 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` — 1074 Data.Tests + 1445 Core.Tests + 664 Api.Tests, 0 failures |
+| 12 | ✅ | T1 (developer's own Visual Studio run) | Live | Clean startup against real populated database; no backup taken on healthy restart |
+| 13 | ✅ | T2 (Docker smoke tests) | Live | 2026-08-10 — see Step 7 for the five scenarios verified |
 
 ---
 
