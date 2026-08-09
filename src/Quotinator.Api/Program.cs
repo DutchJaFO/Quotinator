@@ -397,12 +397,12 @@ var quoteSourceConverters = new IQuoteSourceConverter[]
 // Real canonical-schema validation needs Quotinator.Core's SourceQuoteDto, but Quotinator.Data (home of
 // SourceCacheUpdater) must not depend on Quotinator.Core — so the validator is built here, at the
 // composition root, and injected as a plain delegate.
-Func<string, bool> validateCanonicalSchema = json => SourceQuoteFileReader.TryParse(json, out _);
+static bool ValidateCanonicalSchema(string json) => SourceQuoteFileReader.TryParse(json, out _);
 
 builder.Services.AddSingleton<ISourceCacheUpdater>(sp => new SourceCacheUpdater(
     sp.GetRequiredService<IHttpClientFactory>(),
     new SourceCacheOptions(internalDownloadDir, externalDownloadDir, sourceUpdateIntervalHours,
-        quoteSourceConverters, validateCanonicalSchema),
+        quoteSourceConverters, ValidateCanonicalSchema),
     sp.GetRequiredService<ILogger<SourceCacheUpdater>>()));
 
 // #153: a generated ruleFile/sourceAliasFile override is written under the same two persistent,
