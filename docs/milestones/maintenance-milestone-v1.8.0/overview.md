@@ -61,6 +61,7 @@ and #255/#256 do not carry that urgency.
 | [#278](https://github.com/DutchJaFO/Quotinator/issues/278) | Add a startup notification system surfaced in the #263 modals | Waiting for release | T1 ✅ T2 ✅ | [278-startup-notification-system-plan.md](278-startup-notification-system-plan.md) |
 | [#279](https://github.com/DutchJaFO/Quotinator/issues/279) | Standardise endpoint naming (WithName/WithSummary) across CRUD and action endpoints — includes breaking operationId renames | Waiting for release | T1 ✅ T2 ✅ | [279-endpoint-naming-standardization-plan.md](279-endpoint-naming-standardization-plan.md) |
 | [#280](https://github.com/DutchJaFO/Quotinator/issues/280) | Show a startup "please wait" page while the database is created/updated/seeded, with progress if feasible | Planning | Not yet determined | No plan doc yet |
+| [#281](https://github.com/DutchJaFO/Quotinator/issues/281) | Research: should the 8 masterdata CRUD endpoint files be refactored to share logic via base classes | Planning | N/A (research, no code change expected until findings are recorded) | No plan doc — findings and recommendation to be recorded in the issue's own closing comment |
 
 ---
 
@@ -117,6 +118,10 @@ surfacing that kind of change to operators. #279 must not land before #278 exist
 #280's bonus "current startup phase" progress display is meant to reuse #278's notification/status
 infrastructure rather than invent a second, parallel status-reporting mechanism; #280 must not land
 before #278 exists to build on.
+
+**#281 has no dependency on any other open issue in this milestone** — it examines the 8 masterdata
+endpoint files as they exist after #279 landed (const-per-endpoint naming already applied), but that
+is incidental to what it's reading, not an implementation-order block.
 
 None of the remaining issues block each other beyond these relationships.
 
@@ -227,6 +232,9 @@ None of the remaining issues block each other beyond these relationships.
 36. **#280** — Show a startup "please wait" page while the database is created/updated/seeded, with
     progress if feasible (split out of #269's own T1 verification, 2026-08-09); depends on #278
     landing first so its bonus progress display can reuse the new notification/status infrastructure
+37. **#281** — Research whether the 8 masterdata CRUD endpoint files should share logic via base
+    classes or a thin generic helper (filed 2026-08-09 from a developer question raised during #279's
+    own work); independent, no dependency on the others
 
 ---
 
