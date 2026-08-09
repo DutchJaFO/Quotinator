@@ -28,4 +28,12 @@ public static class QueryParamDefaults
     /// a caller who genuinely needs more narrows the date range or raises the config value.
     /// </summary>
     public const int AdminAuditExportMaxRows = 50_000;
+
+    /// <summary>
+    /// Default expiry duration (in hours) applied to a notification (#278) written without an
+    /// explicit <c>expiresAt</c> — overridable via <c>Quotinator:NotificationDefaultExpiryHours</c>.
+    /// 720 hours (30 days) is a sensible homelab default for how long an unaddressed notification
+    /// stays visible before quietly expiring.
+    /// </summary>
+    public const int NotificationDefaultExpiryHours = 720;
 }

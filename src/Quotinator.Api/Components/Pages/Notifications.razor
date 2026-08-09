@@ -1,0 +1,30 @@
+@page "/notifications"
+@rendermode InteractiveServer
+
+<PageTitle>@Text.NotificationsHeading — Quotinator</PageTitle>
+
+<h1>@Text.NotificationsHeading</h1>
+<p class="text-muted">@Text.NotificationsDescription</p>
+
+@if (AllNotifications.Count > 0)
+{
+    <div class="btn-group mb-3" role="group" aria-label="@Text.NotificationsFilterLabel">
+        <span class="align-self-center me-2">@Text.NotificationsFilterLabel</span>
+        <button type="button" class="@FilterButtonClass(NotificationFilterMode.Active)" @onclick="() => SetFilter(NotificationFilterMode.Active)">@Text.NotificationsFilterActive</button>
+        <button type="button" class="@FilterButtonClass(NotificationFilterMode.All)" @onclick="() => SetFilter(NotificationFilterMode.All)">@Text.NotificationsFilterAll</button>
+        <button type="button" class="@FilterButtonClass(NotificationFilterMode.ExpiredOnly)" @onclick="() => SetFilter(NotificationFilterMode.ExpiredOnly)">@Text.NotificationsFilterExpiredOnly</button>
+    </div>
+}
+
+@if (AllNotifications.Count == 0)
+{
+    <p>@Text.NotificationsEmpty</p>
+}
+else if (FilteredNotifications.Count == 0)
+{
+    <p>@Text.NotificationsEmptyFiltered</p>
+}
+else
+{
+    <NotificationTable Notifications="FilteredNotifications" ShowDismissAction="true" OnDismiss="DismissAsync" ShowActionColumn="true" OnExecuteAction="ExecuteActionAsync" />
+}

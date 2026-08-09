@@ -156,6 +156,7 @@ public class SqlQueryGuardTests
             "SystemChangeLog.CountInRangeBase",   // COUNT(*) — private base for CountInRange factory (#249)
             "SystemAudit.SelectDateRange",        // MIN(...)/MAX(...) — #249's date-range discovery endpoint
             "SystemChangeLog.SelectDateRange",    // MIN(...)/MAX(...) — #249's date-range discovery endpoint
+            "Notifications.CountAll",             // COUNT(*) — total row count for the paginated list endpoint (#278)
         };
 
         var actual = EnumerateSqlConstants()

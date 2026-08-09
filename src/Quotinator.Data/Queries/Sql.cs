@@ -514,4 +514,48 @@ internal static class Sql
             return parts.Count > 0 ? " AND " + string.Join(" AND ", parts) : string.Empty;
         }
     }
+
+    /// <summary>System_Notification table (#278). INSERT is handled by Dapper.Contrib via <see cref="Repositories.NotificationWriter"/>.</summary>
+    internal static class Notifications
+    {
+        private static readonly string SelectColumns =
+            $"{IdClauses.SelectColumn("Id")}, Type, Message, ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DateCreated, DateModified, DateDeleted, IsDeleted";
+
+        /// <summary>
+        /// Undismissed, unexpired, non-deleted notifications, newest first — the set surfaced in the
+        /// startup modals. <c>@now</c> must be formatted with <see cref="Models.SafeDateValue.TimestampFormat"/>
+        /// to sort/compare correctly against the TEXT-stored <c>ExpiresAt</c> column.
+        /// </summary>
+        internal static readonly string SelectActive =
+            $"SELECT {SelectColumns} FROM System_Notification " +
+            "WHERE IsDismissed = 0 AND IsDeleted = 0 AND (ExpiresAt IS NULL OR ExpiresAt > @now) " +
+            "ORDER BY DateCreated DESC;";
+
+        /// <summary>Full notification history (including dismissed/expired), paginated, newest first — backs the REST list endpoint and the Blazor Notifications page.</summary>
+        internal static readonly string SelectPage =
+            $"SELECT {SelectColumns} FROM System_Notification WHERE IsDeleted = 0 " +
+            "ORDER BY DateCreated DESC LIMIT @pageSize OFFSET @offset;";
+
+        /// <summary>Total non-deleted row count, for <see cref="SelectPage"/>'s pagination envelope.</summary>
+        internal const string CountAll = "SELECT COUNT(*) FROM System_Notification WHERE IsDeleted = 0;";
+
+        /// <summary>Single-notification lookup by Id — backs the dismiss endpoint's existence check.</summary>
+        internal static readonly string SelectById =
+            $"SELECT {SelectColumns} FROM System_Notification WHERE {IdClauses.Equals("Id", "id")};";
+
+        /// <summary>Marks one notification dismissed by Id. Idempotent — dismissing an already-dismissed row is a no-op in effect, not an error.</summary>
+        internal static readonly string UpdateDismissById =
+            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DateModified = @dateModified " +
+            $"WHERE {IdClauses.Equals("Id", "id")};";
+
+        /// <summary>
+        /// Marks every active (undismissed, non-deleted) notification carrying a given
+        /// <c>DismissTriggerKey</c> as dismissed — #278's "dismiss on related action" mechanism.
+        /// A no-op (zero rows affected) when nothing matches. Case-insensitive, matching this
+        /// project's project-wide enum-comparison convention.
+        /// </summary>
+        internal static readonly string UpdateDismissByTrigger =
+            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DateModified = @dateModified " +
+            $"WHERE IsDismissed = 0 AND IsDeleted = 0 AND {TextClauses.Equals("DismissTriggerKey", "trigger")};";
+    }
 }

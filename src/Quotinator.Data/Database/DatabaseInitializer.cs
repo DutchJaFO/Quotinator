@@ -65,6 +65,7 @@ public class DatabaseInitializer(
     // development database had already applied version 6 (during #251's T1 pass) by the time this
     // generalization was decided. See ADR 015's own "Revision — issue #254" section for why
     // "unreleased" is not the right test for whether a migration is safe to edit.
+    // Version 8 (#278) adds System_Notification — see NotificationMigrations.CreateNotificationTable.
     private static readonly IReadOnlyList<SchemaMigration> DataOwnedMigrations =
     [
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
@@ -74,6 +75,7 @@ public class DatabaseInitializer(
         new SchemaMigration { Version = 5, Sql = DomainPrefixRenameMigrations.RenameDataOwnedTables },
         new SchemaMigration { Version = 6, Sql = FileResourceMigrations.CreateFileResourceTables },
         new SchemaMigration { Version = 7, Sql = FileResourceOriginGeneralizationMigrations.GeneralizeOrigin },
+        new SchemaMigration { Version = 8, Sql = NotificationMigrations.CreateNotificationTable },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -249,6 +251,24 @@ public class DatabaseInitializer(
             IsDeleted        INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS IX_Audit_Change_Entity ON Audit_Change (EntityType, EntityId, OccurredAt DESC);
+
+        CREATE TABLE IF NOT EXISTS System_Notification (
+            Id                TEXT    NOT NULL PRIMARY KEY,
+            Type              TEXT    NOT NULL
+                              CHECK (Type IN ('Information', 'Warning', 'Error', 'Success', 'ActionRequired')),
+            Message           TEXT    NOT NULL,
+            ExpiresAt         TEXT,
+            IsDismissed       INTEGER NOT NULL DEFAULT 0,
+            DismissedAt       TEXT,
+            DismissTriggerKey TEXT
+                              CHECK (DismissTriggerKey IS NULL OR DismissTriggerKey IN ('DatabaseReset')),
+            DateCreated       TEXT    NOT NULL,
+            DateModified      TEXT,
+            DateDeleted       TEXT,
+            IsDeleted         INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS IX_System_Notification_Active ON System_Notification (IsDismissed, IsDeleted, ExpiresAt);
+        CREATE INDEX IF NOT EXISTS IX_System_Notification_DismissTriggerKey ON System_Notification (DismissTriggerKey);
         """;
 
     private readonly IDbConnectionFactory _factory = factory;

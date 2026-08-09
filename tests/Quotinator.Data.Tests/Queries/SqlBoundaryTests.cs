@@ -16,12 +16,14 @@ public class SqlBoundaryTests
     /// Engine on the mistaken assumption that its existing (also-misplaced) entity location was
     /// correct. <c>FileResources</c> (#251) stays here for the same reason — it only touches
     /// Import_FileResource/Import_FileResourceLine/Import_FileResourceBatch and the already-Data-owned
-    /// Import_Batch, never a consumer-defined entity.
+    /// Import_Batch, never a consumer-defined entity. <c>Notifications</c> (#278) stays here too —
+    /// System_Notification is operational/system content, not quote-domain content, and never
+    /// references a consumer-defined entity.
     /// </summary>
     [TestMethod]
     public void Sql_ContainsOnlyGenericInfrastructureQueries()
     {
-        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides", "FileResources" };
+        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides", "FileResources", "Notifications" };
 
         var actual = typeof(Sql)
             .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)

@@ -209,10 +209,19 @@ internal static class AdminEndpoints
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
+        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, INotificationWriter notificationWriter, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
         {
             await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh);
             dbHealth.MarkHealthy();
+            // #278: dismiss any ActionRequired notification recommending a Reset, now that one has
+            // actually completed. Reset itself drops and rebuilds System_Notification along with
+            // every other table (no protected/excluded set — see CLAUDE.md's "No exception-based
+            // migration recovery"), so in practice this call always affects zero rows immediately
+            // after ResetAsync — the table is already empty. Kept anyway, matching #278's own
+            // explicit wiring instruction: it's the correct call site for the general mechanism
+            // (a future action that does *not* wipe the whole database would make it load-bearing),
+            // and it's harmless here.
+            await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
             return Results.Ok(new DatabaseSeedSummaryResponse
             {
                 Quotes          = db.QuoteCount,

@@ -86,6 +86,7 @@ public class DatabaseHealthGateMiddlewareTests
     [DataRow("/rest-api")]
     [DataRow("/about")]
     [DataRow("/stats")]
+    [DataRow("/notifications")]
     [DataRow("/_blazor")]
     [DataRow("/app.khy4lop6wu.css")]
     [DataRow("/Quotinator.Api.ngd3z69k33.styles.css")]

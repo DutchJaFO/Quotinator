@@ -527,6 +527,81 @@ public class DatabaseInitializerOwnershipTests
         }
     }
 
+    /// <summary>
+    /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
+    /// for <c>System_Notification</c> (added by #278's Data-owned migration 8).
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync(TestContext.CancellationToken);
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync(TestContext.CancellationToken);
+
+        var schemaA = await DumpTableSchemaAsync(connA, "System_Notification");
+        var schemaB = await DumpTableSchemaAsync(connB, "System_Notification");
+
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_Notification schema differs between Data's baseline and incremental paths — " +
+            "update DataBaselineSql to match DataOwnedMigrations' final result.");
+    }
+
+    /// <summary>
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural round-trip
+    /// closes that gap for <c>System_Notification.Type</c>/<c>DismissTriggerKey</c>'s enum values
+    /// (#278, ADR 008), for both the baseline and incremental paths.
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync(TestContext.CancellationToken);
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync(TestContext.CancellationToken);
+
+        foreach (var conn in new[] { connA, connB })
+        {
+            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+
+            await conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Message, DismissTriggerKey, DateCreated) " +
+                "VALUES (@id, 'ActionRequired', 'Consider running a Reset.', 'DatabaseReset', @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            // DismissTriggerKey is nullable — most notifications carry no dismiss trigger.
+            await conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Message, DateCreated) " +
+                "VALUES (@id, 'Information', 'Just letting you know.', @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Message, DateCreated) " +
+                "VALUES (@id, 'NotARealType', 'x', @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Message, DismissTriggerKey, DateCreated) " +
+                "VALUES (@id, 'Information', 'x', 'NotARealTrigger', @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+        }
+    }
+
     /// <summary>A fresh database with no consumer baseline defined always falls through to the full incremental path, even though it is empty.</summary>
     [TestMethod]
     public async Task ApplyBaselineAsync_NoConsumerBaselineDefined_FallsThroughToIncremental()
@@ -540,9 +615,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync(TestContext.CancellationToken);
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(7, dataRows,
+        Assert.AreEqual(8, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(7, db.DataSchemaVersion);
+        Assert.AreEqual(8, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

@@ -44,6 +44,7 @@ verification command here in the same commit that fixes it — the list only gro
 30. [FileResource capture, byte-exact reconstruction, and pruning](#30-fileresource-capture-byte-exact-reconstruction-and-pruning-251) (#251)
 31. [Audit-trail bulk export, date-range discovery, and conflict-resolution data auto-purge](#31-audit-trail-bulk-export-date-range-discovery-and-conflict-resolution-data-auto-purge-249) (#249)
 32. [Reset is a full wipe with no reseed](#32-reset-is-a-full-wipe-with-no-reseed-156) (#156)
+33. [Startup notification system](#33-startup-notification-system-278) (#278)
 
 ---
 
@@ -1428,4 +1429,51 @@ per-version history, not collapsed to a single baseline row) — `SELECT COUNT(*
 System_SchemaVersion;` / `SELECT COUNT(*) FROM System_ConsumerSchemaVersion;`.
 
 Clean up: `docker rm -f smoke156`.
+
+## 33. Startup notification system (#278)
+
+`GET /api/v1/notifications` (list, no key) and `POST /api/v1/notifications/{id}/dismiss` (admin,
+key required), plus the `/notifications` Blazor page and the `StartupSuccessModal`/`StartupErrorModal`
+wiring. No production code path writes a real notification yet — the actual producers (e.g. a future
+"pre-seed backup skipped" case) are follow-on integrations tracked separately, so a fresh container has
+none. This section proves the mechanism (list/dismiss/tag/UI) works against an empty table; the
+write → active → dismiss round trip itself is covered by `NotificationWriterTests`/
+`NotificationReaderTests` (real SQLite, not live-command-verified here).
+
+```bash
+docker rm -f smoke278
+MSYS_NO_PATHCONV=1 docker run -d --name smoke278 -p 8080:8080 \
+  -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 8
+curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/notifications"
+curl -s -w " [%{http_code}]\n" -X POST "http://localhost:8080/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
+curl -s -w " [%{http_code}]\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
+curl -s "http://localhost:8080/openapi/v1.json" | grep -o '"Notifications"' | head -1
+```
+- `GET /notifications` must return `200` with `{"items":[],"page":1,"pageSize":20,"totalCount":0}`.
+- Dismissing a random id with no `X-Api-Key` must return `401`.
+- Dismissing the same id with the correct key must return `404` (no notification exists with that id).
+- The OpenAPI spec must contain the `Notifications` tag.
+
+**Blazor UI**: visit `http://localhost:8080/notifications` — must render the page heading and
+"No notifications yet." (no crash, no 503). Visit `http://localhost:8080/` — `StartupSuccessModal`
+must render with no notification section shown (nothing active yet); confirms `NotificationSummary`
+renders cleanly with zero rows rather than an empty heading with nothing under it.
+
+**Status filter and Action button (requires seeded rows — insert directly via a SQLite client against
+`System_Notification`, e.g. one `ActionRequired` row with `DismissTriggerKey = 'DatabaseReset'`, one
+already-expired row, one already-dismissed row):**
+- `/notifications`'s Status column must read `Active`/`Expired`/`Dismissed` correctly — an
+  undismissed-but-past-`ExpiresAt` row must show `Expired`, never `Active`.
+- The Status filter defaults to **Active** on page load; switching to **All** shows every row
+  including the expired/dismissed ones; **Expired only** shows just the expired row.
+- The `ActionRequired`/`DatabaseReset` row's Action column shows a **Run** button; clicking it replaces
+  it with **Confirm**/**Cancel** — **Cancel** must revert to the plain **Run** button without calling
+  the reset endpoint (confirm via the quote count / `/version` staying unchanged). **Confirm** must
+  actually run `POST /admin/database/reset` (quote count drops to 0, matching section 32's own Reset
+  behaviour) and the row disappears from the list afterward (the whole `System_Notification` table is
+  wiped by Reset, same as every other table).
+
+Clean up: `docker rm -f smoke278`.
 

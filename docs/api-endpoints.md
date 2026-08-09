@@ -64,6 +64,8 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/admin/audit/date-range` | Earliest/latest timestamp across `Audit_Entry` and `Audit_Change` combined — check before requesting `.../audit/export` (no `X-Api-Key` required) |
 | GET | `/api/v1/admin/audit/export?startDate=&endDate=` | Bulk-export every `Audit_Entry`/`Audit_Change` row in an optional date range as one downloaded JSON file, not paginated. `422` if a date fails to parse, `startDate` is after `endDate`, or the combined row count exceeds `Quotinator:AdminAuditExportMaxRows` (default 50,000) (no `X-Api-Key` required) |
 | DELETE | `/api/v1/admin/audit?table=` | Delete all audit entries, or only entries for a specific table when `table` is supplied. An unscoped clear also clears the change log (`Audit_Change`) — a scoped clear leaves it untouched. A single audit entry recording the purge is written after the delete, so there is always a trace that a clear occurred (requires `X-Api-Key`) |
+| GET | `/api/v1/notifications?page=&pageSize=` | Paginated list of the full notification history (#278) — including dismissed and expired notifications, newest first. Maximum `pageSize` is 500 (no `X-Api-Key` required) |
+| POST | `/api/v1/notifications/{id}/dismiss` | Mark a notification dismissed. `404` for an unknown or malformed id (requires `X-Api-Key`) |
 
 Admin endpoints require the `X-Api-Key: <key>` request header matching the `admin_api_key` set in the add-on configuration. Requests without the header, or with an incorrect key, receive `401 Unauthorized`. The endpoints return `401` if no key is configured.
 

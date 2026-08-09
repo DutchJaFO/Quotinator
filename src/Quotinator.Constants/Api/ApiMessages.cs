@@ -66,4 +66,5 @@ public static class ApiMessages
     public const string AuditExportDateInvalid           = "ErrorAuditExportDateInvalid";
     public const string AuditExportDateRangeInvalid      = "ErrorAuditExportDateRangeInvalid";
     public const string AuditExportRowCapExceeded        = "ErrorAuditExportRowCapExceeded";
+    public const string NotificationNotFound             = "ErrorNotificationNotFound";
 }

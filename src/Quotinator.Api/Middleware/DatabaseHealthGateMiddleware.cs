@@ -25,7 +25,7 @@ internal class DatabaseHealthGateMiddleware(DatabaseHealthState health) : IMiddl
         "/api/v1/health", "/api/v1/version", "/api/v1/admin",
         "/openapi", "/scalar",
         "/_framework/", "/_content/", "/lib/",
-        "/_blazor", "/rest-api", "/about", "/stats",
+        "/_blazor", "/rest-api", "/about", "/stats", "/notifications",
         "/favicon.png",
     ];
 

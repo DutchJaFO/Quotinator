@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-09 11:27 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-09 18:10 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Old conflict-resolution history from completed imports is now cleaned up automatically, and the full audit trail (what changed and when) can be exported in bulk for record-keeping.
 - Resetting the database is now a complete, unconditional wipe — it always rebuilds from scratch and no longer automatically re-imports the bundled quote content afterward. Nothing survives a reset any more, including the audit trail, so export it first (see above) if you want to keep it.
 - When something goes wrong at startup, the web interface itself now shows a clear popup explaining what happened and the database's last known-good status — not just the REST API. Home is disabled until the problem is resolved, but the REST API (clearly marked as limited), Statistics, and About pages stay reachable. Database status — quote counts and which files were used to build it — is also now always available on a new Statistics page in the navigation menu.
+- A new Notifications page and startup popups now surface informational, warning, error, and action-recommended messages from Quotinator, with a history you can review and dismiss at any time.
 
 ### Added
 - Release entries can now carry an optional one-line `quote` (release-note flavour text, with optional `attribution`) — rendered in `CHANGELOG.md` and the Blazor changelog UI, omitted from the more concise `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)
@@ -30,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - New Blazor `/stats` page showing current database counts (across all nine entity categories) and a per-file import history table (filename, origin, source URL, last-updated timestamp, record count), reachable from the nav menu at any time, including while the database is degraded (issue #263)
 - New `StartupErrorModal`/`StartupSuccessModal` popups on the Blazor Home page — a degraded-startup popup shows the failure reason and last known-good database status with a button through to the rest of the app; a one-time startup-success popup shows the same kind of status after a healthy startup (issue #263)
 - `DatabaseHealthGateMiddleware`'s exempt list extended so Blazor's own page routes and fingerprinted static assets (`app.css`, `Quotinator.Api.styles.css`) stay reachable during a degraded startup, and the nav menu now shows Home as disabled and REST API as "Limited" in that state (issue #263)
+- New startup notification system: `GET /api/v1/notifications` (paginated history) and `POST /api/v1/notifications/{id}/dismiss` (admin), a new `/notifications` Blazor page reachable from the nav menu with a Status filter (Active by default, or All/Expired only), and active Information/Warning/Error/Success/Action-required notifications now shown in the startup popups — each notification carries an optional expiry (default 30 days, overridable via `Quotinator__NotificationDefaultExpiryHours`, shown in its own column) and can be automatically dismissed once a related action (e.g. a database Reset) completes. An `Action-required` notification recommending a specific fix (e.g. a database Reset) can be run directly from `/notifications` via a Run button with a confirm step, instead of only being dismissible (issue #278)
 
 ### Changed
 - Documented that the database's internal audit-trail tables (event/audit history) intentionally retain their record after the entity they describe is later changed or replaced — a purely internal documentation clarification with no behaviour change (issue #151)

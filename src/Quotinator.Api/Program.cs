@@ -22,6 +22,7 @@ using Quotinator.Core.Repositories;
 using Quotinator.Core.Services;
 using Quotinator.Api.Middleware;
 using Quotinator.Api.OpenApi;
+using Quotinator.Api.Services;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
@@ -187,6 +188,12 @@ var sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:Sourc
 var sourceRefreshTimeoutSeconds = builder.Configuration.GetValue<int?>("Quotinator:SourceRefreshTimeoutSeconds")
     ?? SourceCacheUpdater.DefaultHttpTimeoutSeconds;
 
+// #278: default expiry applied to a notification written without an explicit expiresAt. Read once
+// here (not per-request, unlike AdminAuditExportMaxRows) since it's a NotificationWriter constructor
+// dependency, not a per-call local — same pattern as sourceRefreshTimeoutSeconds above.
+var notificationDefaultExpiryHours = builder.Configuration.GetValue<int?>("Quotinator:NotificationDefaultExpiryHours")
+    ?? QueryParamDefaults.NotificationDefaultExpiryHours;
+
 // #249: once a seeded batch reaches zero pending actions, its Import_Action (conflict-resolution)
 // rows have served their purpose and are purged automatically — separate settings per origin so a
 // developer investigating one specific source (bundled or user-imports) can temporarily retain that
@@ -299,6 +306,12 @@ builder.Services.AddSingleton<ISourceFileOverrideRegistry, SourceFileOverrideReg
 builder.Services.AddSingleton<IFileResourceRepository, SqliteFileResourceRepository>();
 builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
 builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
+builder.Services.AddSingleton<INotificationReader, NotificationReader>();
+// Factory overload — the container can't supply notificationDefaultExpiryHours (a computed config
+// value) at registration time, matching this project's documented DI exception.
+builder.Services.AddSingleton<INotificationWriter>(sp =>
+    new NotificationWriter(sp.GetRequiredService<IDbConnectionFactory>(), notificationDefaultExpiryHours));
+builder.Services.AddSingleton<INotificationActionExecutor, NotificationActionExecutor>();
 
 // #59: restorable-repository access for Quote/Source/Character/Person, needed only by batch-undo
 // (reversal) — nothing else in the app soft-deletes these tables today. Fully generic, already
@@ -651,6 +664,7 @@ app.MapImportEndpoints();
 app.MapImportRuleEndpoints();
 app.MapImportFileResourceEndpoints();
 app.MapImportBatchEndpoints();
+app.MapNotificationEndpoints();
 app.MapConversationEndpoints();
 app.MapSourceEndpoints();
 app.MapCharacterEndpoints();

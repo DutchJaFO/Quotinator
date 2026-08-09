@@ -58,6 +58,11 @@ public abstract class DatabaseConfiguration
         RegisterEnumHandler<FileResourceOrigin>();
         // LineEndingStyle (#251) backs Import_FileResource.LineEnding — same category.
         RegisterEnumHandler<LineEndingStyle>();
+        // NotificationType/NotificationDismissTrigger (#278) back System_Notification.Type/
+        // DismissTriggerKey — same category, a closed set this project's own notification mechanism
+        // assigns and transitions between.
+        RegisterEnumHandler<NotificationType>();
+        RegisterEnumHandler<NotificationDismissTrigger>();
         RegisterDomainHandlers();
     }
 
