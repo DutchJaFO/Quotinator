@@ -253,13 +253,41 @@ New "Logging call-site pattern" section: the rule, the shared-vs-project-local d
 each backed by a concrete, verified finding from this issue's own implementation, not asserted blind.
 
 ### Step 7 — Full verification (T1, T2) + changelog
-**Status:** T1 ✅ Done (clean Visual Studio start, normal startup log output); T2 ⬜ not yet run; build/test verification ✅ Done
+**Status:** ✅ Done — T1, T2, and build/test verification all confirmed
 
 Full clean rebuild (`bin`/`obj` deleted first): 0 warnings, 0 errors, `CA1873` escalated. Full test
 suite: 3194 tests across all 10 projects, 0 failures, including all 33 `StartupSummaryLoggerTests` and
 the new 5 `Quotinator.Logging.Tests`. Grep sweep confirmed the only remaining raw `LogInformation`/
 `LogDebug`/`LogCritical` calls are either argument-free (exempt) or `LogWarning`/`LogError` (out of
 this rule's scope, per Step 5's finding).
+
+**T1 (2026-08-09):** confirmed by the developer — clean Visual Studio start, normal startup log
+output.
+
+**T2 (2026-08-09): full 32-section `docs/smoke-tests.md` pass, all sections verified live against a
+rebuilt image.** Given no behaviour change was intended, this pass specifically watched for any
+divergence in logged output. One genuine bug was caught and fixed mid-pass: `SourceEndpoints.cs` had
+been drafted for conversion but the edit was never applied — its two `LogInformation` calls were still
+raw, only surfaced when the CA1873 re-escalation flagged them again during Step 5. No other regression
+found. Two real, expected, and harmless observations, documented rather than "fixed":
+
+- **Docker/production console log lines gained a visible `SourceContext[{ Id, Name }]` prefix** for
+  every converted call (e.g. `DatabaseInitializer[{ Id: 1849141447, Name: "LogCreatingSchemaAtBaseline"
+  }]`). Traced to `Program.cs`'s `{SourceContext}[{EventId:0}]` template segment — already present,
+  unchanged by this issue — which previously rendered empty because raw `LogInformation` calls always
+  had `EventId = default`, a case Serilog's MEL bridge omits from the log event entirely.
+  `[LoggerMessage]` auto-generates a named `EventId` per method, so every converted line now populates
+  it — the same pattern the untouched built-in `HttpClient` logger lines already showed. Confirmed
+  harmless: every smoke-test log assertion uses substring `grep`, and all of section 29's ordered,
+  multi-line log-content checks (`backup complete` → `seeding failed` → `pre-seed backup restored` →
+  the FTL message with its attached `SqliteException`) matched exactly.
+- Section 2's "curated file re-import produces two pending actions" note is stale (now produces all 13
+  — the curated file has grown since that note was written); confirmed unrelated to this issue, since
+  the mechanism itself (ambiguousFields, decide/undo/apply) behaved correctly regardless of count.
+
+All log-content assertions in sections 27 (`[Database - Stats]`) and 29 (backup/restore/failure
+sequence) — the two sections most directly exercising this issue's converted call sites — matched
+byte-for-byte.
 
 ---
 
@@ -279,7 +307,7 @@ CA-rule steps (mechanical/build-verified, no new production-logic test methods n
 | 6 | ✅ | Grep sweep: zero remaining direct templated `LogXxx` calls outside the 5 `LogMessages` classes (or the documented `LogWarning`/`LogError` exception) | Manual | Step 4 |
 | 7 | ✅ | `docs/logging.md` documents the enforceable call-site pattern | Manual | Step 6 |
 | 8 | ✅ | T1 (developer's own Visual Studio run) | Live | Confirmed clean start, normal startup log output (2026-08-09) |
-| 9 | ⬜ | T2 (Docker smoke tests) | Live | Not yet run |
+| 9 | ✅ | T2 (Docker smoke tests) | Live | Full 32-section pass, 2026-08-09 — see Step 7 |
 
 ---
 
