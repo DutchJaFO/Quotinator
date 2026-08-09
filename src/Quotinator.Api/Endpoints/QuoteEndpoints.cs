@@ -8,6 +8,7 @@ using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Repositories;
 using Quotinator.Core.Services;
+using Quotinator.Api.Logging;
 using ProblemDetails = Microsoft.AspNetCore.Mvc.ProblemDetails;
 
 namespace Quotinator.Api.Endpoints;
@@ -203,7 +204,7 @@ internal static class QuoteEndpoints
         [Description("Filter to quotes in this Universe (spans every Series in it), by id.")] string? universeId = null,
         [Description("Filter to quotes in this Universe (spans every Series in it), by exact name. Mutually exclusive with `universeId`.")] string? universe = null)
     {
-        logger.LogInformation("[Api - Random] n={N} type={Type} genre={Genre} lang={Lang}", n, type, genre, lang);
+        logger.LogRandomQuoteQuery(n, type, genre, lang);
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
@@ -282,7 +283,7 @@ internal static class QuoteEndpoints
         ILogger<Log> logger,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
-        logger.LogInformation("[Api - GetById] id={Id} lang={Lang}", id, lang);
+        logger.LogIdWithLang("[Api - GetById]", id, lang);
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
@@ -311,7 +312,7 @@ internal static class QuoteEndpoints
         [Description("Filter to quotes in this Universe (spans every Series in it), by id.")] string? universeId = null,
         [Description("Filter to quotes in this Universe (spans every Series in it), by exact name. Mutually exclusive with `universeId`.")] string? universe = null)
     {
-        logger.LogInformation("[Api - Search] q={Q} field={Field} limit={Limit} type={Type} lang={Lang}", q, field, limit, type, lang);
+        logger.LogSearchQuery(q, field, limit, type, lang);
 
         if (ValidateCommon(localizer, ref lang, field) is { } err) return err;
 
@@ -405,7 +406,7 @@ internal static class QuoteEndpoints
         [Description("Filter to quotes in this Universe (spans every Series in it), by id.")] string? universeId = null,
         [Description("Filter to quotes in this Universe (spans every Series in it), by exact name. Mutually exclusive with `universeId`.")] string? universe = null)
     {
-        logger.LogInformation("[Api - GetAll] page={Page} pageSize={PageSize} type={Type} lang={Lang}", page, pageSize, type, lang);
+        logger.LogGetAllQuotesQuery(page, pageSize, type, lang);
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 

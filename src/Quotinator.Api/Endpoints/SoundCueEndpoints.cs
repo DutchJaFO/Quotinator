@@ -11,6 +11,7 @@ using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -46,7 +47,7 @@ internal static class SoundCueEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0-500). 0 means every sound cue as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogInformation("[Api - GetAllSoundCues] page={Page} pageSize={PageSize}", page, pageSize);
+        logger.LogPageQuery("[Api - GetAllSoundCues]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -70,7 +71,7 @@ internal static class SoundCueEndpoints
         ILogger<Log> logger,
         IListableRepository<SoundCueEntity> repository)
     {
-        logger.LogInformation("[Api - GetSoundCueById] id={Id}", id);
+        logger.LogIdQuery("[Api - GetSoundCueById]", id);
 
         SoundCueEntity? entity = Guid.TryParse(id, out var soundCueId)
             ? await repository.GetByIdAsync(soundCueId)

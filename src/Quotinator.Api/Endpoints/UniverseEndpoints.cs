@@ -11,6 +11,7 @@ using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -46,7 +47,7 @@ internal static class UniverseEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0-500). 0 means every universe as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogInformation("[Api - GetAllUniverses] page={Page} pageSize={PageSize}", page, pageSize);
+        logger.LogPageQuery("[Api - GetAllUniverses]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -70,7 +71,7 @@ internal static class UniverseEndpoints
         ILogger<Log> logger,
         IListableRepository<UniverseEntity> repository)
     {
-        logger.LogInformation("[Api - GetUniverseById] id={Id}", id);
+        logger.LogIdQuery("[Api - GetUniverseById]", id);
 
         UniverseEntity? entity = Guid.TryParse(id, out var universeId)
             ? await repository.GetByIdAsync(universeId)

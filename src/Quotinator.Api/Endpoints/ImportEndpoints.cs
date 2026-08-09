@@ -11,6 +11,7 @@ using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Csv;
 using Quotinator.Data.Import;
+using Quotinator.Api.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -510,7 +511,7 @@ internal static class ImportEndpoints
         IFormFile? file, string? settingsJson, IQuoteImportService importService, IApiLocalizer localizer,
         ILogger<Log> logger, bool preview, bool purgeOnSuccess, CancellationToken cancellationToken)
     {
-        logger.LogInformation("[Api - Import] preview={Preview} file={File}", preview, file?.FileName);
+        logger.LogImportPreviewRequest(preview, file?.FileName);
 
         if (file is null || file.Length == 0)
             return Results.Problem(detail: localizer[ApiMessages.ImportFileMissing], statusCode: StatusCodes.Status422UnprocessableEntity);
@@ -565,7 +566,7 @@ internal static class ImportEndpoints
         if (!Guid.TryParse(batchIdRaw, out var batchId))
             return Results.Problem(detail: localizer[ApiMessages.ImportBatchNotFound], statusCode: StatusCodes.Status404NotFound);
 
-        logger.LogInformation("[Api - Import] applying already-staged batch {BatchId}", batchId);
+        logger.LogImportApplyingStagedBatch(batchId);
 
         try
         {

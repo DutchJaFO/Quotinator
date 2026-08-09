@@ -12,6 +12,7 @@ using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Repositories;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -50,7 +51,7 @@ internal static class SeriesEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogInformation("[Api - GetAllSeries] page={Page} pageSize={PageSize}", page, pageSize);
+        logger.LogPageQuery("[Api - GetAllSeries]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -81,7 +82,7 @@ internal static class SeriesEndpoints
         IListableRepository<SeriesEntity> repository,
         ISeriesUniverseReferenceReader universeReader)
     {
-        logger.LogInformation("[Api - GetSeriesById] id={Id}", id);
+        logger.LogIdQuery("[Api - GetSeriesById]", id);
 
         if (!Guid.TryParse(id, out var seriesId))
             return NotFoundResult.OkOrNotFound<SeriesResponse>(null, localizer, ApiMessages.SeriesNotFound);

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Logging;
 
 namespace Quotinator.Data.Import;
 
@@ -228,7 +229,7 @@ public sealed class SourceCacheUpdater(
             // cache file behind for the next seed operation to read.
             File.Move(preparedPath, targetPath, overwrite: true);
 
-            logger.LogInformation("[Database - SourceRefresh] updated {File} from {Url}", name, file.DownloadUrl);
+            logger.LogSourceRefreshUpdated(name, file.DownloadUrl);
             return true;
         }
         catch (Exception ex)

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Quotinator.Api.Logging;
 using Quotinator.Data.Helpers;
 
 namespace Quotinator.Api.Middleware;
@@ -39,7 +40,7 @@ public class RequestLoggingMiddleware(ILogger<RequestLoggingMiddleware> logger) 
         var url    = LogSanitizer.ForLog(context.Request.Path + context.Request.QueryString.Value);
         var tag    = Categorise(context.Request.Path.Value ?? string.Empty);
 
-        _logger.LogDebug("{Tag:l} {Id:l} {Method:l} {Url:l}", tag, id, method, url);
+        _logger.LogRequestStart(tag, id, method, url);
 
         var sw = Stopwatch.StartNew();
         try
@@ -49,8 +50,7 @@ public class RequestLoggingMiddleware(ILogger<RequestLoggingMiddleware> logger) 
         finally
         {
             sw.Stop();
-            _logger.LogDebug("{Tag:l} {Id:l} {Method:l} {Url:l} → {Status} in {Ms}ms",
-                tag, id, method, url, context.Response.StatusCode, sw.ElapsedMilliseconds);
+            _logger.LogRequestEnd(tag, id, method, url, context.Response.StatusCode, sw.ElapsedMilliseconds);
         }
     }
 

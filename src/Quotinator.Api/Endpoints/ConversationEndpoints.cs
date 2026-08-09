@@ -13,6 +13,8 @@ using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Repositories;
+using Quotinator.Api.Logging;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -54,7 +56,7 @@ internal static class ConversationEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogInformation("[Api - GetAllConversations] page={Page} pageSize={PageSize}", page, pageSize);
+        logger.LogPageQuery("[Api - GetAllConversations]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -83,7 +85,7 @@ internal static class ConversationEndpoints
         ILogger<Log> logger,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
-        logger.LogInformation("[Api - GetConversationById] id={Id} lang={Lang}", id, lang);
+        logger.LogIdWithLang("[Api - GetConversationById]", id, lang);
 
         if (!InputValidation.TryNormalizeLang(ref lang))
             return Results.Problem(

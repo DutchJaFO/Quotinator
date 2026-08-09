@@ -13,6 +13,7 @@ using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
+using Quotinator.Api.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -109,8 +110,9 @@ internal static class ImportRuleEndpoints
 
                 await registry.RegisterAsync(fileName!, parsedOrigin, EffectiveRuleFileResolver.ComputeContentHash(json), batchId);
 
-                logger.LogInformation("[Api - Import] generated conflict-resolution override for {File} ({Origin}) from batch {BatchId} — {Added} rule(s) added",
-                    LogSanitizer.ForLog(fileName!), LogSanitizer.ForLog(origin!), LogSanitizer.ForLog(batchId!), rulesAdded);
+                if (logger.IsEnabled(LogLevel.Information))
+                    logger.LogImportRuleOverrideGenerated(
+                        LogSanitizer.ForLog(fileName!), LogSanitizer.ForLog(origin!), LogSanitizer.ForLog(batchId!), rulesAdded);
 
                 return Results.Ok(new ConflictRuleFileResponse
                 {

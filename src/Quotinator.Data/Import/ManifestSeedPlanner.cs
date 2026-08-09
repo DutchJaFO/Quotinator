@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using Quotinator.Data.Logging;
 
 namespace Quotinator.Data.Import;
 
@@ -34,7 +35,7 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
             if (allowAutoCreate && allJson.Count > 0)
                 TryWriteAutoManifest(manifestPath, allJson);
             else
-                logger.LogInformation("[Database - Init] no manifest in {Dir} — importing {Count} JSON file(s) in alphabetical order", dir, allJson.Count);
+                logger.LogNoManifestAlphabeticalOrder(dir, allJson.Count);
 
             return (allJson, configPolicy);
         }
@@ -71,8 +72,8 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
                 manifest.Files.Where(e => e.SourceAliasFile is not null).Select(e => Path.Combine(dir, e.SourceAliasFile!)),
                 StringComparer.OrdinalIgnoreCase);
             var unlisted = allJson.Where(f => !listedPaths.Contains(f.FilePath) && !ruleFilePaths.Contains(f.FilePath) && !sourceAliasFilePaths.Contains(f.FilePath)).ToList();
-            if (unlisted.Count > 0)
-                logger.LogInformation("[Database - Init] {Count} file(s) not listed in manifest will be appended: {Files}",
+            if (unlisted.Count > 0 && logger.IsEnabled(LogLevel.Information))
+                logger.LogUnlistedFilesAppended(
                     unlisted.Count, string.Join(", ", unlisted.Select(f => Path.GetFileName(f.FilePath))));
 
             return ([.. listed, .. unlisted], resolvedPolicy);

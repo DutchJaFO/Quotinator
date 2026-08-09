@@ -1,3 +1,4 @@
+using Quotinator.Api.Logging;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 
@@ -64,46 +65,13 @@ internal sealed class StartupSummaryLogger(
             ResolveUrls(boundAddresses, _isHa, _sslEnabled, GetLocalIp());
 
         foreach (var addr in boundAddresses)
-            _logger.LogInformation("[Server] listening on {Address:l}", addr);
+            _logger.LogListeningOn(addr);
 
         var migLine = _db.MigrationApplied is { } mig
             ? $"\n                migration applied: {mig}"
             : string.Empty;
 
-        _logger.LogInformation(
-            """
-
-            ##############################
-            #     Quotinator ready       #
-            ##############################
-            Version:        {Version:l}
-            Data:           {DataDir:l}
-            Database:       {DbPath:l}
-                            schema v{SchemaVersion} (data v{DataSchemaVersion}){MigLine:l}
-            Statistics:
-                            {QuoteCount} quotes
-                            {SourceCount} sources
-                            {CharacterCount} characters
-                            {PeopleCount} people
-                            {SeriesCount} series
-                            {UniverseCount} universes
-                            {StageDirectionCount} stage directions
-                            {SoundCueCount} sound cues
-                            {ConversationCount} conversations
-            Backups:        {BackupsDir:l}
-            DataProtection: {KeysDir:l}
-            ------------------------------
-            Log level:      {ConfiguredLogLevel:l}
-            Log requests:   {LogRequests:l}
-            SSL:            {Ssl:l}
-            Admin API key:  {AdminApiKey:l}
-            ------------------------------
-            REST API:       {RestApi:l}
-            OpenAPI UI:     {OpenApiUi:l}
-            OpenAPI spec:   {OpenApiSpec:l}
-            MCP server:     not implemented
-            ##############################
-            """,
+        _logger.LogReadyBanner(
             _version.Version, _dataDir, _dbPath, _db.SchemaVersion, _db.DataSchemaVersion, migLine,
             _db.QuoteCount, _db.SourceCount, _db.CharacterCount, _db.PeopleCount, _db.SeriesCount,
             _db.UniverseCount, _db.StageDirectionCount, _db.SoundCueCount, _db.ConversationCount,

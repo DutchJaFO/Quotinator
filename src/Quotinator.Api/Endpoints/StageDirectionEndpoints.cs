@@ -11,6 +11,7 @@ using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -46,7 +47,7 @@ internal static class StageDirectionEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0-500). 0 means every stage direction as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogInformation("[Api - GetAllStageDirections] page={Page} pageSize={PageSize}", page, pageSize);
+        logger.LogPageQuery("[Api - GetAllStageDirections]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -70,7 +71,7 @@ internal static class StageDirectionEndpoints
         ILogger<Log> logger,
         IListableRepository<StageDirectionEntity> repository)
     {
-        logger.LogInformation("[Api - GetStageDirectionById] id={Id}", id);
+        logger.LogIdQuery("[Api - GetStageDirectionById]", id);
 
         StageDirectionEntity? entity = Guid.TryParse(id, out var stageDirectionId)
             ? await repository.GetByIdAsync(stageDirectionId)

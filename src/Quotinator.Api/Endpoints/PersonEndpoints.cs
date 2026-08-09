@@ -9,6 +9,7 @@ using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -45,7 +46,7 @@ internal static class PersonEndpoints
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
         IListableRepository<PersonEntity> repository = null!)
     {
-        logger.LogInformation("[Api - GetAllPeople] page={Page} pageSize={PageSize}", page, pageSize);
+        logger.LogPageQuery("[Api - GetAllPeople]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -64,7 +65,7 @@ internal static class PersonEndpoints
         ILogger<Log> logger,
         IListableRepository<PersonEntity> repository)
     {
-        logger.LogInformation("[Api - GetPersonById] id={Id}", id);
+        logger.LogIdQuery("[Api - GetPersonById]", id);
 
         PersonResponse? response = Guid.TryParse(id, out var personId)
             ? await repository.GetByIdAsync(personId) is { } person ? ToResponse(person) : null

@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Import;
+using Quotinator.Data.Logging;
 using Quotinator.Data.Models;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
@@ -506,16 +507,18 @@ public class DatabaseInitializer(
         var legacyPath = Path.Combine(dataDir, DataPaths.LegacyDatabaseFile);
         if (!File.Exists(legacyPath) || File.Exists(_options.DbPath)) return;
 
-        Logger.LogInformation("[Database - Init] migrating legacy filename quotes.db → {NewName}", Path.GetFileName(_options.DbPath));
+        if (Logger.IsEnabled(LogLevel.Information))
+            Logger.LogLegacyFilenameMigrationStarting(Path.GetFileName(_options.DbPath));
         foreach (var suffix in new[] { "", "-wal", "-shm" })
         {
             var src = legacyPath + suffix;
             var dst = _options.DbPath + suffix;
             if (!File.Exists(src)) continue;
-            Logger.LogInformation("[Database - Init] moving {Src} → {Dst}", Path.GetFileName(src), Path.GetFileName(dst));
+            if (Logger.IsEnabled(LogLevel.Information))
+                Logger.LogMovingLegacyFile(Path.GetFileName(src), Path.GetFileName(dst));
             File.Move(src, dst);
         }
-        Logger.LogInformation("[Database - Init] filename migration complete → {Path}", _options.DbPath);
+        Logger.LogLegacyFilenameMigrationComplete(_options.DbPath);
     }
 
     private string CreateBackup(SqliteConnection connection, int fromVersion)
@@ -525,11 +528,11 @@ public class DatabaseInitializer(
         var backupName = $"{Path.GetFileNameWithoutExtension(_options.DbPath)}_v{fromVersion}_{timestamp}Z.db";
         var backupPath = Path.Combine(_options.BackupsPath, backupName);
 
-        Logger.LogInformation("[Database - Backup] backing up v{Version} → {Path}", fromVersion, backupPath);
+        Logger.LogBackupStarting(fromVersion, backupPath);
         using var dest = new SqliteConnection($"Data Source={backupPath}");
         dest.Open();
         connection.BackupDatabase(dest);
-        Logger.LogInformation("[Database - Backup] backup complete");
+        Logger.LogBackupComplete();
         return backupPath;
     }
 
@@ -599,9 +602,7 @@ public class DatabaseInitializer(
         {
             DataSchemaVersion = dataCurrent;
             SchemaVersion     = consumerCurrent;
-            Logger.LogInformation(
-                "[Database - Init] schema is up to date (data v{DataVersion}, app v{AppVersion})",
-                dataCurrent, consumerCurrent);
+            Logger.LogSchemaUpToDate(dataCurrent, consumerCurrent);
             return false;
         }
 
@@ -641,19 +642,14 @@ public class DatabaseInitializer(
             await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
         }
 
-        Logger.LogInformation(
-            "[Database - Init] schema updated (data v{DataVersion}, app v{AppVersion})",
-            DataSchemaVersion, SchemaVersion);
+        Logger.LogSchemaUpdated(DataSchemaVersion, SchemaVersion);
 
         return false;
     }
 
     private async Task ApplyBaselineAsync(SqliteConnection connection)
     {
-        Logger.LogInformation(
-            "[Database - Init] fresh database detected — creating schema directly at baseline " +
-            "(data v{DataVersion}, app v{AppVersion})...",
-            DataOwnedMigrations.Count, _consumerMigrations.Count);
+        Logger.LogCreatingSchemaAtBaseline(DataOwnedMigrations.Count, _consumerMigrations.Count);
 
         await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
         try
@@ -678,9 +674,7 @@ public class DatabaseInitializer(
 
         DataSchemaVersion = DataOwnedMigrations.Count;
         SchemaVersion     = _consumerMigrations.Count;
-        Logger.LogInformation(
-            "[Database - Init] schema created at baseline (data v{DataVersion}, app v{AppVersion})",
-            DataSchemaVersion, SchemaVersion);
+        Logger.LogSchemaCreatedAtBaseline(DataSchemaVersion, SchemaVersion);
 
         await SeedSystemContentAsync(connection);
     }
@@ -703,9 +697,7 @@ public class DatabaseInitializer(
     {
         if (current >= migrations.Count) return null;
 
-        Logger.LogInformation(
-            "[Database - Init] applying {Count} pending {Phase} migration(s) (version {Current} → {Target})...",
-            migrations.Count - current, phaseName, current, migrations.Count);
+        Logger.LogApplyingMigrationPhase(migrations.Count - current, phaseName, current, migrations.Count);
 
         for (var i = current; i < migrations.Count; i++)
         {

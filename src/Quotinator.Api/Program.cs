@@ -30,6 +30,7 @@ using Quotinator.Converters.BasicJsonArray;
 using Quotinator.Converters.Csv;
 using Quotinator.Converters.RegexArray;
 using Quotinator.Core.Import;
+using Quotinator.Api.Logging;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
 
@@ -532,7 +533,7 @@ catch (Exception ex)
         "version doesn't match its actual on-disk schema (e.g. after an interrupted upgrade). " +
         "Resolve with an explicit database Reset (POST /api/v1/admin/database/reset) or by " +
         "stopping the app, deleting the database file, and restarting.";
-    startupLogger.LogCritical(ex, "[Server] {Reason} See the exception below for the specific cause.", failureReason);
+    startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
     dbHealth.MarkFailed(failureReason);
 }
 
@@ -550,7 +551,7 @@ lifetime.ApplicationStarted.Register(() =>
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 lifetime.ApplicationStopping.Register(() =>
-    logger.LogInformation("[Server] Quotinator v{Version} stopping", versionService.Version));
+    logger.LogServerStopping(versionService.Version));
 
 // Must be first so all subsequent middleware sees the correct scheme and client IP.
 app.UseForwardedHeaders();

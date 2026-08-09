@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Description>JSON-driven changelog service for Quotinator — loads per-language changelog.*.json files and provides typed release data.</Description>
+    <Description>Shared, cross-project [LoggerMessage] logging extension methods for Quotinator — reusable message shapes callable from the domain-agnostic data layer and every consuming project.</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,12 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Quotinator.Logging\Quotinator.Logging.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>Quotinator.Changelog.Tests</_Parameter1>
+      <_Parameter1>Quotinator.Logging.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

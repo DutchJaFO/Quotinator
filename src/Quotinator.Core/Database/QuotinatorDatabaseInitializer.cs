@@ -4,6 +4,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Quotinator.Core.Import;
+using Quotinator.Core.Logging;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
@@ -92,7 +93,7 @@ public sealed class QuotinatorDatabaseInitializer(
     {
         var effectiveBatches = (await ResolveEffectiveBatchesAsync(forceSourceRefresh)).EffectiveBatches;
         var totalFiles = effectiveBatches.Sum(b => b.Files.Count);
-        Logger.LogInformation("[Database - Seed] reseed requested — clearing all data and reimporting from {Count} source file(s)...", totalFiles);
+        Logger.LogReseedRequested(totalFiles);
 
         await SharedSeedLock.WaitAsync();
         try
@@ -290,8 +291,7 @@ public sealed class QuotinatorDatabaseInitializer(
                 var conflictRules   = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
                 var sourceAliases   = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
 
-                Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
-                    quotes.Count, fileName, batch.Label);
+                Logger.LogImportingQuotes(quotes.Count, fileName, batch.Label);
 
                 var importBatch = await CreateImportBatchAsync(batch, seedFile, filePolicy);
                 var batchIdStr  = importBatch.Id.ToCanonicalId();
@@ -308,7 +308,8 @@ public sealed class QuotinatorDatabaseInitializer(
 
                 var report = ImportActionReportBuilder.Build(fileName, actions);
                 reports.Add(report);
-                Logger.LogInformation("[Database - Seed] {File} report: {Report}", fileName, FormatReport(report));
+                if (Logger.IsEnabled(LogLevel.Information))
+                    Logger.LogFileReport(fileName, FormatReport(report));
 
                 var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Seed);
                 if (applyResult is null)
@@ -354,21 +355,17 @@ public sealed class QuotinatorDatabaseInitializer(
                 else
                 {
                     stagedFiles.Add(fileName);
-                    Logger.LogInformation(
-                        "[Database - Seed] {File} left staged awaiting review — batch {BatchId}, {Count} action(s) pending a decision (GET /import/actions?batchId=<BatchId>)",
-                        fileName, batchIdStr, applyResult.PendingActionIds.Count);
+                    Logger.LogFileStagedAwaitingReview(fileName, batchIdStr, applyResult.PendingActionIds.Count);
                 }
             }
         }
 
         LastSeedReport = reports;
 
-        Logger.LogInformation("[Database - Seed] seeding complete — {Count} file(s) processed", reports.Count);
+        Logger.LogSeedingComplete(reports.Count);
 
-        if (stagedFiles.Count > 0)
-            Logger.LogInformation(
-                "[Database - Seed] {Count} source file(s) staged awaiting review: {Files}",
-                stagedFiles.Count, string.Join(", ", stagedFiles));
+        if (stagedFiles.Count > 0 && Logger.IsEnabled(LogLevel.Information))
+            Logger.LogFilesStagedAwaitingReview(stagedFiles.Count, string.Join(", ", stagedFiles));
     }
 
     private async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
@@ -411,7 +408,7 @@ public sealed class QuotinatorDatabaseInitializer(
             }
         }
 
-        Logger.LogInformation("[Database - Seed] genre re-seed complete — {Count} genre rows processed", inserted);
+        Logger.LogGenreReseedComplete(inserted);
     }
 
     private async Task LogDatabaseStatsAsync(SqliteConnection connection)
@@ -426,9 +423,7 @@ public sealed class QuotinatorDatabaseInitializer(
         SoundCueCount       = await connection.ExecuteScalarAsync<int>(Sql.SoundCues.CountActive);
         ConversationCount   = await connection.ExecuteScalarAsync<int>(Sql.Conversations.CountActive);
 
-        Logger.LogInformation(
-            "[Database - Stats] {Quotes} quotes  {Sources} sources  {Characters} characters  {People} people  " +
-            "{Series} series  {Universes} universes  {StageDirections} stage directions  {SoundCues} sound cues  {Conversations} conversations",
+        Logger.LogDatabaseStats(
             QuoteCount, SourceCount, CharacterCount, PeopleCount,
             SeriesCount, UniverseCount, StageDirectionCount, SoundCueCount, ConversationCount);
     }

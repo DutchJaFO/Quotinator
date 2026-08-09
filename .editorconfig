@@ -103,3 +103,14 @@ dotnet_diagnostic.CA2254.severity = warning
 # positionally) before reordering; the one internal self-call between the two methods was updated to
 # match the new order in the same commit.
 dotnet_diagnostic.CA1068.severity = warning
+
+# #269: CA1873 (expensive logging argument evaluation), 52 occurrences across Quotinator.Api/Core/
+# Data/Changelog. Every LogInformation/LogDebug/LogCritical call with template arguments (LogWarning/
+# LogError calls are never flagged by this rule, confirmed empirically against a clean rebuild — no
+# conversion needed for those) now goes through a [LoggerMessage]-decorated extension method: the
+# two genuinely cross-project-reusable shapes (a subsystem tag plus page/pageSize, or plus a bare id)
+# live in the new zero-dependency Quotinator.Logging project; every other message is bespoke to its
+# own project's Logging/LogMessages.cs. See docs/logging.md's "Logging call-site pattern" section for
+# the enforceable rule this escalation exists to back, and this issue's plan doc for the full
+# per-file conversion list.
+dotnet_diagnostic.CA1873.severity = warning

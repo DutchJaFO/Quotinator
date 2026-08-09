@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Quotinator.Changelog.Logging;
 using Quotinator.Changelog.Models;
 
 namespace Quotinator.Changelog.Services;
@@ -25,8 +26,7 @@ public sealed class ChangelogService : IChangelogService
 
         if (_documents.TryGetValue("en", out var english))
         {
-            _logger.LogInformation(
-                "[Changelog - Resolve] Language '{Requested}' not available — falling back to 'en'", code);
+            _logger.LogLanguageFallbackToEnglish(code);
             return english;
         }
 
@@ -108,13 +108,12 @@ public sealed class ChangelogService : IChangelogService
                 SectionHeaders    = root.SectionHeaders
             };
 
-            logger.LogDebug("[Changelog - Load] Loaded {File} ({Language}, {Count} release(s))",
-                filename, root.Language, releases.Count);
+            logger.LogChangelogFileLoaded(filename, root.Language, releases.Count);
         }
 
         AvailableLanguages = [.. _documents.Keys];
-        logger.LogInformation("[Changelog - Load] {Count} language file(s) loaded: {Languages}",
-            AvailableLanguages.Count, string.Join(", ", AvailableLanguages));
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogChangelogFilesLoaded(AvailableLanguages.Count, string.Join(", ", AvailableLanguages));
     }
 
     private static string Normalise(string? culture) =>
