@@ -8,11 +8,11 @@ namespace Quotinator.Converters.Csv;
 
 /// <summary>
 /// Converts a flat CSV rendering of Quotinator's canonical quote schema into Quotinator's canonical
-/// JSON schema. With no <see cref="CsvConverterOptions"/> supplied: header row required
+/// JSON schema. With no <see cref="CsvConverterOptionsDto"/> supplied: header row required
 /// (case-insensitive), columns <c>id, quote, originalLanguage, source, date, character, author,
 /// type, genres</c> (<c>genres</c> semicolon-delimited within its cell; <c>quote</c>/<c>source</c> are
-/// the only required columns). With <see cref="CsvConverterOptions.ColumnMapping"/> supplied, columns
-/// are matched by 1-based position instead of header text — see <see cref="CsvConverterOptions"/>. A
+/// the only required columns). With <see cref="CsvConverterOptionsDto.ColumnMapping"/> supplied, columns
+/// are matched by 1-based position instead of header text — see <see cref="CsvConverterOptionsDto"/>. A
 /// row's own <c>id</c> is used verbatim when present and non-empty; otherwise one is derived
 /// deterministically via <see cref="QuoteIdentity.StableId"/>, exactly like the other bundled
 /// converters do for sources with no id of their own.
@@ -29,7 +29,7 @@ public sealed class CsvQuoteConverter : IQuoteSourceConverter
     {
         var content     = await File.ReadAllTextAsync(inputPath, cancellationToken);
         var rows        = CsvLineParser.Parse(content);
-        var csvOptions  = options?.Deserialize<CsvConverterOptions>() ?? new CsvConverterOptions();
+        var csvOptions  = options?.Deserialize<CsvConverterOptionsDto>() ?? new CsvConverterOptionsDto();
         var mapping     = csvOptions.ColumnMapping;
         var defaults    = csvOptions.Defaults;
 
@@ -51,7 +51,7 @@ public sealed class CsvQuoteConverter : IQuoteSourceConverter
             if (!header.ContainsKey("quote") || !header.ContainsKey("source"))
                 throw new SourceConversionException($"csv: input at {inputPath} is missing a required 'quote' or 'source' column");
 
-            dataRows = rows.Skip(1).ToList();
+            dataRows = [.. rows.Skip(1)];
         }
         else
         {
@@ -60,7 +60,7 @@ public sealed class CsvQuoteConverter : IQuoteSourceConverter
             {
                 if (rows.Count < 2)
                     throw new SourceConversionException($"csv: input at {inputPath} has no header row or no data rows");
-                dataRows = rows.Skip(1).ToList();
+                dataRows = [.. rows.Skip(1)];
             }
             else
             {
@@ -68,7 +68,7 @@ public sealed class CsvQuoteConverter : IQuoteSourceConverter
             }
         }
 
-        var quotes = new List<SourceQuote>();
+        var quotes = new List<SourceQuoteDto>();
         foreach (var row in dataRows)
         {
             string? Get(string canonicalName, int? mappedIndex) => mapping is not null
@@ -78,7 +78,7 @@ public sealed class CsvQuoteConverter : IQuoteSourceConverter
             var genresRaw = Get("genres", mapping?.Genres);
             var genres    = string.IsNullOrWhiteSpace(genresRaw)
                 ? defaults?.Genres?.ToList()
-                : genresRaw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                : [.. genresRaw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
             var quote = MappedSourceQuoteBuilder.Build(
                 id:               Get("id", mapping?.Id),

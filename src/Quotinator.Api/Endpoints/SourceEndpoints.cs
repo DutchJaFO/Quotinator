@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Shared;
@@ -11,6 +12,7 @@ using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Repositories;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -20,6 +22,11 @@ internal static class SourceEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
+    private const string GetAllSourcesName = "GetAllSources";
+    private const string GetSourceByIdName = "GetSourceById";
+
     internal static void MapSourceEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/masterdata/sources")
@@ -27,7 +34,7 @@ internal static class SourceEndpoints
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
         group.MapGet("/", GetAll)
-             .WithName("GetAllSources")
+             .WithName(GetAllSourcesName)
              .WithSummary("List sources")
              .WithDescription(
                  "Returns a paginated list of Sources — the films, television series, books, and other " +
@@ -35,66 +42,52 @@ internal static class SourceEndpoints
                  "page/pageSize semantics.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetSourceById")
+             .WithName(GetSourceByIdName)
              .WithSummary("Source by ID")
              .WithDescription("Returns a single Source by UUID. Returns 404 if not found. Matches `id` case-insensitively.");
     }
 
-    private static async Task<IResult> GetAll(
+    private static Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        IListableRepository<Source> repository,
+        IListableRepository<SourceEntity> repository,
         ISourceSeriesReferenceReader seriesReader,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogInformation("[Api - GetAllSources] page={Page} pageSize={PageSize}", page, pageSize);
+        logger.LogPageQuery($"[Api - {GetAllSourcesName}]", page, pageSize);
 
-        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
-            return pageError!;
-
-        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
-
-        var beyondLast = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
-        if (beyondLast is not null)
-            return beyondLast;
-
-        var sourceIds        = result.Items.Select(s => s.Id).ToList();
-        var seriesBySourceId = await seriesReader.GetSeriesReferencesForManyAsync(sourceIds);
-
-        var items = result.Items
-            .Select(s => ToResponse(s, seriesBySourceId.TryGetValue(s.Id, out var series)
-                ? new MasterDataReference(series.Id.ToCanonicalId(), series.Name)
-                : null))
-            .ToList();
-
-        var response = new PagedItems<SourceResponse>(items, result.Page, result.PageSize, result.TotalCount);
-        return Results.Ok(response);
+        return PagedListing.GetAllAsync<SourceEntity, SourceResponse>(
+            page, pageSize, localizer, repository,
+            async items =>
+            {
+                var sourceIds        = items.Select(s => s.Id).ToList();
+                var seriesBySourceId = await seriesReader.GetSeriesReferencesForManyAsync(sourceIds);
+                return [.. items.Select(s => ToResponse(s, seriesBySourceId.TryGetValue(s.Id, out var series)
+                    ? new MasterDataReference(series.Id.ToCanonicalId(), series.Name)
+                    : null))];
+            });
     }
 
-    private static async Task<IResult> GetById(
+    private static Task<IResult> GetById(
         [Description("UUID of the source.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        IListableRepository<Source> repository,
+        IListableRepository<SourceEntity> repository,
         ISourceSeriesReferenceReader seriesReader)
     {
-        logger.LogInformation("[Api - GetSourceById] id={Id}", id);
+        logger.LogIdQuery($"[Api - {GetSourceByIdName}]", id);
 
-        if (!Guid.TryParse(id, out var guid))
-            return NotFoundResult.OkOrNotFound<SourceResponse>(null, localizer, ApiMessages.SourceNotFound);
-
-        var source = await repository.GetByIdAsync(guid);
-        if (source is null)
-            return NotFoundResult.OkOrNotFound<SourceResponse>(null, localizer, ApiMessages.SourceNotFound);
-
-        var seriesRef = await seriesReader.GetSeriesReferenceAsync(guid);
-        var series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToCanonicalId(), s.Name) : null;
-
-        return NotFoundResult.OkOrNotFound(ToResponse(source, series), localizer, ApiMessages.SourceNotFound);
+        return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.SourceNotFound,
+            async source =>
+            {
+                var seriesRef = await seriesReader.GetSeriesReferenceAsync(source.Id);
+                var series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToCanonicalId(), s.Name) : null;
+                return ToResponse(source, series);
+            });
     }
 
-    private static SourceResponse ToResponse(Source source, MasterDataReference? series) => new()
+    private static SourceResponse ToResponse(SourceEntity source, MasterDataReference? series) => new()
     {
         Id                 = source.Id.ToCanonicalId(),
         Title              = source.Title,

@@ -1,3 +1,5 @@
+using Quotinator.Data.Enums;
+
 namespace Quotinator.Core.Models;
 
 /// <summary>The API response shape for a single StageDirection.</summary>
@@ -13,5 +15,5 @@ public sealed class StageDirectionResponse
     public string? ImageUrl { get; init; }
 
     /// <summary>Whether the record's fields are known to be fully populated and reviewed.</summary>
-    public required Quotinator.Data.Entities.CompletenessStatus CompletenessStatus { get; init; }
+    public required CompletenessStatus CompletenessStatus { get; init; }
 }

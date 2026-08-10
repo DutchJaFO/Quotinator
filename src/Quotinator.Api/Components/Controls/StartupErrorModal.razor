@@ -1,0 +1,22 @@
+<div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 80vw;">
+        <div class="modal-content border-danger">
+            <div class="modal-header border-danger">
+                <h1 class="modal-title fs-5 text-danger">
+                    @Text.StartupErrorHeading
+                    <span class="badge bg-secondary ms-2 fs-6 align-middle">v@(Version)</span>
+                </h1>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">@FailureReason</p>
+
+                <p>@Text.StartupErrorLastKnownGood</p>
+                <NotificationSummary />
+                <DatabaseStatsSummary />
+            </div>
+            <div class="modal-footer border-danger">
+                <button type="button" class="btn btn-outline-danger" @onclick="OnContinue">@Text.StartupErrorContinueButton</button>
+            </div>
+        </div>
+    </div>
+</div>

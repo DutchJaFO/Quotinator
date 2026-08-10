@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Shared;
@@ -11,6 +12,7 @@ using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Repositories;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -20,6 +22,11 @@ internal static class CharacterEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
+    private const string GetAllCharactersName = "GetAllCharacters";
+    private const string GetCharacterByIdName = "GetCharacterById";
+
     internal static void MapCharacterEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/masterdata/characters")
@@ -27,7 +34,7 @@ internal static class CharacterEndpoints
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
         group.MapGet("/", GetAll)
-             .WithName("GetAllCharacters")
+             .WithName(GetAllCharactersName)
              .WithSummary("List characters")
              .WithDescription(
                  "Returns a paginated list of characters, each with the Sources it appears in (#179) as " +
@@ -35,66 +42,53 @@ internal static class CharacterEndpoints
                  "page/pageSize semantics.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetCharacterById")
+             .WithName(GetCharacterByIdName)
              .WithSummary("Character by ID")
              .WithDescription("Returns a single character with the Sources it appears in. Returns 404 if not found. Matches `id` case-insensitively.");
     }
 
-    private static async Task<IResult> GetAll(
+    private static Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        IListableRepository<Character> repository,
+        IListableRepository<CharacterEntity> repository,
         ICharacterSourceLinkReader linkReader,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogInformation("[Api - GetAllCharacters] page={Page} pageSize={PageSize}", page, pageSize);
+        logger.LogPageQuery($"[Api - {GetAllCharactersName}]", page, pageSize);
 
-        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
-            return pageError!;
-
-        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
-
-        var beyondLast = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
-        if (beyondLast is not null)
-            return beyondLast;
-
-        var characterIds     = result.Items.Select(c => c.Id).ToList();
-        var linksByCharacter = await linkReader.GetSourceReferencesForManyAsync(characterIds);
-
-        var items = result.Items
-            .Select(c => ToResponse(c, linksByCharacter.TryGetValue(c.Id, out var sources) ? sources : []))
-            .ToList();
-
-        var response = new PagedItems<CharacterResponse>(items, result.Page, result.PageSize, result.TotalCount);
-        return Results.Ok(response);
+        return PagedListing.GetAllAsync<CharacterEntity, CharacterResponse>(
+            page, pageSize, localizer, repository,
+            async items =>
+            {
+                var characterIds     = items.Select(c => c.Id).ToList();
+                var linksByCharacter = await linkReader.GetSourceReferencesForManyAsync(characterIds);
+                return [.. items.Select(c => ToResponse(c, linksByCharacter.TryGetValue(c.Id, out var sources) ? sources : []))];
+            });
     }
 
-    private static async Task<IResult> GetById(
+    private static Task<IResult> GetById(
         [Description("UUID of the character.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
-        IListableRepository<Character> repository,
+        IListableRepository<CharacterEntity> repository,
         ICharacterSourceLinkReader linkReader)
     {
-        logger.LogInformation("[Api - GetCharacterById] id={Id}", id);
+        logger.LogIdQuery($"[Api - {GetCharacterByIdName}]", id);
 
-        if (!Guid.TryParse(id, out var characterId))
-            return NotFoundResult.OkOrNotFound<CharacterResponse>(null, localizer, ApiMessages.CharacterNotFound);
-
-        var character = await repository.GetByIdAsync(characterId);
-        if (character is null)
-            return NotFoundResult.OkOrNotFound<CharacterResponse>(null, localizer, ApiMessages.CharacterNotFound);
-
-        var sources = await linkReader.GetSourceReferencesAsync(characterId);
-        return NotFoundResult.OkOrNotFound(ToResponse(character, sources), localizer, ApiMessages.CharacterNotFound);
+        return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.CharacterNotFound,
+            async character =>
+            {
+                var sources = await linkReader.GetSourceReferencesAsync(character.Id);
+                return ToResponse(character, sources);
+            });
     }
 
-    private static CharacterResponse ToResponse(Character character, IReadOnlyList<(Guid Id, string Name)> sources) => new()
+    private static CharacterResponse ToResponse(CharacterEntity character, IReadOnlyList<(Guid Id, string Name)> sources) => new()
     {
         Id                 = character.Id.ToCanonicalId(),
         Name               = character.Name,
         CompletenessStatus = character.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,
-        Sources            = sources.Select(s => new MasterDataReference(s.Id.ToCanonicalId(), s.Name)).ToList(),
+        Sources            = [.. sources.Select(s => new MasterDataReference(s.Id.ToCanonicalId(), s.Name))],
     };
 }

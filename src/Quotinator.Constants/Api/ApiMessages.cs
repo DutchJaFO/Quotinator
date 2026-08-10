@@ -1,6 +1,6 @@
 namespace Quotinator.Constants.Api;
 
-/// <summary>Keys for localised API error messages stored in i18ntext/UI.*.json.</summary>
+/// <summary>Keys for localised API-surface text (error messages, and non-Blazor server-rendered content such as the startup wait page) stored in i18ntext/UI.*.json.</summary>
 public static class ApiMessages
 {
     public const string SearchQueryRequired  = "ErrorSearchQueryRequired";
@@ -57,4 +57,16 @@ public static class ApiMessages
     public const string RuleFileOriginInvalid            = "ErrorRuleFileOriginInvalid";
     public const string RuleFileNotFound                 = "ErrorRuleFileNotFound";
     public const string RuleFileOverrideNotFound         = "ErrorRuleFileOverrideNotFound";
+    public const string FileResourceNotFound             = "ErrorFileResourceNotFound";
+    public const string LineEndingInvalid                = "ErrorLineEndingInvalid";
+    public const string KeepPerFileInvalid               = "ErrorKeepPerFileInvalid";
+    public const string FileResourceOriginInvalid        = "ErrorFileResourceOriginInvalid";
+    public const string ImportBatchTypeInvalid           = "ErrorImportBatchTypeInvalid";
+    public const string ImportBatchStatusInvalid         = "ErrorImportBatchStatusInvalid";
+    public const string AuditExportDateInvalid           = "ErrorAuditExportDateInvalid";
+    public const string AuditExportDateRangeInvalid      = "ErrorAuditExportDateRangeInvalid";
+    public const string AuditExportRowCapExceeded        = "ErrorAuditExportRowCapExceeded";
+    public const string NotificationNotFound             = "ErrorNotificationNotFound";
+    public const string StartupWaitHeading               = "StartupWaitHeading";
+    public const string StartupWaitBody                  = "StartupWaitBody";
 }

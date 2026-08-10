@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Quotinator.Core.Import;
 
-/// <summary>A translated version of a <see cref="SourceSoundCue"/>'s text for a specific language.</summary>
+/// <summary>A translated version of a <see cref="SourceSoundCueDto"/>'s text for a specific language.</summary>
 public sealed class SourceSoundCueTranslation
 {
     /// <summary>The translated text.</summary>

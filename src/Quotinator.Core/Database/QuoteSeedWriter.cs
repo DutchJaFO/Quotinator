@@ -1,3 +1,5 @@
+using Quotinator.Core.Enums;
+using Quotinator.Data.Enums;
 using System.Text.Json;
 using Dapper;
 using Dapper.Contrib.Extensions;
@@ -15,7 +17,7 @@ using Quotinator.Core.Queries;
 namespace Quotinator.Core.Database;
 
 /// <summary>
-/// Shared insert/merge primitives for writing a <see cref="SourceQuote"/> (and its Source/Character/
+/// Shared insert/merge primitives for writing a <see cref="SourceQuoteDto"/> (and its Source/Character/
 /// Person/Translation/Genre rows) into the database, plus conflict logging and existing-row lookup.
 /// Used by both <see cref="QuotinatorDatabaseInitializer"/>'s startup seeding and the
 /// <c>POST /api/v1/import</c> endpoint's live import service — one copy of this logic, not two.
@@ -24,14 +26,14 @@ internal static class QuoteSeedWriter
 {
     // Reverse of InputValidation.GenreApiToDb — DB enum name (e.g. "SciFi") back to the wire-format
     // tag (e.g. "sci-fi"), needed to rebuild a QuoteFieldMerge-compatible field map from stored rows.
-    private static readonly IReadOnlyDictionary<string, string> GenreDbToApi =
+    private static readonly Dictionary<string, string> GenreDbToApi =
         InputValidation.GenreApiToDb.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Bundles the change-log writer and initiator identity shared across every Source/Character/Person/Quote write within one seeding run or one import call (#56).</summary>
-    internal readonly record struct ChangeLogContext(ISystemChangeLogWriter Writer, InitiatorType InitiatedByType, string? InitiatedById);
+    internal readonly record struct ChangeLogContext(IChangeWriter Writer, InitiatorType InitiatedByType, string? InitiatedById);
 
     /// <summary>
-    /// Writes one <see cref="SystemChangeLog"/> for a Created/Modified operation on a domain entity.
+    /// Writes one <see cref="Quotinator.Data.Entities.ChangeEntity"/> for a Created/Modified operation on a domain entity.
     /// <paramref name="oldValue"/>/<paramref name="newValue"/> are serialised as whole-record JSON
     /// snapshots (per #56's Scope changes — one row per operation, not one per field); pass <c>null</c>
     /// for whichever side doesn't apply (e.g. <paramref name="oldValue"/> for a brand-new row).
@@ -40,7 +42,7 @@ internal static class QuoteSeedWriter
         ChangeLogContext changeLog, string entityType, string entityId, ChangeAction action,
         object? oldValue, object? newValue, SqliteConnection connection, SqliteTransaction? transaction = null)
     {
-        await changeLog.Writer.LogAsync(new SystemChangeLog
+        await changeLog.Writer.LogAsync(new ChangeEntity
         {
             EntityType      = entityType,
             EntityId        = entityId,
@@ -62,7 +64,7 @@ internal static class QuoteSeedWriter
     /// violate the unique constraint.
     /// </summary>
     internal static async Task<Guid> GetOrCreateSourceAsync(
-        SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId,
+        SqliteConnection connection, SourceQuoteDto q, Dictionary<string, Guid> index, Guid importBatchId,
         ChangeLogContext changeLog, SqliteTransaction? transaction = null)
     {
         var typeStr = q.Type.ToString();
@@ -78,7 +80,7 @@ internal static class QuoteSeedWriter
         }
 
         var id = Guid.NewGuid();
-        await connection.InsertAsync(new Source
+        await connection.InsertAsync(new SourceEntity
         {
             Id            = id,
             Title         = q.Source,
@@ -100,7 +102,7 @@ internal static class QuoteSeedWriter
     /// miss — see <see cref="GetOrCreateSourceAsync"/> for why.
     /// </summary>
     internal static async Task<Guid?> GetOrCreatePersonAsync(
-        SqliteConnection connection, SourceQuote q, Dictionary<string, Guid> index, Guid importBatchId,
+        SqliteConnection connection, SourceQuoteDto q, Dictionary<string, Guid> index, Guid importBatchId,
         ChangeLogContext changeLog, SqliteTransaction? transaction = null)
     {
         if (string.IsNullOrWhiteSpace(q.Author)) return null;
@@ -116,7 +118,7 @@ internal static class QuoteSeedWriter
         }
 
         var id = Guid.NewGuid();
-        await connection.InsertAsync(new Person
+        await connection.InsertAsync(new PersonEntity
         {
             Id            = id,
             Name          = q.Author,
@@ -141,7 +143,7 @@ internal static class QuoteSeedWriter
     /// constraint on every insert (found live, not assumed — see ADR 012's Quotes.Id revision history).
     /// </summary>
     internal static async Task InsertTranslationsAsync(
-        SqliteConnection connection, SourceQuote q, Guid quoteId, Guid sourceId, string now,
+        SqliteConnection connection, SourceQuoteDto q, Guid quoteId, Guid sourceId, string now,
         SqliteTransaction? transaction = null)
     {
         foreach (var (lang, t) in q.Translations)
@@ -153,7 +155,7 @@ internal static class QuoteSeedWriter
                     Id        = Guid.NewGuid().ToString(),
                     QuoteId   = quoteId.ToString("D"),
                     Language  = lang,
-                    QuoteText = t.QuoteText,
+                    t.QuoteText,
                     DateCreated = now
                 }, transaction);
 
@@ -163,7 +165,7 @@ internal static class QuoteSeedWriter
                     Sql.SourceTranslations.CountForSource,
                     new { sid = sourceId, lang }, transaction);
                 if (exists == 0)
-                    await connection.InsertAsync(new SourceTranslation
+                    await connection.InsertAsync(new SourceTranslationEntity
                     {
                         SourceId = sourceId,
                         Language = lang,
@@ -179,7 +181,7 @@ internal static class QuoteSeedWriter
     /// cref="InsertTranslationsAsync"/>'s remark for why this must match <c>Quotes.Id</c>'s canonical form.
     /// </summary>
     internal static async Task InsertGenresAsync(
-        SqliteConnection connection, SourceQuote q, Guid quoteId, string now, SqliteTransaction? transaction = null)
+        SqliteConnection connection, SourceQuoteDto q, Guid quoteId, string now, SqliteTransaction? transaction = null)
     {
         foreach (var genre in q.Genres)
         {

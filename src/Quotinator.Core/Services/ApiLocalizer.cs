@@ -32,13 +32,14 @@ public interface IApiLocalizer
 /// implementation (including test fakes) calls this from its own <c>Format</c> method rather than
 /// reimplementing the substitution logic.
 /// </summary>
-public static class ApiLocalizerFormatting
+public static partial class ApiLocalizerFormatting
 {
-    private static readonly Regex PlaceholderPattern = new(@"\{(\d+)\}", RegexOptions.Compiled);
+    [GeneratedRegex(@"\{(\d+)\}")]
+    private static partial Regex PlaceholderPattern();
 
     /// <summary>Substitutes <c>{0}</c>/<c>{1}</c>-style placeholders in <paramref name="template"/> from <paramref name="args"/>, by position.</summary>
     public static string Substitute(string template, params object[] args)
-        => PlaceholderPattern.Replace(template, m =>
+        => PlaceholderPattern().Replace(template, m =>
         {
             var index = int.Parse(m.Groups[1].Value);
             return index < args.Length ? args[index]?.ToString() ?? string.Empty : m.Value;
@@ -49,18 +50,13 @@ public static class ApiLocalizerFormatting
 /// Reads all <c>UI.*.json</c> localisation files at startup and resolves strings
 /// against <see cref="CultureInfo.CurrentUICulture"/> at call time.
 /// </summary>
-public sealed class ApiLocalizer : IApiLocalizer
+/// <remarks>Initialises the localizer by loading all <c>UI.*.json</c> files from <paramref name="i18nTextDir"/>.</remarks>
+/// <param name="i18nTextDir">Directory that contains the <c>UI.*.json</c> translation files.</param>
+public sealed class ApiLocalizer(string i18nTextDir) : IApiLocalizer
 {
-    private readonly Dictionary<string, IReadOnlyDictionary<string, string>> _tables;
-
-    /// <summary>Initialises the localizer by loading all <c>UI.*.json</c> files from <paramref name="i18nTextDir"/>.</summary>
-    /// <param name="i18nTextDir">Directory that contains the <c>UI.*.json</c> translation files.</param>
-    public ApiLocalizer(string i18nTextDir)
-    {
-        _tables = Directory
+    private readonly Dictionary<string, IReadOnlyDictionary<string, string>> _tables = Directory
             .GetFiles(i18nTextDir, "UI.*.json")
             .ToDictionary(ExtractLang, LoadTable);
-    }
 
     /// <inheritdoc/>
     public string this[string key] => Resolve(key);

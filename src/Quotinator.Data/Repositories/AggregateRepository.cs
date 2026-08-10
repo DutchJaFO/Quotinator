@@ -1,4 +1,5 @@
 using Quotinator.Data.Connections;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Repositories;
@@ -13,7 +14,7 @@ namespace Quotinator.Data.Repositories;
 /// <typeparam name="TChild">Child entity type.</typeparam>
 public abstract class AggregateRepository<TParent, TChild>(
     IDbConnectionFactory factory,
-    ISystemAuditWriter auditWriter,
+    IAuditEntryWriter auditWriter,
     ICallerContext callerContext)
     : SqliteRepository<TParent>(factory, auditWriter, callerContext)
     where TParent : RecordBase

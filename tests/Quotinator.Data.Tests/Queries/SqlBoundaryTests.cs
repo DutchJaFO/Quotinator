@@ -14,12 +14,16 @@ public class SqlBoundaryTests
     /// <c>ImportBatches</c> stays here — it never interacts with a consumer-defined entity (see
     /// ADR 004's consumer-entity-interaction test, issue #158) — after #157 briefly moved it to
     /// Engine on the mistaken assumption that its existing (also-misplaced) entity location was
-    /// correct.
+    /// correct. <c>FileResources</c> (#251) stays here for the same reason — it only touches
+    /// Import_FileResource/Import_FileResourceLine/Import_FileResourceBatch and the already-Data-owned
+    /// Import_Batch, never a consumer-defined entity. <c>Notifications</c> (#278) stays here too —
+    /// System_Notification is operational/system content, not quote-domain content, and never
+    /// references a consumer-defined entity.
     /// </summary>
     [TestMethod]
     public void Sql_ContainsOnlyGenericInfrastructureQueries()
     {
-        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides" };
+        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides", "FileResources", "Notifications" };
 
         var actual = typeof(Sql)
             .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)
@@ -27,7 +31,7 @@ public class SqlBoundaryTests
             .ToHashSet();
 
         Assert.AreSequenceEqual(
-            expected.ToList(), actual.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "Quotinator.Data.Queries.Sql contains a nested type outside the documented generic-infrastructure " +
+            [.. expected], [.. actual], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "Quotinator.Data.Queries.Sql contains a nested type outside the documented generic-infrastructure " +
             "set. Domain-specific query sets (Quotes, Characters, Sources, Conversations, etc.) must live in " +
             "Quotinator.Core.Queries.Sql instead — see ADR 004 and issues #157/#206.");
     }

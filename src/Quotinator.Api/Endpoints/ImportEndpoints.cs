@@ -11,6 +11,7 @@ using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Csv;
 using Quotinator.Data.Import;
+using Quotinator.Api.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -53,7 +54,7 @@ internal static class ImportEndpoints
                 IApiLocalizer localizer,
                 ILogger<Log> logger,
                 CancellationToken cancellationToken) =>
-                    HandleImportAsync(file, settings, importService, localizer, logger, preview: true, cancellationToken))
+                    HandleImportAsync(file, settings, importService, localizer, logger, preview: true, purgeOnSuccess: false, cancellationToken))
              .DisableAntiforgery()
              .Produces<ImportResultResponse>(StatusCodes.Status200OK)
              .Produces<ImportResultResponse>(StatusCodes.Status202Accepted)
@@ -76,6 +77,7 @@ internal static class ImportEndpoints
                 // QuoteEndpoints.cs), which the global BadRequestExceptionHandler safety net then reports as
                 // a generic, misleading "numeric parameters" 422. Parsed explicitly below instead.
                 [Description("Applies an already-staged batch (from a prior `/import` or `/import/preview` call) instead of uploading a file — alias for `POST /import/actions/apply` that returns the same response shape the file-upload mode does.")] string? batchId,
+                [Description("#249: when true and the call results in the batch having zero pending actions, that batch's conflict-resolution history (Import_Action rows) is purged immediately. Forfeits `POST /import/actions/reverse` for this batch.")] bool? purgeOnSuccess,
                 // HttpRequest, not a bound IFormFile?/[FromForm] string? pair — this route accepts a request
                 // with no body at all in batchId mode. Minimal API's automatic form binding always requires
                 // a form content-type to even attempt binding; a request with no Content-Type/body fails
@@ -89,8 +91,8 @@ internal static class ImportEndpoints
                 ILogger<Log> logger,
                 CancellationToken cancellationToken) =>
                     batchId is not null
-                        ? HandleApplyBatchAsync(batchId, importService, localizer, logger, cancellationToken)
-                        : HandleImportFromRequestAsync(request, importService, localizer, logger, cancellationToken))
+                        ? HandleApplyBatchAsync(batchId, purgeOnSuccess ?? false, importService, localizer, logger, cancellationToken)
+                        : HandleImportFromRequestAsync(request, purgeOnSuccess ?? false, importService, localizer, logger, cancellationToken))
              .DisableAntiforgery()
              .Accepts<IFormFile>("multipart/form-data")
              .Produces<ImportResultResponse>(StatusCodes.Status200OK)
@@ -111,6 +113,9 @@ internal static class ImportEndpoints
                  "Returns `404` if `batchId` doesn't exist, or `422` if neither `file` nor `batchId` is given. Either mode " +
                  "returns `200` when everything applied, or `202` when any row needs a decision (adjust the file and " +
                  "re-import, or decide the ambiguous rows via `POST /api/v1/import/actions/{id}/decide` then re-apply). " +
+                 "`purgeOnSuccess=true` (#249) purges the batch's conflict-resolution history (`Import_Action` rows) " +
+                 "immediately once it applies fully — has no effect on a `202` response, since nothing applied. " +
+                 "Purging forfeits `POST /import/actions/reverse` for that batch, since it depends on those same rows. " +
                  ImportDescription);
 
         // ── #154: unified staging engine — /import/actions/* ────────────────────
@@ -167,7 +172,7 @@ internal static class ImportEndpoints
 
             return Results.Ok(rows);
         })
-        .Produces<IReadOnlyList<ImportActionFieldRow>>(StatusCodes.Status200OK)
+        .Produces<IReadOnlyList<ImportActionFieldRowResponse>>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
         .WithName("ExportImportActionBatch")
         .WithSummary("Export a staged batch's decidable fields as a flat file")
@@ -327,6 +332,7 @@ internal static class ImportEndpoints
 
         adminGroup.MapPost("/actions/apply", async (
             string? batchId,
+            bool? purgeOnSuccess,
             IImportActionService service,
             IApiLocalizer localizer) =>
         {
@@ -338,7 +344,7 @@ internal static class ImportEndpoints
             if (string.IsNullOrWhiteSpace(batchId))
                 return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-            var stillPending = await service.ApplyBatchAsync(batchId);
+            var stillPending = await service.ApplyBatchAsync(batchId, purgeOnSuccess: purgeOnSuccess ?? false);
             return stillPending is null
                 ? Results.Ok()
                 : Results.Problem(
@@ -354,6 +360,10 @@ internal static class ImportEndpoints
             "until every action in the batch has been decided. If any are still pending, applies " +
             "nothing and returns `422` with the list of action ids still needing a decision. " +
             "Returns `422` if `batchId` is missing. " +
+            "`purgeOnSuccess=true` (#249) purges the batch's conflict-resolution history (`Import_Action` " +
+            "rows) immediately once it applies fully — has no effect on the `422`/still-pending outcome. " +
+            "Purging forfeits `POST /import/actions/reverse` for that batch, since it depends on those " +
+            "same rows. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
 
         adminGroup.MapPost("/actions/discard", async (
@@ -432,12 +442,12 @@ internal static class ImportEndpoints
     // "missing required properties" despite the data being present under its camelCase name.
     private static readonly JsonSerializerOptions BulkDecideRowJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-    // Row-by-row, not JsonSerializer.Deserialize<List<ImportActionFieldRow>> in one call — a single
+    // Row-by-row, not JsonSerializer.Deserialize<List<ImportActionFieldRowDto>> in one call — a single
     // malformed element would otherwise abort the whole file's parse, violating the "one bad row never
     // aborts the rest" contract (#163 spec requirement 6) for the parse stage specifically.
-    private static (List<ImportActionFieldRow> Rows, List<BulkDecideRowError> Errors) ParseJsonRows(string content)
+    private static (List<ImportActionFieldRowDto> Rows, List<BulkDecideRowError> Errors) ParseJsonRows(string content)
     {
-        var rows   = new List<ImportActionFieldRow>();
+        var rows   = new List<ImportActionFieldRowDto>();
         var errors = new List<BulkDecideRowError>();
 
         JsonElement root;
@@ -463,7 +473,7 @@ internal static class ImportEndpoints
             index++;
             try
             {
-                rows.Add(element.Deserialize<ImportActionFieldRow>(BulkDecideRowJsonOptions) ?? throw new JsonException("Row is null."));
+                rows.Add(element.Deserialize<ImportActionFieldRowDto>(BulkDecideRowJsonOptions) ?? throw new JsonException("Row is null."));
             }
             catch (JsonException ex)
             {
@@ -476,9 +486,9 @@ internal static class ImportEndpoints
 
     // Same per-row resilience as ParseJsonRows — one malformed CSV line is reported and skipped, not
     // an aborted parse of the whole file.
-    private static (List<ImportActionFieldRow> Rows, List<BulkDecideRowError> Errors) ParseCsvRows(string content)
+    private static (List<ImportActionFieldRowDto> Rows, List<BulkDecideRowError> Errors) ParseCsvRows(string content)
     {
-        var rows   = new List<ImportActionFieldRow>();
+        var rows   = new List<ImportActionFieldRowDto>();
         var errors = new List<BulkDecideRowError>();
         var lines  = CsvLineParser.Parse(content);
 
@@ -499,9 +509,9 @@ internal static class ImportEndpoints
 
     private static async Task<IResult> HandleImportAsync(
         IFormFile? file, string? settingsJson, IQuoteImportService importService, IApiLocalizer localizer,
-        ILogger<Log> logger, bool preview, CancellationToken cancellationToken)
+        ILogger<Log> logger, bool preview, bool purgeOnSuccess, CancellationToken cancellationToken)
     {
-        logger.LogInformation("[Api - Import] preview={Preview} file={File}", preview, file?.FileName);
+        logger.LogImportPreviewRequest(preview, file?.FileName);
 
         if (file is null || file.Length == 0)
             return Results.Problem(detail: localizer[ApiMessages.ImportFileMissing], statusCode: StatusCodes.Status422UnprocessableEntity);
@@ -515,7 +525,7 @@ internal static class ImportEndpoints
         try
         {
             await using var stream = file.OpenReadStream();
-            var result = await importService.ImportAsync(stream, file.FileName, settings, preview, cancellationToken);
+            var result = await importService.ImportAsync(stream, file.FileName, settings, preview, purgeOnSuccess, cancellationToken);
             return ToStatusCodeResult(result);
         }
         catch (UnknownConverterException ex)
@@ -538,7 +548,7 @@ internal static class ImportEndpoints
     // thrown exception, for a request with no form content-type at all — see the route registration's
     // comment on `HttpRequest request` for why binding is done manually instead).
     private static async Task<IResult> HandleImportFromRequestAsync(
-        HttpRequest request, IQuoteImportService importService, IApiLocalizer localizer,
+        HttpRequest request, bool purgeOnSuccess, IQuoteImportService importService, IApiLocalizer localizer,
         ILogger<Log> logger, CancellationToken cancellationToken)
     {
         if (!request.HasFormContentType)
@@ -547,20 +557,20 @@ internal static class ImportEndpoints
         var form = await request.ReadFormAsync(cancellationToken);
         return await HandleImportAsync(
             form.Files["file"], form["settings"].FirstOrDefault(),
-            importService, localizer, logger, preview: false, cancellationToken);
+            importService, localizer, logger, preview: false, purgeOnSuccess, cancellationToken);
     }
 
     private static async Task<IResult> HandleApplyBatchAsync(
-        string batchIdRaw, IQuoteImportService importService, IApiLocalizer localizer, ILogger<Log> logger, CancellationToken cancellationToken)
+        string batchIdRaw, bool purgeOnSuccess, IQuoteImportService importService, IApiLocalizer localizer, ILogger<Log> logger, CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(batchIdRaw, out var batchId))
             return Results.Problem(detail: localizer[ApiMessages.ImportBatchNotFound], statusCode: StatusCodes.Status404NotFound);
 
-        logger.LogInformation("[Api - Import] applying already-staged batch {BatchId}", batchId);
+        logger.LogImportApplyingStagedBatch(batchId);
 
         try
         {
-            var result = await importService.ApplyStagedBatchAsync(batchId, cancellationToken);
+            var result = await importService.ApplyStagedBatchAsync(batchId, purgeOnSuccess, cancellationToken);
             return ToStatusCodeResult(result);
         }
         catch (ImportBatchNotFoundException)

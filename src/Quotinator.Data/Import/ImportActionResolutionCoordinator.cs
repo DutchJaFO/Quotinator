@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Data;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
@@ -6,24 +7,20 @@ using Quotinator.Data.Repositories;
 namespace Quotinator.Data.Import;
 
 /// <summary>SQLite-backed implementation of <see cref="IImportActionCoordinator"/>.</summary>
-public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
+/// <remarks>Initialises the coordinator with the reader/writer it orchestrates and a connection factory for its own transactions.</remarks>
+/// <param name="reader">Reader used to look up staged import actions and their current state.</param>
+/// <param name="writer">Writer used to stage, decide, and apply/discard import actions.</param>
+/// <param name="factory">Factory used to open connections and transactions for operations with no caller-supplied connection.</param>
+public sealed class ImportActionResolutionCoordinator(IImportActionReader reader, IImportActionWriter writer, IDbConnectionFactory factory) : IImportActionCoordinator
 {
-    private readonly ISystemImportActionReader _reader;
-    private readonly ISystemImportActionWriter _writer;
-    private readonly IDbConnectionFactory _factory;
-
-    /// <summary>Initialises the coordinator with the reader/writer it orchestrates and a connection factory for its own transactions.</summary>
-    public ImportActionResolutionCoordinator(ISystemImportActionReader reader, ISystemImportActionWriter writer, IDbConnectionFactory factory)
-    {
-        _reader  = reader;
-        _writer  = writer;
-        _factory = factory;
-    }
+    private readonly IImportActionReader _reader = reader;
+    private readonly IImportActionWriter _writer = writer;
+    private readonly IDbConnectionFactory _factory = factory;
 
     /// <inheritdoc/>
-    public async Task StageAsync(IEnumerable<SystemImportAction> actions, IDbConnection? connection = null, IDbTransaction? transaction = null)
+    public async Task StageAsync(IEnumerable<ImportActionEntity> actions, IDbConnection? connection = null, IDbTransaction? transaction = null)
     {
-        var list = actions as IReadOnlyCollection<SystemImportAction> ?? actions.ToList();
+        var list = actions as IReadOnlyCollection<ImportActionEntity> ?? [.. actions];
         if (list.Count == 0) return;
 
         if (connection is not null)
@@ -76,7 +73,7 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
     /// <inheritdoc/>
     public async Task<IReadOnlyList<Guid>?> TryApplyBatchAsync(
         string batchId,
-        Func<SystemImportAction, IDbConnection, IDbTransaction, Task> applyResolvedAction,
+        Func<ImportActionEntity, IDbConnection, IDbTransaction, Task> applyResolvedAction,
         CancellationToken cancellationToken = default)
     {
         var actions = await _reader.GetAllForBatchAsync(batchId);
@@ -132,7 +129,7 @@ public sealed class ImportActionResolutionCoordinator : IImportActionCoordinator
     /// <inheritdoc/>
     public async Task<IReadOnlyList<Guid>?> TryReverseBatchAsync(
         string batchId,
-        Func<IReadOnlyList<SystemImportAction>, IDbConnection, IDbTransaction, Task> reverseActions,
+        Func<IReadOnlyList<ImportActionEntity>, IDbConnection, IDbTransaction, Task> reverseActions,
         CancellationToken cancellationToken = default)
     {
         var actions = await _reader.GetAllForBatchAsync(batchId);

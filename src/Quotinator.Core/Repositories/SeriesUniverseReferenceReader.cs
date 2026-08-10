@@ -1,30 +1,23 @@
-using Dapper;
-using Quotinator.Data.Connections;
 using Quotinator.Data.Helpers;
 using Quotinator.Core.Queries;
+using Quotinator.Data.Repositories;
 
 namespace Quotinator.Core.Repositories;
 
 /// <summary>SQLite implementation of <see cref="ISeriesUniverseReferenceReader"/>.</summary>
-public sealed class SeriesUniverseReferenceReader : ISeriesUniverseReferenceReader
+/// <remarks>Initialises the reader with its join-query repositories — per ADR 017, SQL execution goes
+/// through <see cref="JoinQueryRepository{TResult}"/>/<see cref="Quotinator.Data.Queries.IJoinStrategy{TResult}"/> rather than a raw connection.</remarks>
+/// <param name="referenceRepository">Executes the single-Series active Universe reference join.</param>
+/// <param name="batchRepository">Executes the batched active Universe reference join.</param>
+public sealed class SeriesUniverseReferenceReader(
+    JoinQueryRepository<UniverseReferenceRow> referenceRepository,
+    JoinQueryRepository<SeriesUniverseReferenceRow> batchRepository) : ISeriesUniverseReferenceReader
 {
-    private readonly IDbConnectionFactory _factory;
-
-    /// <summary>Initialises the reader with the connection factory.</summary>
-    public SeriesUniverseReferenceReader(IDbConnectionFactory factory)
-    {
-        _factory = factory;
-    }
-
     /// <inheritdoc/>
     public async Task<(Guid Id, string Name)?> GetUniverseReferenceAsync(Guid seriesId)
     {
-        var param = new { seriesId = seriesId.ToCanonicalId() };
-
-        using var conn = _factory.CreateConnection();
-        conn.Open();
-        var row = await conn.QueryFirstOrDefaultAsync<UniverseReferenceRow>(
-            Sql.Series.SelectUniverseReferenceForSeries, param);
+        var rows = await referenceRepository.QueryAsync(new { seriesId = seriesId.ToCanonicalId() });
+        var row = rows.Count > 0 ? rows[0] : null;
 
         return row is null ? null : (row.Id, row.Name);
     }
@@ -35,17 +28,9 @@ public sealed class SeriesUniverseReferenceReader : ISeriesUniverseReferenceRead
         if (seriesIds.Count == 0)
             return new Dictionary<Guid, (Guid Id, string Name)>();
 
-        var param = new { seriesIds = seriesIds.Select(id => id.ToCanonicalId()).ToList() };
-
-        using var conn = _factory.CreateConnection();
-        conn.Open();
-        var rows = await conn.QueryAsync<SeriesUniverseReferenceRow>(
-            Sql.Series.SelectUniverseReferencesForSeries, param);
+        var canonicalIds = seriesIds.Select(id => id.ToCanonicalId()).ToList();
+        var rows = await batchRepository.QueryAsync(new { seriesIds = canonicalIds });
 
         return rows.ToDictionary(r => r.SeriesId, r => (r.UniverseId, r.UniverseName));
     }
-
-    private sealed record UniverseReferenceRow(Guid Id, string Name);
-
-    private sealed record SeriesUniverseReferenceRow(Guid SeriesId, Guid UniverseId, string UniverseName);
 }

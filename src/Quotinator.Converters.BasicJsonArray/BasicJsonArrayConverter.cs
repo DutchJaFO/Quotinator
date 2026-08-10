@@ -6,10 +6,10 @@ namespace Quotinator.Converters.BasicJsonArray;
 
 /// <summary>
 /// Converts a flat JSON array of objects into Quotinator's canonical quote schema. With no
-/// <see cref="BasicJsonArrayConverterOptions"/> supplied, each canonical field is read from the raw
+/// <see cref="BasicJsonArrayConverterOptionsDto"/> supplied, each canonical field is read from the raw
 /// JSON property of the same name (e.g. <c>quote</c>, <c>source</c>) — a source whose raw property
 /// names already match Quotinator's canonical names needs no configuration at all. With
-/// <see cref="BasicJsonArrayConverterOptions.PropertyMapping"/> supplied, a canonical field is instead
+/// <see cref="BasicJsonArrayConverterOptionsDto.PropertyMapping"/> supplied, a canonical field is instead
 /// read from the named raw property. A row's own <c>id</c> is used verbatim when present and
 /// non-empty; otherwise one is derived deterministically via <see cref="QuoteIdentity.StableId"/>,
 /// exactly like the other bundled converters do for sources with no id of their own.
@@ -41,11 +41,11 @@ public sealed class BasicJsonArrayConverter : IQuoteSourceConverter
         if (rawEntries is null || rawEntries.Count == 0)
             throw new SourceConversionException($"basic-json-array: input at {inputPath} contained no entries");
 
-        var jsonOptions = options?.Deserialize<BasicJsonArrayConverterOptions>() ?? new BasicJsonArrayConverterOptions();
+        var jsonOptions = options?.Deserialize<BasicJsonArrayConverterOptionsDto>() ?? new BasicJsonArrayConverterOptionsDto();
         var mapping     = jsonOptions.PropertyMapping;
         var defaults    = jsonOptions.Defaults;
 
-        var quotes = new List<SourceQuote>();
+        var quotes = new List<SourceQuoteDto>();
         foreach (var entry in rawEntries)
         {
             string? Get(string canonicalName, string? mappedProperty)
@@ -86,11 +86,10 @@ public sealed class BasicJsonArrayConverter : IQuoteSourceConverter
     /// <summary>A genres value may be a JSON array of strings (each element becomes one genre) or a single JSON string (becomes one genre) — no delimiter splitting needed, unlike CSV, since JSON expresses arrays natively.</summary>
     private static List<string>? ParseGenres(JsonElement element) => element.ValueKind switch
     {
-        JsonValueKind.Array => element.EnumerateArray()
+        JsonValueKind.Array => [.. element.EnumerateArray()
             .Select(e => e.ValueKind == JsonValueKind.String ? e.GetString() : null)
             .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => s!)
-            .ToList(),
+            .Select(s => s!)],
         JsonValueKind.String when element.GetString() is { Length: > 0 } s => [s],
         _ => null,
     };

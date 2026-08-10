@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Text.Json;
 using Quotinator.Core.Models;
 using Quotinator.Data.Import;
@@ -6,7 +7,7 @@ namespace Quotinator.Core.Database;
 
 /// <summary>
 /// Generates <see cref="ConflictResolutionRule"/> entries from a batch's already-decided
-/// <see cref="ImportActionFieldRow"/> export rows (#153, Phase 2 of #163) — the same flat rows
+/// <see cref="ImportActionFieldRowResponse"/> export rows (#153, Phase 2 of #163) — the same flat rows
 /// <c>GET /import/actions/export</c> produces. Reuses that shape rather than re-reading raw
 /// <c>SystemImportAction</c> payloads directly, so a generated rule is always built from exactly the
 /// same field set a human reviewing the export file would see.
@@ -27,7 +28,7 @@ public static class ConflictRuleGenerator
     /// row per <em>decidable</em> field for that entity type — the full mergeable field set, not a
     /// subset — matching every hand-authored rule's own "complete field set on both sides" convention.
     /// </summary>
-    public static IReadOnlyList<ConflictResolutionRule> Generate(IReadOnlyList<ImportActionFieldRow> rows)
+    public static IReadOnlyList<ConflictResolutionRule> Generate(IReadOnlyList<ImportActionFieldRowResponse> rows)
     {
         var result = new List<ConflictResolutionRule>();
 
@@ -75,7 +76,7 @@ public static class ConflictRuleGenerator
     /// hand-authored field's resolution, and the entry's own recorded <c>ExistingRecord</c>/
     /// <c>IncomingRecord</c> snapshot, are left exactly as the file already has them.
     /// </summary>
-    public static ConflictResolutionRuleFile Merge(ConflictResolutionRuleFile? existing, IReadOnlyList<ConflictResolutionRule> generated)
+    public static ConflictResolutionRuleFileDto Merge(ConflictResolutionRuleFileDto? existing, IReadOnlyList<ConflictResolutionRule> generated)
     {
         var merged = existing?.Rules.ToList() ?? [];
         var byEntityId = merged.ToDictionary(r => r.EntityId, StringComparer.OrdinalIgnoreCase);
@@ -103,7 +104,7 @@ public static class ConflictRuleGenerator
             };
         }
 
-        return new ConflictResolutionRuleFile { Rules = merged };
+        return new ConflictResolutionRuleFileDto { Rules = merged };
     }
 
     private static object? DecodeFieldValue(string field, string? value) =>

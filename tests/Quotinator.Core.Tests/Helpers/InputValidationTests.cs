@@ -1,3 +1,4 @@
+using Quotinator.Core.Enums;
 using System.Text.Json;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
@@ -107,7 +108,7 @@ public class InputValidationTests
         var expected = Enum.GetValues<QuoteType>()
             .Where(t => t != QuoteType.Unknown)
             .Select(t => t.ToString().ToLowerInvariant());
-        Assert.AreSequenceEqual(expected.ToList(), InputValidation.ValidTypes.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual([.. expected], [.. InputValidation.ValidTypes], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     #endregion
@@ -160,7 +161,7 @@ public class InputValidationTests
         var expected = Enum.GetValues<Genre>()
             .Where(g => g != Genre.Unknown)
             .Select(g => JsonNamingPolicy.KebabCaseLower.ConvertName(g.ToString()));
-        Assert.AreSequenceEqual(expected.ToList(), InputValidation.ValidGenres.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual([.. expected], [.. InputValidation.ValidGenres], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     #endregion
@@ -209,7 +210,7 @@ public class InputValidationTests
 
     [TestMethod]
     [DataRow("' OR 1=1 --")]
-    [DataRow("'; DROP TABLE Quotes --")]
+    [DataRow("'; DROP TABLE Quotinator_Quote --")]
     [DataRow("UNION SELECT * FROM Users")]
     [DataRow("/* comment */")]
     [DataRow("EXEC(xp_cmdshell)")]

@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -29,8 +30,8 @@ public static class EffectiveRuleFileResolver
         IRuleFileOverridePathResolver pathResolver,
         ISourceFileOverrideRegistry registry,
         ILogger logger,
-        CancellationToken cancellationToken = default,
-        string logPrefix = "[Database - Seed]")
+        string logPrefix = "[Database - Seed]",
+        CancellationToken cancellationToken = default)
     {
         var fileName = Path.GetFileName(bundledPath);
 
@@ -83,8 +84,8 @@ public static class EffectiveRuleFileResolver
         IRuleFileOverridePathResolver pathResolver,
         ISourceFileOverrideRegistry registry,
         ILogger logger,
-        CancellationToken cancellationToken = default,
-        string logPrefix = "[Database - Seed]")
+        string logPrefix = "[Database - Seed]",
+        CancellationToken cancellationToken = default)
     {
         string bundledPath;
         try
@@ -97,7 +98,7 @@ public static class EffectiveRuleFileResolver
         }
 
         var effectivePath = await ResolveEffectivePathAsync(
-            bundledPath.Length > 0 ? bundledPath : fileName, origin, pathResolver, registry, logger, cancellationToken, logPrefix);
+            bundledPath.Length > 0 ? bundledPath : fileName, origin, pathResolver, registry, logger, logPrefix, cancellationToken);
 
         return File.Exists(effectivePath) ? await File.ReadAllTextAsync(effectivePath, cancellationToken) : null;
     }

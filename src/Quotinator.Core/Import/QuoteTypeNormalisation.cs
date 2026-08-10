@@ -1,3 +1,4 @@
+using Quotinator.Core.Enums;
 using Quotinator.Core.Models;
 
 namespace Quotinator.Core.Import;

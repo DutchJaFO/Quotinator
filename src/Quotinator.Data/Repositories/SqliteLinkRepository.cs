@@ -15,7 +15,11 @@ namespace Quotinator.Data.Repositories;
 /// <typeparam name="TLeft">Left-side entity. Must carry a <c>[Table]</c> attribute.</typeparam>
 /// <typeparam name="TRight">Right-side entity. Must carry a <c>[Table]</c> attribute.</typeparam>
 /// <typeparam name="TJunction">Junction entity. Must carry a <c>[Table]</c> attribute.</typeparam>
-public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepository<TLeft, TRight>
+/// <remarks>Initialises with the three standard infrastructure dependencies.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+/// <param name="auditWriter">Writer used to record an <see cref="Entities.AuditEntryEntity"/> for every write operation on the left, right, and junction repositories.</param>
+/// <param name="callerContext">Identifies the caller attributed to each audit entry.</param>
+public abstract class SqliteLinkRepository<TLeft, TRight, TJunction>(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext) : ILinkRepository<TLeft, TRight>
     where TLeft    : RecordBase
     where TRight   : RecordBase
     where TJunction : RecordBase
@@ -25,19 +29,10 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
     private static readonly string JunctionTableName = GetTableName<TJunction>();
     private static readonly IEntityColumnMetadata JunctionColumns = ReflectedColumnMetadata.For(typeof(TJunction));
 
-    private readonly IDbConnectionFactory _factory;
-    private readonly SqliteRepository<TLeft>              _leftRepo;
-    private readonly SqliteRepository<TRight>             _rightRepo;
-    private readonly SqliteRestorableRepository<TJunction> _junctionRepo;
-
-    /// <summary>Initialises with the three standard infrastructure dependencies.</summary>
-    protected SqliteLinkRepository(IDbConnectionFactory factory, ISystemAuditWriter auditWriter, ICallerContext callerContext)
-    {
-        _factory      = factory;
-        _leftRepo     = new SqliteRepository<TLeft>(factory, auditWriter, callerContext);
-        _rightRepo    = new SqliteRepository<TRight>(factory, auditWriter, callerContext);
-        _junctionRepo = new SqliteRestorableRepository<TJunction>(factory, auditWriter, callerContext);
-    }
+    private readonly IDbConnectionFactory _factory = factory;
+    private readonly SqliteRepository<TLeft> _leftRepo = new SqliteRepository<TLeft>(factory, auditWriter, callerContext);
+    private readonly SqliteRepository<TRight> _rightRepo = new SqliteRepository<TRight>(factory, auditWriter, callerContext);
+    private readonly SqliteRestorableRepository<TJunction> _junctionRepo = new SqliteRestorableRepository<TJunction>(factory, auditWriter, callerContext);
 
     // ── Abstract members ───────────────────────────────────────────────────────
 
@@ -139,12 +134,12 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var rows = await uow.Connection.QueryAsync<TJunction>(sql, param, uow.Transaction);
-            return rows.ToList();
+            return [.. rows];
         }
         using var conn = _factory.CreateConnection();
         conn.Open();
         var result = await conn.QueryAsync<TJunction>(sql, param);
-        return result.ToList();
+        return [.. result];
     }
 
     private async Task<IReadOnlyList<TEntity>> QueryByIdsAsync<TEntity>(
@@ -157,12 +152,12 @@ public abstract class SqliteLinkRepository<TLeft, TRight, TJunction> : ILinkRepo
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             var rows = await uow.Connection.QueryAsync<TEntity>(sql, param, uow.Transaction);
-            return rows.ToList();
+            return [.. rows];
         }
         using var conn = _factory.CreateConnection();
         conn.Open();
         var result = await conn.QueryAsync<TEntity>(sql, param);
-        return result.ToList();
+        return [.. result];
     }
 
     private static IEnumerable<string> ExtractIds(IReadOnlyList<TJunction> rows, string propertyName)

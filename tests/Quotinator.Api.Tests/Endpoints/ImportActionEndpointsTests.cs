@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -253,7 +254,7 @@ public class ImportActionEndpointsTests
         {
             ReturnExportRows =
             [
-                new ImportActionFieldRow
+                new ImportActionFieldRowResponse
                 {
                     ActionId      = actionId,
                     EntityId      = "e0000001-0000-4000-8000-000000000001",
@@ -268,7 +269,7 @@ public class ImportActionEndpointsTests
         using var client  = factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1", TestContext.CancellationToken);
-        var rows = await response.Content.ReadFromJsonAsync<List<ImportActionFieldRow>>(TestContext.CancellationToken);
+        var rows = await response.Content.ReadFromJsonAsync<List<ImportActionFieldRowResponse>>(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsNotNull(rows);
@@ -284,7 +285,7 @@ public class ImportActionEndpointsTests
         {
             ReturnExportRows =
             [
-                new ImportActionFieldRow
+                new ImportActionFieldRowResponse
                 {
                     ActionId      = Guid.NewGuid(),
                     EntityId      = "e0000001-0000-4000-8000-000000000001",
@@ -720,6 +721,55 @@ public class ImportActionEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("BATCH-1", fake.LastAppliedBatchId);
+    }
+
+    // ── POST /actions/apply — purgeOnSuccess (#249) ──────────────────────────
+
+    [TestMethod]
+    public async Task ApplyBatch_PurgeOnSuccessTrue_ForwardsTrueToService()
+    {
+        var fake = new FakeImportActionService { ReturnApplyResult = null };
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1&purgeOnSuccess=true", null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(fake.LastApplyPurgeOnSuccess);
+    }
+
+    [TestMethod]
+    public async Task ApplyBatch_PurgeOnSuccessOmitted_ForwardsFalseToService()
+    {
+        var fake = new FakeImportActionService { ReturnApplyResult = null };
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsFalse(fake.LastApplyPurgeOnSuccess, "must default to false, not purge unless the caller explicitly opts in");
+    }
+
+    [TestMethod]
+    public async Task ApplyBatch_PurgeOnSuccessTrue_BatchStillPending_DoesNotAffect422Outcome()
+    {
+        var pendingId = Guid.NewGuid();
+        var fake = new FakeImportActionService
+        {
+            ReturnApplyResult = new ImportActionBatchStatusResponse { BatchId = "BATCH-1", PendingActionIds = [pendingId] }
+        };
+        using var factory = CreateFactory(fake);
+        using var client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1&purgeOnSuccess=true", null, TestContext.CancellationToken);
+        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Contains(pendingId.ToString(), body);
     }
 
     [TestMethod]

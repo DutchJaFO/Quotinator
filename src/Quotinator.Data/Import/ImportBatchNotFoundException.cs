@@ -5,15 +5,10 @@ namespace Quotinator.Data.Import;
 /// the given batch id does not exist. A distinct type from any generic validation exception a
 /// consumer defines, so its endpoint handler can return <c>404</c> rather than <c>422</c>.
 /// </summary>
-public sealed class ImportBatchNotFoundException : Exception
+/// <remarks>Creates the exception for the given missing batch id.</remarks>
+/// <param name="batchId">The batch id that was not found.</param>
+public sealed class ImportBatchNotFoundException(Guid batchId) : Exception($"Import batch '{batchId}' does not exist.")
 {
     /// <summary>The batch id that was not found.</summary>
-    public Guid BatchId { get; }
-
-    /// <summary>Creates the exception for the given missing batch id.</summary>
-    public ImportBatchNotFoundException(Guid batchId)
-        : base($"Import batch '{batchId}' does not exist.")
-    {
-        BatchId = batchId;
-    }
+    public Guid BatchId { get; } = batchId;
 }

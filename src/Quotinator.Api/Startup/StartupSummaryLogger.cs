@@ -1,52 +1,49 @@
+using Quotinator.Api.Logging;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 
 namespace Quotinator.Api.Startup;
 
 /// <summary>Logs the opening and closing startup banners.</summary>
-internal sealed class StartupSummaryLogger
+/// <remarks>Initialises the summary logger with the config values captured at startup.</remarks>
+/// <param name="logger">Logger the opening/closing banners and listen-address lines are written to.</param>
+/// <param name="db">Database initialiser consulted for schema version, migration, and row-count statistics in the closing banner.</param>
+/// <param name="version">Service reporting the running application version.</param>
+/// <param name="dataDir">Data directory path, shown in the closing banner.</param>
+/// <param name="dbPath">Database file path, shown in the closing banner.</param>
+/// <param name="backupsDir">Backups directory path, shown in the closing banner.</param>
+/// <param name="keysDir">DataProtection keys directory path, shown in the closing banner.</param>
+/// <param name="logLevel">Configured log level, shown in the closing banner.</param>
+/// <param name="logRequests">Whether request logging is enabled, shown in the closing banner.</param>
+/// <param name="sslEnabled">Whether Kestrel HTTPS is enabled, shown in the closing banner and used to resolve the displayed URLs' scheme.</param>
+/// <param name="adminKeyConfigured">Whether an admin API key is configured, shown in the closing banner.</param>
+/// <param name="isHa">Whether the app is running as a Home Assistant add-on, used to resolve the displayed URLs.</param>
+internal sealed class StartupSummaryLogger(
+    ILogger<StartupSummaryLogger> logger,
+    IDatabaseInitializer db,
+    IVersionService version,
+    string dataDir,
+    string dbPath,
+    string backupsDir,
+    string keysDir,
+    string logLevel,
+    bool logRequests,
+    bool sslEnabled,
+    bool adminKeyConfigured,
+    bool isHa)
 {
-    private readonly ILogger<StartupSummaryLogger> _logger;
-    private readonly IDatabaseInitializer          _db;
-    private readonly IVersionService               _version;
-    private readonly string _dataDir;
-    private readonly string _dbPath;
-    private readonly string _backupsDir;
-    private readonly string _keysDir;
-    private readonly string _logLevel;
-    private readonly bool   _logRequests;
-    private readonly bool   _sslEnabled;
-    private readonly bool   _adminKeyConfigured;
-    private readonly bool   _isHa;
-
-    /// <summary>Initialises the summary logger with the config values captured at startup.</summary>
-    public StartupSummaryLogger(
-        ILogger<StartupSummaryLogger> logger,
-        IDatabaseInitializer          db,
-        IVersionService               version,
-        string dataDir,
-        string dbPath,
-        string backupsDir,
-        string keysDir,
-        string logLevel,
-        bool   logRequests,
-        bool   sslEnabled,
-        bool   adminKeyConfigured,
-        bool   isHa)
-    {
-        _logger             = logger;
-        _db                 = db;
-        _version            = version;
-        _dataDir            = dataDir;
-        _dbPath             = dbPath;
-        _backupsDir         = backupsDir;
-        _keysDir            = keysDir;
-        _logLevel           = logLevel;
-        _logRequests        = logRequests;
-        _sslEnabled         = sslEnabled;
-        _adminKeyConfigured = adminKeyConfigured;
-        _isHa               = isHa;
-    }
+    private readonly ILogger<StartupSummaryLogger> _logger = logger;
+    private readonly IDatabaseInitializer _db = db;
+    private readonly IVersionService _version = version;
+    private readonly string _dataDir = dataDir;
+    private readonly string _dbPath = dbPath;
+    private readonly string _backupsDir = backupsDir;
+    private readonly string _keysDir = keysDir;
+    private readonly string _logLevel = logLevel;
+    private readonly bool _logRequests = logRequests;
+    private readonly bool _sslEnabled = sslEnabled;
+    private readonly bool _adminKeyConfigured = adminKeyConfigured;
+    private readonly bool _isHa = isHa;
 
     /// <summary>Logs the opening banner as a single entry before database initialisation.</summary>
     public void LogStarting() =>
@@ -68,46 +65,18 @@ internal sealed class StartupSummaryLogger
             ResolveUrls(boundAddresses, _isHa, _sslEnabled, GetLocalIp());
 
         foreach (var addr in boundAddresses)
-            _logger.LogInformation("[Server] listening on {Address}", addr);
+            _logger.LogListeningOn(addr);
 
         var migLine = _db.MigrationApplied is { } mig
             ? $"\n                migration applied: {mig}"
             : string.Empty;
 
-        _logger.LogInformation(
-            $"""
-
-            ##############################
-            #     Quotinator ready       #
-            ##############################
-            Version:        {_version.Version}
-            Data:           {_dataDir}
-            Database:       {_dbPath}
-                            schema v{_db.SchemaVersion} (data v{_db.DataSchemaVersion}){migLine}
-            Statistics:
-                            {_db.QuoteCount} quotes
-                            {_db.SourceCount} sources
-                            {_db.CharacterCount} characters
-                            {_db.PeopleCount} people
-                            {_db.SeriesCount} series
-                            {_db.UniverseCount} universes
-                            {_db.StageDirectionCount} stage directions
-                            {_db.SoundCueCount} sound cues
-                            {_db.ConversationCount} conversations
-            Backups:        {_backupsDir}
-            DataProtection: {_keysDir}
-            ------------------------------
-            Log level:      {_logLevel}
-            Log requests:   {(_logRequests ? "on" : "off")}
-            SSL:            {(_sslEnabled ? "on" : "off")}
-            Admin API key:  {(_adminKeyConfigured ? "set" : "not set")}
-            ------------------------------
-            REST API:       {restApi}
-            OpenAPI UI:     {openApiUi}
-            OpenAPI spec:   {openApiSpec}
-            MCP server:     not implemented
-            ##############################
-            """);
+        _logger.LogReadyBanner(
+            _version.Version, _dataDir, _dbPath, _db.SchemaVersion, _db.DataSchemaVersion, migLine,
+            _db.QuoteCount, _db.SourceCount, _db.CharacterCount, _db.PeopleCount, _db.SeriesCount,
+            _db.UniverseCount, _db.StageDirectionCount, _db.SoundCueCount, _db.ConversationCount,
+            _backupsDir, _keysDir, _logLevel, _logRequests ? "on" : "off", _sslEnabled ? "on" : "off",
+            _adminKeyConfigured ? "set" : "not set", restApi, openApiUi, openApiSpec);
     }
 
     /// <summary>

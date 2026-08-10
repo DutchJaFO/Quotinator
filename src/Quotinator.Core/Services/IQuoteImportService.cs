@@ -11,7 +11,7 @@ namespace Quotinator.Core.Services;
 /// </summary>
 /// <remarks>
 /// Lives in <c>Quotinator.Core</c> rather than <c>Quotinator.Core</c> (unlike <see cref="IQuoteService"/>)
-/// because its signature needs <see cref="ImportRequestSettingsDto"/>, a <c>Quotinator.Data</c> type —
+/// because its signature needs <see cref="ImportSettingsDto"/>, a <c>Quotinator.Data</c> type —
 /// Core and Data must never depend on each other, so an interface needing both must live where both
 /// are already legitimately referenced.
 /// </remarks>
@@ -26,13 +26,19 @@ public interface IQuoteImportService
     /// <param name="fileName">The uploaded file's own name — used as the <c>ImportBatch</c>'s display name.</param>
     /// <param name="settings">Optional converter/duplicate-resolution/enrich settings for this run.</param>
     /// <param name="preview">When <c>true</c>, rolls back all writes instead of committing them.</param>
+    /// <param name="purgeOnSuccess">
+    /// #249: when <c>true</c>, <c>preview</c> is <c>false</c>, and the batch applies fully (no pending
+    /// actions left), that batch's <c>Import_Action</c> rows are purged immediately — see
+    /// <see cref="Services.IImportActionService.ApplyBatchAsync"/>'s own doc comment for the full
+    /// consequence (forfeits reversing this batch).
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <exception cref="QuoteImportValidationException">
     /// The settings named an unrecognised converter, or the file's content could not be parsed/converted
     /// into at least one valid quote.
     /// </exception>
     Task<ImportResultResponse> ImportAsync(
-        Stream file, string fileName, ImportRequestSettingsDto? settings, bool preview, CancellationToken cancellationToken = default);
+        Stream file, string fileName, ImportSettingsDto? settings, bool preview, bool purgeOnSuccess = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Applies an already-staged batch — the <c>batchId</c>-mode alias <c>POST /api/v1/import</c>
@@ -41,7 +47,8 @@ public interface IQuoteImportService
     /// a consistent response contract regardless of which mode a caller used.
     /// </summary>
     /// <param name="batchId">The id of a batch already staged via <c>/import</c> or <c>/import/preview</c>.</param>
+    /// <param name="purgeOnSuccess">See <see cref="ImportAsync"/>'s own doc comment.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <exception cref="ImportBatchNotFoundException"><paramref name="batchId"/> does not exist.</exception>
-    Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, CancellationToken cancellationToken = default);
+    Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, bool purgeOnSuccess = false, CancellationToken cancellationToken = default);
 }

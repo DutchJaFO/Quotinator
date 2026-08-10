@@ -1,4 +1,8 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Serilog;
+using Serilog.Events;
+using Serilog.Extensions.Logging;
 using Quotinator.Api.Startup;
 using Quotinator.Api.Tests.Fakes;
 using Quotinator.Core.Services;
@@ -13,17 +17,32 @@ public class StartupSummaryLoggerTests
     // -------------------------------------------------------------------------
     #region Helpers
 
-    private static StartupSummaryLogger Build(
-        CapturingLogger<StartupSummaryLogger> logger,
+    /// <summary>
+    /// Builds the logger against a real Serilog pipeline via <see cref="CaptureSink"/> — a plain MEL
+    /// test double's formatter callback does not apply Serilog's default string-quoting behaviour, so
+    /// it cannot catch a missing <c>{:l}</c> literal specifier (#244 found this live: the banner's
+    /// `$"""..."""` → message-template conversion initially omitted `:l` on every string placeholder,
+    /// and every existing `Contains(...)` assertion here still passed since a quoted value still
+    /// contains its own unquoted substring).
+    /// </summary>
+    private static (StartupSummaryLogger Logger, CaptureSink Sink) Build(
         string?  migrationApplied    = null,
         bool     adminKeyConfigured  = false,
         bool     sslEnabled          = false,
         bool     logRequests         = false,
         bool     isHa                = false)
     {
+        var sink    = new CaptureSink();
+        var serilog = new LoggerConfiguration()
+            .MinimumLevel.Is(LogEventLevel.Information)
+            .WriteTo.Sink(sink)
+            .CreateLogger();
+        var logger = new SerilogLoggerFactory(serilog)
+            .CreateLogger<StartupSummaryLogger>();
+
         var db      = new StubDbInitializer(migrationApplied);
         var version = new StubVersionService("1.2.3");
-        return new StartupSummaryLogger(
+        var startupLogger = new StartupSummaryLogger(
             logger, db, version,
             dataDir:            "/data",
             dbPath:             "/data/quotinatordata.db",
@@ -34,6 +53,7 @@ public class StartupSummaryLoggerTests
             sslEnabled:         sslEnabled,
             adminKeyConfigured: adminKeyConfigured,
             isHa:               isHa);
+        return (startupLogger, sink);
     }
 
     private sealed class StubVersionService(string version) : IVersionService
@@ -55,6 +75,7 @@ public class StartupSummaryLoggerTests
         public int    SoundCueCount    => 0;
         public int    ConversationCount => 0;
         public string? MigrationApplied => migrationApplied;
+        public bool SchemaVersionOvershootDetected => false;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task InitialiseAsync()                    => Task.CompletedTask;
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
@@ -65,8 +86,8 @@ public class StartupSummaryLoggerTests
             Task.FromResult(new SourceCacheResolution([], []));
     }
 
-    private static string AllMessages(CapturingLogger<StartupSummaryLogger> logger)
-        => string.Join("\n", logger.Messages);
+    private static string AllMessages(CaptureSink sink)
+        => string.Join("\n", sink.Lines);
 
     #endregion
 
@@ -76,25 +97,25 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogStarting_LogsExactlyOneEntry()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogStarting();
-        Assert.HasCount(1, logger.Messages);
+        var (logger, sink) = Build();
+        logger.LogStarting();
+        Assert.HasCount(1, sink.Lines);
     }
 
     [TestMethod]
     public void LogStarting_BannerContainsHashBorder()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogStarting();
-        Assert.Contains("##############################", logger.Messages[0]);
+        var (logger, sink) = Build();
+        logger.LogStarting();
+        Assert.Contains("##############################", sink.Lines[0]);
     }
 
     [TestMethod]
     public void LogStarting_BannerContainsStartingText()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogStarting();
-        Assert.Contains("Quotinator starting", logger.Messages[0]);
+        var (logger, sink) = Build();
+        logger.LogStarting();
+        Assert.Contains("Quotinator starting", sink.Lines[0]);
     }
 
     #endregion
@@ -105,11 +126,11 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_ListeningLinesLoggedBeforeBanner()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
 
-        var listeningIdx = logger.Messages.FindIndex(m => m.Contains("listening on"));
-        var bannerIdx    = logger.Messages.FindIndex(m => m.Contains("Quotinator ready"));
+        var listeningIdx = sink.Lines.ToList().FindIndex(m => m.Contains("listening on"));
+        var bannerIdx    = sink.Lines.ToList().FindIndex(m => m.Contains("Quotinator ready"));
         Assert.IsGreaterThanOrEqualTo(0, listeningIdx,  "listening on line not found");
         Assert.IsGreaterThanOrEqualTo(0, bannerIdx,  "ready banner not found");
         Assert.IsLessThan(bannerIdx, listeningIdx, "listening line must come before the ready banner");
@@ -118,11 +139,24 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_EmitsOneListeningLinePerAddress()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080", "https://0.0.0.0:8443"]);
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080", "https://0.0.0.0:8443"]);
 
-        var listeningLines = logger.Messages.Where(m => m.Contains("listening on")).ToList();
+        var listeningLines = sink.Lines.Where(m => m.Contains("listening on")).ToList();
         Assert.HasCount(2, listeningLines);
+    }
+
+    /// <summary>#244: the listening-address line is a string property — must carry the `{:l}`
+    /// literal specifier, or Serilog wraps the address in quotes.</summary>
+    [TestMethod]
+    public void LogReady_ListeningLine_AddressNotQuoted()
+    {
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+
+        var listeningLine = sink.Lines.Single(m => m.Contains("listening on"));
+        Assert.DoesNotContain("\"http://0.0.0.0:8080\"", listeningLine);
+        Assert.Contains("listening on http://0.0.0.0:8080", listeningLine);
     }
 
     #endregion
@@ -133,33 +167,33 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsHashBorder()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("##############################", AllMessages(logger));
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("##############################", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_BannerContainsReadyText()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("Quotinator ready", AllMessages(logger));
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("Quotinator ready", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_BannerContainsVersion()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("1.2.3", AllMessages(logger));
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("Version:        1.2.3", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_BannerContainsDbStats()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        var all = AllMessages(logger);
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        var all = AllMessages(sink);
         Assert.Contains("schema v3", all);
         Assert.Contains("Statistics:", all);
         Assert.Contains("780 quotes", all);
@@ -174,9 +208,9 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsNewEntityTypeStats_OnePerLine()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        var all = AllMessages(logger);
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        var all = AllMessages(sink);
         Assert.Contains("0 series", all);
         Assert.Contains("0 universes", all);
         Assert.Contains("0 stage directions", all);
@@ -187,98 +221,131 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsMigrationLine_WhenMigrationApplied()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger, migrationApplied: "v2 -> v3").LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("migration applied: v2 -> v3", AllMessages(logger));
+        var (logger, sink) = Build(migrationApplied: "v2 -> v3");
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("migration applied: v2 -> v3", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_BannerOmitsMigrationLine_WhenNoMigration()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger, migrationApplied: null).LogReady(["http://0.0.0.0:8080"]);
-        Assert.DoesNotContain("migration applied", AllMessages(logger),
+        var (logger, sink) = Build(migrationApplied: null);
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.DoesNotContain("migration applied", AllMessages(sink),
             "migration line must not appear when no migration ran");
+    }
+
+    /// <summary>#244: found live via T2 — the empty-string `MigLine` value rendered as a literal `""`
+    /// pair when the `{MigLine}` placeholder was missing its `:l` specifier (Serilog quotes an empty
+    /// string the same as any other string). The schema line must end cleanly with no stray quotes.</summary>
+    [TestMethod]
+    public void LogReady_SchemaLine_NoStrayQuotesWhenNoMigration()
+    {
+        var (logger, sink) = Build(migrationApplied: null);
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        var schemaLine = AllMessages(sink).Split('\n').Single(l => l.Contains("schema v3"));
+        Assert.DoesNotContain("\"", schemaLine);
     }
 
     [TestMethod]
     public void LogReady_BannerContainsMcpNotImplemented()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("MCP server:     not implemented", AllMessages(logger));
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("MCP server:     not implemented", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_BannerContainsLogLevel()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("Log level:      info", AllMessages(logger));
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("Log level:      info", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_AdminKeySet_ShowsSet()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger, adminKeyConfigured: true).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("Admin API key:  set", AllMessages(logger));
+        var (logger, sink) = Build(adminKeyConfigured: true);
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("Admin API key:  set", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_AdminKeyNotSet_ShowsNotSet()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger, adminKeyConfigured: false).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("Admin API key:  not set", AllMessages(logger));
+        var (logger, sink) = Build(adminKeyConfigured: false);
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("Admin API key:  not set", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_SslOn_ShowsOn()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger, sslEnabled: true).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("SSL:            on", AllMessages(logger));
+        var (logger, sink) = Build(sslEnabled: true);
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("SSL:            on", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_SslOff_ShowsOff()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger, sslEnabled: false).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("SSL:            off", AllMessages(logger));
+        var (logger, sink) = Build(sslEnabled: false);
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("SSL:            off", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_LogRequestsOn_ShowsOn()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger, logRequests: true).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("Log requests:   on", AllMessages(logger));
+        var (logger, sink) = Build(logRequests: true);
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("Log requests:   on", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_BannerContainsRestApiUrl()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("REST API:", AllMessages(logger));
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("REST API:", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_BannerContainsOpenApiUiUrl()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("OpenAPI UI:", AllMessages(logger));
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("OpenAPI UI:", AllMessages(sink));
     }
 
     [TestMethod]
     public void LogReady_BannerContainsOpenApiSpecUrl()
     {
-        var logger = new CapturingLogger<StartupSummaryLogger>();
-        Build(logger).LogReady(["http://0.0.0.0:8080"]);
-        Assert.Contains("OpenAPI spec:", AllMessages(logger));
+        var (logger, sink) = Build();
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        Assert.Contains("OpenAPI spec:", AllMessages(sink));
+    }
+
+    /// <summary>#244: every string-valued field in the closing banner must render unquoted — the
+    /// `:l` literal specifier on every string placeholder, proven against Serilog's real rendering
+    /// rather than a MEL test double that can't reproduce the quoting behaviour at all.</summary>
+    [TestMethod]
+    public void LogReady_BannerFields_NoneAreQuoted()
+    {
+        var (logger, sink) = Build(migrationApplied: "v2 -> v3", adminKeyConfigured: true, sslEnabled: true, logRequests: true);
+        logger.LogReady(["http://0.0.0.0:8080"]);
+        var all = AllMessages(sink);
+
+        Assert.DoesNotContain("\"1.2.3\"", all);
+        Assert.DoesNotContain("\"/data\"", all);
+        Assert.DoesNotContain("\"/data/quotinatordata.db\"", all);
+        Assert.DoesNotContain("\"/data/backups\"", all);
+        Assert.DoesNotContain("\"/data/keys\"", all);
+        Assert.DoesNotContain("\"info\"", all);
+        Assert.DoesNotContain("\"on\"", all);
+        Assert.DoesNotContain("\"set\"", all);
+        Assert.DoesNotContain("v2 -> v3\"", all);
     }
 
     #endregion

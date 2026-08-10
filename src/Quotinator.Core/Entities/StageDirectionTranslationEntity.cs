@@ -4,7 +4,7 @@ using Quotinator.Data.Models;
 namespace Quotinator.Core.Entities;
 
 /// <summary>A translated version of a stage direction's text for a specific language.</summary>
-[Table("StageDirectionTranslations")]
+[Table("Quotinator_StageDirectionTranslation")]
 public sealed class StageDirectionTranslationEntity : RecordBase
 {
     /// <summary>The stage direction this translation belongs to.</summary>

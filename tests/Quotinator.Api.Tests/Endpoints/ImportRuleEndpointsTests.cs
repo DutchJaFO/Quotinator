@@ -1,3 +1,5 @@
+using Quotinator.Core.Enums;
+using Quotinator.Data.Enums;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -47,7 +49,7 @@ public class ImportRuleEndpointsTests
     private WebApplicationFactory<Program> CreateFactory(
         FakeImportActionService? actionService = null,
         FakeSourceFileOverrideRegistry? registry = null,
-        IEnumerable<Source>? sources = null,
+        IEnumerable<SourceEntity>? sources = null,
         string? adminApiKey = TestKey)
     {
         var pathResolver = new RuleFileOverridePathResolver(_overrideDir, Path.Combine(_tempDir, "override-external"), _bundledDir, Path.Combine(_tempDir, "bundled-external"));
@@ -62,7 +64,7 @@ public class ImportRuleEndpointsTests
                 services.AddSingleton<IImportActionService>(actionService ?? new FakeImportActionService());
                 services.AddSingleton<ISourceFileOverrideRegistry>(registry ?? new FakeSourceFileOverrideRegistry());
                 services.AddSingleton<IRuleFileOverridePathResolver>(pathResolver);
-                services.AddSingleton<IListableRepository<Source>>(new FakeSourceRepository(sources));
+                services.AddSingleton<IListableRepository<SourceEntity>>(new FakeSourceRepository(sources));
             });
             builder.ConfigureAppConfiguration((_, config) =>
             {
@@ -87,7 +89,7 @@ public class ImportRuleEndpointsTests
     private const string SampleRuleFile =
         """{"rules":[{"entityId":"11111111-1111-1111-1111-111111111111","existingRecord":{"date":"1990"},"incomingRecord":{"date":"1991"},"fields":[{"field":"date","resolution":"Keep"}]}]}""";
 
-    private static Source NewSource(string title, QuoteType type = QuoteType.Movie) => new()
+    private static SourceEntity NewSource(string title, QuoteType type = QuoteType.Movie) => new()
     {
         Id          = Guid.NewGuid(),
         Title       = title,
@@ -199,7 +201,7 @@ public class ImportRuleEndpointsTests
         {
             ReturnExportRows =
             [
-                new ImportActionFieldRow
+                new ImportActionFieldRowResponse
                 {
                     ActionId      = Guid.NewGuid(),
                     EntityId      = "33333333-3333-3333-3333-333333333333",
@@ -243,7 +245,7 @@ public class ImportRuleEndpointsTests
         {
             ReturnExportRows =
             [
-                new ImportActionFieldRow
+                new ImportActionFieldRowResponse
                 {
                     ActionId      = Guid.NewGuid(),
                     EntityId      = "44444444-4444-4444-4444-444444444444",

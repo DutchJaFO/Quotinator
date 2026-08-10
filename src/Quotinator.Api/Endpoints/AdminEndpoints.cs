@@ -1,5 +1,8 @@
+using Quotinator.Data.Enums;
 using System.ComponentModel;
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
@@ -8,7 +11,7 @@ using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
-using Quotinator.Data.Import;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
@@ -38,7 +41,7 @@ internal static class AdminEndpoints
             var preview = await db.PreviewSeedAsync();
             return Results.Ok(new SeedPreviewResponse
             {
-                Files = preview.Files.Select(f => new SeedFilePreviewResponse
+                Files = [.. preview.Files.Select(f => new Quotinator.Core.Models.SeedFilePreview
                 {
                     FileName           = f.FileName,
                     QuoteCount         = f.QuoteCount,
@@ -51,7 +54,7 @@ internal static class AdminEndpoints
                         SeedFileIssue.InvalidJson => localizer[ApiMessages.SeedFileInvalidJson],
                         _                         => null
                     }
-                }).ToList(),
+                })],
                 Reports = preview.Reports
             });
         })
@@ -79,24 +82,99 @@ internal static class AdminEndpoints
             IApiLocalizer localizer,
             [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
             [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
-            ISystemAuditReader auditReader = null!) =>
+            IAuditEntryReader auditReader = null!) =>
         {
             if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
                 return pageError!;
 
             var result = await auditReader.GetPagedAsync(table, recordId, pageValue, pageSizeValue);
+            var mapped = new PagedItems<AuditEntryResponse>(
+                [.. result.Items.Select(ToAuditEntryResponse)], result.Page, result.PageSize, result.TotalCount);
 
             return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
-                ?? Results.Ok(result);
+                ?? Results.Ok(mapped);
         })
         .WithName("GetAuditLog")
         .WithSummary("Get audit log")
-        .Produces<PagedItems<SystemAuditEntry>>(StatusCodes.Status200OK)
+        .Produces<PagedItems<AuditEntryResponse>>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
         .WithDescription(
             "Returns a paginated list of audit entries, newest first. " +
             "Filter by `table` (e.g. `Quotes`, `Database`) and/or `recordId` (Guid). " +
             "Maximum `pageSize` is 500.");
+
+        publicGroup.MapGet("/audit/date-range", async (
+            IAuditEntryReader auditReader,
+            IChangeReader changeReader) =>
+        {
+            var (entryEarliest, entryLatest)   = await auditReader.GetDateRangeAsync();
+            var (changeEarliest, changeLatest) = await changeReader.GetDateRangeAsync();
+
+            return Results.Ok(new AuditDateRangeResponse
+            {
+                EarliestDate = Earlier(entryEarliest, changeEarliest),
+                LatestDate   = Later(entryLatest, changeLatest),
+            });
+        })
+        .WithName("GetAuditDateRange")
+        .WithSummary("Get the audit trail's available date range")
+        .Produces<AuditDateRangeResponse>(StatusCodes.Status200OK)
+        .WithDescription(
+            "Returns the earliest and latest timestamp across both `Audit_Entry` and `Audit_Change` " +
+            "combined — so a caller knows what range actually has data before requesting " +
+            "`GET /api/v1/admin/audit/export`. Both fields are `null` when neither table has any rows.");
+
+        publicGroup.MapGet("/audit/export", async (
+            string? startDate,
+            string? endDate,
+            IAuditEntryReader auditReader,
+            IChangeReader changeReader,
+            IApiLocalizer localizer,
+            IConfiguration configuration,
+            HttpContext httpContext) =>
+        {
+            if (!TryParseUtcDate(startDate, out var start))
+                return Results.Problem(detail: localizer[ApiMessages.AuditExportDateInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
+            if (!TryParseUtcDate(endDate, out var end))
+                return Results.Problem(detail: localizer[ApiMessages.AuditExportDateInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
+            if (start is not null && end is not null && start > end)
+                return Results.Problem(detail: localizer[ApiMessages.AuditExportDateRangeInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
+
+            var entryCount  = await auditReader.CountInRangeAsync(start, end);
+            var changeCount = await changeReader.CountInRangeAsync(start, end);
+            var totalCount  = entryCount + changeCount;
+            var maxRows     = configuration.GetValue<int?>("Quotinator:AdminAuditExportMaxRows") ?? QueryParamDefaults.AdminAuditExportMaxRows;
+
+            if (totalCount > maxRows)
+                return Results.Problem(
+                    detail: localizer.Format(ApiMessages.AuditExportRowCapExceeded, totalCount, maxRows),
+                    statusCode: StatusCodes.Status422UnprocessableEntity);
+
+            var entries = await auditReader.GetAllInRangeAsync(start, end);
+            var changes = await changeReader.GetAllInRangeAsync(start, end);
+
+            httpContext.Response.Headers.Append("Content-Disposition",
+                $"attachment; filename=\"quotinator-audit-export-{DateTime.UtcNow:yyyyMMddHHmmss}.json\"");
+
+            return Results.Ok(new AuditExportResponse
+            {
+                Entries = [.. entries.Select(ToAuditEntryResponse)],
+                Changes = [.. changes.Select(ToAuditChangeResponse)],
+            });
+        })
+        .WithName("ExportAuditTrail")
+        .WithSummary("Bulk-export the audit trail")
+        .Produces<AuditExportResponse>(StatusCodes.Status200OK)
+        .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
+        .WithDescription(
+            "Returns every `Audit_Entry` and `Audit_Change` row within an optional date range, in one " +
+            "call — a downloaded JSON file (`Content-Disposition: attachment`), not a paginated response; " +
+            "the caller already decided it wants the full set. `startDate`/`endDate` are optional and " +
+            "unbounded on whichever side is omitted; use `GET /api/v1/admin/audit/date-range` first to " +
+            "learn the range that actually has data. Returns `422` if either date fails to parse, if " +
+            "`startDate` is after `endDate`, or if the combined row count would exceed " +
+            "`Quotinator:AdminAuditExportMaxRows` (default 50,000) — narrow the range and retry rather " +
+            "than receiving a silently truncated file. No `X-Api-Key` required, matching `GET /admin/audit`'s precedent.");
 
         // ── Admin-only ────────────────────────────────────────────────────────
 
@@ -131,9 +209,19 @@ internal static class AdminEndpoints
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
+        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, INotificationWriter notificationWriter, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
         {
             await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh);
+            dbHealth.MarkHealthy();
+            // #278: dismiss any ActionRequired notification recommending a Reset, now that one has
+            // actually completed. Reset itself drops and rebuilds System_Notification along with
+            // every other table (no protected/excluded set — see CLAUDE.md's "No exception-based
+            // migration recovery"), so in practice this call always affects zero rows immediately
+            // after ResetAsync — the table is already empty. Kept anyway, matching #278's own
+            // explicit wiring instruction: it's the correct call site for the general mechanism
+            // (a future action that does *not* wipe the whole database would make it load-bearing),
+            // and it's harmless here.
+            await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
             return Results.Ok(new DatabaseSeedSummaryResponse
             {
                 Quotes          = db.QuoteCount,
@@ -153,15 +241,17 @@ internal static class AdminEndpoints
         .Produces<DatabaseSeedSummaryResponse>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
         .WithDescription(
-            "Clears all data, reapplies all migrations from scratch, " +
-            "then reimports every quote from the configured source files. " +
-            "Equivalent to deleting the database file and restarting. " +
-            "The audit log (`System_AuditEntries`) always survives a reset — clear it separately via `DELETE /api/v1/admin/audit` if needed. " +
-            "By default, schema migration history is also cleared and replayed; pass `preserveSchemaVersion=true` to keep the existing migration history instead. " +
-            "Auto-updated sources are refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
-            "unless `Quotinator:AutoUpdateSources` is `false`, in which case `forceSourceRefresh` has no effect. " +
-            "Returns the row counts and a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) " +
-            "after the operation completes (issue #221). " +
+            "Drops the entire database and rebuilds it from scratch via the baseline schema — equivalent to " +
+            "deleting the database file and restarting, except it does **not** reimport any bundled or user " +
+            "quote content afterward (issue #156). Every table is dropped, including the audit log — no table " +
+            "is protected from this reset; export the audit trail first via `GET /api/v1/admin/audit/export` " +
+            "if you need to keep it (issue #249). " +
+            "By default, schema migration history is also cleared and rebuilt to the latest version; pass `preserveSchemaVersion=true` to keep the existing migration history's per-version rows instead. " +
+            "Auto-updated sources are still refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
+            "unless `Quotinator:AutoUpdateSources` is `false` — this only refreshes the on-disk source cache, " +
+            "independent of the database, since nothing gets imported by this call. " +
+            "Returns the row counts (all zero immediately after a reset) and a per-file, per-entity-type report (issue #221); " +
+            "the report reflects no activity since Reset does not seed. " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
@@ -170,14 +260,14 @@ internal static class AdminEndpoints
             var resolution = await db.RefreshSourcesAsync(force);
             return Results.Ok(new SourceRefreshResponse
             {
-                Results = resolution.Results.Select(r => new SourceRefreshResultResponse
+                Results = [.. resolution.Results.Select(r => new SourceRefreshResultResponse
                 {
                     Name               = r.Name,
                     Url                = r.Url,
                     Outcome            = r.Outcome.ToString().ToLowerInvariant(),
                     Detail             = r.Detail,
                     LastRefreshedAtUtc = r.LastRefreshedAtUtc
-                }).ToList()
+                })]
             });
         })
         .WithName("RefreshSources")
@@ -193,7 +283,7 @@ internal static class AdminEndpoints
             "still shows exactly how old the cached copy is rather than only that it was within the TTL window. `null` when no trusted cache file exists (e.g. a collision). " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapDelete("/audit", async (string? table, ISystemAuditWriter auditWriter) =>
+        adminGroup.MapDelete("/audit", async (string? table, IAuditEntryWriter auditWriter) =>
         {
             await auditWriter.ClearAsync(table);
             return Results.NoContent();
@@ -202,7 +292,67 @@ internal static class AdminEndpoints
         .WithSummary("Clear audit log")
         .WithDescription(
             "Deletes all audit entries, or only entries for a specific table when `table` is supplied. " +
+            "An unscoped clear (`table` omitted) also clears the change log (`Audit_Change`) — #249 treats " +
+            "both as one combined audit-trail concern, matching `GET .../audit/export`/`.../date-range`. " +
+            "A scoped clear leaves `Audit_Change` untouched, since it has no equivalent per-table scoping. " +
             "A single audit entry recording the purge is written after the delete so there is always a trace that a clear occurred. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
     }
+
+    // Parses an optional startDate/endDate query value as UTC — DateTimeStyles.AssumeUniversal treats
+    // an offset-less value (e.g. "2026-01-01") as already UTC rather than local server time, matching
+    // how PerformedAt/OccurredAt are always stored; AdjustToUniversal converts an explicit-offset value
+    // (e.g. with "Z" or "+02:00") to UTC instead of rejecting it.
+    private static bool TryParseUtcDate(string? value, out DateTime? result)
+    {
+        if (value is null) { result = null; return true; }
+
+        if (!DateTime.TryParse(value, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+        {
+            result = null;
+            return false;
+        }
+
+        result = parsed;
+        return true;
+    }
+
+    private static DateTime? Earlier(DateTime? a, DateTime? b) =>
+        a is null ? b : b is null ? a : a < b ? a : b;
+
+    private static DateTime? Later(DateTime? a, DateTime? b) =>
+        a is null ? b : b is null ? a : a > b ? a : b;
+
+    private static AuditEntryResponse ToAuditEntryResponse(AuditEntryEntity entity) => new()
+    {
+        Id           = entity.Id.ToCanonicalId(),
+        TableName    = entity.TableName,
+        RecordId     = entity.RecordId,
+        Operation    = entity.Operation,
+        Agent        = entity.Agent,
+        PerformedAt  = entity.PerformedAt,
+        DateCreated  = entity.DateCreated.Parsed,
+        DateModified = entity.DateModified.Parsed,
+        DateDeleted  = entity.DateDeleted.Parsed,
+        IsDeleted    = entity.IsDeleted,
+    };
+
+    private static AuditChangeResponse ToAuditChangeResponse(ChangeEntity entity) => new()
+    {
+        Id              = entity.Id.ToCanonicalId(),
+        EntityType      = entity.EntityType,
+        EntityId        = entity.EntityId,
+        InitiatedByType = entity.InitiatedByType.Parsed,
+        InitiatedById   = entity.InitiatedById,
+        Action          = entity.Action.Parsed,
+        Field           = entity.Field,
+        OldValue        = entity.OldValue,
+        NewValue        = entity.NewValue,
+        OccurredAt      = entity.OccurredAt,
+        DateCreated     = entity.DateCreated.Parsed,
+        DateModified    = entity.DateModified.Parsed,
+        DateDeleted     = entity.DateDeleted.Parsed,
+        IsDeleted       = entity.IsDeleted,
+    };
 }

@@ -18,16 +18,17 @@ public class AdminEndpointsTests
     private const string TestKey = "test-admin-key";
 
     private static WebApplicationFactory<Program> CreateFactory(
-        string? adminApiKey = null, IDatabaseInitializer? dbInitializer = null) =>
+        string? adminApiKey = null, IDatabaseInitializer? dbInitializer = null, INotificationWriter? notificationWriter = null) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton(dbInitializer ?? NoOpDatabaseInitializer.Instance);
-                services.AddSingleton<ISystemAuditWriter>(new NoOpSystemAuditWriter());
-                services.AddSingleton<ISystemAuditReader>(new NoOpSystemAuditReader());
+                services.AddSingleton<IAuditEntryWriter>(new NoOpAuditEntryWriter());
+                services.AddSingleton<IAuditEntryReader>(new NoOpAuditEntryReader());
                 services.AddSingleton<ICallerContext>(new NoOpCallerContext());
+                services.AddSingleton(notificationWriter ?? (INotificationWriter)NoOpNotificationWriter.Instance);
             });
 
             // ConfigureAppConfiguration runs after all file-based sources (including
@@ -176,6 +177,24 @@ public class AdminEndpointsTests
         Assert.IsTrue(doc.RootElement.TryGetProperty("reports",         out _), "#221: per-file report array replacing the old flat duplicates count");
     }
 
+    /// <summary>
+    /// POST /admin/database/reset calls DismissByTriggerAsync(DatabaseReset) as part of its own
+    /// success path (#278) — verified via a spy writer rather than a real Reset round-trip, since a
+    /// real Reset wipes System_Notification entirely (no protected/excluded table set), which would
+    /// make the notification disappear regardless of whether this call ever happened.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetDatabase_CorrectKey_CallsDismissByTriggerWithDatabaseReset()
+    {
+        var notificationWriter = new FakeNotificationWriter();
+        using var factory = CreateFactory(TestKey, notificationWriter: notificationWriter);
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.HasCount(1, notificationWriter.DismissByTriggerCalls);
+        Assert.AreEqual(Quotinator.Data.Enums.NotificationDismissTrigger.DatabaseReset, notificationWriter.DismissByTriggerCalls[0]);
+    }
+
     /// <summary>POST /admin/database/reset with no query parameter defaults preserveSchemaVersion to false (#141).</summary>
     [TestMethod]
     public async Task ResetDatabase_NoQueryParam_DefaultsPreserveSchemaVersionFalse()
@@ -217,6 +236,7 @@ public class AdminEndpointsTests
         public int    SoundCueCount    => 0;
         public int    ConversationCount => 0;
         public string? MigrationApplied => null;
+        public bool   SchemaVersionOvershootDetected => false;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
         public Task InitialiseAsync() => Task.CompletedTask;

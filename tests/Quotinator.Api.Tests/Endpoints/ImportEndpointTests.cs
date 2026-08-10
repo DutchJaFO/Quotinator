@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
 using Quotinator.Core.Services;
+using Quotinator.Data.Database;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
@@ -24,9 +26,9 @@ public class ImportEndpointTests
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
-                services.AddSingleton(NoOpDatabaseInitializer.Instance);
-                services.AddSingleton<ISystemAuditWriter>(new NoOpSystemAuditWriter());
-                services.AddSingleton<ISystemAuditReader>(new NoOpSystemAuditReader());
+                services.AddSingleton<IDatabaseInitializer>(NoOpDatabaseInitializer.Instance);
+                services.AddSingleton<IAuditEntryWriter>(new NoOpAuditEntryWriter());
+                services.AddSingleton<IAuditEntryReader>(new NoOpAuditEntryReader());
                 services.AddSingleton<ICallerContext>(new NoOpCallerContext());
                 services.AddSingleton<IQuoteImportService>(importService);
             });
@@ -158,6 +160,33 @@ public class ImportEndpointTests
         Assert.IsTrue(doc.RootElement.TryGetProperty("preview", out var preview));
         Assert.IsFalse(preview.GetBoolean());
         Assert.AreEqual(0, doc.RootElement.GetProperty("conflicts").GetArrayLength(), "A zero-conflict import (the FakeQuoteImportService default) must report an empty conflicts array");
+    }
+
+    // ── purgeOnSuccess (#249) — file mode ────────────────────────────────────
+
+    [TestMethod]
+    public async Task Import_PurgeOnSuccessTrue_ForwardsTrueToService()
+    {
+        var service = new FakeQuoteImportService();
+        using var factory = CreateFactory(TestKey, service);
+
+        var response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/import?purgeOnSuccess=true", BuildForm(), TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(service.LastImportPurgeOnSuccess);
+    }
+
+    [TestMethod]
+    public async Task Import_PurgeOnSuccessOmitted_ForwardsFalseToService()
+    {
+        var service = new FakeQuoteImportService();
+        using var factory = CreateFactory(TestKey, service);
+
+        var response = await CreateClientWithKey(factory).PostAsync("/api/v1/import", BuildForm(), TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsFalse(service.LastImportPurgeOnSuccess, "must default to false, not purge unless the caller explicitly opts in");
     }
 
     [TestMethod]
@@ -292,6 +321,34 @@ public class ImportEndpointTests
     }
 
     [TestMethod]
+    public async Task Import_WithBatchIdAndPurgeOnSuccessTrue_ForwardsTrueToService()
+    {
+        var service = new FakeQuoteImportService();
+        using var factory = CreateFactory(TestKey, service);
+        var batchId = Guid.NewGuid();
+
+        var response = await CreateClientWithKey(factory)
+            .PostAsync($"/api/v1/import?batchId={batchId}&purgeOnSuccess=true", BuildForm(includeFile: false), TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(service.LastApplyPurgeOnSuccess);
+    }
+
+    [TestMethod]
+    public async Task Import_WithBatchIdPurgeOnSuccessOmitted_ForwardsFalseToService()
+    {
+        var service = new FakeQuoteImportService();
+        using var factory = CreateFactory(TestKey, service);
+        var batchId = Guid.NewGuid();
+
+        var response = await CreateClientWithKey(factory)
+            .PostAsync($"/api/v1/import?batchId={batchId}", BuildForm(includeFile: false), TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsFalse(service.LastApplyPurgeOnSuccess, "must default to false, not purge unless the caller explicitly opts in");
+    }
+
+    [TestMethod]
     public async Task Import_WithBatchId_NoBodyAtAll_StillWorks()
     {
         var service = new FakeQuoteImportService();
@@ -372,7 +429,7 @@ public class ImportEndpointTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("csv", service.LastSettings?.Converter);
-        Assert.AreEqual(Quotinator.Data.Import.DuplicateResolutionPolicy.MergeTheirs, service.LastSettings?.DuplicateResolution?.Default);
+        Assert.AreEqual(Quotinator.Data.Enums.DuplicateResolutionPolicy.MergeTheirs, service.LastSettings?.DuplicateResolution?.Default);
     }
 
     public TestContext TestContext { get; set; }

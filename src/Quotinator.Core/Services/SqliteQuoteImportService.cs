@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Quotinator.Core.Import;
@@ -21,48 +22,47 @@ namespace Quotinator.Core.Services;
 /// (a second, separate commit; a crash between the two leaves the batch <c>Staged</c>, an already-safe
 /// state by this design). Replaces the old single-pass detect-and-write loop entirely.
 /// </remarks>
-public sealed class SqliteQuoteImportService : IQuoteImportService
+/// <summary>Initialises the service with all dependencies required to import a single file.</summary>
+/// <param name="factory">Factory used to open the connection and transaction each stage/apply operation runs in.</param>
+/// <param name="importBatches">Repository used to record each import run as an <c>Import_Batch</c> row.</param>
+/// <param name="actionCoordinator">Coordinator used to stage and, unless previewing, apply the import actions produced from the file.</param>
+/// <param name="actionService">Service used to apply a batch's decided/auto-resolved import actions to their target entities.</param>
+/// <param name="actionReader">Reader used to look up the staged actions produced for a batch.</param>
+/// <param name="converters">Registered <see cref="IQuoteSourceConverter"/> plugins, keyed by converter name, used to convert raw file content into the canonical schema.</param>
+/// <param name="configPolicy">Policy governing default conflict-resolution and completeness behaviour for staged actions.</param>
+/// <param name="fileResources">Repository used to record the imported file as a <c>FileResource</c> row.</param>
+public sealed class SqliteQuoteImportService(
+    IDbConnectionFactory factory,
+    IImportBatchRepository importBatches,
+    IImportActionCoordinator actionCoordinator,
+    IImportActionService actionService,
+    IImportActionReader actionReader,
+    IReadOnlyDictionary<string, IQuoteSourceConverter> converters,
+    ManifestPolicy configPolicy,
+    IFileResourceRepository fileResources) : IQuoteImportService
 {
-    private readonly IDbConnectionFactory _factory;
-    private readonly IImportBatchRepository _importBatches;
-    private readonly IImportActionCoordinator _actionCoordinator;
-    private readonly IImportActionService _actionService;
-    private readonly ISystemImportActionReader _actionReader;
-    private readonly IReadOnlyDictionary<string, IQuoteSourceConverter> _converters;
-    private readonly ManifestPolicy _configPolicy;
-
-    /// <summary>Initialises the service with all dependencies required to import a single file.</summary>
-    public SqliteQuoteImportService(
-        IDbConnectionFactory factory,
-        IImportBatchRepository importBatches,
-        IImportActionCoordinator actionCoordinator,
-        IImportActionService actionService,
-        ISystemImportActionReader actionReader,
-        IReadOnlyDictionary<string, IQuoteSourceConverter> converters,
-        ManifestPolicy configPolicy)
-    {
-        _factory           = factory;
-        _importBatches     = importBatches;
-        _actionCoordinator = actionCoordinator;
-        _actionService     = actionService;
-        _actionReader      = actionReader;
-        _converters        = converters;
-        _configPolicy      = configPolicy;
-    }
+    private readonly IDbConnectionFactory _factory = factory;
+    private readonly IImportBatchRepository _importBatches = importBatches;
+    private readonly IImportActionCoordinator _actionCoordinator = actionCoordinator;
+    private readonly IImportActionService _actionService = actionService;
+    private readonly IImportActionReader _actionReader = actionReader;
+    private readonly IReadOnlyDictionary<string, IQuoteSourceConverter> _converters = converters;
+    private readonly ManifestPolicy _configPolicy = configPolicy;
+    private readonly IFileResourceRepository _fileResources = fileResources;
 
     /// <inheritdoc/>
     public async Task<ImportResultResponse> ImportAsync(
-        Stream file, string fileName, ImportRequestSettingsDto? settings, bool preview,
+        Stream file, string fileName, ImportSettingsDto? settings, bool preview, bool purgeOnSuccess = false,
         CancellationToken cancellationToken = default)
     {
-        var parsed = await LoadSourceFileAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
+        var (parsed, rawContent) = await LoadSourceFileAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
         var quotes = parsed.Quotes;
         var policy = ManifestPolicy.Resolve(ToManifestPolicy(settings?.DuplicateResolution), _configPolicy);
         var effectivePolicy = policy.ForQuotes;
 
         var (valid, errors) = ValidateRows(quotes);
 
-        var batch = new ImportBatch
+        var batch = new ImportBatchEntity
         {
             Name           = fileName,
             Type           = new SafeValue<ImportBatchType?>(ImportBatchType.Import.ToString(), ImportBatchType.Import),
@@ -73,7 +73,16 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         await _importBatches.InsertAsync(batch);
         var batchIdStr = batch.Id.ToCanonicalId();
 
-        IReadOnlyList<SystemImportAction> actions;
+        // #251 — a multipart upload carries no folder information, only a bare filename, so
+        // homeDirectoryKey is also always null (#252) — there is no root for it to be relative to.
+        // Converter/ConverterOptions come from the request's own settings, not the raw content itself,
+        // since the same bytes could be uploaded again later under different settings.
+        await _fileResources.WriteAsync(
+            fileName, originalFolderPath: null, FileResourceOrigin.Upload, rawContent, batch.Id,
+            settings?.Converter, settings?.ConverterOptions?.GetRawText(), homeDirectoryKey: null,
+            cancellationToken: cancellationToken);
+
+        IReadOnlyList<ImportActionEntity> actions;
         using (var conn = (SqliteConnection)_factory.CreateConnection())
         {
             conn.Open();
@@ -98,14 +107,13 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         var skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
 
-        IReadOnlyList<Guid> pendingActionIds = actions
+        IReadOnlyList<Guid> pendingActionIds = [.. actions
             .Where(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale)
-            .Select(a => a.Id)
-            .ToList();
+            .Select(a => a.Id)];
 
         if (!preview)
         {
-            var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, cancellationToken);
+            var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken);
             if (applyResult is null)
             {
                 // #177: Status/AppliedAt are now set by ApplyBatchAsync itself, the shared choke point
@@ -139,7 +147,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
     }
 
     /// <inheritdoc/>
-    public async Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, CancellationToken cancellationToken = default)
+    public async Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, bool purgeOnSuccess = false, CancellationToken cancellationToken = default)
     {
         var batch = await _importBatches.GetByIdAsync(batchId) ?? throw new ImportBatchNotFoundException(batchId);
         var batchIdStr = batchId.ToCanonicalId();
@@ -158,7 +166,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
         var totalQuotes = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote);
 
-        var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, cancellationToken);
+        var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken);
         IReadOnlyList<Guid> pendingActionIds = [];
         if (applyResult is null)
         {
@@ -193,7 +201,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
 
     // ── Response shaping (temporary — Task 33 replaces this with the /import/actions response shape) ──
 
-    private static IReadOnlyList<ImportConflictEntry> BuildConflictEntries(IReadOnlyList<SystemImportAction> actions)
+    private static List<ImportConflictEntry> BuildConflictEntries(IReadOnlyList<ImportActionEntity> actions)
     {
         var entries = new List<ImportConflictEntry>();
         foreach (var action in actions)
@@ -206,8 +214,8 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
                 || action.Status.Parsed is ImportActionStatus.Blocked or ImportActionStatus.Stale)
                 continue;
 
-            var existingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.ExistingValue!)!;
-            var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayload>(action.IncomingValue!)!;
+            var existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
+            var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
             var existingFields  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
             var incomingFields  = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
             var policy          = action.AppliedPolicy.Parsed!.Value;
@@ -230,9 +238,9 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
         return entries;
     }
 
-    private static (List<SourceQuote> Valid, List<ImportRowError> Errors) ValidateRows(IReadOnlyList<SourceQuote> quotes)
+    private static (List<SourceQuoteDto> Valid, List<ImportRowError> Errors) ValidateRows(IReadOnlyList<SourceQuoteDto> quotes)
     {
-        var valid  = new List<SourceQuote>();
+        var valid  = new List<SourceQuoteDto>();
         var errors = new List<ImportRowError>();
         var row = 0;
         foreach (var q in quotes)
@@ -260,7 +268,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
     /// conditional needed; conversations are only ever present when the uploaded file is already in
     /// Quotinator's own extended format (e.g. re-uploading a curated source file with no converter).
     /// </summary>
-    private async Task<ParsedSourceFile> LoadSourceFileAsync(Stream file, string? converterName, JsonElement? converterOptions, CancellationToken cancellationToken)
+    private async Task<(ParsedSourceFileDto Parsed, string RawContent)> LoadSourceFileAsync(Stream file, string? converterName, JsonElement? converterOptions, CancellationToken cancellationToken)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "quotinator-import-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -270,6 +278,10 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             await using (var rawStream = File.Create(rawPath))
                 await file.CopyToAsync(rawStream, cancellationToken);
 
+            // #251 — captured before any converter runs: this is the file the caller actually
+            // uploaded, not a converter's transformed output, matching "reconstruct the original
+            // content of a file" as the provenance record's own stated goal.
+            var rawContent = await File.ReadAllTextAsync(rawPath, cancellationToken);
             var contentPath = rawPath;
 
             if (!string.IsNullOrEmpty(converterName))
@@ -296,7 +308,7 @@ public sealed class SqliteQuoteImportService : IQuoteImportService
             if (parsed is null || parsed.Quotes.Count == 0)
                 throw new QuoteImportValidationException("File contained no quotes.");
 
-            return parsed;
+            return (parsed, rawContent);
         }
         finally
         {

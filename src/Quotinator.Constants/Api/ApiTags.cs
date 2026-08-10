@@ -9,4 +9,5 @@ public static class ApiTags
     public const string Import        = "Import";
     public const string Conversations = "Conversations";
     public const string MasterData    = "MasterData";
+    public const string Notifications = "Notifications";
 }

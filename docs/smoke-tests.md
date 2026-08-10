@@ -39,6 +39,15 @@ verification command here in the same commit that fixes it — the list only gro
 25. [SourceAliasRule staleness](#25-sourcealiasrule-staleness-153) (#153)
 26. [Rule-file override endpoints](#26-rule-file-override-endpoints-153) (#153)
 27. [Per-file, per-entity-type import/seed report](#27-per-file-per-entity-type-importseed-report-221) (#221)
+28. [Unicode-aware search toggle](#28-unicode-aware-search-toggle-222) (#222)
+29. [Seeding-stage backup/restore safety net, degraded startup, and Reset recovery](#29-seeding-stage-backuprestore-safety-net-degraded-startup-and-reset-recovery-254) (#254)
+30. [FileResource capture, byte-exact reconstruction, and pruning](#30-fileresource-capture-byte-exact-reconstruction-and-pruning-251) (#251)
+31. [Audit-trail bulk export, date-range discovery, and conflict-resolution data auto-purge](#31-audit-trail-bulk-export-date-range-discovery-and-conflict-resolution-data-auto-purge-249) (#249)
+32. [Reset is a full wipe with no reseed](#32-reset-is-a-full-wipe-with-no-reseed-156) (#156)
+33. [Startup notification system](#33-startup-notification-system-278) (#278)
+34. [Standardised endpoint WithName/WithSummary, including breaking operationId renames](#34-standardised-endpoint-withnamewithsummary-including-breaking-operationid-renames-279) (#279)
+35. [Startup backup real-work gating and storage pre-flight check](#35-startup-backup-real-work-gating-and-storage-pre-flight-check-277) (#277)
+36. [Startup wait page during database initialisation](#36-startup-wait-page-during-database-initialisation-280) (#280)
 
 ---
 
@@ -95,7 +104,7 @@ After `decide`, `status=Decided` must show it; after `undo`, it must be back und
 
 A batch applied entirely through the staged
 review→decide→apply flow (i.e. via `POST /import/actions/apply` directly, not `POST /import`'s own
-single-shot path) previously never had its own `ImportBatches.Status` set to `Applied`, so
+single-shot path) previously never had its own `Import_Batch.Status` set to `Applied`, so
 `POST /import/actions/reverse` always rejected it with a bare `422` even though the batch had
 genuinely applied. Re-import the curated file under `review` again and decide every pending action
 from the sequence above (repeat the `decide` call for each remaining `id` until none are left
@@ -164,7 +173,7 @@ curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>"
 `preview=true` must return `200` without changing anything; the real call must also return `200`.
 The actions listing must still show every action `"status":"Applied"` afterwards — reversal never
 introduces a new action status; the batch's own record being gone is the only signal it was undone
-(confirm via `GET /api/v1/admin/audit` or `Quotinator.Tools.DbInspector` against `ImportBatches`
+(confirm via `GET /api/v1/admin/audit` or `Quotinator.Tools.DbInspector` against `Import_Batch`
 showing `IsDeleted=1` for this batch, since there is no `GET /import-batches` listing endpoint).
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
@@ -220,7 +229,7 @@ cat > .claude/temp/smoke-171-172.json <<'EOF'
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
 ```
-Must return `200` with both rows added (check via `Quotinator.Tools.DbInspector` — `SELECT Id, Text, CompletenessStatus FROM StageDirections WHERE Id = 'f0000002-...'`). Re-import the same ids with a
+Must return `200` with both rows added (check via `Quotinator.Tools.DbInspector` — `SELECT Id, Text, CompletenessStatus FROM Quotinator_StageDirection WHERE Id = 'f0000002-...'`). Re-import the same ids with a
 changed `text` under `{"duplicateResolution":{"default":"review"}}` — must stage a `Pending` `Modify`
 action for each (`GET /import/actions?status=pending`) with `ambiguousFields: ["text"]`. Decide each
 with `{"stageDirectionText":{"choice":"replace"},"markCompletenessAs":"Complete"}` /
@@ -228,11 +237,29 @@ with `{"stageDirectionText":{"choice":"replace"},"markCompletenessAs":"Complete"
 `POST /import/actions/apply?batchId=...` — confirm the corrected text and `CompletenessStatus: Complete`
 via DbInspector. Re-import the same ids again with another changed `text` under `review` policy — must
 now stage `Blocked`, not `Pending` (`GET /import/actions?status=Blocked`), and the on-disk text must be
-unchanged — proves a `Complete` row can no longer be silently overwritten. Finally, exercise
-correct/apply/reverse on a still-correctable row: single-shot re-import a changed `text` under
-`newest-wins` (nothing pending, applies immediately, `ImportBatches.Status` set to `Applied` by this
-direct-apply path — the two-phase decide→apply path used above does **not** set it, a known
-pre-existing gap, see #171/#172's plan docs), confirm the write via DbInspector, then
+unchanged — proves a `Complete` row can no longer be silently overwritten.
+
+**Correction (2026-08-08, same gap as #173's own correction below):** the paragraph below used to
+describe reversing the *same* StageDirection/SoundCue from the steps above under `newest-wins`,
+expecting a clean apply with nothing pending. That cannot happen: `CompletenessGuard.ShouldBlock` is
+evaluated against the value a policy would actually *write*, not the raw incoming value — so once a
+row is `Complete`, every policy except `skip` blocks a genuine field change, `newest-wins` included.
+Re-running that sequence against the already-`Complete` rows above stages `Blocked` again, exactly
+like the paragraph above, never a clean apply. Use a **second, brand-new** pair for this part:
+```bash
+cat > .claude/temp/smoke-171-172-addonly.json <<'EOF'
+{
+  "quotes": [{"id":"f0000001-0000-4000-8000-000000000009","quote":"A #171/#172 add-only smoke test quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+  "stageDirections": [{"id":"f0000002-0000-4000-8000-000000000009","text":"Original text before correction.","imageUrl":null,"translations":{}}],
+  "soundCues": [{"id":"f0000003-0000-4000-8000-000000000009","text":"Original sound before correction.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-addonly.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+```
+Must return `200` with both rows added (fresh, still `NeedsReview`). Single-shot re-import a changed
+`text` for both ids under `newest-wins` (nothing pending, applies immediately, `Import_Batch.Status` set
+to `Applied` by this direct-apply path — the two-phase decide→apply path used above does **not** set it,
+a known pre-existing gap, see #171/#172's plan docs), confirm the write via DbInspector, then
 `POST /import/actions/reverse?batchId=...` (`preview=true` first, then for real) and confirm the
 pre-correction text is restored via DbInspector.
 
@@ -255,7 +282,7 @@ EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
 ```
 Must return `200` with the Person added (check via `Quotinator.Tools.DbInspector` — `SELECT Id,
-Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM People WHERE Id = 'f0000005-...'` — note
+Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM Quotinator_Person WHERE Id = 'f0000005-...'` — note
 the id is deliberately lowercase, as a file-authored explicit id always is). Re-import the same id
 with a changed `dateOfBirth` under `{"duplicateResolution":{"default":"review"}}` — must stage a
 `Pending` `Modify` action (`GET /import/actions?status=pending`) with `ambiguousFields:
@@ -295,7 +322,7 @@ returned `batchId`, then:
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
-Both must return `200`; confirm via DbInspector (`SELECT Id, IsDeleted FROM People WHERE Id =
+Both must return `200`; confirm via DbInspector (`SELECT Id, IsDeleted FROM Quotinator_Person WHERE Id =
 'f0000007-0000-4000-8000-000000000007'`) that `IsDeleted` genuinely flips to `1`. Re-import the exact
 same fixture one more time — must stage as a fresh `Add` (not `Modify`, which would mean the reversal
 silently no-op'd and the row was never truly gone), and `IsDeleted` must be back to `0` afterward.
@@ -305,10 +332,10 @@ silently no-op'd and the row was never truly gone), and `IsDeleted` must be back
 ## 10. Series/Universe schema, Character↔Source many-to-many identity (#179)
 
 Character no longer
-has a `SourceId` column; a Character's Source links live in `CharacterSources` instead, and today's
+has a `SourceId` column; a Character's Source links live in `Quotinator_CharacterSource` instead, and today's
 matching remains per-Source in meaning (only the mechanism changed — reusing a Character across
 Sources is #174's job, not this one's). This proves both halves live: a brand-new Character on an
-existing Source creates exactly one new `CharacterSources` link, and the same Character *name*
+existing Source creates exactly one new `Quotinator_CharacterSource` link, and the same Character *name*
 under a *different* Source still creates a separate row (no premature cross-Source reuse).
 ```bash
 cat > .claude/temp/smoke-179.json <<'EOF'
@@ -317,8 +344,8 @@ EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-179.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
 ```
 Must return `200`. Confirm via `Quotinator.Tools.DbInspector` — `SELECT COUNT(*) FROM
-CharacterSources;` must have increased by exactly 1, and `SELECT c.Name, s.Title FROM Characters c
-JOIN CharacterSources cs ON cs.CharacterId = c.Id JOIN Sources s ON s.Id = cs.SourceId WHERE
+Quotinator_CharacterSource;` must have increased by exactly 1, and `SELECT c.Name, s.Title FROM Quotinator_Character c
+JOIN Quotinator_CharacterSource cs ON cs.CharacterId = c.Id JOIN Quotinator_Source s ON s.Id = cs.SourceId WHERE
 c.Name = 'Striker (Smoke Test)';` must show one row linking to `Airplane!`. Then re-import the same
 character name under a different Source:
 ```bash
@@ -327,8 +354,8 @@ cat > .claude/temp/smoke-179b.json <<'EOF'
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-179b.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
 ```
-Must return `200`. `SELECT COUNT(*) FROM Characters WHERE Name = 'Striker (Smoke Test)';` must now
-be `2` — a *second*, separate Character row, each linked to its own Source via `CharacterSources`
+Must return `200`. `SELECT COUNT(*) FROM Quotinator_Character WHERE Name = 'Striker (Smoke Test)';` must now
+be `2` — a *second*, separate Character row, each linked to its own Source via `Quotinator_CharacterSource`
 — proving today's per-Source matching genuinely survived the mechanism change unchanged, not
 silently reused across Sources.
 
@@ -364,21 +391,31 @@ reproduction steps:
 ```bash
 docker stop -t 15 <container>
 docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-191.db
+docker cp <container>:/app/data/quotinatordata.db-wal .claude/temp/inspect-191.db-wal
+docker cp <container>:/app/data/quotinatordata.db-shm .claude/temp/inspect-191.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
-  --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Sources WHERE IsDeleted = 0"
+  --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Quotinator_Source WHERE IsDeleted = 0"
 ```
+The `-wal`/`-shm` sidecar files must always be copied alongside `quotinatordata.db`, here and at every
+other `docker cp .../quotinatordata.db` step in this file — `DatabaseInitializer` runs in WAL mode, and
+SQLite doesn't auto-checkpoint recent writes back into the main `.db` file until the WAL grows past its
+own size threshold or every connection to it closes; the always-open app connection means a copy of just
+the main file can silently omit real, already-committed data (confirmed live 2026-08-04: a batch-links
+count read `3` instead of the correct `4` from a bare `.db`-only copy, matching once the sidecars were
+included too). `sqlite3` isn't present in the image, so a `PRAGMA wal_checkpoint` via `docker exec` isn't
+an option — copying the sidecars is the only fix that doesn't need a Dockerfile change.
 `have_date` must be nonzero and a large majority of `sources` (roughly 400+ of 479 on the current
 bundled dataset) — before the fix this was always `0`. Cross-check one title with no `sources[]`
 entry at all (implicit-discovery path, the case #191 actually fixes):
 ```bash
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
-  --sql "SELECT Title, Type, Date FROM Sources WHERE Title = 'Airplane!' AND IsDeleted = 0"
+  --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Airplane!' AND IsDeleted = 0"
 ```
 Must return `Date = 1980`. Then cross-check a title known to have a date-less explicit `sources[]`
 entry (the gap noted above):
 ```bash
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
-  --sql "SELECT Title, Type, Date FROM Sources WHERE Title = 'Jurassic Park' AND IsDeleted = 0"
+  --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Jurassic Park' AND IsDeleted = 0"
 ```
 Currently returns `Date = NULL` — expected until the open gap above is fixed, not a fresh failure.
 
@@ -489,7 +526,7 @@ supplied — proving both the capture-time canonicalization and the case-insensi
 
 A conversation line
 referencing a quote by an id whose casing doesn't match the quote's own now-canonical form must not
-violate `ConversationLines`' real `FOREIGN KEY` constraint to `Quotes(Id)` — the same bug class #209
+violate `Quotinator_ConversationLine`'s real `FOREIGN KEY` constraint to `Quotinator_Quote(Id)` — the same bug class #209
 found for `StageDirectionId`/`SoundCueId`, now also covering `QuoteId`.
 ```bash
 cat > .claude/temp/smoke-210-conv.json <<'EOF'
@@ -568,7 +605,7 @@ curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/soundcues
 All must return `200` with populated `items` and lowercase `id` fields — these endpoints all go
 through `SqliteRepository<T>`/`SqliteRestorableRepository<T>`'s generic `GetPageAsync`/`GetByIdAsync`,
 the only live paths that exercise `RepositorySql`'s rewritten queries end to end (Characters'
-`CharacterSources` many-to-many link also exercises `SqliteLinkRepository`). Also confirm
+`Quotinator_CharacterSource` many-to-many link also exercises `SqliteLinkRepository`). Also confirm
 `GetByIdAsync`'s case-insensitive lookup survived the rewrite — fetch one of the returned ids from
 `GET .../sources/{id}` with both its original casing and an uppercased version; both must return `200`
 with the same, lowercase-rendered `id`.
@@ -597,10 +634,12 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse"
 ```
 All three must return `422` with `"detail":"You must provide a batchId."` — never the generic
-"Numeric parameters..." message. With `Quotinator__LogRequests=true`, `docker logs` for each of these
-requests must show `→ 422`, not `→ 200`. Re-run a normal `apply` with a real `batchId` (see the
-"Import and staged-action review workflow" section above) to confirm the fix didn't break the happy
-path — still `200`.
+"Numeric parameters..." message. With `Quotinator__LogRequests=true` **and** `Quotinator__LogLevel=debug`
+(request logging is Debug-only across every category, #244 — `LogRequests=true` alone only registers
+the middleware, it does not raise the log level), `docker logs` for each of these requests must show
+`→ 422`, not `→ 200`. Re-run a normal `apply` with a real `batchId` (see the "Import and
+staged-action review workflow" section above) to confirm the fix didn't break the happy path — still
+`200`.
 
 ---
 
@@ -785,10 +824,14 @@ must return `200` with an **empty** `items` array — no file should be left "st
 If any are, `docker logs` will show `"<file>" left staged awaiting review — batch "<id>", N action(s)
 pending a decision`; inspect via `GET /import/actions?batchId=<id>` to see which entity/field lacks a
 rule or alias. Cross-check for duplicate Sources directly, using `Quotinator.Tools.DbInspector`
-against a copy of the running container's database (`docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db`):
+against a copy of the running container's database (copy the `-wal`/`-shm` sidecars alongside the `.db`
+file too — see §11's own note on why):
 ```bash
+docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db
+docker cp <container>:/app/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
+docker cp <container>:/app/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
-  --sql "SELECT Title, Type, COUNT(*) AS c FROM Sources WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
+  --sql "SELECT Title, Type, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
 ```
 Must return **no rows** — any row here is a genuine duplicate Source that slipped through both the
 rule and alias mechanisms.
@@ -798,27 +841,36 @@ rule and alias mechanisms.
 ## 23. Rule file live-read proof (#181)
 
 Proves the lookup genuinely reads the rule file's live content, not a cached or hardcoded value —
-live-verified 2026-07-25. Temporarily delete the Auntie Mame rule entirely from
+live-verified 2026-07-25. **Both `docker run` commands in this section need
+`-e Quotinator__AutoPurgeBundledImportActions=false`** (confirmed live 2026-08-08, #249) — without it,
+every bundled batch's `Import_Action` rows (including the one this section's own `MergedFields` check
+below queries) are purged immediately after a successful seed, and the row will already be gone by the
+time you inspect it. Temporarily delete the Auntie Mame rule entirely from
 `nikhilnamal17-conflict-rules.json` (`entityId: 088603c0-...`), then rebuild and run a fresh
 container:
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
-docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending"
 ```
 With the rule removed, that one quote's conflict must now stage `Pending` again (confirmed:
 `ambiguousFields: ["date"]`) — proving the mechanism actually consults the file's content on every
 seed, not a cached decision from an earlier run. Restore the rule, then change its `resolution` from
 `Keep` to `Replace` and reseed again — `GET /quotes/{id}` will **not** show the change (`date` is
-Source-derived, read via JOIN from `Sources.Date`, and the Source was already fixed at the film's
+Source-derived, read via JOIN from `Quotinator_Source.Date`, and the Source was already fixed at the film's
 correct year by whichever occurrence was seen first — a per-quote rule only ever affects that Quote's
 own `MergedFields` audit trail, never a Source-owned field's real stored value, the same limitation
-#181's own Step 10 addendum documents). Check via `Quotinator.Tools.DbInspector` instead:
+#181's own Step 10 addendum documents). Check via `Quotinator.Tools.DbInspector` instead (again with the
+`-wal`/`-shm` sidecars):
 ```bash
 docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db
+docker cp <container>:/app/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
+docker cp <container>:/app/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
-  --sql "SELECT MergedFields FROM System_ImportActions WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
+  --sql "SELECT MergedFields FROM Import_Action WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
 ```
+(again against a container started with `Quotinator__AutoPurgeBundledImportActions=false`, per the
+note above — otherwise this query returns no rows at all)
 The row for the batch matching NikhilNamal17's own rule file must show `"date":"2005"` (the incoming
 value — Replace won), confirmed changed from `"date":"1958"` under the original `Keep` rule; a
 *second* row may appear for vilaboim's own separate cross-file duplicate of the same quote id,
@@ -931,16 +983,19 @@ remove). Finally, the alias-candidate suggestion endpoint — read-only, no `X-A
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/alias?fileName=quotinator-curated-source-aliases.json&origin=Bundled"
 ```
-Must return `200` with a `candidates` array. **Live-verified 2026-07-26 against real bundled data:
-this is not empty** — it found 3 genuine near-duplicates the curated alias file doesn't cover
-(`"When Harry Met Sally"` vs. `"When Harry Met Sally..."`, `"Avengers - Age of Ultron"` vs.
-`"Avengers: Age of Ultron"` — the normalizer strips `-`/`:` identically, correctly catching this —
-and `"Airplane"` vs. `"Airplane!"`, already aliased in a *different* bundled file's own alias list,
-not curated's — the file-scoped design means a duplicate covered elsewhere can still surface here,
-a known, accepted trade-off, not a bug). This confirms the endpoint runs cleanly end to end against
-the full live `Sources` table and genuinely finds real candidates, which is the point — do not expect
-an empty result on this dataset. A confirmed, verified duplicate should be filed as a data-quality
-follow-up per `docs/workflow/source-verification.md`, not fixed inline as part of this checklist.
+Must return `200` with a `candidates` array. **Originally live-verified 2026-07-26 against real bundled
+data with 3 genuine near-duplicates the curated alias file didn't cover** (`"When Harry Met Sally"` vs.
+`"When Harry Met Sally..."`, `"Avengers - Age of Ultron"` vs. `"Avengers: Age of Ultron"` — the
+normalizer strips `-`/`:` identically, correctly catching this — and `"Airplane"` vs. `"Airplane!"`,
+aliased in a *different* bundled file's own alias list, not curated's, at the time). **All 3 have since
+been added to `nikhilnamal17-source-aliases.json` as a data-quality follow-up (confirmed 2026-08-08)**,
+so a T2 run against current `main` correctly returns an **empty** `candidates` array for this exact
+query — that is the fix working, not a regression of the endpoint. What this section actually verifies
+is structural, not a specific candidate count: `200` with a well-formed `candidates` array, confirming
+the endpoint runs cleanly end to end against the full live `Quotinator_Source` table. If a future
+bundled-source refresh introduces a genuinely new near-duplicate, it will show up here again — a
+confirmed, verified one should be filed as a data-quality follow-up per
+`docs/workflow/source-verification.md`, not fixed inline as part of this checklist.
 
 ---
 
@@ -961,7 +1016,8 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 Must return `200` with `quotes`/`sources`/`characters`/`people`/`series`/`universes`/
 `stageDirections`/`soundCues`/`conversations` (all nine entity-type row counts) plus `reports`
 (same per-file shape as the preview above). Repeat against `POST /admin/database/reset` — same
-shape.
+shape, but expect every count `0` and `reports` reflecting no activity: Reset no longer reimports
+bundled/user content after rebuilding the schema (#156), so there is nothing to report.
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
@@ -979,4 +1035,566 @@ docker logs <container> 2>&1 | grep "\[Database - Stats\]"
 ```
 The startup log line must show all nine counts — quotes, sources, characters, people, series,
 universes, stage directions, sound cues, conversations — not just the original four.
+
+---
+
+## 28. Unicode-aware search toggle (#222)
+
+Proves the container-level wiring, not the matching logic itself (already covered by unit tests) —
+that `Quotinator__UnicodeAwareSearch` (or the HA add-on's `unicode_aware_search` option) actually
+reaches the running app and flips real query behaviour. No bundled/curated data contains a
+case-varying accented string, so this imports a small throwaway fixture instead.
+
+**Flag off (default) — start a fresh container without the env var:**
+```bash
+docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+cat > .claude/temp/smoke-222.json <<'EOF'
+{
+  "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"I will always have Café de Flore.","originalLanguage":"en","source":"Café de Flore","date":"1990","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
+```
+Import must return `200`. The search (`CAFÉ`, percent-encoded) must return an empty `items` array
+with a `message` — the fixture's `Café de Flore` is not matched, proving default behaviour is
+unchanged.
+
+**Flag on — stop that container, start a fresh one with the env var set:**
+```bash
+docker stop <container>
+docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__UnicodeAwareSearch=true quotinator:local
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
+```
+A fresh container has no persisted data, so the same import is required again. The search — same
+query, same fixture — must now return `200` with one item, `source: "Café de Flore"`. Same query,
+same data, only the env var differs — the direct "with and without the feature active" comparison.
+
+---
+
+## 29. Seeding-stage backup/restore safety net, degraded startup, and Reset recovery (#254)
+
+Found live during #254's own T1 pass, as three compounding gaps in the same startup path:
+
+1. `DatabaseInitializer`'s migration-version tracking only detects a pending migration by comparing
+   recorded counts — rewriting an unreleased migration's content in place (same slot, same final
+   count) left an already-migrated database reading as "up to date" while its on-disk schema no
+   longer matched, and seeding then crashed with no exception safety net (unlike the migration
+   phase, which already had one). Fixed by wrapping seeding in the same backup/restore/rethrow net.
+2. That exception, left uncaught, propagated out of `Main` before Kestrel ever bound — under IIS
+   Express/ANCM this rendered a raw, technical stack-trace page to whoever was looking at the
+   browser. An initial fix caught it and exited the process cleanly instead — but that broke the
+   *only* documented remedy (`POST /api/v1/admin/database/reset`), since a fully-exited process has
+   no server left to receive that request. Corrected to degrade instead of exit:
+   `DatabaseHealthState` + `DatabaseHealthGateMiddleware` keep the app bound and reachable for
+   health/version/admin traffic, and return a clear `503` (never a raw exception) for everything
+   else.
+3. Calling Reset while degraded genuinely repairs the on-disk schema, but `DatabaseHealthState` is
+   in-memory and does not observe that on its own — a first pass left the app stuck reporting
+   unhealthy forever after a successful Reset. Fixed by having the Reset endpoint call
+   `DatabaseHealthState.MarkHealthy()` once `ResetAsync` returns without throwing.
+
+This proves all three end to end against a real container, using a bind-mounted data directory so
+the host can manipulate the SQLite file directly. `Quotinator.Tools.DbInspector` is deliberately
+**read-only** (`Mode=ReadOnly` — see its `README.md`) and cannot run the `DROP TABLE` this needs;
+`scripts/execute-sql.csx` (a real, checked-in dotnet-script — the writable counterpart to DbInspector,
+per this project's own scripting policy, ADR 010) opens a normal connection instead.
+
+**Start a container with a bind-mounted data directory and let it seed normally:**
+```bash
+mkdir -p .claude/temp/smoke-254-data
+MSYS_NO_PATHCONV=1 docker run -d --name smoke254 -p 8080:8080 \
+  -v "C:/repos/Quotinator/.claude/temp/smoke-254-data:/data" \
+  -e Quotinator__DataDir=/data quotinator:local
+sleep 8
+docker logs smoke254 2>&1 | grep "\[Database - Init\]"
+ls .claude/temp/smoke-254-data/backups/ 2>/dev/null
+```
+`MSYS_NO_PATHCONV=1` and an explicit Windows-style source path are required under Git Bash — without
+them, Git Bash's automatic POSIX-to-Windows path conversion mangles the `-v` argument (confirmed live:
+`$(pwd)/...:/data` silently became a bind mount to `\Program Files\Git\data`, and the container wrote
+nothing to the intended host directory at all).
+The init log must show `schema created at baseline` (fresh database, baseline path) and the
+`backups/` directory must not exist yet or must be empty — a baseline run has nothing to lose, so no
+backup is taken.
+
+**Restart the same container unchanged — an ordinary restart now takes a backup too:**
+```bash
+docker restart smoke254
+sleep 5
+docker logs smoke254 2>&1 | grep "\[Database - Init\]" | tail -3
+ls .claude/temp/smoke-254-data/backups/*.db 2>/dev/null | wc -l
+```
+Must show `schema is up to date`, and the backup count must now be `1` — this is the deliberately
+chosen tradeoff (see #254's plan doc discussion), not a bug: every non-baseline startup backs up
+before seeding, since seeding has no cheaper "is there real work to do" signal to gate on the way
+migrations do (a version-count check alone is exactly what missed the schema/version mismatch this
+fix exists to protect against). Only the very first baseline run is skipped, confirmed by the
+previous step.
+
+**Break the schema directly on the host side, then restart (start the container with an admin key
+this time — needed for the Reset call in the next step):**
+```bash
+docker rm -f smoke254
+MSYS_NO_PATHCONV=1 docker run -d --name smoke254 -p 8080:8080 \
+  -v "C:/repos/Quotinator/.claude/temp/smoke-254-data:/data" \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 8
+docker stop smoke254
+dotnet script scripts/execute-sql.csx -- \
+  --db .claude/temp/smoke-254-data/quotinatordata.db \
+  --sql "PRAGMA foreign_keys=OFF; DROP TABLE Quotinator_Quote;"
+docker start smoke254
+sleep 8
+docker logs smoke254 2>&1 | tail -20
+ls .claude/temp/smoke-254-data/backups/*.db 2>/dev/null | wc -l
+docker ps -a --filter name=smoke254 --format "{{.Status}}"
+```
+- The log must show, in order: `[Database - Backup] backup complete`, `[Database - Init] seeding
+  failed — restoring pre-seed backup, database left unchanged...` (ERR), `[Database - Init] pre-seed
+  backup restored.` (INF), then `[Server] Database initialisation failed...` (CRIT/FTL) with the
+  underlying `SqliteException: ... no such table: Quotinator_Quote` attached as the log event's
+  exception — not a bare ".NET Unhandled exception" runtime dump.
+- At least one new backup `.db` file must exist (one per `CreateBackup` call — its own `-shm`/`-wal`
+  WAL sidecars don't count as separate backups).
+- `docker ps -a` must show the container as `Up ...` — **not** `Exited` — the app degrades, it does
+  not crash.
+
+**Confirm the degraded HTTP surface, then call Reset and confirm it actually recovers:**
+```bash
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  http://localhost:8080/api/v1/admin/database/reset -o /dev/null
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
+```
+- `/health` must return `503` with `{"status":"unhealthy","reason":"..."}` (not a bare `200`) —
+  and `/quotes/random` must return `503` with `{"status":"unavailable","reason":"..."}`, never a raw
+  exception. A Reset call made with a wrong/missing `X-Api-Key` must return `401` (not `503`) even
+  while degraded — confirming the health gate exempts `/api/v1/admin/*` from the 503 gate entirely,
+  rather than blocking the route outright and only letting a correctly-authenticated call through.
+- The Reset call must return `200` with a row-count summary of **all zeros** — it does its own
+  independent schema rebuild, unaffected by the degraded state, but no longer reimports bundled/user
+  quote content afterward (#156), so every count is `0` immediately after.
+- After Reset, `/health` must return `200` with `{"status":"healthy"}` — proving
+  `DatabaseHealthState.MarkHealthy()` actually clears the degraded state rather than requiring a
+  process restart to recover — and `/quotes/random` must return `200` with `{"status":"NoResults", ...}`
+  and an empty `items` array (not `503`, and not real quote data — the database is genuinely empty
+  after a Reset now).
+
+Clean up: `docker rm -f smoke254 && rm -rf .claude/temp/smoke-254-data`.
+
+## 30. FileResource capture, listing, byte-exact reconstruction, and pruning (#251, #252)
+
+Proves the write path captures a bundled source file's real content on startup, the paginated
+list/detail endpoints (#251's later round) return it correctly including `homeDirectoryKey` and
+`linkedBatchCount`/`linkedBatchIds` (#252's generalized `system`/`user`/`upload` origin values), the
+download endpoint reconstructs it byte-for-byte (or normalizes to a different line ending on request),
+and the prune endpoint enforces admin auth and input validation. `Quotinator.Tools.DbInspector`
+(read-only) is used for the provenance checks that need a raw SQL join.
+
+**Start a container and let it seed normally:**
+```bash
+docker run -d --name smoke251 -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 15
+docker logs smoke251 2>&1 | tail -5
+```
+
+**Find a captured file's id and confirm all four bundled files were captured with correct provenance**
+(copy the `-wal`/`-shm` sidecars alongside the `.db` file too — see §11's own note on why):
+```bash
+MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/quotinatordata.db .claude/temp/smoke251.db
+MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/quotinatordata.db-wal .claude/temp/smoke251.db-wal
+MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/quotinatordata.db-shm .claude/temp/smoke251.db-shm
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db \
+  --sql "SELECT Id, FileName, Origin, HomeDirectoryKey, LineEnding, EndsWithTrailingNewline, Converter, ConverterOptions FROM Import_FileResource WHERE IsDeleted = 0 ORDER BY FileName"
+```
+Must list **five** rows: the four bundled source files (`NikhilNamal17_popular-movie-quotes.json`,
+`quotinator-curated.json`, `quotinator-series-universe.json`, `vilaboim_movie-quotes.json`) plus
+`manifest.json` itself, each with `Origin = System`, `HomeDirectoryKey = sources`. `NikhilNamal17_popular-movie-quotes.json` must
+show `Converter = basic-json-array` with its full `ConverterOptions` JSON; `vilaboim_movie-quotes.json`
+must show `Converter = regex-array` with its own options; the other three (including `manifest.json`
+itself) must show `NULL` for both — they have no `converter` entry in `manifest.json`.
+
+**Confirm `manifest.json` is linked to all four batches it drove, not just the two whose files were
+never redirected to the download cache (the #251 follow-up bug — `SeedBatch.SourceDirectory`):**
+```bash
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db \
+  --sql "SELECT fr.FileName, COUNT(frb.Id) AS BatchLinks FROM Import_FileResource fr LEFT JOIN Import_FileResourceBatch frb ON frb.FileResourceId = fr.Id WHERE fr.IsDeleted = 0 GROUP BY fr.Id ORDER BY fr.FileName"
+```
+`manifest.json` must show `BatchLinks = 4`; every other row must show `BatchLinks = 1`.
+
+**List endpoint returns the paginated shape, filterable by `origin` (`system`, `user`, `upload` — #252's generalized values):**
+```bash
+curl -s "http://localhost:18099/api/v1/import/file-resources"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/file-resources?origin=bogus"
+curl -s "http://localhost:18099/api/v1/import/file-resources?origin=system"
+```
+First command's `items` must each include `homeDirectoryKey` (`"sources"` for the bundled rows) and
+`linkedBatchCount`, but no `linkedBatchIds` key. Second must return `422`. Third's `totalCount` must be
+`5` (all five bundled/manifest rows — none are `user`/`upload` origin on a fresh container).
+
+**Detail endpoint returns the full `linkedBatchIds` list, consistent with the list row's `linkedBatchCount` (substitute the `manifest.json` id from the first provenance check above):**
+```bash
+curl -s "http://localhost:18099/api/v1/import/file-resources/<manifest-id>"
+```
+Must show `linkedBatchCount: 4` and `linkedBatchIds` containing exactly 4 ids — matching the
+`BatchLinks = 4` confirmed above via the raw SQL join.
+
+**Batches list/detail — every batch id from the FileResource detail above must actually exist here:**
+```bash
+curl -s "http://localhost:18099/api/v1/import/batches?type=seed"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/batches?status=bogus"
+curl -s "http://localhost:18099/api/v1/import/batches/<one-of-the-linkedBatchIds-above>"
+```
+First's `totalCount` must be `4` (one `seed`-type batch per bundled file). Second must return `422`.
+Third must return `200` with that batch's own detail — proving the FileResource detail's
+`linkedBatchIds` and the batches endpoint agree on what exists.
+
+**Download must reconstruct the file byte-for-byte identical to the original on disk (substitute a real id from the previous step):**
+```bash
+curl -s "http://localhost:18099/api/v1/import/file-resources/<id>/download" -o .claude/temp/downloaded.json
+MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/sources/quotinator-curated.json .claude/temp/original.json
+diff .claude/temp/downloaded.json .claude/temp/original.json && echo IDENTICAL
+```
+Must print `IDENTICAL` — no `X-Api-Key` required (read-only endpoint).
+
+**`lineEnding` override normalizes the output (confirm via a hex dump, not just word count):**
+```bash
+curl -s "http://localhost:18099/api/v1/import/file-resources/<id>/download?lineEnding=crlf" -o .claude/temp/crlf.json
+xxd .claude/temp/crlf.json | head -3
+```
+Must show `0d0a` (`\r\n`) sequences even though the file was originally captured as bare `LF`.
+
+**Error cases and prune auth/validation:**
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/file-resources/00000000-0000-0000-0000-000000000000/download"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/file-resources/<id>/download?lineEnding=bogus"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:18099/api/v1/import/file-resources/prune"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18099/api/v1/import/file-resources/prune?keepPerFile=abc"
+curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18099/api/v1/import/file-resources/prune"
+```
+Must return, in order: `404` (unknown id), `422` (invalid `lineEnding`), `401` (no key), `422`
+(malformed `keepPerFile`), then `200` with `{"prunedCount":0}` (nothing to prune — each bundled file
+has only one captured version after a single startup).
+
+Clean up: `docker rm -f smoke251 && rm -f .claude/temp/smoke251.db .claude/temp/smoke251.db-wal .claude/temp/smoke251.db-shm .claude/temp/downloaded.json .claude/temp/original.json .claude/temp/crlf.json`.
+
+## 31. Audit-trail bulk export, date-range discovery, and conflict-resolution data auto-purge (#249)
+
+Proves the two new `/admin/audit` endpoints (bulk export, date-range discovery) return correct data and
+respect the row-count cap, that a fresh bundled seed auto-purges its own `Import_Action` rows by
+default, that the per-origin config settings can disable that, and that `purgeOnSuccess` on the live
+import endpoints purges on request and forfeits `POST /import/actions/reverse` afterward.
+`Quotinator.Tools.DbInspector` (read-only) is used for the raw-table checks.
+
+**Start a container with defaults (both auto-purge settings on) and let it seed normally:**
+```bash
+docker run -d --name smoke249 -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 15
+docker logs smoke249 2>&1 | tail -5
+```
+
+**Date-range discovery reflects the seeding-time audit activity:**
+```bash
+curl -s "http://localhost:18099/api/v1/admin/audit/date-range"
+```
+Must return `200` with non-null `earliestDate`/`latestDate` — the bundled seed's own `BulkInserted`
+audit entries (no `X-Api-Key` required, matching `GET /admin/audit`'s precedent).
+
+**Bulk export returns both tables, as a downloaded file:**
+```bash
+curl -s -D - "http://localhost:18099/api/v1/admin/audit/export" -o .claude/temp/audit-export.json | grep -i content-disposition
+cat .claude/temp/audit-export.json | head -c 300
+```
+Response headers must include `Content-Disposition: attachment; filename="quotinator-audit-export-...json"`.
+The body must have top-level `entries` and `changes` arrays, both non-empty after a fresh seed.
+
+**Row-count cap returns 422, never a silently truncated file (restart with a tiny cap):**
+```bash
+docker rm -f smoke249
+docker run -d --name smoke249cap -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__AdminAuditExportMaxRows=1 quotinator:local
+sleep 15
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/admin/audit/export"
+docker rm -f smoke249cap
+```
+Must return `422` — a fresh seed produces far more than 1 combined row.
+
+**Auto-purge defaults to on — a fresh bundled seed leaves (near-)zero `Import_Action` rows for its own
+fully-applied batches, with an `Audit_Entry` trace recorded for each purge:**
+```bash
+docker run -d --name smoke249 -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 15
+MSYS_NO_PATHCONV=1 docker cp smoke249:/app/data/quotinatordata.db .claude/temp/smoke249.db
+MSYS_NO_PATHCONV=1 docker cp smoke249:/app/data/quotinatordata.db-wal .claude/temp/smoke249.db-wal
+MSYS_NO_PATHCONV=1 docker cp smoke249:/app/data/quotinatordata.db-shm .claude/temp/smoke249.db-shm
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db \
+  --sql "SELECT COUNT(*) AS RemainingActions FROM Import_Action"
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db \
+  --sql "SELECT COUNT(*) AS PurgeTraces FROM Audit_Entry WHERE TableName = 'Import_Action' AND Operation = 'Purged'"
+```
+`RemainingActions` must be `0` (every bundled batch applies cleanly with no pending actions, so all four
+get auto-purged). `PurgeTraces` must be `4` — one per bundled batch, even though the `Import_Action` rows
+themselves are gone.
+
+**Disabling the bundled setting retains the rows instead (fresh container, no prior data):**
+```bash
+docker rm -f smoke249
+docker run -d --name smoke249noautopurge -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
+sleep 15
+MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/app/data/quotinatordata.db .claude/temp/smoke249b.db
+MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/app/data/quotinatordata.db-wal .claude/temp/smoke249b.db-wal
+MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/app/data/quotinatordata.db-shm .claude/temp/smoke249b.db-shm
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249b.db \
+  --sql "SELECT COUNT(*) AS RemainingActions FROM Import_Action"
+docker rm -f smoke249noautopurge
+```
+`RemainingActions` must be greater than `0` — with the bundled setting off, the seeding path never
+purges, matching pre-#249 behaviour.
+
+**`purgeOnSuccess` on a live import purges immediately and forfeits reverse (using `smoke249` from the
+auto-purge check above, still running):**
+```bash
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@data/sources/quotinator-curated.json" \
+  "http://localhost:18099/api/v1/import?purgeOnSuccess=true"
+```
+Note the response's `batchId`, then:
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:18099/api/v1/import/actions/reverse?batchId=<batchId-from-above>"
+```
+The import call must return `200` (curated file re-imports as all-Modify against the already-seeded
+data, no pending decisions). The reverse call must return `422` — the batch's own `Import_Action` rows
+were purged immediately by `purgeOnSuccess=true`, so `ReverseBatchAsync` has nothing to reverse.
+
+**`DELETE /admin/audit` (unscoped) clears both `Audit_Entry` and `Audit_Change` — found live during
+T1: date-range/export kept showing data after a clear because the endpoint had only ever cleared
+`Audit_Entry`, even though #249 treats both tables as one combined concern everywhere else:**
+```bash
+curl -s -X DELETE -H "X-Api-Key: <your admin key>" "http://localhost:18099/api/v1/admin/audit"
+curl -s "http://localhost:18099/api/v1/admin/audit/date-range"
+```
+The DELETE must return `204`. The date-range call afterward must show `earliestDate`/`latestDate`
+matching *only* the clear's own self-recorded `Purged` trace (a single, just-now timestamp) — not any
+earlier `Audit_Change` activity, which is now also gone. A table-scoped clear
+(`DELETE .../admin/audit?table=Quotinator_Quote`) must leave `Audit_Change` untouched instead — verify
+via `Quotinator.Tools.DbInspector` (`SELECT COUNT(*) FROM Audit_Change`) that the row count is
+unaffected by a scoped clear.
+
+Clean up: `docker rm -f smoke249 && rm -f .claude/temp/smoke249.db .claude/temp/smoke249.db-wal .claude/temp/smoke249.db-shm .claude/temp/smoke249b.db .claude/temp/smoke249b.db-wal .claude/temp/smoke249b.db-shm .claude/temp/audit-export.json`.
+
+## 32. Reset is a full wipe with no reseed (#156)
+
+Proves Reset now drops the *entire* database (no `System_`/`Import_`/`Audit_` protected-table
+concept) and rebuilds via the baseline path, and no longer reimports bundled/user quote content
+afterward — reversing #141's preserve-on-reset behaviour. There is no live check for the
+`SeedSystemContentAsync` extension point itself: no real system/reference table exists in
+production yet (proven only via test-only fixtures — see the #156 plan doc), so nothing observable
+changes in a running container for that part.
+
+**Start a container, let it seed normally, write an audit-trail marker, then Reset:**
+```bash
+docker rm -f smoke156
+MSYS_NO_PATHCONV=1 docker run -d --name smoke156 -p 8080:8080 \
+  -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 8
+curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+curl -s "http://localhost:8080/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/admin/database/reset"
+curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+curl -s "http://localhost:8080/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
+curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/quotes/random"
+```
+- Before Reset, `quotes` and the audit `totalCount` must both be non-zero (a normal seeded install).
+- The Reset call must return `200` with every row count `0` (see the endpoint's own updated
+  description) — no reimport happens.
+- After Reset, `/version`'s `quotes` count must be `0` — the audit trail is wiped along with
+  everything else, no longer surviving Reset the way it did before #156. The audit `totalCount` must
+  be exactly `1`, not `0` — Reset writes its own self-trace row (`Operation: Reset`) into the
+  freshly-rebuilt `Audit_Entry` table immediately after wiping it, the same pattern
+  `DELETE /admin/audit` already uses for its own `Purged` trace.
+- `/quotes/random` must return `200` with `{"status":"NoResults", ...}` and an empty `items` array —
+  not `503`, and not real quote data.
+
+**`preserveSchemaVersion=true` still restores the pre-reset migration-history rows — now for both
+counters, not just the consumer's own (#156 made this symmetric since Data's own `System_SchemaVersion`
+is wiped by the full drop too, where previously it was never touched):**
+```bash
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/admin/database/reset?preserveSchemaVersion=true"
+```
+Must return `200`. Verify via `Quotinator.Tools.DbInspector` that both `System_SchemaVersion` and
+`System_ConsumerSchemaVersion` report the same row *count* as before this call (their granular
+per-version history, not collapsed to a single baseline row) — `SELECT COUNT(*) FROM
+System_SchemaVersion;` / `SELECT COUNT(*) FROM System_ConsumerSchemaVersion;`.
+
+Clean up: `docker rm -f smoke156`.
+
+## 33. Startup notification system (#278)
+
+`GET /api/v1/notifications` (list, no key) and `POST /api/v1/notifications/{id}/dismiss` (admin,
+key required), plus the `/notifications` Blazor page and the `StartupSuccessModal`/`StartupErrorModal`
+wiring. No production code path writes a real notification yet — the actual producers (e.g. a future
+"pre-seed backup skipped" case) are follow-on integrations tracked separately, so a fresh container has
+none. This section proves the mechanism (list/dismiss/tag/UI) works against an empty table; the
+write → active → dismiss round trip itself is covered by `NotificationWriterTests`/
+`NotificationReaderTests` (real SQLite, not live-command-verified here).
+
+```bash
+docker rm -f smoke278
+MSYS_NO_PATHCONV=1 docker run -d --name smoke278 -p 8080:8080 \
+  -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+sleep 8
+curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/notifications"
+curl -s -w " [%{http_code}]\n" -X POST "http://localhost:8080/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
+curl -s -w " [%{http_code}]\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
+curl -s "http://localhost:8080/openapi/v1.json" | grep -o '"Notifications"' | head -1
+```
+- `GET /notifications` must return `200` with `{"items":[],"page":1,"pageSize":20,"totalCount":0}`.
+- Dismissing a random id with no `X-Api-Key` must return `401`.
+- Dismissing the same id with the correct key must return `404` (no notification exists with that id).
+- The OpenAPI spec must contain the `Notifications` tag.
+
+**Blazor UI**: visit `http://localhost:8080/notifications` — must render the page heading and
+"No notifications yet." (no crash, no 503). Visit `http://localhost:8080/` — `StartupSuccessModal`
+must render with no notification section shown (nothing active yet); confirms `NotificationSummary`
+renders cleanly with zero rows rather than an empty heading with nothing under it.
+
+**Status filter and Action button (requires seeded rows — insert directly via a SQLite client against
+`System_Notification`, e.g. one `ActionRequired` row with `DismissTriggerKey = 'DatabaseReset'`, one
+already-expired row, one already-dismissed row):**
+- `/notifications`'s Status column must read `Active`/`Expired`/`Dismissed` correctly — an
+  undismissed-but-past-`ExpiresAt` row must show `Expired`, never `Active`.
+- The Status filter defaults to **Active** on page load; switching to **All** shows every row
+  including the expired/dismissed ones; **Expired only** shows just the expired row.
+- The `ActionRequired`/`DatabaseReset` row's Action column shows a **Run** button; clicking it replaces
+  it with **Confirm**/**Cancel** — **Cancel** must revert to the plain **Run** button without calling
+  the reset endpoint (confirm via the quote count / `/version` staying unchanged). **Confirm** must
+  actually run `POST /admin/database/reset` (quote count drops to 0, matching section 32's own Reset
+  behaviour) and the row disappears from the list afterward (the whole `System_Notification` table is
+  wiped by Reset, same as every other table).
+
+Clean up: `docker rm -f smoke278`.
+
+## 34. Standardised endpoint WithName/WithSummary, including breaking operationId renames (#279)
+
+```bash
+docker rm -f smoke279
+MSYS_NO_PATHCONV=1 docker run -d --name smoke279 -p 8080:8080 quotinator:local
+sleep 15
+curl -s "http://localhost:8080/openapi/v1.json" > /tmp/spec279.json
+grep -o '"operationId":"GetAllImportBatches"' /tmp/spec279.json
+grep -o '"operationId":"GetAllFileResources"' /tmp/spec279.json
+grep -o '"operationId":"GetImportBatches"\|"operationId":"GetFileResources"' /tmp/spec279.json
+grep -o '"summary":"List [a-z ]*"' /tmp/spec279.json | sort -u
+```
+- The spec must contain `operationId: GetAllImportBatches` and `operationId: GetAllFileResources` (the
+  two breaking renames) — and must **not** contain the old `GetImportBatches`/`GetFileResources`
+  values anywhere.
+- Every List-endpoint `summary` must read `"List x"` (lowercase plural noun) — in particular
+  `"List people"`, `"List quotes"`, and `"List series"` must appear; `"All people (paginated)"`,
+  `"All quotes (paginated)"`, and `"List Series"` (capitalised) must not.
+
+**Scalar UI**: visit `http://localhost:8080/scalar/v1` and spot-check a few GetById operations (e.g.
+Character, Quote, Import batch, Captured import file) — every summary must read `"X by ID"` with a
+capitalised `ID`, no `"...by id"` remaining.
+
+**Log tag consistency**: `GET /api/v1/quotes/{id}` against a real quote id — the container log line
+must read `[Api - GetQuoteById]`, not the old, already-mismatched `[Api - GetById]`.
+```bash
+curl -s "http://localhost:8080/api/v1/quotes/random" | grep -o '"id":"[a-f0-9-]*"' | head -1
+# use that id:
+curl -s "http://localhost:8080/api/v1/quotes/<id>" > /dev/null
+docker logs smoke279 2>&1 | grep "GetQuoteById\|Api - GetById"
+```
+
+Clean up: `docker rm -f smoke279`.
+
+## 35. Startup backup real-work gating and storage pre-flight check (#277)
+
+```bash
+docker volume rm smoke277-data 2>/dev/null
+docker rm -f smoke277
+MSYS_NO_PATHCONV=1 docker run -d --name smoke277 -p 8080:8080 -v smoke277-data:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest quotinator:local
+sleep 15
+docker logs smoke277 2>&1 | grep "Database - Backup"
+# Fresh baseline install must produce no [Database - Backup] lines at all.
+```
+
+```bash
+docker restart smoke277
+sleep 10
+docker logs smoke277 --since 15s 2>&1 | grep "Database - Backup\|schema is up to date"
+# A healthy restart (schema up to date, content already seeded) must show "schema is up to date"
+# and no [Database - Backup] line — /data/backups should not even exist yet:
+docker exec smoke277 sh -c "ls /data/backups 2>&1 || echo 'no backups dir — correct'"
+```
+
+```bash
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:8080/api/v1/admin/database/reset"
+docker exec smoke277 sh -c "ls /data/backups | wc -l"
+# Reset must take exactly one backup (unconditional — Reset is the highest-risk operation).
+```
+
+```bash
+docker restart smoke277
+sleep 10
+docker logs smoke277 --since 15s 2>&1 | grep "Database - Backup"
+docker exec smoke277 sh -c "ls /data/backups | wc -l"
+# The startup immediately after a Reset must ALSO take a backup — content-seed has real work to do
+# (Quotes empty again) even though the schema itself needed no migration. This is the exact case a
+# MigrationApplied-based gate was found to miss. Backup count must now be 2.
+```
+
+```bash
+docker rm -f smoke277
+docker run -d --name smoke277 -p 8080:8080 -v smoke277-data:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest -e Quotinator__MaxBackupStorageGb=0 quotinator:local
+sleep 5
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:8080/api/v1/admin/database/reset"
+docker logs smoke277 --since 10s 2>&1 | grep "LogBackupSkippedBudgetExceeded"
+docker exec smoke277 sh -c "ls /data/backups | wc -l"
+# With the budget already exceeded, Reset must still succeed (200, database rebuilt) — the backup is
+# skipped with a warning log, not an exception, and the backup count must stay unchanged at 2.
+```
+
+Clean up: `docker rm -f smoke277 && docker volume rm smoke277-data`.
+
+## 36. Startup wait page during database initialisation (#280)
+
+```bash
+docker volume rm smoke280-data 2>/dev/null
+docker rm -f smoke280
+MSYS_NO_PATHCONV=1 docker run -d --name smoke280 -p 8080:8080 -v smoke280-data:/data \
+  -e Quotinator__DataDir=/data quotinator:local
+sleep 1
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/health"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/version"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/"
+# Immediately after container start (before seeding completes):
+# - /health must return 503 {"status":"starting"}
+# - /version must return 200 {"status":"starting","version":"..."} — no environment/database fields
+# - / must return 200, a self-contained HTML wait page (auto-refresh meta tag, localized heading/body,
+#   no external assets) — never a hang or a raw error.
+```
+
+```bash
+sleep 15
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/health"
+curl -s "http://localhost:8080/api/v1/version"
+docker logs smoke280 2>&1 | grep "Now listening on\|Server] listening on\|Quotinator ready"
+# After seeding completes:
+# - /health must return 200 {"status":"healthy"}
+# - /version must return 200 {"status":"ready", ..., "database": {...}} with real counts
+# - Log ordering: Microsoft.Hosting.Lifetime's own "Now listening on" (Kestrel actually bound) must
+#   appear BEFORE the app's own "[Server] listening on"/"Quotinator ready" banner — proving Kestrel
+#   accepted connections during the whole wait-page window, not just after it.
+```
+
+Clean up: `docker rm -f smoke280 && docker volume rm smoke280-data`.
 

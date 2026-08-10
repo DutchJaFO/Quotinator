@@ -1,6 +1,7 @@
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Database;
@@ -47,7 +48,7 @@ public static class ImportActionFieldRowMapper
         ["ActionId", "EntityId", "EntityType", "Field", "ExistingValue", "IncomingValue", "Decision", "CustomValue", "MarkCompletenessAs"];
 
     /// <summary>Converts one row to plain-text fields in <see cref="CsvHeader"/> order, ready for <see cref="Quotinator.Data.Csv.CsvLineWriter"/>.</summary>
-    public static IEnumerable<string?> ToCsvRow(ImportActionFieldRow row) =>
+    public static IEnumerable<string?> ToCsvRow(ImportActionFieldRowResponse row) =>
     [
         row.ActionId.ToString(),
         row.EntityId,
@@ -67,7 +68,7 @@ public static class ImportActionFieldRowMapper
     /// string from a genuinely absent value, an accepted limitation of this flat format.
     /// </summary>
     /// <exception cref="FormatException"><paramref name="fields"/> doesn't have exactly 9 columns, or <c>ActionId</c>/<c>Decision</c>/<c>MarkCompletenessAs</c> isn't a recognised value.</exception>
-    public static ImportActionFieldRow FromCsvRow(IReadOnlyList<string> fields)
+    public static ImportActionFieldRowDto FromCsvRow(IReadOnlyList<string> fields)
     {
         if (fields.Count != CsvHeader.Length)
             throw new FormatException($"Expected {CsvHeader.Length} columns, found {fields.Count}.");
@@ -91,7 +92,7 @@ public static class ImportActionFieldRowMapper
             markCompletenessAs = parsedStatus;
         }
 
-        return new ImportActionFieldRow
+        return new ImportActionFieldRowDto
         {
             ActionId           = actionId,
             EntityId           = fields[1],
@@ -125,7 +126,7 @@ public static class ImportActionFieldRowMapper
     /// </summary>
     /// <exception cref="ImportActionUnknownEntityTypeException"><paramref name="entityType"/> is not a recognised entity type.</exception>
     /// <exception cref="ImportActionUnknownFieldException">A row's <c>Field</c> is not decidable for <paramref name="entityType"/>.</exception>
-    public static ConflictDecisionRequest BuildRequest(string entityType, IReadOnlyList<ImportActionFieldRow> rows)
+    public static ConflictDecisionRequest BuildRequest(string entityType, IReadOnlyList<ImportActionFieldRowDto> rows)
     {
         if (!DecidableFieldsByEntityType.TryGetValue(entityType, out var validFields))
             throw new ImportActionUnknownEntityTypeException(entityType);

@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Example.Common;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
@@ -14,7 +15,8 @@ public class InsertManyAsyncTests
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private IDbConnectionFactory _factory  = null!;
-    private SystemAuditWriter _auditWriter = null!;
+    private AuditEntryWriter _auditWriter = null!;
+    private AuditEntryReader _auditReader = null!;
     private CallerContext _callerContext = null!;
     private SqliteRepository<Widget> _repository = null!;
 
@@ -35,7 +37,7 @@ public class InsertManyAsyncTests
                 DateDeleted  TEXT,
                 IsDeleted    INTEGER NOT NULL DEFAULT 0
             );
-            CREATE TABLE System_AuditEntries (
+            CREATE TABLE Audit_Entry (
                 Id           TEXT    NOT NULL PRIMARY KEY,
                 TableName    TEXT    NOT NULL,
                 RecordId     TEXT,
@@ -51,7 +53,8 @@ public class InsertManyAsyncTests
 
         _factory      = new SqliteConnectionFactory(_dbPath);
         _callerContext = new CallerContext();
-        _auditWriter  = new SystemAuditWriter(_factory, _callerContext);
+        _auditWriter  = new AuditEntryWriter(_factory, _callerContext);
+        _auditReader  = new AuditEntryReader(_factory);
         _repository   = new SqliteRepository<Widget>(_factory, _auditWriter, _callerContext);
     }
 
@@ -70,15 +73,11 @@ public class InsertManyAsyncTests
         return conn.ExecuteScalar<int>("SELECT COUNT(*) FROM Widgets WHERE IsDeleted = 0;");
     }
 
-    private int CountAuditEntries()
-    {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        return conn.ExecuteScalar<int>("SELECT COUNT(*) FROM System_AuditEntries;");
-    }
+    private async Task<int> CountAuditEntriesAsync()
+        => (await _auditReader.GetPagedAsync(null, null, 1, 0)).TotalCount;
 
     private static List<Widget> MakeWidgets(int count)
-        => Enumerable.Range(1, count).Select(i => new Widget { Label = $"Widget {i}" }).ToList();
+        => [.. Enumerable.Range(1, count).Select(i => new Widget { Label = $"Widget {i}" })];
 
     // ── IRepository contract ──────────────────────────────────────────────────
 
@@ -105,7 +104,7 @@ public class InsertManyAsyncTests
 
         await _repository.InsertManyAsync(widgets, strategy: InsertStrategy.Bulk);
 
-        Assert.AreEqual(4, CountAuditEntries());
+        Assert.AreEqual(4, await CountAuditEntriesAsync());
     }
 
     [TestMethod]
@@ -115,11 +114,9 @@ public class InsertManyAsyncTests
 
         await _repository.InsertManyAsync(widgets, strategy: InsertStrategy.Bulk);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        var operations = conn.Query<string>("SELECT Operation FROM System_AuditEntries;").ToList();
+        var entries = (await _auditReader.GetPagedAsync(null, null, 1, 0)).Items;
 
-        Assert.IsTrue(operations.All(op => op == AuditOperation.Insert));
+        Assert.IsTrue(entries.All(e => e.Operation == AuditOperation.Insert));
     }
 
     // ── Sequential strategy ───────────────────────────────────────────────────
@@ -141,7 +138,7 @@ public class InsertManyAsyncTests
 
         await _repository.InsertManyAsync(widgets, strategy: InsertStrategy.Sequential);
 
-        Assert.AreEqual(4, CountAuditEntries());
+        Assert.AreEqual(4, await CountAuditEntriesAsync());
     }
 
     [TestMethod]
@@ -195,7 +192,7 @@ public class InsertManyAsyncTests
         conn.Open();
         using var tx = conn.BeginTransaction();
 
-        var entries = Enumerable.Range(1, 5).Select(_ => new SystemAuditEntry
+        var entries = Enumerable.Range(1, 5).Select(_ => new AuditEntryEntity
         {
             TableName   = "Widgets",
             RecordId    = Guid.NewGuid().ToString("D").ToUpperInvariant(),
@@ -206,6 +203,6 @@ public class InsertManyAsyncTests
         await _auditWriter.WriteAsync(entries, conn, tx);
         tx.Commit();
 
-        Assert.AreEqual(5, CountAuditEntries());
+        Assert.AreEqual(5, await CountAuditEntriesAsync());
     }
 }

@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.Text.Json;
 using Quotinator.Core.Database;
 using Quotinator.Core.Helpers;
@@ -11,7 +12,7 @@ public class ConflictRuleGeneratorTests
 {
     private const string EntityId = "e0000001-0000-4000-8000-000000000001";
 
-    private static ImportActionFieldRow Row(string field, string? existingValue, string? incomingValue, FieldResolutionChoice? decision = null, string? customValue = null, string entityId = EntityId) =>
+    private static ImportActionFieldRowResponse Row(string field, string? existingValue, string? incomingValue, FieldResolutionChoice? decision = null, string? customValue = null, string entityId = EntityId) =>
         new()
         {
             ActionId      = Guid.NewGuid(),
@@ -110,7 +111,7 @@ public class ConflictRuleGeneratorTests
         var rule = ConflictRuleGenerator.Generate(rows).Single();
 
         var genres = rule.ExistingRecord.GetProperty("genres").EnumerateArray().Select(e => e.GetString()).ToArray();
-        Assert.AreSequenceEqual(new[] { "drama", "sci-fi" }, genres);
+        Assert.AreSequenceEqual(["drama", "sci-fi"], genres);
     }
 
     [TestMethod]
@@ -142,7 +143,7 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_NewEntityId_IsAppended()
     {
-        var existingFile = new ConflictResolutionRuleFile
+        var existingFile = new ConflictResolutionRuleFileDto
         {
             Rules = [BuildRule("e0000001-0000-4000-8000-000000000001", "date", FieldResolutionChoice.Keep)],
         };
@@ -156,7 +157,7 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_EntityAlreadyCoversField_ManualEditIsNeverOverwritten()
     {
-        var existingFile = new ConflictResolutionRuleFile
+        var existingFile = new ConflictResolutionRuleFileDto
         {
             Rules = [BuildRule(EntityId, "date", FieldResolutionChoice.Custom, "1942")],
         };
@@ -174,7 +175,7 @@ public class ConflictRuleGeneratorTests
     [TestMethod]
     public void Merge_EntityCoversDifferentField_NewFieldIsAdded()
     {
-        var existingFile = new ConflictResolutionRuleFile
+        var existingFile = new ConflictResolutionRuleFileDto
         {
             Rules = [BuildRule(EntityId, "date", FieldResolutionChoice.Keep)],
         };

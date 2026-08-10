@@ -1,0 +1,116 @@
+root = true
+
+[*.cs]
+
+# #244 Step 2: escalated one rule family at a time, each landing at 0 warnings before the next is
+# added — see docs/milestones/maintenance-milestone-v1.8.0/244-hidden-analyzer-diagnostics-plan.md.
+# These four are the collection-expression-simplification family (all four flag exactly the same
+# transformation — `new[] { ... }`/`new List<T> { ... }`/`.ToList()`/`.ToArray()`/`.ToHashSet()` at
+# the end of a chain, or `new()` on a field initializer — becoming `[...]`/`[.. ...]` syntax): purely
+# syntactic, verified by hand against the full diff before landing, no behaviour change possible for
+# any of the 202 occurrences fixed in the same commit as this entry.
+dotnet_diagnostic.IDE0305.severity = warning
+dotnet_diagnostic.IDE0300.severity = warning
+dotnet_diagnostic.IDE0301.severity = warning
+dotnet_diagnostic.IDE0028.severity = warning
+
+# Step 2b: member-name simplification, deconstruction, null-check simplification, unnecessary
+# assignment, local function vs lambda, simple using statement, readonly field. Found live: the
+# IDE0270 (null-check simplification) fix on SqliteImportActionService.cs correctly narrowed a
+# `Guid?` local to `Guid` via `?? throw`, but two downstream `.Value` accesses weren't updated by
+# the tool and had to be fixed by hand — dotnet format applies a diagnostic-correct fix without
+# checking whether it invalidates code elsewhere in the same file.
+dotnet_diagnostic.IDE0037.severity = warning
+dotnet_diagnostic.IDE0042.severity = warning
+dotnet_diagnostic.IDE0270.severity = warning
+dotnet_diagnostic.IDE0059.severity = warning
+dotnet_diagnostic.IDE0039.severity = warning
+dotnet_diagnostic.IDE0063.severity = warning
+dotnet_diagnostic.IDE0044.severity = warning
+
+# Step 3: primary constructors. `dotnet format` only performs the mechanical syntax conversion — it
+# does not write per-parameter XML docs, so every constructor parameter across all ~33 converted
+# classes was documented by hand (no exceptions) before this severity was escalated. CS1591 only
+# checks that *a* doc comment exists on a public member, not that every parameter has its own
+# <param> tag, so a clean build alone could not have caught missing parameter documentation here.
+dotnet_diagnostic.IDE0290.severity = warning
+
+# Step 4: namespace/folder mismatch. All 4 hits were Quotinator.Core.Tests files declared under
+# `namespace Quotinator.Core.Tests.Data` while living in Database/ or Services/ — a real violation of
+# CLAUDE.md's file placement rule, not a style nit. Confirmed no cross-file references to the affected
+# classes before renaming each file's namespace to match its actual folder.
+dotnet_diagnostic.IDE0130.severity = warning
+
+# Step 5: unused parameter. Two of the three hits were genuinely dead (ToResponse's requestedLang,
+# ReverseQuoteActionAsync's uow) and removed. The third — BuildFilterWhere's lang — was a real
+# correctness bug, not dead code: the method hardcoded its @lang SQL parameter to null regardless of
+# the caller-supplied value, so GetAll/Search silently ignored every ?lang= request since 2026-06-15.
+# Fixed by actually binding lang; red tests added first (GetAll_LangRequested_ReturnsTranslatedContent,
+# Search_LangRequested_ReturnsTranslatedContent) to prove the bug before the fix.
+dotnet_diagnostic.IDE0060.severity = warning
+
+# Step 6: mechanical CAxxxx/SYSLIB rules — targeted per-rule severities rather than a blanket
+# <AnalysisMode>Recommended</AnalysisMode>, to keep this step scoped to exactly these 7 (Recommended
+# would also pull in CA1806/CA2254/CA1068/CA1873, each reserved for its own later step needing
+# individual review, not a bulk escalation). `dotnet format analyzers` does not reliably discover the
+# SDK's built-in CA analyzers the way it discovers IDE0xxx style rules — `dotnet build` after this
+# escalation is the actual diagnostic source; fixes applied by hand per the same "verify by reading,
+# don't trust blindly" standing instruction as every other step.
+dotnet_diagnostic.CA1861.severity = warning
+dotnet_diagnostic.CA1822.severity = warning
+dotnet_diagnostic.SYSLIB1045.severity = warning
+dotnet_diagnostic.CA1869.severity = warning
+dotnet_diagnostic.CA1507.severity = warning
+dotnet_diagnostic.CA1826.severity = warning
+
+# Step 6b: CA1859 (prefer concrete types for perf), reviewed individually per developer decision
+# (2026-08-08) rather than bulk-escalated or bulk-suppressed in 6a. Every one of the 32 occurrences
+# turned out to be safe to narrow — none were an interface-typed field/parameter genuinely swapped
+# for a different (fake/mock) implementation anywhere in the codebase; each was either a private,
+# non-interface implementation detail, or a test field/factory always assigned the same concrete
+# real type. See the plan doc's Step 6b for the full per-occurrence reasoning.
+dotnet_diagnostic.CA1859.severity = warning
+
+# Step 7: CA1806 (ignored TryParse/TryParseExtended result), all 12 occurrences in test files. Each
+# already relied on the out parameter alone (a null-forgiving `!` with no check, or an `Assert.IsNotNull`
+# afterward) instead of asserting the bool return directly — weaker than the codebase's own established
+# pattern (`Assert.IsTrue(TryParse(...))`, already used elsewhere in the same files) since a genuine
+# parse failure would surface as a confusing NullReferenceException instead of a clear assertion
+# message. Tightened all 12 to that established pattern; no case exercised a real production bug.
+dotnet_diagnostic.CA1806.severity = warning
+
+# Step 8: CA2254 (logging message template varies between calls), 3 occurrences, 2 distinct root
+# causes. RequestLoggingMiddleware.cs's shared `Log(bool, string, object[])` helper routed to
+# LogDebug/LogInformation with a runtime-supplied template — the fix surfaced a deeper design
+# question (developer feedback mid-review): should [Api - Request] log at Information (visible by
+# default) at all, given the project's own principle that per-request detail is opt-in Debug
+# verbosity, not something visible from normal operation? Decision: no — all three request
+# categories ([Api - Request]/[Web - Request]/[Web - Asset]) now log at Debug uniformly, via two
+# trivial single-line LogDebug calls inlined directly in InvokeAsync (no isDebug branching left to
+# justify a helper once every category shares one level). docs/logging.md updated in the same
+# commit — it documented the old Information/Debug split in five separate places.
+# StartupSummaryLogger.cs's closing banner used $"""...""" (string interpolation) directly as the
+# log template — baking all 24 values into plain text instead of passing them as structured Serilog
+# properties. Converted to a proper message template (dropped `$`, added named {Placeholder} tokens
+# with the values passed as separate arguments) — same rendered multi-line output, actual structured
+# logging instead of pre-formatted text.
+dotnet_diagnostic.CA2254.severity = warning
+
+# Step 9: CA1068 (CancellationToken should be the last parameter), 2 occurrences, both in
+# EffectiveRuleFileResolver.cs — `logPrefix` (an optional string with a default) was appended after
+# `cancellationToken`, pushing it out of last position. Confirmed every external call site either
+# omits both trailing optional params or passes `logPrefix:` by name (never `cancellationToken`
+# positionally) before reordering; the one internal self-call between the two methods was updated to
+# match the new order in the same commit.
+dotnet_diagnostic.CA1068.severity = warning
+
+# #269: CA1873 (expensive logging argument evaluation), 52 occurrences across Quotinator.Api/Core/
+# Data/Changelog. Every LogInformation/LogDebug/LogCritical call with template arguments (LogWarning/
+# LogError calls are never flagged by this rule, confirmed empirically against a clean rebuild — no
+# conversion needed for those) now goes through a [LoggerMessage]-decorated extension method: the
+# two genuinely cross-project-reusable shapes (a subsystem tag plus page/pageSize, or plus a bare id)
+# live in the new zero-dependency Quotinator.Logging project; every other message is bespoke to its
+# own project's Logging/LogMessages.cs. See docs/logging.md's "Logging call-site pattern" section for
+# the enforceable rule this escalation exists to back, and this issue's plan doc for the full
+# per-file conversion list.
+dotnet_diagnostic.CA1873.severity = warning

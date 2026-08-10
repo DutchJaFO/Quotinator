@@ -1,3 +1,5 @@
+using Quotinator.Data.Enums;
+
 namespace Quotinator.Data.Import;
 
 /// <summary>

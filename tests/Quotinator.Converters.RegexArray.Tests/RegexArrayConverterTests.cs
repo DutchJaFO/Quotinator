@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Quotinator.Converters.RegexArray;
+using Quotinator.Core.Enums;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Import;
@@ -57,9 +58,8 @@ public class RegexArrayConverterTests
         await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken);
 
         var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
-        SourceQuoteFileReader.TryParse(text, out var quotes);
-        Assert.IsNotNull(quotes);
-        Assert.HasCount(2, quotes);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        Assert.HasCount(2, quotes!);
     }
 
     [TestMethod]
@@ -67,7 +67,7 @@ public class RegexArrayConverterTests
     {
         var inputPath  = WriteInput("[\"\\\"A quote.\\\" A Source\"]");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptions
+        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
         {
             Pattern      = VilaboimPattern,
             GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 },
@@ -90,7 +90,7 @@ public class RegexArrayConverterTests
     {
         var inputPath  = WriteInput("[\"\\\"A quote.\\\" A Source\"]");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptions
+        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
         {
             GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
         });
@@ -104,7 +104,7 @@ public class RegexArrayConverterTests
     {
         var inputPath  = WriteInput("[\"\\\"A quote.\\\" A Source\"]");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptions { Pattern = VilaboimPattern });
+        var options = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto { Pattern = VilaboimPattern });
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new RegexArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken));
@@ -121,10 +121,9 @@ public class RegexArrayConverterTests
         await new RegexArrayConverter().ConvertAsync(inputPath, outputPath, VilaboimOptions(), TestContext.CancellationToken);
 
         var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
-        SourceQuoteFileReader.TryParse(text, out var quotes);
-        Assert.IsNotNull(quotes);
-        Assert.HasCount(1, quotes);
-        Assert.AreEqual("A real quote.", quotes[0].QuoteText);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        Assert.HasCount(1, quotes!);
+        Assert.AreEqual("A real quote.", quotes![0].QuoteText);
     }
 
     [TestMethod]
@@ -171,7 +170,7 @@ public class RegexArrayConverterTests
 
     #endregion
 
-    private static JsonElement VilaboimOptions() => JsonSerializer.SerializeToElement(new RegexArrayConverterOptions
+    private static JsonElement VilaboimOptions() => JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
     {
         Pattern      = VilaboimPattern,
         GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
@@ -187,11 +186,11 @@ public class RegexArrayConverterTests
     private static string FindBaselineId(string quote, string source)
     {
         var text = File.ReadAllText(VilaboimBaselineFile);
-        SourceQuoteFileReader.TryParse(text, out var quotes);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
         return quotes!.Single(q => q.QuoteText == quote && q.Source == source).Id;
     }
 
-    private static async Task<SourceQuote> ReadSingle(string outputPath)
+    private static async Task<SourceQuoteDto> ReadSingle(string outputPath)
     {
         var text = await File.ReadAllTextAsync(outputPath);
         Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));

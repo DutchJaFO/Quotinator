@@ -32,14 +32,13 @@ public class RepositoryStructureTests
         throw new InvalidOperationException("Could not find repo root containing Quotinator.slnx.");
     }
 
-    private static IReadOnlySet<string> LoadSlnxFilePaths()
+    private static HashSet<string> LoadSlnxFilePaths()
     {
         var doc = XDocument.Load(SlnxPath);
-        return doc.Descendants("File")
+        return [.. doc.Descendants("File")
             .Select(e => e.Attribute("Path")?.Value)
             .Where(p => p is not null)
-            .Select(p => p!.Replace('\\', '/'))
-            .ToHashSet();
+            .Select(p => p!.Replace('\\', '/'))];
     }
 
     /// <summary>src/Quotinator.Api/resources/changelog.en.json must exist on disk as the English source file.</summary>
@@ -136,12 +135,12 @@ public class RepositoryStructureTests
         var schema = JsonSchema.FromText(
             File.ReadAllText(Path.Combine(RepoRoot, "schemas", "source-flat.schema.json")));
 
-        var nikhilNamal17Options = JsonSerializer.SerializeToElement(new BasicJsonArrayConverterOptions
+        var nikhilNamal17Options = JsonSerializer.SerializeToElement(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
 
-        var vilaboimOptions = JsonSerializer.SerializeToElement(new RegexArrayConverterOptions
+        var vilaboimOptions = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
         {
             Pattern      = """^"(.+?)"\s+(.+)$""",
             GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
@@ -188,9 +187,7 @@ public class RepositoryStructureTests
 
                 // ID set must exactly match baseline
                 static HashSet<string> LoadIds(JsonElement root) =>
-                    root.EnumerateArray()
-                        .Select(e => e.GetProperty("id").GetString()!)
-                        .ToHashSet();
+                    [.. root.EnumerateArray().Select(e => e.GetProperty("id").GetString()!)];
 
                 var outputIds   = LoadIds(outputDoc.RootElement);
                 using var baselineDoc = JsonDocument.Parse(File.ReadAllText(baselinePath));

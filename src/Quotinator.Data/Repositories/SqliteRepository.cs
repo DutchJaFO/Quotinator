@@ -2,6 +2,7 @@ using Dapper;
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 
@@ -9,24 +10,20 @@ namespace Quotinator.Data.Repositories;
 
 /// <summary>
 /// SQLite implementation of <see cref="IRepository{T}"/> using Dapper and Dapper.Contrib.
-/// Extends <see cref="SqliteRepositoryBase{T}"/> and writes a <see cref="SystemAuditEntry"/> in the
+/// Extends <see cref="SqliteRepositoryBase{T}"/> and writes a <see cref="AuditEntryEntity"/> in the
 /// same connection and transaction on every write operation.
 /// Derive from <see cref="SqliteRepositoryBase{T}"/> directly — not from this class — when audit
-/// recursion must be avoided (e.g. <see cref="SystemAuditWriter"/>).
+/// recursion must be avoided (e.g. <see cref="AuditEntryWriter"/>).
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
-public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, IListableRepository<T> where T : RecordBase
+/// <remarks>Initialises the repository with the factory, audit writer, and caller context.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+/// <param name="auditWriter">Writer used to record an <see cref="AuditEntryEntity"/> for every write operation.</param>
+/// <param name="callerContext">Identifies the caller attributed to each audit entry.</param>
+public class SqliteRepository<T>(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext) : SqliteRepositoryBase<T>(factory), IRepository<T>, IListableRepository<T> where T : RecordBase
 {
-    private readonly ISystemAuditWriter _auditWriter;
-    private readonly ICallerContext     _callerContext;
-
-    /// <summary>Initialises the repository with the factory, audit writer, and caller context.</summary>
-    public SqliteRepository(IDbConnectionFactory factory, ISystemAuditWriter auditWriter, ICallerContext callerContext)
-        : base(factory)
-    {
-        _auditWriter   = auditWriter;
-        _callerContext = callerContext;
-    }
+    private readonly IAuditEntryWriter _auditWriter = auditWriter;
+    private readonly ICallerContext _callerContext = callerContext;
 
     /// <inheritdoc/>
     public async Task<T?> GetByIdAsync(Guid id, IUnitOfWork? unitOfWork = null)
@@ -111,14 +108,14 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
         if (unitOfWork is SqliteUnitOfWork uow)
         {
             totalCount = await uow.Connection.ExecuteScalarAsync<int>(RepositorySql.CountActive(TableName), transaction: uow.Transaction);
-            items      = (await uow.Connection.QueryAsync<T>(sql, param, uow.Transaction)).ToList();
+            items      = [.. (await uow.Connection.QueryAsync<T>(sql, param, uow.Transaction))];
         }
         else
         {
             using var conn = Factory.CreateConnection();
             conn.Open();
             totalCount = await conn.ExecuteScalarAsync<int>(RepositorySql.CountActive(TableName));
-            items      = (await conn.QueryAsync<T>(sql, param)).ToList();
+            items      = [.. (await conn.QueryAsync<T>(sql, param))];
         }
 
         var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
@@ -157,7 +154,7 @@ public class SqliteRepository<T> : SqliteRepositoryBase<T>, IRepository<T>, ILis
         System.Data.IDbConnection connection, System.Data.IDbTransaction? transaction = null)
         => _auditWriter.WriteAsync(BuildEntry(operation, id), connection, transaction);
 
-    private SystemAuditEntry BuildEntry(string operation, Guid? id) => new()
+    private AuditEntryEntity BuildEntry(string operation, Guid? id) => new()
     {
         TableName   = TableName,
         RecordId    = id.HasValue ? id.Value.ToCanonicalId() : null,

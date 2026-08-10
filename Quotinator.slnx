@@ -72,6 +72,9 @@
     <File Path="data/sources/nikhilnamal17-conflict-rules.json" />
     <File Path="data/sources/nikhilnamal17-source-aliases.json" />
   </Folder>
+  <Folder Name="/data/system/">
+    <File Path="data/system/README.md" />
+  </Folder>
   <Folder Name="/docker/">
     <File Path="docker/Dockerfile" />
     <File Path="docker/docker-compose.yml" />
@@ -79,6 +82,7 @@
   </Folder>
   <Folder Name="/docs/">
     <File Path="docs/README.md" />
+    <File Path="docs/api-endpoints.md" />
     <File Path="docs/ci-cd.md" />
     <File Path="docs/data-access.md" />
     <File Path="docs/data-import.md" />
@@ -114,6 +118,10 @@
     <File Path="docs/architecture-decisions/011-series-universe-hierarchy-and-character-source-identity.md" />
     <File Path="docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md" />
     <File Path="docs/architecture-decisions/013-character-merge-algorithm.md" />
+    <File Path="docs/architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md" />
+    <File Path="docs/architecture-decisions/015-domain-prefixed-table-naming.md" />
+    <File Path="docs/architecture-decisions/016-class-naming-suffixes-and-enum-placement.md" />
+    <File Path="docs/architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
@@ -234,6 +242,34 @@
   <Folder Name="/docs/milestones/maintenance-milestone-v1.8.0/">
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/overview.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/166-ha-addon-stable-beta-split-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/244-hidden-analyzer-diagnostics-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/245-source-date-backfill-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/263-startup-ux-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/222-unicode-like-matching-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/227-domain-prefixed-naming-implementation-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/249-audit-trail-export-and-conflict-data-purge-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/156-reset-baseline-and-system-reseed-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/251-file-resource-provenance-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/252-source-file-override-supersession-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/253-data-owned-rename-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/254-core-owned-rename-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/255-enum-folder-moves-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/256-response-dto-suffix-fixes-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/269-loggermessage-pattern-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/271-actionpayload-converteroptions-rename-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/272-audit-response-dto-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/278-startup-notification-system-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/279-endpoint-naming-standardization-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/277-backup-gating-and-storage-preflight-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/280-startup-wait-page-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/283-person-completeness-consistency-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/284-reference-reader-joinstrategy-migration-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/285-conversation-line-lookup-joinstrategy-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/286-getbyid-getall-helpers-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/287-iquoteservice-async-conversion-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/288-migration-verification-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/289-migration-squash-overshoot-detection-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
@@ -265,6 +301,7 @@
     <File Path="scripts/changelog.csx" />
     <File Path="scripts/changelog-import.csx" />
     <File Path="scripts/changelog-upgrade.csx" />
+    <File Path="scripts/execute-sql.csx" />
     <File Path="scripts/SOURCES.md" />
   </Folder>
   <Folder Name="/scripts/changelog-reference/">
@@ -299,6 +336,7 @@
     <Project Path="src/Quotinator.Core/Quotinator.Core.csproj" />
     <Project Path="src/Quotinator.Data/Quotinator.Data.csproj" />
     <Project Path="src/Quotinator.Data.Testing/Quotinator.Data.Testing.csproj" />
+    <Project Path="src/Quotinator.Logging/Quotinator.Logging.csproj" />
     <File Path="src/Quotinator.Api/resources/changelog.en.json" />
     <File Path="src/Quotinator.Api/resources/changelog.nl.json" />
     <File Path="src/Quotinator.Api/resources/changelog.de.json" />
@@ -317,6 +355,7 @@
     <Project Path="tests/Quotinator.Data.Example/Quotinator.Data.Example.csproj" />
     <Project Path="tests/Quotinator.Data.Tests/Quotinator.Data.Tests.csproj" />
     <Project Path="tests/Quotinator.Data.Testing.Tests/Quotinator.Data.Testing.Tests.csproj" />
+    <Project Path="tests/Quotinator.Logging.Tests/Quotinator.Logging.Tests.csproj" />
     <Project Path="tests/Quotinator.Tools.DbInspector.Tests/Quotinator.Tools.DbInspector.Tests.csproj" />
   </Folder>
   <Folder Name="/CVE/" />
@@ -397,6 +436,12 @@
   </Folder>
   <Folder Name="/CVE/Quotinator.Data.Testing.Tests/archived/">
     <File Path="tests/Quotinator.Data.Testing.Tests/CVE/archived/CVE-2025-6965.md" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Logging/">
+    <File Path="src/Quotinator.Logging/CVE/.gitkeep" />
+  </Folder>
+  <Folder Name="/CVE/Quotinator.Logging.Tests/">
+    <File Path="tests/Quotinator.Logging.Tests/CVE/.gitkeep" />
   </Folder>
   <Folder Name="/CVE/Quotinator.Tools.DbInspector/">
     <File Path="tools/Quotinator.Tools.DbInspector/CVE/.gitkeep" />

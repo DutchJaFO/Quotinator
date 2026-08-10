@@ -25,10 +25,10 @@ internal sealed class AdminApiKeySecurityTransformer : IOpenApiOperationTransfor
 
         if (requiresAdminApiKey)
         {
-            operation.Security = new List<OpenApiSecurityRequirement>
-            {
-                new() { [new OpenApiSecuritySchemeReference("ApiKey")] = new List<string>() }
-            };
+            operation.Security =
+            [
+                new() { [new OpenApiSecuritySchemeReference("ApiKey")] = [] }
+            ];
         }
 
         return Task.CompletedTask;

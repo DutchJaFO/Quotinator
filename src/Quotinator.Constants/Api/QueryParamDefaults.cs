@@ -17,4 +17,23 @@ public static class QueryParamDefaults
 
     /// <summary>Default quote count for <c>GET /api/v1/quotes/random</c>.</summary>
     public const int RandomCount = 1;
+
+    /// <summary>Default number of most-recently-seen rows kept per distinct FileName by <c>POST /api/v1/import/file-resources/prune</c>.</summary>
+    public const int KeepPerFile = 5;
+
+    /// <summary>
+    /// Default maximum combined <c>Audit_Entry</c> + <c>Audit_Change</c> row count for
+    /// <c>GET /api/v1/admin/audit/export</c> (#249) — overridable via <c>Quotinator:AdminAuditExportMaxRows</c>.
+    /// A homelab-scale install producing a few hundred audit rows a day stays well under this for years;
+    /// a caller who genuinely needs more narrows the date range or raises the config value.
+    /// </summary>
+    public const int AdminAuditExportMaxRows = 50_000;
+
+    /// <summary>
+    /// Default expiry duration (in hours) applied to a notification (#278) written without an
+    /// explicit <c>expiresAt</c> — overridable via <c>Quotinator:NotificationDefaultExpiryHours</c>.
+    /// 720 hours (30 days) is a sensible homelab default for how long an unaddressed notification
+    /// stays visible before quietly expiring.
+    /// </summary>
+    public const int NotificationDefaultExpiryHours = 720;
 }

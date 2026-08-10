@@ -2,6 +2,7 @@ using Dapper;
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
@@ -10,13 +11,13 @@ using Quotinator.Data.Queries;
 namespace Quotinator.Data.Repositories;
 
 /// <summary>SQLite implementation of <see cref="ISourceFileOverrideRegistry"/>.</summary>
-public sealed class SourceFileOverrideRegistry : SqliteRepositoryBase<SourceFileOverride>, ISourceFileOverrideRegistry
+/// <remarks>Initialises the registry with the connection factory.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class SourceFileOverrideRegistry(IDbConnectionFactory factory) : SqliteRepositoryBase<SourceFileOverrideEntity>(factory), ISourceFileOverrideRegistry
 {
-    /// <summary>Initialises the registry with the connection factory.</summary>
-    public SourceFileOverrideRegistry(IDbConnectionFactory factory) : base(factory) { }
 
     /// <inheritdoc/>
-    public async Task<SourceFileOverride?> FindAsync(string fileName, SeedBatchOrigin origin, CancellationToken cancellationToken = default)
+    public async Task<SourceFileOverrideEntity?> FindAsync(string fileName, SeedBatchOrigin origin, CancellationToken cancellationToken = default)
     {
         using var conn = Factory.CreateConnection();
         conn.Open();
@@ -24,7 +25,7 @@ public sealed class SourceFileOverrideRegistry : SqliteRepositoryBase<SourceFile
             Sql.SystemSourceFileOverrides.SelectByFileNameAndOrigin,
             new { fileName, origin = origin.ToString() },
             cancellationToken: cancellationToken);
-        return await conn.QuerySingleOrDefaultAsync<SourceFileOverride>(command);
+        return await conn.QuerySingleOrDefaultAsync<SourceFileOverrideEntity>(command);
     }
 
     /// <inheritdoc/>
@@ -38,7 +39,7 @@ public sealed class SourceFileOverrideRegistry : SqliteRepositoryBase<SourceFile
 
         if (existing is not null)
         {
-            await conn.UpdateAsync(new SourceFileOverride
+            await conn.UpdateAsync(new SourceFileOverrideEntity
             {
                 Id            = existing.Id,
                 FileName      = fileName,
@@ -51,7 +52,7 @@ public sealed class SourceFileOverrideRegistry : SqliteRepositoryBase<SourceFile
             return;
         }
 
-        await conn.InsertAsync(new SourceFileOverride
+        await conn.InsertAsync(new SourceFileOverrideEntity
         {
             FileName      = fileName,
             Origin        = originValue,

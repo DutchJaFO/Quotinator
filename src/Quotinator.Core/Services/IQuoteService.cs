@@ -6,7 +6,7 @@ namespace Quotinator.Core.Services;
 public interface IQuoteService
 {
     /// <summary>Returns the quote with the given ID, localised to <paramref name="lang"/> if a translation exists. Returns <c>null</c> if not found.</summary>
-    QuoteResponse? GetById(string id, string? lang = null);
+    Task<QuoteResponse?> GetById(string id, string? lang = null);
 
     /// <summary>
     /// Returns <paramref name="count"/> quotes chosen at random from the filtered pool, wrapped in a result envelope.
@@ -15,7 +15,7 @@ public interface IQuoteService
     /// <paramref name="seriesId"/>/<paramref name="universeId"/> restrict to quotes whose source is in that
     /// Series/Universe (#192) — already resolved to an id by the caller.
     /// </summary>
-    FilteredQuoteResult<QuoteResponse> GetRandom(
+    Task<FilteredQuoteResult<QuoteResponse>> GetRandom(
         int count,
         string[]? types = null,
         string[]? genres = null,
@@ -31,14 +31,14 @@ public interface IQuoteService
     /// <summary>Returns a paginated slice of all quotes, with optional multi-value type, genre, and year
     /// filters, plus an optional Series/Universe filter (#192, already resolved to an id by the
     /// caller).</summary>
-    PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null);
+    Task<PagedResult<QuoteResponse>> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null);
 
     /// <summary>Returns quotes whose text, source, character, or author contain <paramref name="query"/>
     /// (case-insensitive). Pass <paramref name="field"/> to restrict which field is searched.
     /// <paramref name="seriesId"/>/<paramref name="universeId"/> restrict to quotes whose source is in
     /// that Series/Universe (#192, already resolved to an id by the caller).</summary>
-    FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null);
+    Task<FilteredQuoteResult<QuoteResponse>> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null);
 
     /// <summary>Returns the full ordered line list of the conversation with the given ID (case-insensitive), localised to <paramref name="lang"/> where a translation exists. Returns <c>null</c> if not found.</summary>
-    ConversationResponse? GetConversation(string id, string? lang = null);
+    Task<ConversationResponse?> GetConversation(string id, string? lang = null);
 }

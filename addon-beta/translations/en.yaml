@@ -45,5 +45,23 @@ configuration:
     description: >-
       How long a downloaded source file is considered fresh before it is checked again.
       Individual sources may override this in their own manifest entry.
+  unicode_aware_search:
+    name: Unicode-aware search
+    description: >-
+      Makes quote, character, author, and source search match accented and other non-ASCII
+      characters regardless of case (e.g. é/É). Off by default — not yet validated against
+      real-world search traffic.
+  auto_purge_bundled_import_actions:
+    name: Auto-purge bundled import history
+    description: >-
+      Once a bundled seed file's conflict-resolution history has done its job (zero pending
+      decisions left), delete it automatically. Disable temporarily while investigating a
+      specific bundled source so its resolution history is retained.
+  auto_purge_user_import_actions:
+    name: Auto-purge user import history
+    description: >-
+      Once a user-imports seed file's conflict-resolution history has done its job (zero
+      pending decisions left), delete it automatically. Disable temporarily while debugging
+      your own import so its resolution history is retained.
 network:
   8080/tcp: Direct web access — HTTP (ssl disabled) or HTTPS (ssl enabled)

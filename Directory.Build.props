@@ -1,7 +1,10 @@
 <Project>
 
   <PropertyGroup>
-    <Version>1.8.2</Version>
+    <Version>1.8.3-beta</Version>
+    <!-- AssemblyVersion and FileVersion require numeric-only; pin to base version when Version carries a prerelease suffix -->
+    <AssemblyVersion>1.8.3.0</AssemblyVersion>
+    <FileVersion>1.8.3.0</FileVersion>
     <Product>Quotinator</Product>
     <Authors>DutchJaFO</Authors>
     <Copyright>Copyright © 2026 DutchJaFO</Copyright>
@@ -15,6 +18,15 @@
        being stuck at 'suggestion' severity, invisible to `dotnet build` regardless of verbosity. -->
   <PropertyGroup>
     <MSTestAnalysisMode>Recommended</MSTestAnalysisMode>
+  </PropertyGroup>
+
+  <!-- #244 Step 1: makes IDE0xxx code-style analyzers run at build time, not just in Visual Studio's
+       live analysis. This alone does not surface them as build warnings — most IDE0xxx rules default
+       to 'suggestion' severity, invisible to `dotnet build` regardless of verbosity, exactly like the
+       MSTest rules above before #197. Severity escalation is a separate, later step (an .editorconfig
+       entry), done incrementally per rule family rather than all at once. -->
+  <PropertyGroup>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
 </Project>

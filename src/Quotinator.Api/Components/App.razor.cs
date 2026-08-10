@@ -10,7 +10,7 @@ public partial class App
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 
-    private string HtmlLang => CultureInfo.CurrentUICulture.Name;
+    private static string HtmlLang => CultureInfo.CurrentUICulture.Name;
 
     private string BaseHref
     {

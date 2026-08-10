@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 using Quotinator.Core.Helpers;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 
 namespace Quotinator.Api.OpenApi;
 

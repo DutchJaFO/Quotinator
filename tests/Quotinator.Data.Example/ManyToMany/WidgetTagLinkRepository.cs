@@ -21,7 +21,7 @@ namespace Quotinator.Data.Example.ManyToMany;
 /// </remarks>
 public sealed class WidgetTagLinkRepository(
     IDbConnectionFactory factory,
-    ISystemAuditWriter auditWriter,
+    IAuditEntryWriter auditWriter,
     ICallerContext callerContext)
     : SqliteLinkRepository<Widget, Tag, WidgetTag>(factory, auditWriter, callerContext)
 {

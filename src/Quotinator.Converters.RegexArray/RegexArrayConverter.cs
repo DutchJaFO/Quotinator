@@ -7,9 +7,9 @@ namespace Quotinator.Converters.RegexArray;
 
 /// <summary>
 /// Converts a JSON array of bare strings into Quotinator's canonical quote schema, by applying a
-/// manifest-supplied regex <see cref="RegexArrayConverterOptions.Pattern"/> to each entry and mapping
-/// its capture groups to canonical fields via <see cref="RegexArrayConverterOptions.GroupMapping"/>'s
-/// 1-based index — the same indexing convention <c>CsvConverterOptions.ColumnMapping</c> uses. A raw
+/// manifest-supplied regex <see cref="RegexArrayConverterOptionsDto.Pattern"/> to each entry and mapping
+/// its capture groups to canonical fields via <see cref="RegexArrayConverterOptionsDto.GroupMapping"/>'s
+/// 1-based index — the same indexing convention <c>CsvConverterOptionsDto.ColumnMapping</c> uses. A raw
 /// entry the pattern doesn't match is skipped, not an error, unless zero entries match at all. A row's
 /// own <c>id</c> is used verbatim when present and non-empty; otherwise one is derived deterministically
 /// via <see cref="QuoteIdentity.StableId"/>, exactly like the other bundled converters do for sources
@@ -40,7 +40,7 @@ public sealed class RegexArrayConverter : IQuoteSourceConverter
         if (rawEntries is null || rawEntries.Count == 0)
             throw new SourceConversionException($"regex-array: input at {inputPath} contained no entries");
 
-        var regexOptions = options?.Deserialize<RegexArrayConverterOptions>() ?? new RegexArrayConverterOptions();
+        var regexOptions = options?.Deserialize<RegexArrayConverterOptionsDto>() ?? new RegexArrayConverterOptionsDto();
 
         if (string.IsNullOrWhiteSpace(regexOptions.Pattern))
             throw new SourceConversionException($"regex-array: converterOptions for {inputPath} is missing a required 'pattern'");
@@ -52,7 +52,7 @@ public sealed class RegexArrayConverter : IQuoteSourceConverter
         var mapping  = regexOptions.GroupMapping;
         var defaults = regexOptions.Defaults;
 
-        var quotes = new List<SourceQuote>();
+        var quotes = new List<SourceQuoteDto>();
         foreach (var raw in rawEntries)
         {
             var match = pattern.Match(raw);
@@ -65,7 +65,7 @@ public sealed class RegexArrayConverter : IQuoteSourceConverter
             var genresRaw = Get(mapping.Genres);
             var genres    = string.IsNullOrWhiteSpace(genresRaw)
                 ? defaults?.Genres?.ToList()
-                : genresRaw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                : [.. genresRaw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
             var quote = MappedSourceQuoteBuilder.Build(
                 id:               Get(mapping.Id),

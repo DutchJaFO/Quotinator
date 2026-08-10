@@ -1,3 +1,4 @@
+using Quotinator.Core.Enums;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Import;
@@ -67,7 +68,7 @@ public class SourceQuoteFileReaderTests
     [TestMethod]
     public void TryParse_ArrayEntryMissingRequiredField_ReturnsFalse()
     {
-        // "quote" is required on SourceQuote; the raw upstream format this guards against
+        // "quote" is required on SourceQuoteDto; the raw upstream format this guards against
         // (e.g. a foreign, unconverted quote source) commonly lacks required canonical fields.
         var json = """
             [{"movie":"Gone with the Wind"}]
@@ -183,7 +184,7 @@ public class SourceQuoteFileReaderTests
         Assert.AreEqual("77777777-7777-7777-7777-777777777777", parsed.Characters[0].Id);
         Assert.AreEqual("Gandalf", parsed.Characters[0].Name);
         Assert.AreEqual("The Fellowship of the Ring", parsed.Characters[0].SourceTitle);
-        Assert.AreEqual(Core.Models.QuoteType.Movie, parsed.Characters[0].SourceType);
+        Assert.AreEqual(Core.Enums.QuoteType.Movie, parsed.Characters[0].SourceType);
     }
 
     /// <summary>A file without a characters section parses identically to today — purely additive.</summary>
@@ -227,8 +228,8 @@ public class SourceQuoteFileReaderTests
             {"quotes":[],"sources":[{"title":"World","type":"movie","date":null}]}
             """;
 
-        SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult);
-        SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult);
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult));
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult));
 
         Assert.IsFalse(absentResult!.Sources[0].Date.HasValue, "Omitted 'date' must be Absent, not Of(null)");
         Assert.IsTrue(explicitNullResult!.Sources[0].Date.HasValue, "Explicit 'date: null' must be Of(null), not Absent");
@@ -245,8 +246,8 @@ public class SourceQuoteFileReaderTests
             {"quotes":[],"sources":[{"title":"World","type":"movie","seriesName":null}]}
             """;
 
-        SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult);
-        SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult);
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult));
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult));
 
         Assert.IsFalse(absentResult!.Sources[0].SeriesName.HasValue, "Omitted 'seriesName' must be Absent, not Of(null)");
         Assert.IsTrue(explicitNullResult!.Sources[0].SeriesName.HasValue, "Explicit 'seriesName: null' must be Of(null), not Absent");
@@ -263,8 +264,8 @@ public class SourceQuoteFileReaderTests
             {"quotes":[],"people":[{"id":"66666666-6666-6666-6666-666666666666","name":"Ada Lovelace","dateOfBirth":null}]}
             """;
 
-        SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult);
-        SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult);
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(absentJson, out var absentResult));
+        Assert.IsTrue(SourceQuoteFileReader.TryParseExtended(explicitNullJson, out var explicitNullResult));
 
         Assert.IsFalse(absentResult!.People[0].DateOfBirth.HasValue, "Omitted 'dateOfBirth' must be Absent, not Of(null)");
         Assert.IsTrue(explicitNullResult!.People[0].DateOfBirth.HasValue, "Explicit 'dateOfBirth: null' must be Of(null), not Absent");

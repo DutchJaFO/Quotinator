@@ -1,8 +1,10 @@
+using Quotinator.Data.Enums;
 using System.Text.Json;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Quotinator.Core.Import;
+using Quotinator.Core.Logging;
 using Quotinator.Core.Models;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
@@ -23,45 +25,61 @@ namespace Quotinator.Core.Database;
 /// Quotinator-specific database initialiser. Extends <see cref="DatabaseInitializer"/> with
 /// seeding logic for Quotinator domain tables (Quotes, Sources, Characters, People, Genres).
 /// </summary>
-public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
+/// <remarks>Initialises the instance with all dependencies required for Quotinator seeding.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+/// <param name="options">Database file paths and settings.</param>
+/// <param name="migrations">Ordered, append-only list of Quotinator.Core's own schema migrations to apply. Always applied after Quotinator.Data's own migrations.</param>
+/// <param name="batches">Bundled and user seed batches applied when the database is empty.</param>
+/// <param name="importBatches">Repository used to record each seed/import run as an <c>Import_Batch</c> row.</param>
+/// <param name="actionCoordinator">Coordinator used to stage and apply the import actions produced by seeding.</param>
+/// <param name="actionService">Service used to convert raw seed/import file content into staged import actions.</param>
+/// <param name="actionWriter">Writer used to persist staged import actions directly, outside the coordinator's own stage/apply flow.</param>
+/// <param name="auditWriter">Writes audit entries for reseed and reset operations.</param>
+/// <param name="callerContext">Provides the agent identifier for audit entries.</param>
+/// <param name="logger">Logger for startup diagnostics.</param>
+/// <param name="sourceCacheUpdater">Downloads and converts live-updated source files before seeding, when auto-update is enabled.</param>
+/// <param name="autoUpdateSources">Whether live source auto-update runs before seeding.</param>
+/// <param name="autoPurgeBundledImportActions">Whether import actions produced from bundled/system content are automatically purged on successful apply.</param>
+/// <param name="autoPurgeUserImportActions">Whether import actions produced from user-supplied content are automatically purged on successful apply.</param>
+/// <param name="ruleFileOverridePathResolver">Resolves the on-disk path of a conflict-resolution-rule or source-alias override file for a given seed batch.</param>
+/// <param name="sourceFileOverrideRegistry">Tracks which seed source files have a curator-authored override applied, so an override is not silently reapplied or skipped.</param>
+/// <param name="fileResources">Repository used to record each seeded/imported file as a <c>FileResource</c> row.</param>
+/// <param name="baseline">Optional consolidated DDL for Quotinator.Core's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
+/// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277). Defaults to a real implementation when omitted.</param>
+public sealed class QuotinatorDatabaseInitializer(
+    IDbConnectionFactory factory,
+    DatabaseOptions options,
+    IReadOnlyList<SchemaMigration> migrations,
+    IReadOnlyList<SeedBatch> batches,
+    IImportBatchRepository importBatches,
+    IImportActionCoordinator actionCoordinator,
+    IImportActionService actionService,
+    IImportActionWriter actionWriter,
+    IAuditEntryWriter auditWriter,
+    ICallerContext callerContext,
+    ILogger<DatabaseInitializer> logger,
+    ISourceCacheUpdater sourceCacheUpdater,
+    bool autoUpdateSources,
+    bool autoPurgeBundledImportActions,
+    bool autoPurgeUserImportActions,
+    IRuleFileOverridePathResolver ruleFileOverridePathResolver,
+    ISourceFileOverrideRegistry sourceFileOverrideRegistry,
+    IFileResourceRepository fileResources,
+    SchemaBaseline? baseline = null,
+    IDiskSpaceProvider? diskSpaceProvider = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, baseline, diskSpaceProvider)
 {
-    private readonly IReadOnlyList<SeedBatch>       _batches;
-    private readonly IImportBatchRepository         _importBatches;
-    private readonly IImportActionCoordinator       _actionCoordinator;
-    private readonly IImportActionService           _actionService;
-    private readonly ISourceCacheUpdater            _sourceCacheUpdater;
-    private readonly bool                           _autoUpdateSources;
-    private readonly IRuleFileOverridePathResolver  _ruleFileOverridePathResolver;
-    private readonly ISourceFileOverrideRegistry    _sourceFileOverrideRegistry;
-
-    /// <summary>Initialises the instance with all dependencies required for Quotinator seeding.</summary>
-    public QuotinatorDatabaseInitializer(
-        IDbConnectionFactory           factory,
-        DatabaseOptions                options,
-        IReadOnlyList<SchemaMigration> migrations,
-        IReadOnlyList<SeedBatch>       batches,
-        IImportBatchRepository         importBatches,
-        IImportActionCoordinator       actionCoordinator,
-        IImportActionService           actionService,
-        ISystemAuditWriter             auditWriter,
-        ICallerContext                 callerContext,
-        ILogger<DatabaseInitializer>   logger,
-        ISourceCacheUpdater            sourceCacheUpdater,
-        bool                           autoUpdateSources,
-        IRuleFileOverridePathResolver  ruleFileOverridePathResolver,
-        ISourceFileOverrideRegistry    sourceFileOverrideRegistry,
-        SchemaBaseline?                baseline = null)
-        : base(factory, options, migrations, auditWriter, callerContext, logger, baseline)
-    {
-        _batches            = batches;
-        _importBatches      = importBatches;
-        _actionCoordinator  = actionCoordinator;
-        _actionService      = actionService;
-        _sourceCacheUpdater = sourceCacheUpdater;
-        _autoUpdateSources  = autoUpdateSources;
-        _ruleFileOverridePathResolver = ruleFileOverridePathResolver;
-        _sourceFileOverrideRegistry   = sourceFileOverrideRegistry;
-    }
+    private readonly IReadOnlyList<SeedBatch> _batches = batches;
+    private readonly IImportBatchRepository _importBatches = importBatches;
+    private readonly IImportActionCoordinator _actionCoordinator = actionCoordinator;
+    private readonly IImportActionService _actionService = actionService;
+    private readonly IImportActionWriter _actionWriter = actionWriter;
+    private readonly ISourceCacheUpdater _sourceCacheUpdater = sourceCacheUpdater;
+    private readonly bool _autoUpdateSources = autoUpdateSources;
+    private readonly bool _autoPurgeBundledImportActions = autoPurgeBundledImportActions;
+    private readonly bool _autoPurgeUserImportActions = autoPurgeUserImportActions;
+    private readonly IRuleFileOverridePathResolver _ruleFileOverridePathResolver = ruleFileOverridePathResolver;
+    private readonly ISourceFileOverrideRegistry _sourceFileOverrideRegistry = sourceFileOverrideRegistry;
+    private readonly IFileResourceRepository _fileResources = fileResources;
 
     /// <inheritdoc/>
     protected override async Task OnInitialisedAsync(SqliteConnection connection)
@@ -73,11 +91,22 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     }
 
     /// <inheritdoc/>
+    /// <remarks>Mirrors the two count-gates <see cref="OnInitialisedAsync"/> itself runs (#277): <see cref="SeedIfEmptyInternalAsync"/> would do real work whenever Quotes is empty, and <see cref="ReSeedGenresIfEmptyAsync"/> would do real work whenever Genres is empty but Quotes is not.</remarks>
+    protected override async Task<bool> HasPendingContentSeedAsync(SqliteConnection connection)
+    {
+        var quoteCount = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
+        if (quoteCount == 0) return true;
+
+        var genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
+        return genreCount == 0;
+    }
+
+    /// <inheritdoc/>
     protected override async Task OnReseedAsync(SqliteConnection connection, bool forceSourceRefresh)
     {
         var effectiveBatches = (await ResolveEffectiveBatchesAsync(forceSourceRefresh)).EffectiveBatches;
         var totalFiles = effectiveBatches.Sum(b => b.Files.Count);
-        Logger.LogInformation("[Database - Seed] reseed requested — clearing all data and reimporting from {Count} source file(s)...", totalFiles);
+        Logger.LogReseedRequested(totalFiles);
 
         await SharedSeedLock.WaitAsync();
         try
@@ -91,7 +120,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         }
 
         await LogDatabaseStatsAsync(connection);
-        await AuditWriter.WriteAsync(new SystemAuditEntry
+        await AuditWriter.WriteAsync(new AuditEntryEntity
         {
             TableName   = "Database",
             Operation   = AuditOperation.Reseed,
@@ -102,25 +131,37 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// #156: Reset's one job is rebuilding the schema to an empty baseline (plus system content via
+    /// <see cref="DatabaseInitializer.SeedSystemContentAsync"/>) — it no longer reimports bundled or
+    /// user quote content, matching the Single Responsibility endpoint-side-effect policy (a caller
+    /// resetting to start fresh must not be forced to re-accept optional bundled content every time).
+    /// <see cref="ResolveEffectiveBatchesAsync"/> is still called so <paramref name="forceSourceRefresh"/>
+    /// keeps its existing effect of refreshing the on-disk source cache — a disk-level concern
+    /// independent of database content, outside that policy's scope — but its returned batches are
+    /// discarded here, never imported.
+    /// </remarks>
     protected override async Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
     {
-        var effectiveBatches = (await ResolveEffectiveBatchesAsync(forceSourceRefresh)).EffectiveBatches;
-        var totalFiles = effectiveBatches.Sum(b => b.Files.Count);
-        Logger.LogInformation("[Database - Init] reset requested — rebuilding schema and reimporting from {Count} source file(s)...", totalFiles);
+        await ResolveEffectiveBatchesAsync(forceSourceRefresh);
+        Logger.LogInformation("[Database - Init] reset requested — rebuilding schema from baseline...");
 
         await SharedSeedLock.WaitAsync();
         try
         {
             await DropAndRebuildAsync(connection, preserveSchemaVersion);
-            await SeedIfEmptyInternalAsync(connection, effectiveBatches);
         }
         finally
         {
             SharedSeedLock.Release();
         }
 
+        // Reset performs no seeding — LastSeedReport must not keep echoing whatever the last real
+        // seed/reseed reported, which would misleadingly suggest this Reset call imported something.
+        LastSeedReport = [];
+
         await LogDatabaseStatsAsync(connection);
-        await AuditWriter.WriteAsync(new SystemAuditEntry
+        await AuditWriter.WriteAsync(new AuditEntryEntity
         {
             TableName   = "Database",
             Operation   = AuditOperation.Reset,
@@ -170,7 +211,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         var effectiveBatches = resolution.EffectiveBatches;
         var resultsByName    = resolution.Results.ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
 
-        var filePreviews = new List<SeedFilePreview>();
+        var filePreviews = new List<Quotinator.Data.Import.SeedFilePreview>();
         var reports      = new List<FileImportReport>();
 
         using var connection = CreateConnection();
@@ -185,7 +226,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 var quotes      = parsed.Quotes;
                 var refreshResult = resultsByName.GetValueOrDefault(fileName);
                 var filePolicy  = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
-                filePreviews.Add(new SeedFilePreview(fileName, quotes.Count, refreshResult?.Outcome, refreshResult?.LastRefreshedAtUtc, issue));
+                filePreviews.Add(new Quotinator.Data.Import.SeedFilePreview(fileName, quotes.Count, refreshResult?.Outcome, refreshResult?.LastRefreshedAtUtc, issue));
 
                 var conflictRules = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
                 var sourceAliases = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
@@ -263,13 +304,12 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                 var conflictRules   = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
                 var sourceAliases   = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
 
-                Logger.LogInformation("[Database - Seed] importing {Count} quotes from {File} ({Batch})...",
-                    quotes.Count, fileName, batch.Label);
+                Logger.LogImportingQuotes(quotes.Count, fileName, batch.Label);
 
                 var importBatch = await CreateImportBatchAsync(batch, seedFile, filePolicy);
                 var batchIdStr  = importBatch.Id.ToCanonicalId();
 
-                IReadOnlyList<SystemImportAction> actions;
+                IReadOnlyList<ImportActionEntity> actions;
                 using (var tx = connection.BeginTransaction())
                 {
                     actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx,
@@ -281,7 +321,8 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
 
                 var report = ImportActionReportBuilder.Build(fileName, actions);
                 reports.Add(report);
-                Logger.LogInformation("[Database - Seed] {File} report: {Report}", fileName, FormatReport(report));
+                if (Logger.IsEnabled(LogLevel.Information))
+                    Logger.LogFileReport(fileName, FormatReport(report));
 
                 var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Seed);
                 if (applyResult is null)
@@ -295,33 +336,49 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
                     importBatch.RecordCount = imported + updated;
                     await _importBatches.UpdateAsync(importBatch);
 
-                    await AuditWriter.WriteAsync(new SystemAuditEntry
+                    await AuditWriter.WriteAsync(new AuditEntryEntity
                     {
-                        TableName   = "Quotes",
+                        TableName   = "Quotinator_Quote",
                         RecordId    = batchIdStr,
                         Operation   = AuditOperation.BulkInsert,
                         Agent       = CallerContext.Agent,
                         PerformedAt = DateTime.UtcNow,
                     }, connection);
+
+                    // #249: the batch reached zero pending actions — its Import_Action rows have
+                    // served their purpose (resolving this import). Purge them when the relevant
+                    // per-origin setting allows it; a temporary developer investigation of a specific
+                    // source flips that one setting off first, so this stays a no-op for it.
+                    var autoPurge = batch.Origin == SeedBatchOrigin.UserImports
+                        ? _autoPurgeUserImportActions
+                        : _autoPurgeBundledImportActions;
+                    if (autoPurge)
+                    {
+                        await _actionWriter.DeleteForBatchAsync(batchIdStr, connection);
+                        await AuditWriter.WriteAsync(new AuditEntryEntity
+                        {
+                            TableName   = "Import_Action",
+                            RecordId    = batchIdStr,
+                            Operation   = AuditOperation.Purge,
+                            Agent       = CallerContext.Agent,
+                            PerformedAt = DateTime.UtcNow,
+                        }, connection);
+                    }
                 }
                 else
                 {
                     stagedFiles.Add(fileName);
-                    Logger.LogInformation(
-                        "[Database - Seed] {File} left staged awaiting review — batch {BatchId}, {Count} action(s) pending a decision (GET /import/actions?batchId=<BatchId>)",
-                        fileName, batchIdStr, applyResult.PendingActionIds.Count);
+                    Logger.LogFileStagedAwaitingReview(fileName, batchIdStr, applyResult.PendingActionIds.Count);
                 }
             }
         }
 
         LastSeedReport = reports;
 
-        Logger.LogInformation("[Database - Seed] seeding complete — {Count} file(s) processed", reports.Count);
+        Logger.LogSeedingComplete(reports.Count);
 
-        if (stagedFiles.Count > 0)
-            Logger.LogInformation(
-                "[Database - Seed] {Count} source file(s) staged awaiting review: {Files}",
-                stagedFiles.Count, string.Join(", ", stagedFiles));
+        if (stagedFiles.Count > 0 && Logger.IsEnabled(LogLevel.Information))
+            Logger.LogFilesStagedAwaitingReview(stagedFiles.Count, string.Join(", ", stagedFiles));
     }
 
     private async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
@@ -364,7 +421,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             }
         }
 
-        Logger.LogInformation("[Database - Seed] genre re-seed complete — {Count} genre rows processed", inserted);
+        Logger.LogGenreReseedComplete(inserted);
     }
 
     private async Task LogDatabaseStatsAsync(SqliteConnection connection)
@@ -379,18 +436,16 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         SoundCueCount       = await connection.ExecuteScalarAsync<int>(Sql.SoundCues.CountActive);
         ConversationCount   = await connection.ExecuteScalarAsync<int>(Sql.Conversations.CountActive);
 
-        Logger.LogInformation(
-            "[Database - Stats] {Quotes} quotes  {Sources} sources  {Characters} characters  {People} people  " +
-            "{Series} series  {Universes} universes  {StageDirections} stage directions  {SoundCues} sound cues  {Conversations} conversations",
+        Logger.LogDatabaseStats(
             QuoteCount, SourceCount, CharacterCount, PeopleCount,
             SeriesCount, UniverseCount, StageDirectionCount, SoundCueCount, ConversationCount);
     }
 
-    private async Task<ImportBatch> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile, ManifestPolicy filePolicy)
+    private async Task<ImportBatchEntity> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile, ManifestPolicy filePolicy)
     {
         var type   = DetermineType(seedBatch.Origin);
         var policy = filePolicy.ForQuotes;
-        var batch = new ImportBatch
+        var batch = new ImportBatchEntity
         {
             Name           = Path.GetFileName(seedFile.FilePath),
             Type           = new SafeValue<ImportBatchType?>(type.ToString(), type),
@@ -400,6 +455,46 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             Status         = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Staged.ToString(), ImportBatchStatus.Staged),
         };
         await _importBatches.InsertAsync(batch);
+
+        // #251 — capture this file's own content for provenance. Skipped only when the file is
+        // genuinely missing (already surfaced separately via LoadSourceFileAsync's own SeedFileIssue
+        // path elsewhere in this seed pass) — a real failure during the write itself is not swallowed
+        // here; it propagates and is caught by the outer seeding backup/restore/rethrow net #254
+        // already wraps this whole hook in, the same as any other seeding failure.
+        if (File.Exists(seedFile.FilePath))
+        {
+            var isUserImports = seedBatch.Origin == SeedBatchOrigin.UserImports;
+            var fileResourceOrigin   = isUserImports ? FileResourceOrigin.User : FileResourceOrigin.System;
+            // "sources"/"imports" per #252 — the only two local directories any write path has ever
+            // captured from; a future consumer of System/User origin unrelated to quote sources
+            // registers its own key without stretching what these two mean.
+            var homeDirectoryKey     = isUserImports ? "imports" : "sources";
+            var content = await File.ReadAllTextAsync(seedFile.FilePath);
+            // OriginalFolderPath is null here — today's directory scan is flat (no subfolders under
+            // data/sources/ or {dataDir}/imports/), confirmed via ManifestSeedPlanner's own
+            // non-recursive Directory.GetFiles call, so there is no folder segment to record yet.
+            await _fileResources.WriteAsync(
+                Path.GetFileName(seedFile.FilePath), originalFolderPath: null, fileResourceOrigin, content, batch.Id,
+                seedFile.Converter, seedFile.ConverterOptions?.GetRawText(), homeDirectoryKey);
+
+            // Also capture the manifest.json that drove this seed pass, linked to this same batch —
+            // content-hash dedup means only a new Import_FileResourceBatch link row is added for every
+            // file in the same directory after the first, correctly reflecting that one manifest.json
+            // version governed every batch created from it this session. Uses seedBatch.SourceDirectory
+            // rather than seedFile.FilePath's own directory — ISourceCacheUpdater rewrites a downloaded
+            // file's FilePath to a separate cache directory that never contains manifest.json, which
+            // would silently miss the link for every downloaded source otherwise (found live in a T2 pass).
+            var manifestDir  = seedBatch.SourceDirectory ?? Path.GetDirectoryName(seedFile.FilePath)!;
+            var manifestPath = Path.Combine(manifestDir, ManifestSeedPlanner.ManifestFileName);
+            if (File.Exists(manifestPath))
+            {
+                var manifestContent = await File.ReadAllTextAsync(manifestPath);
+                await _fileResources.WriteAsync(
+                    ManifestSeedPlanner.ManifestFileName, originalFolderPath: null, fileResourceOrigin, manifestContent, batch.Id,
+                    homeDirectoryKey: homeDirectoryKey);
+            }
+        }
+
         return batch;
     }
 
@@ -415,7 +510,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
             ? ImportBatchType.UserSeed
             : ImportBatchType.Seed;
 
-    private (List<SourceQuote> Quotes, SeedFileIssue? Issue) LoadQuotesFromFile(string filePath)
+    private (List<SourceQuoteDto> Quotes, SeedFileIssue? Issue) LoadQuotesFromFile(string filePath)
     {
         var (parsed, issue) = LoadSourceFileAsync(filePath);
         return (parsed.Quotes.ToList(), issue);
@@ -427,15 +522,15 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
     /// <see cref="LoadQuotesFromFile"/> wraps this for the two call sites that only need the quotes —
     /// one parsing implementation, not two.
     /// </summary>
-    private (ParsedSourceFile Parsed, SeedFileIssue? Issue) LoadSourceFileAsync(string filePath)
+    private (ParsedSourceFileDto Parsed, SeedFileIssue? Issue) LoadSourceFileAsync(string filePath)
     {
-        if (!File.Exists(filePath)) return (new ParsedSourceFile { Quotes = [] }, SeedFileIssue.Missing);
+        if (!File.Exists(filePath)) return (new ParsedSourceFileDto { Quotes = [] }, SeedFileIssue.Missing);
 
         var json = File.ReadAllText(filePath);
         if (SourceQuoteFileReader.TryParseExtended(json, out var parsed)) return (parsed!, null);
 
         Logger.LogWarning("[Database - Seed] {File} is empty or not valid JSON — skipping", Path.GetFileName(filePath));
-        return (new ParsedSourceFile { Quotes = [] }, SeedFileIssue.InvalidJson);
+        return (new ParsedSourceFileDto { Quotes = [] }, SeedFileIssue.InvalidJson);
     }
 
     /// <summary>Single-line, grep-friendly rendering of a <see cref="FileImportReport"/> for the seed log (#221).</summary>
@@ -471,7 +566,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         try
         {
             var json     = await File.ReadAllTextAsync(effectivePath);
-            var ruleFile = JsonSerializer.Deserialize<ConflictResolutionRuleFile>(json, ConflictRuleReadOptions);
+            var ruleFile = JsonSerializer.Deserialize<ConflictResolutionRuleFileDto>(json, ConflictRuleReadOptions);
             return new ConflictRuleLookup(ruleFile?.Rules ?? []);
         }
         catch (JsonException ex)
@@ -506,7 +601,7 @@ public sealed class QuotinatorDatabaseInitializer : DatabaseInitializer
         try
         {
             var json      = await File.ReadAllTextAsync(effectivePath);
-            var aliasFile = JsonSerializer.Deserialize<SourceAliasRuleFile>(json, ConflictRuleReadOptions);
+            var aliasFile = JsonSerializer.Deserialize<SourceAliasRuleFileDto>(json, ConflictRuleReadOptions);
             return new SourceAliasLookup(aliasFile?.Aliases ?? []);
         }
         catch (JsonException ex)

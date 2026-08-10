@@ -270,7 +270,7 @@ static string ToJson(ChangelogUnreleased? unreleased, List<ChangelogRelease> rel
             Modifiers = { SkipEmptyOrNull }
         }
     };
-    var root = new ChangelogRoot
+    var root = new ChangelogRootDto
     {
         Language          = language,
         SourceLanguage    = sourceLanguage,

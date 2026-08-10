@@ -35,7 +35,7 @@ public class SqliteRepositoryTests
             );
             """);
 
-        _repository = new SqliteRepository<Widget>(new SqliteConnectionFactory(_dbPath), NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        _repository = new SqliteRepository<Widget>(new SqliteConnectionFactory(_dbPath), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
     }
 
     [TestCleanup]
@@ -261,7 +261,7 @@ public class SqliteRepositoryTests
 
         var result = await _repository.GetPageAsync(1, 10, [new SortColumn("Label")]);
 
-        Assert.AreSequenceEqual(new[] { "Apple", "Banana", "Cherry" }, result.Items.Select(w => w.Label).ToList());
+        Assert.AreSequenceEqual(["Apple", "Banana", "Cherry"], [.. result.Items.Select(w => w.Label)]);
     }
 
     [TestMethod]
@@ -273,7 +273,7 @@ public class SqliteRepositoryTests
 
         var result = await _repository.GetPageAsync(1, 10, [new SortColumn("Label", Descending: true)]);
 
-        Assert.AreSequenceEqual(new[] { "Cherry", "Banana", "Apple" }, result.Items.Select(w => w.Label).ToList());
+        Assert.AreSequenceEqual(["Cherry", "Banana", "Apple"], [.. result.Items.Select(w => w.Label)]);
     }
 
     [TestMethod]
@@ -290,7 +290,7 @@ public class SqliteRepositoryTests
             1, 10, [new SortColumn("Label"), new SortColumn("DateCreated", Descending: true)]);
 
         Assert.AreSequenceEqual(
-            new[] { other.Id, sameNewer.Id, sameOlder.Id }, result.Items.Select(w => w.Id).ToList());
+            [other.Id, sameNewer.Id, sameOlder.Id], [.. result.Items.Select(w => w.Id)]);
     }
 
     [TestMethod]

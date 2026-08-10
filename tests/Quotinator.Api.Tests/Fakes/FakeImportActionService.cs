@@ -1,4 +1,5 @@
 using Quotinator.Core.Models;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Core.Services;
 
@@ -8,7 +9,7 @@ namespace Quotinator.Api.Tests.Fakes;
 internal sealed class FakeImportActionService : IImportActionService
 {
     public PagedItems<ImportActionSummaryResponse>? ReturnPage { get; set; }
-    public IReadOnlyList<ImportActionFieldRow>? ReturnExportRows { get; set; }
+    public IReadOnlyList<ImportActionFieldRowResponse>? ReturnExportRows { get; set; }
     public Exception? ThrowOnDecide { get; set; }
     public Exception? ThrowOnUndo { get; set; }
     public Exception? ThrowOnDiscard { get; set; }
@@ -19,23 +20,24 @@ internal sealed class FakeImportActionService : IImportActionService
     public ConflictDecisionRequest? LastDecisionRequest { get; private set; }
     public Guid? LastUndoneActionId { get; private set; }
     public string? LastAppliedBatchId { get; private set; }
+    public bool? LastApplyPurgeOnSuccess { get; private set; }
     public string? LastDiscardedBatchId { get; private set; }
     public string? LastReversedBatchId { get; private set; }
     public string? LastExportedBatchId { get; private set; }
     public string? LastBulkDecidedBatchId { get; private set; }
-    public IReadOnlyList<ImportActionFieldRow>? LastBulkDecideRows { get; private set; }
+    public IReadOnlyList<ImportActionFieldRowDto>? LastBulkDecideRows { get; private set; }
     public BulkDecideResponse? ReturnBulkDecideResponse { get; set; }
 
     public Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
         => Task.FromResult(ReturnPage ?? new PagedItems<ImportActionSummaryResponse>([], page, pageSize, 0));
 
-    public Task<IReadOnlyList<ImportActionFieldRow>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<ImportActionFieldRowResponse>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default)
     {
         LastExportedBatchId = batchId;
         return Task.FromResult(ReturnExportRows ?? []);
     }
 
-    public Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRow> rows, CancellationToken cancellationToken = default)
+    public Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRowDto> rows, CancellationToken cancellationToken = default)
     {
         LastBulkDecidedBatchId = batchId;
         LastBulkDecideRows     = rows;
@@ -57,9 +59,10 @@ internal sealed class FakeImportActionService : IImportActionService
         return Task.CompletedTask;
     }
 
-    public Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, CancellationToken cancellationToken = default)
+    public Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, CancellationToken cancellationToken = default)
     {
-        LastAppliedBatchId = batchId;
+        LastAppliedBatchId     = batchId;
+        LastApplyPurgeOnSuccess = purgeOnSuccess;
         return Task.FromResult(ReturnApplyResult);
     }
 

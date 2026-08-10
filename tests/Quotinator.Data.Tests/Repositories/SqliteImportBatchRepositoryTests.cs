@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
@@ -33,7 +34,7 @@ public class SqliteImportBatchRepositoryTests
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         conn.Execute("""
-            CREATE TABLE ImportBatches (
+            CREATE TABLE Import_Batch (
                 Id             TEXT    PRIMARY KEY,
                 Name           TEXT    NOT NULL,
                 Type           TEXT    NOT NULL CHECK (Type IN ('Seed', 'Import', 'System', 'UserSeed')),
@@ -53,7 +54,7 @@ public class SqliteImportBatchRepositoryTests
             """);
 
         _repository = new SqliteImportBatchRepository(
-            new SqliteConnectionFactory(_dbPath), NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+            new SqliteConnectionFactory(_dbPath), NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
     }
 
     [TestCleanup]
@@ -64,7 +65,7 @@ public class SqliteImportBatchRepositoryTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private static ImportBatch BuildBatch(ImportBatchType type, string name = "test-batch.json", string? importedAt = null) => new()
+    private static ImportBatchEntity BuildBatch(ImportBatchType type, string name = "test-batch.json", string? importedAt = null) => new()
     {
         Name           = name,
         Type           = new SafeValue<ImportBatchType?>(type.ToString(), type),
@@ -127,7 +128,7 @@ public class SqliteImportBatchRepositoryTests
     /// no capture-time canonicalization exists for this column, since nothing in <c>src/</c> writes it
     /// today per #213's own Background), renders lowercase through <see cref="SqliteImportBatchRepository.GetAllAsync"/>
     /// (<c>Sql.ImportBatches.SelectAll</c>, the query #212 rewrote away from <c>SELECT *</c>). Mirrors
-    /// <c>SystemImportActionWriterReaderTests.ExistingBatchId_RoundTripsCorrectly</c>'s pattern.
+    /// <c>ImportActionWriterReaderTests.ExistingBatchId_RoundTripsCorrectly</c>'s pattern.
     /// </summary>
     [TestMethod]
     public async Task GetAllAsync_MixedCaseImportedById_RendersLowercase()
@@ -138,7 +139,7 @@ public class SqliteImportBatchRepositoryTests
         {
             conn.Open();
             conn.Execute(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, ImportedById, DateCreated) " +
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, ImportedById, DateCreated) " +
                 "VALUES (@id, 'mixed-case.json', 'Import', @now, UPPER('aabbccdd-1234-4abc-8def-1234567890ab'), @now);",
                 new { id, now });
         }
@@ -165,7 +166,7 @@ public class SqliteImportBatchRepositoryTests
         {
             conn.Open();
             conn.Execute(
-                "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, ImportedById, DateCreated) " +
+                "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, ImportedById, DateCreated) " +
                 "VALUES (@id, 'mixed-case.json', 'Import', @now, UPPER('aabbccdd-1234-4abc-8def-1234567890ab'), @now);",
                 new { id, now });
         }
@@ -195,5 +196,60 @@ public class SqliteImportBatchRepositoryTests
         Assert.AreEqual(ImportBatchType.Seed, result.Type.Parsed);
         Assert.AreEqual(seedBatch.RecordCount, result.RecordCount);
         Assert.AreEqual(ImportBatchStatus.Applied, result.Status.Parsed);
+    }
+
+    // ── GetPagedAsync (#251) ─────────────────────────────────────────────────
+
+    [TestMethod]
+    public async Task GetPagedAsync_NoFilters_ReturnsAllBatches()
+    {
+        await _repository.InsertAsync(BuildBatch(ImportBatchType.Seed, "a.json"));
+        await _repository.InsertAsync(BuildBatch(ImportBatchType.Import, "b.json"));
+
+        var result = await _repository.GetPagedAsync(type: null, status: null, page: 1, pageSize: 20);
+
+        Assert.AreEqual(2, result.TotalCount);
+        Assert.HasCount(2, result.Items);
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_FilterByType_ReturnsOnlyMatchingType()
+    {
+        var seedBatch = BuildBatch(ImportBatchType.Seed, "seed.json");
+        await _repository.InsertAsync(seedBatch);
+        await _repository.InsertAsync(BuildBatch(ImportBatchType.Import, "import.json"));
+
+        var result = await _repository.GetPagedAsync(ImportBatchType.Seed, status: null, page: 1, pageSize: 20);
+
+        Assert.AreEqual(1, result.TotalCount);
+        Assert.AreEqual(seedBatch.Id, result.Items.Single().Id);
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_FilterByStatus_ReturnsOnlyMatchingStatus()
+    {
+        var applied = BuildBatch(ImportBatchType.Import, "applied.json");
+        await _repository.InsertAsync(applied);
+        var staged = BuildBatch(ImportBatchType.Import, "staged.json");
+        staged.Status = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Staged.ToString(), ImportBatchStatus.Staged);
+        await _repository.InsertAsync(staged);
+
+        var result = await _repository.GetPagedAsync(type: null, ImportBatchStatus.Staged, page: 1, pageSize: 20);
+
+        Assert.AreEqual(1, result.TotalCount);
+        Assert.AreEqual(staged.Id, result.Items.Single().Id);
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_PageSizeZero_ReturnsAllRowsAsOnePage()
+    {
+        for (var i = 0; i < 3; i++)
+            await _repository.InsertAsync(BuildBatch(ImportBatchType.Import, $"batch-{i}.json"));
+
+        var result = await _repository.GetPagedAsync(type: null, status: null, page: 1, pageSize: 0);
+
+        Assert.AreEqual(3, result.TotalCount);
+        Assert.AreEqual(3, result.PageSize);
+        Assert.HasCount(3, result.Items);
     }
 }

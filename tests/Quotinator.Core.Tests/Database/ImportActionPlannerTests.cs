@@ -1,10 +1,12 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
+using Quotinator.Core.Enums;
 using Quotinator.Core.Import;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
@@ -35,24 +37,25 @@ public class ImportActionPlannerTests
         _factory = new SqliteConnectionFactory(_dbPath);
 
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
-        var actionReader  = new SystemImportActionReader(_factory);
-        var actionWriter  = new SystemImportActionWriter(_factory);
+        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader  = new ImportActionReader(_factory);
+        var actionWriter  = new ImportActionWriter(_factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory);
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
-            coordinator, actionService, NoOpSystemAuditWriter.Instance,
+            coordinator, actionService, actionWriter, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
-            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
+            autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
     }
 
@@ -64,7 +67,7 @@ public class ImportActionPlannerTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private static SourceQuote BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null, string quoteText = "Here's looking at you, kid.", string? date = null, Core.Models.QuoteType type = Core.Models.QuoteType.Movie) => new()
+    private static SourceQuoteDto BuildQuote(string id, string source = "Casablanca", string? character = "Rick Blaine", string? author = null, string quoteText = "Here's looking at you, kid.", string? date = null, Core.Enums.QuoteType type = Core.Enums.QuoteType.Movie) => new()
     {
         Id               = id,
         QuoteText        = quoteText,
@@ -118,7 +121,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
         Assert.HasCount(2, actions);
-        Assert.AreSequenceEqual(new[] { "Quote", "Source" }, actions.Select(a => a.EntityType).ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["Quote", "Source"], [.. actions.Select(a => a.EntityType)], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -129,15 +132,15 @@ public class ImportActionPlannerTests
         var realSourceId    = Guid.NewGuid();
         var realCharacterId = Guid.NewGuid();
         var realPersonId    = Guid.NewGuid();
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
             new { Id = realSourceId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
         // #174: Characters.SourceType is NOT NULL as of Migration011 (ADR 013).
-        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, SourceType, DateCreated) VALUES (@Id, 'Rick Blaine', 'Movie', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Character (Id, Name, SourceType, DateCreated) VALUES (@Id, 'Rick Blaine', 'Movie', @now)",
             new { Id = realCharacterId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
         // #179: Character<->Source is many-to-many via CharacterSources, not a Characters.SourceId column.
-        await conn.ExecuteAsync("INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_CharacterSource (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
             new { Id = Guid.NewGuid(), CharacterId = realCharacterId, SourceId = realSourceId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
-        await conn.ExecuteAsync("INSERT INTO People (Id, Name, DateCreated) VALUES (@Id, 'Someone', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Person (Id, Name, DateCreated) VALUES (@Id, 'Someone', @now)",
             new { Id = realPersonId, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
 
         var quote = BuildQuote("31111111-1111-4111-8111-111111111111", author: "Someone");
@@ -147,7 +150,7 @@ public class ImportActionPlannerTests
         var quoteAction = actions.Single();
         Assert.AreEqual("Quote", quoteAction.EntityType);
 
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         // GuidExtensions.ToCanonicalId (and GuidHandler, given RemoveTypeMap) render every Guid column
         // as lowercase "D"-format TEXT (ADR 012) — the resolved id must match that convention.
         Assert.AreEqual(realSourceId.ToString("D"), payload.SourceId, "Must resolve to the real existing Source id, not a stable id");
@@ -157,22 +160,22 @@ public class ImportActionPlannerTests
 
     // ── #174/ADR 013: Character global identity, Series-scoped cross-Source resolution ──────────
 
-    private async Task<string> SeedGlobalCharacterAsync(SqliteConnection conn, string name, string sourceId, string sourceType)
+    private static async Task<string> SeedGlobalCharacterAsync(SqliteConnection conn, string name, string sourceId, string sourceType)
     {
         var characterId = Guid.NewGuid();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, SourceType, DateCreated) VALUES (@Id, @Name, @SourceType, @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Character (Id, Name, SourceType, DateCreated) VALUES (@Id, @Name, @SourceType, @now)",
             new { Id = characterId, Name = name, SourceType = sourceType, now });
-        await conn.ExecuteAsync("INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_CharacterSource (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
             new { Id = Guid.NewGuid(), CharacterId = characterId, SourceId = sourceId, now });
         return characterId.ToString("D");
     }
 
-    private async Task<string> SeedSourceAsync(SqliteConnection conn, string title, string type = "Movie", string? seriesId = null)
+    private static async Task<string> SeedSourceAsync(SqliteConnection conn, string title, string type = "Movie", string? seriesId = null)
     {
         var sourceId = Guid.NewGuid();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, SeriesId, DateCreated) VALUES (@Id, @Title, @Type, @SeriesId, @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, SeriesId, DateCreated) VALUES (@Id, @Title, @Type, @SeriesId, @now)",
             new { Id = sourceId, Title = title, Type = type, SeriesId = seriesId, now });
         return sourceId.ToString("D");
     }
@@ -189,7 +192,7 @@ public class ImportActionPlannerTests
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "Already linked to this exact Source — silently reused, no Add staged");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(existingCharacterId, payload.CharacterId);
     }
 
@@ -208,7 +211,7 @@ public class ImportActionPlannerTests
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "A Series-scoped cross-Source match is reused directly, like the same-Source case");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(existingCharacterId, payload.CharacterId, "Must resolve to the existing global Character, not stage a duplicate");
     }
 
@@ -221,7 +224,7 @@ public class ImportActionPlannerTests
         await SeedGlobalCharacterAsync(conn, "Gandalf", movieSourceId, "Movie");
         await SeedSourceAsync(conn, "The Fellowship of the Ring (Book)", type: "Book", seriesId: seriesId);
 
-        var quote = BuildQuote("e3111111-1111-4111-8111-111111111111", source: "The Fellowship of the Ring (Book)", character: "Gandalf", type: Core.Models.QuoteType.Book);
+        var quote = BuildQuote("e3111111-1111-4111-8111-111111111111", source: "The Fellowship of the Ring (Book)", character: "Gandalf", type: Core.Enums.QuoteType.Book);
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
         Assert.ContainsSingle(a => a.EntityType == "Character", actions, "Source.Type anchor (ADR 011) must never be crossed, even within a shared Series");
@@ -253,7 +256,7 @@ public class ImportActionPlannerTests
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "Name matching is case-insensitive — storage keeps original casing, comparison does not");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(existingCharacterId, payload.CharacterId);
     }
 
@@ -349,7 +352,7 @@ public class ImportActionPlannerTests
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "A matching rule for the only changed field must auto-resolve instead of leaving it Pending");
         Assert.IsNotNull(quoteAction.MergedFields, "An auto-resolved action already has its final values computed, the same as any other Decided action");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.MergedFields!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.MergedFields!)!;
         Assert.AreEqual("Original text", payload.Fields.QuoteText, "Keep must resolve to the existing side's value");
     }
 
@@ -424,12 +427,12 @@ public class ImportActionPlannerTests
 
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionKind.Add, quoteAction.ActionType.Parsed, "This is still a genuine first-ever encounter, not a Modify");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual("Steve McCroskey", payload.Fields.Character, "A matching Custom rule must correct the field on a brand-new Add, not only on a later Modify");
     }
 
     [TestMethod]
-    public async Task PlanAsync_BrandNewQuote_MatchingCustomRule_CharacterEntityResolvesAgainstCorrectedValue()
+    public async Task PlanAsync_BrandNewQuote_MatchingCustomRule_CharacterResolvesAgainstCorrectedValue()
     {
         using var conn = await OpenConnectionAsync();
         var id = "d2111111-1111-4111-8111-111111111111";
@@ -468,7 +471,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual("Some Newly-Added Value", payload.Fields.Character, "A stale rule (recorded snapshot no longer matches this field's real value) must never silently apply, on Add or Modify");
     }
 
@@ -485,7 +488,7 @@ public class ImportActionPlannerTests
 
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionKind.Add, quoteAction.ActionType.Parsed);
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual("Here's looking at you, kid.", payload.Fields.QuoteText, "Keep/Replace on a first-ever Add must be a no-op, not an error");
     }
 
@@ -494,10 +497,10 @@ public class ImportActionPlannerTests
     private static async Task SeedExistingQuoteWithSourceAsync(SqliteConnection conn, string quoteId, string sourceId, string sourceTitle, string sourceType, string quoteText)
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, @sourceTitle, @sourceType, @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, @sourceTitle, @sourceType, @now)",
             new { Id = sourceId, sourceTitle, sourceType, now });
         await conn.ExecuteAsync(
-            "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, DateCreated) VALUES (@Id, @quoteText, 'en', @SourceId, @now)",
+            "INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, DateCreated) VALUES (@Id, @quoteText, 'en', @SourceId, @now)",
             new { Id = quoteId, quoteText, SourceId = sourceId, now });
     }
 
@@ -515,9 +518,9 @@ public class ImportActionPlannerTests
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
 
-        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must resolve to the already-existing canonical Source — no new Source Add should be staged");
+        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must resolve to the already-existing canonical Source — no new SourceEntity Add should be staged");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload     = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload     = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(canonicalSourceId, payload.SourceId, "The quote must link to the existing canonical Source, not a spurious alias-derived one");
     }
 
@@ -536,7 +539,7 @@ public class ImportActionPlannerTests
         var sourceId = Guid.NewGuid().ToString();
         await SeedExistingQuoteWithSourceAsync(conn, quoteId, sourceId, "Zootopia", "Movie", "Original text.");
 
-        var quote   = BuildQuote(quoteId, source: "Zootopia", quoteText: "Original text.", type: Core.Models.QuoteType.Anime);
+        var quote   = BuildQuote(quoteId, source: "Zootopia", quoteText: "Original text.", type: Core.Enums.QuoteType.Anime);
         var aliases = new SourceAliasLookup([
             new SourceAliasRule { Title = "Zootopia", Type = "anime", CanonicalTitle = "Zootopia", CanonicalType = "movie" },
         ]);
@@ -546,7 +549,7 @@ public class ImportActionPlannerTests
         Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must normalise type before Source resolution runs — no spurious anime-typed Source should ever be staged");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed);
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.MergedFields!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.MergedFields!)!;
         Assert.AreEqual(sourceId, payload.SourceId, "Must resolve to the original existing Source id, not a new alias-derived one");
     }
 
@@ -559,7 +562,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
         Assert.AreEqual("Marvel's The Avengers", payload.Title, "With no alias lookup provided, the raw incoming title is used unchanged — regression guard matching pre-#181 behaviour");
     }
 
@@ -606,7 +609,7 @@ public class ImportActionPlannerTests
         var renamedCanonicalId = EntityIdentity.SourceId("Zootopia (Canonical)", "movie");
         await SeedExplicitSourceAsync(conn, renamedCanonicalId, title: "Zootopia (Canonical, Renamed)", type: "Movie", date: null);
 
-        var quote   = BuildQuote(quoteId, source: "Zootopia", quoteText: "A changed line.", type: Core.Models.QuoteType.Anime);
+        var quote   = BuildQuote(quoteId, source: "Zootopia", quoteText: "A changed line.", type: Core.Enums.QuoteType.Anime);
         var aliases = new SourceAliasLookup([
             new SourceAliasRule { Title = "Zootopia", Type = "anime", CanonicalTitle = "Zootopia (Canonical)", CanonicalType = "movie" },
         ]);
@@ -638,8 +641,8 @@ public class ImportActionPlannerTests
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "No Source has ever existed under this canonical name yet — this is a legitimate first-time creation, not staleness");
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
-        Assert.AreEqual("The Avengers", payload.Title, "The new Source must be created under the alias's canonical title, not the raw incoming one");
+        var payload      = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
+        Assert.AreEqual("The Avengers", payload.Title, "The new SourceEntity must be created under the alias's canonical title, not the raw incoming one");
     }
 
     [TestMethod]
@@ -666,13 +669,13 @@ public class ImportActionPlannerTests
         var sourceId     = Guid.NewGuid();
         var characterId  = Guid.NewGuid();
         var characterSourceId = Guid.NewGuid();
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
-        await conn.ExecuteAsync("INSERT INTO Characters (Id, Name, DateCreated) VALUES (@Id, @characterName, @now)", new { Id = characterId, characterName, now });
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Character (Id, Name, DateCreated) VALUES (@Id, @characterName, @now)", new { Id = characterId, characterName, now });
         await conn.ExecuteAsync(
-            "INSERT INTO CharacterSources (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+            "INSERT INTO Quotinator_CharacterSource (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
             new { Id = characterSourceId, CharacterId = characterId, SourceId = sourceId, now });
         await conn.ExecuteAsync(
-            "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, DateCreated) VALUES (@Id, @quoteText, 'en', @SourceId, @CharacterId, @now)",
+            "INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, DateCreated) VALUES (@Id, @quoteText, 'en', @SourceId, @CharacterId, @now)",
             new { Id = id, quoteText, SourceId = sourceId, CharacterId = characterId, now });
     }
 
@@ -697,7 +700,7 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
         Assert.AreEqual("1993", payload.Date, "The resolving quote's own Date must carry through to the staged Source Add payload");
     }
 
@@ -711,8 +714,54 @@ public class ImportActionPlannerTests
         var actions = await ImportActionPlanner.PlanAsync(conn, [q1, q2], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
         Assert.AreEqual("1942", payload.Date, "Only one Source Add is staged for both quotes — the first-encountered quote's Date wins, matching the existing Title/Type first-quote-wins behaviour");
+    }
+
+    // ── #245: ResolveSourceAsync backfilling a null Date on an already-existing Source ──────────
+
+    [TestMethod]
+    public async Task ResolveSourceAsync_ExistingNullDatedSource_QuoteWithDate_StagesDecidedModifyBackfillingDate()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: null, completenessStatus: "Incomplete");
+        SourceQuoteDto quote = BuildQuote("c1111111-1111-4111-8111-111111111111", date: "1942");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed, "The Source already exists — this must be a Modify, not a fresh Add");
+        Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed, "A background Date backfill needs no human review, matching #191's own Add-payload precedent");
+        SourceActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.MergedFields!)!;
+        Assert.AreEqual("1942", payload.Date, "The resolving quote's own Date must backfill the existing row's null Date");
+    }
+
+    [TestMethod]
+    public async Task ResolveSourceAsync_ExistingDatedSource_QuoteWithDifferentDate_NoActionStaged()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: "1942", completenessStatus: "Incomplete");
+        SourceQuoteDto quote = BuildQuote("c2111111-1111-4111-8111-111111111111", date: "1999");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "An already-dated Source must never be touched by a later, differently-dated quote — first-found-wins, no invented conflict logic");
+    }
+
+    [TestMethod]
+    public async Task ResolveSourceAsync_ExistingCompleteNullDatedSource_QuoteWithDate_StagesBlockedNotBackfill()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: null, completenessStatus: "Complete");
+        SourceQuoteDto quote = BuildQuote("c3111111-1111-4111-8111-111111111111", date: "1942");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionStatus.Blocked, sourceAction.Status.Parsed, "A Complete Source must never have its null Date silently backfilled");
     }
 
     [TestMethod]
@@ -723,10 +772,10 @@ public class ImportActionPlannerTests
 
         await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotes"));
-        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Sources"));
-        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Characters"));
-        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM People"));
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote"));
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Source"));
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Character"));
+        Assert.AreEqual(0, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Person"));
     }
 
     [TestMethod]
@@ -747,15 +796,15 @@ public class ImportActionPlannerTests
     {
         var now      = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         var sourceId = Guid.NewGuid();
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)", new { Id = sourceId, now });
         await conn.ExecuteAsync(
-            "INSERT INTO Quotes (Id, QuoteText, OriginalLanguage, SourceId, CompletenessStatus, DateCreated) VALUES (@Id, 'Original text', 'en', @SourceId, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, CompletenessStatus, DateCreated) VALUES (@Id, 'Original text', 'en', @SourceId, @CompletenessStatus, @now)",
             new { Id = id, SourceId = sourceId, CompletenessStatus = completenessStatus, now });
     }
 
     // ── #162: PlanSourcesAsync ────────────────────────────────────────────────
 
-    private static SourceEntry BuildSourceEntry(string? id, string title = "Casablanca", Core.Models.QuoteType type = Core.Models.QuoteType.Movie, string? date = "1942", string? seriesName = null) => new()
+    private static SourceEntryDto BuildSourceEntry(string? id, string title = "Casablanca", Core.Enums.QuoteType type = Core.Enums.QuoteType.Movie, string? date = "1942", string? seriesName = null) => new()
     {
         Id         = id,
         Title      = title,
@@ -765,7 +814,7 @@ public class ImportActionPlannerTests
     };
 
     /// <summary>#180: an enrichment-shaped entry — no explicit id (matched by natural key), no date (not intended to be set), just the Series link.</summary>
-    private static SourceEntry BuildEnrichmentEntry(string title = "Casablanca", Core.Models.QuoteType type = Core.Models.QuoteType.Movie, string? seriesName = "The Hobbit") => new()
+    private static SourceEntryDto BuildEnrichmentEntry(string title = "Casablanca", Core.Enums.QuoteType type = Core.Enums.QuoteType.Movie, string? seriesName = "The Hobbit") => new()
     {
         Title      = title,
         Type       = type,
@@ -776,15 +825,15 @@ public class ImportActionPlannerTests
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Sources (Id, Title, Type, Date, SeriesId, CompletenessStatus, DateCreated) VALUES (@Id, @Title, @Type, @Date, @SeriesId, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_Source (Id, Title, Type, Date, SeriesId, CompletenessStatus, DateCreated) VALUES (@Id, @Title, @Type, @Date, @SeriesId, @CompletenessStatus, @now)",
             new { Id = id, Title = title, Type = type, Date = date, SeriesId = seriesId, CompletenessStatus = completenessStatus, now });
     }
 
     // ── #180: PlanUniverseAsync / PlanSeriesAsync / Source.SeriesId ─────────────
 
-    private static UniverseEntry BuildUniverseEntry(string name = "Middle Earth") => new() { Name = name };
+    private static UniverseEntryDto BuildUniverseEntry(string name = "Middle Earth") => new() { Name = name };
 
-    private static SeriesEntry BuildSeriesEntry(string name = "The Lord of the Rings", string? universeName = null) => new()
+    private static SeriesEntryDto BuildSeriesEntry(string name = "The Lord of the Rings", string? universeName = null) => new()
     {
         Name         = name,
         UniverseName = universeName,
@@ -795,7 +844,7 @@ public class ImportActionPlannerTests
         var id  = Guid.NewGuid().ToString("D");
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Series (Id, Name, UniverseId, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @UniverseId, 'Incomplete', @now)",
+            "INSERT INTO Quotinator_Series (Id, Name, UniverseId, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @UniverseId, 'Incomplete', @now)",
             new { Id = id, Name = name, UniverseId = universeId, now });
         return id;
     }
@@ -805,7 +854,7 @@ public class ImportActionPlannerTests
         var id  = Guid.NewGuid().ToString("D");
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
+            "INSERT INTO Quotinator_Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
             new { Id = id, Name = name, now });
         return id;
     }
@@ -829,7 +878,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, 'Middle Earth', 'Incomplete', @now)",
+            "INSERT INTO Quotinator_Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, 'Middle Earth', 'Incomplete', @now)",
             new { Id = Guid.NewGuid().ToString("D").ToUpperInvariant(), now });
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
@@ -863,12 +912,12 @@ public class ImportActionPlannerTests
         var id = await SeedExistingUniverseAsync(conn, "Middle Earth");
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            universe: [new UniverseEntry { Id = id, Name = "Middle-earth (corrected)" }]);
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle-earth (corrected)" }]);
 
         var universeAction = actions.Single(a => a.EntityType == "Universe");
         Assert.AreEqual(ImportActionKind.Modify, universeAction.ActionType.Parsed);
         Assert.AreEqual(ImportActionStatus.Decided, universeAction.Status.Parsed);
-        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayload>(universeAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayloadDto>(universeAction.MergedFields!)!;
         Assert.AreEqual("Middle-earth (corrected)", merged.Name);
     }
 
@@ -888,11 +937,11 @@ public class ImportActionPlannerTests
         ]);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
-            universe: [new UniverseEntry { Id = id, Name = "Middle-earth (corrected)" }], conflictRules: rules);
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle-earth (corrected)" }], conflictRules: rules);
 
         var universeAction = actions.Single(a => a.EntityType == "Universe");
         Assert.AreEqual(ImportActionStatus.Decided, universeAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayload>(universeAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayloadDto>(universeAction.MergedFields!)!;
         Assert.AreEqual("Middle Earth", merged.Name, "Keep must resolve to the existing side's value");
     }
 
@@ -919,12 +968,12 @@ public class ImportActionPlannerTests
         // Name is identical between existing and incoming — would hit the "unchanged" early exit
         // before #181, and never even reach the rule lookup.
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
-            universe: [new UniverseEntry { Id = id, Name = "Middle Earth" }], conflictRules: rules);
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle Earth" }], conflictRules: rules);
 
         var universeAction = actions.SingleOrDefault(a => a.EntityType == "Universe");
         Assert.IsNotNull(universeAction, "The Custom rule must produce an action even though nothing 'changed' in the ordinary sense");
         Assert.AreEqual(ImportActionStatus.Decided, universeAction!.Status.Parsed);
-        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayload>(universeAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayloadDto>(universeAction.MergedFields!)!;
         Assert.AreEqual("Middle-earth", merged.Name, "Custom must resolve to customValue, not either side's actual value");
     }
 
@@ -966,12 +1015,12 @@ public class ImportActionPlannerTests
         var id = await SeedExistingSeriesAsync(conn, "The Hobbit");
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            series: [new SeriesEntry { Id = id, Name = "The Hobbit Trilogy" }]);
+            series: [new SeriesEntryDto { Id = id, Name = "The Hobbit Trilogy" }]);
 
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionKind.Modify, seriesAction.ActionType.Parsed);
         Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed);
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayloadDto>(seriesAction.MergedFields!)!;
         Assert.AreEqual("The Hobbit Trilogy", merged.Name);
     }
 
@@ -985,11 +1034,11 @@ public class ImportActionPlannerTests
         var id = await SeedExistingSeriesAsync(conn, "The Hobbit", universeId: originalUniverseId);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            series: [new SeriesEntry { Id = id, Name = "The Hobbit", UniverseName = "The Shire Cinematic Universe" }]);
+            series: [new SeriesEntryDto { Id = id, Name = "The Hobbit", UniverseName = "The Shire Cinematic Universe" }]);
 
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionKind.Modify, seriesAction.ActionType.Parsed);
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayloadDto>(seriesAction.MergedFields!)!;
         Assert.AreEqual(newUniverseId.ToUpperInvariant(), merged.UniverseId?.ToUpperInvariant());
     }
 
@@ -1009,11 +1058,11 @@ public class ImportActionPlannerTests
         ]);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
-            series: [new SeriesEntry { Id = id, Name = "The Hobbit Trilogy" }], conflictRules: rules);
+            series: [new SeriesEntryDto { Id = id, Name = "The Hobbit Trilogy" }], conflictRules: rules);
 
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayloadDto>(seriesAction.MergedFields!)!;
         Assert.AreEqual("The Hobbit", merged.Name, "Keep must resolve to the existing side's value");
     }
 
@@ -1028,7 +1077,7 @@ public class ImportActionPlannerTests
 
         var universeAction = actions.Single(a => a.EntityType == "Universe");
         var seriesAction   = actions.Single(a => a.EntityType == "Series");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayload>(seriesAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayloadDto>(seriesAction.IncomingValue!)!;
         Assert.AreEqual(universeAction.EntityId, payload.UniverseId, "Series' Add payload must carry the same-batch Universe Add's own stable id");
     }
 
@@ -1044,7 +1093,7 @@ public class ImportActionPlannerTests
 
         var seriesAction = actions.Single(a => a.EntityType == "Series");
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
         Assert.AreEqual(seriesAction.EntityId, payload.SeriesId, "Source's Add payload must carry the same-batch Series Add's own stable id");
     }
 
@@ -1062,7 +1111,7 @@ public class ImportActionPlannerTests
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed);
         Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed);
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.MergedFields!)!;
         Assert.AreEqual(seriesId, merged.SeriesId);
     }
 
@@ -1087,7 +1136,7 @@ public class ImportActionPlannerTests
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed, "A natural-key match must stage a Modify, not be silently skipped");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.MergedFields!)!;
         Assert.AreEqual(seriesId, merged.SeriesId);
     }
 
@@ -1134,7 +1183,7 @@ public class ImportActionPlannerTests
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionStatus.Decided, sourceAction.Status.Parsed, "A matching rule must auto-resolve the Source's seriesId enrichment instead of leaving it Pending");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.MergedFields!)!;
         Assert.IsNotNull(merged.SeriesId);
     }
 
@@ -1154,7 +1203,7 @@ public class ImportActionPlannerTests
             sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "The Hobbit")]);
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(sourceAction.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.MergedFields!)!;
         Assert.AreEqual("1942", merged.Date, "An omitted date must carry the existing row's value through, never null it out");
         Assert.AreEqual("Casablanca", merged.Title, "Title is the lookup key on this path — never a correction");
     }
@@ -1184,7 +1233,7 @@ public class ImportActionPlannerTests
         await SeedExplicitSourceAsync(conn, "d1111111-1111-4111-8111-111111111111", title: "Casablanca", type: "Movie");
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            sources: [BuildEnrichmentEntry(title: "CASABLANCA", type: Core.Models.QuoteType.Movie, seriesName: null)]);
+            sources: [BuildEnrichmentEntry(title: "CASABLANCA", type: Core.Enums.QuoteType.Movie, seriesName: null)]);
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Differing casing must still match the existing row by natural key, not stage a duplicate Add");
     }
@@ -1311,7 +1360,7 @@ public class ImportActionPlannerTests
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", type: "Movie", date: "1942");
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            sources: [BuildSourceEntry(id, title: "Casablanca", type: Core.Models.QuoteType.Movie, date: "1942")]);
+            sources: [BuildSourceEntry(id, title: "Casablanca", type: Core.Enums.QuoteType.Movie, date: "1942")]);
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Nothing differs — silent reuse, no action staged");
     }
@@ -1322,7 +1371,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         // A pre-existing row found only by natural key (Title+Type) — never declared an explicit id before.
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO Sources (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
             new { Id = Guid.NewGuid(), now });
 
         var newFileId = "c3111111-1111-4111-8111-111111111111";
@@ -1331,7 +1380,7 @@ public class ImportActionPlannerTests
         // liberalization), which is a different, separately-tested scenario, not what this test means
         // to exercise (nothing about this entry differs from the existing row at all).
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            sources: [BuildSourceEntry(newFileId, title: "Casablanca", type: Core.Models.QuoteType.Movie, date: null)]);
+            sources: [BuildSourceEntry(newFileId, title: "Casablanca", type: Core.Enums.QuoteType.Movie, date: null)]);
 
         Assert.IsEmpty(actions, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#162 scope boundary)");
     }
@@ -1393,14 +1442,14 @@ public class ImportActionPlannerTests
 
         Assert.ContainsSingle(a => a.EntityType == "Source", actions, "Only one Source Add — the quote must resolve to the same row the sources[] section staged, not a second one");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         // #209/#210: the quote resolves to the canonicalized form of the file's declared id (ADR 012).
         Assert.AreEqual(newFileId, payload.SourceId);
     }
 
     // ── #171: PlanStageDirectionsAsync ───────────────────────────────────────
 
-    private static SourceStageDirection BuildStageDirectionEntry(string id, string text = "A shot rings out.", string? imageUrl = null) => new()
+    private static SourceStageDirectionDto BuildStageDirectionEntry(string id, string text = "A shot rings out.", string? imageUrl = null) => new()
     {
         Id       = id,
         Text     = text,
@@ -1411,7 +1460,7 @@ public class ImportActionPlannerTests
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO StageDirections (Id, Text, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @ImageUrl, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_StageDirection (Id, Text, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @ImageUrl, @CompletenessStatus, @now)",
             new { Id = id, Text = text, ImageUrl = imageUrl, CompletenessStatus = completenessStatus, now });
     }
 
@@ -1475,7 +1524,7 @@ public class ImportActionPlannerTests
 
     // ── #172: PlanSoundCuesAsync ──────────────────────────────────────────────
 
-    private static SourceSoundCue BuildSoundCueEntry(string id, string text = "Distant thunder.", string? soundFileUrl = null, string? imageUrl = null) => new()
+    private static SourceSoundCueDto BuildSoundCueEntry(string id, string text = "Distant thunder.", string? soundFileUrl = null, string? imageUrl = null) => new()
     {
         Id           = id,
         Text         = text,
@@ -1487,7 +1536,7 @@ public class ImportActionPlannerTests
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO SoundCues (Id, Text, SoundFileUrl, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @SoundFileUrl, @ImageUrl, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_SoundCue (Id, Text, SoundFileUrl, ImageUrl, CompletenessStatus, DateCreated) VALUES (@Id, @Text, @SoundFileUrl, @ImageUrl, @CompletenessStatus, @now)",
             new { Id = id, Text = text, SoundFileUrl = soundFileUrl, ImageUrl = imageUrl, CompletenessStatus = completenessStatus, now });
     }
 
@@ -1551,7 +1600,7 @@ public class ImportActionPlannerTests
 
     // ── #173: PlanPeopleAsync ─────────────────────────────────────────────────
 
-    private static PersonEntry BuildPersonEntry(string id, string name = "Ada Lovelace", string? dateOfBirth = "1815-12-10", string? dateOfDeath = "1852-11-27") => new()
+    private static PersonEntryDto BuildPersonEntry(string id, string name = "Ada Lovelace", string? dateOfBirth = "1815-12-10", string? dateOfDeath = "1852-11-27") => new()
     {
         Id          = id,
         Name        = name,
@@ -1563,7 +1612,7 @@ public class ImportActionPlannerTests
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO People (Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @DateOfBirth, @DateOfDeath, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_Person (Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus, DateCreated) VALUES (@Id, @Name, @DateOfBirth, @DateOfDeath, @CompletenessStatus, @now)",
             new { Id = id, Name = name, DateOfBirth = dateOfBirth, DateOfDeath = dateOfDeath, CompletenessStatus = completenessStatus, now });
     }
 
@@ -1602,7 +1651,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         // A pre-existing row found only by natural key (Name) — never declared an explicit id before.
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO People (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Person (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
             new { Id = Guid.NewGuid(), now });
 
         var newFileId = "e3111111-1111-4111-8111-111111111173";
@@ -1622,7 +1671,7 @@ public class ImportActionPlannerTests
     {
         using var conn = await OpenConnectionAsync();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        await conn.ExecuteAsync("INSERT INTO People (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Person (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
             new { Id = Guid.NewGuid(), now });
 
         var newFileId = "e3211111-1111-4111-8111-111111111173";
@@ -1663,7 +1712,7 @@ public class ImportActionPlannerTests
 
     // ── #175: PlanCharactersAsync (widened schema — id optional, sourceTitle/sourceType required) ──
 
-    private static CharacterEntry BuildCharacterEntry(string? id, string name = "Gandalf", string sourceTitle = "Existing Film", Core.Models.QuoteType sourceType = Core.Models.QuoteType.Movie) => new()
+    private static CharacterEntryDto BuildCharacterEntry(string? id, string name = "Gandalf", string sourceTitle = "Existing Film", Core.Enums.QuoteType sourceType = Core.Enums.QuoteType.Movie) => new()
     {
         Id          = id,
         Name        = name,
@@ -1709,7 +1758,7 @@ public class ImportActionPlannerTests
         var bogusId = "aaaaaaaa-1111-4111-8111-111111111111";
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            characters: [BuildCharacterEntry(bogusId, name: "Gandalf", sourceTitle: "Existing Film", sourceType: Core.Models.QuoteType.Movie)]);
+            characters: [BuildCharacterEntry(bogusId, name: "Gandalf", sourceTitle: "Existing Film", sourceType: Core.Enums.QuoteType.Movie)]);
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "A declared id that matches nothing must fall back to ADR 013's real matching algorithm, same as PlanSourcesAsync's own id-not-found fallback");
     }
@@ -1724,7 +1773,7 @@ public class ImportActionPlannerTests
         await SeedSourceAsync(conn, "The Two Towers", seriesId: seriesId);
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            characters: [BuildCharacterEntry(null, name: "Aragorn", sourceTitle: "The Two Towers", sourceType: Core.Models.QuoteType.Movie)]);
+            characters: [BuildCharacterEntry(null, name: "Aragorn", sourceTitle: "The Two Towers", sourceType: Core.Enums.QuoteType.Movie)]);
 
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "A Series-scoped cross-Source candidate must be reused directly, matching ResolveCharacterAsync's own behaviour");
     }
@@ -1736,7 +1785,7 @@ public class ImportActionPlannerTests
         await SeedSourceAsync(conn, "A Brand New Film");
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            characters: [BuildCharacterEntry(null, name: "A Brand New Character", sourceTitle: "A Brand New Film", sourceType: Core.Models.QuoteType.Movie)]);
+            characters: [BuildCharacterEntry(null, name: "A Brand New Character", sourceTitle: "A Brand New Film", sourceType: Core.Enums.QuoteType.Movie)]);
 
         var action = actions.Single(a => a.EntityType == "Character");
         Assert.AreEqual(ImportActionKind.Add, action.ActionType.Parsed);
@@ -1749,7 +1798,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
-            characters: [BuildCharacterEntry(null, name: "A Brand New Character", sourceTitle: "A Never-Before-Seen Film", sourceType: Core.Models.QuoteType.Movie)]);
+            characters: [BuildCharacterEntry(null, name: "A Brand New Character", sourceTitle: "A Never-Before-Seen Film", sourceType: Core.Enums.QuoteType.Movie)]);
 
         Assert.ContainsSingle(a => a.EntityType == "Source", actions, "The referenced Source must be resolved/created too, same as a quote's own ResolveSourceAsync");
         var characterAction = actions.Single(a => a.EntityType == "Character");
@@ -1762,7 +1811,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         var sourceId = await SeedSourceAsync(conn, "Existing Film");
         var characterId = await SeedGlobalCharacterAsync(conn, "Gandalf", sourceId, "Movie");
-        await conn.ExecuteAsync("UPDATE Characters SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = characterId });
+        await conn.ExecuteAsync("UPDATE Quotinator_Character SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = characterId });
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             characters: [BuildCharacterEntry(characterId, name: "A completely different name")]);
@@ -1778,7 +1827,7 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         var sourceId = await SeedSourceAsync(conn, "Existing Film");
         var characterId = await SeedGlobalCharacterAsync(conn, "Gandalf", sourceId, "Movie");
-        await conn.ExecuteAsync("UPDATE Characters SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = characterId });
+        await conn.ExecuteAsync("UPDATE Quotinator_Character SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = characterId });
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Skip,
             characters: [BuildCharacterEntry(characterId, name: "A completely different name")]);
@@ -1789,7 +1838,7 @@ public class ImportActionPlannerTests
 
     // ── #176: PlanConversationsAsync ─────────────────────────────────────────
 
-    private static SourceConversation BuildConversationEntry(string id, string? description = "A tense standoff.") => new()
+    private static SourceConversationDto BuildConversationEntry(string id, string? description = "A tense standoff.") => new()
     {
         Id          = id,
         Description = description,
@@ -1800,7 +1849,7 @@ public class ImportActionPlannerTests
     {
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Conversations (Id, Description, CompletenessStatus, DateCreated) VALUES (@Id, @Description, @CompletenessStatus, @now)",
+            "INSERT INTO Quotinator_Conversation (Id, Description, CompletenessStatus, DateCreated) VALUES (@Id, @Description, @CompletenessStatus, @now)",
             new { Id = id, Description = description, CompletenessStatus = completenessStatus, now });
     }
 
@@ -1840,16 +1889,16 @@ public class ImportActionPlannerTests
         var id = "db111111-1111-4111-8111-111111111176";
         await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.");
 
-        var entry = new SourceConversation
+        var entry = new SourceConversationDto
         {
             Id          = id,
             Description = "A tense standoff in the saloon.",
-            Lines       = [new SourceConversationLine { Order = 0, Type = Core.Models.ConversationLineType.Quote, QuoteId = "11111111-1111-4111-8111-111111111111" }],
+            Lines       = [new SourceConversationLineDto { Order = 0, Type = Core.Enums.ConversationLineType.Quote, QuoteId = "11111111-1111-4111-8111-111111111111" }],
         };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, conversations: [entry]);
 
         var action = actions.Single(a => a.EntityType == "Conversation");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<ConversationActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.MergedFields!)!;
         Assert.IsEmpty(merged.Lines, "Lines are never read or included in a Modify payload — out of scope for this issue");
     }
 
@@ -1910,7 +1959,7 @@ public class ImportActionPlannerTests
 
         Assert.ContainsSingle(a => a.EntityType == "Source", actions, "The correction-match must be found via case-insensitive lookup — no duplicate Add");
         var quoteAction = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(canonicalId, payload.SourceId, "sourceIndex must be seeded with the canonicalized (lowercase) form of the file's uppercase id, not the raw file casing, so a same-batch quote resolves to the row's real stored id");
     }
 
@@ -1926,7 +1975,7 @@ public class ImportActionPlannerTests
 
         var sourceAction = actions.Single(a => a.EntityType == "Source");
         var quoteAction  = actions.Single(a => a.EntityType == "Quote");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayload>(quoteAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(sourceAction.EntityId, payload.SourceId, "The quote must resolve to the same canonical id the Source Add itself staged");
         Assert.AreEqual(uppercaseId.ToLowerInvariant(), payload.SourceId);
     }
@@ -2013,18 +2062,18 @@ public class ImportActionPlannerTests
         using var conn = await OpenConnectionAsync();
         var uppercaseQuoteId = "DF222222-2222-4222-8222-222222222280";
         var quote = BuildQuote(uppercaseQuoteId, source: "A Film With A Referenced Line (Canonical Id Test)");
-        var conversationEntry = new SourceConversation
+        var conversationEntry = new SourceConversationDto
         {
             Id          = "df333333-3333-4333-8333-333333333380",
             Description = "A conversation referencing an uppercase-authored quote id.",
-            Lines       = [new SourceConversationLine { Order = 0, Type = Core.Models.ConversationLineType.Quote, QuoteId = uppercaseQuoteId }],
+            Lines       = [new SourceConversationLineDto { Order = 0, Type = Core.Enums.ConversationLineType.Quote, QuoteId = uppercaseQuoteId }],
         };
 
         var actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             conversations: [conversationEntry]);
 
         var conversationAction = actions.Single(a => a.EntityType == "Conversation");
-        var payload = System.Text.Json.JsonSerializer.Deserialize<ConversationActionPayload>(conversationAction.IncomingValue!)!;
+        var payload = System.Text.Json.JsonSerializer.Deserialize<ConversationActionPayloadDto>(conversationAction.IncomingValue!)!;
         Assert.AreEqual(uppercaseQuoteId.ToLowerInvariant(), payload.Lines[0].QuoteId,
             "A conversation line's QuoteId must be canonicalized to lowercase, matching the referenced quote's own canonical id — otherwise the ConversationLines FOREIGN KEY constraint to Quotes(Id) fails");
     }
@@ -2038,7 +2087,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111181";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942");
 
-        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Models.QuoteType.Movie };
+        var entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -2052,13 +2101,13 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111182";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942");
 
-        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Models.QuoteType.Movie, Date = Optional<string>.Of(null) };
+        var entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = Optional<string>.Of(null) };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
         var action = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed, "An explicit 'date: null' must resolve to a genuine reset");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields!)!;
         Assert.IsNull(merged.Date);
     }
 
@@ -2070,7 +2119,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111183";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942", seriesId: seriesId);
 
-        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Models.QuoteType.Movie, Date = "1942" };
+        var entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1942" };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -2085,13 +2134,13 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111184";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942", seriesId: seriesId);
 
-        var entry = new SourceEntry { Id = id, Title = "Casablanca", Type = Core.Models.QuoteType.Movie, Date = "1942", SeriesName = Optional<string>.Of(null) };
+        var entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1942", SeriesName = Optional<string>.Of(null) };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
         var action = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed, "An explicit 'seriesName: null' must resolve to a genuine clear");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields!)!;
         Assert.IsNull(merged.SeriesId);
     }
 
@@ -2103,14 +2152,14 @@ public class ImportActionPlannerTests
         await SeedExplicitSourceAsync(conn, "e0111111-1111-4111-8111-111111111185", title: "Casablanca", date: null);
 
         // #180's enrichment shape: no explicit id.
-        var entry = new SourceEntry { Title = "Casablanca", Type = Core.Models.QuoteType.Movie, Date = "1975" };
+        var entry = new SourceEntryDto { Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1975" };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
         var action = actions.Single(a => a.EntityType == "Source");
         Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed,
             "#190 requirement 6's liberalization: a natural-key entry that explicitly sets 'date' now actually takes effect, where it was previously always silently ignored regardless of what the file said");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields!)!;
         Assert.AreEqual("1975", merged.Date);
     }
 
@@ -2123,12 +2172,12 @@ public class ImportActionPlannerTests
         // Not referenced by the entry below — a row found only by natural key (Title+Type).
         await SeedExplicitSourceAsync(conn, "e0111111-1111-4111-8111-111111111186", title: "Casablanca", seriesId: originalSeriesId);
 
-        var entry = new SourceEntry { Title = "Casablanca", Type = Core.Models.QuoteType.Movie, SeriesName = "New Series" };
+        var entry = new SourceEntryDto { Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, SeriesName = "New Series" };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.MergeOurs,
             sources: [entry]);
 
         var action = actions.Single(a => a.EntityType == "Source");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields!)!;
         Assert.AreEqual(originalSeriesId, merged.SeriesId,
             "#190 drive-by fix: MergeOurs must keep the existing Series on a genuine conflict — this branch previously never consulted FieldMergeResolver at all and always took the incoming value unconditionally");
     }
@@ -2140,7 +2189,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111187";
         await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27");
 
-        var entry = new PersonEntry { Id = id, Name = "Ada Lovelace", DateOfDeath = "1852-11-27" };
+        var entry = new PersonEntryDto { Id = id, Name = "Ada Lovelace", DateOfDeath = "1852-11-27" };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [entry]);
 
@@ -2154,13 +2203,13 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111188";
         await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27");
 
-        var entry = new PersonEntry { Id = id, Name = "Ada Lovelace", DateOfBirth = "1815-12-10", DateOfDeath = Optional<string>.Of(null) };
+        var entry = new PersonEntryDto { Id = id, Name = "Ada Lovelace", DateOfBirth = "1815-12-10", DateOfDeath = Optional<string>.Of(null) };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [entry]);
 
         var action = actions.Single(a => a.EntityType == "Person");
         Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed, "An explicit 'dateOfDeath: null' must resolve to a genuine reset");
-        var merged = System.Text.Json.JsonSerializer.Deserialize<PersonActionPayload>(action.MergedFields!)!;
+        var merged = System.Text.Json.JsonSerializer.Deserialize<PersonActionPayloadDto>(action.MergedFields!)!;
         Assert.IsNull(merged.DateOfDeath);
     }
 
@@ -2171,7 +2220,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111189";
         await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.", imageUrl: "http://example.com/still.jpg");
 
-        var entry = new SourceStageDirection { Id = id, Text = "A shot rings out." };
+        var entry = new SourceStageDirectionDto { Id = id, Text = "A shot rings out." };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             stageDirections: [entry]);
 
@@ -2185,7 +2234,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111191";
         await SeedExplicitSoundCueAsync(conn, id, text: "Distant thunder.", soundFileUrl: "http://example.com/thunder.mp3", imageUrl: "http://example.com/img.jpg");
 
-        var entry = new SourceSoundCue { Id = id, Text = "Distant thunder.", ImageUrl = "http://example.com/img.jpg" };
+        var entry = new SourceSoundCueDto { Id = id, Text = "Distant thunder.", ImageUrl = "http://example.com/img.jpg" };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             soundCues: [entry]);
 
@@ -2199,7 +2248,7 @@ public class ImportActionPlannerTests
         var id = "e0111111-1111-4111-8111-111111111192";
         await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.");
 
-        var entry = new SourceConversation { Id = id, Lines = [] };
+        var entry = new SourceConversationDto { Id = id, Lines = [] };
         var actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             conversations: [entry]);
 

@@ -10,18 +10,16 @@ namespace Quotinator.Data.Repositories;
 /// Extends <see cref="SqliteRepository{T}"/> with soft-delete management:
 /// retrieving deleted records, undoing a soft-delete, hard-deleting a single record,
 /// and purging all soft-deleted records from the table.
-/// All write methods write a <see cref="SystemAuditEntry"/> in the same connection and transaction.
+/// All write methods write a <see cref="AuditEntryEntity"/> in the same connection and transaction.
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
-public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRepository<T>
+/// <remarks>Initialises the repository with the factory, audit writer, and caller context.</remarks>
+/// <param name="factory">Opens connections to the SQLite database.</param>
+/// <param name="auditWriter">Writes an audit entry alongside every write operation.</param>
+/// <param name="callerContext">Provides the current caller's identity for audit entries.</param>
+public class SqliteRestorableRepository<T>(IDbConnectionFactory factory, IAuditEntryWriter auditWriter, ICallerContext callerContext) : SqliteRepository<T>(factory, auditWriter, callerContext), IRestorableRepository<T>
     where T : RecordBase
 {
-    /// <summary>Initialises the repository with the factory, audit writer, and caller context.</summary>
-    /// <param name="factory">Opens connections to the SQLite database.</param>
-    /// <param name="auditWriter">Writes an audit entry alongside every write operation.</param>
-    /// <param name="callerContext">Provides the current caller's identity for audit entries.</param>
-    public SqliteRestorableRepository(IDbConnectionFactory factory, ISystemAuditWriter auditWriter, ICallerContext callerContext)
-        : base(factory, auditWriter, callerContext) { }
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<T>> GetDeletedAsync(IUnitOfWork? unitOfWork = null)
@@ -30,12 +28,12 @@ public class SqliteRestorableRepository<T> : SqliteRepository<T>, IRestorableRep
         {
             var results = await uow.Connection.QueryAsync<T>(
                 RepositorySql.SelectDeleted(TableName, Columns), transaction: uow.Transaction);
-            return results.ToList();
+            return [.. results];
         }
         using var conn = Factory.CreateConnection();
         conn.Open();
         var rows = await conn.QueryAsync<T>(RepositorySql.SelectDeleted(TableName, Columns));
-        return rows.ToList();
+        return [.. rows];
     }
 
     /// <inheritdoc/>

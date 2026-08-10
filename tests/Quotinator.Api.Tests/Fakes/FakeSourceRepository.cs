@@ -1,50 +1,51 @@
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
 
 namespace Quotinator.Api.Tests.Fakes;
 
-/// <summary>In-memory <see cref="IListableRepository{T}"/> double for <see cref="Source"/>, seeded via the
+/// <summary>In-memory <see cref="IListableRepository{T}"/> double for <see cref="SourceEntity"/>, seeded via the
 /// constructor so tests can construct it with known fixtures. Mirrors the real repository's documented
 /// <c>pageSize = 0</c>/effective-size contract so it cannot silently diverge from #195's behaviour.</summary>
-internal sealed class FakeSourceRepository : IListableRepository<Source>
+internal sealed class FakeSourceRepository : IListableRepository<SourceEntity>
 {
-    private readonly List<Source> _sources;
+    private readonly List<SourceEntity> _sources;
 
-    internal FakeSourceRepository(IEnumerable<Source>? seed = null)
+    internal FakeSourceRepository(IEnumerable<SourceEntity>? seed = null)
     {
         _sources = seed?.ToList() ?? [];
     }
 
-    public Task<PagedItems<Source>> GetPageAsync(
+    public Task<PagedItems<SourceEntity>> GetPageAsync(
         int page, int pageSize, IReadOnlyList<SortColumn>? orderBy = null, IUnitOfWork? unitOfWork = null)
     {
         var active = _sources.Where(s => !s.IsDeleted).OrderBy(s => s.DateCreated.Parsed).ToList();
 
         var items = pageSize == 0
             ? active
-            : active.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            : [.. active.Skip((page - 1) * pageSize).Take(pageSize)];
 
         var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
-        return Task.FromResult(new PagedItems<Source>(items, page, effectivePageSize, active.Count));
+        return Task.FromResult(new PagedItems<SourceEntity>(items, page, effectivePageSize, active.Count));
     }
 
-    public Task<Source?> GetByIdAsync(Guid id, IUnitOfWork? unitOfWork = null)
+    public Task<SourceEntity?> GetByIdAsync(Guid id, IUnitOfWork? unitOfWork = null)
         => Task.FromResult(_sources.FirstOrDefault(s => s.Id == id && !s.IsDeleted));
 
-    public Task InsertAsync(Source entity, IUnitOfWork? unitOfWork = null)
+    public Task InsertAsync(SourceEntity entity, IUnitOfWork? unitOfWork = null)
     {
         _sources.Add(entity);
         return Task.CompletedTask;
     }
 
-    public Task InsertManyAsync(IEnumerable<Source> entities, IUnitOfWork? unitOfWork = null, InsertStrategy strategy = InsertStrategy.Bulk)
+    public Task InsertManyAsync(IEnumerable<SourceEntity> entities, IUnitOfWork? unitOfWork = null, InsertStrategy strategy = InsertStrategy.Bulk)
     {
         _sources.AddRange(entities);
         return Task.CompletedTask;
     }
 
-    public Task UpdateAsync(Source entity, IUnitOfWork? unitOfWork = null)
+    public Task UpdateAsync(SourceEntity entity, IUnitOfWork? unitOfWork = null)
     {
         var index = _sources.FindIndex(s => s.Id == entity.Id);
         if (index >= 0)
@@ -56,7 +57,7 @@ internal sealed class FakeSourceRepository : IListableRepository<Source>
     {
         var index = _sources.FindIndex(s => s.Id == id);
         if (index >= 0)
-            _sources[index] = new Source
+            _sources[index] = new SourceEntity
             {
                 Id                  = _sources[index].Id,
                 Title               = _sources[index].Title,

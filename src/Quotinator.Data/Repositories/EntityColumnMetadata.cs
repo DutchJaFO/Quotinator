@@ -50,14 +50,11 @@ internal sealed class ReflectedColumnMetadata : IEntityColumnMetadata
 
     private ReflectedColumnMetadata(Type type)
     {
-        ValidColumnNames = type.GetProperties()
+        ValidColumnNames = [.. type.GetProperties()
             .Where(p => p.GetCustomAttribute<WriteAttribute>()?.Write != false
                      && p.GetCustomAttribute<ComputedAttribute>() is null)
-            .Select(p => p.Name)
-            .ToList();
-        IdColumnNames = ValidColumnNames
-            .Where(name => name.EndsWith("Id", StringComparison.Ordinal))
-            .ToList();
+            .Select(p => p.Name)];
+        IdColumnNames = [.. ValidColumnNames.Where(name => name.EndsWith("Id", StringComparison.Ordinal))];
     }
 
     /// <summary>Returns the (cached) column metadata for <paramref name="type"/>.</summary>

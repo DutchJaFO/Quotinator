@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Logging;
+using Quotinator.Data.Enums;
+using Quotinator.Data.Logging;
 
 namespace Quotinator.Data.Import;
 
@@ -8,8 +10,18 @@ public sealed class SourceCacheUpdater(
     SourceCacheOptions options,
     ILogger<SourceCacheUpdater> logger) : ISourceCacheUpdater
 {
-    /// <summary>Name of the <see cref="IHttpClientFactory"/> client registered for this component, with its 5 s timeout configured at registration time.</summary>
+    /// <summary>Name of the <see cref="IHttpClientFactory"/> client registered for this component. Its timeout is configured at registration time, overridable via <c>Quotinator:SourceRefreshTimeoutSeconds</c> — see <see cref="DefaultHttpTimeoutSeconds"/>.</summary>
     public const string HttpClientName = "SourceCacheUpdater";
+
+    /// <summary>
+    /// Default <see cref="HttpClientName"/> timeout in seconds, used when <c>Quotinator:SourceRefreshTimeoutSeconds</c>
+    /// is not set. A slow/unreachable upstream must never block startup, reseed, or reset indefinitely — the
+    /// updater always falls back to the existing cached/local file on timeout. 30 s (raised from 5 s, 2026-08-09):
+    /// a cold HttpClient's first request (fresh DNS + TCP + TLS) can legitimately exceed 5 s even against a
+    /// healthy endpoint, which was tripping the fallback path more often than a genuinely unreachable upstream
+    /// warranted.
+    /// </summary>
+    public const int DefaultHttpTimeoutSeconds = 30;
 
     /// <inheritdoc/>
     public async Task<SourceCacheResolution> ResolveAsync(
@@ -74,11 +86,10 @@ public sealed class SourceCacheUpdater(
         var effectiveBatches = candidateBatches
             .Select((batch, batchIndex) => batch with
             {
-                Files = batch.Files
+                Files = [.. batch.Files
                     .Select((file, fileIndex) => effectivePaths.TryGetValue((batchIndex, fileIndex), out var effectivePath)
                         ? file with { FilePath = effectivePath }
-                        : file)
-                    .ToList()
+                        : file)]
             })
             .ToList();
 
@@ -228,7 +239,7 @@ public sealed class SourceCacheUpdater(
             // cache file behind for the next seed operation to read.
             File.Move(preparedPath, targetPath, overwrite: true);
 
-            logger.LogInformation("[Database - SourceRefresh] updated {File} from {Url}", name, file.DownloadUrl);
+            logger.LogSourceRefreshUpdated(name, file.DownloadUrl);
             return true;
         }
         catch (Exception ex)

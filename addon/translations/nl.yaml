@@ -45,5 +45,23 @@ configuration:
     description: >-
       Hoe lang een gedownload bronbestand als actueel wordt beschouwd voordat het opnieuw wordt gecontroleerd.
       Individuele bronnen kunnen dit overschrijven in hun eigen manifestvermelding.
+  unicode_aware_search:
+    name: Unicode-bewust zoeken
+    description: >-
+      Zorgt ervoor dat zoeken op quote, personage, auteur en bron ook overeenkomt met
+      geaccentueerde en andere niet-ASCII-tekens, ongeacht hoofd-/kleine letters (bijv. é/É).
+      Standaard uitgeschakeld — nog niet gevalideerd tegen echt zoekverkeer.
+  auto_purge_bundled_import_actions:
+    name: Meegeleverde importgeschiedenis automatisch opschonen
+    description: >-
+      Verwijdert de conflictoplossingsgeschiedenis van een meegeleverd seedbestand automatisch
+      zodra deze haar werk heeft gedaan (geen openstaande beslissingen meer). Schakel tijdelijk
+      uit tijdens het onderzoeken van een specifieke meegeleverde bron om die geschiedenis te bewaren.
+  auto_purge_user_import_actions:
+    name: Gebruikersimportgeschiedenis automatisch opschonen
+    description: >-
+      Verwijdert de conflictoplossingsgeschiedenis van een eigen-imports-seedbestand automatisch
+      zodra deze haar werk heeft gedaan (geen openstaande beslissingen meer). Schakel tijdelijk
+      uit tijdens het debuggen van je eigen import om die geschiedenis te bewaren.
 network:
   8080/tcp: Directe webtoegang — HTTP (SSL uitgeschakeld) of HTTPS (SSL ingeschakeld)

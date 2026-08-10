@@ -34,24 +34,25 @@ public class SeriesUniverseNameResolverTests
         _factory = new SqliteConnectionFactory(_dbPath);
 
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
-        var actionReader  = new SystemImportActionReader(_factory);
-        var actionWriter  = new SystemImportActionWriter(_factory);
+        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        var actionReader  = new ImportActionReader(_factory);
+        var actionWriter  = new ImportActionWriter(_factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<Quotinator.Core.Entities.QuoteEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Quotinator.Core.Entities.Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Quotinator.Core.Entities.Character>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Quotinator.Core.Entities.Person>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Quotinator.Core.Entities.ConversationEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Quotinator.Core.Entities.StageDirectionEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Quotinator.Core.Entities.SoundCueEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<Quotinator.Core.Entities.QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Quotinator.Core.Entities.SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Quotinator.Core.Entities.CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Quotinator.Core.Entities.PersonEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Quotinator.Core.Entities.ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Quotinator.Core.Entities.StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<Quotinator.Core.Entities.SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory);
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
-            coordinator, actionService, NoOpSystemAuditWriter.Instance,
+            coordinator, actionService, actionWriter, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
-            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, QuotinatorMigrations.Baseline);
+            autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance, QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
     }
 
@@ -69,7 +70,7 @@ public class SeriesUniverseNameResolverTests
         await conn.OpenAsync();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Series (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
+            "INSERT INTO Quotinator_Series (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
             new { Id = Guid.NewGuid().ToString("D"), Name = name, now });
     }
 
@@ -79,7 +80,7 @@ public class SeriesUniverseNameResolverTests
         await conn.OpenAsync();
         var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
-            "INSERT INTO Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
+            "INSERT INTO Quotinator_Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
             new { Id = Guid.NewGuid().ToString("D"), Name = name, now });
     }
 

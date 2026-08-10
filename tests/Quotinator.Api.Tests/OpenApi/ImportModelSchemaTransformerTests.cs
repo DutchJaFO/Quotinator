@@ -79,7 +79,7 @@ public class ImportModelSchemaTransformerTests
 
         var property = (OpenApiSchema)schema.Properties!["conflictPolicy"];
         Assert.AreSequenceEqual(
-            new[] { "skip", "newest-wins", "merge-ours", "merge-theirs", "review" }, property.Enum!.Select(v => v!.GetValue<string>()).ToList());
+            ["skip", "newest-wins", "merge-ours", "merge-theirs", "review"], [.. property.Enum!.Select(v => v!.GetValue<string>())]);
     }
 
     [TestMethod]
@@ -91,7 +91,7 @@ public class ImportModelSchemaTransformerTests
 
         var property = (OpenApiSchema)schema.Properties!["appliedPolicy"];
         Assert.AreSequenceEqual(
-            new[] { "skip", "newest-wins", "merge-ours", "merge-theirs", "review" }, property.Enum!.Select(v => v!.GetValue<string>()).ToList());
+            ["skip", "newest-wins", "merge-ours", "merge-theirs", "review"], [.. property.Enum!.Select(v => v!.GetValue<string>())]);
     }
 
     [TestMethod]
@@ -103,7 +103,7 @@ public class ImportModelSchemaTransformerTests
 
         var property = (OpenApiSchema)schema.Properties!["status"];
         Assert.AreSequenceEqual(
-            new[] { "resolved", "pending" }, property.Enum!.Select(v => v!.GetValue<string>()).ToList());
+            ["resolved", "pending"], [.. property.Enum!.Select(v => v!.GetValue<string>())]);
     }
 
     [TestMethod]

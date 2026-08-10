@@ -1,4 +1,5 @@
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
 
@@ -11,8 +12,8 @@ public sealed class NoOpSourceFileOverrideRegistry : ISourceFileOverrideRegistry
     public static readonly NoOpSourceFileOverrideRegistry Instance = new();
 
     /// <inheritdoc/>
-    public Task<SourceFileOverride?> FindAsync(string fileName, SeedBatchOrigin origin, CancellationToken cancellationToken = default)
-        => Task.FromResult<SourceFileOverride?>(null);
+    public Task<SourceFileOverrideEntity?> FindAsync(string fileName, SeedBatchOrigin origin, CancellationToken cancellationToken = default)
+        => Task.FromResult<SourceFileOverrideEntity?>(null);
 
     /// <inheritdoc/>
     public Task RegisterAsync(string fileName, SeedBatchOrigin origin, string contentHash, string? sourceBatchId, CancellationToken cancellationToken = default)

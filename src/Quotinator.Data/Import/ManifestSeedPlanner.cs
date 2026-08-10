@@ -1,13 +1,15 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
+using Quotinator.Data.Logging;
 
 namespace Quotinator.Data.Import;
 
 /// <inheritdoc/>
 public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : IManifestSeedPlanner
 {
-    private const string ManifestFileName = "manifest.json";
+    /// <summary>The well-known manifest filename within a source directory — shared with #251's own manifest-content capture.</summary>
+    public const string ManifestFileName = "manifest.json";
 
     private static readonly JsonSerializerOptions ReadOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -33,7 +35,7 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
             if (allowAutoCreate && allJson.Count > 0)
                 TryWriteAutoManifest(manifestPath, allJson);
             else
-                logger.LogInformation("[Database - Init] no manifest in {Dir} — importing {Count} JSON file(s) in alphabetical order", dir, allJson.Count);
+                logger.LogNoManifestAlphabeticalOrder(dir, allJson.Count);
 
             return (allJson, configPolicy);
         }
@@ -70,8 +72,8 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
                 manifest.Files.Where(e => e.SourceAliasFile is not null).Select(e => Path.Combine(dir, e.SourceAliasFile!)),
                 StringComparer.OrdinalIgnoreCase);
             var unlisted = allJson.Where(f => !listedPaths.Contains(f.FilePath) && !ruleFilePaths.Contains(f.FilePath) && !sourceAliasFilePaths.Contains(f.FilePath)).ToList();
-            if (unlisted.Count > 0)
-                logger.LogInformation("[Database - Init] {Count} file(s) not listed in manifest will be appended: {Files}",
+            if (unlisted.Count > 0 && logger.IsEnabled(LogLevel.Information))
+                logger.LogUnlistedFilesAppended(
                     unlisted.Count, string.Join(", ", unlisted.Select(f => Path.GetFileName(f.FilePath))));
 
             return ([.. listed, .. unlisted], resolvedPolicy);
@@ -103,19 +105,18 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
         People:       dto.People,
         Translations: dto.Translations);
 
-    private void TryWriteAutoManifest(string manifestPath, IReadOnlyList<SeedFile> files)
+    private void TryWriteAutoManifest(string manifestPath, List<SeedFile> files)
     {
         try
         {
             var manifest = new ManifestDto
             {
-                Files = files
+                Files = [.. files
                     .Select(f => new ManifestFileEntryDto
                     {
                         File = Path.GetFileName(f.FilePath),
                         Name = Path.GetFileName(f.FilePath)
-                    })
-                    .ToList()
+                    })]
             };
 
             File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, WriteOptions));

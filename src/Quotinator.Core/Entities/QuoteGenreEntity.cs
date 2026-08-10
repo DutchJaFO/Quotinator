@@ -1,11 +1,12 @@
 using Dapper.Contrib.Extensions;
+using Quotinator.Core.Enums;
 using Quotinator.Core.Models;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Core.Entities;
 
 /// <summary>Associates a quote with a genre tag.</summary>
-[Table("QuoteGenres")]
+[Table("Quotinator_QuoteGenre")]
 public sealed class QuoteGenreEntity : RecordBase
 {
     /// <summary>The quote this genre tag belongs to.</summary>

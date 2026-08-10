@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Shared;
@@ -12,6 +13,8 @@ using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Repositories;
+using Quotinator.Api.Logging;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -21,6 +24,11 @@ internal static class ConversationEndpoints
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
 
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
+    private const string GetAllConversationsName = "GetAllConversations";
+    private const string GetConversationByIdName = "GetConversationById";
+
     internal static void MapConversationEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/conversations")
@@ -28,7 +36,7 @@ internal static class ConversationEndpoints
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
         group.MapGet("/", GetAll)
-             .WithName("GetAllConversations")
+             .WithName(GetAllConversationsName)
              .WithSummary("List conversations")
              .WithDescription(
                  "Returns a paginated list of conversation summaries — Id, Description, CompletenessStatus, and " +
@@ -36,7 +44,7 @@ internal static class ConversationEndpoints
                  "pagination contract\" for page/pageSize semantics.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetConversationById")
+             .WithName(GetConversationByIdName)
              .WithSummary("Conversation by ID")
              .WithDescription(
                  "Returns a conversation's full ordered line list — quotes, stage directions, and sound cues. " +
@@ -53,7 +61,7 @@ internal static class ConversationEndpoints
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
-        logger.LogInformation("[Api - GetAllConversations] page={Page} pageSize={PageSize}", page, pageSize);
+        logger.LogPageQuery($"[Api - {GetAllConversationsName}]", page, pageSize);
 
         if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
             return pageError!;
@@ -75,21 +83,21 @@ internal static class ConversationEndpoints
         return Results.Ok(response);
     }
 
-    private static IResult GetById(
+    private static async Task<IResult> GetById(
         [Description("UUID of the conversation.")] string id,
         IQuoteService service,
         IApiLocalizer localizer,
         ILogger<Log> logger,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
-        logger.LogInformation("[Api - GetConversationById] id={Id} lang={Lang}", id, lang);
+        logger.LogIdWithLang($"[Api - {GetConversationByIdName}]", id, lang);
 
         if (!InputValidation.TryNormalizeLang(ref lang))
             return Results.Problem(
                 detail: localizer[ApiMessages.LangInvalid],
                 statusCode: StatusCodes.Status400BadRequest);
 
-        var conversation = service.GetConversation(id, lang);
+        var conversation = await service.GetConversation(id, lang);
         return NotFoundResult.OkOrNotFound(conversation, localizer, ApiMessages.ConversationNotFound);
     }
 

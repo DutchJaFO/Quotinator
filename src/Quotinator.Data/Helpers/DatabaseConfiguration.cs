@@ -1,5 +1,6 @@
 using Dapper;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 
@@ -52,6 +53,16 @@ public abstract class DatabaseConfiguration
         // SeedBatchOrigin (#153) backs System_SourceFileOverrides.Origin — pure import/seed
         // bookkeeping, the same category as ImportBatchType/ImportBatchStatus above.
         RegisterEnumHandler<SeedBatchOrigin>();
+        // FileResourceOrigin (#251) backs Import_FileResource.Origin — same category as
+        // SeedBatchOrigin above, a closed set this project's own import pipeline assigns.
+        RegisterEnumHandler<FileResourceOrigin>();
+        // LineEndingStyle (#251) backs Import_FileResource.LineEnding — same category.
+        RegisterEnumHandler<LineEndingStyle>();
+        // NotificationType/NotificationDismissTrigger (#278) back System_Notification.Type/
+        // DismissTriggerKey — same category, a closed set this project's own notification mechanism
+        // assigns and transitions between.
+        RegisterEnumHandler<NotificationType>();
+        RegisterEnumHandler<NotificationDismissTrigger>();
         RegisterDomainHandlers();
     }
 
@@ -66,7 +77,7 @@ public abstract class DatabaseConfiguration
     /// Registers a <see cref="SafeEnumHandler{TEnum}"/> for <typeparamref name="TEnum"/> with Dapper.
     /// Call from <see cref="RegisterDomainHandlers"/> in subclasses.
     /// </summary>
-    protected void RegisterEnumHandler<TEnum>() where TEnum : struct, Enum
+    protected static void RegisterEnumHandler<TEnum>() where TEnum : struct, Enum
         => SqlMapper.AddTypeHandler(new SafeEnumHandler<TEnum>());
 
     /// <summary>

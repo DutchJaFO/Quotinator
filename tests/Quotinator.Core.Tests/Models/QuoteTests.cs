@@ -1,3 +1,4 @@
+using Quotinator.Core.Enums;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 
@@ -6,7 +7,7 @@ namespace Quotinator.Core.Tests.Models;
 [TestClass]
 public class QuoteTests
 {
-    private static SourceQuote BuildMinimal() => new()
+    private static SourceQuoteDto BuildMinimal() => new()
     {
         Id = "123e4567-e89b-12d3-a456-426614174000",
         QuoteText = "Here's looking at you, kid.",
@@ -60,8 +61,8 @@ public class QuoteTests
     [TestMethod]
     public void Quote_AllProperties_CanBeSet()
     {
-        var translation = new SourceQuoteTranslation { QuoteText = "Hier kijk ik naar je, kind.", Source = "Casablanca" };
-        var quote = new SourceQuote
+        var translation = new SourceQuoteTranslationDto { QuoteText = "Hier kijk ik naar je, kind.", Source = "Casablanca" };
+        var quote = new SourceQuoteDto
         {
             Id = "123e4567-e89b-12d3-a456-426614174000",
             QuoteText = "Here's looking at you, kid.",
@@ -72,7 +73,7 @@ public class QuoteTests
             Author = null,
             Type = QuoteType.Movie,
             Genres = ["drama", "romance"],
-            Translations = new Dictionary<string, SourceQuoteTranslation> { ["nl"] = translation }
+            Translations = new Dictionary<string, SourceQuoteTranslationDto> { ["nl"] = translation }
         };
 
         Assert.AreEqual("en", quote.OriginalLanguage);
@@ -88,7 +89,7 @@ public class QuoteTests
     [TestMethod]
     public void Quote_PersonType_UsesAuthorNotCharacter()
     {
-        var quote = new SourceQuote
+        var quote = new SourceQuoteDto
         {
             Id = "223e4567-e89b-12d3-a456-426614174001",
             QuoteText = "We shall fight on the beaches.",
@@ -109,7 +110,7 @@ public class QuoteTests
     [TestMethod]
     public void Quote_BookType_HasBothAuthorAndCharacter()
     {
-        var quote = new SourceQuote
+        var quote = new SourceQuoteDto
         {
             Id = "323e4567-e89b-12d3-a456-426614174002",
             QuoteText = "All that is gold does not glitter.",

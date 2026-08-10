@@ -1,9 +1,10 @@
 using System.Data;
+using Quotinator.Data.Enums;
 
 namespace Quotinator.Data.Repositories;
 
 /// <summary>
-/// Writes and clears immutable audit entries in the <c>System_AuditEntries</c> table.
+/// Writes and clears immutable audit entries in the <c>Audit_Entry</c> table.
 /// </summary>
 /// <remarks>
 /// Three <c>WriteAsync</c> overloads exist by design:
@@ -15,32 +16,36 @@ namespace Quotinator.Data.Repositories;
 /// <item>The no-connection overload is used by services (reseed, reset) where
 /// the operation itself completes before the audit entry is written.</item>
 /// </list>
-/// <see cref="Entities.SystemAuditEntry"/> must not be constructed outside <see cref="ISystemAuditWriter"/>
+/// <see cref="Entities.AuditEntryEntity"/> must not be constructed outside <see cref="IAuditEntryWriter"/>
 /// call sites — callers should use <see cref="Entities.AuditOperation"/> constants for
 /// the <c>Operation</c> field.
 /// </remarks>
-public interface ISystemAuditWriter
+public interface IAuditEntryWriter
 {
     /// <summary>
     /// Writes an audit entry using an existing connection and optional transaction.
     /// The INSERT participates in <paramref name="transaction"/> when supplied.
     /// </summary>
-    Task WriteAsync(Entities.SystemAuditEntry entry, IDbConnection connection, IDbTransaction? transaction = null);
+    Task WriteAsync(Entities.AuditEntryEntity entry, IDbConnection connection, IDbTransaction? transaction = null);
 
     /// <summary>
     /// Writes multiple audit entries using an existing connection and optional transaction.
     /// All entries participate in <paramref name="transaction"/> when supplied.
     /// </summary>
-    Task WriteAsync(IReadOnlyList<Entities.SystemAuditEntry> entries, IDbConnection connection, IDbTransaction? transaction = null);
+    Task WriteAsync(IReadOnlyList<Entities.AuditEntryEntity> entries, IDbConnection connection, IDbTransaction? transaction = null);
 
     /// <summary>
     /// Writes an audit entry by opening its own connection.
     /// Used by services where no caller connection is available.
     /// </summary>
-    Task WriteAsync(Entities.SystemAuditEntry entry);
+    Task WriteAsync(Entities.AuditEntryEntity entry);
 
     /// <summary>
     /// Deletes all audit entries, or only those for a specific table when <paramref name="table"/> is supplied.
+    /// An unscoped clear (<paramref name="table"/> omitted) also clears <c>Audit_Change</c> — #249 treats
+    /// both tables as one combined "audit trail" concern, matching the export/date-range endpoints. A
+    /// scoped clear leaves <c>Audit_Change</c> untouched: its <c>EntityType</c> vocabulary has no
+    /// equivalent to <paramref name="table"/>'s <c>TableName</c> scoping.
     /// Writes a single audit entry recording the clear operation so there is always a record that a purge occurred.
     /// </summary>
     Task ClearAsync(string? table = null);

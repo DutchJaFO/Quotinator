@@ -9,9 +9,11 @@ namespace Quotinator.Data.Repositories;
 /// metadata, not user input. Interpolating them into SQL is safe; SQLite does not support
 /// parameterised identifiers, so string interpolation is the only viable mechanism.
 /// </remarks>
-internal static class RepositorySql
+internal static partial class RepositorySql
 {
-    private static readonly Regex IdentifierPattern = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.Compiled);
+    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_]*$")]
+    private static partial Regex IdentifierPattern();
+
     private static readonly IReadOnlyList<SortColumn> DefaultOrderBy = [new SortColumn("DateCreated")];
 
     /// <summary>The primary key column name every generic query in this class compares against.</summary>
@@ -104,7 +106,7 @@ internal static class RepositorySql
     {
         var sortColumns = orderBy is { Count: > 0 } ? orderBy : DefaultOrderBy;
         foreach (var col in sortColumns)
-            if (!IdentifierPattern.IsMatch(col.Name))
+            if (!IdentifierPattern().IsMatch(col.Name))
                 throw new ArgumentException($"'{col.Name}' is not a valid column identifier.", nameof(orderBy));
 
         var clause = string.Join(", ", sortColumns.Select(c => c.Descending ? $"{c.Name} DESC" : c.Name));

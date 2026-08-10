@@ -4,12 +4,18 @@ using Quotinator.Data.Diagnostics;
 namespace Quotinator.Core.Tests.Security;
 
 [TestClass]
-public class SqlSourceScanTests
+public partial class SqlSourceScanTests
 {
+    // Matches a quote character immediately followed by a DML keyword.
+    // Covers regular ("SELECT), verbatim (@"SELECT), interpolated ($"SELECT), and raw ("""SELECT) literals.
+    [GeneratedRegex(@"""(SELECT|INSERT|UPDATE|DELETE)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex SqlDmlPattern();
+
+
     private static readonly string RepoRoot =
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
-    private static IEnumerable<string> CSharpSourceFiles()
+    private static string[] CSharpSourceFiles()
     {
         var srcDir = Path.Combine(RepoRoot, "src");
         Assert.IsTrue(Directory.Exists(srcDir), $"src/ directory not found at: {srcDir}");
@@ -52,13 +58,9 @@ public class SqlSourceScanTests
             "QuotinatorMigrations.cs",
         };
 
-        // Matches a quote character immediately followed by a DML keyword.
-        // Covers regular ("SELECT), verbatim (@"SELECT), interpolated ($"SELECT), and raw ("""SELECT) literals.
-        var sqlDmlPattern = new Regex(@"""(SELECT|INSERT|UPDATE|DELETE)\b", RegexOptions.IgnoreCase);
-
         var violations = CSharpSourceFiles()
             .Where(f => !permittedFiles.Contains(Path.GetFileName(f)))
-            .Where(f => sqlDmlPattern.IsMatch(File.ReadAllText(f)))
+            .Where(f => SqlDmlPattern().IsMatch(File.ReadAllText(f)))
             .Select(f => Path.GetRelativePath(RepoRoot, f))
             .ToList();
 

@@ -5,15 +5,11 @@ using Quotinator.Core.Queries;
 namespace Quotinator.Core.Repositories;
 
 /// <summary>SQLite implementation of <see cref="IUniverseNameResolver"/>.</summary>
-public sealed class UniverseNameResolver : IUniverseNameResolver
+/// <remarks>Initialises the resolver with the connection factory.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public sealed class UniverseNameResolver(IDbConnectionFactory factory) : IUniverseNameResolver
 {
-    private readonly IDbConnectionFactory _factory;
-
-    /// <summary>Initialises the resolver with the connection factory.</summary>
-    public UniverseNameResolver(IDbConnectionFactory factory)
-    {
-        _factory = factory;
-    }
+    private readonly IDbConnectionFactory _factory = factory;
 
     /// <inheritdoc/>
     public async Task<Guid?> ResolveIdByNameAsync(string name)

@@ -15,7 +15,7 @@ public class SqlQueryGuardTests
     /// registry). Computed once and reused by every text-case-guard test in this class.
     /// </summary>
     private static readonly IReadOnlySet<string> DataTextColumnNames = SqlTextCaseGuard.DiscoverTextColumnNames(
-        typeof(ImportBatch), typeof(SystemAuditEntry), typeof(SystemChangeLog), typeof(SystemImportAction));
+        typeof(ImportBatchEntity), typeof(AuditEntryEntity), typeof(ChangeEntity), typeof(ImportActionEntity));
 
     /// <summary>
     /// Reflects over every string constant in <see cref="Sql"/> and its nested classes,
@@ -151,6 +151,12 @@ public class SqlQueryGuardTests
             "Schema.AnyTableExists",              // COUNT(*) — fresh-database detection for the baseline path (#143)
             "SystemAudit.CountPagedBase",         // COUNT(*) — private base for CountPaged factory
             "SystemImportActions.CountPagedBase", // COUNT(*) — private base for CountPaged factory
+            "ImportBatches.CountPagedBase",       // COUNT(*) — private base for CountPaged factory (#251)
+            "FileResources.CountPageBase",        // COUNT(*) — private base for CountPage factory (#251)
+            "SystemChangeLog.CountInRangeBase",   // COUNT(*) — private base for CountInRange factory (#249)
+            "SystemAudit.SelectDateRange",        // MIN(...)/MAX(...) — #249's date-range discovery endpoint
+            "SystemChangeLog.SelectDateRange",    // MIN(...)/MAX(...) — #249's date-range discovery endpoint
+            "Notifications.CountAll",             // COUNT(*) — total row count for the paginated list endpoint (#278)
         };
 
         var actual = EnumerateSqlConstants()
@@ -159,7 +165,7 @@ public class SqlQueryGuardTests
             .ToHashSet();
 
         Assert.AreSequenceEqual(
-            documented.ToList(), actual.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of SQL constants containing aggregate functions has changed. " +
+            [.. documented], [.. actual], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of SQL constants containing aggregate functions has changed. " +
             "Review any new or removed aggregate queries against docs/sql-safety.md " +
             "and update the documented list in this test.");
     }
@@ -199,6 +205,34 @@ public class SqlQueryGuardTests
         {
             yield return [$"SystemImportActions.SelectPaged({filterBatchId},{filterStatus},{filterEntityType})", Sql.SystemImportActions.SelectPaged(filterBatchId, filterStatus, filterEntityType)];
             yield return [$"SystemImportActions.CountPaged({filterBatchId},{filterStatus},{filterEntityType})", Sql.SystemImportActions.CountPaged(filterBatchId, filterStatus, filterEntityType)];
+        }
+
+        // ImportBatches.SelectPaged/CountPaged (#251) — one case per filter-flag combination.
+        foreach (var (filterType, filterStatus) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        {
+            yield return [$"ImportBatches.SelectPaged({filterType},{filterStatus})", Sql.ImportBatches.SelectPaged(filterType, filterStatus)];
+            yield return [$"ImportBatches.CountPaged({filterType},{filterStatus})", Sql.ImportBatches.CountPaged(filterType, filterStatus)];
+        }
+
+        // FileResources.SelectPage/CountPage (#251) — one case per filter-flag combination.
+        foreach (var (filterFileName, filterOrigin) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        {
+            yield return [$"FileResources.SelectPage({filterFileName},{filterOrigin})", Sql.FileResources.SelectPage(filterFileName, filterOrigin)];
+            yield return [$"FileResources.CountPage({filterFileName},{filterOrigin})", Sql.FileResources.CountPage(filterFileName, filterOrigin)];
+        }
+
+        // SystemAudit.SelectInRange/CountInRange (#249) — one case per filter-flag combination.
+        foreach (var (filterStart, filterEnd) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        {
+            yield return [$"SystemAudit.SelectInRange({filterStart},{filterEnd})", Sql.SystemAudit.SelectInRange(filterStart, filterEnd)];
+            yield return [$"SystemAudit.CountInRange({filterStart},{filterEnd})", Sql.SystemAudit.CountInRange(filterStart, filterEnd)];
+        }
+
+        // SystemChangeLog.SelectInRange/CountInRange (#249) — one case per filter-flag combination.
+        foreach (var (filterStart, filterEnd) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        {
+            yield return [$"SystemChangeLog.SelectInRange({filterStart},{filterEnd})", Sql.SystemChangeLog.SelectInRange(filterStart, filterEnd)];
+            yield return [$"SystemChangeLog.CountInRange({filterStart},{filterEnd})", Sql.SystemChangeLog.CountInRange(filterStart, filterEnd)];
         }
     }
 
@@ -248,7 +282,7 @@ public class SqlQueryGuardTests
             "Sql.ImportBatches.SelectByType must not use SELECT * — it is invisible to SqlSelectPresentationGuard's text scan.");
     }
 
-    /// <summary>#212: <c>Id</c> is the only <c>*Id</c>-suffixed column on <see cref="ImportBatch"/> — both queries must read it through <c>LOWER(...)</c> for canonical presentation. See ADR 012.</summary>
+    /// <summary>#212: <c>Id</c> is the only <c>*Id</c>-suffixed column on <see cref="ImportBatchEntity"/> — both queries must read it through <c>LOWER(...)</c> for canonical presentation. See ADR 012.</summary>
     [TestMethod]
     public void ImportBatches_SelectAllAndSelectByType_WrapIdColumnViaLower()
     {
@@ -258,16 +292,16 @@ public class SqlQueryGuardTests
 
     /// <summary>
     /// #212: proves the column list is reflection-driven (<see cref="ReflectedColumnMetadata"/>), not
-    /// hand-typed — every property <see cref="ImportBatch"/> actually persists today must appear
+    /// hand-typed — every property <see cref="ImportBatchEntity"/> actually persists today must appear
     /// somewhere in <c>SelectAll</c>'s text. A hand-typed column list would also pass this today, but
     /// would silently drift the next time a property is added, removed, or renamed on
-    /// <see cref="ImportBatch"/>; this test keeps passing automatically because it reflects the same
+    /// <see cref="ImportBatchEntity"/>; this test keeps passing automatically because it reflects the same
     /// metadata the query itself is built from, rather than asserting a fixed list.
     /// </summary>
     [TestMethod]
     public void ImportBatches_SelectColumns_ReflectsEveryImportBatchProperty()
     {
-        var columns = ReflectedColumnMetadata.For(typeof(ImportBatch));
+        var columns = ReflectedColumnMetadata.For(typeof(ImportBatchEntity));
         foreach (var name in columns.ValidColumnNames)
         {
             var expected = columns.IdColumnNames.Contains(name) ? $"LOWER({name}) AS {name}" : name;
@@ -368,15 +402,27 @@ public class SqlQueryGuardTests
             "SystemAudit.SelectPaged",
             "SystemAudit.CountPaged",
             "SystemAudit.BuildWhere",
+            "SystemAudit.SelectInRange",
+            "SystemAudit.CountInRange",
+            "SystemAudit.BuildRangeWhere",
+            "SystemChangeLog.SelectInRange",
+            "SystemChangeLog.CountInRange",
+            "SystemChangeLog.BuildRangeWhere",
             "SystemImportActions.SelectPaged",
             "SystemImportActions.CountPaged",
             "SystemImportActions.BuildWhere",
+            "ImportBatches.SelectPaged",
+            "ImportBatches.CountPaged",
+            "ImportBatches.BuildWhere",
+            "FileResources.SelectPage",
+            "FileResources.CountPage",
+            "FileResources.BuildWhere",
         };
 
         var actual = EnumerateParameterizedSqlFactoryMethodNames().ToHashSet();
 
         Assert.AreSequenceEqual(
-            documented.ToList(), actual.ToList(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of static SQL factory methods requiring at least one parameter has changed. " +
+            [.. documented], [.. actual], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of static SQL factory methods requiring at least one parameter has changed. " +
             "Add the new method to AssembledQueryCases with a case for every meaningfully distinct " +
             "call shape, then update this documented list. See #214.");
     }
@@ -417,5 +463,5 @@ public class SqlQueryGuardTests
                         && m.GetParameters().All(p => p.IsOptional))
                     .Select(m => (
                         $"{t.Name}.{m.Name}()",
-                        (string)m.Invoke(null, m.GetParameters().Select(p => p.DefaultValue).ToArray())!))));
+                        (string)m.Invoke(null, [.. m.GetParameters().Select(p => p.DefaultValue)])!))));
 }

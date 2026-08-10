@@ -1,0 +1,73 @@
+@using Quotinator.Data.Enums
+
+<table class="table table-sm">
+    <thead>
+        <tr>
+            <th>@Text.NotificationsCreatedColumn</th>
+            <th>@Text.NotificationsTypeColumn</th>
+            <th>@Text.NotificationsMessageColumn</th>
+            <th>@Text.NotificationsExpiresColumn</th>
+            <th>@Text.NotificationsStatusColumn</th>
+            @if (ShowActionColumn)
+            {
+                <th>@Text.NotificationsActionColumn</th>
+            }
+            @if (ShowDismissAction)
+            {
+                <th></th>
+            }
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var notification in Notifications)
+        {
+            <tr>
+                <td>@(notification.DateCreated.Parsed?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                <td><span class="badge @BadgeClass(notification.Type.Parsed)">@TypeLabel(notification.Type.Parsed)</span></td>
+                <td>@notification.Message</td>
+                <td>@(notification.ExpiresAt.Parsed?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                <td>
+                    @switch (GetDisplayStatus(notification, Now))
+                    {
+                        case NotificationDisplayStatus.Dismissed:
+                            <span class="badge bg-secondary">@Text.NotificationsDismissedLabel</span>
+                            break;
+                        case NotificationDisplayStatus.Expired:
+                            <span class="badge bg-secondary">@Text.NotificationsExpiredLabel</span>
+                            break;
+                        default:
+                            <span class="badge bg-success">@Text.NotificationsActiveLabel</span>
+                            break;
+                    }
+                </td>
+                @if (ShowActionColumn)
+                {
+                    <td>
+                        @if (CanExecuteAction(notification))
+                        {
+                            @if (ConfirmingActionForId == notification.Id)
+                            {
+                                <button type="button" class="btn btn-sm btn-danger" @onclick="() => ConfirmActionAsync(notification.Id)">@Text.NotificationsConfirmActionButton</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelAction">@Text.NotificationsCancelActionButton</button>
+                                <div class="form-text">@Text.NotificationsConfirmActionWarning</div>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmingActionForId = notification.Id">@Text.NotificationsRunActionButton</button>
+                            }
+                        }
+                    </td>
+                }
+                @if (ShowDismissAction)
+                {
+                    <td>
+                        @if (!notification.IsDismissed)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => OnDismiss.InvokeAsync(notification.Id)">@Text.NotificationsDismissButton</button>
+                        }
+                    </td>
+                }
+            </tr>
+        }
+    </tbody>
+</table>

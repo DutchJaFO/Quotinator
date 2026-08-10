@@ -53,21 +53,21 @@ public class EnumParameterSchemaTransformerTests
     public async Task Field_OnSearch_PatchedToEnum()
     {
         var schema = await TransformAndGetSchema(ScalarParam("field"), "api/v1/quotes/search");
-        Assert.AreSequenceEqual(new[] { "quote", "source", "character", "author" }, schema!.Enum!.Select(v => v!.ToString()).ToArray(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["quote", "source", "character", "author"], [.. schema!.Enum!.Select(v => v!.ToString())], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
     public async Task Status_OnImportActions_PatchedToEnum()
     {
         var schema = await TransformAndGetSchema(ScalarParam("status"), "api/v1/import/actions");
-        Assert.AreSequenceEqual(new[] { "Pending", "Decided", "Applied", "Discarded", "Blocked", "Stale" }, schema!.Enum!.Select(v => v!.ToString()).ToArray(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["Pending", "Decided", "Applied", "Discarded", "Blocked", "Stale"], [.. schema!.Enum!.Select(v => v!.ToString())], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
     public async Task EntityType_OnImportActions_PatchedToEnum()
     {
         var schema = await TransformAndGetSchema(ScalarParam("entityType"), "api/v1/import/actions");
-        Assert.AreSequenceEqual(new[] { "Quote", "Source", "Character", "Person", "Conversation", "StageDirection", "SoundCue", "Series", "Universe" }, schema!.Enum!.Select(v => v!.ToString()).ToArray(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["Quote", "Source", "Character", "Person", "Conversation", "StageDirection", "SoundCue", "Series", "Universe"], [.. schema!.Enum!.Select(v => v!.ToString())], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     #endregion
@@ -80,7 +80,7 @@ public class EnumParameterSchemaTransformerTests
     {
         var schema = await TransformAndGetSchema(ArrayParam("type"), "api/v1/quotes");
         Assert.IsNull(schema!.Enum);
-        Assert.AreSequenceEqual(new[] { "movie", "tv", "anime", "book", "person" }, ((OpenApiSchema)schema.Items!).Enum!.Select(v => v!.ToString()).ToArray(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["movie", "tv", "anime", "book", "person"], [.. ((OpenApiSchema)schema.Items!).Enum!.Select(v => v!.ToString())], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
@@ -91,21 +91,21 @@ public class EnumParameterSchemaTransformerTests
         // two /quotes paths use — this silently broke both this transformer and the
         // pre-existing NumericParameterSchemaTransformer until caught live.
         var schema = await TransformAndGetSchema(ArrayParam("type"), "api/v1/quotes/");
-        Assert.AreSequenceEqual(new[] { "movie", "tv", "anime", "book", "person" }, ((OpenApiSchema)schema!.Items!).Enum!.Select(v => v!.ToString()).ToArray(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["movie", "tv", "anime", "book", "person"], [.. ((OpenApiSchema)schema!.Items!).Enum!.Select(v => v!.ToString())], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
     public async Task Type_OnRandom_PatchedOnItemsSchema()
     {
         var schema = await TransformAndGetSchema(ArrayParam("type"), "api/v1/quotes/random");
-        Assert.AreSequenceEqual(new[] { "movie", "tv", "anime", "book", "person" }, ((OpenApiSchema)schema!.Items!).Enum!.Select(v => v!.ToString()).ToArray(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["movie", "tv", "anime", "book", "person"], [.. ((OpenApiSchema)schema!.Items!).Enum!.Select(v => v!.ToString())], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     [TestMethod]
     public async Task Type_OnSearch_PatchedOnItemsSchema()
     {
         var schema = await TransformAndGetSchema(ArrayParam("type"), "api/v1/quotes/search");
-        Assert.AreSequenceEqual(new[] { "movie", "tv", "anime", "book", "person" }, ((OpenApiSchema)schema!.Items!).Enum!.Select(v => v!.ToString()).ToArray(), Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["movie", "tv", "anime", "book", "person"], [.. ((OpenApiSchema)schema!.Items!).Enum!.Select(v => v!.ToString())], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     #endregion

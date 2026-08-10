@@ -1,3 +1,5 @@
+using Quotinator.Core.Enums;
+
 namespace Quotinator.Core.Models;
 
 /// <summary>

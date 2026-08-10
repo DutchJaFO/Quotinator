@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Example.Common;
 using Quotinator.Data.Example.MasterDetail;
 using Quotinator.Data.Models;
@@ -16,7 +17,7 @@ public class AggregateRepositoryTests
 
     private sealed class WidgetWithLinesRepository(
         IDbConnectionFactory factory,
-        ISystemAuditWriter auditWriter,
+        IAuditEntryWriter auditWriter,
         ICallerContext callerContext,
         SqliteRepository<WidgetLine> lineRepo,
         Func<Widget, IReadOnlyList<WidgetLine>> getLines,
@@ -33,7 +34,8 @@ public class AggregateRepositoryTests
     private string _tempDir       = null!;
     private string _dbPath        = null!;
     private IDbConnectionFactory _factory = null!;
-    private SystemAuditWriter _auditWriter = null!;
+    private AuditEntryWriter _auditWriter = null!;
+    private AuditEntryReader _auditReader = null!;
     private CallerContext _callerContext = null!;
     private SqliteRepository<WidgetLine> _lineRepo = null!;
 
@@ -63,7 +65,7 @@ public class AggregateRepositoryTests
                 DateDeleted  TEXT,
                 IsDeleted    INTEGER NOT NULL DEFAULT 0
             );
-            CREATE TABLE System_AuditEntries (
+            CREATE TABLE Audit_Entry (
                 Id           TEXT    NOT NULL PRIMARY KEY,
                 TableName    TEXT    NOT NULL,
                 RecordId     TEXT,
@@ -79,7 +81,8 @@ public class AggregateRepositoryTests
 
         _factory       = new SqliteConnectionFactory(_dbPath);
         _callerContext = new CallerContext();
-        _auditWriter   = new SystemAuditWriter(_factory, _callerContext);
+        _auditWriter   = new AuditEntryWriter(_factory, _callerContext);
+        _auditReader   = new AuditEntryReader(_factory);
         _lineRepo      = new SqliteRepository<WidgetLine>(_factory, _auditWriter, _callerContext);
     }
 
@@ -103,13 +106,8 @@ public class AggregateRepositoryTests
         return conn.ExecuteScalar<int>($"SELECT COUNT(*) FROM {table};");
     }
 
-    private int CountAuditFor(string tableName)
-    {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        return conn.ExecuteScalar<int>(
-            "SELECT COUNT(*) FROM System_AuditEntries WHERE TableName = @t;", new { t = tableName });
-    }
+    private async Task<int> CountAuditForAsync(string tableName)
+        => (await _auditReader.GetPagedAsync(tableName, null, 1, 0)).TotalCount;
 
     // ── AggregateRepository compiles ──────────────────────────────────────────
 
@@ -205,8 +203,8 @@ public class AggregateRepositoryTests
         var repo = MakeRepo(_ => lines);
         await repo.InsertAsync(parent);
 
-        Assert.AreEqual(1, CountAuditFor("Widgets"),     "One audit entry for the parent");
-        Assert.AreEqual(3, CountAuditFor("WidgetLines"), "One audit entry per child");
+        Assert.AreEqual(1, await CountAuditForAsync("Widgets"),     "One audit entry for the parent");
+        Assert.AreEqual(3, await CountAuditForAsync("WidgetLines"), "One audit entry per child");
     }
 
     // ── Sequential ChildInsertStrategy ───────────────────────────────────────

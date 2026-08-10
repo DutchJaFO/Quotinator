@@ -3,10 +3,12 @@ using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Core.Enums;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Repositories;
 using Quotinator.Core.Services;
+using Quotinator.Api.Logging;
 using ProblemDetails = Microsoft.AspNetCore.Mvc.ProblemDetails;
 
 namespace Quotinator.Api.Endpoints;
@@ -18,6 +20,12 @@ internal static class QuoteEndpoints
 
     // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
     private sealed class Log { }
+
+    // Held as a const (#279) so .WithName(...) and GetById's own logging tag can never drift apart —
+    // see CLAUDE.md's "Endpoint naming convention" section. Fixes a genuine pre-existing bug, not just
+    // a DRY cleanup: the old hardcoded tag was "[Api - GetById]", which never matched
+    // WithName("GetQuoteById") in the first place.
+    private const string GetQuoteByIdName = "GetQuoteById";
 
     internal static void MapQuoteEndpoints(this WebApplication app)
     {
@@ -61,7 +69,7 @@ internal static class QuoteEndpoints
                  "Use `lang` to request a specific language.");
 
         group.MapGet("/{id}", GetById)
-             .WithName("GetQuoteById")
+             .WithName(GetQuoteByIdName)
              .WithSummary("Quote by ID")
              .Produces<QuoteResponse>(StatusCodes.Status200OK)
              .Produces<ProblemDetails>(StatusCodes.Status404NotFound)
@@ -71,7 +79,7 @@ internal static class QuoteEndpoints
 
         group.MapGet("/", GetAll)
              .WithName("GetAllQuotes")
-             .WithSummary("All quotes (paginated)")
+             .WithSummary("List quotes")
              .Produces<PagedResult<QuoteResponse>>(StatusCodes.Status200OK)
              .WithDescription(
                  "Returns a paginated list of all quotes. " +
@@ -202,7 +210,7 @@ internal static class QuoteEndpoints
         [Description("Filter to quotes in this Universe (spans every Series in it), by id.")] string? universeId = null,
         [Description("Filter to quotes in this Universe (spans every Series in it), by exact name. Mutually exclusive with `universeId`.")] string? universe = null)
     {
-        logger.LogInformation("[Api - Random] n={N} type={Type} genre={Genre} lang={Lang}", n, type, genre, lang);
+        logger.LogRandomQuoteQuery(n, type, genre, lang);
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
@@ -258,7 +266,7 @@ internal static class QuoteEndpoints
                 ReturnedCount  = 0,
             });
 
-        var result = service.GetRandom(count, type, genre, character, author, source, lang, yf, yt, seriesResult.Id, universeResult.Id);
+        var result = await service.GetRandom(count, type, genre, character, author, source, lang, yf, yt, seriesResult.Id, universeResult.Id);
 
         if (result.Status == FilteredResultStatus.NoResults)
             return Results.Ok(new FilteredQuoteResult<QuoteResponse>
@@ -274,18 +282,18 @@ internal static class QuoteEndpoints
         return Results.Ok(result);
     }
 
-    private static IResult GetById(
+    private static async Task<IResult> GetById(
         [Description("UUID of the quote.")] string id,
         IQuoteService service,
         IApiLocalizer localizer,
         ILogger<Log> logger,
         [Description("ISO 639-1 language code (e.g. `nl`, `de`). Falls back to the original language when no translation exists."), DefaultValue("en")] string? lang = null)
     {
-        logger.LogInformation("[Api - GetById] id={Id} lang={Lang}", id, lang);
+        logger.LogIdWithLang($"[Api - {GetQuoteByIdName}]", id, lang);
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
-        var quote = service.GetById(id, lang);
+        var quote = await service.GetById(id, lang);
         return NotFoundResult.OkOrNotFound(quote, localizer, ApiMessages.QuoteNotFound);
     }
 
@@ -310,7 +318,7 @@ internal static class QuoteEndpoints
         [Description("Filter to quotes in this Universe (spans every Series in it), by id.")] string? universeId = null,
         [Description("Filter to quotes in this Universe (spans every Series in it), by exact name. Mutually exclusive with `universeId`.")] string? universe = null)
     {
-        logger.LogInformation("[Api - Search] q={Q} field={Field} limit={Limit} type={Type} lang={Lang}", q, field, limit, type, lang);
+        logger.LogSearchQuery(q, field, limit, type, lang);
 
         if (ValidateCommon(localizer, ref lang, field) is { } err) return err;
 
@@ -370,7 +378,7 @@ internal static class QuoteEndpoints
                 Message       = seriesResult.Message ?? universeResult.Message,
             });
 
-        var result = service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yf, yt, seriesResult.Id, universeResult.Id);
+        var result = await service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yf, yt, seriesResult.Id, universeResult.Id);
 
         if (result.Status == FilteredResultStatus.NoResults)
             return Results.Ok(new FilteredQuoteResult<QuoteResponse>
@@ -404,7 +412,7 @@ internal static class QuoteEndpoints
         [Description("Filter to quotes in this Universe (spans every Series in it), by id.")] string? universeId = null,
         [Description("Filter to quotes in this Universe (spans every Series in it), by exact name. Mutually exclusive with `universeId`.")] string? universe = null)
     {
-        logger.LogInformation("[Api - GetAll] page={Page} pageSize={PageSize} type={Type} lang={Lang}", page, pageSize, type, lang);
+        logger.LogGetAllQuotesQuery(page, pageSize, type, lang);
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
@@ -445,7 +453,7 @@ internal static class QuoteEndpoints
         if (seriesResult.Outcome == EntityFilterOutcome.NotFound || universeResult.Outcome == EntityFilterOutcome.NotFound)
             return Results.Ok(new PagedResult<QuoteResponse>([], pageValue, pageSizeValue, 0));
 
-        var result = service.GetAll(pageValue, pageSizeValue, type, genre, lang, yf, yt, seriesResult.Id, universeResult.Id);
+        var result = await service.GetAll(pageValue, pageSizeValue, type, genre, lang, yf, yt, seriesResult.Id, universeResult.Id);
         return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
             ?? Results.Ok(result);
     }

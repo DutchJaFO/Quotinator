@@ -1,3 +1,4 @@
+using Quotinator.Core.Enums;
 using Quotinator.Core.Models;
 
 namespace Quotinator.Core.Import;
@@ -15,13 +16,13 @@ public static class MappedSourceQuoteBuilder
         !string.IsNullOrWhiteSpace(rawValue) ? rawValue.Trim() : defaultValue;
 
     /// <summary>
-    /// Assembles one row's already-resolved field values into a <see cref="SourceQuote"/>, or
+    /// Assembles one row's already-resolved field values into a <see cref="SourceQuoteDto"/>, or
     /// <c>null</c> if <paramref name="quote"/>/<paramref name="source"/> ended up empty — the same
-    /// "skip this row" contract every converter already has. Derives <see cref="SourceQuote.Id"/> via
+    /// "skip this row" contract every converter already has. Derives <see cref="SourceQuoteDto.Id"/> via
     /// <see cref="QuoteIdentity.StableId"/> when <paramref name="id"/> is absent, and applies the same
     /// <c>en</c>/<see cref="QuoteType.Movie"/> fallbacks every existing converter already uses.
     /// </summary>
-    public static SourceQuote? Build(
+    public static SourceQuoteDto? Build(
         string? id, string? quote, string? originalLanguage, string? source, string? date,
         string? character, string? author, string? typeRaw, IReadOnlyList<string>? genres)
     {
@@ -30,7 +31,7 @@ public static class MappedSourceQuoteBuilder
         if (string.IsNullOrWhiteSpace(trimmedQuote) || string.IsNullOrWhiteSpace(trimmedSource))
             return null;
 
-        return new SourceQuote
+        return new SourceQuoteDto
         {
             Id               = string.IsNullOrWhiteSpace(id) ? QuoteIdentity.StableId(trimmedQuote, trimmedSource) : id.Trim(),
             QuoteText        = trimmedQuote,
@@ -41,7 +42,7 @@ public static class MappedSourceQuoteBuilder
             Author           = string.IsNullOrWhiteSpace(author) ? null : author.Trim(),
             Type             = QuoteTypeNormalisation.CanonicalType(typeRaw?.Trim(), QuoteType.Movie),
             Genres           = genres ?? [],
-            Translations     = new Dictionary<string, SourceQuoteTranslation>(),
+            Translations     = new Dictionary<string, SourceQuoteTranslationDto>(),
         };
     }
 }

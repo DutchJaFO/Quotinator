@@ -15,21 +15,26 @@ using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
+using Quotinator.Data.Enums;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Helpers;
+using Quotinator.Core.Queries;
 using Quotinator.Core.Repositories;
 using Quotinator.Core.Services;
 using Quotinator.Api.Middleware;
 using Quotinator.Api.OpenApi;
+using Quotinator.Api.Services;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
+using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Changelog.Services;
 using Quotinator.Converters.BasicJsonArray;
 using Quotinator.Converters.Csv;
 using Quotinator.Converters.RegexArray;
 using Quotinator.Core.Import;
+using Quotinator.Api.Logging;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
 
@@ -183,6 +188,26 @@ var includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeD
 // downloaded copy is considered fresh before the next check re-verifies it.
 var autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoUpdateSources", true);
 var sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
+var sourceRefreshTimeoutSeconds = builder.Configuration.GetValue<int?>("Quotinator:SourceRefreshTimeoutSeconds")
+    ?? SourceCacheUpdater.DefaultHttpTimeoutSeconds;
+
+// #278: default expiry applied to a notification written without an explicit expiresAt. Read once
+// here (not per-request, unlike AdminAuditExportMaxRows) since it's a NotificationWriter constructor
+// dependency, not a per-call local — same pattern as sourceRefreshTimeoutSeconds above.
+var notificationDefaultExpiryHours = builder.Configuration.GetValue<int?>("Quotinator:NotificationDefaultExpiryHours")
+    ?? QueryParamDefaults.NotificationDefaultExpiryHours;
+
+// #249: once a seeded batch reaches zero pending actions, its Import_Action (conflict-resolution)
+// rows have served their purpose and are purged automatically — separate settings per origin so a
+// developer investigating one specific source (bundled or user-imports) can temporarily retain that
+// origin's resolution history without affecting the other.
+var autoPurgeBundledImportActions = builder.Configuration.GetValue("Quotinator:AutoPurgeBundledImportActions", true);
+var autoPurgeUserImportActions    = builder.Configuration.GetValue("Quotinator:AutoPurgeUserImportActions", true);
+
+// Unicode-aware LIKE-style matching (issue #222) — opt-in, off by default until validated against
+// real-world non-ASCII search traffic. See docs/milestones/maintenance-milestone-v1.8.0/
+// 222-unicode-like-matching-plan.md for why this isn't unconditional.
+var unicodeAwareSearch = builder.Configuration.GetValue("Quotinator:UnicodeAwareSearch", false);
 
 // Bundled sources are always read from the Docker image (AppContext.BaseDirectory/data/sources/).
 // No file copy to the persistent volume is needed — only the database and DataProtection keys
@@ -262,8 +287,10 @@ var dbPath     = Path.Combine(dataDir, DataPaths.DatabaseFile);
 var backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0 } customBackupPath
     ? customBackupPath
     : Path.Combine(dataDir, DataPaths.BackupsFolder);
-var dbOptions         = new DatabaseOptions { DbPath = dbPath, BackupsPath = backupsDir };
-var connectionFactory = new SqliteConnectionFactory(dbPath);
+var maxBackupStorageGb = builder.Configuration.GetValue("Quotinator:MaxBackupStorageGb", 1);
+var dbOptions          = new DatabaseOptions { DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb };
+var connectionFactory  = new SqliteConnectionFactory(dbPath);
+builder.Services.AddSingleton<IDiskSpaceProvider, DiskSpaceProvider>();
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
@@ -274,23 +301,30 @@ builder.Services.AddTransient<IUnitOfWork>(sp =>
 builder.Services.AddSingleton<InitiatorContext>();
 builder.Services.AddSingleton<ICallerContext>(sp => sp.GetRequiredService<InitiatorContext>());
 builder.Services.AddSingleton<IInitiatorContext>(sp => sp.GetRequiredService<InitiatorContext>());
-builder.Services.AddSingleton<ISystemAuditWriter, SystemAuditWriter>();
-builder.Services.AddSingleton<ISystemAuditReader, SystemAuditReader>();
-builder.Services.AddSingleton<ISystemChangeLogWriter, SystemChangeLogWriter>();
-builder.Services.AddSingleton<ISystemChangeLogReader, SystemChangeLogReader>();
-builder.Services.AddSingleton<ISystemImportActionWriter, SystemImportActionWriter>();
-builder.Services.AddSingleton<ISystemImportActionReader, SystemImportActionReader>();
+builder.Services.AddSingleton<IAuditEntryWriter, AuditEntryWriter>();
+builder.Services.AddSingleton<IAuditEntryReader, AuditEntryReader>();
+builder.Services.AddSingleton<IChangeWriter, ChangeWriter>();
+builder.Services.AddSingleton<IChangeReader, ChangeReader>();
+builder.Services.AddSingleton<IImportActionWriter, ImportActionWriter>();
+builder.Services.AddSingleton<IImportActionReader, ImportActionReader>();
 builder.Services.AddSingleton<ISourceFileOverrideRegistry, SourceFileOverrideRegistry>();
+builder.Services.AddSingleton<IFileResourceRepository, SqliteFileResourceRepository>();
 builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
 builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
+builder.Services.AddSingleton<INotificationReader, NotificationReader>();
+// Factory overload — the container can't supply notificationDefaultExpiryHours (a computed config
+// value) at registration time, matching this project's documented DI exception.
+builder.Services.AddSingleton<INotificationWriter>(sp =>
+    new NotificationWriter(sp.GetRequiredService<IDbConnectionFactory>(), notificationDefaultExpiryHours));
+builder.Services.AddSingleton<INotificationActionExecutor, NotificationActionExecutor>();
 
 // #59: restorable-repository access for Quote/Source/Character/Person, needed only by batch-undo
 // (reversal) — nothing else in the app soft-deletes these tables today. Fully generic, already
 // tested against a synthetic fixture in Quotinator.Data.Tests; no new repository code required.
 builder.Services.AddSingleton<IRestorableRepository<QuoteEntity>, SqliteRestorableRepository<QuoteEntity>>();
-builder.Services.AddSingleton<IRestorableRepository<Source>, SqliteRestorableRepository<Source>>();
-builder.Services.AddSingleton<IRestorableRepository<Character>, SqliteRestorableRepository<Character>>();
-builder.Services.AddSingleton<IRestorableRepository<Person>, SqliteRestorableRepository<Person>>();
+builder.Services.AddSingleton<IRestorableRepository<SourceEntity>, SqliteRestorableRepository<SourceEntity>>();
+builder.Services.AddSingleton<IRestorableRepository<CharacterEntity>, SqliteRestorableRepository<CharacterEntity>>();
+builder.Services.AddSingleton<IRestorableRepository<PersonEntity>, SqliteRestorableRepository<PersonEntity>>();
 
 // #68: same rationale as above, for Conversation/StageDirection/SoundCue — needed by
 // SqliteImportActionService's stale-Add-target hard-delete and batch-reversal soft-delete/restore.
@@ -307,9 +341,9 @@ builder.Services.AddSingleton<IRestorableRepository<SoundCueEntity>, SqliteResto
 // it extends SqliteRepository<T>), not a second instance.
 builder.Services.AddSingleton<IListableRepository<SeriesEntity>, SqliteRepository<SeriesEntity>>();
 builder.Services.AddSingleton<IListableRepository<UniverseEntity>, SqliteRepository<UniverseEntity>>();
-builder.Services.AddSingleton<IListableRepository<Source>>(sp => (IListableRepository<Source>)sp.GetRequiredService<IRestorableRepository<Source>>());
-builder.Services.AddSingleton<IListableRepository<Character>>(sp => (IListableRepository<Character>)sp.GetRequiredService<IRestorableRepository<Character>>());
-builder.Services.AddSingleton<IListableRepository<Person>>(sp => (IListableRepository<Person>)sp.GetRequiredService<IRestorableRepository<Person>>());
+builder.Services.AddSingleton<IListableRepository<SourceEntity>>(sp => (IListableRepository<SourceEntity>)sp.GetRequiredService<IRestorableRepository<SourceEntity>>());
+builder.Services.AddSingleton<IListableRepository<CharacterEntity>>(sp => (IListableRepository<CharacterEntity>)sp.GetRequiredService<IRestorableRepository<CharacterEntity>>());
+builder.Services.AddSingleton<IListableRepository<PersonEntity>>(sp => (IListableRepository<PersonEntity>)sp.GetRequiredService<IRestorableRepository<PersonEntity>>());
 builder.Services.AddSingleton<IListableRepository<ConversationEntity>>(sp => (IListableRepository<ConversationEntity>)sp.GetRequiredService<IRestorableRepository<ConversationEntity>>());
 
 // #204: StageDirectionEntity was left out of #193's original six-entity scope. Same "second interface
@@ -322,20 +356,37 @@ builder.Services.AddSingleton<IListableRepository<StageDirectionEntity>>(sp => (
 // singleton, not a second instance" reasoning.
 builder.Services.AddSingleton<IListableRepository<SoundCueEntity>>(sp => (IListableRepository<SoundCueEntity>)sp.GetRequiredService<IRestorableRepository<SoundCueEntity>>());
 
-// #184: resolves a Source's SeriesId to its Series' (Id, Name) — the generic IListableRepository<T>/
-// IRepository<T> above cannot express this join (single-table SELECT * only).
+// #184/#284: resolves a Source's SeriesId to its Series' (Id, Name). SQL execution goes through
+// JoinQueryRepository/IJoinStrategy per ADR 017 — a join the generic IListableRepository<T>/
+// IRepository<T> above cannot express (single-table SELECT * only), even though adopting the pattern
+// here doesn't unlock new capability over a hand-rolled query; see ADR 017 for why that's still the
+// right call.
+builder.Services.AddSingleton<IJoinStrategy<SeriesReferenceRow>, SourceSeriesReferenceStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SeriesReferenceRow>>();
+builder.Services.AddSingleton<IJoinStrategy<SourceSeriesReferenceRow>, SourceSeriesReferencesBatchStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SourceSeriesReferenceRow>>();
 builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenceReader>();
 
-// #185: resolves a Character's linked Sources (via CharacterSources, #179) to their (Id, Title) —
-// same "generic repository cannot express a join" reasoning as ISourceSeriesReferenceReader above.
+// #185/#284: resolves a Character's linked Sources (via CharacterSources, #179) to their (Id, Title) —
+// same ADR 017 reasoning as ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<IJoinStrategy<SourceRow>, CharacterSourceReferenceStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SourceRow>>();
+builder.Services.AddSingleton<IJoinStrategy<LinkRow>, CharacterSourceReferencesBatchStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<LinkRow>>();
 builder.Services.AddSingleton<ICharacterSourceLinkReader, CharacterSourceLinkReader>();
 
-// #187: resolves a Series' UniverseId to its Universe's (Id, Name) — same "generic repository cannot
-// express a join" reasoning as ISourceSeriesReferenceReader above.
+// #187/#284: resolves a Series' UniverseId to its Universe's (Id, Name) — same ADR 017 reasoning as
+// ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<IJoinStrategy<UniverseReferenceRow>, SeriesUniverseReferenceStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<UniverseReferenceRow>>();
+builder.Services.AddSingleton<IJoinStrategy<SeriesUniverseReferenceRow>, SeriesUniverseReferencesBatchStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SeriesUniverseReferenceRow>>();
 builder.Services.AddSingleton<ISeriesUniverseReferenceReader, SeriesUniverseReferenceReader>();
 
-// #189: resolves each Conversation's active line count via ConversationLines — same "generic repository
-// cannot express a join/aggregate" reasoning as ISourceSeriesReferenceReader above.
+// #189: resolves each Conversation's active line count via ConversationLines. Deliberately stays on
+// a raw connection, not JoinQueryRepository/IJoinStrategy — ADR 017's one documented exemption, since
+// this read's QueryAsync<dynamic> works around two real Dapper/SQLite bugs that IJoinStrategy<TResult>'s
+// concrete-TResult requirement can't accommodate (see the reader's own code comment for the two bugs).
 builder.Services.AddSingleton<IConversationLineCountReader, ConversationLineCountReader>();
 
 // #192: resolves a Series/Universe name to its id — the resolveIdByName delegate #196's
@@ -350,9 +401,9 @@ builder.Services.AddSingleton<IUniverseNameResolver, UniverseNameResolver>();
 builder.Services.AddSingleton<IManifestSeedPlanner, ManifestSeedPlanner>();
 builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepository>();
 
-// 5 s timeout: a slow/unreachable upstream must never block startup, reseed, or reset for longer
-// than a brief, bounded check — the updater always falls back to the existing cached/local file.
-builder.Services.AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
+// Overridable via Quotinator:SourceRefreshTimeoutSeconds — see SourceCacheUpdater.DefaultHttpTimeoutSeconds
+// for why 30 s is the default.
+builder.Services.AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(sourceRefreshTimeoutSeconds));
 
 // Converters are stateless, hardcoded per source — no DI registration needed for the individual
 // plugin instances themselves (CLAUDE.md's DI policy: bare `new` is permitted for a computed value
@@ -364,15 +415,15 @@ var quoteSourceConverters = new IQuoteSourceConverter[]
     new CsvQuoteConverter(),
 }.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
 
-// Real canonical-schema validation needs Quotinator.Core's SourceQuote, but Quotinator.Data (home of
+// Real canonical-schema validation needs Quotinator.Core's SourceQuoteDto, but Quotinator.Data (home of
 // SourceCacheUpdater) must not depend on Quotinator.Core — so the validator is built here, at the
 // composition root, and injected as a plain delegate.
-Func<string, bool> validateCanonicalSchema = json => SourceQuoteFileReader.TryParse(json, out _);
+static bool ValidateCanonicalSchema(string json) => SourceQuoteFileReader.TryParse(json, out _);
 
 builder.Services.AddSingleton<ISourceCacheUpdater>(sp => new SourceCacheUpdater(
     sp.GetRequiredService<IHttpClientFactory>(),
     new SourceCacheOptions(internalDownloadDir, externalDownloadDir, sourceUpdateIntervalHours,
-        quoteSourceConverters, validateCanonicalSchema),
+        quoteSourceConverters, ValidateCanonicalSchema),
     sp.GetRequiredService<ILogger<SourceCacheUpdater>>()));
 
 // #153: a generated ruleFile/sourceAliasFile override is written under the same two persistent,
@@ -395,25 +446,49 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<IImportBatchRepository>(),
         sp.GetRequiredService<IImportActionCoordinator>(),
         sp.GetRequiredService<IImportActionService>(),
-        sp.GetRequiredService<ISystemAuditWriter>(),
+        sp.GetRequiredService<IImportActionWriter>(),
+        sp.GetRequiredService<IAuditEntryWriter>(),
         sp.GetRequiredService<ICallerContext>(),
         sp.GetRequiredService<ILogger<DatabaseInitializer>>(),
         sp.GetRequiredService<ISourceCacheUpdater>(),
         autoUpdateSources,
+        autoPurgeBundledImportActions,
+        autoPurgeUserImportActions,
         sp.GetRequiredService<IRuleFileOverridePathResolver>(),
         sp.GetRequiredService<ISourceFileOverrideRegistry>(),
-        QuotinatorMigrations.Baseline);
+        sp.GetRequiredService<IFileResourceRepository>(),
+        QuotinatorMigrations.Baseline,
+        sp.GetRequiredService<IDiskSpaceProvider>());
 });
-builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Core.Services.SqliteQuoteService(connectionFactory));
+// #285: resolves a Conversation's per-line quote/stage-direction/sound-cue lookups via
+// JoinQueryRepository/IJoinStrategy per ADR 017.
+builder.Services.AddSingleton<IJoinStrategy<QuoteRow>, QuoteLineStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<QuoteRow>>();
+builder.Services.AddSingleton<IJoinStrategy<StageDirectionLineRow>, StageDirectionLineStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<StageDirectionLineRow>>();
+builder.Services.AddSingleton<IJoinStrategy<SoundCueLineRow>, SoundCueLineStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SoundCueLineRow>>();
+builder.Services.AddSingleton<IQuoteService>(sp => new Quotinator.Core.Services.SqliteQuoteService(
+    connectionFactory,
+    unicodeAwareSearch,
+    sp.GetRequiredService<JoinQueryRepository<QuoteRow>>(),
+    sp.GetRequiredService<JoinQueryRepository<StageDirectionLineRow>>(),
+    sp.GetRequiredService<JoinQueryRepository<SoundCueLineRow>>()));
 builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp => new Quotinator.Core.Services.SqliteQuoteImportService(
     connectionFactory,
     sp.GetRequiredService<IImportBatchRepository>(),
     sp.GetRequiredService<IImportActionCoordinator>(),
     sp.GetRequiredService<IImportActionService>(),
-    sp.GetRequiredService<ISystemImportActionReader>(),
+    sp.GetRequiredService<IImportActionReader>(),
     quoteSourceConverters,
-    configPolicy));
+    configPolicy,
+    sp.GetRequiredService<IFileResourceRepository>()));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
+builder.Services.AddSingleton<Quotinator.Api.Startup.DatabaseHealthState>();
+builder.Services.AddSingleton<Quotinator.Api.Startup.StartupUxState>();
+builder.Services.AddSingleton<Quotinator.Api.Startup.StartupPhaseState>();
+builder.Services.AddSingleton<DatabaseHealthGateMiddleware>();
+builder.Services.AddSingleton<StartupWaitMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
 builder.Services.AddI18nText(options =>
@@ -427,10 +502,9 @@ builder.Services.AddI18nText(options =>
 
 builder.Services.Configure<RequestLocalizationOptions>(options =>
 {
-    var supported = new[] { "en-GB", "de", "nl" };
     options.DefaultRequestCulture = new RequestCulture("en-GB");
-    options.AddSupportedCultures(supported);
-    options.AddSupportedUICultures(supported);
+    options.AddSupportedCultures(SupportedCultures);
+    options.AddSupportedUICultures(SupportedCultures);
 });
 
 builder.Services.AddRazorComponents()
@@ -487,23 +561,18 @@ var startupLog = new Quotinator.Api.Startup.StartupSummaryLogger(
     haLogLevel, logRequests, sslEnabled, adminKeyConfigured, isHa);
 
 startupLog.LogStarting();
-await dbInitializer.InitialiseAsync();
+
+// #280: database initialisation now runs after Kestrel starts listening (see the StartAsync/
+// WaitForShutdownAsync split at the bottom of this file) — StartupWaitMiddleware serves a wait page
+// for every non-exempt request until it completes, instead of the app being completely unreachable
+// during this window as it was before. dbHealth is still resolved here since it's referenced by name
+// throughout the rest of this section's setup.
+var dbHealth = app.Services.GetRequiredService<Quotinator.Api.Startup.DatabaseHealthState>();
 
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-
-// Closing banner fires after Kestrel binds so bound addresses are available.
-lifetime.ApplicationStarted.Register(() =>
-{
-    var addresses = (app.Services
-        .GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>()
-        .Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()
-        ?.Addresses ?? []).ToList();
-    startupLog.LogReady(addresses);
-});
-
-var logger = app.Services.GetRequiredService<ILogger<Program>>();
+var logger   = app.Services.GetRequiredService<ILogger<Program>>();
 lifetime.ApplicationStopping.Register(() =>
-    logger.LogInformation("[Server] Quotinator v{Version} stopping", versionService.Version));
+    logger.LogServerStopping(versionService.Version));
 
 // Must be first so all subsequent middleware sees the correct scheme and client IP.
 app.UseForwardedHeaders();
@@ -521,6 +590,12 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// Degrades to a clear 503 (instead of a raw per-request exception) once DatabaseHealthState
+// records a failed startup initialisation — see DatabaseHealthGateMiddleware's own remarks. Must
+// run before request logging/exception handling so a degraded request never reaches a handler
+// that would throw.
+app.UseMiddleware<DatabaseHealthGateMiddleware>();
+
 // Optional request logging — logs every endpoint call as two lines (start + end) with a
 // per-request correlation ID. Off by default. Enable with log_requests: true in the add-on
 // config (or Quotinator__LogRequests=true). All endpoints are logged; header values are never
@@ -537,6 +612,12 @@ if (logRequests)
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseRequestLocalization();
+
+// #280: gates every non-exempt request to a wait page while StartupPhaseState.IsComplete is false.
+// Registered after UseRequestLocalization() so the page's text resolves from Accept-Language, and
+// before UseRateLimiter() so a polling wait page never burns the caller's rate-limit budget.
+app.UseMiddleware<StartupWaitMiddleware>();
+
 app.UseRateLimiter();
 
 // Populate ICallerContext.Agent from the User-Agent header for audit trail entries.
@@ -557,40 +638,51 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-app.MapGet(ApiRoutes.Health, () => Results.Ok(new { status = "healthy" }))
+app.MapGet(ApiRoutes.Health, (Quotinator.Api.Startup.DatabaseHealthState dbHealth, Quotinator.Api.Startup.StartupPhaseState startupPhase) =>
+    !startupPhase.IsComplete
+        ? Results.Json(new { status = "starting" }, statusCode: StatusCodes.Status503ServiceUnavailable)
+        : dbHealth.IsHealthy
+            ? Results.Ok(new { status = "healthy" })
+            : Results.Json(new { status = "unhealthy", reason = dbHealth.FailureReason }, statusCode: StatusCodes.Status503ServiceUnavailable))
    .WithName("Health")
    .WithTags(ApiTags.System)
    .WithSummary("Health check")
-   .WithDescription("Returns the current health status of the API. Use this endpoint to verify the service is running.");
+   .WithDescription("Returns the current health status of the API. While startup database initialisation is still running, returns a distinct \"starting\" status (503) so callers can tell that apart from a genuine failure; once complete, reports \"healthy\" (200) or \"unhealthy\" (503) depending on whether initialisation succeeded.");
 
-app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDatabaseInitializer db) =>
-    Results.Ok(new
-    {
-        version     = vs.Version,
-        environment = env.EnvironmentName,
-        database    = new
+app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDatabaseInitializer db, Quotinator.Api.Startup.StartupPhaseState startupPhase) =>
+    !startupPhase.IsComplete
+        ? Results.Ok(new { status = "starting", version = vs.Version })
+        : Results.Ok(new
         {
-            schemaVersion   = db.SchemaVersion,
-            quotes          = db.QuoteCount,
-            sources         = db.SourceCount,
-            characters      = db.CharacterCount,
-            people          = db.PeopleCount,
-            series          = db.SeriesCount,
-            universes       = db.UniverseCount,
-            stageDirections = db.StageDirectionCount,
-            soundCues       = db.SoundCueCount,
-            conversations   = db.ConversationCount
-        }
-    }))
+            status      = "ready",
+            version     = vs.Version,
+            environment = env.EnvironmentName,
+            database    = new
+            {
+                schemaVersion   = db.SchemaVersion,
+                quotes          = db.QuoteCount,
+                sources         = db.SourceCount,
+                characters      = db.CharacterCount,
+                people          = db.PeopleCount,
+                series          = db.SeriesCount,
+                universes       = db.UniverseCount,
+                stageDirections = db.StageDirectionCount,
+                soundCues       = db.SoundCueCount,
+                conversations   = db.ConversationCount
+            }
+        }))
    .WithName("Version")
    .WithTags(ApiTags.System)
    .WithSummary("API version")
-   .WithDescription("Returns the running version, environment, and database schema version with row counts.");
+   .WithDescription("Returns the running version, environment, and database schema version with row counts. While startup database initialisation is still running, returns only {\"status\":\"starting\",\"version\":...} — the environment/database fields don't exist yet.");
 
 app.MapQuoteEndpoints();
 app.MapAdminEndpoints();
 app.MapImportEndpoints();
 app.MapImportRuleEndpoints();
+app.MapImportFileResourceEndpoints();
+app.MapImportBatchEndpoints();
+app.MapNotificationEndpoints();
 app.MapConversationEndpoints();
 app.MapSourceEndpoints();
 app.MapCharacterEndpoints();
@@ -621,7 +713,125 @@ app.MapGet(ApiRoutes.CultureSet, (string? culture, string redirectUri, HttpConte
 })
 .ExcludeFromDescription();
 
-app.Run();
+// #280: Kestrel is now listening — StartupWaitMiddleware is already serving a wait page for every
+// non-exempt request (registered above, before this point was reached), so initialisation runs here,
+// after StartAsync, instead of before it as it did prior to #280.
+await app.StartAsync();
+
+// A database initialisation failure must never crash the whole process outright — that would
+// also make POST /api/v1/admin/database/reset unreachable, the one endpoint actually capable of
+// resolving the underlying schema/version mismatch (found live, 2026-08-02: exiting on this
+// exception meant the operator's own documented remedy could never be reached). Catching it here
+// logs one clear, actionable message, then records the failure on DatabaseHealthState and lets
+// startup continue: the app still binds and stays reachable for health/version/admin traffic, while
+// DatabaseHealthGateMiddleware degrades every other request to a clear 503 instead of letting it
+// throw the same raw exception per-request.
+try
+{
+    await dbInitializer.InitialiseAsync();
+}
+catch (DatabaseBackupWriteException ex)
+{
+    var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    const string failureReason =
+        "Database initialisation failed while writing a pre-change safety backup. This usually " +
+        "means the data directory ran out of disk space or lost write access mid-write. Resolve " +
+        "by freeing disk space or restoring write access, then restart.";
+    startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
+    dbHealth.MarkFailed(failureReason);
+}
+catch (Exception ex)
+{
+    var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    const string failureReason =
+        "Database initialisation failed. This often means the database's recorded schema " +
+        "version doesn't match its actual on-disk schema (e.g. after an interrupted upgrade). " +
+        "Resolve with an explicit database Reset (POST /api/v1/admin/database/reset) or by " +
+        "stopping the app, deleting the database file, and restarting.";
+    startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
+    dbHealth.MarkFailed(failureReason);
+}
+
+// #279: first concrete producer for #278's notification mechanism — announces the two breaking
+// operationId renames this release ships. Idempotent across restarts (checked via NotificationSeeding's
+// own dedupe-key lookup against notification history), so this call is safe to leave in place
+// indefinitely rather than needing to be removed after the first deploy. Deliberately outside the
+// critical DB-init try/catch above and in its own non-fatal guard: a failure here (e.g. a test's
+// NoOpDatabaseInitializer, which never creates System_Notification) must never mark the whole app
+// unhealthy — writing an announcement notification is inherently non-critical, unlike schema init itself.
+if (dbHealth.IsHealthy)
+{
+    try
+    {
+        await Quotinator.Api.Startup.NotificationSeeding.SeedOnceAsync(
+            app.Services.GetRequiredService<INotificationReader>(),
+            app.Services.GetRequiredService<INotificationWriter>(),
+            NotificationType.Warning,
+            dedupeKey: "GetAllImportBatches",
+            message: "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
+                      "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
+                      "This only affects a generated API client keyed by operation ID — routes and behaviour are unchanged.");
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Server] Failed to seed the #279 operation-id-rename notification — non-fatal, startup continues.");
+    }
+}
+
+// #289: second producer for #278's notification mechanism — announces a schema-version-overshoot
+// (the recorded version exceeds this build's own known migration count, which only happens after a
+// migration squash on a database that already applied the pre-squash migrations). The dedupe key
+// includes the actual detected versions, not a fixed string like #279's: repeats of the same
+// already-notified overshoot state (e.g. the operator hasn't reset yet and the app just restarted)
+// stay deduped, but a genuinely different future overshoot (a later squash producing different
+// version numbers) still gets its own notification. ActionRequired + DatabaseReset dismiss trigger:
+// POST /admin/database/reset already calls DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset)
+// (see AdminEndpoints.cs), so this clears itself automatically once the operator resets.
+if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
+{
+    try
+    {
+        var overshootDedupeKey = $"SchemaVersionOvershoot:data-v{dbInitializer.DataSchemaVersion}-app-v{dbInitializer.SchemaVersion}";
+        await Quotinator.Api.Startup.NotificationSeeding.SeedOnceAsync(
+            app.Services.GetRequiredService<INotificationReader>(),
+            app.Services.GetRequiredService<INotificationWriter>(),
+            NotificationType.ActionRequired,
+            dedupeKey: overshootDedupeKey,
+            message: $"This database's recorded schema version (data v{dbInitializer.DataSchemaVersion}, " +
+                      $"app v{dbInitializer.SchemaVersion}) is ahead of what this build expects — usually because " +
+                      "a set of not-yet-released migrations were consolidated after this database already applied " +
+                      "them individually (issue #289). The schema itself is complete and the app is working " +
+                      "normally; running a database Reset (POST /api/v1/admin/database/reset) will true up the " +
+                      "version bookkeeping.",
+            trigger: NotificationDismissTrigger.DatabaseReset);
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Server] Failed to seed the #289 schema-version-overshoot notification — non-fatal, startup continues.");
+    }
+}
+
+// #280: initialisation (successful or not) is now finished — StartupWaitMiddleware stops
+// intercepting requests from this point on. Marked complete regardless of dbHealth's outcome: a
+// failed startup has its own existing degraded-state UI (DatabaseHealthGateMiddleware/#263's
+// modals), not the wait page.
+app.Services.GetRequiredService<Quotinator.Api.Startup.StartupPhaseState>().MarkComplete();
+
+// "Ready" now means truly ready (initialisation complete), not merely "Kestrel bound" — logged
+// directly here instead of via the ApplicationStarted event hook, which fires as soon as StartAsync
+// returns, before initialisation even begins under this model.
+var readyAddresses = (app.Services
+    .GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>()
+    .Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()
+    ?.Addresses ?? []).ToList();
+startupLog.LogReady(readyAddresses);
+
+await app.WaitForShutdownAsync();
 
 // Exposes Program to WebApplicationFactory<Program> in the test project.
-public partial class Program { }
+public partial class Program
+{
+    private static readonly string[] SupportedCultures = ["en-GB", "de", "nl"];
+}

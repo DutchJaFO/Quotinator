@@ -5,17 +5,20 @@ using System.Text.RegularExpressions;
 namespace Quotinator.Core.Import;
 
 /// <summary>
-/// Generates the stable, deterministic <see cref="SourceQuote.Id"/> used for quotes converted from
+/// Generates the stable, deterministic <see cref="SourceQuoteDto.Id"/> used for quotes converted from
 /// external sources that have no identifier of their own. Ported verbatim from the historical
 /// <c>scripts/seed.csx</c> algorithm — must never change, since the same quote/source pair must always
 /// produce the same id across every re-conversion, or existing database rows would be silently
 /// duplicated or orphaned on the next refresh.
 /// </summary>
-public static class QuoteIdentity
+public static partial class QuoteIdentity
 {
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex WhitespaceRun();
+
     /// <summary>Trims, lowercases, and collapses runs of whitespace to a single space.</summary>
     public static string Normalise(string s) =>
-        Regex.Replace(s.Trim().ToLowerInvariant(), @"\s+", " ");
+        WhitespaceRun().Replace(s.Trim().ToLowerInvariant(), " ");
 
     /// <summary>
     /// Derives a stable UUID v4 string from the normalised <paramref name="quote"/> and

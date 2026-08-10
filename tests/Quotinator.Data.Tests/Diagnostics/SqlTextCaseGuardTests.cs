@@ -112,14 +112,14 @@ public class SqlTextCaseGuardTests
     {
         var names = SqlTextCaseGuard.DiscoverTextColumnNames(typeof(FakeEntity));
 
-        Assert.Contains("Name", names.ToList());
-        Assert.Contains("Description", names.ToList());
+        Assert.Contains("Name", [.. names]);
+        Assert.Contains("Description", [.. names]);
     }
 
     [TestMethod]
     public void DiscoverTextColumnNames_IdSuffixedProperty_IsExcluded()
         => Assert.DoesNotContain(
-"SomeId", SqlTextCaseGuard.DiscoverTextColumnNames(typeof(FakeEntity)).ToList());
+"SomeId", [.. SqlTextCaseGuard.DiscoverTextColumnNames(typeof(FakeEntity))]);
 
     [TestMethod]
     public void DiscoverTextColumnNames_NonStringProperties_AreExcluded()

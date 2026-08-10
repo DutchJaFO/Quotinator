@@ -4,7 +4,7 @@ using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Import;
 
-/// <summary>Parses a Quotinator source file's raw JSON text into <see cref="SourceQuote"/> entries.</summary>
+/// <summary>Parses a Quotinator source file's raw JSON text into <see cref="SourceQuoteDto"/> entries.</summary>
 public static class SourceQuoteFileReader
 {
     // #190: OptionalJsonConverterFactory covers every Optional<T>-typed entry-DTO property (Date,
@@ -16,24 +16,24 @@ public static class SourceQuoteFileReader
     };
 
     /// <summary>
-    /// Attempts to parse <paramref name="json"/> as either a bare <see cref="SourceQuote"/> array or a
+    /// Attempts to parse <paramref name="json"/> as either a bare <see cref="SourceQuoteDto"/> array or a
     /// <c>{ "quotes": [...] }</c> wrapper. Returns <c>false</c> (with <paramref name="quotes"/> <c>null</c>)
     /// on invalid JSON, an unrecognised top-level shape, or any entry missing a required field — never throws.
     /// </summary>
     /// <param name="json">Raw file contents to parse.</param>
     /// <param name="quotes">The parsed quotes on success; <c>null</c> on failure.</param>
-    public static bool TryParse(string json, out List<SourceQuote>? quotes)
+    public static bool TryParse(string json, out List<SourceQuoteDto>? quotes)
     {
         try
         {
             // JsonNode.Parse here only sniffs whether the root is a bare array or a {"quotes":[...]}
             // wrapper — the one shape-sniffing exception CLAUDE.md's JSON parsing policy allows. Actual
-            // field extraction always goes through JsonSerializer.Deserialize<List<SourceQuote>>.
+            // field extraction always goes through JsonSerializer.Deserialize<List<SourceQuoteDto>>.
             var root = JsonNode.Parse(json);
 
             if (root is JsonArray)
             {
-                quotes = JsonSerializer.Deserialize<List<SourceQuote>>(json, Options) ?? [];
+                quotes = JsonSerializer.Deserialize<List<SourceQuoteDto>>(json, Options) ?? [];
                 return true;
             }
 
@@ -44,7 +44,7 @@ public static class SourceQuoteFileReader
                 return true;
             }
 
-            quotes = quotesNode.Deserialize<List<SourceQuote>>(Options) ?? [];
+            quotes = quotesNode.Deserialize<List<SourceQuoteDto>>(Options) ?? [];
             return true;
         }
         catch (JsonException)
@@ -55,7 +55,7 @@ public static class SourceQuoteFileReader
     }
 
     /// <summary>
-    /// Attempts to parse <paramref name="json"/> as either a bare <see cref="SourceQuote"/> array or the
+    /// Attempts to parse <paramref name="json"/> as either a bare <see cref="SourceQuoteDto"/> array or the
     /// full extended object format (<c>{ "quotes": [...], "sources": [...], "people": [...],
     /// "stageDirections": [...], "soundCues": [...], "conversations": [...], "series": [...],
     /// "universe": [...] }</c>). A bare array yields empty lists for every extended section — same
@@ -64,7 +64,7 @@ public static class SourceQuoteFileReader
     /// </summary>
     /// <param name="json">Raw file contents to parse.</param>
     /// <param name="result">The parsed file on success; <c>null</c> on failure.</param>
-    public static bool TryParseExtended(string json, out ParsedSourceFile? result)
+    public static bool TryParseExtended(string json, out ParsedSourceFileDto? result)
     {
         try
         {
@@ -75,23 +75,23 @@ public static class SourceQuoteFileReader
 
             if (root is JsonArray)
             {
-                var quotes = JsonSerializer.Deserialize<List<SourceQuote>>(json, Options) ?? [];
-                result = new ParsedSourceFile { Quotes = quotes };
+                var quotes = JsonSerializer.Deserialize<List<SourceQuoteDto>>(json, Options) ?? [];
+                result = new ParsedSourceFileDto { Quotes = quotes };
                 return true;
             }
 
             var quotesNode = root?["quotes"];
-            result = new ParsedSourceFile
+            result = new ParsedSourceFileDto
             {
-                Quotes          = quotesNode is null ? [] : quotesNode.Deserialize<List<SourceQuote>>(Options) ?? [],
-                Sources         = root?["sources"]?.Deserialize<List<SourceEntry>>(Options) ?? [],
-                People          = root?["people"]?.Deserialize<List<PersonEntry>>(Options) ?? [],
-                Characters      = root?["characters"]?.Deserialize<List<CharacterEntry>>(Options) ?? [],
-                StageDirections = root?["stageDirections"]?.Deserialize<List<SourceStageDirection>>(Options) ?? [],
-                SoundCues       = root?["soundCues"]?.Deserialize<List<SourceSoundCue>>(Options) ?? [],
-                Conversations   = root?["conversations"]?.Deserialize<List<SourceConversation>>(Options) ?? [],
-                Series          = root?["series"]?.Deserialize<List<SeriesEntry>>(Options) ?? [],
-                Universe        = root?["universe"]?.Deserialize<List<UniverseEntry>>(Options) ?? [],
+                Quotes          = quotesNode is null ? [] : quotesNode.Deserialize<List<SourceQuoteDto>>(Options) ?? [],
+                Sources         = root?["sources"]?.Deserialize<List<SourceEntryDto>>(Options) ?? [],
+                People          = root?["people"]?.Deserialize<List<PersonEntryDto>>(Options) ?? [],
+                Characters      = root?["characters"]?.Deserialize<List<CharacterEntryDto>>(Options) ?? [],
+                StageDirections = root?["stageDirections"]?.Deserialize<List<SourceStageDirectionDto>>(Options) ?? [],
+                SoundCues       = root?["soundCues"]?.Deserialize<List<SourceSoundCueDto>>(Options) ?? [],
+                Conversations   = root?["conversations"]?.Deserialize<List<SourceConversationDto>>(Options) ?? [],
+                Series          = root?["series"]?.Deserialize<List<SeriesEntryDto>>(Options) ?? [],
+                Universe        = root?["universe"]?.Deserialize<List<UniverseEntryDto>>(Options) ?? [],
             };
             return true;
         }

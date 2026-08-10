@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Quotinator.Converters.BasicJsonArray;
+using Quotinator.Core.Enums;
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Data.Import;
@@ -14,6 +15,9 @@ public class BasicJsonArrayConverterTests
 
     private static string BaselineFile =>
         Path.Combine(RepoRoot, "data", "sources", "NikhilNamal17_popular-movie-quotes.json");
+
+    private static readonly string[] DramaSciFiGenres = ["drama", "sci-fi"];
+    private static readonly string[] DramaGenre        = ["drama"];
 
     private string _tempDir = null!;
 
@@ -55,7 +59,7 @@ public class BasicJsonArrayConverterTests
     {
         var inputPath  = WriteInput("""[{"quote":"A quote.","movie":"A Source"}]""");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptions
+        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie" }
         });
@@ -71,7 +75,7 @@ public class BasicJsonArrayConverterTests
     {
         var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source"}]""");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptions
+        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             Defaults = new QuoteFieldDefaults { OriginalLanguage = "nl" }
         });
@@ -96,7 +100,7 @@ public class BasicJsonArrayConverterTests
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
-        CollectionAssert.AreEqual(new[] { "drama", "sci-fi" }, quote.Genres.ToList());
+        CollectionAssert.AreEqual(DramaSciFiGenres, quote.Genres.ToList());
     }
 
     [TestMethod]
@@ -108,7 +112,7 @@ public class BasicJsonArrayConverterTests
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
-        CollectionAssert.AreEqual(new[] { "drama" }, quote.Genres.ToList());
+        CollectionAssert.AreEqual(DramaGenre, quote.Genres.ToList());
     }
 
     [TestMethod]
@@ -140,10 +144,9 @@ public class BasicJsonArrayConverterTests
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
-        SourceQuoteFileReader.TryParse(text, out var quotes);
-        Assert.IsNotNull(quotes);
-        Assert.HasCount(1, quotes);
-        Assert.AreEqual("A real quote.", quotes[0].QuoteText);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        Assert.HasCount(1, quotes!);
+        Assert.AreEqual("A real quote.", quotes![0].QuoteText);
     }
 
     [TestMethod]
@@ -182,7 +185,7 @@ public class BasicJsonArrayConverterTests
             [{"quote":"Do, or do not. There is no try.","movie":"Star Wars: Episode V - The Empire Strikes Back","type":"movie","year":1980}]
             """);
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptions
+        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
@@ -199,7 +202,7 @@ public class BasicJsonArrayConverterTests
     {
         var inputPath  = WriteInput("""[{"quote":"A quote.","movie":"A Movie","year":1994}]""");
         var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptions
+        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
@@ -222,18 +225,18 @@ public class BasicJsonArrayConverterTests
     private static string FindBaselineId(string quote, string source)
     {
         var text = File.ReadAllText(BaselineFile);
-        SourceQuoteFileReader.TryParse(text, out var quotes);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
         return quotes!.Single(q => q.QuoteText == quote && q.Source == source).Id;
     }
 
-    private static async Task<SourceQuote> ReadSingle(string outputPath)
+    private static async Task<SourceQuoteDto> ReadSingle(string outputPath)
     {
         var text = await File.ReadAllTextAsync(outputPath);
         Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
         return quotes!.Single();
     }
 
-    private static JsonElement ToOptions(BasicJsonArrayConverterOptions options)
+    private static JsonElement ToOptions(BasicJsonArrayConverterOptionsDto options)
         => JsonSerializer.SerializeToElement(options);
 
     public TestContext TestContext { get; set; }

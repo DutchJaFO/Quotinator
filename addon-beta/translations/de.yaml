@@ -45,5 +45,23 @@ configuration:
     description: >-
       Wie lange eine heruntergeladene Quelldatei als aktuell gilt, bevor sie erneut geprüft wird.
       Einzelne Quellen können dies in ihrem eigenen Manifest-Eintrag überschreiben.
+  unicode_aware_search:
+    name: Unicode-bewusste Suche
+    description: >-
+      Sorgt dafür, dass die Suche nach Zitat, Figur, Autor und Quelle unabhängig von
+      Groß-/Kleinschreibung auch auf akzentuierte und andere Nicht-ASCII-Zeichen passt (z. B.
+      é/É). Standardmäßig deaktiviert — noch nicht anhand realer Suchanfragen validiert.
+  auto_purge_bundled_import_actions:
+    name: Verlauf gebündelter Importe automatisch bereinigen
+    description: >-
+      Löscht den Konfliktlösungsverlauf einer gebündelten Seed-Datei automatisch, sobald er
+      seinen Zweck erfüllt hat (keine offenen Entscheidungen mehr). Vorübergehend deaktivieren,
+      während eine bestimmte gebündelte Quelle untersucht wird, um deren Verlauf zu behalten.
+  auto_purge_user_import_actions:
+    name: Verlauf eigener Importe automatisch bereinigen
+    description: >-
+      Löscht den Konfliktlösungsverlauf einer eigenen Import-Seed-Datei automatisch, sobald er
+      seinen Zweck erfüllt hat (keine offenen Entscheidungen mehr). Vorübergehend deaktivieren,
+      während der eigene Import debuggt wird, um dessen Verlauf zu behalten.
 network:
   8080/tcp: Direkter Webzugriff — HTTP (SSL deaktiviert) oder HTTPS (SSL aktiviert)

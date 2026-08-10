@@ -12,7 +12,7 @@ namespace Quotinator.Data.Example.MasterDetail;
 /// <remarks>
 /// <para>
 /// The child repository is created internally — consumers only inject the three standard
-/// dependencies (<c>IDbConnectionFactory</c>, <c>ISystemAuditWriter</c>, <c>ICallerContext</c>).
+/// dependencies (<c>IDbConnectionFactory</c>, <c>IAuditEntryWriter</c>, <c>ICallerContext</c>).
 /// </para>
 /// <para>
 /// In production code, <c>GetChildren</c> typically reads a navigation property set by the caller
@@ -22,7 +22,7 @@ namespace Quotinator.Data.Example.MasterDetail;
 /// </remarks>
 public sealed class WidgetWithLinesRepository(
     IDbConnectionFactory factory,
-    ISystemAuditWriter auditWriter,
+    IAuditEntryWriter auditWriter,
     ICallerContext callerContext)
     : AggregateRepository<Widget, WidgetLine>(factory, auditWriter, callerContext)
 {

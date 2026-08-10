@@ -8,10 +8,12 @@ using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
+using Quotinator.Api.Logging;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -108,8 +110,9 @@ internal static class ImportRuleEndpoints
 
                 await registry.RegisterAsync(fileName!, parsedOrigin, EffectiveRuleFileResolver.ComputeContentHash(json), batchId);
 
-                logger.LogInformation("[Api - Import] generated conflict-resolution override for {File} ({Origin}) from batch {BatchId} — {Added} rule(s) added",
-                    LogSanitizer.ForLog(fileName!), LogSanitizer.ForLog(origin!), LogSanitizer.ForLog(batchId!), rulesAdded);
+                if (logger.IsEnabled(LogLevel.Information))
+                    logger.LogImportRuleOverrideGenerated(
+                        LogSanitizer.ForLog(fileName!), LogSanitizer.ForLog(origin!), LogSanitizer.ForLog(batchId!), rulesAdded);
 
                 return Results.Ok(new ConflictRuleFileResponse
                 {
@@ -164,7 +167,7 @@ internal static class ImportRuleEndpoints
         publicGroup.MapGet("/alias", async (
                 string? fileName,
                 string? origin,
-                IListableRepository<Source> sourceRepository,
+                IListableRepository<SourceEntity> sourceRepository,
                 IRuleFileOverridePathResolver pathResolver,
                 ISourceFileOverrideRegistry registry,
                 IApiLocalizer localizer,
@@ -207,11 +210,11 @@ internal static class ImportRuleEndpoints
     private static readonly System.Text.Json.JsonSerializerOptions RuleFileWriteOptions = new() { WriteIndented = true };
     private static readonly System.Text.Json.JsonSerializerOptions RuleFileReadOptions  = new() { PropertyNameCaseInsensitive = true };
 
-    private static ConflictResolutionRuleFile ParseConflictRuleFile(string json)
-        => System.Text.Json.JsonSerializer.Deserialize<ConflictResolutionRuleFile>(json, RuleFileReadOptions) ?? new ConflictResolutionRuleFile();
+    private static ConflictResolutionRuleFileDto ParseConflictRuleFile(string json)
+        => System.Text.Json.JsonSerializer.Deserialize<ConflictResolutionRuleFileDto>(json, RuleFileReadOptions) ?? new ConflictResolutionRuleFileDto();
 
-    private static SourceAliasRuleFile ParseSourceAliasFile(string json)
-        => System.Text.Json.JsonSerializer.Deserialize<SourceAliasRuleFile>(json, RuleFileReadOptions) ?? new SourceAliasRuleFile();
+    private static SourceAliasRuleFileDto ParseSourceAliasFile(string json)
+        => System.Text.Json.JsonSerializer.Deserialize<SourceAliasRuleFileDto>(json, RuleFileReadOptions) ?? new SourceAliasRuleFileDto();
 
     private static bool TryValidate(
         string? fileName, string? origin, IApiLocalizer localizer,

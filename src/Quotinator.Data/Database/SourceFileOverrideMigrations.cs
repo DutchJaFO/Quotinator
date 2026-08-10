@@ -11,7 +11,7 @@ public static class SourceFileOverrideMigrations
     /// Creates the <c>System_SourceFileOverrides</c> table directly under its final RecordBase
     /// Guid-keyed shape — introduced fresh after ADR 002 was already established, so no
     /// create-then-retrofit pair is needed. <c>Origin</c> is backed by a real C# enum
-    /// (<see cref="Import.SeedBatchOrigin"/>) — a closed set, so per ADR 008 it carries a matching
+    /// (<see cref="Enums.SeedBatchOrigin"/>) — a closed set, so per ADR 008 it carries a matching
     /// CHECK constraint from creation. One row per (<c>FileName</c>, <c>Origin</c>) pair — enforced
     /// by a partial unique index so a soft-deleted row never blocks re-registering the same file.
     /// </summary>

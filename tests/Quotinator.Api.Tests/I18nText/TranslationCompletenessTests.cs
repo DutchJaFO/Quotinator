@@ -15,10 +15,10 @@ public class TranslationCompletenessTests
 
     private static readonly string BaselineFile = Path.Combine(I18nTextDir, "UI.en-GB.json");
 
-    private static IReadOnlySet<string> LoadKeys(string path)
+    private static HashSet<string> LoadKeys(string path)
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
-        return doc.RootElement.EnumerateObject().Select(p => p.Name).ToHashSet();
+        return [.. doc.RootElement.EnumerateObject().Select(p => p.Name)];
     }
 
     /// <summary>Every language file must have exactly the same keys as <c>UI.en-GB.json</c>.</summary>

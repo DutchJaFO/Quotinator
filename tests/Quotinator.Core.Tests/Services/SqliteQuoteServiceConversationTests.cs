@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Models;
+using Quotinator.Core.Queries;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
@@ -10,7 +11,7 @@ using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Services;
 
-namespace Quotinator.Core.Tests.Data;
+namespace Quotinator.Core.Tests.Services;
 
 /// <summary>
 /// SQLite integration tests for #69's conversation-aware API surface —
@@ -84,26 +85,27 @@ public class SqliteQuoteServiceConversationTests
 
         _factory = new SqliteConnectionFactory(_dbPath);
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance);
+        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         var logger        = NullLogger<DatabaseInitializer>.Instance;
         var batch         = new SeedBatch([new SeedFile(_fixture, null)], ManifestPolicy.HardcodedDefault, "conversation-fixture");
-        var actionReader  = new SystemImportActionReader(_factory);
-        var actionWriter  = new SystemImportActionWriter(_factory);
+        var actionReader  = new ImportActionReader(_factory);
+        var actionWriter  = new ImportActionWriter(_factory);
         var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, NoOpSystemChangeLogWriter.Instance,
-            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Source>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Character>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<Person>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance),
+        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+            new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<PersonEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
+            new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory);
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
-            coordinator, actionService,
-            NoOpSystemAuditWriter.Instance, NoOpCallerContext.Instance, logger,
+            coordinator, actionService, actionWriter,
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
-            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance);
+            autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance);
         await db.InitialiseAsync();
     }
 
@@ -115,14 +117,19 @@ public class SqliteQuoteServiceConversationTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private SqliteQuoteService CreateService() => new(_factory);
+    private SqliteQuoteService CreateService() => new(
+        _factory,
+        unicodeAwareSearch: false,
+        new JoinQueryRepository<QuoteRow>(_factory, new QuoteLineStrategy()),
+        new JoinQueryRepository<StageDirectionLineRow>(_factory, new StageDirectionLineStrategy()),
+        new JoinQueryRepository<SoundCueLineRow>(_factory, new SoundCueLineStrategy()));
 
     // ── QuoteResponse.Conversations membership ──────────────────────────────
 
     [TestMethod]
-    public void GetById_QuoteInOneConversation_PopulatesConversationsMembership()
+    public async Task GetById_QuoteInOneConversation_PopulatesConversationsMembership()
     {
-        var quote = CreateService().GetById(QuoteAId);
+        var quote = await CreateService().GetById(QuoteAId);
 
         Assert.IsNotNull(quote!.Conversations);
         Assert.HasCount(1, quote.Conversations!);
@@ -132,18 +139,18 @@ public class SqliteQuoteServiceConversationTests
     }
 
     [TestMethod]
-    public void GetById_QuoteInNoConversation_ConversationsIsNull()
+    public async Task GetById_QuoteInNoConversation_ConversationsIsNull()
     {
-        var quote = CreateService().GetById(QuoteStandaloneId);
+        var quote = await CreateService().GetById(QuoteStandaloneId);
 
         Assert.IsNull(quote!.Conversations);
     }
 
     [TestMethod]
-    public void GetById_EmbeddedConversationField_IsAlwaysNull()
+    public async Task GetById_EmbeddedConversationField_IsAlwaysNull()
     {
         // Only /random ever populates EmbeddedConversation — GetById never does, regardless of membership.
-        var quote = CreateService().GetById(QuoteAId);
+        var quote = await CreateService().GetById(QuoteAId);
 
         Assert.IsNull(quote!.EmbeddedConversation);
     }
@@ -151,15 +158,15 @@ public class SqliteQuoteServiceConversationTests
     // ── GetConversation ──────────────────────────────────────────────────────
 
     [TestMethod]
-    public void GetConversation_UnknownId_ReturnsNull()
+    public async Task GetConversation_UnknownId_ReturnsNull()
     {
-        Assert.IsNull(CreateService().GetConversation("00000000-0000-0000-0000-000000000000"));
+        Assert.IsNull(await CreateService().GetConversation("00000000-0000-0000-0000-000000000000"));
     }
 
     [TestMethod]
-    public void GetConversation_CaseInsensitiveId_StillResolves()
+    public async Task GetConversation_CaseInsensitiveId_StillResolves()
     {
-        var result = CreateService().GetConversation(Conversation1Id.ToUpperInvariant());
+        var result = await CreateService().GetConversation(Conversation1Id.ToUpperInvariant());
 
         Assert.IsNotNull(result);
         // #209/#210: the Conversation was seeded through the real import pipeline, so its id is
@@ -170,9 +177,9 @@ public class SqliteQuoteServiceConversationTests
     }
 
     [TestMethod]
-    public void GetConversation_QuoteOnlyConversation_ReturnsLinesInOrder()
+    public async Task GetConversation_QuoteOnlyConversation_ReturnsLinesInOrder()
     {
-        var result = CreateService().GetConversation(Conversation1Id);
+        var result = await CreateService().GetConversation(Conversation1Id);
 
         Assert.IsNotNull(result);
         Assert.HasCount(2, result!.Lines);
@@ -184,18 +191,18 @@ public class SqliteQuoteServiceConversationTests
     }
 
     [TestMethod]
-    public void GetConversation_EmbeddedQuoteLine_HasNoRecursiveConversationsField()
+    public async Task GetConversation_EmbeddedQuoteLine_HasNoRecursiveConversationsField()
     {
-        var result = CreateService().GetConversation(Conversation1Id);
+        var result = await CreateService().GetConversation(Conversation1Id);
 
         Assert.IsNull(result!.Lines[0].Quote!.Conversations);
         Assert.IsNull(result.Lines[0].Quote!.EmbeddedConversation);
     }
 
     [TestMethod]
-    public void GetConversation_MixedLineTypes_ReturnsCorrectShapePerType()
+    public async Task GetConversation_MixedLineTypes_ReturnsCorrectShapePerType()
     {
-        var result = CreateService().GetConversation(Conversation2Id);
+        var result = await CreateService().GetConversation(Conversation2Id);
 
         Assert.AreEqual("Cockpit scene", result!.Description);
         Assert.HasCount(3, result.Lines);
@@ -218,9 +225,9 @@ public class SqliteQuoteServiceConversationTests
     }
 
     [TestMethod]
-    public void GetConversation_LangNl_TranslatesStageDirectionAndSoundCueText()
+    public async Task GetConversation_LangNl_TranslatesStageDirectionAndSoundCueText()
     {
-        var result = CreateService().GetConversation(Conversation2Id, "nl");
+        var result = await CreateService().GetConversation(Conversation2Id, "nl");
 
         var stageDirectionLine = result!.Lines[0];
         Assert.AreEqual("[EXT. COCKPIT NL]", stageDirectionLine.Text);
@@ -234,10 +241,10 @@ public class SqliteQuoteServiceConversationTests
     }
 
     [TestMethod]
-    public void GetConversation_LangRequestedButNoTranslationExists_FallsBackToOriginal()
+    public async Task GetConversation_LangRequestedButNoTranslationExists_FallsBackToOriginal()
     {
         // "de" has no translation for the stage direction/sound cue in this fixture.
-        var result = CreateService().GetConversation(Conversation2Id, "de");
+        var result = await CreateService().GetConversation(Conversation2Id, "de");
 
         Assert.AreEqual("[EXT. COCKPIT]", result!.Lines[0].Text);
         Assert.AreEqual("en", result.Lines[0].Language);
@@ -247,7 +254,7 @@ public class SqliteQuoteServiceConversationTests
     // ── GetRandom conversation-aware dedup ──────────────────────────────────
 
     [TestMethod]
-    public void GetRandom_RepeatedCallsForConversationQuote_NeverReturnsBothQuotesFromSameConversationTogether()
+    public async Task GetRandom_RepeatedCallsForConversationQuote_NeverReturnsBothQuotesFromSameConversationTogether()
     {
         var service = CreateService();
 
@@ -256,7 +263,7 @@ public class SqliteQuoteServiceConversationTests
         // isolates Roger Murdock/Joey, conversation 1's own two lines).
         for (var i = 0; i < 20; i++)
         {
-            var result = service.GetRandom(2, source: "Airplane!");
+            var result = await service.GetRandom(2, source: "Airplane!");
             var conversationIds = result.Items
                 .Where(q => q.Conversations is not null)
                 .SelectMany(q => q.Conversations!)
@@ -268,13 +275,13 @@ public class SqliteQuoteServiceConversationTests
     }
 
     [TestMethod]
-    public void GetRandom_QuoteInConversation_EmbedsFullConversationOnThatItem()
+    public async Task GetRandom_QuoteInConversation_EmbedsFullConversationOnThatItem()
     {
         var service = CreateService();
         FilteredQuoteResult<QuoteResponse>? found = null;
         for (var i = 0; i < 20 && found is null; i++)
         {
-            var result = service.GetRandom(4, source: "Airplane!");
+            var result = await service.GetRandom(4, source: "Airplane!");
             if (result.Items.Any(q => q.EmbeddedConversation is not null))
                 found = result;
         }
@@ -285,21 +292,21 @@ public class SqliteQuoteServiceConversationTests
     }
 
     [TestMethod]
-    public void GetRandom_SetsRequestedAndReturnedCount()
+    public async Task GetRandom_SetsRequestedAndReturnedCount()
     {
-        var result = CreateService().GetRandom(2, source: "Airplane!");
+        var result = await CreateService().GetRandom(2, source: "Airplane!");
 
         Assert.AreEqual(2, result.RequestedCount);
         Assert.AreEqual(result.Items.Count, result.ReturnedCount);
     }
 
     [TestMethod]
-    public void GetRandom_RequestMoreThanPoolAfterDedup_ReturnedCountReflectsShortfall()
+    public async Task GetRandom_RequestMoreThanPoolAfterDedup_ReturnedCountReflectsShortfall()
     {
         // Only 4 Airplane! quotes exist total, 2 of which collapse into one conversation slot's
         // worth of exclusion the moment either conversation-1 quote is picked — requesting all 4
         // can legitimately return fewer once dedup removes a conversation partner from the pool.
-        var result = CreateService().GetRandom(4, source: "Airplane!");
+        var result = await CreateService().GetRandom(4, source: "Airplane!");
 
         Assert.AreEqual(4, result.RequestedCount);
         Assert.IsTrue(result.ReturnedCount <= 4);
@@ -307,9 +314,9 @@ public class SqliteQuoteServiceConversationTests
     }
 
     [TestMethod]
-    public void Search_QuoteInConversation_PopulatesConversationsMembership()
+    public async Task Search_QuoteInConversation_PopulatesConversationsMembership()
     {
-        var result = CreateService().Search("cockpit before", 10, field: "quote");
+        var result = await CreateService().Search("cockpit before", 10, field: "quote");
 
         Assert.HasCount(1, result.Items);
         Assert.IsNotNull(result.Items[0].Conversations);

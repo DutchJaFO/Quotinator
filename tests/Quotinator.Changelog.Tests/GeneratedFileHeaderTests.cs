@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Quotinator.Changelog.Formatting;
 
 namespace Quotinator.Changelog.Tests;
@@ -11,9 +10,6 @@ public sealed class GeneratedFileHeaderTests
     private const string Instruction     = "do not edit by hand.";
     private const string EditLabel       = "Edit:";
     private const string RegenerateLabel = "To regenerate:";
-
-    private static readonly Regex TimestampPattern =
-        new(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", RegexOptions.Compiled);
 
     [TestMethod]
     public void Build_FirstLine_StartsWithNoticePrefix()

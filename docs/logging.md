@@ -24,15 +24,18 @@ Quotinator has two distinct observability tracks. They serve different purposes 
 
 ### Categories and log levels
 
-Every request is categorised by path and logged at a different level. This lets operators choose how much noise they see without disabling request logging entirely.
+Every request is categorised by path for its tag, but all three categories are logged at Debug
+(#244) — normal operation logs only the bare minimum (e.g. the startup/shutdown banners); per-request
+detail is opt-in verbosity for when an operator is actively debugging a problem, not something that
+appears by default just from serving traffic.
 
 | Tag | Level | Paths |
 |---|---|---|
-| `[Api - Request]` | Information | `/api/**` — REST API endpoints |
+| `[Api - Request]` | Debug | `/api/**` — REST API endpoints |
 | `[Web - Request]` | Debug | Blazor pages, culture routes, OpenAPI spec, Scalar UI |
 | `[Web - Asset]` | Debug | Static files (`.js`, `.css`, `.svg`, etc.), `/_framework/**`, `/_content/**`, `/lib/**` |
 
-At the default `info` log level only REST API calls are visible — clean operator view. Set `debug` to see all traffic including Blazor page loads and asset fetches.
+At the default `info` log level, no request traffic is visible at all. Set `debug` to see it.
 
 ### What is captured
 
@@ -43,16 +46,7 @@ Every request produces two log lines: one on arrival, one on completion. Each re
 {tag} {id} {METHOD} {url} → {status} in {ms}ms
 ```
 
-Example — overlapping requests at `info` level (API calls only):
-
-```
-11:00:00.000  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love
-11:00:00.001  [Api - Request] e5f6a7b8 GET /api/v1/health
-11:00:00.002  [Api - Request] e5f6a7b8 GET /api/v1/health → 200 in 2ms
-11:00:00.014  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love → 200 in 14ms
-```
-
-Example — same window at `debug` level (all traffic visible):
+Example — overlapping requests at `debug` level (all traffic visible; at the default `info` level none of this appears at all):
 
 ```
 11:00:00.000  [Api - Request] a1b2c3d4 GET /api/v1/quotes/search?q=love
@@ -92,14 +86,14 @@ If a query parameter ever carries a secret (e.g. `?token=...`), strip that param
 
 ### Serilog quoting and the `{:l}` specifier
 
-Serilog quotes string properties in rendered output by default: `{Url}` → `"/api/v1/health"`. Use the `l` (literal) format specifier on every string property in `LogInformation` calls to suppress this:
+Serilog quotes string properties in rendered output by default: `{Url}` → `"/api/v1/health"`. Use the `l` (literal) format specifier on every string property in a logging call to suppress this:
 
 ```csharp
 // Wrong — Serilog renders: [Api - Request] "a1b2c3d4" "GET" "/api/v1/health"
-_logger.LogInformation("[Api - Request] {Id} {Method} {Url}", id, method, url);
+_logger.LogDebug("[Api - Request] {Id} {Method} {Url}", id, method, url);
 
 // Correct — Serilog renders: [Api - Request] a1b2c3d4 GET /api/v1/health
-_logger.LogInformation("[Api - Request] {Id:l} {Method:l} {Url:l}", id, method, url);
+_logger.LogDebug("[Api - Request] {Id:l} {Method:l} {Url:l}", id, method, url);
 ```
 
 Scalar numerics (`int`, `long`) are not quoted by Serilog and need no specifier.
@@ -240,7 +234,7 @@ Format: `[Subsystem - Phase] message text`
 | `[DataProtection]` | Key persistence setup |
 | `[RateLimit]` | Rate limiter configuration |
 | `[Server]` | Kestrel bind addresses, application lifetime events |
-| `[Api - Request]` | REST API endpoint calls (`/api/**`) — logged at Information |
+| `[Api - Request]` | REST API endpoint calls (`/api/**`) — logged at Debug |
 | `[Web - Request]` | Blazor pages, culture routes, OpenAPI/Scalar UI — logged at Debug |
 | `[Web - Asset]` | Static files and Blazor framework assets — logged at Debug |
 | `[Api - Random]` | Entry to GET /api/v1/quotes/random |
@@ -279,16 +273,8 @@ New subsystems must register a prefix in this table before their log lines land 
 
 ### Example request log output
 
-At `info` level — only REST API calls visible:
-
-```
-11:00:00.000  [Api - Request] a1b2c3d4 GET /api/v1/quotes/random
-11:00:00.008  [Api - Request] a1b2c3d4 GET /api/v1/quotes/random → 200 in 8ms
-11:00:01.000  [Api - Request] b2c3d4e5 GET /api/v1/quotes/search?q=love&lang=nl
-11:00:01.001  [Api - Request] f6a7b8c9 POST /api/v1/admin/database/reseed
-11:00:01.014  [Api - Request] b2c3d4e5 GET /api/v1/quotes/search?q=love&lang=nl → 200 in 14ms
-11:00:01.341  [Api - Request] f6a7b8c9 POST /api/v1/admin/database/reseed → 200 in 340ms
-```
+At `info` level — no request traffic is visible; request logging is Debug-only across all three
+categories (#244).
 
 At `debug` level — all traffic visible, grep by tag to isolate:
 
@@ -300,6 +286,76 @@ At `debug` level — all traffic visible, grep by tag to isolate:
 11:00:00.004  [Web - Request] 7d4e8b1c GET /about → 200 in 2ms
 11:00:00.008  [Api - Request] a1b2c3d4 GET /api/v1/quotes/random → 200 in 8ms
 ```
+
+---
+
+## Logging call-site pattern
+
+**Rule:** any `LogInformation`/`LogDebug`/`LogTrace`/`LogCritical` call that takes template arguments
+must go through a `[LoggerMessage]`-decorated extension method — never call those four directly with
+arguments. A bare, argument-free call (e.g. the opening startup banner) is exempt — there is nothing to
+evaluate ahead of the level check.
+
+**`LogWarning`/`LogError` are a deliberate exception, not an oversight.** Verified directly (2026-08-09,
+#269): `CA1873` — despite its own documentation describing the rule as applying uniformly to any
+logging call with an "expensive" argument — does not fire on `LogWarning`/`LogError` calls at all in
+this SDK version, even when fed an identical, genuinely expensive argument (`string.Join(...)`) that
+does trigger it on `LogInformation` in the same test. Since the goal here is an *enforced* rule backed
+by the 0-warnings build policy, `LogWarning`/`LogError` calls are out of this rule's scope — converting
+them would be unenforceable busywork with no analyzer to prevent regression. If `CA1873`'s coverage
+changes in a future .NET SDK to include these levels, revisit this exception.
+
+**Why:** the standard `ILogger` extension methods take a `params object?[]` — every call allocates and
+boxes that array *before* checking whether the target log level is even enabled, regardless of how
+trivial the arguments are (#269). `[LoggerMessage]` source-generated partial methods check `IsEnabled`
+first, inside the generated method, eliminating that allocation entirely.
+
+### Where a new method belongs
+
+First check whether `Quotinator.Logging`'s shared `LogMessages` class already covers the new call
+site's *shape* — same parameter types, same structural intent (e.g. "a subsystem tag plus a paginated
+page/pageSize pair", or "a subsystem tag plus a bare id"). If so, reuse it with a different `tag`
+argument rather than declaring a near-duplicate method. `Quotinator.Data`, `Quotinator.Core`,
+`Quotinator.Api`, and `Quotinator.Changelog` all reference `Quotinator.Logging` for exactly this —
+including the domain-agnostic data layer, so the same shape doesn't silently reappear as duplicated,
+unconverted code the next time a paginated endpoint is added anywhere in the solution.
+
+Only when the message text is genuinely specific to one subsystem does it belong in that project's own
+`Logging/LogMessages.cs` instead (`src/Quotinator.Api/Logging/`, `src/Quotinator.Core/Logging/`,
+`src/Quotinator.Data/Logging/`, `src/Quotinator.Changelog/Logging/`). Extension methods on `ILogger`,
+not partial methods inside the calling class — no `partial` modifier changes needed on the caller, and
+every call site is a plain one-line method call.
+
+No explicit `EventId` is assigned on any `[LoggerMessage]` attribute — this project's log-navigation
+convention is the `[Subsystem - Phase]` text prefix above, not numeric event IDs.
+
+### A `[LoggerMessage]` conversion does not, by itself, defer an expensive argument
+
+`[LoggerMessage]`'s `IsEnabled` check happens *inside* the generated method — but C# always evaluates
+every argument expression at the call site *before* invoking any method. `logger.LogFileReport(fileName,
+FormatReport(report))` still calls `FormatReport(report)` unconditionally, no matter what the generated
+method's body does afterward. If an argument is a bare identifier or simple member-access read (`page`,
+`quotes.Count`), this doesn't matter. If an argument is itself a non-trivial computation (`string.Join(...)`,
+`Path.GetFileName(...)`, a formatting helper call), wrap the call site in an explicit
+`logger.IsEnabled(LogLevel.X)` check as well:
+
+```csharp
+if (logger.IsEnabled(LogLevel.Information))
+    logger.LogFileReport(fileName, FormatReport(report));
+```
+
+`CA1873` catches this too — it flags a `[LoggerMessage]`-wrapped call the same as a raw one when an
+argument expression is expensive, since the underlying problem (unconditional evaluation) is identical
+either way.
+
+### Why this is enforced, not just documented
+
+`CA1873` is escalated to `warning` in `.editorconfig` — the project's 0-warnings build policy means a
+future direct `LogInformation(...)` call with arguments, or a `[LoggerMessage]` call fed an unguarded
+expensive expression, fails the build immediately, the same way every other escalated analyzer rule
+here is enforced. This section explains why and how to comply; the analyzer is what actually blocks a
+regression. No separate guard test is needed on top of that — `CA1873` already covers this surface
+project-wide.
 
 ---
 

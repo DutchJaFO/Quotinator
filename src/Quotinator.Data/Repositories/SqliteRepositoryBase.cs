@@ -1,6 +1,7 @@
 using System.Reflection;
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Enums;
 
 namespace Quotinator.Data.Repositories;
 
@@ -8,13 +9,15 @@ namespace Quotinator.Data.Repositories;
 /// Infrastructure base for all SQLite repositories in Quotinator.Data.
 /// Provides the connection factory and the table name resolved from the <c>[Table]</c> attribute.
 /// Does not write audit entries — derive from <see cref="SqliteRepository{T}"/> for auditing,
-/// or from this class directly when audit recursion must be avoided (e.g. <see cref="SystemAuditWriter"/>).
+/// or from this class directly when audit recursion must be avoided (e.g. <see cref="AuditEntryWriter"/>).
 /// </summary>
 /// <typeparam name="T">Entity type. Must carry a <c>[Table]</c> attribute from Dapper.Contrib.Extensions.</typeparam>
-public abstract class SqliteRepositoryBase<T> where T : class
+/// <remarks>Initialises the base with the connection factory.</remarks>
+/// <param name="factory">Factory used to open SQLite connections.</param>
+public abstract class SqliteRepositoryBase<T>(IDbConnectionFactory factory) where T : class
 {
     /// <summary>Factory used to open connections. Accessible to derived repository classes.</summary>
-    protected readonly IDbConnectionFactory Factory;
+    protected readonly IDbConnectionFactory Factory = factory;
 
     // Resolved once per T. The table name comes from the [Table] attribute — developer-controlled
     // metadata, not user input. See RepositorySql for why interpolating it into SQL is safe.
@@ -33,12 +36,6 @@ public abstract class SqliteRepositoryBase<T> where T : class
     /// must be read through <c>LOWER(...)</c> — see ADR 012.
     /// </summary>
     protected static readonly IEntityColumnMetadata Columns = ReflectedColumnMetadata.For(typeof(T));
-
-    /// <summary>Initialises the base with the connection factory.</summary>
-    protected SqliteRepositoryBase(IDbConnectionFactory factory)
-    {
-        Factory = factory;
-    }
 
     /// <summary>
     /// Inserts a collection of entities. Data only — no audit entries are written.
