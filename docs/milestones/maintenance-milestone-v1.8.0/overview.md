@@ -69,7 +69,7 @@ and #255/#256 do not carry that urgency.
 | [#286](https://github.com/DutchJaFO/Quotinator/issues/286) | Extract GetById/GetAll generic helpers for the 7 plain-repository-pattern masterdata endpoints | Waiting for release | T1 ✅ T2 ✅ | [286-getbyid-getall-helpers-plan.md](286-getbyid-getall-helpers-plan.md) |
 | [#287](https://github.com/DutchJaFO/Quotinator/issues/287) | Convert IQuoteService and its implementations to fully async | Waiting for release | T1 ✅ T2 ✅ | [287-iquoteservice-async-conversion-plan.md](287-iquoteservice-async-conversion-plan.md) |
 | [#288](https://github.com/DutchJaFO/Quotinator/issues/288) | Migration review: verify full incremental path from last-shipped v1.8.2 schema | Waiting for release | N/A (pure verification, no code change — live Docker verification, see plan doc) | [288-migration-verification-plan.md](288-migration-verification-plan.md) |
-| [#289](https://github.com/DutchJaFO/Quotinator/issues/289) | Squash unshipped migrations since v1.8.2 into one Consumer + one Data migration, add schema-version-overshoot detection + notification | In progress | T1 ⬜ T2 ⬜ | [289-migration-squash-overshoot-detection-plan.md](289-migration-squash-overshoot-detection-plan.md) |
+| [#289](https://github.com/DutchJaFO/Quotinator/issues/289) | Squash unshipped migrations since v1.8.2 into one Consumer + one Data migration, add schema-version-overshoot detection + notification | Waiting for release | T1 ✅ T2 ✅ | [289-migration-squash-overshoot-detection-plan.md](289-migration-squash-overshoot-detection-plan.md) |
 
 ---
 
