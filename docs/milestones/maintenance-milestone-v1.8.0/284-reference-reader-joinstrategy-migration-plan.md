@@ -1,6 +1,6 @@
 # #284 — Migrate masterdata reference readers to JoinQueryRepository/IJoinStrategy, add missing integration tests
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #284
 **Tiers required:** T1, T2
 **Depends on:** none (isolated to the 3 reference readers' internal implementation)
@@ -151,7 +151,7 @@ of the 3 readers.
 | 2 | ✅ | `CharacterSourceLinkReader` executes via `JoinQueryRepository`, same public behaviour | Unit test | `CharacterSourceLinkReaderTests` (5 tests) |
 | 3 | ✅ | `SeriesUniverseReferenceReader` executes via `JoinQueryRepository`, same public behaviour | Unit test | `SeriesUniverseReferenceReaderTests` (5 tests) |
 | 4 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3299/3299 passed |
-| 5 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
+| 5 | ✅ | T1 — app starts in Visual Studio | Live (T1) | Developer confirmed (2026-08-10): clean boot, schema up to date (v6, data v8), stats match seed exactly (799 quotes / 461 sources / 12 characters / 3 people / 30 series / 7 universes / 2 stage directions / 1 sound cue / 4 conversations) |
 | 6 | ✅ | T2 — live container's masterdata endpoints still resolve Series/Source/Universe references correctly | Live (T2) | `docker build` clean; fresh-seeded container's `/masterdata/sources`, `/masterdata/characters`, `/masterdata/series` all correctly resolve their reference (e.g. "The Empire Strikes Back" → Series "Original Trilogy"; "Darth Vader" → Source "The Empire Strikes Back"; "Sean Connery Era" → Universe "James Bond") |
 
 ---
