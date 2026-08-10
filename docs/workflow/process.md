@@ -286,6 +286,19 @@ begins once the plan doc's verification checklist exists and the issue's status 
    output that prove it exists. The fix is complete only when that test passes or those
    steps no longer reproduce the bug.
 
+**Scope that only settles through live discovery still needs a plan doc before code.** Some issues
+don't have a fixed scope at the moment work starts — a research thread, an `AskUserQuestion` pivot, or
+a bug found mid-implementation of something else can each reshape what the issue actually needs several
+times before the shape is final. That is not an exemption from the rule above. Once the scope stops
+moving — the last pivot has been decided — stop and write (or update) the plan doc's verification
+checklist and the red tests it names *before* writing the code that makes them pass, the same as any
+other issue. Found live during #289 (2026-08-10): the squash-then-detection scope went through several
+live decision points, and implementation ran ahead of the plan doc and its tests as a result — both real
+bugs were still caught by running the full suite afterward, but that is due to the specific attentiveness
+applied that session, not something the process itself would have caught had a full suite pass been
+skipped. Do not let "the scope kept changing" become a reason to skip the checklist-first step; it is a
+reason to *delay* writing it until the scope is actually settled, not to write it after the code.
+
 ### Implementation
 
 1. Write every test named in the plan doc's verification checklist first and confirm each one is
