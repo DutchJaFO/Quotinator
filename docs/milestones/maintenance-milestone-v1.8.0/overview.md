@@ -62,6 +62,7 @@ and #255/#256 do not carry that urgency.
 | [#279](https://github.com/DutchJaFO/Quotinator/issues/279) | Standardise endpoint naming (WithName/WithSummary) across CRUD and action endpoints — includes breaking operationId renames | Waiting for release | T1 ✅ T2 ✅ | [279-endpoint-naming-standardization-plan.md](279-endpoint-naming-standardization-plan.md) |
 | [#280](https://github.com/DutchJaFO/Quotinator/issues/280) | Show a startup "please wait" page while the database is created/updated/seeded, with progress if feasible | Waiting for release | T1 ✅ T2 ✅ | [280-startup-wait-page-plan.md](280-startup-wait-page-plan.md) |
 | [#281](https://github.com/DutchJaFO/Quotinator/issues/281) | Research: should the 8 masterdata CRUD endpoint files be refactored to share logic via base classes | Planning | N/A (research, no code change expected until findings are recorded) | No plan doc — findings and recommendation to be recorded in the issue's own closing comment |
+| [#282](https://github.com/DutchJaFO/Quotinator/issues/282) | Research: should real ad-hoc join reads (masterdata reference readers, SqliteQuoteService's Conversation/Quote hydration) adopt, extend, or replace the unused JoinQueryRepository/IJoinStrategy pattern | Planning | N/A (research, no code change expected until findings are recorded) | No plan doc — findings and recommendation to be recorded in the issue's own closing comment |
 
 ---
 
@@ -119,9 +120,20 @@ surfacing that kind of change to operators. #279 must not land before #278 exist
 infrastructure rather than invent a second, parallel status-reporting mechanism; #280 must not land
 before #278 exists to build on.
 
-**#281 has no dependency on any other open issue in this milestone** — it examines the 8 masterdata
-endpoint files as they exist after #279 landed (const-per-endpoint naming already applied), but that
-is incidental to what it's reading, not an implementation-order block.
+**#281 depends on #282 for a complete answer, discovered mid-investigation (2026-08-10).** #281's own
+findings identified `ConversationEndpoints.GetById` as the one file of the 8 that doesn't follow the
+repository-pattern `GetById` idiom — it hydrates a multi-table aggregate (Conversation + lines + their
+polymorphic Quote/StageDirection/SoundCue targets, each independently language-resolved) via
+`SqliteQuoteService`'s own hand-rolled Dapper queries. Investigating that gap surfaced #282: the
+project already has a documented, guard-tested join-capable repository pattern
+(`JoinQueryRepository`/`IJoinStrategy`) that is used by zero real production code, including this
+Conversation read. #281 cannot finish deciding whether Conversation is a genuine, permanent exception
+to a shared `GetById` helper — versus a case that belongs on the same join-capable pattern as everything
+else — until #282 determines whether/how that pattern actually fits. #281 otherwise has no dependency
+on any other open issue in this milestone.
+
+**#282 has no dependency on any other open issue in this milestone** — it's a discovered gap in
+existing infrastructure, independent of the rename/naming work and everything else in flight.
 
 None of the remaining issues block each other beyond these relationships.
 
@@ -234,7 +246,12 @@ None of the remaining issues block each other beyond these relationships.
     landing first so its bonus progress display can reuse the new notification/status infrastructure
 37. **#281** — Research whether the 8 masterdata CRUD endpoint files should share logic via base
     classes or a thin generic helper (filed 2026-08-09 from a developer question raised during #279's
-    own work); independent, no dependency on the others
+    own work); depends on #282 for a complete answer on the Conversation `GetById` exception (see
+    Dependency map above)
+38. **#282** — Research whether the unused `JoinQueryRepository`/`IJoinStrategy` pattern should be
+    adopted, extended, or replaced for the masterdata reference readers and `SqliteQuoteService`'s
+    Conversation/Quote hydration, all of which currently hand-roll their own raw Dapper joins (filed
+    2026-08-10 while investigating #281); independent, no dependency on the others
 
 ---
 
