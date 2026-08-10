@@ -93,13 +93,13 @@ internal sealed class FakeQuoteService : IQuoteService
         ],
     };
 
-    public QuoteResponse? GetById(string id, string? lang = null)
+    public Task<QuoteResponse?> GetById(string id, string? lang = null)
     {
-        if (id == CasablancaEn.Id && lang == "nl") return CasablancaNl;
-        return All.FirstOrDefault(q => q.Id == id);
+        if (id == CasablancaEn.Id && lang == "nl") return Task.FromResult<QuoteResponse?>(CasablancaNl);
+        return Task.FromResult(All.FirstOrDefault(q => q.Id == id));
     }
 
-    public FilteredQuoteResult<QuoteResponse> GetRandom(
+    public Task<FilteredQuoteResult<QuoteResponse>> GetRandom(
         int count,
         string[]? types = null,
         string[]? genres = null,
@@ -135,15 +135,15 @@ internal sealed class FakeQuoteService : IQuoteService
 
         var pool  = filtered.ToList();
         var items = pool.Take(count).ToList();
-        return new FilteredQuoteResult<QuoteResponse>
+        return Task.FromResult(new FilteredQuoteResult<QuoteResponse>
         {
             Status        = items.Count > 0 ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults,
             Items         = items,
             TotalMatching = pool.Count,
-        };
+        });
     }
 
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
+    public Task<PagedResult<QuoteResponse>> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
         var filtered = All
             .Where(q => types is not { Length: > 0 } || types.Any(t => q.Type.Equals(t, StringComparison.OrdinalIgnoreCase)))
@@ -159,10 +159,10 @@ internal sealed class FakeQuoteService : IQuoteService
             : [.. filtered.Skip((page - 1) * pageSize).Take(pageSize)];
 
         var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
-        return new PagedResult<QuoteResponse>(items, page, effectivePageSize, All.Count);
+        return Task.FromResult(new PagedResult<QuoteResponse>(items, page, effectivePageSize, All.Count));
     }
 
-    public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
+    public Task<FilteredQuoteResult<QuoteResponse>> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
         var items = All.Where(q => field switch
                 {
@@ -182,12 +182,12 @@ internal sealed class FakeQuoteService : IQuoteService
                .Take(limit)
                .ToList();
 
-        return new FilteredQuoteResult<QuoteResponse>
+        return Task.FromResult(new FilteredQuoteResult<QuoteResponse>
         {
             Status        = items.Count > 0 ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults,
             Items         = items,
             TotalMatching = items.Count,
-        };
+        });
     }
 
     private static int? ExtractYear(string? date)
@@ -196,6 +196,6 @@ internal sealed class FakeQuoteService : IQuoteService
         return int.TryParse(date.AsSpan(0, 4), out var y) ? y : null;
     }
 
-    public ConversationResponse? GetConversation(string id, string? lang = null)
-        => id.Equals(SampleConversation.Id, StringComparison.OrdinalIgnoreCase) ? SampleConversation : null;
+    public Task<ConversationResponse?> GetConversation(string id, string? lang = null)
+        => Task.FromResult(id.Equals(SampleConversation.Id, StringComparison.OrdinalIgnoreCase) ? SampleConversation : null);
 }

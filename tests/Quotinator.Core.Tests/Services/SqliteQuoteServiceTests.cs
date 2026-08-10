@@ -38,7 +38,12 @@ public class SqliteQuoteServiceTests
         _tempDir = Directory.CreateTempSubdirectory("quotinator_quote_service_test_").FullName;
         _dbPath  = Path.Combine(_tempDir, "test.db");
         _factory = new SqliteConnectionFactory(_dbPath);
-        _service = new SqliteQuoteService(_factory);
+        _service = new SqliteQuoteService(
+            _factory,
+            unicodeAwareSearch: false,
+            new JoinQueryRepository<QuoteRow>(_factory, new QuoteLineStrategy()),
+            new JoinQueryRepository<StageDirectionLineRow>(_factory, new StageDirectionLineStrategy()),
+            new JoinQueryRepository<SoundCueLineRow>(_factory, new SoundCueLineStrategy()));
 
         var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
         var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
@@ -91,26 +96,26 @@ public class SqliteQuoteServiceTests
     }
 
     [TestMethod]
-    public void GetAll_PageSizeZero_ReturnsEveryRowNotZeroRows()
+    public async Task GetAll_PageSizeZero_ReturnsEveryRowNotZeroRows()
     {
-        var result = _service.GetAll(1, 0);
+        var result = await _service.GetAll(1, 0);
 
         Assert.HasCount(5, result.Items, "pageSize = 0 must reach SQLite as LIMIT -1, not a literal LIMIT 0");
         Assert.AreEqual(5, result.TotalCount);
     }
 
     [TestMethod]
-    public void GetAll_PageSizeZero_ReportsEffectivePageSize()
+    public async Task GetAll_PageSizeZero_ReportsEffectivePageSize()
     {
-        var result = _service.GetAll(1, 0);
+        var result = await _service.GetAll(1, 0);
 
         Assert.AreEqual(5, result.PageSize, "PageSize must report the effective count actually returned, not the literal 0 requested");
     }
 
     [TestMethod]
-    public void GetAll_PageSizeNonZero_StillPaginatesNormally()
+    public async Task GetAll_PageSizeNonZero_StillPaginatesNormally()
     {
-        var result = _service.GetAll(1, 2);
+        var result = await _service.GetAll(1, 2);
 
         Assert.HasCount(2, result.Items);
         Assert.AreEqual(5, result.TotalCount);
@@ -198,7 +203,7 @@ public class SqliteQuoteServiceTests
         var quote  = await InsertQuoteAsync(source.Id, "Original English text.");
         await InsertQuoteTranslationAsync(quote.Id, "nl", "Nederlandse tekst.");
 
-        var result = _service.GetById(quote.Id.ToString("D"), lang: "NL");
+        var result = await _service.GetById(quote.Id.ToString("D"), lang: "NL");
 
         Assert.IsNotNull(result);
         Assert.AreEqual("Nederlandse tekst.", result.Quote, "Uppercase ?lang=NL must still resolve the lowercase-stored 'nl' translation");
@@ -214,7 +219,7 @@ public class SqliteQuoteServiceTests
         var source   = await InsertSourceAsync("The Fellowship of the Ring", series.Id);
         var quote    = await InsertQuoteAsync(source.Id, "One does not simply walk into Mordor.");
 
-        var result = _service.GetById(quote.Id.ToString("D"));
+        var result = await _service.GetById(quote.Id.ToString("D"));
 
         Assert.IsNotNull(result);
         Assert.IsNotNull(result.Series);
@@ -227,8 +232,8 @@ public class SqliteQuoteServiceTests
     public async Task GetById_SourceWithNoSeries_ReturnsQuoteWithNullSeriesAndUniverse()
     {
         // TestInitialize's "Test Source" has no SeriesId.
-        var result = _service.GetAll(1, 1).Items[0];
-        var byId   = _service.GetById(result.Id);
+        var result = (await _service.GetAll(1, 1)).Items[0];
+        var byId   = await _service.GetById(result.Id);
 
         Assert.IsNotNull(byId);
         Assert.IsNull(byId!.Series);
@@ -242,7 +247,7 @@ public class SqliteQuoteServiceTests
         var source = await InsertSourceAsync("A Standalone Film", series.Id);
         var quote  = await InsertQuoteAsync(source.Id, "A quote with a series but no universe.");
 
-        var result = _service.GetById(quote.Id.ToString("D"));
+        var result = await _service.GetById(quote.Id.ToString("D"));
 
         Assert.IsNotNull(result);
         Assert.IsNotNull(result.Series);
@@ -260,7 +265,7 @@ public class SqliteQuoteServiceTests
         var seriesRepo = new SqliteRestorableRepository<SeriesEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         await seriesRepo.SoftDeleteAsync(series.Id);
 
-        var result = _service.GetById(quote.Id.ToString("D"));
+        var result = await _service.GetById(quote.Id.ToString("D"));
 
         Assert.IsNotNull(result);
         Assert.IsNull(result!.Series, "A soft-deleted Series must never leak through as a dangling reference.");
@@ -297,7 +302,7 @@ public class SqliteQuoteServiceTests
             DateCreated      = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
         });
 
-        var result = _service.GetById(lowercaseId.ToUpperInvariant());
+        var result = await _service.GetById(lowercaseId.ToUpperInvariant());
 
         Assert.IsNotNull(result,
             "GET /quotes/{id} must resolve regardless of URL casing (#210) — the previously fully-unmitigated gap.");
@@ -310,7 +315,7 @@ public class SqliteQuoteServiceTests
         var source      = await InsertSourceAsync("A Film In The Filtered Series", series.Id);
         var quote       = await InsertQuoteAsync(source.Id, "The only quote that should match.");
 
-        var result = _service.GetAll(1, 10, seriesId: series.Id);
+        var result = await _service.GetAll(1, 10, seriesId: series.Id);
 
         Assert.HasCount(1, result.Items);
         Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
@@ -327,7 +332,7 @@ public class SqliteQuoteServiceTests
         var quoteA   = await InsertQuoteAsync(sourceA.Id, "Quote from Series A.");
         var quoteB   = await InsertQuoteAsync(sourceB.Id, "Quote from Series B.");
 
-        var result = _service.GetAll(1, 10, universeId: universe.Id);
+        var result = await _service.GetAll(1, 10, universeId: universe.Id);
 
         var ids = result.Items.Select(i => i.Id).ToList();
         Assert.Contains(quoteA.Id.ToString("D"), ids);
@@ -350,7 +355,7 @@ public class SqliteQuoteServiceTests
         var quote  = await InsertQuoteAsync(source.Id, "Original English text.");
         await InsertQuoteTranslationAsync(quote.Id, "nl", "Nederlandse tekst.");
 
-        var result = _service.GetAll(1, 10, lang: "nl");
+        var result = await _service.GetAll(1, 10, lang: "nl");
 
         var item = result.Items.Single(i => i.Id == quote.Id.ToString("D"));
         Assert.AreEqual("Nederlandse tekst.", item.Quote);
@@ -365,7 +370,7 @@ public class SqliteQuoteServiceTests
         var source = await InsertSourceAsync("A Film In The Random-Filtered Series", series.Id);
         var quote  = await InsertQuoteAsync(source.Id, "The only quote random selection can pick.");
 
-        var result = _service.GetRandom(10, seriesId: series.Id);
+        var result = await _service.GetRandom(10, seriesId: series.Id);
 
         Assert.HasCount(1, result.Items);
         Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
@@ -379,7 +384,7 @@ public class SqliteQuoteServiceTests
         var source   = await InsertSourceAsync("A Film In It", series.Id);
         var quote    = await InsertQuoteAsync(source.Id, "The only quote random selection can pick.");
 
-        var result = _service.GetRandom(10, universeId: universe.Id);
+        var result = await _service.GetRandom(10, universeId: universe.Id);
 
         Assert.HasCount(1, result.Items);
         Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Models;
+using Quotinator.Core.Queries;
 using Quotinator.Core.Services;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
@@ -107,7 +108,12 @@ public class SqliteQuoteServiceUnicodeSearchTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private SqliteQuoteService CreateService(bool unicodeAwareSearch) => new(_factory, unicodeAwareSearch);
+    private SqliteQuoteService CreateService(bool unicodeAwareSearch) => new(
+        _factory,
+        unicodeAwareSearch,
+        new JoinQueryRepository<QuoteRow>(_factory, new QuoteLineStrategy()),
+        new JoinQueryRepository<StageDirectionLineRow>(_factory, new StageDirectionLineStrategy()),
+        new JoinQueryRepository<SoundCueLineRow>(_factory, new SoundCueLineStrategy()));
 
     // ── Canary: locks in the underlying SQLite limitation this issue exists to work around ──
 
@@ -184,10 +190,10 @@ public class SqliteQuoteServiceUnicodeSearchTests
     [DataRow("author",    "JOSÉ",   true,  true,  "José Saramago")]
     [DataRow(null,        "CAFÉ",   false, false, null)]
     [DataRow(null,        "CAFÉ",   true,  true,  null)]
-    public void Search_MatchesAccentedCaseVariant_OnlyWhenFlagOn(
+    public async Task Search_MatchesAccentedCaseVariant_OnlyWhenFlagOn(
         string? field, string query, bool unicodeAware, bool expectMatch, string? expectedFieldValue)
     {
-        var result = CreateService(unicodeAware).Search(query, 10, field: field);
+        var result = await CreateService(unicodeAware).Search(query, 10, field: field);
 
         Assert.AreEqual(expectMatch ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults, result.Status);
         if (!expectMatch) return;
@@ -214,15 +220,15 @@ public class SqliteQuoteServiceUnicodeSearchTests
     [DataRow("author",    "JOSÉ",   true,  true)]
     [DataRow("source",    "CAFÉ",   false, false)]
     [DataRow("source",    "CAFÉ",   true,  true)]
-    public void GetRandom_FuzzyFilterMatchesAccentedCaseVariant_OnlyWhenFlagOn(
+    public async Task GetRandom_FuzzyFilterMatchesAccentedCaseVariant_OnlyWhenFlagOn(
         string filter, string term, bool unicodeAware, bool expectMatch)
     {
         var service = CreateService(unicodeAware);
         var result = filter switch
         {
-            "character" => service.GetRandom(10, character: term),
-            "author"    => service.GetRandom(10, author: term),
-            "source"    => service.GetRandom(10, source: term),
+            "character" => await service.GetRandom(10, character: term),
+            "author"    => await service.GetRandom(10, author: term),
+            "source"    => await service.GetRandom(10, source: term),
             _           => throw new ArgumentOutOfRangeException(nameof(filter), filter, "Unknown filter"),
         };
 

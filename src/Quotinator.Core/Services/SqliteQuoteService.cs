@@ -6,6 +6,7 @@ using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Models;
+using Quotinator.Data.Repositories;
 using Quotinator.Core.Queries;
 using IdClauses = Quotinator.Data.Queries.IdClauses;
 
@@ -15,17 +16,30 @@ namespace Quotinator.Core.Services;
 /// <see cref="IQuoteService"/> implementation backed by SQLite + Dapper.
 /// All queries use parameterised SQL — never string-concatenated user input.
 /// </summary>
-/// <remarks>Initialises the service with the connection factory used for all database queries.</remarks>
+/// <remarks>Initialises the service with the connection factory and the join-query repositories used
+/// by a Conversation's per-line lookups (ADR 017) — all other queries use the connection factory
+/// directly.</remarks>
 /// <param name="factory">Factory used to open SQLite connections.</param>
 /// <param name="unicodeAwareSearch">
 /// Whether <c>LIKE</c>-based fuzzy matching (quote search, character/author/source filters) uses
 /// the Unicode-aware <c>UNICODE_CONTAINS</c> function instead of SQLite's own ASCII-only
 /// <c>LIKE</c>. Opt-in, off by default — see issue #222.
 /// </param>
-public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicodeAwareSearch = false) : IQuoteService
+/// <param name="quoteLineRepository">Executes a Conversation quote-line's translation-resolved lookup.</param>
+/// <param name="stageDirectionLineRepository">Executes a Conversation stage-direction-line's translation-resolved lookup.</param>
+/// <param name="soundCueLineRepository">Executes a Conversation sound-cue-line's translation-resolved lookup.</param>
+public sealed class SqliteQuoteService(
+    IDbConnectionFactory factory,
+    bool unicodeAwareSearch,
+    JoinQueryRepository<QuoteRow> quoteLineRepository,
+    JoinQueryRepository<StageDirectionLineRow> stageDirectionLineRepository,
+    JoinQueryRepository<SoundCueLineRow> soundCueLineRepository) : IQuoteService
 {
     private readonly IDbConnectionFactory _factory = factory;
     private readonly bool _unicodeAwareSearch = unicodeAwareSearch;
+    private readonly JoinQueryRepository<QuoteRow> _quoteLineRepository = quoteLineRepository;
+    private readonly JoinQueryRepository<StageDirectionLineRow> _stageDirectionLineRepository = stageDirectionLineRepository;
+    private readonly JoinQueryRepository<SoundCueLineRow> _soundCueLineRepository = soundCueLineRepository;
 
     // Maps DB enum name back to the API genre tag for response serialisation.
     private static readonly Dictionary<string, string> GenreDbToApi =
@@ -50,18 +64,18 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
     #region IQuoteService
 
     /// <inheritdoc/>
-    public QuoteResponse? GetById(string id, string? lang = null)
+    public async Task<QuoteResponse?> GetById(string id, string? lang = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        var row = connection.QueryFirstOrDefault<QuoteRow>(Sql.Quotes.SelectById(),
+        var row = await connection.QueryFirstOrDefaultAsync<QuoteRow>(Sql.Quotes.SelectById(),
             new { id, lang = TranslationLang(lang, null) });
 
         if (row is null) return null;
 
-        var genres = LoadGenres(connection, id);
-        return ToResponse(row, genres, LoadConversationMemberships(connection, id));
+        var genres = await LoadGenres(connection, id);
+        return ToResponse(row, genres, await LoadConversationMemberships(connection, id));
     }
 
     /// <inheritdoc/>
@@ -74,7 +88,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
     /// distinct quotes are gathered or the pool is exhausted — a single <c>ORDER BY RANDOM() LIMIT</c>
     /// can't express "exclude a growing set discovered mid-selection" in one round-trip.
     /// </remarks>
-    public FilteredQuoteResult<QuoteResponse> GetRandom(
+    public async Task<FilteredQuoteResult<QuoteResponse>> GetRandom(
         int count,
         string[]? types = null,
         string[]? genres = null,
@@ -92,7 +106,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
 
         var (whereClause, filterParams) = BuildFilterWhere(types, genres, lang, _unicodeAwareSearch, character, author, source, seriesId, universeId, yearFrom, yearTo);
 
-        var totalMatching = connection.ExecuteScalar<int>(
+        var totalMatching = await connection.ExecuteScalarAsync<int>(
             Sql.Quotes.CountRandom(whereClause),
             filterParams);
 
@@ -112,7 +126,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
             rp.Add("count", remaining);
             if (excludedIds.Count > 0) rp.Add("excludedIds", excludedIds);
 
-            var rows = connection.Query<QuoteRow>(Sql.Quotes.SelectRandom(effectiveWhere), rp).ToList();
+            var rows = (await connection.QueryAsync<QuoteRow>(Sql.Quotes.SelectRandom(effectiveWhere), rp)).ToList();
             if (rows.Count == 0) break; // pool exhausted — nothing left outside the exclusion set
 
             foreach (var row in rows)
@@ -124,21 +138,21 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
                 var translationLang = TranslationLang(lang, r.OriginalLanguage);
                 if (translationLang is not null)
                 {
-                    var translated = connection.QueryFirstOrDefault<QuoteRow>(Sql.Quotes.SelectById(), new { id = r.Id, lang = translationLang });
+                    var translated = await connection.QueryFirstOrDefaultAsync<QuoteRow>(Sql.Quotes.SelectById(), new { id = r.Id, lang = translationLang });
                     if (translated is not null) r = translated;
                 }
 
-                var memberships = LoadConversationMemberships(connection, r.Id);
+                var memberships = await LoadConversationMemberships(connection, r.Id);
                 ConversationResponse? embedded = null;
                 if (memberships.Count > 0)
                 {
                     var chosen = memberships[Random.Shared.Next(memberships.Count)];
-                    foreach (var quoteId in connection.Query<string>(Sql.ConversationLines.SelectQuoteIdsForConversation, new { conversationId = chosen.ConversationId }))
+                    foreach (var quoteId in await connection.QueryAsync<string>(Sql.ConversationLines.SelectQuoteIdsForConversation, new { conversationId = chosen.ConversationId }))
                         excludedIds.Add(quoteId);
-                    embedded = BuildConversationResponse(connection, chosen.ConversationId, lang);
+                    embedded = await BuildConversationResponse(connection, chosen.ConversationId, lang);
                 }
 
-                items.Add(ToResponse(r, LoadGenres(connection, r.Id), memberships, embedded));
+                items.Add(ToResponse(r, await LoadGenres(connection, r.Id), memberships, embedded));
             }
         }
 
@@ -153,14 +167,14 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
     }
 
     /// <inheritdoc/>
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
+    public async Task<PagedResult<QuoteResponse>> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
 
         var (whereClause, parameters) = BuildFilterWhere(types, genres, lang, _unicodeAwareSearch, seriesId, universeId, yearFrom, yearTo);
 
-        var total = connection.ExecuteScalar<int>(
+        var total = await connection.ExecuteScalarAsync<int>(
             Sql.Quotes.CountGetAll(whereClause),
             parameters);
 
@@ -169,16 +183,18 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         var p = new DynamicParameters(parameters);
         p.Add("pageSize", limit);
         p.Add("offset",   offset);
-        var rows = connection.Query<QuoteRow>(
-            Sql.Quotes.SelectPaged(whereClause), p).ToList();
+        var rows = (await connection.QueryAsync<QuoteRow>(
+            Sql.Quotes.SelectPaged(whereClause), p)).ToList();
 
-        var items = rows.Select(r => ToResponse(r, LoadGenres(connection, r.Id), LoadConversationMemberships(connection, r.Id))).ToList();
+        var items = new List<QuoteResponse>(rows.Count);
+        foreach (var r in rows)
+            items.Add(ToResponse(r, await LoadGenres(connection, r.Id), await LoadConversationMemberships(connection, r.Id)));
         var effectivePageSize = pageSize == 0 ? items.Count : pageSize;
         return new PagedResult<QuoteResponse>(items, page, effectivePageSize, total);
     }
 
     /// <inheritdoc/>
-    public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
+    public async Task<FilteredQuoteResult<QuoteResponse>> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
@@ -202,8 +218,10 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         p.Add("like",  like);
         p.Add("limit", limit);
 
-        var rows = connection.Query<QuoteRow>(sql, p).ToList();
-        var items = rows.Select(r => ToResponse(r, LoadGenres(connection, r.Id), LoadConversationMemberships(connection, r.Id))).ToList();
+        var rows = (await connection.QueryAsync<QuoteRow>(sql, p)).ToList();
+        var items = new List<QuoteResponse>(rows.Count);
+        foreach (var r in rows)
+            items.Add(ToResponse(r, await LoadGenres(connection, r.Id), await LoadConversationMemberships(connection, r.Id)));
 
         return new FilteredQuoteResult<QuoteResponse>
         {
@@ -214,12 +232,12 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
     }
 
     /// <inheritdoc/>
-    public ConversationResponse? GetConversation(string id, string? lang = null)
+    public async Task<ConversationResponse?> GetConversation(string id, string? lang = null)
     {
         using var connection = _factory.CreateConnection();
         connection.Open();
 
-        return BuildConversationResponse(connection, id, lang);
+        return await BuildConversationResponse(connection, id, lang);
     }
 
     #endregion
@@ -236,8 +254,8 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         return lang;
     }
 
-    private static IReadOnlyList<SafeValue<Genre?>> LoadGenres(System.Data.IDbConnection connection, string quoteId)
-        => [.. connection.Query<SafeValue<Genre?>>(
+    private static async Task<IReadOnlyList<SafeValue<Genre?>>> LoadGenres(System.Data.IDbConnection connection, string quoteId)
+        => [.. await connection.QueryAsync<SafeValue<Genre?>>(
             Sql.QuoteGenres.LoadForQuote,
             new { id = quoteId })];
 
@@ -278,8 +296,8 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
     }
 
     /// <summary>Every conversation <paramref name="quoteId"/> appears in — backs <see cref="QuoteResponse.Conversations"/> on every read call, and <c>/random</c>'s conversation-selection step.</summary>
-    private static IReadOnlyList<QuoteConversationMembership> LoadConversationMemberships(System.Data.IDbConnection connection, string quoteId)
-        => [.. connection.Query<QuoteConversationMembership>(
+    private static async Task<IReadOnlyList<QuoteConversationMembership>> LoadConversationMemberships(System.Data.IDbConnection connection, string quoteId)
+        => [.. await connection.QueryAsync<QuoteConversationMembership>(
             Sql.ConversationLines.SelectMembershipForQuote,
             new { quoteId })];
 
@@ -291,14 +309,16 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
     /// quote lines never carry their own <see cref="QuoteResponse.Conversations"/> or
     /// <see cref="QuoteResponse.EmbeddedConversation"/> — no recursive expansion.
     /// </summary>
-    private static ConversationResponse? BuildConversationResponse(System.Data.IDbConnection connection, string conversationId, string? lang)
+    private async Task<ConversationResponse?> BuildConversationResponse(System.Data.IDbConnection connection, string conversationId, string? lang)
     {
-        var conversation = connection.QueryFirstOrDefault<ConversationRow>(Sql.Conversations.SelectForRead, new { id = conversationId });
+        var conversation = await connection.QueryFirstOrDefaultAsync<ConversationRow>(Sql.Conversations.SelectForRead, new { id = conversationId });
         if (conversation is null) return null;
 
-        var lineRows = connection.Query<ConversationLineRow>(Sql.ConversationLines.SelectByConversationId, new { conversationId = conversation.Id }).ToList();
+        var lineRows = (await connection.QueryAsync<ConversationLineRow>(Sql.ConversationLines.SelectByConversationId, new { conversationId = conversation.Id })).ToList();
 
-        var lines = lineRows.Select(lr => BuildLineResponse(connection, lr, lang)).ToList();
+        var lines = new List<ConversationLineResponse>(lineRows.Count);
+        foreach (var lr in lineRows)
+            lines.Add(await BuildLineResponse(connection, lr, lang));
 
         return new ConversationResponse
         {
@@ -308,7 +328,7 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         };
     }
 
-    private static ConversationLineResponse BuildLineResponse(System.Data.IDbConnection connection, ConversationLineRow lineRow, string? lang)
+    private async Task<ConversationLineResponse> BuildLineResponse(System.Data.IDbConnection connection, ConversationLineRow lineRow, string? lang)
     {
         var wireType = ConversationLineTypeWire(lineRow.LineType);
 
@@ -316,23 +336,18 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         {
             case "quote":
             {
-                var quoteRow = connection.QueryFirstOrDefault<QuoteRow>(Sql.Quotes.SelectById(), new { id = lineRow.QuoteId, lang = TranslationLang(lang, null) });
-                var effectiveRow = quoteRow;
-                if (effectiveRow is not null)
-                {
-                    var translationLang = TranslationLang(lang, effectiveRow.OriginalLanguage);
-                    if (translationLang is not null)
-                    {
-                        var translated = connection.QueryFirstOrDefault<QuoteRow>(Sql.Quotes.SelectById(), new { id = lineRow.QuoteId, lang = translationLang });
-                        if (translated is not null) effectiveRow = translated;
-                    }
-                }
-                var quote = effectiveRow is null ? null : ToResponse(effectiveRow, LoadGenres(connection, effectiveRow.Id));
+                // The single query already resolves translation via LEFT JOIN + COALESCE (Sql.Quotes.SelectBase) —
+                // passing lang directly is equivalent to the old TranslationLang(lang, null) wrapper, which was
+                // a no-op at this call site (see #285's plan doc for the proof). No second query is needed.
+                var rows = await _quoteLineRepository.QueryAsync(new { id = lineRow.QuoteId, lang });
+                var effectiveRow = rows.Count > 0 ? rows[0] : null;
+                var quote = effectiveRow is null ? null : ToResponse(effectiveRow, await LoadGenres(connection, effectiveRow.Id));
                 return new ConversationLineResponse { Order = lineRow.Order, Type = wireType, Quote = quote };
             }
             case "stage_direction":
             {
-                var sd = connection.QueryFirstOrDefault<TextEntityRow>(Sql.StageDirections.SelectByIdWithTranslation, new { id = lineRow.StageDirectionId, lang = lang ?? "en" });
+                var sdRows = await _stageDirectionLineRepository.QueryAsync(new { id = lineRow.StageDirectionId, lang = lang ?? "en" });
+                var sd = sdRows.Count > 0 ? sdRows[0] : null;
                 return new ConversationLineResponse
                 {
                     Order        = lineRow.Order,
@@ -345,7 +360,8 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
             }
             default: // "sound_cue"
             {
-                var sc = connection.QueryFirstOrDefault<TextEntityRow>(Sql.SoundCues.SelectByIdWithTranslation, new { id = lineRow.SoundCueId, lang = lang ?? "en" });
+                var scRows = await _soundCueLineRepository.QueryAsync(new { id = lineRow.SoundCueId, lang = lang ?? "en" });
+                var sc = scRows.Count > 0 ? scRows[0] : null;
                 return new ConversationLineResponse
                 {
                     Order        = lineRow.Order,
@@ -419,23 +435,6 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
     // -------------------------------------------------------------------------
     #region Private row DTO
 
-    private sealed class QuoteRow
-    {
-        public string              Id                { get; init; } = string.Empty;
-        public string              QuoteText         { get; init; } = string.Empty;
-        public string              OriginalLanguage  { get; init; } = "en";
-        public string              Source            { get; init; } = string.Empty;
-        public string?             Date              { get; init; }
-        public SafeValue<QuoteType?> SourceType      { get; init; } = SafeValue<QuoteType?>.Empty;
-        public string?             Character         { get; init; }
-        public string?             Author            { get; init; }
-        public string              EffectiveLanguage { get; init; } = string.Empty;
-        public string?             SeriesId          { get; init; }
-        public string?             SeriesName        { get; init; }
-        public string?             UniverseId        { get; init; }
-        public string?             UniverseName      { get; init; }
-    }
-
     private sealed class ConversationRow
     {
         public string  Id          { get; init; } = string.Empty;
@@ -449,17 +448,6 @@ public sealed class SqliteQuoteService(IDbConnectionFactory factory, bool unicod
         public string? QuoteId          { get; init; }
         public string? StageDirectionId { get; init; }
         public string? SoundCueId       { get; init; }
-    }
-
-    // Shared row shape for StageDirections.SelectByIdWithTranslation / SoundCues.SelectByIdWithTranslation —
-    // SoundFileUrl is simply unpopulated (default null) when mapping a StageDirections row.
-    private sealed class TextEntityRow
-    {
-        public string  Id                { get; init; } = string.Empty;
-        public string  Text              { get; init; } = string.Empty;
-        public string? SoundFileUrl      { get; init; }
-        public string? ImageUrl          { get; init; }
-        public string  EffectiveLanguage { get; init; } = "en";
     }
 
     #endregion

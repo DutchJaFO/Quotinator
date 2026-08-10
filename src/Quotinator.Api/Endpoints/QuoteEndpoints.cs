@@ -266,7 +266,7 @@ internal static class QuoteEndpoints
                 ReturnedCount  = 0,
             });
 
-        var result = service.GetRandom(count, type, genre, character, author, source, lang, yf, yt, seriesResult.Id, universeResult.Id);
+        var result = await service.GetRandom(count, type, genre, character, author, source, lang, yf, yt, seriesResult.Id, universeResult.Id);
 
         if (result.Status == FilteredResultStatus.NoResults)
             return Results.Ok(new FilteredQuoteResult<QuoteResponse>
@@ -282,7 +282,7 @@ internal static class QuoteEndpoints
         return Results.Ok(result);
     }
 
-    private static IResult GetById(
+    private static async Task<IResult> GetById(
         [Description("UUID of the quote.")] string id,
         IQuoteService service,
         IApiLocalizer localizer,
@@ -293,7 +293,7 @@ internal static class QuoteEndpoints
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
-        var quote = service.GetById(id, lang);
+        var quote = await service.GetById(id, lang);
         return NotFoundResult.OkOrNotFound(quote, localizer, ApiMessages.QuoteNotFound);
     }
 
@@ -378,7 +378,7 @@ internal static class QuoteEndpoints
                 Message       = seriesResult.Message ?? universeResult.Message,
             });
 
-        var result = service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yf, yt, seriesResult.Id, universeResult.Id);
+        var result = await service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yf, yt, seriesResult.Id, universeResult.Id);
 
         if (result.Status == FilteredResultStatus.NoResults)
             return Results.Ok(new FilteredQuoteResult<QuoteResponse>
@@ -453,7 +453,7 @@ internal static class QuoteEndpoints
         if (seriesResult.Outcome == EntityFilterOutcome.NotFound || universeResult.Outcome == EntityFilterOutcome.NotFound)
             return Results.Ok(new PagedResult<QuoteResponse>([], pageValue, pageSizeValue, 0));
 
-        var result = service.GetAll(pageValue, pageSizeValue, type, genre, lang, yf, yt, seriesResult.Id, universeResult.Id);
+        var result = await service.GetAll(pageValue, pageSizeValue, type, genre, lang, yf, yt, seriesResult.Id, universeResult.Id);
         return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
             ?? Results.Ok(result);
     }

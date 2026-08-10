@@ -26,7 +26,7 @@ public class QuoteServiceTests
     /// enrichment with a deliberately empty quotes[] section.
     /// </summary>
     [TestMethod]
-    public void Load_EachSourceFile_ReturnsQuotes()
+    public async Task Load_EachSourceFile_ReturnsQuotes()
     {
         Assert.IsTrue(Directory.Exists(SourcesDir), $"data/sources/ not found at: {SourcesDir}");
 
@@ -38,19 +38,19 @@ public class QuoteServiceTests
         foreach (var file in files)
         {
             var service = new QuoteService(file);
-            var result  = service.GetAll(1, 10);
+            var result  = await service.GetAll(1, 10);
             Assert.IsGreaterThan(0, result.TotalCount, $"No quotes loaded from: {Path.GetFileName(file)}");
         }
     }
 
     /// <summary>Every entry in every source file has a non-empty id, quote, and source.</summary>
     [TestMethod]
-    public void Load_EachSourceFile_AllEntriesHaveRequiredFields()
+    public async Task Load_EachSourceFile_AllEntriesHaveRequiredFields()
     {
         foreach (var file in SourceFiles)
         {
             var service = new QuoteService(file);
-            var result  = service.GetAll(1, int.MaxValue);
+            var result  = await service.GetAll(1, int.MaxValue);
 
             foreach (var q in result.Items)
             {
@@ -63,10 +63,10 @@ public class QuoteServiceTests
 
     /// <summary>Missing file returns empty list rather than throwing.</summary>
     [TestMethod]
-    public void Load_MissingFile_ReturnsEmpty()
+    public async Task Load_MissingFile_ReturnsEmpty()
     {
         var service = new QuoteService("does-not-exist.json");
-        var result  = service.GetAll(1, 10);
+        var result  = await service.GetAll(1, 10);
 
         Assert.AreEqual(0, result.TotalCount);
     }

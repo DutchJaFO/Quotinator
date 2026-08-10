@@ -15,7 +15,7 @@ public partial class QuoteCard
     protected override async Task OnInitializedAsync()
     {
         Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
-        LoadQuote();
+        await LoadQuote();
     }
 
     #endregion
@@ -28,9 +28,9 @@ public partial class QuoteCard
     private QuoteResponse? _quote;
     private Quotinator.Api.I18nText.UI Text = new();
 
-    private void LoadQuote()
+    private async Task LoadQuote()
     {
-        var items = QuoteService.GetRandom(1).Items;
+        var items = (await QuoteService.GetRandom(1)).Items;
         _quote = items.Count > 0 ? items[0] : null;
     }
 

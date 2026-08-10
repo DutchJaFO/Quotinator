@@ -460,7 +460,20 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         QuotinatorMigrations.Baseline,
         sp.GetRequiredService<IDiskSpaceProvider>());
 });
-builder.Services.AddSingleton<IQuoteService>(_ => new Quotinator.Core.Services.SqliteQuoteService(connectionFactory, unicodeAwareSearch));
+// #285: resolves a Conversation's per-line quote/stage-direction/sound-cue lookups via
+// JoinQueryRepository/IJoinStrategy per ADR 017.
+builder.Services.AddSingleton<IJoinStrategy<QuoteRow>, QuoteLineStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<QuoteRow>>();
+builder.Services.AddSingleton<IJoinStrategy<StageDirectionLineRow>, StageDirectionLineStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<StageDirectionLineRow>>();
+builder.Services.AddSingleton<IJoinStrategy<SoundCueLineRow>, SoundCueLineStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SoundCueLineRow>>();
+builder.Services.AddSingleton<IQuoteService>(sp => new Quotinator.Core.Services.SqliteQuoteService(
+    connectionFactory,
+    unicodeAwareSearch,
+    sp.GetRequiredService<JoinQueryRepository<QuoteRow>>(),
+    sp.GetRequiredService<JoinQueryRepository<StageDirectionLineRow>>(),
+    sp.GetRequiredService<JoinQueryRepository<SoundCueLineRow>>()));
 builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp => new Quotinator.Core.Services.SqliteQuoteImportService(
     connectionFactory,
     sp.GetRequiredService<IImportBatchRepository>(),

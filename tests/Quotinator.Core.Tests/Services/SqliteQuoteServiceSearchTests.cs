@@ -120,7 +120,12 @@ public class SqliteQuoteServiceSearchTests
             Directory.Delete(_tempDir, recursive: true);
     }
 
-    private SqliteQuoteService CreateService() => new(_factory);
+    private SqliteQuoteService CreateService() => new(
+        _factory,
+        unicodeAwareSearch: false,
+        new JoinQueryRepository<QuoteRow>(_factory, new QuoteLineStrategy()),
+        new JoinQueryRepository<StageDirectionLineRow>(_factory, new StageDirectionLineStrategy()),
+        new JoinQueryRepository<SoundCueLineRow>(_factory, new SoundCueLineStrategy()));
 
     private async Task InsertQuoteTranslationAsync(string quoteId, string language, string quoteText)
     {
@@ -140,9 +145,9 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>Search by quote text returns the matching quote.</summary>
     [TestMethod]
-    public void Search_FieldQuote_WithMatch_ReturnsOk()
+    public async Task Search_FieldQuote_WithMatch_ReturnsOk()
     {
-        var result = CreateService().Search("serious", 10, field: "quote");
+        var result = await CreateService().Search("serious", 10, field: "quote");
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -151,9 +156,9 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>Quote-field search with no match returns NoResults envelope.</summary>
     [TestMethod]
-    public void Search_FieldQuote_NoMatch_ReturnsNoResults()
+    public async Task Search_FieldQuote_NoMatch_ReturnsNoResults()
     {
-        var result = CreateService().Search("xyzzy_no_match", 10, field: "quote");
+        var result = await CreateService().Search("xyzzy_no_match", 10, field: "quote");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.AreEqual(0, result.TotalMatching);
@@ -164,9 +169,9 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>Search by source title returns matching quotes.</summary>
     [TestMethod]
-    public void Search_FieldSource_WithMatch_ReturnsOk()
+    public async Task Search_FieldSource_WithMatch_ReturnsOk()
     {
-        var result = CreateService().Search("Airplane", 10, field: "source");
+        var result = await CreateService().Search("Airplane", 10, field: "source");
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -177,9 +182,9 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>Search by character name returns the matching quote when character data exists.</summary>
     [TestMethod]
-    public void Search_FieldCharacter_WithCharacterData_ReturnsOk()
+    public async Task Search_FieldCharacter_WithCharacterData_ReturnsOk()
     {
-        var result = CreateService().Search("Striker", 10, field: "character");
+        var result = await CreateService().Search("Striker", 10, field: "character");
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -188,9 +193,9 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>Search by character name when no quote has that character returns NoResults.</summary>
     [TestMethod]
-    public void Search_FieldCharacter_NoMatch_ReturnsNoResults()
+    public async Task Search_FieldCharacter_NoMatch_ReturnsNoResults()
     {
-        var result = CreateService().Search("Gandalf", 10, field: "character");
+        var result = await CreateService().Search("Gandalf", 10, field: "character");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.IsEmpty(result.Items);
@@ -201,11 +206,11 @@ public class SqliteQuoteServiceSearchTests
     /// This is the data-gap scenario from issue #109: NULL LIKE '%x%' is NULL, not TRUE.
     /// </summary>
     [TestMethod]
-    public void Search_FieldCharacter_QuoteHasNoCharacter_ReturnsNoResults()
+    public async Task Search_FieldCharacter_QuoteHasNoCharacter_ReturnsNoResults()
     {
         // The "We shall fight" and "Elementary" quotes have no character — searching for anything
         // via field=character should not match them even if the term appears elsewhere.
-        var result = CreateService().Search("Churchill", 10, field: "character");
+        var result = await CreateService().Search("Churchill", 10, field: "character");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.IsEmpty(result.Items);
@@ -215,9 +220,9 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>Search by author name returns the matching quote when author data exists.</summary>
     [TestMethod]
-    public void Search_FieldAuthor_WithAuthorData_ReturnsOk()
+    public async Task Search_FieldAuthor_WithAuthorData_ReturnsOk()
     {
-        var result = CreateService().Search("Churchill", 10, field: "author");
+        var result = await CreateService().Search("Churchill", 10, field: "author");
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -226,9 +231,9 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>Search by author name when no quote has that author returns NoResults.</summary>
     [TestMethod]
-    public void Search_FieldAuthor_NoMatch_ReturnsNoResults()
+    public async Task Search_FieldAuthor_NoMatch_ReturnsNoResults()
     {
-        var result = CreateService().Search("Tolkien", 10, field: "author");
+        var result = await CreateService().Search("Tolkien", 10, field: "author");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.IsEmpty(result.Items);
@@ -239,11 +244,11 @@ public class SqliteQuoteServiceSearchTests
     /// This is the data-gap scenario from issue #109: the bundled sources produce 0 People rows.
     /// </summary>
     [TestMethod]
-    public void Search_FieldAuthor_QuoteHasNoAuthor_ReturnsNoResults()
+    public async Task Search_FieldAuthor_QuoteHasNoAuthor_ReturnsNoResults()
     {
         // "Surely you can't be serious" has no author — searching any term via field=author
         // must not match it even if the term appears in the quote text.
-        var result = CreateService().Search("serious", 10, field: "author");
+        var result = await CreateService().Search("serious", 10, field: "author");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.IsEmpty(result.Items);
@@ -253,9 +258,9 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>type=person returns only person-type quotes.</summary>
     [TestMethod]
-    public void Search_TypePerson_ReturnsPerson()
+    public async Task Search_TypePerson_ReturnsPerson()
     {
-        var result = CreateService().Search("fight", 10, types: ["person"]);
+        var result = await CreateService().Search("fight", 10, types: ["person"]);
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -264,9 +269,9 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>type=anime with no anime quotes in the dataset returns NoResults.</summary>
     [TestMethod]
-    public void Search_TypeAnime_NoAnimeData_ReturnsNoResults()
+    public async Task Search_TypeAnime_NoAnimeData_ReturnsNoResults()
     {
-        var result = CreateService().Search("the", 10, types: ["anime"]);
+        var result = await CreateService().Search("the", 10, types: ["anime"]);
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.IsEmpty(result.Items);
@@ -276,9 +281,9 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>Default search (no field) matches across quote text and source.</summary>
     [TestMethod]
-    public void Search_AllFields_MatchesAcrossQuoteAndSource()
+    public async Task Search_AllFields_MatchesAcrossQuoteAndSource()
     {
-        var result = CreateService().Search("Airplane", 10);
+        var result = await CreateService().Search("Airplane", 10);
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -287,10 +292,10 @@ public class SqliteQuoteServiceSearchTests
 
     /// <summary>limit caps the result count.</summary>
     [TestMethod]
-    public void Search_LimitCapsResults()
+    public async Task Search_LimitCapsResults()
     {
         // All 3 quotes in the fixture match "the" somewhere — limit to 2
-        var result = CreateService().Search("e", 2);
+        var result = await CreateService().Search("e", 2);
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(2, result.TotalMatching);
@@ -312,7 +317,7 @@ public class SqliteQuoteServiceSearchTests
         await InsertQuoteTranslationAsync(
             "ffffffff-0000-0000-0000-000000000001", "nl", "Natuurlijk kun je niet serieus zijn.");
 
-        var result = CreateService().Search("Airplane", 10, lang: "nl");
+        var result = await CreateService().Search("Airplane", 10, lang: "nl");
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual("Natuurlijk kun je niet serieus zijn.", result.Items[0].Quote);

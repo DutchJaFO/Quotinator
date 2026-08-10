@@ -83,7 +83,7 @@ internal static class ConversationEndpoints
         return Results.Ok(response);
     }
 
-    private static IResult GetById(
+    private static async Task<IResult> GetById(
         [Description("UUID of the conversation.")] string id,
         IQuoteService service,
         IApiLocalizer localizer,
@@ -97,7 +97,7 @@ internal static class ConversationEndpoints
                 detail: localizer[ApiMessages.LangInvalid],
                 statusCode: StatusCodes.Status400BadRequest);
 
-        var conversation = service.GetConversation(id, lang);
+        var conversation = await service.GetConversation(id, lang);
         return NotFoundResult.OkOrNotFound(conversation, localizer, ApiMessages.ConversationNotFound);
     }
 

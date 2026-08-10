@@ -21,14 +21,14 @@ public sealed class QuoteService(string dataPath = "data/quotes.json") : IQuoteS
     }
 
     /// <inheritdoc/>
-    public QuoteResponse? GetById(string id, string? lang = null)
+    public Task<QuoteResponse?> GetById(string id, string? lang = null)
     {
         var quote = _quotes.FirstOrDefault(q => q.Id == id);
-        return quote is null ? null : Localise(quote, lang);
+        return Task.FromResult(quote is null ? null : Localise(quote, lang));
     }
 
     /// <inheritdoc/>
-    public FilteredQuoteResult<QuoteResponse> GetRandom(
+    public Task<FilteredQuoteResult<QuoteResponse>> GetRandom(
         int count,
         string[]? types = null,
         string[]? genres = null,
@@ -56,16 +56,16 @@ public sealed class QuoteService(string dataPath = "data/quotes.json") : IQuoteS
         var totalMatching = pool.Count;
         var picks = pool.OrderBy(_ => Random.Shared.Next()).Take(count).Select(q => Localise(q, lang)).ToList();
 
-        return new FilteredQuoteResult<QuoteResponse>
+        return Task.FromResult(new FilteredQuoteResult<QuoteResponse>
         {
             Status        = picks.Count > 0 ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults,
             Items         = picks,
             TotalMatching = totalMatching,
-        };
+        });
     }
 
     /// <inheritdoc/>
-    public PagedResult<QuoteResponse> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
+    public Task<PagedResult<QuoteResponse>> GetAll(int page, int pageSize, string[]? types = null, string[]? genres = null, string? lang = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
         // Flat-file SourceQuoteDto has no Series/Universe concept (#179 is SQLite-only) — these
         // parameters are accepted to satisfy IQuoteService but have no effect on this legacy path.
@@ -77,11 +77,11 @@ public sealed class QuoteService(string dataPath = "data/quotes.json") : IQuoteS
             .Select(q => Localise(q, lang))
             .ToList();
 
-        return new PagedResult<QuoteResponse>(items, page, pageSize, total);
+        return Task.FromResult(new PagedResult<QuoteResponse>(items, page, pageSize, total));
     }
 
     /// <inheritdoc/>
-    public FilteredQuoteResult<QuoteResponse> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
+    public Task<FilteredQuoteResult<QuoteResponse>> Search(string query, int limit, string[]? types = null, string[]? genres = null, string? lang = null, string? field = null, int? yearFrom = null, int? yearTo = null, Guid? seriesId = null, Guid? universeId = null)
     {
         // Flat-file SourceQuoteDto has no Series/Universe concept (#179 is SQLite-only) — these
         // parameters are accepted to satisfy IQuoteService but have no effect on this legacy path.
@@ -102,17 +102,17 @@ public sealed class QuoteService(string dataPath = "data/quotes.json") : IQuoteS
             .Select(q => Localise(q, lang))
             .ToList();
 
-        return new FilteredQuoteResult<QuoteResponse>
+        return Task.FromResult(new FilteredQuoteResult<QuoteResponse>
         {
             Status        = items.Count > 0 ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults,
             Items         = items,
             TotalMatching = items.Count,
-        };
+        });
     }
 
     /// <inheritdoc/>
     /// <remarks>#69: this legacy v1 in-memory service only ever loads flat <see cref="SourceQuoteDto"/> records — it has no conversation data to serve, so this always returns <c>null</c>. Nothing registers this service in the running app; the real implementation is <c>Quotinator.Core.Services.SqliteQuoteService</c>.</remarks>
-    public ConversationResponse? GetConversation(string id, string? lang = null) => null;
+    public Task<ConversationResponse?> GetConversation(string id, string? lang = null) => Task.FromResult<ConversationResponse?>(null);
 
     private static IReadOnlyList<SourceQuoteDto> Filter(IReadOnlyList<SourceQuoteDto> quotes, string[]? types, string[]? genres, int? yearFrom = null, int? yearTo = null)
     {
