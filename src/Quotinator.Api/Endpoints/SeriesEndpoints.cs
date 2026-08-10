@@ -48,7 +48,7 @@ internal static class SeriesEndpoints
                  "Returns a single Series by ID. Returns 404 if not found. `{id}` matches case-insensitively.");
     }
 
-    private static async Task<IResult> GetAll(
+    private static Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
         IListableRepository<SeriesEntity> repository,
@@ -58,29 +58,19 @@ internal static class SeriesEndpoints
     {
         logger.LogPageQuery($"[Api - {GetAllSeriesName}]", page, pageSize);
 
-        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
-            return pageError!;
-
-        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
-
-        var beyondLast = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
-        if (beyondLast is not null)
-            return beyondLast;
-
-        var seriesIds           = result.Items.Select(s => s.Id).ToList();
-        var universesBySeriesId = await universeReader.GetUniverseReferencesForManyAsync(seriesIds);
-
-        var items = result.Items
-            .Select(s => ToResponse(s, universesBySeriesId.TryGetValue(s.Id, out var universe)
-                ? new MasterDataReference(universe.Id.ToCanonicalId(), universe.Name)
-                : null))
-            .ToList();
-
-        var response = new PagedItems<SeriesResponse>(items, result.Page, result.PageSize, result.TotalCount);
-        return Results.Ok(response);
+        return PagedListing.GetAllAsync<SeriesEntity, SeriesResponse>(
+            page, pageSize, localizer, repository,
+            async items =>
+            {
+                var seriesIds           = items.Select(s => s.Id).ToList();
+                var universesBySeriesId = await universeReader.GetUniverseReferencesForManyAsync(seriesIds);
+                return [.. items.Select(s => ToResponse(s, universesBySeriesId.TryGetValue(s.Id, out var universe)
+                    ? new MasterDataReference(universe.Id.ToCanonicalId(), universe.Name)
+                    : null))];
+            });
     }
 
-    private static async Task<IResult> GetById(
+    private static Task<IResult> GetById(
         [Description("UUID of the Series.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
@@ -89,17 +79,13 @@ internal static class SeriesEndpoints
     {
         logger.LogIdQuery($"[Api - {GetSeriesByIdName}]", id);
 
-        if (!Guid.TryParse(id, out var seriesId))
-            return NotFoundResult.OkOrNotFound<SeriesResponse>(null, localizer, ApiMessages.SeriesNotFound);
-
-        var entity = await repository.GetByIdAsync(seriesId);
-        if (entity is null)
-            return NotFoundResult.OkOrNotFound<SeriesResponse>(null, localizer, ApiMessages.SeriesNotFound);
-
-        var universeRef = await universeReader.GetUniverseReferenceAsync(seriesId);
-        var universe     = universeRef is { } u ? new MasterDataReference(u.Id.ToCanonicalId(), u.Name) : null;
-
-        return NotFoundResult.OkOrNotFound(ToResponse(entity, universe), localizer, ApiMessages.SeriesNotFound);
+        return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.SeriesNotFound,
+            async entity =>
+            {
+                var universeRef = await universeReader.GetUniverseReferenceAsync(entity.Id);
+                var universe    = universeRef is { } u ? new MasterDataReference(u.Id.ToCanonicalId(), u.Name) : null;
+                return ToResponse(entity, universe);
+            });
     }
 
     private static SeriesResponse ToResponse(SeriesEntity entity, MasterDataReference? universe) => new()

@@ -45,7 +45,7 @@ internal static class PersonEndpoints
                  "Returns a single person by UUID. Returns 404 if not found. `{id}` matches case-insensitively.");
     }
 
-    private static async Task<IResult> GetAll(
+    private static Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
@@ -54,22 +54,12 @@ internal static class PersonEndpoints
     {
         logger.LogPageQuery($"[Api - {GetAllPeopleName}]", page, pageSize);
 
-        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
-            return pageError!;
-
-        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
-
-        var beyondLast = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
-        if (beyondLast is not null)
-            return beyondLast;
-
-        var response = new PagedItems<PersonResponse>(
-            [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
-
-        return Results.Ok(response);
+        return PagedListing.GetAllAsync<PersonEntity, PersonResponse>(
+            page, pageSize, localizer, repository,
+            items => Task.FromResult<IReadOnlyList<PersonResponse>>([.. items.Select(ToResponse)]));
     }
 
-    private static async Task<IResult> GetById(
+    private static Task<IResult> GetById(
         [Description("UUID of the person.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
@@ -77,11 +67,8 @@ internal static class PersonEndpoints
     {
         logger.LogIdQuery($"[Api - {GetPersonByIdName}]", id);
 
-        PersonResponse? response = Guid.TryParse(id, out var personId)
-            ? await repository.GetByIdAsync(personId) is { } person ? ToResponse(person) : null
-            : null;
-
-        return NotFoundResult.OkOrNotFound(response, localizer, ApiMessages.PersonNotFound);
+        return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.PersonNotFound,
+            person => Task.FromResult(ToResponse(person)));
     }
 
     private static PersonResponse ToResponse(PersonEntity person) => new()

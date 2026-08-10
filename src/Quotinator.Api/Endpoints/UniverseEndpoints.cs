@@ -45,7 +45,7 @@ internal static class UniverseEndpoints
              .WithDescription("Returns a single universe by ID. Matches case-insensitively. Returns 404 if not found.");
     }
 
-    private static async Task<IResult> GetAll(
+    private static Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
         IListableRepository<UniverseEntity> repository,
@@ -54,23 +54,12 @@ internal static class UniverseEndpoints
     {
         logger.LogPageQuery($"[Api - {GetAllUniversesName}]", page, pageSize);
 
-        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
-            return pageError!;
-
-        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
-
-        var beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
-        if (beyondLastError is not null)
-            return beyondLastError;
-
-        var mapped = new PagedItems<UniverseResponse>(
-            [.. result.Items.Select(ToResponse)],
-            result.Page, result.PageSize, result.TotalCount);
-
-        return Results.Ok(mapped);
+        return PagedListing.GetAllAsync<UniverseEntity, UniverseResponse>(
+            page, pageSize, localizer, repository,
+            items => Task.FromResult<IReadOnlyList<UniverseResponse>>([.. items.Select(ToResponse)]));
     }
 
-    private static async Task<IResult> GetById(
+    private static Task<IResult> GetById(
         [Description("UUID of the universe.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
@@ -78,12 +67,8 @@ internal static class UniverseEndpoints
     {
         logger.LogIdQuery($"[Api - {GetUniverseByIdName}]", id);
 
-        UniverseEntity? entity = Guid.TryParse(id, out var universeId)
-            ? await repository.GetByIdAsync(universeId)
-            : null;
-
-        var response = entity is null ? null : ToResponse(entity);
-        return NotFoundResult.OkOrNotFound(response, localizer, ApiMessages.UniverseNotFound);
+        return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.UniverseNotFound,
+            entity => Task.FromResult(ToResponse(entity)));
     }
 
     private static UniverseResponse ToResponse(UniverseEntity entity) => new()

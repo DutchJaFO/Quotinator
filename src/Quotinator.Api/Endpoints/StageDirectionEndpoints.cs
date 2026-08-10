@@ -45,7 +45,7 @@ internal static class StageDirectionEndpoints
              .WithDescription("Returns a single stage direction by ID. Matches case-insensitively. Returns 404 if not found.");
     }
 
-    private static async Task<IResult> GetAll(
+    private static Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
         IListableRepository<StageDirectionEntity> repository,
@@ -54,23 +54,12 @@ internal static class StageDirectionEndpoints
     {
         logger.LogPageQuery($"[Api - {GetAllStageDirectionsName}]", page, pageSize);
 
-        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
-            return pageError!;
-
-        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
-
-        var beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
-        if (beyondLastError is not null)
-            return beyondLastError;
-
-        var mapped = new PagedItems<StageDirectionResponse>(
-            [.. result.Items.Select(ToResponse)],
-            result.Page, result.PageSize, result.TotalCount);
-
-        return Results.Ok(mapped);
+        return PagedListing.GetAllAsync<StageDirectionEntity, StageDirectionResponse>(
+            page, pageSize, localizer, repository,
+            items => Task.FromResult<IReadOnlyList<StageDirectionResponse>>([.. items.Select(ToResponse)]));
     }
 
-    private static async Task<IResult> GetById(
+    private static Task<IResult> GetById(
         [Description("UUID of the stage direction.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
@@ -78,12 +67,8 @@ internal static class StageDirectionEndpoints
     {
         logger.LogIdQuery($"[Api - {GetStageDirectionByIdName}]", id);
 
-        StageDirectionEntity? entity = Guid.TryParse(id, out var stageDirectionId)
-            ? await repository.GetByIdAsync(stageDirectionId)
-            : null;
-
-        var response = entity is null ? null : ToResponse(entity);
-        return NotFoundResult.OkOrNotFound(response, localizer, ApiMessages.StageDirectionNotFound);
+        return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.StageDirectionNotFound,
+            entity => Task.FromResult(ToResponse(entity)));
     }
 
     private static StageDirectionResponse ToResponse(StageDirectionEntity entity) => new()

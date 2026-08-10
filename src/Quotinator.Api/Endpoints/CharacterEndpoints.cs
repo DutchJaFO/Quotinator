@@ -47,7 +47,7 @@ internal static class CharacterEndpoints
              .WithDescription("Returns a single character with the Sources it appears in. Returns 404 if not found. Matches `id` case-insensitively.");
     }
 
-    private static async Task<IResult> GetAll(
+    private static Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
         IListableRepository<CharacterEntity> repository,
@@ -57,27 +57,17 @@ internal static class CharacterEndpoints
     {
         logger.LogPageQuery($"[Api - {GetAllCharactersName}]", page, pageSize);
 
-        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
-            return pageError!;
-
-        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
-
-        var beyondLast = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
-        if (beyondLast is not null)
-            return beyondLast;
-
-        var characterIds     = result.Items.Select(c => c.Id).ToList();
-        var linksByCharacter = await linkReader.GetSourceReferencesForManyAsync(characterIds);
-
-        var items = result.Items
-            .Select(c => ToResponse(c, linksByCharacter.TryGetValue(c.Id, out var sources) ? sources : []))
-            .ToList();
-
-        var response = new PagedItems<CharacterResponse>(items, result.Page, result.PageSize, result.TotalCount);
-        return Results.Ok(response);
+        return PagedListing.GetAllAsync<CharacterEntity, CharacterResponse>(
+            page, pageSize, localizer, repository,
+            async items =>
+            {
+                var characterIds     = items.Select(c => c.Id).ToList();
+                var linksByCharacter = await linkReader.GetSourceReferencesForManyAsync(characterIds);
+                return [.. items.Select(c => ToResponse(c, linksByCharacter.TryGetValue(c.Id, out var sources) ? sources : []))];
+            });
     }
 
-    private static async Task<IResult> GetById(
+    private static Task<IResult> GetById(
         [Description("UUID of the character.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
@@ -86,15 +76,12 @@ internal static class CharacterEndpoints
     {
         logger.LogIdQuery($"[Api - {GetCharacterByIdName}]", id);
 
-        if (!Guid.TryParse(id, out var characterId))
-            return NotFoundResult.OkOrNotFound<CharacterResponse>(null, localizer, ApiMessages.CharacterNotFound);
-
-        var character = await repository.GetByIdAsync(characterId);
-        if (character is null)
-            return NotFoundResult.OkOrNotFound<CharacterResponse>(null, localizer, ApiMessages.CharacterNotFound);
-
-        var sources = await linkReader.GetSourceReferencesAsync(characterId);
-        return NotFoundResult.OkOrNotFound(ToResponse(character, sources), localizer, ApiMessages.CharacterNotFound);
+        return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.CharacterNotFound,
+            async character =>
+            {
+                var sources = await linkReader.GetSourceReferencesAsync(character.Id);
+                return ToResponse(character, sources);
+            });
     }
 
     private static CharacterResponse ToResponse(CharacterEntity character, IReadOnlyList<(Guid Id, string Name)> sources) => new()

@@ -47,7 +47,7 @@ internal static class SourceEndpoints
              .WithDescription("Returns a single Source by UUID. Returns 404 if not found. Matches `id` case-insensitively.");
     }
 
-    private static async Task<IResult> GetAll(
+    private static Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
         IListableRepository<SourceEntity> repository,
@@ -57,29 +57,19 @@ internal static class SourceEndpoints
     {
         logger.LogPageQuery($"[Api - {GetAllSourcesName}]", page, pageSize);
 
-        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
-            return pageError!;
-
-        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
-
-        var beyondLast = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
-        if (beyondLast is not null)
-            return beyondLast;
-
-        var sourceIds        = result.Items.Select(s => s.Id).ToList();
-        var seriesBySourceId = await seriesReader.GetSeriesReferencesForManyAsync(sourceIds);
-
-        var items = result.Items
-            .Select(s => ToResponse(s, seriesBySourceId.TryGetValue(s.Id, out var series)
-                ? new MasterDataReference(series.Id.ToCanonicalId(), series.Name)
-                : null))
-            .ToList();
-
-        var response = new PagedItems<SourceResponse>(items, result.Page, result.PageSize, result.TotalCount);
-        return Results.Ok(response);
+        return PagedListing.GetAllAsync<SourceEntity, SourceResponse>(
+            page, pageSize, localizer, repository,
+            async items =>
+            {
+                var sourceIds        = items.Select(s => s.Id).ToList();
+                var seriesBySourceId = await seriesReader.GetSeriesReferencesForManyAsync(sourceIds);
+                return [.. items.Select(s => ToResponse(s, seriesBySourceId.TryGetValue(s.Id, out var series)
+                    ? new MasterDataReference(series.Id.ToCanonicalId(), series.Name)
+                    : null))];
+            });
     }
 
-    private static async Task<IResult> GetById(
+    private static Task<IResult> GetById(
         [Description("UUID of the source.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
@@ -88,17 +78,13 @@ internal static class SourceEndpoints
     {
         logger.LogIdQuery($"[Api - {GetSourceByIdName}]", id);
 
-        if (!Guid.TryParse(id, out var guid))
-            return NotFoundResult.OkOrNotFound<SourceResponse>(null, localizer, ApiMessages.SourceNotFound);
-
-        var source = await repository.GetByIdAsync(guid);
-        if (source is null)
-            return NotFoundResult.OkOrNotFound<SourceResponse>(null, localizer, ApiMessages.SourceNotFound);
-
-        var seriesRef = await seriesReader.GetSeriesReferenceAsync(guid);
-        var series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToCanonicalId(), s.Name) : null;
-
-        return NotFoundResult.OkOrNotFound(ToResponse(source, series), localizer, ApiMessages.SourceNotFound);
+        return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.SourceNotFound,
+            async source =>
+            {
+                var seriesRef = await seriesReader.GetSeriesReferenceAsync(source.Id);
+                var series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToCanonicalId(), s.Name) : null;
+                return ToResponse(source, series);
+            });
     }
 
     private static SourceResponse ToResponse(SourceEntity source, MasterDataReference? series) => new()

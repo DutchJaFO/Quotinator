@@ -45,7 +45,7 @@ internal static class SoundCueEndpoints
              .WithDescription("Returns a single sound cue by ID. Matches case-insensitively. Returns 404 if not found.");
     }
 
-    private static async Task<IResult> GetAll(
+    private static Task<IResult> GetAll(
         IApiLocalizer localizer,
         ILogger<Log> logger,
         IListableRepository<SoundCueEntity> repository,
@@ -54,23 +54,12 @@ internal static class SoundCueEndpoints
     {
         logger.LogPageQuery($"[Api - {GetAllSoundCuesName}]", page, pageSize);
 
-        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
-            return pageError!;
-
-        var result = await repository.GetPageAsync(pageValue, pageSizeValue);
-
-        var beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
-        if (beyondLastError is not null)
-            return beyondLastError;
-
-        var mapped = new PagedItems<SoundCueResponse>(
-            [.. result.Items.Select(ToResponse)],
-            result.Page, result.PageSize, result.TotalCount);
-
-        return Results.Ok(mapped);
+        return PagedListing.GetAllAsync<SoundCueEntity, SoundCueResponse>(
+            page, pageSize, localizer, repository,
+            items => Task.FromResult<IReadOnlyList<SoundCueResponse>>([.. items.Select(ToResponse)]));
     }
 
-    private static async Task<IResult> GetById(
+    private static Task<IResult> GetById(
         [Description("UUID of the sound cue.")] string id,
         IApiLocalizer localizer,
         ILogger<Log> logger,
@@ -78,12 +67,8 @@ internal static class SoundCueEndpoints
     {
         logger.LogIdQuery($"[Api - {GetSoundCueByIdName}]", id);
 
-        SoundCueEntity? entity = Guid.TryParse(id, out var soundCueId)
-            ? await repository.GetByIdAsync(soundCueId)
-            : null;
-
-        var response = entity is null ? null : ToResponse(entity);
-        return NotFoundResult.OkOrNotFound(response, localizer, ApiMessages.SoundCueNotFound);
+        return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.SoundCueNotFound,
+            entity => Task.FromResult(ToResponse(entity)));
     }
 
     private static SoundCueResponse ToResponse(SoundCueEntity entity) => new()
