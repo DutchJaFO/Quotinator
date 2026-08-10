@@ -9,6 +9,9 @@
     {
       "version": "1.8.3-beta",
       "date": "2026-08-10",
+      "quote": {
+        "text": "Quotinator spent this release learning to fact-check its own database — fitting, for an app built entirely on verified quotes."
+      },
       "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245, 263, 264, 265, 271, 272, 267, 269, 278, 279, 277, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289],
     "highlights": [
       "If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page — an admin database Reset can fix it without needing to restart the app or container.",

@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-10 21:47 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-10 22:19 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ---
 
 ## [1.8.3-beta] - 2026-08-10
+
+> "Quotinator spent this release learning to fact-check its own database — fitting, for an app built entirely on verified quotes."
 
 ### Highlights
 - If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page — an admin database Reset can fix it without needing to restart the app or container.
