@@ -262,6 +262,7 @@
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/279-endpoint-naming-standardization-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/277-backup-gating-and-storage-preflight-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/280-startup-wait-page-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/283-person-completeness-consistency-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

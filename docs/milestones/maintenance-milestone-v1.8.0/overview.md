@@ -63,6 +63,7 @@ and #255/#256 do not carry that urgency.
 | [#280](https://github.com/DutchJaFO/Quotinator/issues/280) | Show a startup "please wait" page while the database is created/updated/seeded, with progress if feasible | Waiting for release | T1 ✅ T2 ✅ | [280-startup-wait-page-plan.md](280-startup-wait-page-plan.md) |
 | [#281](https://github.com/DutchJaFO/Quotinator/issues/281) | Research: should the 8 masterdata CRUD endpoint files be refactored to share logic via base classes | Planning | N/A (research, no code change expected until findings are recorded) | No plan doc — findings and recommendation to be recorded in the issue's own closing comment |
 | [#282](https://github.com/DutchJaFO/Quotinator/issues/282) | Research: should real ad-hoc join reads (masterdata reference readers, SqliteQuoteService's Conversation/Quote hydration) adopt, extend, or replace the unused JoinQueryRepository/IJoinStrategy pattern | Planning | N/A (research, no code change expected until findings are recorded) | No plan doc — findings and recommendation to be recorded in the issue's own closing comment |
+| [#283](https://github.com/DutchJaFO/Quotinator/issues/283) | PersonResponse.CompletenessStatus is nullable with no fallback, unlike every other masterdata entity | In progress | T1 ⬜ T2 ⬜ | [283-person-completeness-consistency-plan.md](283-person-completeness-consistency-plan.md) |
 
 ---
 
@@ -134,6 +135,10 @@ on any other open issue in this milestone.
 
 **#282 has no dependency on any other open issue in this milestone** — it's a discovered gap in
 existing infrastructure, independent of the rename/naming work and everything else in flight.
+
+**#283 has no dependency on any other open issue in this milestone** — it's a standalone response-
+contract bug discovered while investigating #281 (not #281's own core base-class question), fixable
+independently of #281's or #282's outcomes.
 
 None of the remaining issues block each other beyond these relationships.
 
@@ -252,6 +257,10 @@ None of the remaining issues block each other beyond these relationships.
     adopted, extended, or replaced for the masterdata reference readers and `SqliteQuoteService`'s
     Conversation/Quote hydration, all of which currently hand-roll their own raw Dapper joins (filed
     2026-08-10 while investigating #281); independent, no dependency on the others
+39. **#283** — Fix `PersonResponse.CompletenessStatus` to match the non-nullable,
+    `?? Incomplete`-fallback contract every other masterdata entity uses, plus a drive-by reorder of
+    `PersonEndpoints.GetAll`'s beyond-last-page check to match its siblings (filed 2026-08-10 while
+    investigating #281); independent, no dependency on the others
 
 ---
 
