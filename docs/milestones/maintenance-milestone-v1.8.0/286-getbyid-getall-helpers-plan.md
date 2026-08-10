@@ -134,7 +134,7 @@ issue's own scope).
 | 2 | ✅ | All 7 endpoint files use the helpers, same public behaviour | Unit test | Existing endpoint test suites pass unmodified (3299/3299) |
 | 3 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3299/3299 |
 | 4 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
-| 5 | ⬜ | T2 — live container's 7 masterdata list/get-by-id endpoints still work correctly | Live (T2) | Docker smoke test |
+| 5 | ✅ | T2 — live container's 7 masterdata list/get-by-id endpoints still work correctly | Live (T2) | `docker build` clean; all 7 `GetAll`/`GetById` pairs return correct data (Character/Series/Source correctly resolve their reference; Person/SoundCue/StageDirection/Universe map directly); not-found returns `404`; page-beyond-last returns `422`; `pageSize=0` returns every row as one page |
 
 ---
 
