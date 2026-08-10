@@ -1,6 +1,6 @@
 # #287 — Convert IQuoteService and its implementations to fully async
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #287
 **Tiers required:** T1, T2
 **Depends on:** none (a pure signature conversion, isolated to `IQuoteService` and its call graph)
@@ -94,19 +94,42 @@ concurrent use from multiple threads, so a sequential `foreach` with `await` is 
 ## Steps
 
 ### 1. Convert IQuoteService, QuoteService, FakeQuoteService
-**Status:** ⬜ Not started
+**Status:** ✅ Done — all 5 interface methods return `Task<T>`; `QuoteService` wraps each result in
+`Task.FromResult(...)` (no real async work, confirmed unregistered in production); `FakeQuoteService`
+matches.
 
 ### 2. Convert SqliteQuoteService
-**Status:** ⬜ Not started
+**Status:** ✅ Done — every method and private helper (`LoadGenres`, `LoadConversationMemberships`,
+`BuildConversationResponse`, `BuildLineResponse`) is now `async Task<T>`, using Dapper's async API.
+`BuildConversationResponse`/`BuildLineResponse` dropped `static` (now instance methods, since they use
+the injected `JoinQueryRepository<T>` fields). `GetAll`'s and `Search`'s `.Select(...)` LINQ mapping
+over rows became a `foreach` loop, since each row's mapping now needs `await`.
+
+**This step also completed #285's own actual code wiring**, as a natural side effect: the 3
+`JoinQueryRepository<T>` constructor parameters were already scaffolded on `SqliteQuoteService` before
+this issue's async blocker was discovered (added while investigating #285, before realizing the async
+cascade), so converting `BuildLineResponse` to compile at all meant wiring those fields in rather than
+writing a throwaway async-Dapper-direct version first and replacing it in a later, separate #285
+commit. #285's own plan doc records this — its remaining scope is verification and closing only.
 
 ### 3. Convert endpoint handlers and QuoteCard.razor.cs
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `QuoteEndpoints.GetById` and `ConversationEndpoints.GetById` are now
+`async Task<IResult>`; the other 3 `QuoteEndpoints` handlers (already async) gained `await`.
+`QuoteCard.razor.cs`'s `LoadQuote()` is `async Task`, awaited from `OnInitializedAsync`; no markup
+change needed.
 
 ### 4. Convert test call sites
-**Status:** ⬜ Not started
+**Status:** ✅ Done — all 51 call sites across `QuoteServiceTests.cs` (3),
+`SqliteQuoteServiceConversationTests.cs` (15), `SqliteQuoteServiceSearchTests.cs` (14),
+`SqliteQuoteServiceTests.cs` (15), `SqliteQuoteServiceUnicodeSearchTests.cs` (4) gained `await`;
+every `[TestMethod] public void` that called one of these methods became `async Task`. Each file's own
+`CreateService()`/direct-construction call site was also updated to pass the 3 new
+`JoinQueryRepository<T>` constructor arguments.
 
 ### 5. Verify
-**Status:** ⬜ Not started
+**Status:** ✅ Done — full solution build: 0 warnings/0 errors. Full solution test suite: 3299/3299
+passed (same count as before this issue — a pure signature conversion adds no new tests, per its own
+"Expected tests: Omitted" scope), 0 failures, 0 regressions.
 
 ---
 
@@ -114,8 +137,8 @@ concurrent use from multiple threads, so a sequential `foreach` with `await` is 
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | `IQuoteService` and both implementations compile async, same behaviour | Build + test | Full solution build/test |
-| 2 | ⬜ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — all pass |
+| 1 | ✅ | `IQuoteService` and both implementations compile async, same behaviour | Build + test | Full solution build/test, 3299/3299 |
+| 2 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3299/3299 |
 | 3 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
 | 4 | ⬜ | T2 — live container's quote/conversation endpoints and the QuoteCard component still work | Live (T2) | Docker smoke test |
 
