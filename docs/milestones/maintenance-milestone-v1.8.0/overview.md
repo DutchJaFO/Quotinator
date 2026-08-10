@@ -66,7 +66,7 @@ and #255/#256 do not carry that urgency.
 | [#283](https://github.com/DutchJaFO/Quotinator/issues/283) | PersonResponse.CompletenessStatus is nullable with no fallback, unlike every other masterdata entity | Waiting for release | T1 ✅ T2 ✅ | [283-person-completeness-consistency-plan.md](283-person-completeness-consistency-plan.md) |
 | [#284](https://github.com/DutchJaFO/Quotinator/issues/284) | Migrate masterdata reference readers to JoinQueryRepository/IJoinStrategy, add missing integration tests | Waiting for release | T1 ✅ T2 ✅ | [284-reference-reader-joinstrategy-migration-plan.md](284-reference-reader-joinstrategy-migration-plan.md) |
 | [#285](https://github.com/DutchJaFO/Quotinator/issues/285) | Wrap Conversation's per-line lookups as IJoinStrategy implementations, fix redundant quote query | Waiting for release | T1 ✅ T2 ✅ | [285-conversation-line-lookup-joinstrategy-plan.md](285-conversation-line-lookup-joinstrategy-plan.md) |
-| [#286](https://github.com/DutchJaFO/Quotinator/issues/286) | Extract GetById/GetAll generic helpers for the 7 plain-repository-pattern masterdata endpoints | Planning | T1 ⬜ T2 ⬜ | [286-getbyid-getall-helpers-plan.md](286-getbyid-getall-helpers-plan.md) |
+| [#286](https://github.com/DutchJaFO/Quotinator/issues/286) | Extract GetById/GetAll generic helpers for the 7 plain-repository-pattern masterdata endpoints | Waiting for release | T1 ✅ T2 ✅ | [286-getbyid-getall-helpers-plan.md](286-getbyid-getall-helpers-plan.md) |
 | [#287](https://github.com/DutchJaFO/Quotinator/issues/287) | Convert IQuoteService and its implementations to fully async | Waiting for release | T1 ✅ T2 ✅ | [287-iquoteservice-async-conversion-plan.md](287-iquoteservice-async-conversion-plan.md) |
 
 ---
