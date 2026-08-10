@@ -1,12 +1,9 @@
 # #285 — Wrap Conversation's per-line lookups as IJoinStrategy implementations, fix redundant quote query
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #285
 **Tiers required:** T1, T2
-**Depends on:** ADR 017 (done), #287 (in progress — `JoinQueryRepository` is async-only, forcing
-`BuildLineResponse`/`BuildConversationResponse`/`GetConversation`/`GetRandom` to become async, which
-became #287's own full `IQuoteService` conversion; #285's POCOs/strategies/DI registrations are
-already scaffolded, only the actual wiring into `SqliteQuoteService` waits on #287)
+**Depends on:** ADR 017 (done), #287 (done)
 
 ---
 
@@ -111,16 +108,31 @@ where `SqliteQuoteService` itself is registered.
 ## Steps
 
 ### 1. Add the POCOs and strategy classes
-**Status:** ⬜ Not started
+**Status:** ✅ Done — landed in the same commit as #284's own migration groundwork
+(`feat [#284]: migrate reference readers to JoinQueryRepository/IJoinStrategy` was a separate commit;
+`QuoteLineStrategy`/`StageDirectionLineStrategy`/`SoundCueLineStrategy` and their POCOs
+(`QuoteRow` promoted from `SqliteQuoteService`'s own private class; `StageDirectionLineRow`/
+`SoundCueLineRow` split from the shared `TextEntityRow`, per this doc's Background) were added while
+scaffolding #285's own constructor changes, ahead of discovering the async blocker).
 
 ### 2. Update SqliteQuoteService's constructor and the two Build* methods
-**Status:** ⬜ Not started
+**Status:** ✅ Done — **landed as part of #287's own commit**
+(`feat [#287][#285]: convert IQuoteService and implementations to fully async`), not a separate #285
+commit. #287's async conversion required rewriting `BuildLineResponse`/`BuildConversationResponse`
+regardless; since the `JoinQueryRepository<T>` constructor fields were already scaffolded (added
+before the async blocker was discovered), wiring them in directly was the natural implementation —
+writing a throwaway async-Dapper-direct version first and replacing it in a separate #285 commit
+would have been pure churn. The quote branch is now a single call, exactly as planned (see Approach).
 
 ### 3. Update Program.cs DI registrations
-**Status:** ⬜ Not started
+**Status:** ✅ Done — same commit as Step 2.
 
 ### 4. Verify
-**Status:** ⬜ Not started
+**Status:** ✅ Done — see #287's own plan doc for the full build/test/T1/T2 evidence (same commits,
+same running app/container). Directly re-confirmed here: `ConversationEndpoints.cs`'s live `GET
+/conversations/{id}` response (T2 pass) shows correctly resolved mixed stage-direction/quote lines,
+with series/universe references embedded, and correct English fallback under `?lang=nl` where no
+Dutch translation exists — proving all three `JoinQueryRepository`-backed branches work.
 
 ---
 
@@ -128,14 +140,19 @@ where `SqliteQuoteService` itself is registered.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | Quote/StageDirection/SoundCue line lookups execute via `JoinQueryRepository`, same public behaviour | Unit test | Existing `ConversationEndpointsTests`/`SqliteQuoteServiceTests` pass unmodified |
-| 2 | ⬜ | Quote branch issues a single query, not two | Code review | Diff shows one `QueryAsync` call, no `TranslationLang`-gated second call |
-| 3 | ⬜ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — all pass |
-| 4 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
-| 5 | ⬜ | T2 — live container's Conversation endpoint still resolves quote/stage-direction/sound-cue lines correctly, with and without `lang` | Live (T2) | Docker smoke test |
+| 1 | ✅ | Quote/StageDirection/SoundCue line lookups execute via `JoinQueryRepository`, same public behaviour | Unit test | Existing `ConversationEndpointsTests`/`SqliteQuoteServiceConversationTests` pass unmodified (updated for #287's async signatures, no assertion changes) |
+| 2 | ✅ | Quote branch issues a single query, not two | Code review | `BuildLineResponse`'s `"quote"` case is one `await _quoteLineRepository.QueryAsync(...)` call, no `TranslationLang`-gated second call |
+| 3 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3299/3299 passed |
+| 4 | ✅ | T1 — app starts in Visual Studio | Live (T1) | Developer confirmed (2026-08-10, same pass as #287): clean boot, schema/stats match seed exactly |
+| 5 | ✅ | T2 — live container's Conversation endpoint still resolves quote/stage-direction/sound-cue lines correctly, with and without `lang` | Live (T2) | `GET /conversations/{id}` (Star Wars "I am your father" scene) correctly returns mixed stage-direction + 4 quote lines with series/universe embedded; `?lang=nl` correctly falls back to English (no Dutch translation in this fixture) |
 
 ---
 
 ## Notes
 
-None yet.
+**Implementation landed across two commits, split differently than "Files touched" above
+anticipated.** The POCOs/strategies (Step 1) landed with #284's own migration work; the actual
+`SqliteQuoteService`/`Program.cs` wiring (Steps 2–3) landed inside #287's async-conversion commit,
+since #287 needed to rewrite the exact same methods regardless and the constructor fields already
+existed. No functional deviation from this doc's Approach — the code matches what was planned, just
+committed under #287's own message rather than a separate #285 commit.
