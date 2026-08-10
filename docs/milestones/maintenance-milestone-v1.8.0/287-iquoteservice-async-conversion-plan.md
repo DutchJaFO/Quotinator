@@ -1,6 +1,6 @@
 # #287 — Convert IQuoteService and its implementations to fully async
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #287
 **Tiers required:** T1, T2
 **Depends on:** none (a pure signature conversion, isolated to `IQuoteService` and its call graph)
@@ -139,7 +139,7 @@ passed (same count as before this issue — a pure signature conversion adds no 
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | `IQuoteService` and both implementations compile async, same behaviour | Build + test | Full solution build/test, 3299/3299 |
 | 2 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3299/3299 |
-| 3 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
+| 3 | ✅ | T1 — app starts in Visual Studio | Live (T1) | Developer confirmed (2026-08-10): clean boot, schema up to date (v6, data v8), stats match seed exactly (799 quotes / 461 sources / 12 characters / 3 people / 30 series / 7 universes / 2 stage directions / 1 sound cue / 4 conversations) |
 | 4 | ✅ | T2 — live container's quote/conversation endpoints and the QuoteCard component still work | Live (T2) | `docker build` clean; `/quotes` (GetAll), `/quotes/random` (GetRandom), `/quotes/search` (Search) all return `200` with correct data; `/conversations/{id}` (GetById) correctly resolves mixed stage-direction/quote lines via the new `JoinQueryRepository` wiring, with and without `?lang=nl` (falls back to English correctly, no translation existing); home page's `QuoteCard` Blazor component renders a real quote via its now-async `LoadQuote()`, `POST /_blazor/negotiate` confirms an interactive circuit, no console/network errors |
 
 ---

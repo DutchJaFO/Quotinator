@@ -67,7 +67,7 @@ and #255/#256 do not carry that urgency.
 | [#284](https://github.com/DutchJaFO/Quotinator/issues/284) | Migrate masterdata reference readers to JoinQueryRepository/IJoinStrategy, add missing integration tests | Waiting for release | T1 ✅ T2 ✅ | [284-reference-reader-joinstrategy-migration-plan.md](284-reference-reader-joinstrategy-migration-plan.md) |
 | [#285](https://github.com/DutchJaFO/Quotinator/issues/285) | Wrap Conversation's per-line lookups as IJoinStrategy implementations, fix redundant quote query | Planning | T1 ⬜ T2 ⬜ | [285-conversation-line-lookup-joinstrategy-plan.md](285-conversation-line-lookup-joinstrategy-plan.md) |
 | [#286](https://github.com/DutchJaFO/Quotinator/issues/286) | Extract GetById/GetAll generic helpers for the 7 plain-repository-pattern masterdata endpoints | Planning | N/A yet | No plan doc yet |
-| [#287](https://github.com/DutchJaFO/Quotinator/issues/287) | Convert IQuoteService and its implementations to fully async | In progress | T1 ⬜ T2 ⬜ | [287-iquoteservice-async-conversion-plan.md](287-iquoteservice-async-conversion-plan.md) |
+| [#287](https://github.com/DutchJaFO/Quotinator/issues/287) | Convert IQuoteService and its implementations to fully async | Waiting for release | T1 ✅ T2 ✅ | [287-iquoteservice-async-conversion-plan.md](287-iquoteservice-async-conversion-plan.md) |
 
 ---
 
