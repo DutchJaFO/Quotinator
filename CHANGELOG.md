@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-10 19:56 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-10 21:32 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -65,6 +65,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A Conversation's quote/stage-direction/sound-cue line lookups now execute through the same shared join-query infrastructure as issue #284, resolving issue #281's remaining open question about that endpoint; a redundant duplicate database query on the quote branch, found during this work, is also gone — no functional change (issue #285)
 - The seven masterdata REST endpoints that share the plain repository pattern (Characters, People, Series, SoundCues, Sources, StageDirections, Universes) now share one generic implementation of their list/get-by-id logic instead of each duplicating it, the direct outcome of issue #281's investigation — no functional change, no API surface change (issue #286)
 - Internal quote and conversation database access (`IQuoteService` and its implementations) is now fully asynchronous throughout, a prerequisite discovered while implementing issue #285 for using the project's shared join-query infrastructure there — no functional change, no API surface change (issue #287)
+- Verified the full database upgrade path from the last release against a real copy of that release's database, confirming every migration since applies cleanly with no data loss — a routine internal check with no behaviour change of its own (issue #288)
+- A batch of not-yet-released internal database migrations was consolidated into a smaller number of steps before release, to keep future upgrades simpler; if a database somehow ends up recording a schema version ahead of what the app expects (only possible on a database that ran the pre-consolidation migrations before this release shipped), Quotinator now notices and shows an action-recommended notification suggesting a database Reset, instead of silently carrying on with a stale internal version number (issue #289)
 
 ### Fixed
 - Database columns backed by the duplicate-resolution-policy setting (`ImportBatches.ConflictPolicy`, and the internal `AppliedPolicy` column on two provenance tables) now reject an invalid value at the database level via a CHECK constraint, matching every other enum-backed column in the schema; a pre-existing data inconsistency this closed is also normalised automatically (issue #150)
