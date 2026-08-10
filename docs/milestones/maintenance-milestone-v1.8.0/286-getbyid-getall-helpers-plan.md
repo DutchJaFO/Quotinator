@@ -1,6 +1,6 @@
 # #286 — Extract GetById/GetAll generic helpers for the 7 plain-repository-pattern masterdata endpoints
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #286
 **Tiers required:** T1, T2
 **Depends on:** #283 (done — Person is one of the 7 covered entities, needed its consistency fix first)
@@ -107,16 +107,22 @@ and not-found message key are all unchanged.
 ## Steps
 
 ### 1. Add the two shared helpers
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `EntityLookup.TryFindByIdAsync`/`PagedListing.GetAllAsync` in
+`Quotinator.Api/Endpoints/Shared/`, matching the issue's exact specified signatures.
 
 ### 2. Apply to the 4 entities with no reference reader (Person, SoundCue, StageDirection, Universe)
-**Status:** ⬜ Not started
+**Status:** ✅ Done — each `mapAsync`/`mapItemsAsync` delegate wraps the existing sync `ToResponse`
+in `Task.FromResult(...)`.
 
 ### 3. Apply to the 3 entities with a batched reference reader (Character, Series, Source)
-**Status:** ⬜ Not started
+**Status:** ✅ Done — each `mapItemsAsync` delegate does the batched reference-reader call once per
+page (unchanged from before), then maps; each `mapAsync` delegate does the single reference-reader
+call, then maps. Matches the Approach section exactly.
 
 ### 4. Verify
-**Status:** ⬜ Not started
+**Status:** ✅ Done — full solution build (0 warnings/0 errors) and test suite green: 3299/3299
+passed, 0 failures, 0 regressions (same total as before — pure refactor, no new tests per the
+issue's own scope).
 
 ---
 
@@ -124,9 +130,9 @@ and not-found message key are all unchanged.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | Both helpers added, matching the issue's exact specified signatures | Code review | `EntityLookup.cs`/`PagedListing.cs` |
-| 2 | ⬜ | All 7 endpoint files use the helpers, same public behaviour | Unit test | Existing endpoint test suites pass unmodified |
-| 3 | ⬜ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — all pass |
+| 1 | ✅ | Both helpers added, matching the issue's exact specified signatures | Code review | `EntityLookup.cs`/`PagedListing.cs` |
+| 2 | ✅ | All 7 endpoint files use the helpers, same public behaviour | Unit test | Existing endpoint test suites pass unmodified (3299/3299) |
+| 3 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3299/3299 |
 | 4 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
 | 5 | ⬜ | T2 — live container's 7 masterdata list/get-by-id endpoints still work correctly | Live (T2) | Docker smoke test |
 
