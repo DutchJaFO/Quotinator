@@ -56,7 +56,7 @@ and #255/#256 do not carry that urgency.
 | [#269](https://github.com/DutchJaFO/Quotinator/issues/269) | Adopt a project-wide pattern for expensive logging arguments (CA1873) | Waiting for release | T1 ✅ T2 ✅ | [269-loggermessage-pattern-plan.md](269-loggermessage-pattern-plan.md) |
 | [#271](https://github.com/DutchJaFO/Quotinator/issues/271) | Rename ActionPayload/ConverterOptions classes, add ImportActionFieldRow subclasses (ADR 016 revision) | Waiting for release | N/A | [271-actionpayload-converteroptions-rename-plan.md](271-actionpayload-converteroptions-rename-plan.md) |
 | [#272](https://github.com/DutchJaFO/Quotinator/issues/272) | Add AuditEntryResponse/AuditChangeResponse DTOs — stop leaking SafeValue's raw/parsed wrapper over HTTP | Waiting for release | N/A | [272-audit-response-dto-plan.md](272-audit-response-dto-plan.md) |
-| [#276](https://github.com/DutchJaFO/Quotinator/issues/276) | Startup backup safety-net improvements: correct backup gating + notification system (parent tracking issue for #277/#278) | Planning | N/A (parent — no code of its own) | No plan doc — tracking issue only |
+| [#276](https://github.com/DutchJaFO/Quotinator/issues/276) | Startup backup safety-net improvements: correct backup gating + notification system (parent tracking issue for #277/#278) | Waiting for release | N/A (parent — no code of its own) | No plan doc — tracking issue only |
 | [#277](https://github.com/DutchJaFO/Quotinator/issues/277) | Gate startup backups on each action's own real-work signal, not an inferred flag; add a storage pre-flight check | Waiting for release | T1 ✅ T2 ✅ | [277-backup-gating-and-storage-preflight-plan.md](277-backup-gating-and-storage-preflight-plan.md) |
 | [#278](https://github.com/DutchJaFO/Quotinator/issues/278) | Add a startup notification system surfaced in the #263 modals | Waiting for release | T1 ✅ T2 ✅ | [278-startup-notification-system-plan.md](278-startup-notification-system-plan.md) |
 | [#279](https://github.com/DutchJaFO/Quotinator/issues/279) | Standardise endpoint naming (WithName/WithSummary) across CRUD and action endpoints — includes breaking operationId renames | Waiting for release | T1 ✅ T2 ✅ | [279-endpoint-naming-standardization-plan.md](279-endpoint-naming-standardization-plan.md) |
@@ -249,14 +249,15 @@ None of the remaining issues block each other beyond these relationships.
 36. **#280** — Show a startup "please wait" page while the database is created/updated/seeded, with
     progress if feasible (split out of #269's own T1 verification, 2026-08-09); depends on #278
     landing first so its bonus progress display can reuse the new notification/status infrastructure
-37. **#281** — Research whether the 8 masterdata CRUD endpoint files should share logic via base
-    classes or a thin generic helper (filed 2026-08-09 from a developer question raised during #279's
-    own work); depends on #282 for a complete answer on the Conversation `GetById` exception (see
-    Dependency map above)
-38. **#282** — Research whether the unused `JoinQueryRepository`/`IJoinStrategy` pattern should be
+37. **#282** — Research whether the unused `JoinQueryRepository`/`IJoinStrategy` pattern should be
     adopted, extended, or replaced for the masterdata reference readers and `SqliteQuoteService`'s
     Conversation/Quote hydration, all of which currently hand-roll their own raw Dapper joins (filed
-    2026-08-10 while investigating #281); independent, no dependency on the others
+    2026-08-10 while investigating #281); sequenced ahead of #281 despite being filed later, since
+    #281 depends on its answer (see Dependency map above)
+38. **#281** — Research whether the 8 masterdata CRUD endpoint files should share logic via base
+    classes or a thin generic helper (filed 2026-08-09 from a developer question raised during #279's
+    own work); depends on #282 landing first — its own recommendation on the Conversation `GetById`
+    exception is incomplete until #282 determines whether that read can join the same pattern
 39. **#283** — Fix `PersonResponse.CompletenessStatus` to match the non-nullable,
     `?? Incomplete`-fallback contract every other masterdata entity uses, plus a drive-by reorder of
     `PersonEndpoints.GetAll`'s beyond-last-page check to match its siblings (filed 2026-08-10 while
