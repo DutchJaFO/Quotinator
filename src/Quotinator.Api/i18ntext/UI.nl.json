@@ -53,6 +53,8 @@
   "StartupErrorHeading": "Quotinator is gestart met een probleem",
   "StartupErrorLastKnownGood": "De database is achtergelaten in de laatst bekende goede staat:",
   "StartupErrorContinueButton": "Doorgaan",
+  "StartupWaitHeading": "Quotinator wordt gestart",
+  "StartupWaitBody": "De database wordt aangemaakt, bijgewerkt of gevuld. Deze pagina wordt automatisch ververst — er is geen actie nodig.",
   "RestApiLimitedBadge": "Beperkt",
   "RestApiDegradedBanner": "Beperkte functionaliteit — de database is momenteel niet beschikbaar. Alleen health-, version- en admin-endpoints werken; citaat-data-endpoints geven een foutmelding.",
   "RestApiHeading": "REST-API",

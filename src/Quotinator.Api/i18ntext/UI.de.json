@@ -53,6 +53,8 @@
   "StartupErrorHeading": "Quotinator wurde mit einem Problem gestartet",
   "StartupErrorLastKnownGood": "Die Datenbank wurde im letzten bekannten funktionierenden Zustand belassen:",
   "StartupErrorContinueButton": "Weiter",
+  "StartupWaitHeading": "Quotinator wird gestartet",
+  "StartupWaitBody": "Die Datenbank wird erstellt, aktualisiert oder befüllt. Diese Seite aktualisiert sich automatisch — es ist keine Aktion erforderlich.",
   "RestApiLimitedBadge": "Eingeschränkt",
   "RestApiDegradedBanner": "Eingeschränkte Funktionalität — die Datenbank ist derzeit nicht verfügbar. Nur Health-, Version- und Admin-Endpunkte funktionieren; Zitat-Daten-Endpunkte geben einen Fehler zurück.",
   "RestApiHeading": "REST-API",

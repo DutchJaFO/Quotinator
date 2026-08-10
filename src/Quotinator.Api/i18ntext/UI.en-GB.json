@@ -53,6 +53,8 @@
   "StartupErrorHeading": "Quotinator started with a problem",
   "StartupErrorLastKnownGood": "The database was left at its last known-good state:",
   "StartupErrorContinueButton": "Continue",
+  "StartupWaitHeading": "Quotinator is starting up",
+  "StartupWaitBody": "The database is being created, updated, or seeded. This page will refresh automatically — no action is needed.",
   "RestApiLimitedBadge": "Limited",
   "RestApiDegradedBanner": "Limited functionality — the database is currently unavailable. Only health, version, and admin endpoints work; quote data endpoints will return an error.",
   "RestApiHeading": "REST API",

@@ -1,6 +1,6 @@
 # #280 — Show a startup "please wait" page while the database is created/updated/seeded, with progress if feasible
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #280
 **Tiers required:** T1, T2
 **Depends on:** #278 (must land first so its status-surface infrastructure exists — done)
@@ -129,19 +129,42 @@ not `II18nText`).
 **Status:** ✅ Done — all 664 existing Api.Tests pass unchanged with the tail swapped
 
 ### 2. `StartupPhaseState` + `StartupWaitMiddleware`
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 ### 3. `Program.cs` restructure (`StartAsync`/init/`MarkComplete`/`WaitForShutdownAsync`, ready-banner move)
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 ### 4. `/health`/`/version` "starting" state
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `/version`'s normal (post-startup) response also gained a `status: "ready"`
+field for consistency with the "starting" shape; purely additive, no existing field removed or
+renamed.
 
 ### 5. Localisation (`i18ntext/UI.*.json`, all 3 locales)
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `StartupWaitHeading`/`StartupWaitBody` added to `ApiMessages.cs` (its class
+summary widened from "error messages" to "API-surface text," since this is the first non-error use)
+and all three locale files.
 
 ### 6. Full verification (T1, T2)
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+**T1 confirmed (2026-08-10):** developer's own Visual Studio run against a real reseed — observed
+the browser tab title flicker (the wait page mounting and unmounting as `StartupPhaseState.IsComplete`
+flips) during the reseed window, directly confirming the mechanism fires correctly outside Docker too,
+not only in the isolated T2 environment.
+
+**T2 confirmed (2026-08-10):** `docker build` succeeded; live against a real container with a
+persistent volume (fresh, unseeded):
+- Immediately after start: `GET /` returned the self-contained wait page (200, correct localized
+  English text, auto-refresh meta tag); `GET /api/v1/health` returned `503 {"status":"starting"}`;
+  `GET /api/v1/version` returned `200 {"status":"starting","version":"1.8.2"}` with no
+  `environment`/`database` fields.
+- After seeding completed: `/health` returned `200 {"status":"healthy"}`; `/version` returned the
+  full `{"status":"ready", ..., "database": {...}}` shape with real counts (799 quotes, etc.).
+- Log ordering: `Microsoft.Hosting.Lifetime`'s own `Now listening on` line (framework-level, proves
+  Kestrel genuinely bound and started accepting connections) appeared at `05:42:02`; the app's own
+  `[Server] listening on ...`/`Quotinator ready` banner appeared at `05:42:22` — 20 seconds later,
+  confirming Kestrel was live and serving the wait page for the entire initialisation window, not
+  just reachable after the fact.
 
 ---
 
@@ -150,15 +173,15 @@ not `II18nText`).
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | `StartAsync`/`WaitForShutdownAsync` split is compatible with `WebApplicationFactory` | Unit test | Full `Quotinator.Api.Tests` suite green against the spiked tail (664/664) |
-| 2 | ⬜ | A request during initialisation receives the wait page, not a hang or error | Unit test | `StartupWaitMiddlewareTests.Invoke_InitialisationInProgress_ServesWaitPage` |
-| 3 | ⬜ | A request after initialisation completes passes through normally | Unit test | `StartupWaitMiddlewareTests.Invoke_InitialisationComplete_PassesThroughToNextMiddleware` |
-| 4 | ⬜ | `/health` and `/version` are exempt from the wait gate and report a distinct `"starting"` state | Unit test | `StartupWaitMiddlewareTests.Invoke_HealthEndpoint_ExemptFromWaitGate`, `HealthEndpointTests`/`VersionEndpointTests` starting-state cases |
-| 5 | ⬜ | The ready banner logs only once initialisation is truly complete, not merely once Kestrel is bound | Live | Docker log ordering: `[Server] listening on ...` before `Quotinator ready`, banner timestamp after seed completion on a slow/large seed |
-| 6 | ⬜ | Wait page text is fully localised, no hardcoded English | Manual + Test | `TranslationCompletenessTests` covers the new keys; live check with `Accept-Language: nl`/`de` |
-| 7 | ⬜ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 8 | ⬜ | Full test suite green | Build | `dotnet test --configuration Release` |
-| 9 | ⬜ | T1 (developer's own Visual Studio run) | Live | Awaiting developer |
-| 10 | ⬜ | T2 (Docker smoke tests) | Live | Awaiting a Docker pass — ideally against a large seed so the wait page is actually observable |
+| 2 | ✅ | A request during initialisation receives the wait page, not a hang or error | Unit test + Live | `StartupWaitMiddlewareTests.Invoke_InitialisationInProgress_ServesWaitPage`; Docker: `GET /` returned the wait page immediately after container start |
+| 3 | ✅ | A request after initialisation completes passes through normally | Unit test | `StartupWaitMiddlewareTests.Invoke_InitialisationComplete_PassesThroughToNextMiddleware` |
+| 4 | ✅ | `/health` and `/version` are exempt from the wait gate and report a distinct `"starting"` state | Unit test + Live | `StartupWaitMiddlewareTests.Invoke_HealthEndpoint_ExemptFromWaitGate` (both routes); Docker: `503 {"status":"starting"}` / `200 {"status":"starting","version":...}` confirmed live. No `WebApplicationFactory`-level endpoint test — `Program.cs`'s own startup sequence runs to completion (`MarkComplete()` fires) before `CreateClient()` returns a usable client, so the transient state isn't observable that way; the middleware-level unit test plus the live Docker check cover it instead. |
+| 5 | ✅ | The ready banner logs only once initialisation is truly complete, not merely once Kestrel is bound | Live | Docker log ordering confirmed: `Microsoft.Hosting.Lifetime`'s own `Now listening on` at 05:42:02, app's own `ready` banner at 05:42:22 — 20s later |
+| 6 | ✅ | Wait page text is fully localised, no hardcoded English | Test + Live | `TranslationCompletenessTests` covers the new keys in all 3 locales (green); live Docker check confirmed the English render resolves correctly via `IApiLocalizer` |
+| 7 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 8 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` — 1074 Data.Tests + 1445 Core.Tests + 668 Api.Tests, 0 failures |
+| 9 | ✅ | T1 (developer's own Visual Studio run) | Live | Observed the browser tab title flicker during a real reseed — the wait page mounting/unmounting live |
+| 10 | ✅ | T2 (Docker smoke tests) | Live | 2026-08-10 — see Step 6 for the full scenario list |
 
 ---
 

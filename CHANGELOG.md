@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-09 22:50 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-10 05:45 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - When something goes wrong at startup, the web interface itself now shows a clear popup explaining what happened and the database's last known-good status — not just the REST API. Home is disabled until the problem is resolved, but the REST API (clearly marked as limited), Statistics, and About pages stay reachable. Database status — quote counts and which files were used to build it — is also now always available on a new Statistics page in the navigation menu.
 - A new Notifications page and startup popups now surface informational, warning, error, and action-recommended messages from Quotinator, with a history you can review and dismiss at any time.
 - Breaking change for API clients: two REST endpoints' operation IDs were renamed for naming consistency — `GetImportBatches` is now `GetAllImportBatches`, and `GetFileResources` is now `GetAllFileResources`. This only affects a generated API client keyed by operation ID; the routes and behaviour themselves are unchanged.
+- Opening Quotinator while it's still setting up the database (a fresh install, or a large re-seed) no longer shows a blank, unresponsive page — a "Quotinator is starting up" page now appears immediately and refreshes itself automatically until the app is ready.
 
 ### Added
 - Release entries can now carry an optional one-line `quote` (release-note flavour text, with optional `attribution`) — rendered in `CHANGELOG.md` and the Blazor changelog UI, omitted from the more concise `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)
@@ -57,6 +58,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Standardised every endpoint's OpenAPI `WithName`/`WithSummary` pair onto one of three documented shapes (List, GetById, Action — see `CLAUDE.md`'s new "Endpoint naming convention" section): list-endpoint summaries now consistently read `"List x"` (`People`, `Quotes`, `Series` previously read `"All people (paginated)"`/`"All quotes (paginated)"`/`"List Series"`), and `GetById` summaries now consistently capitalise `ID` (`Import batches`/captured import files previously read `"...by id"`). Two of these renames change the published `operationId` — see the breaking-change highlight above (issue #279)
 - Every masterdata/Conversation/Quote `GetAll`/`GetById` handler's own request-logging tag is now derived from a single `private const string` shared with its `.WithName(...)` call, instead of a second hardcoded literal — closes the drift #269 introduced, and fixes one case (`GET /quotes/{id}`) where the literal tag had already silently drifted from the endpoint's real name; no API surface change, log line text only (issue #279)
 - Pre-change safety backups are now only taken when there is genuinely pending work to protect — a schema migration, or content that still needs seeding — instead of unconditionally on every restart; a first draft of this fix (gating on the same signal migrations already use) was found to leave the restart immediately after a database Reset unprotected and was corrected before shipping, closing that gap directly rather than reintroducing it (issue #277)
+- `GET /api/v1/health` and `GET /api/v1/version` now report a distinct `"starting"` status while database initialisation is still running (previously `/version` would return incomplete data and `/health` reported no distinction from a genuine failure) — the server now starts listening immediately rather than only after initialisation finishes, so these endpoints (and every other route) are reachable throughout, not just once fully ready (issue #280)
 
 ### Fixed
 - Database columns backed by the duplicate-resolution-policy setting (`ImportBatches.ConflictPolicy`, and the internal `AppliedPolicy` column on two provenance tables) now reject an invalid value at the database level via a CHECK constraint, matching every other enum-backed column in the schema; a pre-existing data inconsistency this closed is also normalised automatically (issue #150)

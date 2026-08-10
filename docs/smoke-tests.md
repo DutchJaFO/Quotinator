@@ -46,6 +46,8 @@ verification command here in the same commit that fixes it — the list only gro
 32. [Reset is a full wipe with no reseed](#32-reset-is-a-full-wipe-with-no-reseed-156) (#156)
 33. [Startup notification system](#33-startup-notification-system-278) (#278)
 34. [Standardised endpoint WithName/WithSummary, including breaking operationId renames](#34-standardised-endpoint-withnamewithsummary-including-breaking-operationid-renames-279) (#279)
+35. [Startup backup real-work gating and storage pre-flight check](#35-startup-backup-real-work-gating-and-storage-pre-flight-check-277) (#277)
+36. [Startup wait page during database initialisation](#36-startup-wait-page-during-database-initialisation-280) (#280)
 
 ---
 
@@ -1562,4 +1564,37 @@ docker exec smoke277 sh -c "ls /data/backups | wc -l"
 ```
 
 Clean up: `docker rm -f smoke277 && docker volume rm smoke277-data`.
+
+## 36. Startup wait page during database initialisation (#280)
+
+```bash
+docker volume rm smoke280-data 2>/dev/null
+docker rm -f smoke280
+MSYS_NO_PATHCONV=1 docker run -d --name smoke280 -p 8080:8080 -v smoke280-data:/data \
+  -e Quotinator__DataDir=/data quotinator:local
+sleep 1
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/health"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/version"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/"
+# Immediately after container start (before seeding completes):
+# - /health must return 503 {"status":"starting"}
+# - /version must return 200 {"status":"starting","version":"..."} — no environment/database fields
+# - / must return 200, a self-contained HTML wait page (auto-refresh meta tag, localized heading/body,
+#   no external assets) — never a hang or a raw error.
+```
+
+```bash
+sleep 15
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/health"
+curl -s "http://localhost:8080/api/v1/version"
+docker logs smoke280 2>&1 | grep "Now listening on\|Server] listening on\|Quotinator ready"
+# After seeding completes:
+# - /health must return 200 {"status":"healthy"}
+# - /version must return 200 {"status":"ready", ..., "database": {...}} with real counts
+# - Log ordering: Microsoft.Hosting.Lifetime's own "Now listening on" (Kestrel actually bound) must
+#   appear BEFORE the app's own "[Server] listening on"/"Quotinator ready" banner — proving Kestrel
+#   accepted connections during the whole wait-page window, not just after it.
+```
+
+Clean up: `docker rm -f smoke280 && docker volume rm smoke280-data`.
 

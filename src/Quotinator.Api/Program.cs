@@ -454,7 +454,9 @@ builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp =
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.DatabaseHealthState>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.StartupUxState>();
+builder.Services.AddSingleton<Quotinator.Api.Startup.StartupPhaseState>();
 builder.Services.AddSingleton<DatabaseHealthGateMiddleware>();
+builder.Services.AddSingleton<StartupWaitMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
 builder.Services.AddI18nText(options =>
@@ -528,18 +530,170 @@ var startupLog = new Quotinator.Api.Startup.StartupSummaryLogger(
 
 startupLog.LogStarting();
 
+// #280: database initialisation now runs after Kestrel starts listening (see the StartAsync/
+// WaitForShutdownAsync split at the bottom of this file) — StartupWaitMiddleware serves a wait page
+// for every non-exempt request until it completes, instead of the app being completely unreachable
+// during this window as it was before. dbHealth is still resolved here since it's referenced by name
+// throughout the rest of this section's setup.
+var dbHealth = app.Services.GetRequiredService<Quotinator.Api.Startup.DatabaseHealthState>();
+
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+var logger   = app.Services.GetRequiredService<ILogger<Program>>();
+lifetime.ApplicationStopping.Register(() =>
+    logger.LogServerStopping(versionService.Version));
+
+// Must be first so all subsequent middleware sees the correct scheme and client IP.
+app.UseForwardedHeaders();
+
+// The HA supervisor sets X-Ingress-Path to the ingress prefix (e.g. /api/hassio_ingress/TOKEN).
+// Applying it as PathBase makes <base href> render correctly so all relative asset URLs
+// (blazor.web.js, CSS, etc.) resolve through the ingress proxy rather than HA's own server.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Headers.TryGetValue("X-Ingress-Path", out var ingressPath)
+        && !string.IsNullOrEmpty(ingressPath))
+    {
+        context.Request.PathBase = new PathString(ingressPath.ToString());
+    }
+    await next();
+});
+
+// Degrades to a clear 503 (instead of a raw per-request exception) once DatabaseHealthState
+// records a failed startup initialisation — see DatabaseHealthGateMiddleware's own remarks. Must
+// run before request logging/exception handling so a degraded request never reaches a handler
+// that would throw.
+app.UseMiddleware<DatabaseHealthGateMiddleware>();
+
+// Optional request logging — logs every endpoint call as two lines (start + end) with a
+// per-request correlation ID. Off by default. Enable with log_requests: true in the add-on
+// config (or Quotinator__LogRequests=true). All endpoints are logged; header values are never
+// captured (X-Api-Key, Authorization, Cookie must not appear in logs).
+//
+// Registered before UseExceptionHandler() so it wraps it, not the reverse — the completion log
+// line reads context.Response.StatusCode in a finally block, and an exception thrown deeper in
+// the pipeline unwinds through that finally before the response status has actually been set by
+// whichever middleware handles it. Logging registered after UseExceptionHandler would therefore
+// always report the pre-exception default (200), never the real status the client received.
+if (logRequests)
+    app.UseMiddleware<RequestLoggingMiddleware>();
+
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+app.UseRequestLocalization();
+
+// #280: gates every non-exempt request to a wait page while StartupPhaseState.IsComplete is false.
+// Registered after UseRequestLocalization() so the page's text resolves from Accept-Language, and
+// before UseRateLimiter() so a polling wait page never burns the caller's rate-limit budget.
+app.UseMiddleware<StartupWaitMiddleware>();
+
+app.UseRateLimiter();
+
+// Populate ICallerContext.Agent from the User-Agent header for audit trail entries.
+// Only the value is read — the header name is not logged or stored anywhere.
+app.Use(async (context, next) =>
+{
+    var callerContext = context.RequestServices.GetRequiredService<ICallerContext>();
+    callerContext.Agent = context.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;
+    await next();
+});
+
+app.MapOpenApi();
+app.MapScalarApiReference();
+
+app.UseAntiforgery();
+app.MapStaticAssets();
+
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
+
+app.MapGet(ApiRoutes.Health, (Quotinator.Api.Startup.DatabaseHealthState dbHealth, Quotinator.Api.Startup.StartupPhaseState startupPhase) =>
+    !startupPhase.IsComplete
+        ? Results.Json(new { status = "starting" }, statusCode: StatusCodes.Status503ServiceUnavailable)
+        : dbHealth.IsHealthy
+            ? Results.Ok(new { status = "healthy" })
+            : Results.Json(new { status = "unhealthy", reason = dbHealth.FailureReason }, statusCode: StatusCodes.Status503ServiceUnavailable))
+   .WithName("Health")
+   .WithTags(ApiTags.System)
+   .WithSummary("Health check")
+   .WithDescription("Returns the current health status of the API. While startup database initialisation is still running, returns a distinct \"starting\" status (503) so callers can tell that apart from a genuine failure; once complete, reports \"healthy\" (200) or \"unhealthy\" (503) depending on whether initialisation succeeded.");
+
+app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDatabaseInitializer db, Quotinator.Api.Startup.StartupPhaseState startupPhase) =>
+    !startupPhase.IsComplete
+        ? Results.Ok(new { status = "starting", version = vs.Version })
+        : Results.Ok(new
+        {
+            status      = "ready",
+            version     = vs.Version,
+            environment = env.EnvironmentName,
+            database    = new
+            {
+                schemaVersion   = db.SchemaVersion,
+                quotes          = db.QuoteCount,
+                sources         = db.SourceCount,
+                characters      = db.CharacterCount,
+                people          = db.PeopleCount,
+                series          = db.SeriesCount,
+                universes       = db.UniverseCount,
+                stageDirections = db.StageDirectionCount,
+                soundCues       = db.SoundCueCount,
+                conversations   = db.ConversationCount
+            }
+        }))
+   .WithName("Version")
+   .WithTags(ApiTags.System)
+   .WithSummary("API version")
+   .WithDescription("Returns the running version, environment, and database schema version with row counts. While startup database initialisation is still running, returns only {\"status\":\"starting\",\"version\":...} — the environment/database fields don't exist yet.");
+
+app.MapQuoteEndpoints();
+app.MapAdminEndpoints();
+app.MapImportEndpoints();
+app.MapImportRuleEndpoints();
+app.MapImportFileResourceEndpoints();
+app.MapImportBatchEndpoints();
+app.MapNotificationEndpoints();
+app.MapConversationEndpoints();
+app.MapSourceEndpoints();
+app.MapCharacterEndpoints();
+app.MapPersonEndpoints();
+app.MapSeriesEndpoints();
+app.MapUniverseEndpoints();
+app.MapStageDirectionEndpoints();
+app.MapSoundCueEndpoints();
+
+// Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
+// Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.
+// Non-empty culture: sets the cookie (c={culture}|uic={culture}) read by CookieRequestCultureProvider.
+app.MapGet(ApiRoutes.CultureSet, (string? culture, string redirectUri, HttpContext context) =>
+{
+    if (string.IsNullOrEmpty(culture))
+    {
+        context.Response.Cookies.Delete(CookieRequestCultureProvider.DefaultCookieName,
+            new CookieOptions { SameSite = SameSiteMode.Lax, Secure = context.Request.IsHttps });
+    }
+    else
+    {
+        context.Response.Cookies.Append(
+            CookieRequestCultureProvider.DefaultCookieName,
+            CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture, culture)),
+            new CookieOptions { MaxAge = TimeSpan.FromDays(365), IsEssential = true, SameSite = SameSiteMode.Lax, Secure = context.Request.IsHttps });
+    }
+    return TypedResults.LocalRedirect(redirectUri);
+})
+.ExcludeFromDescription();
+
+// #280: Kestrel is now listening — StartupWaitMiddleware is already serving a wait page for every
+// non-exempt request (registered above, before this point was reached), so initialisation runs here,
+// after StartAsync, instead of before it as it did prior to #280.
+await app.StartAsync();
+
 // A database initialisation failure must never crash the whole process outright — that would
 // also make POST /api/v1/admin/database/reset unreachable, the one endpoint actually capable of
 // resolving the underlying schema/version mismatch (found live, 2026-08-02: exiting on this
-// exception meant the operator's own documented remedy could never be reached). Left completely
-// unguarded, the same exception would otherwise propagate out of Main before Kestrel ever binds,
-// which under IIS Express/ANCM renders a raw, technical stack-trace page to whoever is looking at
-// the browser (also confirmed live) — meaningless to an end user and unnecessarily alarming even
-// to an operator. Catching it here logs one clear, actionable message, then records the failure on
-// DatabaseHealthState and lets startup continue: the app still binds and stays reachable for
-// health/version/admin traffic, while DatabaseHealthGateMiddleware degrades every other request to
-// a clear 503 instead of letting it throw the same raw exception per-request.
-var dbHealth = app.Services.GetRequiredService<Quotinator.Api.Startup.DatabaseHealthState>();
+// exception meant the operator's own documented remedy could never be reached). Catching it here
+// logs one clear, actionable message, then records the failure on DatabaseHealthState and lets
+// startup continue: the app still binds and stays reachable for health/version/admin traffic, while
+// DatabaseHealthGateMiddleware degrades every other request to a clear 503 instead of letting it
+// throw the same raw exception per-request.
 try
 {
     await dbInitializer.InitialiseAsync();
@@ -593,150 +747,22 @@ if (dbHealth.IsHealthy)
     }
 }
 
-var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+// #280: initialisation (successful or not) is now finished — StartupWaitMiddleware stops
+// intercepting requests from this point on. Marked complete regardless of dbHealth's outcome: a
+// failed startup has its own existing degraded-state UI (DatabaseHealthGateMiddleware/#263's
+// modals), not the wait page.
+app.Services.GetRequiredService<Quotinator.Api.Startup.StartupPhaseState>().MarkComplete();
 
-// Closing banner fires after Kestrel binds so bound addresses are available.
-lifetime.ApplicationStarted.Register(() =>
-{
-    var addresses = (app.Services
-        .GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>()
-        .Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()
-        ?.Addresses ?? []).ToList();
-    startupLog.LogReady(addresses);
-});
+// "Ready" now means truly ready (initialisation complete), not merely "Kestrel bound" — logged
+// directly here instead of via the ApplicationStarted event hook, which fires as soon as StartAsync
+// returns, before initialisation even begins under this model.
+var readyAddresses = (app.Services
+    .GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>()
+    .Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()
+    ?.Addresses ?? []).ToList();
+startupLog.LogReady(readyAddresses);
 
-var logger = app.Services.GetRequiredService<ILogger<Program>>();
-lifetime.ApplicationStopping.Register(() =>
-    logger.LogServerStopping(versionService.Version));
-
-// Must be first so all subsequent middleware sees the correct scheme and client IP.
-app.UseForwardedHeaders();
-
-// The HA supervisor sets X-Ingress-Path to the ingress prefix (e.g. /api/hassio_ingress/TOKEN).
-// Applying it as PathBase makes <base href> render correctly so all relative asset URLs
-// (blazor.web.js, CSS, etc.) resolve through the ingress proxy rather than HA's own server.
-app.Use(async (context, next) =>
-{
-    if (context.Request.Headers.TryGetValue("X-Ingress-Path", out var ingressPath)
-        && !string.IsNullOrEmpty(ingressPath))
-    {
-        context.Request.PathBase = new PathString(ingressPath.ToString());
-    }
-    await next();
-});
-
-// Degrades to a clear 503 (instead of a raw per-request exception) once DatabaseHealthState
-// records a failed startup initialisation — see DatabaseHealthGateMiddleware's own remarks. Must
-// run before request logging/exception handling so a degraded request never reaches a handler
-// that would throw.
-app.UseMiddleware<DatabaseHealthGateMiddleware>();
-
-// Optional request logging — logs every endpoint call as two lines (start + end) with a
-// per-request correlation ID. Off by default. Enable with log_requests: true in the add-on
-// config (or Quotinator__LogRequests=true). All endpoints are logged; header values are never
-// captured (X-Api-Key, Authorization, Cookie must not appear in logs).
-//
-// Registered before UseExceptionHandler() so it wraps it, not the reverse — the completion log
-// line reads context.Response.StatusCode in a finally block, and an exception thrown deeper in
-// the pipeline unwinds through that finally before the response status has actually been set by
-// whichever middleware handles it. Logging registered after UseExceptionHandler would therefore
-// always report the pre-exception default (200), never the real status the client received.
-if (logRequests)
-    app.UseMiddleware<RequestLoggingMiddleware>();
-
-app.UseExceptionHandler();
-app.UseStatusCodePages();
-app.UseRequestLocalization();
-app.UseRateLimiter();
-
-// Populate ICallerContext.Agent from the User-Agent header for audit trail entries.
-// Only the value is read — the header name is not logged or stored anywhere.
-app.Use(async (context, next) =>
-{
-    var callerContext = context.RequestServices.GetRequiredService<ICallerContext>();
-    callerContext.Agent = context.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;
-    await next();
-});
-
-app.MapOpenApi();
-app.MapScalarApiReference();
-
-app.UseAntiforgery();
-app.MapStaticAssets();
-
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
-
-app.MapGet(ApiRoutes.Health, (Quotinator.Api.Startup.DatabaseHealthState dbHealth) => dbHealth.IsHealthy
-        ? Results.Ok(new { status = "healthy" })
-        : Results.Json(new { status = "unhealthy", reason = dbHealth.FailureReason }, statusCode: StatusCodes.Status503ServiceUnavailable))
-   .WithName("Health")
-   .WithTags(ApiTags.System)
-   .WithSummary("Health check")
-   .WithDescription("Returns the current health status of the API, including whether startup database initialisation succeeded. Use this endpoint to verify the service is running.");
-
-app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDatabaseInitializer db) =>
-    Results.Ok(new
-    {
-        version     = vs.Version,
-        environment = env.EnvironmentName,
-        database    = new
-        {
-            schemaVersion   = db.SchemaVersion,
-            quotes          = db.QuoteCount,
-            sources         = db.SourceCount,
-            characters      = db.CharacterCount,
-            people          = db.PeopleCount,
-            series          = db.SeriesCount,
-            universes       = db.UniverseCount,
-            stageDirections = db.StageDirectionCount,
-            soundCues       = db.SoundCueCount,
-            conversations   = db.ConversationCount
-        }
-    }))
-   .WithName("Version")
-   .WithTags(ApiTags.System)
-   .WithSummary("API version")
-   .WithDescription("Returns the running version, environment, and database schema version with row counts.");
-
-app.MapQuoteEndpoints();
-app.MapAdminEndpoints();
-app.MapImportEndpoints();
-app.MapImportRuleEndpoints();
-app.MapImportFileResourceEndpoints();
-app.MapImportBatchEndpoints();
-app.MapNotificationEndpoints();
-app.MapConversationEndpoints();
-app.MapSourceEndpoints();
-app.MapCharacterEndpoints();
-app.MapPersonEndpoints();
-app.MapSeriesEndpoints();
-app.MapUniverseEndpoints();
-app.MapStageDirectionEndpoints();
-app.MapSoundCueEndpoints();
-
-// Sets or clears the UI language cookie and redirects back. LocalRedirect prevents open-redirect attacks.
-// Empty culture = auto-detect mode: deletes the cookie so Accept-Language takes over.
-// Non-empty culture: sets the cookie (c={culture}|uic={culture}) read by CookieRequestCultureProvider.
-app.MapGet(ApiRoutes.CultureSet, (string? culture, string redirectUri, HttpContext context) =>
-{
-    if (string.IsNullOrEmpty(culture))
-    {
-        context.Response.Cookies.Delete(CookieRequestCultureProvider.DefaultCookieName,
-            new CookieOptions { SameSite = SameSiteMode.Lax, Secure = context.Request.IsHttps });
-    }
-    else
-    {
-        context.Response.Cookies.Append(
-            CookieRequestCultureProvider.DefaultCookieName,
-            CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(culture, culture)),
-            new CookieOptions { MaxAge = TimeSpan.FromDays(365), IsEssential = true, SameSite = SameSiteMode.Lax, Secure = context.Request.IsHttps });
-    }
-    return TypedResults.LocalRedirect(redirectUri);
-})
-.ExcludeFromDescription();
-
-app.Run();
+await app.WaitForShutdownAsync();
 
 // Exposes Program to WebApplicationFactory<Program> in the test project.
 public partial class Program
