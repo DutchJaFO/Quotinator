@@ -17,6 +17,6 @@ public sealed class PersonResponse
     /// <summary>Imprecise ISO 8601 death date. Null when still living or unknown.</summary>
     public string? DateOfDeath { get; init; }
 
-    /// <summary>Whether the record's fields are known to be fully populated and reviewed. Null when not yet assessed.</summary>
-    public CompletenessStatus? CompletenessStatus { get; init; }
+    /// <summary>Whether the record's fields are known to be fully populated and reviewed.</summary>
+    public required CompletenessStatus CompletenessStatus { get; init; }
 }

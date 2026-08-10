@@ -192,6 +192,23 @@ public class PersonEndpointsTests
     }
 
     [TestMethod]
+    public async Task GetPersonById_CompletenessStatusUnparseable_ReturnsIncompleteNotNull()
+    {
+        var id   = Guid.NewGuid();
+        var repo = new FakePersonRepository
+        {
+            ReturnById = NewPerson(id: id, completeness: null)
+        };
+        using var factory = CreateFactory(repo);
+        var response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/people/{id}", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
+        Assert.AreEqual(JsonValueKind.String, root.GetProperty("completenessStatus").ValueKind);
+        Assert.AreEqual("Incomplete", root.GetProperty("completenessStatus").GetString());
+    }
+
+    [TestMethod]
     public async Task GetPersonById_UnknownId_Returns404()
     {
         using var factory = CreateFactory();

@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Shared;
@@ -57,11 +58,15 @@ internal static class PersonEndpoints
             return pageError!;
 
         var result = await repository.GetPageAsync(pageValue, pageSizeValue);
+
+        var beyondLast = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
+        if (beyondLast is not null)
+            return beyondLast;
+
         var response = new PagedItems<PersonResponse>(
             [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
 
-        return PaginationParsing.ValidatePageBeyondLast(pageValue, response.TotalPages, localizer)
-            ?? Results.Ok(response);
+        return Results.Ok(response);
     }
 
     private static async Task<IResult> GetById(
@@ -85,6 +90,6 @@ internal static class PersonEndpoints
         Name               = person.Name,
         DateOfBirth        = string.IsNullOrEmpty(person.DateOfBirth.Raw) ? null : person.DateOfBirth.Raw,
         DateOfDeath        = string.IsNullOrEmpty(person.DateOfDeath.Raw) ? null : person.DateOfDeath.Raw,
-        CompletenessStatus = person.CompletenessStatus.Parsed
+        CompletenessStatus = person.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,
     };
 }
