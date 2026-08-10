@@ -236,6 +236,7 @@ public class AdminEndpointsTests
         public int    SoundCueCount    => 0;
         public int    ConversationCount => 0;
         public string? MigrationApplied => null;
+        public bool   SchemaVersionOvershootDetected => false;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
         public Task InitialiseAsync() => Task.CompletedTask;

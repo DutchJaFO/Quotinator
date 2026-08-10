@@ -46,6 +46,9 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public string? MigrationApplied => null;
 
     /// <inheritdoc/>
+    public bool SchemaVersionOvershootDetected => false;
+
+    /// <inheritdoc/>
     public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
     /// <inheritdoc/>

@@ -75,6 +75,7 @@ public class StartupSummaryLoggerTests
         public int    SoundCueCount    => 0;
         public int    ConversationCount => 0;
         public string? MigrationApplied => migrationApplied;
+        public bool SchemaVersionOvershootDetected => false;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task InitialiseAsync()                    => Task.CompletedTask;
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;

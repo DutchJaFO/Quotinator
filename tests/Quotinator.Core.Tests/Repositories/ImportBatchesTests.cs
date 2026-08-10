@@ -176,14 +176,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>App schema migration version is bumped to 6 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>App schema migration version is bumped to 5 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         var db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(6, db.SchemaVersion, "SchemaVersion should be 6: #155's consolidation of migrations 4-11 into one (4), #150's ImportBatches.ConflictPolicy CHECK constraint migration (5), plus #254's domain-prefix rename (6)");
+        Assert.AreEqual(5, db.SchemaVersion, "SchemaVersion should be 5: #155's consolidation of migrations 4-11 into one (4), plus #289's consolidation of #150's ImportBatches.ConflictPolicy CHECK constraint migration and #254's domain-prefix rename into one (5)");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────

@@ -53,6 +53,15 @@ public interface IDatabaseInitializer
     string? MigrationApplied { get; }
 
     /// <summary>
+    /// <c>true</c> when the database's recorded Data or Consumer schema version exceeds this build's
+    /// own known migration count (#289) — the state a migration squash produces on a database that
+    /// already applied the pre-squash migrations. The schema itself is treated as complete (nothing is
+    /// replayed), but the recorded version is stale relative to this build; an explicit database Reset
+    /// resolves the mismatch. Available after <see cref="InitialiseAsync"/> completes.
+    /// </summary>
+    bool SchemaVersionOvershootDetected { get; }
+
+    /// <summary>
     /// One <see cref="FileImportReport"/> per source file processed during the last seeding
     /// operation, in the order the files were processed (#221). Populated after
     /// <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, or <see cref="ResetAsync"/> completes.

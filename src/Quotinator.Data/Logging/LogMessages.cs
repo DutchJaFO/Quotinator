@@ -34,6 +34,10 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Init] schema is up to date (data v{DataVersion}, app v{AppVersion})")]
     public static partial void LogSchemaUpToDate(this ILogger logger, int dataVersion, int appVersion);
 
+    /// <summary>Logs that a recorded schema version exceeds the app's own known migration count — e.g. after a migration squash, on a database that already applied the pre-squash migrations (#289).</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Init] schema version overshoot detected: recorded data v{DataVersion} (known: v{DataKnown}), recorded app v{AppVersion} (known: v{AppKnown}) — schema is treated as complete, but a database Reset is recommended to true up the version bookkeeping")]
+    public static partial void LogSchemaVersionOvershoot(this ILogger logger, int dataVersion, int dataKnown, int appVersion, int appKnown);
+
     /// <summary>Logs completion of an incremental migration pass.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Init] schema updated (data v{DataVersion}, app v{AppVersion})")]
     public static partial void LogSchemaUpdated(this ILogger logger, int dataVersion, int appVersion);

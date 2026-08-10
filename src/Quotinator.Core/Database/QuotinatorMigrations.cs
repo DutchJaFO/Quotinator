@@ -21,8 +21,7 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 2, Sql = Migration002_ReseedGenres },
         new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
         new SchemaMigration { Version = 4, Sql = Migration004_ConsolidatedSinceV172 },
-        new SchemaMigration { Version = 5, Sql = Migration005_ImportBatchConflictPolicyCheckConstraint },
-        new SchemaMigration { Version = 6, Sql = Migration006_DomainPrefixRename },
+        new SchemaMigration { Version = 5, Sql = Migration005_ConsolidatedSinceV182 },
     ];
 
     /// <summary>
@@ -1005,6 +1004,21 @@ public static class QuotinatorMigrations
         CREATE INDEX IF NOT EXISTS IX_Quotinator_ConversationLine_StageDirectionId ON Quotinator_ConversationLine(StageDirectionId);
         CREATE INDEX IF NOT EXISTS IX_Quotinator_ConversationLine_SoundCueId       ON Quotinator_ConversationLine(SoundCueId);
         """;
+
+    /// <summary>
+    /// #289: reference concatenation of the 2 Consumer-owned migrations added since v1.8.2 (the
+    /// former versions 5 and 6 — #150's <c>ImportBatches.ConflictPolicy</c> CHECK constraint and
+    /// #253/#254's domain-prefix rename), in their original application order. Neither had shipped in
+    /// a tagged release, but this project's own local dev database had already applied both — per ADR
+    /// 015's revision (from #254's own incident, which was this exact pair of migrations the first
+    /// time), "unreleased" is not the right test for whether a migration is safe to edit. Squashed
+    /// anyway by deliberate developer decision, with the local dev database reset alongside this
+    /// change — see #289's plan doc, and <c>DatabaseInitializer.ApplyMigrationsAsync</c>'s own
+    /// schema-version-overshoot detection for the safety net covering any other already-migrated
+    /// database.
+    /// </summary>
+    internal const string Migration005_ConsolidatedSinceV182 =
+        Migration005_ImportBatchConflictPolicyCheckConstraint + Migration006_DomainPrefixRename;
 
     // Consolidated schema for a genuinely fresh database — the union of migrations 1-8's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's

@@ -779,6 +779,40 @@ if (dbHealth.IsHealthy)
     }
 }
 
+// #289: second producer for #278's notification mechanism — announces a schema-version-overshoot
+// (the recorded version exceeds this build's own known migration count, which only happens after a
+// migration squash on a database that already applied the pre-squash migrations). The dedupe key
+// includes the actual detected versions, not a fixed string like #279's: repeats of the same
+// already-notified overshoot state (e.g. the operator hasn't reset yet and the app just restarted)
+// stay deduped, but a genuinely different future overshoot (a later squash producing different
+// version numbers) still gets its own notification. ActionRequired + DatabaseReset dismiss trigger:
+// POST /admin/database/reset already calls DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset)
+// (see AdminEndpoints.cs), so this clears itself automatically once the operator resets.
+if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
+{
+    try
+    {
+        var overshootDedupeKey = $"SchemaVersionOvershoot:data-v{dbInitializer.DataSchemaVersion}-app-v{dbInitializer.SchemaVersion}";
+        await Quotinator.Api.Startup.NotificationSeeding.SeedOnceAsync(
+            app.Services.GetRequiredService<INotificationReader>(),
+            app.Services.GetRequiredService<INotificationWriter>(),
+            NotificationType.ActionRequired,
+            dedupeKey: overshootDedupeKey,
+            message: $"This database's recorded schema version (data v{dbInitializer.DataSchemaVersion}, " +
+                      $"app v{dbInitializer.SchemaVersion}) is ahead of what this build expects — usually because " +
+                      "a set of not-yet-released migrations were consolidated after this database already applied " +
+                      "them individually (issue #289). The schema itself is complete and the app is working " +
+                      "normally; running a database Reset (POST /api/v1/admin/database/reset) will true up the " +
+                      "version bookkeeping.",
+            trigger: NotificationDismissTrigger.DatabaseReset);
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Server] Failed to seed the #289 schema-version-overshoot notification — non-fatal, startup continues.");
+    }
+}
+
 // #280: initialisation (successful or not) is now finished — StartupWaitMiddleware stops
 // intercepting requests from this point on. Marked complete regardless of dbHealth's outcome: a
 // failed startup has its own existing degraded-state UI (DatabaseHealthGateMiddleware/#263's

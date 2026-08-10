@@ -1070,7 +1070,7 @@ public class DatabaseInitializerTests
             Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
         }
 
-        Assert.AreEqual(8, db2.DataSchemaVersion, "Data migrations 2-8 (the #155 consolidation, the two AppliedPolicy CHECK constraint migrations, #253's domain-prefix rename, #251's FileResource tables, #252's FileResourceOrigin generalization, and #278's System_Notification table) should have replayed from the correctly-seeded starting point of 1");
+        Assert.AreEqual(3, db2.DataSchemaVersion, "Data migrations 2-3 (the #155 consolidation, plus #289's consolidation of the two AppliedPolicy CHECK constraint migrations, #253's domain-prefix rename, #251's FileResource tables, #252's FileResourceOrigin generalization, and #278's System_Notification table into one) should have replayed from the correctly-seeded starting point of 1");
     }
 
     /// <summary>Replaying from a legacy v1.7.2 AuditEntries table renames it all the way to Audit_Entry (via migration 2's Audit_Entry then migration 3's domain-prefix rename) and preserves existing rows and both indexes.</summary>
@@ -1159,7 +1159,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(6, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+        Assert.AreEqual(5, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
     }
 
     /// <summary>
@@ -1511,8 +1511,50 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(8, db.DataSchemaVersion);
-        Assert.AreEqual(6, db.SchemaVersion);
+        Assert.AreEqual(3, db.DataSchemaVersion);
+        Assert.AreEqual(5, db.SchemaVersion);
+    }
+
+    /// <summary>
+    /// #289: a recorded version higher than this build's own known migration count (the state a
+    /// migration squash produces on a database that already applied the pre-squash migrations) is
+    /// treated as already-complete, not an error — no exception, the real recorded (higher) version is
+    /// reported rather than the smaller known count, and the overshoot is flagged for the caller.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_RecordedVersionExceedsKnownMigrations_TreatsAsUpToDateAndFlagsOvershoot()
+    {
+        var db = CreateInitializer([]);
+        await db.InitialiseAsync();
+        Assert.IsFalse(db.SchemaVersionOvershootDetected, "Sanity check — a normal fresh database has no overshoot");
+
+        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync(TestContext.CancellationToken);
+            await conn.ExecuteAsync(
+                "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (@v, @at);",
+                new { v = QuotinatorMigrations.All.Count + 1, at = "2026-01-01T00:00:00Z" });
+        }
+
+        var db2 = CreateInitializer([]);
+        await db2.InitialiseAsync();
+
+        Assert.IsTrue(db2.SchemaVersionOvershootDetected, "A recorded version ahead of the known migration list must be flagged");
+        Assert.AreEqual(QuotinatorMigrations.All.Count + 1, db2.SchemaVersion,
+            "The real recorded (higher) version must be reported, not silently replaced by the smaller known count");
+    }
+
+    /// <summary>#289: an ordinary, correctly-migrated database never flags an overshoot.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_NoOvershoot_FlagStaysFalse()
+    {
+        var db = CreateInitializer([]);
+        await db.InitialiseAsync();
+        Assert.IsFalse(db.SchemaVersionOvershootDetected);
+
+        var db2 = CreateInitializer([]);
+        await db2.InitialiseAsync();
+        Assert.IsFalse(db2.SchemaVersionOvershootDetected, "A second, already-up-to-date startup must not flag an overshoot either");
     }
 
     /// <summary>
@@ -1556,7 +1598,7 @@ public class DatabaseInitializerTests
 
         var db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(6, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+        Assert.AreEqual(5, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
     // ── #179 — Series/Universe schema, Character↔Source many-to-many ───────────

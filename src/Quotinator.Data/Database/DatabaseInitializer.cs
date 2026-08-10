@@ -52,39 +52,23 @@ public class DatabaseInitializer(
     // specific rename must instead live in Quotinator.Core's migration list (#254).
     // #155: version 2 consolidates every Data-owned migration shipped since v1.7.2's single frozen
     // migration (version 1) — see DataConsolidatedMigrations.SinceV172 for the full reasoning.
-    // Versions 3 and 4 (each adding an AppliedPolicy CHECK constraint, one for
-    // System_ImportConflicts and one for System_ImportActions) are frozen — found live during #254's
-    // own T1 pass (2026-08-02): an earlier version of #253 squashed these two into a single new
-    // version 3 (the domain-prefix rename), reasoning that neither had ever shipped in a tagged
-    // release. That reasoning was wrong: this project's own local dev database had already run both
-    // in an earlier session, so the squash left that database's already-recorded version 4 reading
-    // as "up to date" under the new 3-migration count, silently skipping the rename entirely and
-    // leaving Import_Batch never created — this project's "never edit an existing migration" policy
-    // protects any database that has already run a migration, not only tagged releases. Corrected:
-    // versions 3 and 4 are restored to their original, unedited content; the domain-prefix rename is
-    // a new version 5, appended after them — see DomainPrefixRenameMigrations.RenameDataOwnedTables.
-    // Version 6 (#251) adds Import_FileResource/Import_FileResourceLine/Import_FileResourceBatch.
-    // Import_FileResourceBatch references Import_Batch(Id) (Core-owned, created by Core's own
-    // migration phase which always runs immediately after this one within the same FK-enforcement-off
-    // window — see ApplyMigrationsAsync/ApplyBaselineAsync's own PRAGMA foreign_keys toggling) — safe
-    // as a forward reference despite Import_Batch not existing yet at the moment this migration runs.
-    // Version 7 (#252) generalizes Import_FileResource.Origin (Bundled/UserImports/Uploaded ->
-    // System/User/Upload) and adds HomeDirectoryKey — a new migration, not an edit to version 6,
-    // even though version 6 had not yet shipped in a tagged release: this project's own local
-    // development database had already applied version 6 (during #251's T1 pass) by the time this
-    // generalization was decided. See ADR 015's own "Revision — issue #254" section for why
-    // "unreleased" is not the right test for whether a migration is safe to edit.
-    // Version 8 (#278) adds System_Notification — see NotificationMigrations.CreateNotificationTable.
+    // #289: version 3 consolidates every Data-owned migration added since v1.8.2 (the former versions
+    // 3-8: two AppliedPolicy CHECK constraints, the domain-prefix rename, FileResource's tables, its
+    // Origin generalization, and System_Notification) — see DataConsolidatedMigrations.SinceV182.
+    // None of the former versions 3-8 had shipped in a tagged release, but this project's own local
+    // dev database had already applied all of them via each issue's own T1 pass earlier in this
+    // milestone (confirmed live before squashing, not assumed) — per ADR 015's revision (from #254),
+    // "unreleased" is not the right test for whether a migration is safe to edit; the real test is
+    // whether any real database, including a developer's own, has already applied it. The squash was
+    // done anyway, by deliberate developer decision, with the local dev database being reset as part
+    // of this same work — see #289's plan doc. ApplyMigrationsAsync's own schema-version-overshoot
+    // detection is the safety net for every other database (a second developer's machine, a CI cache)
+    // that may be in the same already-migrated state and isn't being reset alongside this one.
     private static readonly IReadOnlyList<SchemaMigration> DataOwnedMigrations =
     [
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
         new SchemaMigration { Version = 2, Sql = DataConsolidatedMigrations.SinceV172 },
-        new SchemaMigration { Version = 3, Sql = ImportConflictMigrations.AddAppliedPolicyCheckConstraint },
-        new SchemaMigration { Version = 4, Sql = ImportActionMigrations.AddAppliedPolicyCheckConstraint },
-        new SchemaMigration { Version = 5, Sql = DomainPrefixRenameMigrations.RenameDataOwnedTables },
-        new SchemaMigration { Version = 6, Sql = FileResourceMigrations.CreateFileResourceTables },
-        new SchemaMigration { Version = 7, Sql = FileResourceOriginGeneralizationMigrations.GeneralizeOrigin },
-        new SchemaMigration { Version = 8, Sql = NotificationMigrations.CreateNotificationTable },
+        new SchemaMigration { Version = 3, Sql = DataConsolidatedMigrations.SinceV182 },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -329,6 +313,9 @@ public class DatabaseInitializer(
 
     /// <inheritdoc/>
     public string? MigrationApplied { get; protected set; }
+
+    /// <inheritdoc/>
+    public bool SchemaVersionOvershootDetected { get; protected set; }
 
     /// <inheritdoc/>
     public IReadOnlyList<FileImportReport> LastSeedReport { get; protected set; } = [];
@@ -613,7 +600,16 @@ public class DatabaseInitializer(
             return null;
         }
 
-        var timestamp  = DateTime.UtcNow.ToString("yyyyMMddTHHmmss");
+        // #289: millisecond precision, not just seconds — found live when #289's migration squash
+        // happened to make two real, distinct backups within the same test (Reset's own backup, then
+        // the following InitialiseAsync's) land on the same fromVersion for the first time (previously
+        // 6 vs 8, now both 5 after the squash). Second-precision timestamps let two same-version
+        // backups within the same second collide on an identical filename — SqliteConnection.
+        // BackupDatabase silently overwrites the existing file at that path rather than erroring, so
+        // the second backup was never actually taking a distinct new file. Not specific to this one
+        // version-number coincidence — any two same-version backups within the same wall-clock second
+        // could always have collided this way; milliseconds make that effectively impossible.
+        var timestamp  = DateTime.UtcNow.ToString("yyyyMMddTHHmmssfff");
         var backupName = $"{Path.GetFileNameWithoutExtension(_options.DbPath)}_v{fromVersion}_{timestamp}Z.db";
         var backupPath = Path.Combine(_options.BackupsPath, backupName);
 
@@ -692,6 +688,14 @@ public class DatabaseInitializer(
         var dataCurrent     = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetDataCurrentVersion);
         var consumerCurrent = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetConsumerCurrentVersion);
 
+        // #289: a recorded version higher than this build's own known migration count is only
+        // reachable after a migration squash, on a database that already applied the pre-squash
+        // migrations — the schema itself is complete (nothing to replay), only the counter is stale
+        // relative to this build. Detected here (not treated as a hard failure) so the caller can
+        // surface it via a notification instead — see IDatabaseInitializer.SchemaVersionOvershootDetected.
+        SchemaVersionOvershootDetected =
+            dataCurrent > DataOwnedMigrations.Count || consumerCurrent > _consumerMigrations.Count;
+
         var dataPending     = dataCurrent     < DataOwnedMigrations.Count;
         var consumerPending = consumerCurrent < _consumerMigrations.Count;
 
@@ -700,6 +704,8 @@ public class DatabaseInitializer(
             DataSchemaVersion = dataCurrent;
             SchemaVersion     = consumerCurrent;
             Logger.LogSchemaUpToDate(dataCurrent, consumerCurrent);
+            if (SchemaVersionOvershootDetected)
+                Logger.LogSchemaVersionOvershoot(dataCurrent, DataOwnedMigrations.Count, consumerCurrent, _consumerMigrations.Count);
             return false;
         }
 
@@ -719,13 +725,20 @@ public class DatabaseInitializer(
         {
             var dataApplied = await ApplyMigrationPhaseAsync(
                 connection, "Data", DataOwnedMigrations, dataCurrent, Sql.Schema.InsertDataVersion);
-            DataSchemaVersion = DataOwnedMigrations.Count;
+            // #289: Math.Max, not a bare assignment to DataOwnedMigrations.Count — when this side
+            // overshoots while the other side has genuine pending work (so this whole method doesn't
+            // take the early "both up to date" return above), ApplyMigrationPhaseAsync writes nothing
+            // for this side (current >= migrations.Count), so the true recorded version stays
+            // dataCurrent, not the smaller known count.
+            DataSchemaVersion = Math.Max(dataCurrent, DataOwnedMigrations.Count);
 
             var consumerApplied = await ApplyMigrationPhaseAsync(
                 connection, "App", _consumerMigrations, consumerCurrent, Sql.Schema.InsertConsumerVersion);
-            SchemaVersion = _consumerMigrations.Count;
+            SchemaVersion = Math.Max(consumerCurrent, _consumerMigrations.Count);
 
             MigrationApplied = CombineMigrationApplied(dataApplied, consumerApplied);
+            if (SchemaVersionOvershootDetected)
+                Logger.LogSchemaVersionOvershoot(DataSchemaVersion, DataOwnedMigrations.Count, SchemaVersion, _consumerMigrations.Count);
         }
         catch (Exception ex) when (backupPath is not null)
         {
