@@ -62,8 +62,10 @@ and #255/#256 do not carry that urgency.
 | [#279](https://github.com/DutchJaFO/Quotinator/issues/279) | Standardise endpoint naming (WithName/WithSummary) across CRUD and action endpoints — includes breaking operationId renames | Waiting for release | T1 ✅ T2 ✅ | [279-endpoint-naming-standardization-plan.md](279-endpoint-naming-standardization-plan.md) |
 | [#280](https://github.com/DutchJaFO/Quotinator/issues/280) | Show a startup "please wait" page while the database is created/updated/seeded, with progress if feasible | Waiting for release | T1 ✅ T2 ✅ | [280-startup-wait-page-plan.md](280-startup-wait-page-plan.md) |
 | [#281](https://github.com/DutchJaFO/Quotinator/issues/281) | Research: should the 8 masterdata CRUD endpoint files be refactored to share logic via base classes | Planning | N/A (research, no code change expected until findings are recorded) | No plan doc — findings and recommendation to be recorded in the issue's own closing comment |
-| [#282](https://github.com/DutchJaFO/Quotinator/issues/282) | Research: should real ad-hoc join reads (masterdata reference readers, SqliteQuoteService's Conversation/Quote hydration) adopt, extend, or replace the unused JoinQueryRepository/IJoinStrategy pattern | Planning | N/A (research, no code change expected until findings are recorded) | No plan doc — findings and recommendation to be recorded in the issue's own closing comment |
+| [#282](https://github.com/DutchJaFO/Quotinator/issues/282) | Research: should real ad-hoc join reads (masterdata reference readers, SqliteQuoteService's Conversation/Quote hydration) adopt, extend, or replace the unused JoinQueryRepository/IJoinStrategy pattern | Waiting for release | N/A (research; findings posted, ADR 017 written, #284/#285 filed — issue stays open until it actually ships, per #264/#267 precedent) | No plan doc — findings and recommendation recorded in the issue's own closing comment |
 | [#283](https://github.com/DutchJaFO/Quotinator/issues/283) | PersonResponse.CompletenessStatus is nullable with no fallback, unlike every other masterdata entity | Waiting for release | T1 ✅ T2 ✅ | [283-person-completeness-consistency-plan.md](283-person-completeness-consistency-plan.md) |
+| [#284](https://github.com/DutchJaFO/Quotinator/issues/284) | Migrate masterdata reference readers to JoinQueryRepository/IJoinStrategy, add missing integration tests | Planning | N/A yet | No plan doc yet |
+| [#285](https://github.com/DutchJaFO/Quotinator/issues/285) | Wrap Conversation's per-line lookups as IJoinStrategy implementations, fix redundant quote query | Planning | N/A yet | No plan doc yet |
 
 ---
 
@@ -121,24 +123,31 @@ surfacing that kind of change to operators. #279 must not land before #278 exist
 infrastructure rather than invent a second, parallel status-reporting mechanism; #280 must not land
 before #278 exists to build on.
 
-**#281 depends on #282 for a complete answer, discovered mid-investigation (2026-08-10).** #281's own
-findings identified `ConversationEndpoints.GetById` as the one file of the 8 that doesn't follow the
-repository-pattern `GetById` idiom — it hydrates a multi-table aggregate (Conversation + lines + their
-polymorphic Quote/StageDirection/SoundCue targets, each independently language-resolved) via
-`SqliteQuoteService`'s own hand-rolled Dapper queries. Investigating that gap surfaced #282: the
-project already has a documented, guard-tested join-capable repository pattern
-(`JoinQueryRepository`/`IJoinStrategy`) that is used by zero real production code, including this
-Conversation read. #281 cannot finish deciding whether Conversation is a genuine, permanent exception
-to a shared `GetById` helper — versus a case that belongs on the same join-capable pattern as everything
-else — until #282 determines whether/how that pattern actually fits. #281 otherwise has no dependency
-on any other open issue in this milestone.
+**#281's dependency on #282 is resolved (2026-08-10) — #281 is now unblocked.** #282 concluded (ADR
+017) that Conversation's per-line lookups will be wrapped as `IJoinStrategy` implementations via
+`JoinQueryRepository` (#285), giving Conversation's `GetById` a real, documented generic mechanism
+instead of staying permanently ad hoc — even though it's a different mechanism from the
+`IRepository<T>.GetByIdAsync` idiom the shared helper covers for the other 7 masterdata entities,
+since a Conversation is a multi-table aggregate, not a single-entity fetch. #281 does not need to wait
+for #285's code to land to close — the architectural answer is settled; #281's own closing comment can
+now state the final recommendation (reject base class; shared helper for 7/8 entities; Conversation
+uses ADR 017's pattern instead, tracked by #285) without further blocking.
 
 **#282 has no dependency on any other open issue in this milestone** — it's a discovered gap in
-existing infrastructure, independent of the rename/naming work and everything else in flight.
+existing infrastructure, independent of the rename/naming work and everything else in flight. Its own
+findings produced [ADR 017](../architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md)
+and two follow-up issues, #284 and #285.
 
 **#283 has no dependency on any other open issue in this milestone** — it's a standalone response-
 contract bug discovered while investigating #281 (not #281's own core base-class question), fixable
 independently of #281's or #282's outcomes.
+
+**#284 has no dependency on any other open issue in this milestone** — mechanical migration of the 3
+masterdata reference readers' internal SQL-execution mechanism, per ADR 017. Independent of #285 (no
+shared files, no shared risk).
+
+**#285 depends on ADR 017 (done) and closes out #281's Conversation `GetById` question** — otherwise
+independent of every other open issue in this milestone.
 
 None of the remaining issues block each other beyond these relationships.
 
@@ -262,6 +271,13 @@ None of the remaining issues block each other beyond these relationships.
     `?? Incomplete`-fallback contract every other masterdata entity uses, plus a drive-by reorder of
     `PersonEndpoints.GetAll`'s beyond-last-page check to match its siblings (filed 2026-08-10 while
     investigating #281); independent, no dependency on the others
+40. **#284** — Migrate the 3 masterdata reference readers to use `JoinQueryRepository`/
+    `IJoinStrategy` internally, per [ADR 017](../architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md)
+    (filed 2026-08-10 from #282's findings); independent, no dependency on the others
+41. **#285** — Wrap Conversation's per-line lookups as `IJoinStrategy` implementations, fixing a
+    redundant double-query found in the same investigation (filed 2026-08-10 from #282's findings);
+    sequenced after #282 (done) since it implements ADR 017's decision, and closes out #281's
+    Conversation `GetById` question once it lands
 
 ---
 
