@@ -152,7 +152,7 @@ of the 3 readers.
 | 3 | ✅ | `SeriesUniverseReferenceReader` executes via `JoinQueryRepository`, same public behaviour | Unit test | `SeriesUniverseReferenceReaderTests` (5 tests) |
 | 4 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3299/3299 passed |
 | 5 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
-| 6 | ⬜ | T2 — live container's masterdata endpoints still resolve Series/Source/Universe references correctly | Live (T2) | Docker smoke test |
+| 6 | ✅ | T2 — live container's masterdata endpoints still resolve Series/Source/Universe references correctly | Live (T2) | `docker build` clean; fresh-seeded container's `/masterdata/sources`, `/masterdata/characters`, `/masterdata/series` all correctly resolve their reference (e.g. "The Empire Strikes Back" → Series "Original Trilogy"; "Darth Vader" → Source "The Empire Strikes Back"; "Sean Connery Era" → Universe "James Bond") |
 
 ---
 
