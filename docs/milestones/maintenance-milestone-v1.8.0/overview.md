@@ -68,6 +68,7 @@ and #255/#256 do not carry that urgency.
 | [#285](https://github.com/DutchJaFO/Quotinator/issues/285) | Wrap Conversation's per-line lookups as IJoinStrategy implementations, fix redundant quote query | Waiting for release | T1 ✅ T2 ✅ | [285-conversation-line-lookup-joinstrategy-plan.md](285-conversation-line-lookup-joinstrategy-plan.md) |
 | [#286](https://github.com/DutchJaFO/Quotinator/issues/286) | Extract GetById/GetAll generic helpers for the 7 plain-repository-pattern masterdata endpoints | Waiting for release | T1 ✅ T2 ✅ | [286-getbyid-getall-helpers-plan.md](286-getbyid-getall-helpers-plan.md) |
 | [#287](https://github.com/DutchJaFO/Quotinator/issues/287) | Convert IQuoteService and its implementations to fully async | Waiting for release | T1 ✅ T2 ✅ | [287-iquoteservice-async-conversion-plan.md](287-iquoteservice-async-conversion-plan.md) |
+| [#288](https://github.com/DutchJaFO/Quotinator/issues/288) | Migration review: verify full incremental path from last-shipped v1.8.2 schema | Waiting for release | N/A (pure verification, no code change — live Docker verification, see plan doc) | [288-migration-verification-plan.md](288-migration-verification-plan.md) |
 
 ---
 
@@ -298,6 +299,9 @@ None of the remaining issues block each other beyond these relationships.
 43. **#285** — Wrap Conversation's per-line lookups as `IJoinStrategy` implementations, fixing a
     redundant double-query found in the same investigation (filed 2026-08-10 from #282's findings);
     depends on #287 landing first; closes out #281's Conversation `GetById` question once it lands
+44. **#288** — Migration review: verify the full incremental path from the last-shipped v1.8.2 schema
+    (ADR 009 milestone-closing gate, filed 2026-08-10); sequenced last, once every migration-touching
+    issue above had landed — no bug found, no code change required
 
 ---
 
