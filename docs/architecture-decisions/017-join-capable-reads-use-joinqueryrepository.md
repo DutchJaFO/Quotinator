@@ -82,20 +82,21 @@ precedent for a future reader unless it has the same genuine typed-POCO incompat
 ## Consequences
 
 - Two follow-up issues in v1.8.0:
-  - Migrate the 3 masterdata reference readers to use `JoinQueryRepository`/`IJoinStrategy`
-    internally, keeping their own domain-specific interface and dictionary/tuple shaping unchanged —
-    and add the real-SQLite integration tests these readers are missing today (only fakes exist),
-    matching `ConversationLineCountReaderTests.cs`'s pattern.
-  - Wrap Conversation's per-line lookups (Quote/StageDirection/SoundCue, each already a single
-    correct translation-aware query) as `IJoinStrategy` implementations via `JoinQueryRepository` —
-    this also gives Conversation's `GetById` a real, documented generic pattern to point to instead
-    of being permanently ad hoc, closing #281's open question about whether it can join the same
-    category as the other 7 masterdata `GetById` handlers. The same pass fixes a redundant
-    double-query found as a side-effect of this investigation (`BuildLineResponse`'s `"quote"` branch
-    calling the already-translation-complete `Quotes.SelectById()` query twice whenever the requested
-    language differs from the quote's original language) — folded into this issue rather than filed
-    separately, since rewriting the branch as a single `JoinQueryRepository` call naturally eliminates
-    it, and a standalone fix would just be rewritten again the moment this issue landed.
+  - **#284** — Migrate the 3 masterdata reference readers to use `JoinQueryRepository`/
+    `IJoinStrategy` internally, keeping their own domain-specific interface and dictionary/tuple
+    shaping unchanged — and add the real-SQLite integration tests these readers are missing today
+    (only fakes exist), matching `ConversationLineCountReaderTests.cs`'s pattern.
+  - **#285** — Wrap Conversation's per-line lookups (Quote/StageDirection/SoundCue, each already a
+    single correct translation-aware query) as `IJoinStrategy` implementations via
+    `JoinQueryRepository` — this also gives Conversation's `GetById` a real, documented generic
+    pattern to point to instead of being permanently ad hoc, closing #281's open question about
+    whether it can join the same category as the other 7 masterdata `GetById` handlers. The same
+    pass fixes a redundant double-query found as a side-effect of this investigation
+    (`BuildLineResponse`'s `"quote"` branch calling the already-translation-complete
+    `Quotes.SelectById()` query twice whenever the requested language differs from the quote's
+    original language) — folded into this issue rather than filed separately, since rewriting the
+    branch as a single `JoinQueryRepository` call naturally eliminates it, and a standalone fix would
+    just be rewritten again the moment this issue landed.
 - `docs/data-access.md`'s "When to use which pattern" table gets a note pointing to this ADR for the
   "adopt even without an immediate capability gain" rule, so a future contributor facing the same
   "but the hand-rolled version already works fine" reasoning has an answer to check instead of
