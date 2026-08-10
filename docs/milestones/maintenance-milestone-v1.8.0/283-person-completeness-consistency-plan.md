@@ -89,7 +89,7 @@ failed (up from 3283 — exactly the 1 new test), across all 10 test projects.
 | 2 | ✅ | `PersonEndpoints.GetAll` checks beyond-last-page before mapping items | Code review | `PersonEndpoints.cs` diff matches `CharacterEndpoints.cs`'s structure |
 | 3 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3284/3284 passed |
 | 4 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
-| 5 | ⬜ | T2 — live container serves a Person with Incomplete status correctly | Live (T2) | Docker smoke test |
+| 5 | ✅ | T2 — live container serves People with a present, non-null `completenessStatus` | Live (T2) | `docker build` clean; fresh-seeded container's `GET /api/v1/masterdata/people` and `GET /api/v1/masterdata/people/{id}` both return `"completenessStatus":"NeedsReview"` (Winston Churchill, Martin Luther King Jr., Neil Armstrong) — field present and correctly typed, not omitted |
 
 ---
 
