@@ -25,15 +25,24 @@ no fix available anywhere (Docker Scout: "Fixed version: not fixed") as of the s
 is actionable until Ubuntu/Microsoft ships a patched package — re-checked periodically on rebuild
 (#232's own follow-up tracks adding this to the T2 smoke-test checklist).
 
-**Last scanned:** 2026-08-06, `quotinator:local` built fresh with `docker build --no-cache`, via
+**Last scanned:** 2026-08-10, `quotinator:local` built fresh with `docker build --no-cache`, via
 [`docs/release-verification.md`'s T4 tier](../release-verification.md#t4--docker-image-freshness-milestone-close)
-(#250) — identical result to the 2026-08-01 scan below, same 8 CVEs, same severities, all still
-`Fixed version: not fixed`. All 8 originate in the base image itself, confirmed by scanning
-`mcr.microsoft.com/dotnet/aspnet:10.0` directly and getting an identical result — Quotinator's own
-application layer contributes none.
+(#250). 10 CVEs now, up from 8 on 2026-08-06 — two new `systemd` findings
+(CVE-2026-16742, CVE-2026-15059, both Medium). Both report a fixed Ubuntu package version
+(`255.4-1ubuntu8.17`), unlike every other entry in this table, but that fix has **not** reached
+Microsoft's base image yet — confirmed by pulling `mcr.microsoft.com/dotnet/aspnet:10.0` fresh
+(`docker pull`, not just `--no-cache`) and re-scanning it directly: still `systemd
+255.4-1ubuntu8.16`, same two CVEs. Still nothing actionable from Quotinator's side today — tracked
+here as the same accepted-residual-risk category as the rest, but re-check on the *next* rescan
+whether Microsoft has picked up the Ubuntu fix (unlike the other 8, this one could resolve itself on
+a routine rebuild once they do, no watching-for-a-CVE-fix required). All 10 originate in the base
+image itself, confirmed by scanning `mcr.microsoft.com/dotnet/aspnet:10.0` directly and getting an
+identical result — Quotinator's own application layer contributes none.
 
 | CVE | Package | Severity | Fixable |
 |---|---|---|---|
+| CVE-2026-16742 | systemd | Medium | Not yet — fixed in Ubuntu, not yet in the Microsoft base image |
+| CVE-2026-15059 | systemd | Medium | Not yet — fixed in Ubuntu, not yet in the Microsoft base image |
 | CVE-2026-2219 | dpkg | Medium | No |
 | CVE-2026-13757 | p11-kit | Medium | No |
 | CVE-2026-27456 | util-linux | Medium | No |
