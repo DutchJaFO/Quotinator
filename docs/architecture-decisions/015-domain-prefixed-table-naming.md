@@ -150,3 +150,14 @@ frozen. The "collapse into the smallest number of new migrations" guidance above
 for migrations that are still purely theoretical — written in a plan doc but never yet executed against
 any real database, including a developer's own — but that window closes the first time the migration
 actually runs, not at the next tag.
+
+**Confirmed a third time during #288's own migration-minimization evaluation (2026-08-10).** #288
+(ADR 009's milestone-closing verification gate) asked whether the 8 migrations added since v1.8.2 —
+Data versions 3-8, Consumer versions 5-6, spanning #150/#251/#252/#253/#254/#280 — could be squashed
+into 1 Consumer + 1 Data migration, following #155's prior-milestone precedent. Before writing any
+code, the developer's own local Visual Studio startup log was checked directly and showed
+`schema is up to date (data v8, app v6)` — proof, not inference, that every one of those 8 migrations
+had already applied to the local dev database via each issue's own T1 pass earlier in the same
+milestone. The squash was cancelled on that evidence alone. This is the same class of near-miss #254
+itself was, caught this time before any code was written rather than after — the corrected policy
+above held.

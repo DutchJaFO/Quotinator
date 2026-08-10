@@ -269,6 +269,7 @@
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/286-getbyid-getall-helpers-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/287-iquoteservice-async-conversion-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/288-migration-verification-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/289-migration-squash-overshoot-detection-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
