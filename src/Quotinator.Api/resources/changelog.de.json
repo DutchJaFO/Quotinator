@@ -16,6 +16,9 @@
     {
       "version": "1.8.3-beta",
       "date": "2026-08-10",
+      "quote": {
+        "text": "Quotinator hat sich in diesem Release dem Faktencheck der eigenen Datenbank gewidmet — passend für eine App, die vollständig auf verifizierten Zitaten basiert."
+      },
       "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245, 263, 264, 265, 271, 272, 267, 269, 278, 279, 277, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289],
     "highlights": [
       "Falls die Datenbank jemals nicht korrekt starten kann, bleibt Quotinator jetzt erreichbar und meldet das Problem klar, anstatt abzustürzen oder eine technische Fehlerseite anzuzeigen — ein Admin-Datenbank-Reset kann dies beheben, ohne dass App oder Container neu gestartet werden müssen.",
