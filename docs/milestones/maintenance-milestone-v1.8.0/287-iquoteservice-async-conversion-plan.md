@@ -140,7 +140,7 @@ passed (same count as before this issue — a pure signature conversion adds no 
 | 1 | ✅ | `IQuoteService` and both implementations compile async, same behaviour | Build + test | Full solution build/test, 3299/3299 |
 | 2 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3299/3299 |
 | 3 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
-| 4 | ⬜ | T2 — live container's quote/conversation endpoints and the QuoteCard component still work | Live (T2) | Docker smoke test |
+| 4 | ✅ | T2 — live container's quote/conversation endpoints and the QuoteCard component still work | Live (T2) | `docker build` clean; `/quotes` (GetAll), `/quotes/random` (GetRandom), `/quotes/search` (Search) all return `200` with correct data; `/conversations/{id}` (GetById) correctly resolves mixed stage-direction/quote lines via the new `JoinQueryRepository` wiring, with and without `?lang=nl` (falls back to English correctly, no translation existing); home page's `QuoteCard` Blazor component renders a real quote via its now-async `LoadQuote()`, `POST /_blazor/negotiate` confirms an interactive circuit, no console/network errors |
 
 ---
 
