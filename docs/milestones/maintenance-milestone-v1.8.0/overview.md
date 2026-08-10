@@ -63,7 +63,7 @@ and #255/#256 do not carry that urgency.
 | [#280](https://github.com/DutchJaFO/Quotinator/issues/280) | Show a startup "please wait" page while the database is created/updated/seeded, with progress if feasible | Waiting for release | T1 ✅ T2 ✅ | [280-startup-wait-page-plan.md](280-startup-wait-page-plan.md) |
 | [#281](https://github.com/DutchJaFO/Quotinator/issues/281) | Research: should the 8 masterdata CRUD endpoint files be refactored to share logic via base classes | Planning | N/A (research, no code change expected until findings are recorded) | No plan doc — findings and recommendation to be recorded in the issue's own closing comment |
 | [#282](https://github.com/DutchJaFO/Quotinator/issues/282) | Research: should real ad-hoc join reads (masterdata reference readers, SqliteQuoteService's Conversation/Quote hydration) adopt, extend, or replace the unused JoinQueryRepository/IJoinStrategy pattern | Planning | N/A (research, no code change expected until findings are recorded) | No plan doc — findings and recommendation to be recorded in the issue's own closing comment |
-| [#283](https://github.com/DutchJaFO/Quotinator/issues/283) | PersonResponse.CompletenessStatus is nullable with no fallback, unlike every other masterdata entity | In progress | T1 ⬜ T2 ⬜ | [283-person-completeness-consistency-plan.md](283-person-completeness-consistency-plan.md) |
+| [#283](https://github.com/DutchJaFO/Quotinator/issues/283) | PersonResponse.CompletenessStatus is nullable with no fallback, unlike every other masterdata entity | Waiting for release | T1 ✅ T2 ✅ | [283-person-completeness-consistency-plan.md](283-person-completeness-consistency-plan.md) |
 
 ---
 

@@ -1,6 +1,6 @@
 # #283 — PersonResponse.CompletenessStatus is nullable with no fallback, unlike every other masterdata entity
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #283
 **Tiers required:** T1, T2
 **Depends on:** none (isolated fix inside `PersonResponse`/`PersonEndpoints`)
@@ -88,7 +88,7 @@ failed (up from 3283 — exactly the 1 new test), across all 10 test projects.
 | 1 | ✅ | Unparseable/empty CompletenessStatus returns "Incomplete", not null/omitted | Unit test | `PersonEndpointsTests.GetPersonById_CompletenessStatusUnparseable_ReturnsIncompleteNotNull` |
 | 2 | ✅ | `PersonEndpoints.GetAll` checks beyond-last-page before mapping items | Code review | `PersonEndpoints.cs` diff matches `CharacterEndpoints.cs`'s structure |
 | 3 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3284/3284 passed |
-| 4 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
+| 4 | ✅ | T1 — app starts in Visual Studio | Live (T1) | Developer confirmed (2026-08-10): clean boot, schema up to date (v6, data v8), stats match seed exactly (799 quotes / 461 sources / 12 characters / 3 people / 30 series / 7 universes / 2 stage directions / 1 sound cue / 4 conversations) |
 | 5 | ✅ | T2 — live container serves People with a present, non-null `completenessStatus` | Live (T2) | `docker build` clean; fresh-seeded container's `GET /api/v1/masterdata/people` and `GET /api/v1/masterdata/people/{id}` both return `"completenessStatus":"NeedsReview"` (Winston Churchill, Martin Luther King Jr., Neil Armstrong) — field present and correctly typed, not omitted |
 
 ---
