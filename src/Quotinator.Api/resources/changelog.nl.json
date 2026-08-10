@@ -10,7 +10,13 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245, 263, 264, 265, 271, 272, 267, 269, 278, 279, 277, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289],
+    "issues": []
+  },
+  "releases": [
+    {
+      "version": "1.8.3-beta",
+      "date": "2026-08-10",
+      "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245, 263, 264, 265, 271, 272, 267, 269, 278, 279, 277, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289],
     "highlights": [
       "Als de database ooit niet correct kan opstarten, blijft Quotinator nu bereikbaar en meldt het probleem duidelijk in plaats van vast te lopen of een technische foutpagina te tonen — een admin-databasereset kan dit oplossen zonder dat de app of container opnieuw gestart hoeft te worden.",
       "Quotinator bewaart nu een kopie van elk import-/seedbestand dat het verwerkt — inclusief welke conversie-instellingen zijn gebruikt — zodat de originele inhoud later opnieuw kan worden opgevraagd, bekeken of gedownload, en oude versies kunnen worden opgeruimd om ruimte terug te winnen.",
@@ -77,9 +83,8 @@
       "`GET /api/v1/quotes` en `GET /api/v1/quotes/search` geven nu correct vertaalde inhoud terug wanneer `?lang=` wordt opgegeven — door een bug negeerden beide endpoints de gevraagde taal altijd en gaven ze alleen de tekst in de oorspronkelijke taal terug; de losse quote-opvraging (`GET /api/v1/quotes/{id}`) en het random-endpoint waren hier niet door geraakt (issue #244)",
       "Het `date`-veld van een Source wordt nu ook correct gevuld wanneer die Source voor het eerst werd aangemaakt via een datumloze `sources[]`-invoer (bijv. een invoer die alleen een koppeling naar een Series legt) en pas later een datum krijgt via een quote in een later ingeladen bestand — voorheen bleef dit veld in dat specifieke geval permanent leeg, ook al was het vaker voorkomende geval (een Source die uitsluitend via een quote wordt ontdekt) al eerder opgelost (issue #245)",
       "`GET /api/v1/masterdata/people/{id}` en `GET /api/v1/masterdata/people` konden `completenessStatus` voorheen volledig weglaten uit de response in plaats van `\"Incomplete\"` terug te geven — de enige masterdata-entiteit die zich anders gedroeg dan elke vergelijkbare entiteit voor dezelfde onderliggende situatie, terwijl de database zelf nooit een werkelijk onbepaalde volledigheidsstatus toestaat voor enige entiteit, People inbegrepen (issue #283)"
-    ]
-  },
-  "releases": [
+      ]
+    },
     {
       "version": "1.8.2",
       "date": "2026-07-31",

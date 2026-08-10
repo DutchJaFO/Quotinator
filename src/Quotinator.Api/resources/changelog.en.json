@@ -3,7 +3,13 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245, 263, 264, 265, 271, 272, 267, 269, 278, 279, 277, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289],
+    "issues": []
+  },
+  "releases": [
+    {
+      "version": "1.8.3-beta",
+      "date": "2026-08-10",
+      "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245, 263, 264, 265, 271, 272, 267, 269, 278, 279, 277, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289],
     "highlights": [
       "If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page — an admin database Reset can fix it without needing to restart the app or container.",
       "Quotinator now keeps a copy of every import/seed file it processes — including which conversion settings were used — so the original content can be listed, reviewed, or downloaded again later, and old versions can be pruned to reclaim space.",
@@ -70,9 +76,8 @@
       "`GET /api/v1/quotes` and `GET /api/v1/quotes/search` now correctly return translated content when `?lang=` is requested — a bug meant both endpoints always ignored the requested language and returned only the original-language text; single-quote lookup (`GET /api/v1/quotes/{id}`) and the random endpoint were unaffected (issue #244)",
       "A Source's `date` field now populates correctly even when that Source was first created by a date-less `sources[]` entry (e.g. one that only links it to a Series) and only ever gains a date from a quote in a later-seeded file — previously it stayed permanently empty in that specific case, even though the more common case (a Source discovered purely from a quote) was already fixed (issue #245)",
       "`GET /api/v1/masterdata/people/{id}` and `GET /api/v1/masterdata/people` could previously omit `completenessStatus` from the response entirely instead of returning `\"Incomplete\"` — the one masterdata entity behaving differently from every sibling for the same underlying condition, even though the database itself never allows a genuinely unset completeness status for any entity, People included (issue #283)"
-    ]
-  },
-  "releases": [
+      ]
+    },
     {
       "version": "1.8.2",
       "date": "2026-07-31",
