@@ -61,11 +61,12 @@ and #255/#256 do not carry that urgency.
 | [#278](https://github.com/DutchJaFO/Quotinator/issues/278) | Add a startup notification system surfaced in the #263 modals | Waiting for release | T1 ✅ T2 ✅ | [278-startup-notification-system-plan.md](278-startup-notification-system-plan.md) |
 | [#279](https://github.com/DutchJaFO/Quotinator/issues/279) | Standardise endpoint naming (WithName/WithSummary) across CRUD and action endpoints — includes breaking operationId renames | Waiting for release | T1 ✅ T2 ✅ | [279-endpoint-naming-standardization-plan.md](279-endpoint-naming-standardization-plan.md) |
 | [#280](https://github.com/DutchJaFO/Quotinator/issues/280) | Show a startup "please wait" page while the database is created/updated/seeded, with progress if feasible | Waiting for release | T1 ✅ T2 ✅ | [280-startup-wait-page-plan.md](280-startup-wait-page-plan.md) |
-| [#281](https://github.com/DutchJaFO/Quotinator/issues/281) | Research: should the 8 masterdata CRUD endpoint files be refactored to share logic via base classes | Planning | N/A (research, no code change expected until findings are recorded) | No plan doc — findings and recommendation to be recorded in the issue's own closing comment |
+| [#281](https://github.com/DutchJaFO/Quotinator/issues/281) | Research: should the 8 masterdata CRUD endpoint files be refactored to share logic via base classes | Waiting for release | N/A (research; findings posted, #286 filed — issue stays open until it actually ships, per #264/#265/#267 precedent) | No plan doc — findings and recommendation recorded in the issue's own closing comment |
 | [#282](https://github.com/DutchJaFO/Quotinator/issues/282) | Research: should real ad-hoc join reads (masterdata reference readers, SqliteQuoteService's Conversation/Quote hydration) adopt, extend, or replace the unused JoinQueryRepository/IJoinStrategy pattern | Waiting for release | N/A (research; findings posted, ADR 017 written, #284/#285 filed — issue stays open until it actually ships, per #264/#267 precedent) | No plan doc — findings and recommendation recorded in the issue's own closing comment |
 | [#283](https://github.com/DutchJaFO/Quotinator/issues/283) | PersonResponse.CompletenessStatus is nullable with no fallback, unlike every other masterdata entity | Waiting for release | T1 ✅ T2 ✅ | [283-person-completeness-consistency-plan.md](283-person-completeness-consistency-plan.md) |
 | [#284](https://github.com/DutchJaFO/Quotinator/issues/284) | Migrate masterdata reference readers to JoinQueryRepository/IJoinStrategy, add missing integration tests | Planning | N/A yet | No plan doc yet |
 | [#285](https://github.com/DutchJaFO/Quotinator/issues/285) | Wrap Conversation's per-line lookups as IJoinStrategy implementations, fix redundant quote query | Planning | N/A yet | No plan doc yet |
+| [#286](https://github.com/DutchJaFO/Quotinator/issues/286) | Extract GetById/GetAll generic helpers for the 7 plain-repository-pattern masterdata endpoints | Planning | N/A yet | No plan doc yet |
 
 ---
 
@@ -148,6 +149,11 @@ shared files, no shared risk).
 
 **#285 depends on ADR 017 (done) and closes out #281's Conversation `GetById` question** — otherwise
 independent of every other open issue in this milestone.
+
+**#286 depends on #283 (done)** — its `PersonEndpoints.GetAll`/`GetById` are folded into the shared
+helper as one of the 7 covered entities, so Person's own consistency fix had to land first. Otherwise
+independent; does not depend on #284 or #285 (different files, different scope — #286 covers the 7
+plain-repository-pattern entities, #284/#285 cover the reference readers and Conversation).
 
 None of the remaining issues block each other beyond these relationships.
 
@@ -278,6 +284,9 @@ None of the remaining issues block each other beyond these relationships.
     redundant double-query found in the same investigation (filed 2026-08-10 from #282's findings);
     sequenced after #282 (done) since it implements ADR 017's decision, and closes out #281's
     Conversation `GetById` question once it lands
+42. **#286** — Extract `GetById`/`GetAll` generic helpers for the 7 plain-repository-pattern
+    masterdata entities, the direct actionable conclusion of #281's own research question (filed
+    2026-08-10); sequenced after #283 (done), since Person is one of the 7 covered entities
 
 ---
 
