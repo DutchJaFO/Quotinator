@@ -266,6 +266,7 @@
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/283-person-completeness-consistency-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/284-reference-reader-joinstrategy-migration-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/285-conversation-line-lookup-joinstrategy-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/287-iquoteservice-async-conversion-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

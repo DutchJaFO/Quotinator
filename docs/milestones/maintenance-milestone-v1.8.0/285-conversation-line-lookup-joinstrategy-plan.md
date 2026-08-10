@@ -3,7 +3,10 @@
 **Status:** Planning
 **GitHub issue:** #285
 **Tiers required:** T1, T2
-**Depends on:** ADR 017 (done)
+**Depends on:** ADR 017 (done), #287 (in progress — `JoinQueryRepository` is async-only, forcing
+`BuildLineResponse`/`BuildConversationResponse`/`GetConversation`/`GetRandom` to become async, which
+became #287's own full `IQuoteService` conversion; #285's POCOs/strategies/DI registrations are
+already scaffolded, only the actual wiring into `SqliteQuoteService` waits on #287)
 
 ---
 

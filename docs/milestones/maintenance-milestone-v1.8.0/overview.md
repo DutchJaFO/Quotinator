@@ -67,6 +67,7 @@ and #255/#256 do not carry that urgency.
 | [#284](https://github.com/DutchJaFO/Quotinator/issues/284) | Migrate masterdata reference readers to JoinQueryRepository/IJoinStrategy, add missing integration tests | Waiting for release | T1 ✅ T2 ✅ | [284-reference-reader-joinstrategy-migration-plan.md](284-reference-reader-joinstrategy-migration-plan.md) |
 | [#285](https://github.com/DutchJaFO/Quotinator/issues/285) | Wrap Conversation's per-line lookups as IJoinStrategy implementations, fix redundant quote query | Planning | T1 ⬜ T2 ⬜ | [285-conversation-line-lookup-joinstrategy-plan.md](285-conversation-line-lookup-joinstrategy-plan.md) |
 | [#286](https://github.com/DutchJaFO/Quotinator/issues/286) | Extract GetById/GetAll generic helpers for the 7 plain-repository-pattern masterdata endpoints | Planning | N/A yet | No plan doc yet |
+| [#287](https://github.com/DutchJaFO/Quotinator/issues/287) | Convert IQuoteService and its implementations to fully async | Planning | T1 ⬜ T2 ⬜ | [287-iquoteservice-async-conversion-plan.md](287-iquoteservice-async-conversion-plan.md) |
 
 ---
 
@@ -147,8 +148,16 @@ independently of #281's or #282's outcomes.
 masterdata reference readers' internal SQL-execution mechanism, per ADR 017. Independent of #285 (no
 shared files, no shared risk).
 
-**#285 depends on ADR 017 (done) and closes out #281's Conversation `GetById` question** — otherwise
-independent of every other open issue in this milestone.
+**#285 depends on ADR 017 (done) and #287, discovered mid-implementation (2026-08-10).**
+`JoinQueryRepository` is async-only; `SqliteQuoteService.BuildLineResponse`/
+`BuildConversationResponse` need to call it, which cascades to `GetConversation` and `GetRandom`
+needing to be async, which — per developer decision to convert consistently rather than partially —
+became #287's full `IQuoteService` conversion. #285's own `JoinQueryRepository` wiring (POCOs,
+strategies, DI registrations already scaffolded) completes once #287 lands. #285 also closes out
+#281's Conversation `GetById` question, as before.
+
+**#287 has no dependency on any other open issue in this milestone** — a pure signature conversion,
+isolated to `IQuoteService` and its call graph. Blocks #285.
 
 **#286 depends on #283 (done)** — its `PersonEndpoints.GetAll`/`GetById` are folded into the shared
 helper as one of the 7 covered entities, so Person's own consistency fix had to land first. Otherwise
@@ -280,13 +289,15 @@ None of the remaining issues block each other beyond these relationships.
 40. **#284** — Migrate the 3 masterdata reference readers to use `JoinQueryRepository`/
     `IJoinStrategy` internally, per [ADR 017](../architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md)
     (filed 2026-08-10 from #282's findings); independent, no dependency on the others
-41. **#285** — Wrap Conversation's per-line lookups as `IJoinStrategy` implementations, fixing a
-    redundant double-query found in the same investigation (filed 2026-08-10 from #282's findings);
-    sequenced after #282 (done) since it implements ADR 017's decision, and closes out #281's
-    Conversation `GetById` question once it lands
-42. **#286** — Extract `GetById`/`GetAll` generic helpers for the 7 plain-repository-pattern
+41. **#286** — Extract `GetById`/`GetAll` generic helpers for the 7 plain-repository-pattern
     masterdata entities, the direct actionable conclusion of #281's own research question (filed
     2026-08-10); sequenced after #283 (done), since Person is one of the 7 covered entities
+42. **#287** — Convert `IQuoteService` and its implementations to fully async (discovered
+    mid-implementation of #285, 2026-08-10 — `JoinQueryRepository` is async-only); sequenced ahead
+    of #285 despite being filed later, since #285 depends on it (see Dependency map above)
+43. **#285** — Wrap Conversation's per-line lookups as `IJoinStrategy` implementations, fixing a
+    redundant double-query found in the same investigation (filed 2026-08-10 from #282's findings);
+    depends on #287 landing first; closes out #281's Conversation `GetById` question once it lands
 
 ---
 
