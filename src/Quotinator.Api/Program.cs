@@ -19,6 +19,7 @@ using Quotinator.Data.Enums;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Helpers;
+using Quotinator.Core.Queries;
 using Quotinator.Core.Repositories;
 using Quotinator.Core.Services;
 using Quotinator.Api.Middleware;
@@ -26,6 +27,7 @@ using Quotinator.Api.OpenApi;
 using Quotinator.Api.Services;
 using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
+using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Changelog.Services;
 using Quotinator.Converters.BasicJsonArray;
@@ -354,20 +356,37 @@ builder.Services.AddSingleton<IListableRepository<StageDirectionEntity>>(sp => (
 // singleton, not a second instance" reasoning.
 builder.Services.AddSingleton<IListableRepository<SoundCueEntity>>(sp => (IListableRepository<SoundCueEntity>)sp.GetRequiredService<IRestorableRepository<SoundCueEntity>>());
 
-// #184: resolves a Source's SeriesId to its Series' (Id, Name) — the generic IListableRepository<T>/
-// IRepository<T> above cannot express this join (single-table SELECT * only).
+// #184/#284: resolves a Source's SeriesId to its Series' (Id, Name). SQL execution goes through
+// JoinQueryRepository/IJoinStrategy per ADR 017 — a join the generic IListableRepository<T>/
+// IRepository<T> above cannot express (single-table SELECT * only), even though adopting the pattern
+// here doesn't unlock new capability over a hand-rolled query; see ADR 017 for why that's still the
+// right call.
+builder.Services.AddSingleton<IJoinStrategy<SeriesReferenceRow>, SourceSeriesReferenceStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SeriesReferenceRow>>();
+builder.Services.AddSingleton<IJoinStrategy<SourceSeriesReferenceRow>, SourceSeriesReferencesBatchStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SourceSeriesReferenceRow>>();
 builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenceReader>();
 
-// #185: resolves a Character's linked Sources (via CharacterSources, #179) to their (Id, Title) —
-// same "generic repository cannot express a join" reasoning as ISourceSeriesReferenceReader above.
+// #185/#284: resolves a Character's linked Sources (via CharacterSources, #179) to their (Id, Title) —
+// same ADR 017 reasoning as ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<IJoinStrategy<SourceRow>, CharacterSourceReferenceStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SourceRow>>();
+builder.Services.AddSingleton<IJoinStrategy<LinkRow>, CharacterSourceReferencesBatchStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<LinkRow>>();
 builder.Services.AddSingleton<ICharacterSourceLinkReader, CharacterSourceLinkReader>();
 
-// #187: resolves a Series' UniverseId to its Universe's (Id, Name) — same "generic repository cannot
-// express a join" reasoning as ISourceSeriesReferenceReader above.
+// #187/#284: resolves a Series' UniverseId to its Universe's (Id, Name) — same ADR 017 reasoning as
+// ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<IJoinStrategy<UniverseReferenceRow>, SeriesUniverseReferenceStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<UniverseReferenceRow>>();
+builder.Services.AddSingleton<IJoinStrategy<SeriesUniverseReferenceRow>, SeriesUniverseReferencesBatchStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SeriesUniverseReferenceRow>>();
 builder.Services.AddSingleton<ISeriesUniverseReferenceReader, SeriesUniverseReferenceReader>();
 
-// #189: resolves each Conversation's active line count via ConversationLines — same "generic repository
-// cannot express a join/aggregate" reasoning as ISourceSeriesReferenceReader above.
+// #189: resolves each Conversation's active line count via ConversationLines. Deliberately stays on
+// a raw connection, not JoinQueryRepository/IJoinStrategy — ADR 017's one documented exemption, since
+// this read's QueryAsync<dynamic> works around two real Dapper/SQLite bugs that IJoinStrategy<TResult>'s
+// concrete-TResult requirement can't accommodate (see the reader's own code comment for the two bugs).
 builder.Services.AddSingleton<IConversationLineCountReader, ConversationLineCountReader>();
 
 // #192: resolves a Series/Universe name to its id — the resolveIdByName delegate #196's

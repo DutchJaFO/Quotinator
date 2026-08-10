@@ -1,26 +1,23 @@
-using Dapper;
-using Quotinator.Data.Connections;
 using Quotinator.Data.Helpers;
 using Quotinator.Core.Queries;
+using Quotinator.Data.Repositories;
 
 namespace Quotinator.Core.Repositories;
 
 /// <summary>SQLite implementation of <see cref="ISourceSeriesReferenceReader"/>.</summary>
-/// <remarks>Initialises the reader with the connection factory.</remarks>
-/// <param name="factory">Factory used to open SQLite connections.</param>
-public sealed class SourceSeriesReferenceReader(IDbConnectionFactory factory) : ISourceSeriesReferenceReader
+/// <remarks>Initialises the reader with its join-query repositories — per ADR 017, SQL execution goes
+/// through <see cref="JoinQueryRepository{TResult}"/>/<see cref="Quotinator.Data.Queries.IJoinStrategy{TResult}"/> rather than a raw connection.</remarks>
+/// <param name="referenceRepository">Executes the single-Source active Series reference join.</param>
+/// <param name="batchRepository">Executes the batched active Series reference join.</param>
+public sealed class SourceSeriesReferenceReader(
+    JoinQueryRepository<SeriesReferenceRow> referenceRepository,
+    JoinQueryRepository<SourceSeriesReferenceRow> batchRepository) : ISourceSeriesReferenceReader
 {
-    private readonly IDbConnectionFactory _factory = factory;
-
     /// <inheritdoc/>
     public async Task<(Guid Id, string Name)?> GetSeriesReferenceAsync(Guid sourceId)
     {
-        var param = new { sourceId = sourceId.ToCanonicalId() };
-
-        using var conn = _factory.CreateConnection();
-        conn.Open();
-        var row = await conn.QueryFirstOrDefaultAsync<SeriesReferenceRow>(
-            Sql.Sources.SelectSeriesReferenceForSource, param);
+        var rows = await referenceRepository.QueryAsync(new { sourceId = sourceId.ToCanonicalId() });
+        var row = rows.Count > 0 ? rows[0] : null;
 
         return row is null ? null : (row.Id, row.Name);
     }
@@ -31,17 +28,9 @@ public sealed class SourceSeriesReferenceReader(IDbConnectionFactory factory) : 
         if (sourceIds.Count == 0)
             return new Dictionary<Guid, (Guid Id, string Name)>();
 
-        var param = new { sourceIds = sourceIds.Select(id => id.ToCanonicalId()).ToList() };
-
-        using var conn = _factory.CreateConnection();
-        conn.Open();
-        var rows = await conn.QueryAsync<SourceSeriesReferenceRow>(
-            Sql.Sources.SelectSeriesReferencesForSources, param);
+        var canonicalIds = sourceIds.Select(id => id.ToCanonicalId()).ToList();
+        var rows = await batchRepository.QueryAsync(new { sourceIds = canonicalIds });
 
         return rows.ToDictionary(r => r.SourceId, r => (r.SeriesId, r.SeriesName));
     }
-
-    private sealed record SeriesReferenceRow(Guid Id, string Name);
-
-    private sealed record SourceSeriesReferenceRow(Guid SourceId, Guid SeriesId, string SeriesName);
 }
