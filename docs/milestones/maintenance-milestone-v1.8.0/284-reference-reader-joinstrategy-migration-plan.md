@@ -1,6 +1,6 @@
 # #284 — Migrate masterdata reference readers to JoinQueryRepository/IJoinStrategy, add missing integration tests
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #284
 **Tiers required:** T1, T2
 **Depends on:** none (isolated to the 3 reference readers' internal implementation)
@@ -110,17 +110,36 @@ each test file scoped to only the tables its reader touches).
 
 ## Steps
 
-### 1. Write the failing tests (red)
-**Status:** ⬜ Not started
+### 1. Add the 6 POCOs and 6 strategy classes
+**Status:** ✅ Done — `Quotinator.Core/Queries/`: `SeriesReferenceRow`, `SourceSeriesReferenceRow`,
+`SourceRow`, `LinkRow`, `UniverseReferenceRow`, `SeriesUniverseReferenceRow` (promoted from each
+reader's existing private nested records, exact names preserved) and their 6 matching
+`IJoinStrategy<TResult>` implementations, each wrapping the existing `Sql.cs` query string unchanged.
 
-### 2. Add the 6 POCOs and 6 strategy classes
-**Status:** ⬜ Not started
+### 2. Update the 3 readers and Program.cs DI registrations
+**Status:** ✅ Done — each reader now takes two `JoinQueryRepository<TResult>` constructor
+parameters instead of `IDbConnectionFactory`, calling `.QueryAsync(parameters)` instead of opening
+its own connection. `Program.cs` registers 6 new `IJoinStrategy`/`JoinQueryRepository` pairs and
+updates each reader's own registration comment to point at ADR 017. `ConversationLineCountReader`'s
+registration comment updated too (drive-by, same region) to state its ADR 017 exemption explicitly,
+since the comment it previously cross-referenced ("same reasoning as ISourceSeriesReferenceReader
+above") no longer applies once that reasoning changed.
 
-### 3. Update the 3 readers and Program.cs DI registrations
-**Status:** ⬜ Not started
+### 3. Write the integration tests
+**Status:** ✅ Done — one real-SQLite test file per reader (`SourceSeriesReferenceReaderTests`,
+`CharacterSourceLinkReaderTests`, `SeriesUniverseReferenceReaderTests`), 15 tests total, following
+`ConversationLineCountReaderTests.cs`'s fixture pattern. **Not a strict red-before-implementation
+sequence**: the new tests construct each reader via its new `JoinQueryRepository<TResult>`-based
+constructor, which didn't exist before Step 2 — so they could not compile, let alone run, against the
+pre-migration code. Implementation and tests were developed together for this reason, not
+red-then-green in the traditional sense. Once compiled, all 15 passed on first run — unlike
+`ConversationLineCountReaderTests`' own precedent, no bug was found in the pre-existing SQL for any
+of the 3 readers.
 
 ### 4. Verify
-**Status:** ⬜ Not started
+**Status:** ✅ Done — full solution build (0 warnings/0 errors) and test suite green: 1460/1460 in
+`Quotinator.Core.Tests` (up from 1445 — exactly the 15 new tests), 3299 total across the solution
+(up from 3284 pre-#284), 0 failures.
 
 ---
 
@@ -128,10 +147,10 @@ each test file scoped to only the tables its reader touches).
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ⬜ | `SourceSeriesReferenceReader` executes via `JoinQueryRepository`, same public behaviour | Unit test | `SourceSeriesReferenceReaderTests` |
-| 2 | ⬜ | `CharacterSourceLinkReader` executes via `JoinQueryRepository`, same public behaviour | Unit test | `CharacterSourceLinkReaderTests` |
-| 3 | ⬜ | `SeriesUniverseReferenceReader` executes via `JoinQueryRepository`, same public behaviour | Unit test | `SeriesUniverseReferenceReaderTests` |
-| 4 | ⬜ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — all pass |
+| 1 | ✅ | `SourceSeriesReferenceReader` executes via `JoinQueryRepository`, same public behaviour | Unit test | `SourceSeriesReferenceReaderTests` (5 tests) |
+| 2 | ✅ | `CharacterSourceLinkReader` executes via `JoinQueryRepository`, same public behaviour | Unit test | `CharacterSourceLinkReaderTests` (5 tests) |
+| 3 | ✅ | `SeriesUniverseReferenceReader` executes via `JoinQueryRepository`, same public behaviour | Unit test | `SeriesUniverseReferenceReaderTests` (5 tests) |
+| 4 | ✅ | No regression | Build + test | `dotnet build --configuration Release` — 0/0; `dotnet test --configuration Release` — 3299/3299 passed |
 | 5 | ⬜ | T1 — app starts in Visual Studio | Live (T1) | Developer confirms |
 | 6 | ⬜ | T2 — live container's masterdata endpoints still resolve Series/Source/Universe references correctly | Live (T2) | Docker smoke test |
 
@@ -139,4 +158,10 @@ each test file scoped to only the tables its reader touches).
 
 ## Notes
 
-None yet.
+**No true red-before-implementation cycle for the new tests, and that's expected, not a shortcut.**
+Each new test file constructs its reader via the new `JoinQueryRepository<TResult>`-based
+constructor, which didn't exist until Step 2 landed — so the tests could not compile against the
+pre-migration code, let alone fail meaningfully. Implementation and tests were built together for
+this reason. Once compiled, all 15 passed immediately — unlike `ConversationLineCountReaderTests`'
+own precedent (which found two real bugs), no bug was found in any of the 3 readers' pre-existing
+SQL. This is a genuine, honest outcome for a coverage-adding refactor issue, not a process shortcut.
