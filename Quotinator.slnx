@@ -121,6 +121,7 @@
     <File Path="docs/architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md" />
     <File Path="docs/architecture-decisions/015-domain-prefixed-table-naming.md" />
     <File Path="docs/architecture-decisions/016-class-naming-suffixes-and-enum-placement.md" />
+    <File Path="docs/architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />

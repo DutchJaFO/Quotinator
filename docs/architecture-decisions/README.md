@@ -39,3 +39,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 014 | [014-audit-trail-tables-do-not-purge-dangling-references.md](014-audit-trail-tables-do-not-purge-dangling-references.md) | Audit-trail tables don't purge dangling references; a destructive Reset needs its own export step |
 | 015 | [015-domain-prefixed-table-naming.md](015-domain-prefixed-table-naming.md) | Domain-prefixed table naming: a namespace substitute for SQLite's lack of schema qualification |
 | 016 | [016-class-naming-suffixes-and-enum-placement.md](016-class-naming-suffixes-and-enum-placement.md) | Class-naming suffixes (Entity/Request/Response/Dto) and enum placement |
+| 017 | [017-join-capable-reads-use-joinqueryrepository.md](017-join-capable-reads-use-joinqueryrepository.md) | Join-capable reads use JoinQueryRepository/IJoinStrategy, even without an immediate capability gain |

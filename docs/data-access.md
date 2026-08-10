@@ -16,6 +16,17 @@ This document covers the two data access patterns in `Quotinator.Data` and the t
 
 Never reach for a join strategy for single-table reads — `IRepository<T>` is simpler and already tested.
 
+**Adopt `JoinQueryRepository`/`IJoinStrategy` whenever a read joins two or more tables or returns a
+multi-table projection expressible as a concrete POCO — even when a hand-rolled `connection.QueryAsync`
+call already works and adopting the pattern unlocks no new capability.** Consistency and discoverability
+is itself the reason; see [ADR 017](architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md)
+for why this is stated explicitly (a real, dated gap where every actual join-needing read in the domain
+bypassed this pattern despite it existing first). A domain-specific reader interface may still sit above
+this mechanism for batched/shaped results (e.g. a `Dictionary` keyed by id) — the reader shapes the flat
+`IReadOnlyList<TResult>` `JoinQueryRepository` returns; it doesn't open its own connection or write its
+own SQL inline. The one documented exemption is a read whose correct result type cannot be a concrete
+POCO — see ADR 017's `ConversationLineCountReader` example.
+
 ---
 
 ## Transaction coordination — `TransactionScope`

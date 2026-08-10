@@ -524,6 +524,11 @@ separation is a design choice, not a constraint). The consuming endpoint maps th
 than one per row) is required wherever the reference appears in a list response, matching #195's N+1
 avoidance rule for pagination generally.
 
+**The reader's own SQL execution goes through `JoinQueryRepository`/`IJoinStrategy`, not a raw
+`connection.QueryAsync` call** — per [ADR 017](docs/architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md).
+The resolver interface (`ISourceSeriesReferenceReader`, etc.) and its batched/dictionary-shaped return
+type are unaffected; only what's inside the method body changes.
+
 ### Soft-deleted rows are invisible by default, everywhere
 
 `IRepository<T>.GetByIdAsync`/`IListableRepository<T>.GetPageAsync` already exclude `IsDeleted = 1` rows
