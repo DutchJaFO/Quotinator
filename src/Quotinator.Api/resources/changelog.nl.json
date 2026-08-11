@@ -14,6 +14,26 @@
   },
   "releases": [
     {
+      "version": "1.8.3-beta2",
+      "date": "2026-08-12",
+      "quote": {
+        "text": "Quotinators eerste echte upgrade-poging in het wild vond twee bugs voordat een gebruiker dat deed — deze beta lost ze beide op, en legt duidelijker uit wanneer er nog iets niet helemaal goed is."
+      },
+      "issues": [293, 294],
+      "highlights": [
+        "Een crash in de schermen voor een gedegradeerde database (geïntroduceerd in de vorige beta) is opgelost — deze kon optreden bij het upgraden vanaf een oudere databaseversie.",
+        "Een probleem opgelost waardoor een Home Assistant-add-on-upgrade halverwege kon mislukken."
+      ],
+      "changed": [
+        "Het gedrag van SqliteConnectionFactory's tijdelijke opslag (de SQLite-fix hieronder) is nu een expliciete, optionele constructorparameter in plaats van een onvoorwaardelijke standaardinstelling, omdat Quotinator.Data bedoeld is als herbruikbare, domeinonafhankelijke infrastructuur, onafhankelijk van de aannames over datasetgrootte van één specifieke gebruiker — geen functionele wijziging voor Quotinator zelf, dat hier al voor kiest (issue #294)",
+        "Een niet-fatale fout bij het zaaien van opstartmeldingen logt nu een duidelijker bericht dat uitlegt wat er is gebeurd en dat dit geen databasecorruptie betekent, in plaats van een kale uitzondering zonder context (issue #293)"
+      ],
+      "fixed": [
+        "`NotificationSummary` (de opstartpop-up van Home) en de `/notifications`-pagina crashten voorheen met een onafgehandelde uitzondering in plaats van de bedoelde gedegradeerde-status-UI te tonen wanneer `System_Notification` nog niet bestaat (bijvoorbeeld op een database die halverwege een mislukte migratie staat) — beide degraderen nu netjes en retourneren geen actieve meldingen in plaats van een uitzondering te gooien; het bestandsgeschiedenisgedeelte van de Statistieken-pagina wordt nu ook overgeslagen zolang de database gedegradeerd is, in plaats van een query te proberen die ook kon mislukken (issue #293)",
+        "Een SQLite-migratie- of seedingstap die een tijdelijk bestand nodig heeft (bijvoorbeeld om een `UNIQUE`-beperking veilig af te dwingen) kon mislukken met `'unable to open database file'` in bepaalde beperkte containeromgevingen (bevestigd: de eigen AppArmor-beperking van de Home Assistant-add-on) als de tijdelijke map op OS-niveau niet zowel beschrijfbaar als vergrendelbaar was — SQLite-verbindingen houden dit soort tijdelijke gegevens nu in het geheugen in plaats van ze naar schijf te schrijven, waardoor het probleem helemaal wordt vermeden (issue #294)"
+      ]
+    },
+    {
       "version": "1.8.3-beta",
       "date": "2026-08-10",
       "quote": {

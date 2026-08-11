@@ -1,10 +1,28 @@
-##### *GENERATED FILE [2026-08-10 22:19 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-11 22:37 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.8.3-beta2] - 2026-08-12
+
+> "Quotinator's first real upgrade attempt in the wild found two bugs before any user did — this beta fixes both, and explains itself more clearly when something's still not quite right."
+
+### Highlights
+- Fixed a crash in the degraded-database status pages (introduced in the previous beta) that could happen when upgrading from an older database version.
+- Fixed an issue that could cause a Home Assistant add-on upgrade to fail partway through.
+
+### Changed
+- SqliteConnectionFactory's temp-storage behaviour (the SQLite fix below) is now an explicit opt-in constructor parameter rather than an unconditional default, since Quotinator.Data is meant to stay reusable, domain-agnostic infrastructure independent of any one consumer's dataset-size assumptions — no functional change for Quotinator itself, which already opts in (issue #294)
+- A non-fatal startup-notification-seeding failure now logs a clearer message explaining what happened and that it doesn't indicate database corruption, instead of a bare exception with no context (issue #293)
+
+### Fixed
+- `NotificationSummary` (Home's startup popup) and the `/notifications` page previously crashed with an unhandled exception instead of showing the intended degraded-state UI when `System_Notification` doesn't exist yet (e.g. on a database only partway through a failed migration) — both now degrade gracefully, returning no active notifications instead of throwing; the Statistics page's file-history section is also now skipped while the database is degraded, instead of attempting a query that could also fail (issue #293)
+- A SQLite migration or seeding step that needs a temporary file (e.g. to enforce a `UNIQUE` constraint safely) could fail with `'unable to open database file'` in certain restricted container environments (confirmed: the Home Assistant add-on's own AppArmor confinement) if the OS-level temp directory wasn't both writable and lockable — SQLite connections now keep this kind of temporary data in memory instead of writing it to disk, sidestepping the problem entirely (issue #294)
 
 ---
 
@@ -91,25 +109,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
-## [1.8.1-beta] - 2026-07-30
-
-### Highlights
-- A separate Beta add-on is now available in Home Assistant, letting you try upcoming changes without affecting your stable installation — install both side by side.
-- Changelogs shown in the app and the Home Assistant add-on now list only the most recent releases, with a link to the full history on GitHub.
-
-### Added
-- New `addon-beta/` Home Assistant add-on definition (slug `quotinator_beta`) publishes the beta channel as a separate, always-visible, independently installable add-on from the same repository and Docker image as the stable add-on (issue #166)
-- `scripts/changelog.csx` gained a `--max-releases <N>` option limiting generated changelog output to the N most recent releases, with a closing note linking to the full history on GitHub Releases (issue #166)
-
-### Changed
-- `CHANGELOG.md`, `addon/CHANGELOG.md`, and the new `addon-beta/CHANGELOG.md` are now generated with `--max-releases 3`, showing only the 3 most recent releases instead of the full history (issue #166)
-- A beta tag now only bumps `addon-beta/config.yaml`'s version, and a final tag only bumps `addon/config.yaml`'s — previously one shared file toggled between the two states (issue #166)
-
----
-
 Older releases are available in the full history on [GitHub Releases](https://github.com/DutchJaFO/Quotinator/releases).
 
-[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.3-beta...HEAD
+[Unreleased]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.3-beta2...HEAD
+[1.8.3-beta2]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.3-beta...v1.8.3-beta2
 [1.8.3-beta]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.2...v1.8.3-beta
 [1.8.2]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.1-beta...v1.8.2
-[1.8.1-beta]: https://github.com/DutchJaFO/Quotinator/compare/v1.8.0...v1.8.1-beta

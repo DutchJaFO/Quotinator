@@ -14,6 +14,26 @@
   },
   "releases": [
     {
+      "version": "1.8.3-beta2",
+      "date": "2026-08-12",
+      "quote": {
+        "text": "Quotinators erster echter Upgrade-Versuch in freier Wildbahn fand zwei Fehler, bevor es ein Nutzer tat — diese Beta behebt beide und erklärt sich klarer, wenn noch etwas nicht ganz stimmt."
+      },
+      "issues": [293, 294],
+      "highlights": [
+        "Ein Absturz in den Anzeigen für eine beeinträchtigte Datenbank (in der letzten Beta eingeführt) wurde behoben — er konnte beim Upgrade von einer älteren Datenbankversion auftreten.",
+        "Ein Problem behoben, das dazu führen konnte, dass ein Home-Assistant-Add-on-Upgrade auf halbem Weg fehlschlug."
+      ],
+      "changed": [
+        "Das Verhalten der temporären Speicherung von SqliteConnectionFactory (die SQLite-Korrektur unten) ist jetzt ein expliziter Opt-in-Konstruktorparameter statt eine bedingungslose Standardeinstellung, da Quotinator.Data als wiederverwendbare, domänenunabhängige Infrastruktur unabhängig von den Annahmen eines einzelnen Verbrauchers zur Datensatzgröße gedacht ist — keine funktionale Änderung für Quotinator selbst, das sich bereits dafür entscheidet (issue #294)",
+        "Ein nicht schwerwiegender Fehler beim Seeding von Start-Benachrichtigungen protokolliert jetzt eine klarere Meldung, die erklärt, was passiert ist und dass dies keine Datenbankbeschädigung bedeutet, statt einer bloßen Ausnahme ohne Kontext (issue #293)"
+      ],
+      "fixed": [
+        "`NotificationSummary` (das Start-Popup von Home) und die Seite `/notifications` stürzten zuvor mit einer unbehandelten Ausnahme ab, anstatt die vorgesehene Oberfläche für den beeinträchtigten Zustand anzuzeigen, wenn `System_Notification` noch nicht existiert (z. B. bei einer Datenbank, die sich mitten in einer fehlgeschlagenen Migration befindet) — beide degradieren jetzt sauber und geben keine aktiven Benachrichtigungen zurück, statt eine Ausnahme auszulösen; der Dateiverlaufsbereich der Statistikseite wird jetzt ebenfalls übersprungen, solange die Datenbank beeinträchtigt ist, statt eine Abfrage zu versuchen, die ebenfalls fehlschlagen könnte (issue #293)",
+        "Ein SQLite-Migrations- oder Seeding-Schritt, der eine temporäre Datei benötigt (z. B. um eine `UNIQUE`-Einschränkung sicher durchzusetzen), konnte in bestimmten eingeschränkten Container-Umgebungen mit `'unable to open database file'` fehlschlagen (bestätigt: die eigene AppArmor-Beschränkung des Home-Assistant-Add-ons), wenn das Betriebssystem-Temp-Verzeichnis nicht sowohl beschreibbar als auch sperrbar war — SQLite-Verbindungen halten diese Art von temporären Daten jetzt im Speicher, statt sie auf die Festplatte zu schreiben, wodurch das Problem vollständig umgangen wird (issue #294)"
+      ]
+    },
+    {
       "version": "1.8.3-beta",
       "date": "2026-08-10",
       "quote": {
