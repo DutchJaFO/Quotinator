@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Quotinator.Api.Startup;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
@@ -26,6 +27,17 @@ public partial class DatabaseStatsSummary
     protected override async Task OnInitializedAsync()
     {
         Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
+
+        // #293: unlike the counts above (a last-known-good in-memory snapshot, safe regardless of
+        // schema state), the file-history table is a live query against Import_FileResource/
+        // Import_Batch — tables a failed migration may not have created yet. Skipping it while
+        // degraded keeps this component's own promise ("stays meaningful even while degraded")
+        // honest, instead of crashing the whole page the same way NotificationReader once did.
+        if (!DatabaseHealth.IsHealthy)
+        {
+            FileHistory = [];
+            return;
+        }
 
         var page = await FileResourceRepository.GetPageAsync(fileName: null, origin: null, page: 1, pageSize: 0);
         var latestPerFile = page.Items
@@ -66,6 +78,7 @@ public partial class DatabaseStatsSummary
     [Inject] private IDatabaseInitializer DatabaseInitializer { get; set; } = default!;
     [Inject] private IFileResourceRepository FileResourceRepository { get; set; } = default!;
     [Inject] private IImportBatchRepository ImportBatchRepository { get; set; } = default!;
+    [Inject] private DatabaseHealthState DatabaseHealth { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
     private IReadOnlyList<FileHistoryRow> FileHistory = [];
