@@ -24,9 +24,19 @@ write at all (the container's `WORKDIR`), and `/tmp/** rw` grants write but not 
 `/data/** rwk`). Independently corroborated via web search as a documented class of SQLite failure in
 sandboxed/containerized environments generally, with `PRAGMA temp_store = MEMORY` as the standard fix.
 
-**Not confirmed with 100% certainty** — the failure isn't reproducible outside the real HA supervisor
-environment, so this remains the best-evidenced hypothesis rather than a directly-proven root cause. The
-developer's own retry of the live upgrade, once this fix ships, is the actual confirmation step.
+**Not confirmed with 100% certainty against the exact production mechanism** — Docker Desktop's WSL2
+backend has no AppArmor kernel support at all (confirmed live: `/sys/module/apparmor/parameters/enabled`
+reads `N`, no `/sys/kernel/security/apparmor` securityfs), so the specific "write succeeds, lock fails"
+gap `/tmp/** rw` describes cannot be reproduced locally — file-locking permission is an LSM concept with
+no Docker-mount equivalent. **A faithful reproduction of the general failure class was achieved locally
+on 2026-08-11** (see `docs/smoke-tests.md` Section 37): a real, unmodified v1.8.2 database, migrated by
+pre-#294 code under a `--read-only` container (stricter than the real profile — full write denial, not
+just lock denial), reproduces a genuine `SqliteException` (`SQLite Error 10: 'disk I/O error'`, not the
+original's `Error 14`, but the same failure class) and the identical degraded-startup symptom
+(`schemaVersion: 0`, `quotes: 0`, `503 unhealthy`) the live incident showed; the fixed code survives the
+same test cleanly. This is strong evidence the fix addresses a genuine class of failure, but not proof
+it's *the exact* mechanism HA hit. The developer's own retry of the live upgrade remains the actual
+confirmation step for that.
 
 ## Approach
 
@@ -73,6 +83,14 @@ pre-existing `UNICODE_CONTAINS` registration still works alongside the new pragm
 
 **Status:** Done (code change only — no dedicated automated test; see Notes).
 
+### 4. Add a repeatable restricted-write migration-replay smoke test
+
+**Status:** Done. `docs/smoke-tests.md` Section 37 — a real v1.8.2 image seeds a database under normal
+conditions, then a `--read-only` container (current code) replays the migration against it. Live-run
+once during this issue to confirm both directions (Step 1's Background section has the full result);
+the documented procedure also includes the one-time revert-and-rerun steps to prove the test itself
+would have caught the original bug, without requiring that revert on every future run.
+
 ---
 
 ## Verification checklist
@@ -84,15 +102,16 @@ pre-existing `UNICODE_CONTAINS` registration still works alongside the new pragm
 | 3 | ✅ | No other write target in the codebase is missing a required AppArmor permission | Live (review) | Full grep audit of every `File.Write`/`Directory.CreateDirectory`/temp-path call, cross-referenced against `apparmor.txt` — all resolve under `/data` or `/tmp` with sufficient permission for their actual needs |
 | 4 | ✅ | No regression | Unit test | Full solution: 1078 (Data.Tests, +2) + 1462 (Core.Tests) + 671 (Api.Tests) tests, 0 failures, 0 warnings |
 | 5 | ✅ | `SQLITE_TMPDIR` is set to `dataDir` before any `SqliteConnection` opens | Build (review) | `Program.cs` — set immediately after `dataDir` resolution; no dedicated automated test (see Notes) |
-| 6 | ⬜ | T1 — app starts cleanly with the fix in place | Live (T1) | Pending — not yet re-run since the `SQLITE_TMPDIR` addition |
-| 7 | ⬜ | T2 — Docker smoke test | Live (T2) | Pending — not yet re-run since the `SQLITE_TMPDIR` addition |
-| 8 | ⬜ | The actual live HA upgrade succeeds with this fix in place | Live (developer) | Pending — the real confirmation of the root-cause hypothesis |
+| 6 | ✅ | Real v1.8.2 → current migration replay survives a restricted-write (`--read-only`) environment; pre-#294 code fails the same test with a genuine `SqliteException` | Live (Docker) | `docs/smoke-tests.md` Section 37, live-run 2026-08-11 — GREEN: `healthy`, `quotes: 799`, `migration applied: Data v2 → v3, App v4 → v5`, no exception. RED (pre-#294 code, same test): `SQLite Error 10: 'disk I/O error'`, degraded `schemaVersion: 0`/`quotes: 0`/`503 unhealthy` |
+| 7 | ⬜ | T1 — app starts cleanly with the fix in place | Live (T1) | Pending — not yet re-run since the `SQLITE_TMPDIR` addition |
+| 8 | ⬜ | T2 — Docker smoke test | Live (T2) | Pending — not yet re-run since the `SQLITE_TMPDIR` addition |
+| 9 | ⬜ | The actual live HA upgrade succeeds with this fix in place | Live (developer) | Pending — the real confirmation against the exact production mechanism |
 
 ---
 
 ## Notes
 
-Item 8 is the real test of whether this hypothesis was correct. If the live upgrade still fails with the
+Item 9 is the real test of whether this hypothesis was correct. If the live upgrade still fails with the
 same error after this fix ships, the hypothesis was wrong (or incomplete) and this issue reopens for
 further investigation — e.g. actually reaching the HA host's kernel/AppArmor audit log, which this
 session was unable to obtain.
@@ -102,4 +121,12 @@ call setting process-wide state in `Program.cs`. A `WebApplicationFactory`-based
 var's value would set that same process-wide variable inside the shared test-host process — a real risk
 of bleeding into other tests running in parallel in the same process (`docs/testing-policy.md`'s own
 "parallel execution" convention), for a line with no independent logic to verify beyond "did this literal
-call happen." Verified by build/review here instead, plus T1/T2 (rows 6–7) once re-run.
+call happen." Verified by build/review here instead, plus T1/T2 (rows 7–8) once re-run.
+
+**Why item 6's reproduction used `--read-only` rather than a real AppArmor profile:** see
+`docs/smoke-tests.md` Section 37's own opening paragraph for the full reasoning — Docker Desktop's WSL2
+backend cannot load AppArmor profiles at all, and even a Linux host that could would need file-locking
+denial specifically (an LSM concept), which no Docker mount option can express. `--read-only` denies
+write entirely rather than only locking, which is stricter than the real profile — sufficient to prove
+the fix handles "temp storage genuinely unavailable" as a class, not proof of the exact production
+syscall that failed.
