@@ -70,7 +70,7 @@ and #255/#256 do not carry that urgency.
 | [#287](https://github.com/DutchJaFO/Quotinator/issues/287) | Convert IQuoteService and its implementations to fully async | Waiting for release | T1 ✅ T2 ✅ | [287-iquoteservice-async-conversion-plan.md](287-iquoteservice-async-conversion-plan.md) |
 | [#288](https://github.com/DutchJaFO/Quotinator/issues/288) | Migration review: verify full incremental path from last-shipped v1.8.2 schema | Waiting for release | N/A (pure verification, no code change — live Docker verification, see plan doc) | [288-migration-verification-plan.md](288-migration-verification-plan.md) |
 | [#289](https://github.com/DutchJaFO/Quotinator/issues/289) | Squash unshipped migrations since v1.8.2 into one Consumer + one Data migration, add schema-version-overshoot detection + notification | Waiting for release | T1 ✅ T2 ✅ | [289-migration-squash-overshoot-detection-plan.md](289-migration-squash-overshoot-detection-plan.md) |
-| [#294](https://github.com/DutchJaFO/Quotinator/issues/294) | SQLite migration statement-journal temp file fails to open in HA add-on runtime (SQLITE_CANTOPEN) | In progress | T1 ⬜ T2 ⬜ | [294-sqlite-temp-store-memory-plan.md](294-sqlite-temp-store-memory-plan.md) |
+| [#294](https://github.com/DutchJaFO/Quotinator/issues/294) | SQLite migration statement-journal temp file fails to open in HA add-on runtime (SQLITE_CANTOPEN) | Waiting for release | T1 ✅ T2 ✅ T3 ⬜ | [294-sqlite-temp-store-memory-plan.md](294-sqlite-temp-store-memory-plan.md) |
 
 ---
 

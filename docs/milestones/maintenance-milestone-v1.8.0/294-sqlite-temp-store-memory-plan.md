@@ -1,8 +1,8 @@
 # #294 — SQLite migration statement-journal temp file fails to open in HA add-on runtime
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #294
-**Tiers required:** T1, T2
+**Tiers required:** T1, T2, T3
 **Depends on:** none (independent of #293 — different root cause, same live incident)
 
 ---
@@ -121,7 +121,7 @@ would have caught the original bug, without requiring that revert on every futur
 | 5 | ✅ | No regression | Unit test | Full solution, live-run 2026-08-11: 1077 (Data.Tests) + 1462 (Core.Tests) + 670 (Api.Tests) tests, 0 failures, 0 warnings |
 | 6 | ✅ | Real v1.8.2 → current migration replay survives a restricted-write (`--read-only`) environment; pre-#294 code fails the same test with a genuine `SqliteException` | Live (Docker) | `docs/smoke-tests.md` Section 37, live-run 2026-08-11 — GREEN: `healthy`, `quotes: 799`, `migration applied: Data v2 → v3, App v4 → v5`, no exception. RED (pre-#294 code, same test): `SQLite Error 10: 'disk I/O error'`, degraded `schemaVersion: 0`/`quotes: 0`/`503 unhealthy` |
 | 7 | ✅ | T1 — app starts cleanly with the fix in place | Live (T1) | Clean VS boot, 2026-08-11 23:28 — `schema is up to date`, live source refresh succeeded for both GitHub sources, `799 quotes` full stats, no errors; `/quotes/random` served repeatedly without issue |
-| 8 | ⬜ | T2 — Docker smoke test | Live (T2) | Pending — not yet re-run since the `useMemoryTempStore` redesign |
+| 8 | ✅ | T2 — Docker smoke test | Live (Docker) | Re-run 2026-08-11 against the `useMemoryTempStore` redesign: basic boot/health/version sanity, Section 37's full real-migration-replay GREEN check (`healthy`, `quotes: 799`, `migration applied: Data v2 → v3, App v4 → v5`, no exception), and a basic import — all clean |
 | 9 | ⬜ | The actual live HA upgrade succeeds with this fix in place | Live (developer) | Pending — the real confirmation against the exact production mechanism |
 
 ---
