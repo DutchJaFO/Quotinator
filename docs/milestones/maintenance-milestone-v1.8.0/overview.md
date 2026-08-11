@@ -71,6 +71,7 @@ and #255/#256 do not carry that urgency.
 | [#288](https://github.com/DutchJaFO/Quotinator/issues/288) | Migration review: verify full incremental path from last-shipped v1.8.2 schema | Waiting for release | N/A (pure verification, no code change — live Docker verification, see plan doc) | [288-migration-verification-plan.md](288-migration-verification-plan.md) |
 | [#289](https://github.com/DutchJaFO/Quotinator/issues/289) | Squash unshipped migrations since v1.8.2 into one Consumer + one Data migration, add schema-version-overshoot detection + notification | Waiting for release | T1 ✅ T2 ✅ | [289-migration-squash-overshoot-detection-plan.md](289-migration-squash-overshoot-detection-plan.md) |
 | [#293](https://github.com/DutchJaFO/Quotinator/issues/293) | NotificationSummary/notifications crash instead of degrading gracefully when System_Notification doesn't exist yet | In progress | T1 ⬜ T2 ⬜ | [293-notification-missing-table-crash-plan.md](293-notification-missing-table-crash-plan.md) |
+| [#294](https://github.com/DutchJaFO/Quotinator/issues/294) | SQLite migration statement-journal temp file fails to open in HA add-on runtime (SQLITE_CANTOPEN) | Waiting for release | T1 ✅ T2 ✅ T3 ⬜ | [294-sqlite-temp-store-memory-plan.md](294-sqlite-temp-store-memory-plan.md) |
 
 ---
 
@@ -311,6 +312,10 @@ None of the remaining issues block each other beyond these relationships.
     `System_Notification` doesn't exist yet (found live during a real v1.8.2 → v1.8.3-beta HA upgrade
     attempt, 2026-08-10); independent of #289's own unconfirmed root cause, which is tracked separately
     via a retry rather than as part of this issue
+47. **#294** — Fix SQLite's statement-journal temp file failing to open in the HA add-on runtime
+    (`SQLITE_CANTOPEN`), found live during the real v1.8.3-beta upgrade attempt that also surfaced
+    #293; independent of #293 (different root cause, same incident) — `temp_store = MEMORY` on every
+    connection, not just the migration's own
 
 ---
 

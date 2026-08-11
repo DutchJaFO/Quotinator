@@ -271,6 +271,7 @@
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/288-migration-verification-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/289-migration-squash-overshoot-detection-plan.md" />
     <File Path="docs/milestones/maintenance-milestone-v1.8.0/293-notification-missing-table-crash-plan.md" />
+    <File Path="docs/milestones/maintenance-milestone-v1.8.0/294-sqlite-temp-store-memory-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

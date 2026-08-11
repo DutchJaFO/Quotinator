@@ -645,6 +645,9 @@ public class DatabaseInitializer(
     // -------------------------------------------------------------------------
     #region Migrations
 
+    // journal_mode=WAL is persistent (stored in the database file itself), unlike temp_store — see
+    // SqliteConnectionFactory.CreateConnection's own StateChange handler for why temp_store=MEMORY is
+    // applied there instead, on every connection, rather than duplicated here.
     private static void EnableWal(SqliteConnection connection)
         => connection.Execute("PRAGMA journal_mode=WAL;");
 
