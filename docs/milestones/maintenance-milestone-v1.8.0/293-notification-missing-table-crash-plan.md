@@ -66,7 +66,7 @@ reproduced), green after.
 | 3 | ✅ | Both tests confirmed genuinely red against the pre-fix code | Live (review) | Manual revert of `NotificationReader.cs` only (tests kept), reran — both failed with the exact live error message; fix restored afterward |
 | 4 | ✅ | No regression | Unit test | `dotnet test tests/Quotinator.Data.Tests` — 1076 tests, 0 failures; full solution build clean |
 | 5 | ⬜ | T1 — app starts cleanly with the fix in place | Live (T1) | Pending |
-| 6 | ⬜ | T2 — Docker smoke test reproducing the exact live scenario (real v1.8.2 db, migration failure, degraded-state page load) | Live (T2) | Pending |
+| 6 | ✅ | T2 — Docker smoke test reproducing the exact live scenario (real v1.8.2 db, migration failure, degraded-state page load) | Live (Docker) | `docs/smoke-tests.md` Section 38, live-run 2026-08-11 — confirmed `System_Notification` genuinely absent on a real v1.8.2 db; forced migration failure reproduced `schemaVersion: 0`/`503 unhealthy`; `/`, `/stats`, `/notifications` all rendered `200` with correct content (`StartupErrorModal`, zero-count stats, `No notifications yet.`) instead of crashing; `GET /api/v1/notifications` correctly `503`-gated |
 
 ---
 
