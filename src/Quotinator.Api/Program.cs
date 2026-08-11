@@ -166,6 +166,17 @@ var dataDir = builder.Configuration["Quotinator:DataDir"]
     ?? Path.Combine(AppContext.BaseDirectory, "data");
 Directory.CreateDirectory(dataDir);
 
+// #294: defense-in-depth alongside SqliteConnectionFactory's own PRAGMA temp_store=MEMORY (the fix
+// that actually ships). SQLite's own temp-file fallback chain (SQLITE_TMPDIR -> TMPDIR -> a short
+// hardcoded list -> the current working directory) is otherwise entirely environment-dependent, and
+// neither var is set anywhere in this project's Dockerfile. Setting it here, immediately after
+// dataDir is resolved and before any SqliteConnection is ever opened, covers any future connection
+// that bypasses the factory's own pragma. dataDir already has full read/write/lock permission in
+// every deployment shape (the HA add-on's own apparmor.txt grants /data/** rwk), unlike /app (no
+// write) or /tmp (write but no lock) — see SqliteConnectionFactory.cs's own comment for the full
+// incident writeup.
+Environment.SetEnvironmentVariable("SQLITE_TMPDIR", dataDir);
+
 // Duplicate-resolution policy from config — lowest-priority tier; a manifest's own
 // duplicateResolution section overrides this when present. Quotinator:DefaultConflictPolicy is a
 // flat key (env Quotinator__DefaultConflictPolicy) — the 5 nested per-type keys below keep their
