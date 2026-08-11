@@ -1647,11 +1647,11 @@ v4 → v5` and **no** `SqliteException`/`SQLite Error` line — the fix means th
 files never touch disk at all, so restricting every other writable path doesn't matter.
 
 **To confirm this test would actually have caught the original bug** (not required on every run — a
-one-time gut-check when this section itself changes): temporarily revert `SqliteConnectionFactory.cs`'s
-`PRAGMA temp_store=MEMORY` and `Program.cs`'s `SQLITE_TMPDIR` addition, rebuild, and repeat the second
-command above against a **fresh clone** of the same seeded `smoke294-data` volume (the first run
-upgrades the volume's schema in place, so a second attempt against the same volume no longer exercises
-the migration at all — clone via
+one-time gut-check when this section itself changes): in `Program.cs`, temporarily change
+`useMemoryTempStore: true` to `false` (or remove the argument) at `SqliteConnectionFactory`'s DI
+registration site, rebuild, and repeat the second command above against a **fresh clone** of the same
+seeded `smoke294-data` volume (the first run upgrades the volume's schema in place, so a second attempt
+against the same volume no longer exercises the migration at all — clone via
 `docker run --rm -v smoke294-data:/from -v smoke294-data-clone:/to alpine sh -c "cp -a /from/. /to/"`
 first). Must reproduce a real `SqliteException` (`SQLite Error 10: 'disk I/O error'` was the exact
 message live-verified 2026-08-11 — a different code than the original incident's `SQLite Error 14:
@@ -1659,7 +1659,7 @@ message live-verified 2026-08-11 — a different code than the original incident
 a different syscall than the real profile's lock-denial would, so an exact error-code match isn't
 expected, only a genuine failure somewhere in `ApplyMigrationPhaseAsync`) and the same degraded
 `/health` → `503 {"status":"unhealthy"}` / `/version` → `schemaVersion: 0, quotes: 0` outcome the
-original incident showed. Revert the revert before committing anything.
+original incident showed. Revert the flag back to `true` before committing anything.
 
 Clean up: `docker rm -f smoke294 && docker volume rm smoke294-data smoke294-data-clone 2>/dev/null`.
 

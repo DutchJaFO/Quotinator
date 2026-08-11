@@ -53,35 +53,52 @@ manifest/source-cache/rule-override writes (all under the configured `dataDir` =
 existing import-file-upload staging path (`Path.GetTempPath()`, under `/tmp` — write-only needs, no
 locking, so covered by the existing `/tmp/** rw` grant). No other gap found.
 
-**`SQLITE_TMPDIR` defense-in-depth (added after this fix was already shipping in v1.8.3-beta):**
-`Environment.SetEnvironmentVariable("SQLITE_TMPDIR", dataDir)` in `Program.cs`, set immediately after
-`dataDir` is resolved and before any `SqliteConnection` is ever opened. `temp_store = MEMORY` above is
-still the fix that actually ships — it sidesteps the whole directory-permission question for this
-project's small dataset. This addition covers the case where a future `SqliteConnection` is created
-outside `SqliteConnectionFactory` and misses that pragma; `dataDir` was chosen as the target because it
-already carries full `rwk` permission in every deployment shape (`apparmor.txt`'s `/data/** rwk`),
-unlike `/app` (no write) or `/tmp` (write, no lock). Ordering is safe without extra plumbing: SQLite's
-own unix VFS re-reads `SQLITE_TMPDIR` via `getenv()` at temp-file-creation time rather than caching it
-once at process start, so setting it once, early, before the first connection opens is sufficient — no
-per-connection re-application needed (unlike `temp_store`, a session-level pragma).
+**`useMemoryTempStore` is a `SqliteConnectionFactory` constructor parameter, not an unconditional
+default (revised 2026-08-11, after two rounds of self-review).** `Quotinator.Data` is explicitly
+domain-agnostic, reusable infrastructure ([ADR 004](../../architecture-decisions/004-quotinator-data-project-boundaries.md))
+— hardcoding `PRAGMA temp_store=MEMORY` unconditionally there would bake in a Quotinator-specific
+judgment call (RAM cost is negligible *for this project's* small dataset) into code a future, larger
+consumer of `Quotinator.Data` couldn't opt out of. The parameter defaults to `false` (the library stays
+unopinionated); `Quotinator.Api`'s own `Program.cs` passes `useMemoryTempStore: true` explicitly at its
+DI registration site, with a comment there explaining why it's safe for *this* app's dataset. This also
+made the fix directly and fully unit-testable both ways — `true` sets `MEMORY`, `false`/omitted leaves
+SQLite's own default in place — which a hardcoded, unconditional pragma could only ever prove one side
+of.
+
+**`SQLITE_TMPDIR` defense-in-depth was tried, then removed (2026-08-11).** The original plan set
+`Environment.SetEnvironmentVariable("SQLITE_TMPDIR", dataDir)` in `Program.cs` as a hedge against a
+future `SqliteConnection` created outside `SqliteConnectionFactory` and missing the pragma. Measured
+against this project's own bar — a change earns its place only if its effect can be proven via test, not
+because the reasoning sounds plausible — it failed: proving SQLite's native `getenv()` call actually
+picks up a process-wide environment variable would mean either mutating shared test-host process state
+(a real risk of bleeding into other tests running in parallel — `docs/testing-policy.md`'s own "parallel
+execution" convention) or spawning a child process per test, heavier machinery nothing else in this
+suite uses, for a line with no independent decision logic to test in the first place (it's just
+`dataDir`, passed straight through). Removed rather than kept unproven.
 
 ## Steps
 
-### 1. Apply `temp_store = MEMORY` on every connection
+### 1. Add `useMemoryTempStore` to `SqliteConnectionFactory`, applied on every connection when true
 
-**Status:** Done.
+**Status:** Done. Defaults to `false`; `Quotinator.Api`'s `Program.cs` passes `true` at its DI
+registration site.
 
-### 2. Add a test proving it's re-applied per-connection, not just once
+### 2. Add tests proving both the `true` and `false`/default paths genuinely work
 
-**Status:** Done. `SqliteConnectionFactoryTests.CreateConnection_OnOpen_SetsTempStoreToMemory` opens
-two separate connections from the same factory and confirms `PRAGMA temp_store;` reports `2` (MEMORY)
-on both — proving this isn't a one-time artifact of the first `Open()`. A second test
-(`CreateConnection_OnOpen_StillRegistersUnicodeContainsFunction`) is a regression guard confirming the
-pre-existing `UNICODE_CONTAINS` registration still works alongside the new pragma in the same handler.
+**Status:** Done. `SqliteConnectionFactoryTests.CreateConnection_OnOpen_UseMemoryTempStoreTrue_SetsTempStoreToMemory`
+opens two separate connections from a factory constructed with `true` and confirms `PRAGMA temp_store;`
+reports `2` (MEMORY) on both — proving this isn't a one-time artifact of the first `Open()`.
+`CreateConnection_OnOpen_UseMemoryTempStoreFalseOrDefault_LeavesTempStoreAtSqliteDefault` proves the
+opposite: both the default constructor call and an explicit `false` leave `temp_store` at `0` (SQLite's
+own default) — the genuine, testable opt-out this project's own "prove it or it doesn't stay" bar
+required. A third test (`CreateConnection_OnOpen_StillRegistersUnicodeContainsFunction`) is a regression
+guard confirming the pre-existing `UNICODE_CONTAINS` registration still works alongside the new pragma
+in the same handler, independent of the flag.
 
 ### 3. Set `SQLITE_TMPDIR` to `dataDir` as defense-in-depth
 
-**Status:** Done (code change only — no dedicated automated test; see Notes).
+**Status:** Reverted. Tried, then removed — see "Approach" above for why. No longer present in the
+codebase; kept here only so the step numbering below stays stable.
 
 ### 4. Add a repeatable restricted-write migration-replay smoke test
 
@@ -97,14 +114,14 @@ would have caught the original bug, without requiring that revert on every futur
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ✅ | `temp_store` is set to `MEMORY` on every connection the factory opens, not just the first | Unit test | `CreateConnection_OnOpen_SetsTempStoreToMemory` |
-| 2 | ✅ | The existing `UNICODE_CONTAINS` per-connection registration still works | Unit test | `CreateConnection_OnOpen_StillRegistersUnicodeContainsFunction` |
-| 3 | ✅ | No other write target in the codebase is missing a required AppArmor permission | Live (review) | Full grep audit of every `File.Write`/`Directory.CreateDirectory`/temp-path call, cross-referenced against `apparmor.txt` — all resolve under `/data` or `/tmp` with sufficient permission for their actual needs |
-| 4 | ✅ | No regression | Unit test | Full solution: 1078 (Data.Tests, +2) + 1462 (Core.Tests) + 671 (Api.Tests) tests, 0 failures, 0 warnings |
-| 5 | ✅ | `SQLITE_TMPDIR` is set to `dataDir` before any `SqliteConnection` opens | Build (review) | `Program.cs` — set immediately after `dataDir` resolution; no dedicated automated test (see Notes) |
+| 1 | ✅ | `temp_store` is set to `MEMORY` on every connection when `useMemoryTempStore: true` | Unit test | `CreateConnection_OnOpen_UseMemoryTempStoreTrue_SetsTempStoreToMemory` |
+| 2 | ✅ | `temp_store` stays at the SQLite default when `useMemoryTempStore` is `false` or omitted | Unit test | `CreateConnection_OnOpen_UseMemoryTempStoreFalseOrDefault_LeavesTempStoreAtSqliteDefault` |
+| 3 | ✅ | The existing `UNICODE_CONTAINS` per-connection registration still works, independent of the flag | Unit test | `CreateConnection_OnOpen_StillRegistersUnicodeContainsFunction` |
+| 4 | ✅ | No other write target in the codebase is missing a required AppArmor permission | Live (review) | Full grep audit of every `File.Write`/`Directory.CreateDirectory`/temp-path call, cross-referenced against `apparmor.txt` — all resolve under `/data` or `/tmp` with sufficient permission for their actual needs |
+| 5 | ✅ | No regression | Unit test | Full solution, live-run 2026-08-11: 1077 (Data.Tests) + 1462 (Core.Tests) + 670 (Api.Tests) tests, 0 failures, 0 warnings |
 | 6 | ✅ | Real v1.8.2 → current migration replay survives a restricted-write (`--read-only`) environment; pre-#294 code fails the same test with a genuine `SqliteException` | Live (Docker) | `docs/smoke-tests.md` Section 37, live-run 2026-08-11 — GREEN: `healthy`, `quotes: 799`, `migration applied: Data v2 → v3, App v4 → v5`, no exception. RED (pre-#294 code, same test): `SQLite Error 10: 'disk I/O error'`, degraded `schemaVersion: 0`/`quotes: 0`/`503 unhealthy` |
-| 7 | ⬜ | T1 — app starts cleanly with the fix in place | Live (T1) | Pending — not yet re-run since the `SQLITE_TMPDIR` addition |
-| 8 | ⬜ | T2 — Docker smoke test | Live (T2) | Pending — not yet re-run since the `SQLITE_TMPDIR` addition |
+| 7 | ⬜ | T1 — app starts cleanly with the fix in place | Live (T1) | Pending — not yet re-run since the `useMemoryTempStore` redesign |
+| 8 | ⬜ | T2 — Docker smoke test | Live (T2) | Pending — not yet re-run since the `useMemoryTempStore` redesign |
 | 9 | ⬜ | The actual live HA upgrade succeeds with this fix in place | Live (developer) | Pending — the real confirmation against the exact production mechanism |
 
 ---
@@ -116,12 +133,11 @@ same error after this fix ships, the hypothesis was wrong (or incomplete) and th
 further investigation — e.g. actually reaching the HA host's kernel/AppArmor audit log, which this
 session was unable to obtain.
 
-**Why `SQLITE_TMPDIR` has no dedicated automated test:** it's a single `Environment.SetEnvironmentVariable`
-call setting process-wide state in `Program.cs`. A `WebApplicationFactory`-based test asserting the env
-var's value would set that same process-wide variable inside the shared test-host process — a real risk
-of bleeding into other tests running in parallel in the same process (`docs/testing-policy.md`'s own
-"parallel execution" convention), for a line with no independent logic to verify beyond "did this literal
-call happen." Verified by build/review here instead, plus T1/T2 (rows 7–8) once re-run.
+**Why `SQLITE_TMPDIR` was removed rather than kept as an untested extra:** see "Approach" above for the
+full reasoning — this project's own bar is that a change earns its place by having its effect provably
+tested, not by sounding like reasonable defense-in-depth. `SQLITE_TMPDIR` couldn't clear that bar without
+either mutating shared test-host process state or adding child-process test machinery this suite doesn't
+otherwise use, for a line with no independent decision logic to test in the first place.
 
 **Why item 6's reproduction used `--read-only` rather than a real AppArmor profile:** see
 `docs/smoke-tests.md` Section 37's own opening paragraph for the full reasoning — Docker Desktop's WSL2
