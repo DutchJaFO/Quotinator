@@ -61,9 +61,12 @@ jobs:
       # it ships, since neither this reusable workflow's own build/test steps nor any local Docker
       # smoke test can — Docker Desktop's WSL2 backend has no AppArmor support at all (confirmed:
       # the stock WSL2 kernel doesn't compile it in), so this is the only automated coverage this
-      # project has for the profile's own syntax.
+      # project has for the profile's own syntax. --skip-cache is required on this runner
+      # specifically: unlike a local Docker container (root by default), the GitHub-hosted runner
+      # executes as the unprivileged `runner` user, and apparmor_parser's default cache write to
+      # /var/cache/apparmor fails with Permission Denied without it (confirmed live, 2026-08-11).
       - name: Validate addon/apparmor.txt
-        run: apparmor_parser --skip-kernel-load addon/apparmor.txt
+        run: apparmor_parser --skip-kernel-load --skip-cache addon/apparmor.txt
 
       - name: Validate addon-beta/apparmor.txt
-        run: apparmor_parser --skip-kernel-load addon-beta/apparmor.txt
+        run: apparmor_parser --skip-kernel-load --skip-cache addon-beta/apparmor.txt
