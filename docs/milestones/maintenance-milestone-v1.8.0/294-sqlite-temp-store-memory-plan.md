@@ -120,7 +120,7 @@ would have caught the original bug, without requiring that revert on every futur
 | 4 | ✅ | No other write target in the codebase is missing a required AppArmor permission | Live (review) | Full grep audit of every `File.Write`/`Directory.CreateDirectory`/temp-path call, cross-referenced against `apparmor.txt` — all resolve under `/data` or `/tmp` with sufficient permission for their actual needs |
 | 5 | ✅ | No regression | Unit test | Full solution, live-run 2026-08-11: 1077 (Data.Tests) + 1462 (Core.Tests) + 670 (Api.Tests) tests, 0 failures, 0 warnings |
 | 6 | ✅ | Real v1.8.2 → current migration replay survives a restricted-write (`--read-only`) environment; pre-#294 code fails the same test with a genuine `SqliteException` | Live (Docker) | `docs/smoke-tests.md` Section 37, live-run 2026-08-11 — GREEN: `healthy`, `quotes: 799`, `migration applied: Data v2 → v3, App v4 → v5`, no exception. RED (pre-#294 code, same test): `SQLite Error 10: 'disk I/O error'`, degraded `schemaVersion: 0`/`quotes: 0`/`503 unhealthy` |
-| 7 | ⬜ | T1 — app starts cleanly with the fix in place | Live (T1) | Pending — not yet re-run since the `useMemoryTempStore` redesign |
+| 7 | ✅ | T1 — app starts cleanly with the fix in place | Live (T1) | Clean VS boot, 2026-08-11 23:28 — `schema is up to date`, live source refresh succeeded for both GitHub sources, `799 quotes` full stats, no errors; `/quotes/random` served repeatedly without issue |
 | 8 | ⬜ | T2 — Docker smoke test | Live (T2) | Pending — not yet re-run since the `useMemoryTempStore` redesign |
 | 9 | ⬜ | The actual live HA upgrade succeeds with this fix in place | Live (developer) | Pending — the real confirmation against the exact production mechanism |
 
