@@ -49,6 +49,7 @@ verification command here in the same commit that fixes it — the list only gro
 35. [Startup backup real-work gating and storage pre-flight check](#35-startup-backup-real-work-gating-and-storage-pre-flight-check-277) (#277)
 36. [Startup wait page during database initialisation](#36-startup-wait-page-during-database-initialisation-280) (#280)
 37. [Migration replay under a restricted-write environment](#37-migration-replay-under-a-restricted-write-environment-294) (#294)
+38. [Degraded-state pages survive a genuine migration failure](#38-degraded-state-pages-survive-a-genuine-migration-failure-293) (#293)
 
 ---
 
@@ -1662,4 +1663,62 @@ expected, only a genuine failure somewhere in `ApplyMigrationPhaseAsync`) and th
 original incident showed. Revert the flag back to `true` before committing anything.
 
 Clean up: `docker rm -f smoke294 && docker volume rm smoke294-data smoke294-data-clone 2>/dev/null`.
+
+## 38. Degraded-state pages survive a genuine migration failure (#293)
+
+Reproduces the exact live incident this issue was found in — a real HA v1.8.2 → v1.8.3-beta upgrade
+whose migration failed partway through, leaving `NotificationSummary` (embedded in Home's modal) and
+`/notifications` crashing instead of showing the degraded-state UI `#263` was supposed to guarantee.
+`System_Notification` genuinely doesn't exist on a real v1.8.2 database (confirmed live: `SELECT name
+FROM sqlite_master WHERE type='table' AND name='System_Notification'` returns no rows) — it's only
+created by the migration to v1.8.3-beta, the same migration this test forces to fail, so this setup
+exercises `NotificationReader`'s missing-table fix and `DatabaseStatsSummary`'s degraded-skip fix
+together in one genuine reproduction, not two separate contrived ones. Uses the same
+`--read-only`-forces-a-real-migration-failure technique as `#294`'s own Section (see that section's
+opening paragraph for why `--read-only` is the closest approximation of the original failure plain
+Docker mount options can produce, and its limitations).
+
+```bash
+docker rm -f smoke293 2>/dev/null
+docker volume rm smoke293-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name smoke293 -p 8080:8080 \
+  -v smoke293-data:/data -e Quotinator__DataDir=/data \
+  ghcr.io/dutchjafo/quotinator:1.8.2
+sleep 8
+curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+docker stop -t 15 smoke293 && docker rm smoke293
+```
+Seeds a real, unmodified v1.8.2 database. `quotes` must read `799` before proceeding.
+
+```bash
+MSYS_NO_PATHCONV=1 docker run -d --name smoke293 -p 8080:8080 \
+  --read-only \
+  -v smoke293-data:/data -e Quotinator__DataDir=/data \
+  quotinator:local
+sleep 8
+curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/health"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/stats"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/notifications"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/notifications"
+```
+`/health` must return `503 {"status":"unhealthy",...}` — the database is genuinely degraded, confirming
+the test actually reached the failure state, not a false pass. `/`, `/stats`, and `/notifications` (the
+three Blazor pages) must all return `200` — never `500`, never a raw exception page. `GET
+/api/v1/notifications` (the REST endpoint) correctly returns `503` — API traffic stays gated while
+degraded (`#254`'s own design); this is expected, not a regression.
+
+Visit the three pages in a real browser and confirm the actual rendered content, not just the status
+code — a `200` with a blank or broken page would still pass the status-code check above:
+- `/` must render `StartupErrorModal` (`Quotinator started with a problem`) with the real failure
+  reason and all-zero stats, not a raw stack trace.
+- `/stats` must render the Statistics page with all-zero counts, not crash.
+- `/notifications` must render `No notifications yet.` — this is `NotificationReader`'s fix actually
+  working: it caught the missing-`System_Notification`-table exception and returned empty, which the
+  page then renders as an empty list instead of an unhandled-exception page.
+
+Check the browser console for errors — `Failed to load resource: 503` entries are expected (other API
+calls the page makes while degraded); anything else (a JS exception, a Blazor circuit error) is not.
+
+Clean up: `docker rm -f smoke293 && docker volume rm smoke293-data`.
 
