@@ -55,6 +55,21 @@ unrelated SQLite error (a genuine `SQLITE_ERROR` for a different reason) still p
 `System_Notification` table, confirmed red against the pre-fix reader (exact live error message
 reproduced), green after.
 
+### 3. Improve the `NotificationSeeding` non-fatal-failure log message
+
+**Status:** Done.
+
+Found live during T1 (2026-08-12): manually renaming `System_Notification` to simulate a missing table
+surfaced a *different*, pre-existing gap on the write side — `NotificationSeeding.SeedOnceAsync`'s own
+`writer.WriteAsync` call in `Program.cs` has no equivalent catch to `NotificationReader`'s (deliberately
+non-fatal per its own comment, so a failure here never marks the app unhealthy), but its log message
+gave no indication of what actually happened or that it doesn't mean the database is broken. Message
+expanded to explain the actual cause (a table the schema version implies should exist is missing) and
+state explicitly that this doesn't mean corruption. The deeper question this discovery raised — should
+a missing expected table be caught earlier, as a genuine schema-integrity failure, rather than only
+surfacing downstream at whichever call site hits it first — is out of scope here; drafted as a separate
+enhancement issue for a future maintenance milestone (see memory), not implemented as part of #293.
+
 ---
 
 ## Verification checklist
@@ -65,8 +80,9 @@ reproduced), green after.
 | 2 | ✅ | `GetPagedAsync` returns empty instead of throwing when the table doesn't exist | Unit test | `GetPagedAsync_TableDoesNotExist_ReturnsEmptyInsteadOfThrowing` |
 | 3 | ✅ | Both tests confirmed genuinely red against the pre-fix code | Live (review) | Manual revert of `NotificationReader.cs` only (tests kept), reran — both failed with the exact live error message; fix restored afterward |
 | 4 | ✅ | No regression | Unit test | `dotnet test tests/Quotinator.Data.Tests` — 1076 tests, 0 failures; full solution build clean |
-| 5 | ⬜ | T1 — app starts cleanly with the fix in place | Live (T1) | Pending |
+| 5 | ✅ | T1 — app starts cleanly with the fix in place | Live (T1) | Clean VS boot, 2026-08-12 00:03 — `schema is up to date`, `/notifications` rendered `No notifications yet.` cleanly (screenshot confirmed) |
 | 6 | ✅ | T2 — Docker smoke test reproducing the exact live scenario (real v1.8.2 db, migration failure, degraded-state page load) | Live (Docker) | `docs/smoke-tests.md` Section 38, live-run 2026-08-11 — confirmed `System_Notification` genuinely absent on a real v1.8.2 db; forced migration failure reproduced `schemaVersion: 0`/`503 unhealthy`; `/`, `/stats`, `/notifications` all rendered `200` with correct content (`StartupErrorModal`, zero-count stats, `No notifications yet.`) instead of crashing; `GET /api/v1/notifications` correctly `503`-gated |
+| 7 | ⬜ | `NotificationSeeding`'s non-fatal-failure log message explains what happened and that it doesn't mean corruption | Live (T1) | Build confirmed clean; message text not yet re-verified live against a real triggered failure |
 
 ---
 
