@@ -166,17 +166,6 @@ var dataDir = builder.Configuration["Quotinator:DataDir"]
     ?? Path.Combine(AppContext.BaseDirectory, "data");
 Directory.CreateDirectory(dataDir);
 
-// #294: defense-in-depth alongside SqliteConnectionFactory's own PRAGMA temp_store=MEMORY (the fix
-// that actually ships). SQLite's own temp-file fallback chain (SQLITE_TMPDIR -> TMPDIR -> a short
-// hardcoded list -> the current working directory) is otherwise entirely environment-dependent, and
-// neither var is set anywhere in this project's Dockerfile. Setting it here, immediately after
-// dataDir is resolved and before any SqliteConnection is ever opened, covers any future connection
-// that bypasses the factory's own pragma. dataDir already has full read/write/lock permission in
-// every deployment shape (the HA add-on's own apparmor.txt grants /data/** rwk), unlike /app (no
-// write) or /tmp (write but no lock) — see SqliteConnectionFactory.cs's own comment for the full
-// incident writeup.
-Environment.SetEnvironmentVariable("SQLITE_TMPDIR", dataDir);
-
 // Duplicate-resolution policy from config — lowest-priority tier; a manifest's own
 // duplicateResolution section overrides this when present. Quotinator:DefaultConflictPolicy is a
 // flat key (env Quotinator__DefaultConflictPolicy) — the 5 nested per-type keys below keep their
@@ -300,7 +289,11 @@ var backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0
     : Path.Combine(dataDir, DataPaths.BackupsFolder);
 var maxBackupStorageGb = builder.Configuration.GetValue("Quotinator:MaxBackupStorageGb", 1);
 var dbOptions          = new DatabaseOptions { DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb };
-var connectionFactory  = new SqliteConnectionFactory(dbPath);
+// useMemoryTempStore: true — see SqliteConnectionFactory.cs's own comment for the #294 incident this
+// opts into working around. Safe here because Quotinator's own dataset (hundreds to low-thousands of
+// quotes) makes the resulting RAM cost negligible; Quotinator.Data itself stays unopinionated and
+// defaults to false since it doesn't know a future consumer's dataset size.
+var connectionFactory  = new SqliteConnectionFactory(dbPath, useMemoryTempStore: true);
 builder.Services.AddSingleton<IDiskSpaceProvider, DiskSpaceProvider>();
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddTransient<IUnitOfWork>(sp =>

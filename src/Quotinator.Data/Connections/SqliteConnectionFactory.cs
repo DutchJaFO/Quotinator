@@ -6,7 +6,16 @@ namespace Quotinator.Data.Connections;
 /// <summary>SQLite implementation of <see cref="IDbConnectionFactory"/> using a file-based connection string.</summary>
 /// <remarks>Initialises the factory with the path to the SQLite database file.</remarks>
 /// <param name="dbPath">Absolute path to the <c>.db</c> file. The file is created if it does not exist.</param>
-public sealed class SqliteConnectionFactory(string dbPath) : IDbConnectionFactory
+/// <param name="useMemoryTempStore">
+/// When <see langword="true"/>, applies <c>PRAGMA temp_store=MEMORY</c> on every connection this
+/// factory opens, so SQLite never writes statement-journal/temp data to disk. Defaults to
+/// <see langword="false"/> — this project is domain-agnostic, reusable infrastructure (ADR 004), so
+/// it stays unopinionated about a tradeoff (temp data costs RAM instead of disk) that's only safe to
+/// assume for a small dataset. A consuming application opts in explicitly at its own DI registration
+/// site if its own dataset size makes the tradeoff acceptable — see #294's plan doc for the specific
+/// incident (a live HA add-on migration failure) that motivated this option's existence.
+/// </param>
+public sealed class SqliteConnectionFactory(string dbPath, bool useMemoryTempStore = false) : IDbConnectionFactory
 {
     private readonly string _connectionString = $"Data Source={dbPath}";
 
@@ -28,25 +37,28 @@ public sealed class SqliteConnectionFactory(string dbPath) : IDbConnectionFactor
                     && haystack.Contains(needle, StringComparison.InvariantCultureIgnoreCase),
                 isDeterministic: true);
 
-            // #293: temp_store is a per-connection setting (unlike journal_mode=WAL, which persists in
+            if (!useMemoryTempStore) return;
+
+            // #294: temp_store is a per-connection setting (unlike journal_mode=WAL, which persists in
             // the database file itself), so it must be re-applied on every Open here rather than once
             // in DatabaseInitializer. Root cause of a live HA v1.8.2 → v1.8.3-beta migration failure
             // (SQLite Error 14, 'unable to open database file'): SQLite creates a statement journal — a
             // temp file, separate from the main WAL/rollback journal — for any statement that could
             // partially fail without aborting the whole transaction (e.g. a UNIQUE-constraint
-            // violation), even under WAL mode. Neither TMPDIR nor SQLITE_TMPDIR is set anywhere in this
-            // project's Dockerfile, so SQLite's own fallback chain for where to put that temp file
-            // (SQLITE_TMPDIR → TMPDIR → a short hardcoded list → finally the current working directory)
-            // is entirely environment-dependent. The HA add-on's own AppArmor profile (apparmor.txt)
-            // confirms two real gaps in that chain: `/app/** rixmr` grants no write permission at all
-            // (the container's WORKDIR, and SQLite's last-resort fallback), and `/tmp/** rw` grants
-            // write but not lock ('k', unlike `/data/** rwk`) — SQLite's own temp/journal files are
-            // typically locked. Either gap reproduces this exact error if the addon's container runtime
-            // doesn't inherit a usable TMPDIR the way a local Docker Desktop test happens to (found
-            // live: the identical migration succeeded in a local Docker repro, confirming this is
-            // environment-specific, not a code defect in the migration SQL itself). `temp_store =
-            // MEMORY` sidesteps the whole fallback chain by never writing temp data to disk at all —
-            // this project's tables are small enough that the memory cost is negligible.
+            // violation), even under WAL mode. Neither TMPDIR nor SQLITE_TMPDIR is set anywhere in the
+            // Dockerfile of the consuming app that hit this (Quotinator.Api), so SQLite's own fallback
+            // chain for where to put that temp file (SQLITE_TMPDIR → TMPDIR → a short hardcoded list →
+            // finally the current working directory) is entirely environment-dependent. The HA add-on's
+            // own AppArmor profile (apparmor.txt) confirms two real gaps in that chain: `/app/** rixmr`
+            // grants no write permission at all (the container's WORKDIR, and SQLite's last-resort
+            // fallback), and `/tmp/** rw` grants write but not lock ('k', unlike `/data/** rwk`) —
+            // SQLite's own temp/journal files are typically locked. Either gap reproduces this exact
+            // error if the addon's container runtime doesn't inherit a usable TMPDIR the way a local
+            // Docker Desktop test happens to (found live: the identical migration succeeded in a local
+            // Docker repro without this fix, confirming this is environment-specific, not a code defect
+            // in the migration SQL itself; a faithful reproduction was later achieved locally under a
+            // restricted-write container — see docs/smoke-tests.md Section 37). `temp_store = MEMORY`
+            // sidesteps the whole fallback chain by never writing temp data to disk at all.
             using var pragmaCommand = connection.CreateCommand();
             pragmaCommand.CommandText = "PRAGMA temp_store=MEMORY;";
             pragmaCommand.ExecuteNonQuery();
