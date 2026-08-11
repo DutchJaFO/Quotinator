@@ -48,6 +48,8 @@ verification command here in the same commit that fixes it — the list only gro
 34. [Standardised endpoint WithName/WithSummary, including breaking operationId renames](#34-standardised-endpoint-withnamewithsummary-including-breaking-operationid-renames-279) (#279)
 35. [Startup backup real-work gating and storage pre-flight check](#35-startup-backup-real-work-gating-and-storage-pre-flight-check-277) (#277)
 36. [Startup wait page during database initialisation](#36-startup-wait-page-during-database-initialisation-280) (#280)
+37. [Migration replay under a restricted-write environment](#37-migration-replay-under-a-restricted-write-environment-294) (#294)
+38. [Degraded-state pages survive a genuine migration failure](#38-degraded-state-pages-survive-a-genuine-migration-failure-293) (#293)
 
 ---
 
@@ -1597,4 +1599,126 @@ docker logs smoke280 2>&1 | grep "Now listening on\|Server] listening on\|Quotin
 ```
 
 Clean up: `docker rm -f smoke280 && docker volume rm smoke280-data`.
+
+## 37. Migration replay under a restricted-write environment (#294)
+
+Proves the fix survives an environment where nothing but `/data` is writable — the closest
+approximation of the HA add-on's own AppArmor confinement (`apparmor.txt`'s `/app/** rixmr`, no
+write) that plain Docker mount options can produce. **Known limitation, stated up front:** the real
+gap `#294` theorizes (`/tmp/** rw` grants write but not *lock*) has no Docker-mount equivalent — file
+locking is an LSM-level (AppArmor/SELinux) concept, not something `--read-only`/`ro`/`tmpfs` flags
+control, and Docker Desktop's WSL2 backend has no AppArmor kernel support to test the real mechanism
+directly (confirmed live: `/sys/module/apparmor/parameters/enabled` reads `N`, no
+`/sys/kernel/security/apparmor` securityfs). `--read-only` is *stricter* than the real profile (denies
+write entirely, not just locking) — a pass here is strong evidence, not 100% proof of the exact
+mechanism. It is also the only version of this test worth running: an earlier attempt using a
+**fresh baseline** database (empty tables, pure `INSERT`s) passed identically whether the fix was
+present or not, because a fresh insert has nothing to conflict with and never exercises the
+statement-journal code path at all — the real incident happened during **migration replay against an
+already-populated database**, so this test must start from one.
+
+```bash
+docker rm -f smoke294 2>/dev/null
+docker volume rm smoke294-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name smoke294 -p 8080:8080 \
+  -v smoke294-data:/data -e Quotinator__DataDir=/data \
+  ghcr.io/dutchjafo/quotinator:1.8.2
+sleep 8
+curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+docker stop -t 15 smoke294 && docker rm smoke294
+```
+Seeds a real, unmodified historical release's database (adjust the tag if testing a later migration —
+the point is "the release immediately before the one introducing the migration under test", not
+`1.8.2` specifically). `quotes` must read `799` before proceeding — a partially-seeded volume produces
+a misleading result below.
+
+```bash
+MSYS_NO_PATHCONV=1 docker run -d --name smoke294 -p 8080:8080 \
+  --read-only \
+  -v smoke294-data:/data -e Quotinator__DataDir=/data \
+  quotinator:local
+sleep 8
+curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/health"
+curl -s "http://localhost:8080/api/v1/version"
+docker logs smoke294 2>&1 | grep "migration applied\|SqliteException\|SQLite Error"
+```
+`/health` must return `200 {"status":"healthy"}`; `/version` must show the full post-migration
+`quotes: 799` and every other bundled count; the logs must show `migration applied: Data v2 → v3, App
+v4 → v5` and **no** `SqliteException`/`SQLite Error` line — the fix means the migration's own temp
+files never touch disk at all, so restricting every other writable path doesn't matter.
+
+**To confirm this test would actually have caught the original bug** (not required on every run — a
+one-time gut-check when this section itself changes): in `Program.cs`, temporarily change
+`useMemoryTempStore: true` to `false` (or remove the argument) at `SqliteConnectionFactory`'s DI
+registration site, rebuild, and repeat the second command above against a **fresh clone** of the same
+seeded `smoke294-data` volume (the first run upgrades the volume's schema in place, so a second attempt
+against the same volume no longer exercises the migration at all — clone via
+`docker run --rm -v smoke294-data:/from -v smoke294-data-clone:/to alpine sh -c "cp -a /from/. /to/"`
+first). Must reproduce a real `SqliteException` (`SQLite Error 10: 'disk I/O error'` was the exact
+message live-verified 2026-08-11 — a different code than the original incident's `SQLite Error 14:
+'unable to open database file'`, but the same class of failure: `--read-only`'s full write-denial hits
+a different syscall than the real profile's lock-denial would, so an exact error-code match isn't
+expected, only a genuine failure somewhere in `ApplyMigrationPhaseAsync`) and the same degraded
+`/health` → `503 {"status":"unhealthy"}` / `/version` → `schemaVersion: 0, quotes: 0` outcome the
+original incident showed. Revert the flag back to `true` before committing anything.
+
+Clean up: `docker rm -f smoke294 && docker volume rm smoke294-data smoke294-data-clone 2>/dev/null`.
+
+## 38. Degraded-state pages survive a genuine migration failure (#293)
+
+Reproduces the exact live incident this issue was found in — a real HA v1.8.2 → v1.8.3-beta upgrade
+whose migration failed partway through, leaving `NotificationSummary` (embedded in Home's modal) and
+`/notifications` crashing instead of showing the degraded-state UI `#263` was supposed to guarantee.
+`System_Notification` genuinely doesn't exist on a real v1.8.2 database (confirmed live: `SELECT name
+FROM sqlite_master WHERE type='table' AND name='System_Notification'` returns no rows) — it's only
+created by the migration to v1.8.3-beta, the same migration this test forces to fail, so this setup
+exercises `NotificationReader`'s missing-table fix and `DatabaseStatsSummary`'s degraded-skip fix
+together in one genuine reproduction, not two separate contrived ones. Uses the same
+`--read-only`-forces-a-real-migration-failure technique as `#294`'s own Section (see that section's
+opening paragraph for why `--read-only` is the closest approximation of the original failure plain
+Docker mount options can produce, and its limitations).
+
+```bash
+docker rm -f smoke293 2>/dev/null
+docker volume rm smoke293-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name smoke293 -p 8080:8080 \
+  -v smoke293-data:/data -e Quotinator__DataDir=/data \
+  ghcr.io/dutchjafo/quotinator:1.8.2
+sleep 8
+curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+docker stop -t 15 smoke293 && docker rm smoke293
+```
+Seeds a real, unmodified v1.8.2 database. `quotes` must read `799` before proceeding.
+
+```bash
+MSYS_NO_PATHCONV=1 docker run -d --name smoke293 -p 8080:8080 \
+  --read-only \
+  -v smoke293-data:/data -e Quotinator__DataDir=/data \
+  quotinator:local
+sleep 8
+curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/health"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/stats"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/notifications"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/notifications"
+```
+`/health` must return `503 {"status":"unhealthy",...}` — the database is genuinely degraded, confirming
+the test actually reached the failure state, not a false pass. `/`, `/stats`, and `/notifications` (the
+three Blazor pages) must all return `200` — never `500`, never a raw exception page. `GET
+/api/v1/notifications` (the REST endpoint) correctly returns `503` — API traffic stays gated while
+degraded (`#254`'s own design); this is expected, not a regression.
+
+Visit the three pages in a real browser and confirm the actual rendered content, not just the status
+code — a `200` with a blank or broken page would still pass the status-code check above:
+- `/` must render `StartupErrorModal` (`Quotinator started with a problem`) with the real failure
+  reason and all-zero stats, not a raw stack trace.
+- `/stats` must render the Statistics page with all-zero counts, not crash.
+- `/notifications` must render `No notifications yet.` — this is `NotificationReader`'s fix actually
+  working: it caught the missing-`System_Notification`-table exception and returned empty, which the
+  page then renders as an empty list instead of an unhandled-exception page.
+
+Check the browser console for errors — `Failed to load resource: 503` entries are expected (other API
+calls the page makes while degraded); anything else (a JS exception, a Blazor circuit error) is not.
+
+Clean up: `docker rm -f smoke293 && docker volume rm smoke293-data`.
 

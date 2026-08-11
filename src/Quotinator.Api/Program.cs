@@ -289,7 +289,11 @@ var backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0
     : Path.Combine(dataDir, DataPaths.BackupsFolder);
 var maxBackupStorageGb = builder.Configuration.GetValue("Quotinator:MaxBackupStorageGb", 1);
 var dbOptions          = new DatabaseOptions { DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb };
-var connectionFactory  = new SqliteConnectionFactory(dbPath);
+// useMemoryTempStore: true — see SqliteConnectionFactory.cs's own comment for the #294 incident this
+// opts into working around. Safe here because Quotinator's own dataset (hundreds to low-thousands of
+// quotes) makes the resulting RAM cost negligible; Quotinator.Data itself stays unopinionated and
+// defaults to false since it doesn't know a future consumer's dataset size.
+var connectionFactory  = new SqliteConnectionFactory(dbPath, useMemoryTempStore: true);
 builder.Services.AddSingleton<IDiskSpaceProvider, DiskSpaceProvider>();
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 builder.Services.AddTransient<IUnitOfWork>(sp =>
@@ -775,7 +779,10 @@ if (dbHealth.IsHealthy)
     catch (Exception ex)
     {
         app.Services.GetRequiredService<ILogger<Program>>()
-            .LogWarning(ex, "[Server] Failed to seed the #279 operation-id-rename notification — non-fatal, startup continues.");
+            .LogWarning(ex, "[Server] Failed to seed the #279 operation-id-rename notification — non-fatal, startup " +
+                "continues. This does not mean the database is broken or corrupted: it means a table the current " +
+                "schema version implies should exist (e.g. System_Notification) is actually missing on disk, a " +
+                "mismatch normal operation shouldn't produce.");
     }
 }
 

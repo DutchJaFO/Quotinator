@@ -43,3 +43,30 @@ jobs:
           test -d /tmp/publish/data/sources && \
             ls /tmp/publish/data/sources/*.json > /dev/null 2>&1 || \
             (echo "ERROR: data/sources/ missing or empty in publish output" && exit 1)
+
+  validate-apparmor-profiles:
+    name: Validate AppArmor profiles
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install apparmor-utils
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq apparmor-utils
+
+      # --skip-kernel-load is a pure syntax/policy check — it never loads the profile into the
+      # kernel, so it works on any runner regardless of whether AppArmor itself is enabled (it
+      # isn't, on this GitHub-hosted runner). Catches a broken addon/addon-beta apparmor.txt before
+      # it ships, since neither this reusable workflow's own build/test steps nor any local Docker
+      # smoke test can — Docker Desktop's WSL2 backend has no AppArmor support at all (confirmed:
+      # the stock WSL2 kernel doesn't compile it in), so this is the only automated coverage this
+      # project has for the profile's own syntax. --skip-cache is required on this runner
+      # specifically: unlike a local Docker container (root by default), the GitHub-hosted runner
+      # executes as the unprivileged `runner` user, and apparmor_parser's default cache write to
+      # /var/cache/apparmor fails with Permission Denied without it (confirmed live, 2026-08-11).
+      - name: Validate addon/apparmor.txt
+        run: apparmor_parser --skip-kernel-load --skip-cache addon/apparmor.txt
+
+      - name: Validate addon-beta/apparmor.txt
+        run: apparmor_parser --skip-kernel-load --skip-cache addon-beta/apparmor.txt
