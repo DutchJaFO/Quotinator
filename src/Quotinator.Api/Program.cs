@@ -779,7 +779,10 @@ if (dbHealth.IsHealthy)
     catch (Exception ex)
     {
         app.Services.GetRequiredService<ILogger<Program>>()
-            .LogWarning(ex, "[Server] Failed to seed the #279 operation-id-rename notification — non-fatal, startup continues.");
+            .LogWarning(ex, "[Server] Failed to seed the #279 operation-id-rename notification — non-fatal, startup " +
+                "continues. This does not mean the database is broken or corrupted: it means a table the current " +
+                "schema version implies should exist (e.g. System_Notification) is actually missing on disk, a " +
+                "mismatch normal operation shouldn't produce.");
     }
 }
 
