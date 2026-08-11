@@ -95,5 +95,66 @@ public class NotificationReaderTests
         Assert.HasCount(2, result.Items, "the full history endpoint must show dismissed/expired notifications too, unlike GetActiveNotificationsAsync");
     }
 
+    /// <summary>
+    /// Found live during a real HA v1.8.2 → v1.8.3-beta upgrade attempt that failed partway through
+    /// the migration (unrelated cause): the restored pre-migration database genuinely has no
+    /// System_Notification table yet, and both callers reachable during that degraded state (Home's
+    /// modal, the /notifications page) previously crashed with an unhandled SqliteException instead of
+    /// showing "no notifications" — defeating the whole point of the degraded-state UI.
+    /// </summary>
+    [TestMethod]
+    public async Task GetActiveNotificationsAsync_TableDoesNotExist_ReturnsEmptyInsteadOfThrowing()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_missing_table_test_").FullName;
+        try
+        {
+            var dbPath = Path.Combine(tempDir, "no-notification-table.db");
+            using (var conn = new SqliteConnection($"Data Source={dbPath}"))
+            {
+                conn.Open();
+                conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
+            }
+
+            var reader = new NotificationReader(new SqliteConnectionFactory(dbPath));
+
+            var result = await reader.GetActiveNotificationsAsync();
+
+            Assert.IsEmpty(result);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    /// <summary>See <see cref="GetActiveNotificationsAsync_TableDoesNotExist_ReturnsEmptyInsteadOfThrowing"/> — same gap, the paged endpoint.</summary>
+    [TestMethod]
+    public async Task GetPagedAsync_TableDoesNotExist_ReturnsEmptyInsteadOfThrowing()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_missing_table_test_").FullName;
+        try
+        {
+            var dbPath = Path.Combine(tempDir, "no-notification-table.db");
+            using (var conn = new SqliteConnection($"Data Source={dbPath}"))
+            {
+                conn.Open();
+                conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
+            }
+
+            var reader = new NotificationReader(new SqliteConnectionFactory(dbPath));
+
+            var result = await reader.GetPagedAsync(1, 20);
+
+            Assert.IsEmpty(result.Items);
+            Assert.AreEqual(0, result.TotalCount);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
     public TestContext TestContext { get; set; }
 }
