@@ -1,6 +1,6 @@
 # #293 — NotificationSummary/notifications crash when System_Notification doesn't exist yet
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #293
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -82,7 +82,7 @@ enhancement issue for a future maintenance milestone (see memory), not implement
 | 4 | ✅ | No regression | Unit test | `dotnet test tests/Quotinator.Data.Tests` — 1076 tests, 0 failures; full solution build clean |
 | 5 | ✅ | T1 — app starts cleanly with the fix in place | Live (T1) | Clean VS boot, 2026-08-12 00:03 — `schema is up to date`, `/notifications` rendered `No notifications yet.` cleanly (screenshot confirmed) |
 | 6 | ✅ | T2 — Docker smoke test reproducing the exact live scenario (real v1.8.2 db, migration failure, degraded-state page load) | Live (Docker) | `docs/smoke-tests.md` Section 38, live-run 2026-08-11 — confirmed `System_Notification` genuinely absent on a real v1.8.2 db; forced migration failure reproduced `schemaVersion: 0`/`503 unhealthy`; `/`, `/stats`, `/notifications` all rendered `200` with correct content (`StartupErrorModal`, zero-count stats, `No notifications yet.`) instead of crashing; `GET /api/v1/notifications` correctly `503`-gated |
-| 7 | ⬜ | `NotificationSeeding`'s non-fatal-failure log message explains what happened and that it doesn't mean corruption | Live (T1) | Build confirmed clean; message text not yet re-verified live against a real triggered failure |
+| 7 | ✅ | `NotificationSeeding`'s non-fatal-failure log message explains what happened and that it doesn't mean corruption | Live (T1) | Clean VS boot, 2026-08-12 00:21, `System_Notification` renamed away — improved message text rendered correctly and startup still completed to `Quotinator ready` |
 
 ---
 
