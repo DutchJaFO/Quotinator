@@ -70,6 +70,7 @@ and #255/#256 do not carry that urgency.
 | [#287](https://github.com/DutchJaFO/Quotinator/issues/287) | Convert IQuoteService and its implementations to fully async | Waiting for release | T1 ✅ T2 ✅ | [287-iquoteservice-async-conversion-plan.md](287-iquoteservice-async-conversion-plan.md) |
 | [#288](https://github.com/DutchJaFO/Quotinator/issues/288) | Migration review: verify full incremental path from last-shipped v1.8.2 schema | Waiting for release | N/A (pure verification, no code change — live Docker verification, see plan doc) | [288-migration-verification-plan.md](288-migration-verification-plan.md) |
 | [#289](https://github.com/DutchJaFO/Quotinator/issues/289) | Squash unshipped migrations since v1.8.2 into one Consumer + one Data migration, add schema-version-overshoot detection + notification | Waiting for release | T1 ✅ T2 ✅ | [289-migration-squash-overshoot-detection-plan.md](289-migration-squash-overshoot-detection-plan.md) |
+| [#293](https://github.com/DutchJaFO/Quotinator/issues/293) | NotificationSummary/notifications crash instead of degrading gracefully when System_Notification doesn't exist yet | In progress | T1 ⬜ T2 ⬜ | [293-notification-missing-table-crash-plan.md](293-notification-missing-table-crash-plan.md) |
 
 ---
 
@@ -306,6 +307,10 @@ None of the remaining issues block each other beyond these relationships.
 45. **#289** — Squash unshipped migrations since v1.8.2 into one Consumer + one Data migration, add
     schema-version-overshoot detection + notification (developer decision overriding #288's own
     "rejected" conclusion, filed 2026-08-10); depends on #288 having run first
+46. **#293** — Fix `NotificationSummary`/`/notifications` crashing instead of degrading gracefully when
+    `System_Notification` doesn't exist yet (found live during a real v1.8.2 → v1.8.3-beta HA upgrade
+    attempt, 2026-08-10); independent of #289's own unconfirmed root cause, which is tracked separately
+    via a retry rather than as part of this issue
 
 ---
 
