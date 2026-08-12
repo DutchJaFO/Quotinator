@@ -1,6 +1,6 @@
 # #294 — SQLite migration statement-journal temp file fails to open in HA add-on runtime
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #294
 **Tiers required:** T1, T2, T3
 **Depends on:** none (independent of #293 — different root cause, same live incident)
@@ -24,19 +24,23 @@ write at all (the container's `WORKDIR`), and `/tmp/** rw` grants write but not 
 `/data/** rwk`). Independently corroborated via web search as a documented class of SQLite failure in
 sandboxed/containerized environments generally, with `PRAGMA temp_store = MEMORY` as the standard fix.
 
-**Not confirmed with 100% certainty against the exact production mechanism** — Docker Desktop's WSL2
-backend has no AppArmor kernel support at all (confirmed live: `/sys/module/apparmor/parameters/enabled`
-reads `N`, no `/sys/kernel/security/apparmor` securityfs), so the specific "write succeeds, lock fails"
-gap `/tmp/** rw` describes cannot be reproduced locally — file-locking permission is an LSM concept with
-no Docker-mount equivalent. **A faithful reproduction of the general failure class was achieved locally
-on 2026-08-11** (see `docs/smoke-tests.md` Section 37): a real, unmodified v1.8.2 database, migrated by
-pre-#294 code under a `--read-only` container (stricter than the real profile — full write denial, not
-just lock denial), reproduces a genuine `SqliteException` (`SQLite Error 10: 'disk I/O error'`, not the
+**Confirmed live in production, 2026-08-12.** The developer's own real HA supervisor upgrade to
+`v1.8.3-beta2` completed cleanly — the startup log shows `migration applied: Data v2 → v3, App v4 → v5`
+(the exact migration that failed in the original incident) applying without error, full `799 quotes`
+stats, `Data: /data` (the real persistent volume). The hypothesis held.
+
+Before that live confirmation, the exact production mechanism (`/tmp/** rw` — write succeeds, lock
+fails) was never directly reproducible: Docker Desktop's WSL2 backend has no AppArmor kernel support at
+all (confirmed live: `/sys/module/apparmor/parameters/enabled` reads `N`, no
+`/sys/kernel/security/apparmor` securityfs), and file-locking permission is an LSM concept with no
+Docker-mount equivalent. **A faithful reproduction of the general failure class was achieved locally on
+2026-08-11** instead (see `docs/smoke-tests.md` Section 37): a real, unmodified v1.8.2 database, migrated
+by pre-#294 code under a `--read-only` container (stricter than the real profile — full write denial, not
+just lock denial), reproduced a genuine `SqliteException` (`SQLite Error 10: 'disk I/O error'`, not the
 original's `Error 14`, but the same failure class) and the identical degraded-startup symptom
-(`schemaVersion: 0`, `quotes: 0`, `503 unhealthy`) the live incident showed; the fixed code survives the
-same test cleanly. This is strong evidence the fix addresses a genuine class of failure, but not proof
-it's *the exact* mechanism HA hit. The developer's own retry of the live upgrade remains the actual
-confirmation step for that.
+(`schemaVersion: 0`, `quotes: 0`, `503 unhealthy`) the live incident showed; the fixed code survived the
+same test cleanly. That was strong evidence ahead of the real-world retry above, which is what actually
+settled it.
 
 ## Approach
 
@@ -122,16 +126,15 @@ would have caught the original bug, without requiring that revert on every futur
 | 6 | ✅ | Real v1.8.2 → current migration replay survives a restricted-write (`--read-only`) environment; pre-#294 code fails the same test with a genuine `SqliteException` | Live (Docker) | `docs/smoke-tests.md` Section 37, live-run 2026-08-11 — GREEN: `healthy`, `quotes: 799`, `migration applied: Data v2 → v3, App v4 → v5`, no exception. RED (pre-#294 code, same test): `SQLite Error 10: 'disk I/O error'`, degraded `schemaVersion: 0`/`quotes: 0`/`503 unhealthy` |
 | 7 | ✅ | T1 — app starts cleanly with the fix in place | Live (T1) | Clean VS boot, 2026-08-11 23:28 — `schema is up to date`, live source refresh succeeded for both GitHub sources, `799 quotes` full stats, no errors; `/quotes/random` served repeatedly without issue |
 | 8 | ✅ | T2 — Docker smoke test | Live (Docker) | Re-run 2026-08-11 against the `useMemoryTempStore` redesign: basic boot/health/version sanity, Section 37's full real-migration-replay GREEN check (`healthy`, `quotes: 799`, `migration applied: Data v2 → v3, App v4 → v5`, no exception), and a basic import — all clean |
-| 9 | ⬜ | The actual live HA upgrade succeeds with this fix in place | Live (developer) | Pending — the real confirmation against the exact production mechanism |
+| 9 | ✅ | The actual live HA upgrade succeeds with this fix in place | Live (T3) | Real HA supervisor upgrade to v1.8.3-beta2, 2026-08-12 06:17 — startup log shows `migration applied: Data v2 → v3, App v4 → v5` (the exact migration that failed in the original incident) completing cleanly, `799 quotes` full stats, `Data: /data` (the real persistent volume), no errors |
 
 ---
 
 ## Notes
 
-Item 9 is the real test of whether this hypothesis was correct. If the live upgrade still fails with the
-same error after this fix ships, the hypothesis was wrong (or incomplete) and this issue reopens for
-further investigation — e.g. actually reaching the HA host's kernel/AppArmor audit log, which this
-session was unable to obtain.
+Item 9 was the real test of whether this hypothesis was correct — it passed. The developer's own real
+HA supervisor upgrade to v1.8.3-beta2 completed the previously-failing migration cleanly (see Background
+above for the full log detail). No further investigation needed.
 
 **Why `SQLITE_TMPDIR` was removed rather than kept as an untested extra:** see "Approach" above for the
 full reasoning — this project's own bar is that a change earns its place by having its effect provably
