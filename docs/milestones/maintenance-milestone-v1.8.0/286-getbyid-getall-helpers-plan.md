@@ -1,6 +1,6 @@
 # #286 — Extract GetById/GetAll generic helpers for the 7 plain-repository-pattern masterdata endpoints
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #286
 **Tiers required:** T1, T2
 **Depends on:** #283 (done — Person is one of the 7 covered entities, needed its consistency fix first)

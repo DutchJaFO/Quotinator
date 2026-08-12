@@ -1,6 +1,6 @@
 # #288 — Migration review: verify full incremental path from last-shipped v1.8.2 schema
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #288
 **Tiers required:** N/A (pure verification, no code change — see Steps for the live Docker verification performed in place of T1/T2)
 **Depends on:** none

@@ -1,6 +1,6 @@
 # #227 — Import-table naming standardization: research and reference mapping
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #227
 **Tiers required:** N/A (this issue itself is docs/decisions-only — see "Where the actual
 implementation happens" below for the sub-issues that carry T1/T2)

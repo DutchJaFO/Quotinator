@@ -1,6 +1,6 @@
 # #289 — Squash unshipped migrations since v1.8.2, add schema-version-overshoot detection + notification
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #289
 **Tiers required:** T1, T2
 **Depends on:** #288 (verification confirmed the 8 migrations were safe from a tagged-release standpoint; this issue supersedes #288's own "considered and rejected" conclusion by developer decision — see Background)
