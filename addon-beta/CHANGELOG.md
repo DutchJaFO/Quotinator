@@ -1,10 +1,17 @@
-##### *GENERATED FILE [2026-08-10 22:21 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-12 03:59 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to this add-on will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
+
+## [1.8.3-beta2] - 2026-08-12
+
+- Fixed a crash in the degraded-database status pages (introduced in the previous beta) that could happen when upgrading from an older database version.
+- Fixed an issue that could cause a Home Assistant add-on upgrade to fail partway through.
+
+---
 
 ## [1.8.3-beta] - 2026-08-10
 
@@ -22,13 +29,6 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 ## [1.8.2] - 2026-07-31
 
 - Security: a SQLite library vulnerability (CVE-2025-6965) has now been fixed directly by upgrading the affected native library; no user data was affected.
-
----
-
-## [1.8.1-beta] - 2026-07-30
-
-- A separate Beta add-on is now available in Home Assistant, letting you try upcoming changes without affecting your stable installation — install both side by side.
-- Changelogs shown in the app and the Home Assistant add-on now list only the most recent releases, with a link to the full history on GitHub.
 
 ---
 
