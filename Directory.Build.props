@@ -2,9 +2,6 @@
 
   <PropertyGroup>
     <Version>1.8.3</Version>
-    <!-- AssemblyVersion and FileVersion require numeric-only; pin to base version when Version carries a prerelease suffix -->
-    <AssemblyVersion>1.8.3.0</AssemblyVersion>
-    <FileVersion>1.8.3.0</FileVersion>
     <Product>Quotinator</Product>
     <Authors>DutchJaFO</Authors>
     <Copyright>Copyright © 2026 DutchJaFO</Copyright>
