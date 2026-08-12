@@ -494,7 +494,7 @@ A milestone is closed only when all issues are resolved or explicitly closed wit
 
 There is always exactly **one** open maintenance milestone at a time. It is the catch-all for bugs and minor improvements that do not belong to a feature milestone.
 
-**Current maintenance milestone:** v1.8.0 — issues here are expected to release as v1.8.x patch versions.
+**Current maintenance milestone:** v1.9.0 — issues here are expected to release as v1.9.x patch versions.
 
 ### Rules
 

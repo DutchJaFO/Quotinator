@@ -57,7 +57,7 @@ A short flat per-issue index list of plan-doc links at the end is optional but e
       table for which applies. A secondary label (`code style`, `.NET`, etc.) may be proposed alongside
       it when it genuinely fits — see `issues.md`'s labelling section for the adopted secondary set.
 - [ ] Assign a milestone before saving — an issue with no milestone is invisible to planning
-- [ ] No feature milestone fits? Assign to the **current maintenance milestone** (v1.8.0 while it is open) — see `process.md → Maintenance milestone` for rules on when it gets replaced
+- [ ] No feature milestone fits? Assign to the **current maintenance milestone** (v1.9.0 while it is open) — see `process.md → Maintenance milestone` for rules on when it gets replaced
 - [ ] Ask the user which milestone if unsure — never assume
 - [ ] The `gh issue create` command itself includes `--label` and `--milestone` — approving the draft
       approves all three (title/body, label, milestone) in one pass, not label/milestone as a
