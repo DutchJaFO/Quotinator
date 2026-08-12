@@ -86,7 +86,7 @@ When the change touches schema/reset logic, also exercise the affected admin end
 
 ### T4 — Docker image freshness (milestone close)
 
-**Environment:** local Docker build (`docker build --no-cache`) + the Docker Scout CLI (`docker scout cves`).
+**Environment:** local Docker build (`docker build --no-cache --pull`) + the Docker Scout CLI (`docker scout cves`).
 
 **What it catches:** OS-layer vulnerabilities in the base image that drift over time independent of any
 code change in this repository. An upstream base-image maintainer can republish a patched layer between
@@ -105,12 +105,20 @@ where it sits in the close sequence.
 
 **When required:** once per milestone, before the milestone is closed — never skipped, never
 substituted by a T2 pass's own `docker build` (which permits a cached build and is not a freshness
-check). Always uses `--no-cache`: a cached build can silently reuse a stale base layer and miss an
-upstream update, which is the entire failure mode this tier exists to catch.
+check). Always uses `--no-cache --pull`, both flags together: `--no-cache` alone only disables layer
+caching for the build's own `RUN` steps — it does **not** force Docker to re-pull the `FROM` base image,
+which can still be served from the local image cache and silently mask an upstream update. `--pull`
+is what actually forces a fresh base-layer pull. **Found live during v1.8.3's own milestone-close pass
+(2026-08-12), a second time**: #250's own 2026-08-10 entry in `docs/security/README.md` had already hit
+this exact confusion once (a stale local base layer produced 3 phantom `Microsoft.NETCore.App.Runtime`
+CVEs, including one High, that vanished after a manual `docker pull` + rebuild) but the fix was only
+ever noted in that scan's own writeup, never carried back into this gate's documented command — so the
+same false alarm reproduced identically two milestones later. `--pull` is now part of the gate itself,
+not something to remember to add by hand.
 
 **Gate:**
 ```bash
-docker build --no-cache -f docker/Dockerfile -t quotinator:local .
+docker build --no-cache --pull -f docker/Dockerfile -t quotinator:local .
 docker scout cves quotinator:local
 ```
 Compare the result against `docs/security/README.md`'s "Docker base image (OS packages)" table:
