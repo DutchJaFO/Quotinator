@@ -1,6 +1,6 @@
 # #263 — Bare-bones startup UX: degraded error layout, permanent Statistics page
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #263
 **Tiers required:** T1, T2
 **Depends on:** none (builds on #254's `DatabaseHealthState`/`DatabaseHealthGateMiddleware` and #251's

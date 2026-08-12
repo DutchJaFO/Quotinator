@@ -1,6 +1,6 @@
 # #271 — Rename ActionPayload/ConverterOptions classes, add ImportActionFieldRow subclasses (ADR 016 revision)
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #271
 **Tiers required:** N/A
 **Depends on:** #264 (ADR 016 revision this issue implements)

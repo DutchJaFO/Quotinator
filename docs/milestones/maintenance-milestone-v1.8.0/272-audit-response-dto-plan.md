@@ -1,6 +1,6 @@
 # #272 — Add AuditEntryResponse/AuditChangeResponse DTOs, stop leaking SafeValue's raw/parsed wrapper
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #272
 **Tiers required:** N/A
 **Depends on:** #265 (investigation this issue implements)
