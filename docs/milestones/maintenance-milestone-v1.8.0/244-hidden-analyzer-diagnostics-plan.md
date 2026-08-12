@@ -1,6 +1,6 @@
 # #244 — Hidden Roslyn code-style and .NET analyzer diagnostics (IDE0xxx, CAxxxx)
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #244
 **Tiers required:** T1, T2
 **Depends on:** none

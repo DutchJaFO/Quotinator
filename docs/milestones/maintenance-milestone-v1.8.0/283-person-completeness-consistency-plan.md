@@ -1,6 +1,6 @@
 # #283 — PersonResponse.CompletenessStatus is nullable with no fallback, unlike every other masterdata entity
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #283
 **Tiers required:** T1, T2
 **Depends on:** none (isolated fix inside `PersonResponse`/`PersonEndpoints`)

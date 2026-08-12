@@ -1,6 +1,6 @@
 # #287 — Convert IQuoteService and its implementations to fully async
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #287
 **Tiers required:** T1, T2
 **Depends on:** none (a pure signature conversion, isolated to `IQuoteService` and its call graph)

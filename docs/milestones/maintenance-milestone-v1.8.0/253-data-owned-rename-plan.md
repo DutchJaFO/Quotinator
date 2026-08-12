@@ -1,6 +1,6 @@
 # #253 — Rename Quotinator.Data-owned tables and entities
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #253
 **Tiers required:** T1, T2
 **Depends on:** Nothing

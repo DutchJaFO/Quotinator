@@ -14,32 +14,12 @@
   },
   "releases": [
     {
-      "version": "1.8.3-beta2",
+      "version": "1.8.3",
       "date": "2026-08-12",
-      "quote": {
-        "text": "Quotinators eerste echte upgrade-poging in het wild vond twee bugs voordat een gebruiker dat deed — deze beta lost ze beide op, en legt duidelijker uit wanneer er nog iets niet helemaal goed is."
-      },
-      "issues": [293, 294],
-      "highlights": [
-        "Een crash in de schermen voor een gedegradeerde database (geïntroduceerd in de vorige beta) is opgelost — deze kon optreden bij het upgraden vanaf een oudere databaseversie.",
-        "Een probleem opgelost waardoor een Home Assistant-add-on-upgrade halverwege kon mislukken."
-      ],
-      "changed": [
-        "Het gedrag van SqliteConnectionFactory's tijdelijke opslag (de SQLite-fix hieronder) is nu een expliciete, optionele constructorparameter in plaats van een onvoorwaardelijke standaardinstelling, omdat Quotinator.Data bedoeld is als herbruikbare, domeinonafhankelijke infrastructuur, onafhankelijk van de aannames over datasetgrootte van één specifieke gebruiker — geen functionele wijziging voor Quotinator zelf, dat hier al voor kiest (issue #294)",
-        "Een niet-fatale fout bij het zaaien van opstartmeldingen logt nu een duidelijker bericht dat uitlegt wat er is gebeurd en dat dit geen databasecorruptie betekent, in plaats van een kale uitzondering zonder context (issue #293)"
-      ],
-      "fixed": [
-        "`NotificationSummary` (de opstartpop-up van Home) en de `/notifications`-pagina crashten voorheen met een onafgehandelde uitzondering in plaats van de bedoelde gedegradeerde-status-UI te tonen wanneer `System_Notification` nog niet bestaat (bijvoorbeeld op een database die halverwege een mislukte migratie staat) — beide degraderen nu netjes en retourneren geen actieve meldingen in plaats van een uitzondering te gooien; het bestandsgeschiedenisgedeelte van de Statistieken-pagina wordt nu ook overgeslagen zolang de database gedegradeerd is, in plaats van een query te proberen die ook kon mislukken (issue #293)",
-        "Een SQLite-migratie- of seedingstap die een tijdelijk bestand nodig heeft (bijvoorbeeld om een `UNIQUE`-beperking veilig af te dwingen) kon mislukken met `'unable to open database file'` in bepaalde beperkte containeromgevingen (bevestigd: de eigen AppArmor-beperking van de Home Assistant-add-on) als de tijdelijke map op OS-niveau niet zowel beschrijfbaar als vergrendelbaar was — SQLite-verbindingen houden dit soort tijdelijke gegevens nu in het geheugen in plaats van ze naar schijf te schrijven, waardoor het probleem helemaal wordt vermeden (issue #294)"
-      ]
-    },
-    {
-      "version": "1.8.3-beta",
-      "date": "2026-08-10",
       "quote": {
         "text": "Quotinator besteedde deze release aan het factchecken van zijn eigen database — toepasselijk voor een app die volledig draait op geverifieerde quotes."
       },
-      "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245, 263, 264, 265, 271, 272, 267, 269, 278, 279, 277, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289],
+      "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245, 263, 264, 265, 271, 272, 267, 269, 278, 279, 277, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 293, 294],
     "highlights": [
       "Als de database ooit niet correct kan opstarten, blijft Quotinator nu bereikbaar en meldt het probleem duidelijk in plaats van vast te lopen of een technische foutpagina te tonen — een admin-databasereset kan dit oplossen zonder dat de app of container opnieuw gestart hoeft te worden.",
       "Quotinator bewaart nu een kopie van elk import-/seedbestand dat het verwerkt — inclusief welke conversie-instellingen zijn gebruikt — zodat de originele inhoud later opnieuw kan worden opgevraagd, bekeken of gedownload, en oude versies kunnen worden opgeruimd om ruimte terug te winnen.",
@@ -48,7 +28,9 @@
       "Als er bij het opstarten iets misgaat, toont de webinterface zelf nu ook een duidelijk pop-upvenster met wat er is gebeurd en de laatst bekende goede status van de database — niet alleen de REST-API. Home is uitgeschakeld totdat het probleem is opgelost, maar de REST-API (duidelijk gemarkeerd als beperkt), Statistieken en Over blijven bereikbaar. De databasestatus — aantal quotes en welke bestanden zijn gebruikt om de database op te bouwen — is nu ook altijd beschikbaar op een nieuwe Statistieken-pagina in het navigatiemenu.",
       "Een nieuwe Meldingen-pagina en pop-ups bij het opstarten tonen nu informatieve, waarschuwings-, fout- en actie-aanbevolen berichten van Quotinator, met een geschiedenis die je op elk moment kunt bekijken en afwijzen.",
       "Breaking change voor API-clients: twee REST-endpoints' operation-ID's zijn hernoemd voor consistente naamgeving — `GetImportBatches` heet nu `GetAllImportBatches`, en `GetFileResources` heet nu `GetAllFileResources`. Dit heeft alleen invloed op een gegenereerde API-client die op operation-ID werkt; de routes en het gedrag zelf zijn ongewijzigd.",
-      "Als je Quotinator opent terwijl de database nog wordt opgezet (een verse installatie, of een grote herseeding), zie je niet langer een lege, niet-reagerende pagina — er verschijnt nu direct een pagina met \"Quotinator wordt gestart\" die zichzelf automatisch ververst totdat de app klaar is."
+      "Als je Quotinator opent terwijl de database nog wordt opgezet (een verse installatie, of een grote herseeding), zie je niet langer een lege, niet-reagerende pagina — er verschijnt nu direct een pagina met \"Quotinator wordt gestart\" die zichzelf automatisch ververst totdat de app klaar is.",
+      "Een crash in de schermen voor een gedegradeerde database is opgelost — deze kon optreden bij het upgraden vanaf een oudere databaseversie.",
+      "Een probleem opgelost waardoor een Home Assistant-add-on-upgrade halverwege kon mislukken."
     ],
     "added": [
       "Release-items kunnen nu een optioneel eenregelig `quote`-veld bevatten (sfeervolle tekst voor de release-notities, met optionele `attribution`) — weergegeven in `CHANGELOG.md` en de Blazor-changelog-UI, weggelaten uit de beknoptere `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)",
@@ -96,7 +78,9 @@
       "De zeven masterdata-REST-endpoints die het eenvoudige repository-patroon delen (Characters, People, Series, SoundCues, Sources, StageDirections, Universes) delen nu één generieke implementatie van hun lijst-/get-by-id-logica in plaats van elk hun eigen kopie te dupliceren, het directe resultaat van het onderzoek uit issue #281 — geen functionele wijziging, geen wijziging aan de API (issue #286)",
       "Interne quote- en conversation-databasetoegang (`IQuoteService` en de implementaties daarvan) is nu volledig asynchroon, een vereiste die aan het licht kwam tijdens de uitvoering van issue #285 om daar de gedeelde join-query-infrastructuur van het project te kunnen gebruiken — geen functionele wijziging, geen wijziging aan de API (issue #287)",
       "Het volledige database-upgradepad vanaf de laatste release is geverifieerd tegen een echte kopie van de database van die release, waarbij is bevestigd dat elke migratie sindsdien probleemloos wordt toegepast zonder gegevensverlies — een routinematige interne controle zonder eigen gedragswijziging (issue #288)",
-      "Een reeks nog niet uitgebrachte interne databasemigraties is vóór de release samengevoegd tot een kleiner aantal stappen, om toekomstige upgrades eenvoudiger te houden; als een database ooit een schemaversie registreert die voorloopt op wat de app verwacht (alleen mogelijk bij een database die de migraties van vóór de samenvoeging al had uitgevoerd voordat deze release verscheen), merkt Quotinator dit nu op en toont een melding met aanbevolen actie die een database-Reset voorstelt, in plaats van stilzwijgend door te gaan met een verouderd intern versienummer (issue #289)"
+      "Een reeks nog niet uitgebrachte interne databasemigraties is vóór de release samengevoegd tot een kleiner aantal stappen, om toekomstige upgrades eenvoudiger te houden; als een database ooit een schemaversie registreert die voorloopt op wat de app verwacht (alleen mogelijk bij een database die de migraties van vóór de samenvoeging al had uitgevoerd voordat deze release verscheen), merkt Quotinator dit nu op en toont een melding met aanbevolen actie die een database-Reset voorstelt, in plaats van stilzwijgend door te gaan met een verouderd intern versienummer (issue #289)",
+      "Het gedrag van SqliteConnectionFactory's tijdelijke opslag (de SQLite-fix hieronder) is nu een expliciete, optionele constructorparameter in plaats van een onvoorwaardelijke standaardinstelling, omdat Quotinator.Data bedoeld is als herbruikbare, domeinonafhankelijke infrastructuur, onafhankelijk van de aannames over datasetgrootte van één specifieke gebruiker — geen functionele wijziging voor Quotinator zelf, dat hier al voor kiest (issue #294)",
+      "Een niet-fatale fout bij het zaaien van opstartmeldingen logt nu een duidelijker bericht dat uitlegt wat er is gebeurd en dat dit geen databasecorruptie betekent, in plaats van een kale uitzondering zonder context (issue #293)"
     ],
     "fixed": [
       "Databasekolommen die het conflictoplossingsbeleid vastleggen (`ImportBatches.ConflictPolicy` en de interne `AppliedPolicy`-kolom op twee herkomsttabellen) wijzen nu een ongeldige waarde af op databaseniveau via een CHECK-constraint, net als elke andere enum-gebaseerde kolom in het schema; een bestaande data-inconsistentie die dit blootlegde, wordt daarbij ook automatisch genormaliseerd (issue #150)",
@@ -105,7 +89,9 @@
       "Een mislukte database-seeding tijdens het opstarten kon eerder een gedeeltelijk geschreven database achterlaten zonder back-up; seeding maakt nu altijd eerst een back-up (bij elke niet-baseline opstart) en herstelt die back-up als seeding mislukt, gelijk aan het vangnet dat migraties al hadden (issue #254)",
       "`GET /api/v1/quotes` en `GET /api/v1/quotes/search` geven nu correct vertaalde inhoud terug wanneer `?lang=` wordt opgegeven — door een bug negeerden beide endpoints de gevraagde taal altijd en gaven ze alleen de tekst in de oorspronkelijke taal terug; de losse quote-opvraging (`GET /api/v1/quotes/{id}`) en het random-endpoint waren hier niet door geraakt (issue #244)",
       "Het `date`-veld van een Source wordt nu ook correct gevuld wanneer die Source voor het eerst werd aangemaakt via een datumloze `sources[]`-invoer (bijv. een invoer die alleen een koppeling naar een Series legt) en pas later een datum krijgt via een quote in een later ingeladen bestand — voorheen bleef dit veld in dat specifieke geval permanent leeg, ook al was het vaker voorkomende geval (een Source die uitsluitend via een quote wordt ontdekt) al eerder opgelost (issue #245)",
-      "`GET /api/v1/masterdata/people/{id}` en `GET /api/v1/masterdata/people` konden `completenessStatus` voorheen volledig weglaten uit de response in plaats van `\"Incomplete\"` terug te geven — de enige masterdata-entiteit die zich anders gedroeg dan elke vergelijkbare entiteit voor dezelfde onderliggende situatie, terwijl de database zelf nooit een werkelijk onbepaalde volledigheidsstatus toestaat voor enige entiteit, People inbegrepen (issue #283)"
+      "`GET /api/v1/masterdata/people/{id}` en `GET /api/v1/masterdata/people` konden `completenessStatus` voorheen volledig weglaten uit de response in plaats van `\"Incomplete\"` terug te geven — de enige masterdata-entiteit die zich anders gedroeg dan elke vergelijkbare entiteit voor dezelfde onderliggende situatie, terwijl de database zelf nooit een werkelijk onbepaalde volledigheidsstatus toestaat voor enige entiteit, People inbegrepen (issue #283)",
+      "`NotificationSummary` (de opstartpop-up van Home) en de `/notifications`-pagina crashten voorheen met een onafgehandelde uitzondering in plaats van de bedoelde gedegradeerde-status-UI te tonen wanneer `System_Notification` nog niet bestaat (bijvoorbeeld op een database die halverwege een mislukte migratie staat) — beide degraderen nu netjes en retourneren geen actieve meldingen in plaats van een uitzondering te gooien; het bestandsgeschiedenisgedeelte van de Statistieken-pagina wordt nu ook overgeslagen zolang de database gedegradeerd is, in plaats van een query te proberen die ook kon mislukken (issue #293)",
+      "Een SQLite-migratie- of seedingstap die een tijdelijk bestand nodig heeft (bijvoorbeeld om een `UNIQUE`-beperking veilig af te dwingen) kon mislukken met `'unable to open database file'` in bepaalde beperkte containeromgevingen (bevestigd: de eigen AppArmor-beperking van de Home Assistant-add-on) als de tijdelijke map op OS-niveau niet zowel beschrijfbaar als vergrendelbaar was — SQLite-verbindingen houden dit soort tijdelijke gegevens nu in het geheugen in plaats van ze naar schijf te schrijven, waardoor het probleem helemaal wordt vermeden (issue #294)"
       ]
     },
     {

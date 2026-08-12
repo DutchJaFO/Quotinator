@@ -1,6 +1,6 @@
 # #245 — Sources.Date stays NULL when a Source's only sources[] entry omits date
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #245
 **Tiers required:** T1, T2
 **Depends on:** none (isolated fix inside `ImportActionPlanner.ResolveSourceAsync`)

@@ -1,6 +1,6 @@
 # #280 — Show a startup "please wait" page while the database is created/updated/seeded, with progress if feasible
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #280
 **Tiers required:** T1, T2
 **Depends on:** #278 (must land first so its status-surface infrastructure exists — done)

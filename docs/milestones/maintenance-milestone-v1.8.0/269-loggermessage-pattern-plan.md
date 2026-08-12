@@ -1,6 +1,6 @@
 # #269 — Adopt a project-wide pattern for expensive logging arguments (CA1873)
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #269
 **Tiers required:** T1, T2
 **Depends on:** #244 (split CA1873 out as its own follow-up, see #244's Step 10)

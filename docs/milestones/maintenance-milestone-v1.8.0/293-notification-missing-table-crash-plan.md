@@ -1,6 +1,6 @@
 # #293 — NotificationSummary/notifications crash when System_Notification doesn't exist yet
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #293
 **Tiers required:** T1, T2
 **Depends on:** none
