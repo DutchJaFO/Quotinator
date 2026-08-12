@@ -2,7 +2,8 @@
 
 **Status:** Planning
 **GitHub issue:** #81 (open)
-**Depends on:** #278 (done, released v1.8.0), #80 (done, released — Changelog handling milestone)
+**Depends on:** #278 (done, released v1.8.0), #80 (done, released — Changelog handling milestone),
+#309 (open — System_Changelog, not yet built), #307 (open — changelog highlight-flagging, not yet built)
 
 ---
 
@@ -57,6 +58,23 @@ the what's-new path as designed below.
 
 ## Design
 
+**Revised (2026-08-12), same session — depends on a new prerequisite issue.** The producer below
+originally joined every entry in `release.Highlights` into one message. Per developer direction, a
+release's full highlights list isn't necessarily what belongs in a notification — some entries may be
+too minor, too technical, or better shortened for a notification's own audience. A new issue
+(`#307`, split out this same session) adds a way to mark specific highlights as
+notification-worthy in the changelog JSON itself (`schemas/changelog.schema.json`,
+`Quotinator.Changelog.Models`) — this issue's producer reads that flagged subset instead of the full
+`Highlights` list once it exists. This issue cannot start implementation until `#307`
+lands.
+
+**Also revised:** the message now supports multiple lines (one per flagged highlight) rather than one
+joined sentence, since a release commonly has more than one highlight worth surfacing. Rendering
+multiple lines legibly depends on `#308` (also split out this session) —
+`NotificationTable`'s Message column currently has no line-break handling. This producer can still write
+a `\n`-separated message before that issue lands (the notification would just render as run-together
+text in the meantime), so it is a sequencing preference, not a hard implementation-order dependency.
+
 ### Dedupe-key correctness (found during design review)
 
 `SeedOnceAsync`'s dedupe check is `history.Items.Any(n => n.Message.Contains(dedupeKey))` — the dedupe
@@ -77,22 +95,23 @@ reasoning (announcing something is inherently non-critical, unlike schema init).
 var currentVersion = versionService.Version;
 var release = changelogService.GetForCulture(null)?.Releases
     .FirstOrDefault(r => r.Version == currentVersion);
-if (release is not null)
+if (release is not null && release.NotificationHighlights.Count > 0)   // field name TBD — see #307
 {
     var dedupeKey = $"WhatsNew:v{release.Version}:";
-    var message = $"{dedupeKey} What's new in v{release.Version}: " +
-                   string.Join(" ", release.Highlights);
+    var message = $"{dedupeKey} What's new in v{release.Version}:\n" +
+                   string.Join("\n", release.NotificationHighlights);
     await NotificationSeeding.SeedOnceAsync(
         notificationReader, notificationWriter, NotificationType.Information, dedupeKey, message);
 }
 ```
 
-- **No release found** (local/dev build, or a version not yet present in the shipped changelog) → no
-  notification written, no error. Satisfies the Definition of done's "No notification shown when there
-  is nothing to report."
-- **Release found with only the standard internal-only highlight** ("Internal improvements — no
-  user-facing changes.", per CLAUDE.md's Pre-Push Checklist template) → still written. A release always
-  has at least one highlights entry by that same rule, so this is not a special case.
+- **No release found, or a release with no flagged notification highlights** (local/dev build, a version
+  not yet present in the shipped changelog, or a release whose highlights are all internal/technical and
+  none were flagged as notification-worthy — see `#307`) → no notification written, no
+  error. Satisfies the Definition of done's "No notification shown when there is nothing to report." This
+  is a change from the original design (which treated every release as always having at least one
+  highlight to show, since `Highlights` itself is never empty) — flagging is opt-in, so a release can
+  legitimately have zero flagged entries.
 - **Already seen** — `SeedOnceAsync`'s own history scan finds the prior write (dedupe key present in an
   existing notification's message, active or dismissed) and no-ops. This is what makes "mark as seen on
   dismiss" work for free: once the user dismisses the notification (existing `POST
@@ -137,15 +156,16 @@ itself as thin as the two existing producers.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A matching release's highlights are written as an `Information` notification on startup | Unit test | `WhatsNewNotificationTests.Seed_MatchingRelease_WritesInformationNotificationWithHighlights` (name TBD at implementation — extracted helper per Step 3) |
+| 1 | ❌ | A matching release's flagged notification highlights are written as a multi-line `Information` notification on startup | Unit test | `WhatsNewNotificationTests.Seed_MatchingReleaseWithFlaggedHighlights_WritesInformationNotification` (name TBD at implementation — extracted helper per Step 3) |
 | 2 | ❌ | No notification is written when the running version has no matching changelog release | Unit test | `WhatsNewNotificationTests.Seed_NoMatchingRelease_WritesNothing` |
-| 3 | ❌ | Two different versions whose digits nest (e.g. `1.9.1` vs `1.9.10`) do not falsely dedupe against each other | Unit test | `WhatsNewNotificationTests.Seed_NestedVersionNumbers_DoNotFalselyDedupe` |
-| 4 | ❌ | A version already seeded is not re-seeded on a later restart (dedupe holds across restarts) | Unit test | `WhatsNewNotificationTests.Seed_AlreadySeededVersion_IsNoOp` |
-| 5 | ❌ | Dismissing the what's-new notification persists — it does not reappear on the next restart | Live | Docker: seed a matching release, confirm notification appears in `GET /api/v1/notifications`, dismiss via `POST /api/v1/notifications/{id}/dismiss`, restart the container, confirm it does not reappear |
-| 6 | ❌ | T1 — app starts in Visual Studio with no error; `StartupSuccessModal` shows the what's-new notification when the running version has changelog highlights | Live | Developer confirms in Visual Studio |
-| 7 | ❌ | T2 — Docker build and smoke test | Live | `docker build -f docker/Dockerfile -t quotinator:local .`; confirm `GET /api/v1/notifications` includes the what's-new entry when the built version matches a changelog release |
-| 8 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 9 | ❌ | Full test suite green | Build | `dotnet test --configuration Release` |
+| 3 | ❌ | No notification is written when a matching release exists but has zero notification-flagged highlights | Unit test | `WhatsNewNotificationTests.Seed_MatchingReleaseNoFlaggedHighlights_WritesNothing` |
+| 4 | ❌ | Two different versions whose digits nest (e.g. `1.9.1` vs `1.9.10`) do not falsely dedupe against each other | Unit test | `WhatsNewNotificationTests.Seed_NestedVersionNumbers_DoNotFalselyDedupe` |
+| 5 | ❌ | A version already seeded is not re-seeded on a later restart (dedupe holds across restarts) | Unit test | `WhatsNewNotificationTests.Seed_AlreadySeededVersion_IsNoOp` |
+| 6 | ❌ | Dismissing the what's-new notification persists — it does not reappear on the next restart | Live | Docker: seed a matching release, confirm notification appears in `GET /api/v1/notifications`, dismiss via `POST /api/v1/notifications/{id}/dismiss`, restart the container, confirm it does not reappear |
+| 7 | ❌ | T1 — app starts in Visual Studio with no error; `StartupSuccessModal` shows the what's-new notification when the running version has flagged changelog highlights | Live | Developer confirms in Visual Studio |
+| 8 | ❌ | T2 — Docker build and smoke test | Live | `docker build -f docker/Dockerfile -t quotinator:local .`; confirm `GET /api/v1/notifications` includes the what's-new entry when the built version matches a changelog release |
+| 9 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 10 | ❌ | Full test suite green | Build | `dotnet test --configuration Release` |
 
 ---
 
@@ -155,5 +175,12 @@ itself as thin as the two existing producers.
 - **#80** — the changelog system this issue reads highlights from.
 - **#83** — independent; narrowed to a live T3 question about the shared UI this issue also uses, not a
   dependency either direction.
-- **New issue (import warnings/errors, not yet filed)** — split out of this issue's original scope, per
-  its own comment. See `overview.md`'s Order of operations.
+- **#302, #303, #304** — split out of this issue's original "import warnings" scope, then redesigned
+  2026-08-12 around notification writes living inside the seeding pipeline itself. Independent of this
+  issue's own what's-new path.
+- **#309** — hard dependency; implements ADR 005's/018's resolution (`System_Changelog`). This issue's
+  producer reads changelog content through whatever service #309 introduces for querying it.
+- **#307** — hard dependency; this issue's producer cannot be implemented until the flagged-highlight
+  field exists on `ChangelogRelease`.
+- **#308** — soft dependency; improves how this issue's own multi-line message renders, but does not
+  block writing it.
