@@ -58,12 +58,12 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 |---|-------|--------|-------|----------|
 | [#83](https://github.com/DutchJaFO/Quotinator/issues/83) | Research: notification system design | Planning | T3 ⬜ (live confirmation only, no other tier applies) | [83-notification-system-design-research-plan.md](83-notification-system-design-research-plan.md) |
 | [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: what's new after upgrade | Planning | T1 ⬜ T2 ⬜ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |
-| *(pending creation)* | Notification: confirm files that reseed cleanly with no review needed | Planning | TBD | No plan doc yet |
-| *(pending creation)* | Notification + minimal review page: alert when a reseed leaves import actions pending review | Planning | TBD | No plan doc yet |
-| *(pending creation)* | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) | Planning | TBD | No plan doc yet |
+| [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed | Planning | TBD | No plan doc yet |
+| [#303](https://github.com/DutchJaFO/Quotinator/issues/303) | Notification + minimal review page: alert when a reseed leaves import actions pending review | Planning | TBD | No plan doc yet |
+| [#304](https://github.com/DutchJaFO/Quotinator/issues/304) | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) | Planning | TBD | No plan doc yet |
 
-The three pending-creation issues replace an earlier, stale "import diagnostics" issue drafted during
-this same planning pass, before the developer redirected scope — see the Description above.
+#302, #303, and #304 replace an earlier, stale "import diagnostics" issue drafted during this same
+planning pass, before the developer redirected scope — see the Description above.
 
 ---
 
@@ -73,19 +73,19 @@ this same planning pass, before the developer redirected scope — see the Descr
 #83  ─── (none) — narrowed scope; last open question is a live T3 confirmation, not a blocker for anything else
 #81  ─── depends on #278 (done, released v1.8.0) for its notification mechanism; depends on #80 (done,
          released) for changelog highlights via IChangelogService
-Reseed-available notification+action ─── depends on #278 (notification mechanism) and #156 (Reset no
-         longer auto-seeds, which is exactly the gap it fills for the post-Reset trigger)
-Per-file success notification        ─── depends on #278; reads IDatabaseInitializer.LastSeedReport (#221)
-Per-file conflict notification + review page ─── depends on #278; reads LastSeedReport; its review page
-         depends on the existing #154 staging model (ImportAction, IImportActionReader/Service) and the
-         existing /import/actions REST endpoints — all already shipped, nothing new needed there
+#304 ─── depends on #278 (notification mechanism) and #156 (Reset no longer auto-seeds, which is
+         exactly the gap it fills for the post-Reset trigger)
+#302 ─── depends on #278; reads IDatabaseInitializer.LastSeedReport (#221)
+#303 ─── depends on #278; reads LastSeedReport; its review page depends on the existing #154 staging
+         model (ImportAction, IImportActionReader/Service) and the existing /import/actions REST
+         endpoints — all already shipped, nothing new needed there
 ```
 
-None of the three new issues depend on each other for their own correctness, but the reseed-available
-action is what makes the other two's producers reachable from the UI for the first time (today a reseed
-only happens via curl+admin key) — natural to build first, not a hard requirement.
+None of #302/#303/#304 depend on each other for their own correctness, but #304 is what makes #302's
+and #303's producers reachable from the UI for the first time (today a reseed only happens via
+curl+admin key) — natural to build first, not a hard requirement.
 
-#81 and #83 do not depend on #278's siblings above and remain independent of them.
+#81 and #83 do not depend on #302/#303/#304 and remain independent of them.
 
 ---
 
@@ -95,9 +95,9 @@ only happens via curl+admin key) — natural to build first, not a hard requirem
 |-------|-------|--------|
 | 1 | **#83** | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
 | 2 | **#81** | What's-new-after-upgrade path; builds directly on #278's already-shipped notification mechanism and #80's already-shipped `IChangelogService` |
-| 3 | **Reseed-available notification + action** *(pending creation)* | Gives the reseed action a Blazor-reachable entry point for the first time; the two producers below become observable through that path |
-| 4 | **Per-file success notification** *(pending creation)* | Reads `LastSeedReport` after `POST /admin/database/reseed`; no dependency on the review page below |
-| 5 | **Per-file conflict notification + minimal review page** *(pending creation)* | Same hook point as #4; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 3 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 4 | **#302** | Reads `LastSeedReport` after `POST /admin/database/reseed`; no dependency on the review page below |
+| 5 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
 
 ---
 
