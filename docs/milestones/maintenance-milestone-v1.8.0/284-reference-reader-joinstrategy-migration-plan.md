@@ -1,6 +1,6 @@
 # #284 — Migrate masterdata reference readers to JoinQueryRepository/IJoinStrategy, add missing integration tests
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #284
 **Tiers required:** T1, T2
 **Depends on:** none (isolated to the 3 reference readers' internal implementation)

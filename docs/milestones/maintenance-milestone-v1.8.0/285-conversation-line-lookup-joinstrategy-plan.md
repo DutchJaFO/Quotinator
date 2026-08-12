@@ -1,6 +1,6 @@
 # #285 — Wrap Conversation's per-line lookups as IJoinStrategy implementations, fix redundant quote query
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #285
 **Tiers required:** T1, T2
 **Depends on:** ADR 017 (done), #287 (done)
