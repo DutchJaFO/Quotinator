@@ -40,3 +40,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 015 | [015-domain-prefixed-table-naming.md](015-domain-prefixed-table-naming.md) | Domain-prefixed table naming: a namespace substitute for SQLite's lack of schema qualification |
 | 016 | [016-class-naming-suffixes-and-enum-placement.md](016-class-naming-suffixes-and-enum-placement.md) | Class-naming suffixes (Entity/Request/Response/Dto) and enum placement |
 | 017 | [017-join-capable-reads-use-joinqueryrepository.md](017-join-capable-reads-use-joinqueryrepository.md) | Join-capable reads use JoinQueryRepository/IJoinStrategy, even without an immediate capability gain |
+| 018 | [018-system-content-in-quotinator-data.md](018-system-content-in-quotinator-data.md) | System-level content (notifications, changelog, future genre) belongs in Quotinator.Data |

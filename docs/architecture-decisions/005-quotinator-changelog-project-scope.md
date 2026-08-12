@@ -1,6 +1,6 @@
 # ADR 005 — Quotinator.Changelog project scope
 
-**Status:** Accepted — open question on content file location (see below)  
+**Status:** Accepted — the "Open question" below is resolved, see the Revision section
 **Date:** 2026-06-25  
 **GitHub issues:** #80, #82
 
@@ -83,3 +83,38 @@ This question should be resolved in a follow-up decision — either by updating 
 - `Quotinator.Changelog.Tests` tests schema compliance and generation output without any web host
 - New output formats (e.g. RSS, HTML fragment) are added to `Quotinator.Changelog/Formatting/` — not to the API project
 - Any temptation to add domain concepts (quote types, language codes as enums, etc.) to `Quotinator.Changelog` must be resisted — the project is format/serialisation only
+
+---
+
+## Revision — resolves the "Open question" above
+
+**Decision: changelog content is database-backed system content, per
+[ADR 018](018-system-content-in-quotinator-data.md)'s file-authored system content pattern.**
+
+- The `changelog.*.json` files remain the authored source of truth — same schema
+  (`schemas/changelog.schema.json`), same generator (`scripts/changelog.csx`), same parsing
+  (`Quotinator.Changelog.Services.IChangelogService`). How changelog content is authored is unchanged.
+- The files move from the compiled `src/Quotinator.Api/resources/` location to a runtime-accessible
+  location, resolving Option A vs. B in favour of B — the exact path follows the existing
+  `{dataDir}`/`data/sources/` precedent, decided by the implementing issue.
+- A new `System_Changelog` table (`Quotinator.Data`-owned, `System_` domain per
+  [ADR 015](015-domain-prefixed-table-naming.md)) is refreshed from the parsed changelog content at
+  startup, via ADR 018's file-authored system-content mechanism. Consumers (the About page, a startup
+  what's-new notification) read from this table rather than re-parsing JSON per request.
+- Option C (external management tool) is rejected — unwarranted complexity for a homelab project.
+
+**Correction to this ADR's original "No database access" non-goal:** `Quotinator.Changelog` itself
+still performs zero direct database access — unchanged, still governs the project. A separate,
+`Quotinator.Data`-owned component depends on `Quotinator.Changelog` to parse the files, then writes the
+result into `System_Changelog`. The original wording — "changelog data lives in JSON files, never in
+SQLite" — described where the application stores changelog data; corrected to: changelog content is
+authored in JSON files and served from `System_Changelog`, while `Quotinator.Changelog` remains
+schema/parsing/formatting-only.
+
+**New dependency edge:** `Quotinator.Data` → `Quotinator.Changelog` (ADR 018).
+
+**Resolution of this ADR's three original questions:**
+1. Changelog content is a data/runtime concern, not a deploy-time one.
+2. Content resolves from a configurable/runtime location via a service reading `System_Changelog` —
+   exact mechanism decided by the implementing issue.
+3. No external management tool.
