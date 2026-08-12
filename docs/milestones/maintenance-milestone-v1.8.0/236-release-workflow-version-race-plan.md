@@ -1,6 +1,6 @@
 # #236 — Release workflow: HA can see a config.yaml version bump before the matching Docker image is pushed
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #236
 **Tiers required:** N/A (process/documentation change only — no application code)
 **Depends on:** Nothing
@@ -145,8 +145,8 @@ Narrow it to the issues that actually touch renamed tables/entities/SQL.
 | 1 | ✅ | `CLAUDE.md`'s "Tagging a release" section describes the two-PR sequence unambiguously, correctly distinguishing beta (`addon-beta/`) vs. final (`addon/`) | Live | Re-read the section after editing; confirmed no step still implies a single combined PR |
 | 2 | ✅ | `docs/workflow/checklist.md`'s Beta tag and Final tag sections both have an explicit "after the workflow is green" follow-up step for `config.yaml`/`CHANGELOG.md` | Live | Re-read both sections after editing |
 | 3 | ✅ | `overview.md`'s Dependency map no longer claims #227 blocks #232/#236 | Live | Re-read the Dependency map section after editing |
-| 4 | ❌ | The new sequence is actually followed on the next real beta or final tag for this milestone | External verification | No unit test possible — this is process, not code. Confirmed only when the next real tag cycle happens: the config.yaml-bump PR must be observably a separate, later merge than the tag push, with the release workflow shown green in between. Record the PR numbers/timestamps in this plan doc's own status once it happens. |
+| 4 | ✅ | The new sequence is actually followed on the next real beta or final tag for this milestone | External verification | Confirmed on `v1.8.3-beta2`: [PR #296](https://github.com/DutchJaFO/Quotinator/pull/296) (release-prep) merged 2026-08-11 22:47:07 UTC → tag pushed → release workflow run [31543921652](https://github.com/DutchJaFO/Quotinator/actions/runs/31543921652) completed green 2026-08-11 23:06:42 UTC ("Verify image is pullable" passed) → [PR #297](https://github.com/DutchJaFO/Quotinator/pull/297) (addon-beta version bump) merged separately, 2026-08-12 04:16:06 UTC — well after the workflow's green confirmation, exactly the sequence this issue designed. |
 
-Item 4 cannot be closed out in this planning/implementation session — there is no tag being pushed
-right now. It stays ❌ until the milestone's own eventual release goes through this new sequence at
-least once.
+Item 4 is now confirmed: the `v1.8.3-beta2` release cycle (2026-08-11/12) went through the new two-PR
+sequence exactly as designed, with the follow-up `addon-beta/config.yaml` bump PR merging ~5.5 hours
+after the release workflow's own green confirmation, not before.
