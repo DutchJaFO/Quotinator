@@ -1,6 +1,6 @@
 # #255 — Move enums to dedicated Enums/ folders
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #255
 **Tiers required:** N/A
 **Depends on:** Nothing

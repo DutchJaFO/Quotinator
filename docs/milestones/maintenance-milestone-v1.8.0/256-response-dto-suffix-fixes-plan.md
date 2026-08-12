@@ -1,6 +1,6 @@
 # #256 — Fix Response/Dto/class-suffix violations
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #256
 **Tiers required:** N/A
 **Depends on:** Nothing
