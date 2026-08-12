@@ -1,6 +1,6 @@
 # #277 — Gate startup backups on each action's own real-work signal, not an inferred flag; add a storage pre-flight check
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #277
 **Tiers required:** T1, T2
 **Depends on:** none

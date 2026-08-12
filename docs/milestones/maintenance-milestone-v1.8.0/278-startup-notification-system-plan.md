@@ -1,6 +1,6 @@
 # #278 — Add a startup notification system surfaced in the #263 modals
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #278
 **Tiers required:** T1, T2
 **Depends on:** None

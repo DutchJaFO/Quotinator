@@ -1,6 +1,6 @@
 # #279 — Standardise endpoint naming (WithName/WithSummary) across CRUD and action endpoints
 
-**Status:** Waiting for release
+**Status:** Released
 **GitHub issue:** #279
 **Tiers required:** T1, T2
 **Depends on:** #278 (must land first so its notification mechanism exists to announce this issue's breaking `operationId` renames)
