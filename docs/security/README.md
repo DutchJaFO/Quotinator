@@ -25,19 +25,31 @@ no fix available anywhere (Docker Scout: "Fixed version: not fixed") as of the s
 is actionable until Ubuntu/Microsoft ships a patched package — re-checked periodically on rebuild
 (#232's own follow-up tracks adding this to the T2 smoke-test checklist).
 
-**Last scanned:** 2026-08-10, `quotinator:local` built fresh with `docker build --no-cache`, via
-[`docs/release-verification.md`'s T4 tier](../release-verification.md#t4--docker-image-freshness-milestone-close)
-(#250). 10 CVEs now, up from 8 on 2026-08-06 — two new `systemd` findings
+**Last scanned:** 2026-08-12 (v1.8.3 milestone close), `quotinator:local` built fresh with
+`docker build --no-cache --pull`, via
+[`docs/release-verification.md`'s T4 tier](../release-verification.md#t4--docker-image-freshness-milestone-close).
+10 CVEs — unchanged from the 2026-08-10 scan below. Same `systemd` fix-availability gap as before:
+`255.4-1ubuntu8.17` exists in Ubuntu but hasn't reached Microsoft's base image yet — re-confirmed by
+pulling `mcr.microsoft.com/dotnet/aspnet:10.0` fresh and re-scanning it directly: still `systemd
+255.4-1ubuntu8.16`, same two CVEs. Nothing actionable from Quotinator's side today.
+
+**Process note (found live during this scan):** a `docker build --no-cache` run alone (without `--pull`)
+transiently showed 13 vulnerabilities including a High-severity `Microsoft.NETCore.App.Runtime`
+CVE-2026-62901 — a phantom finding caused by a stale locally-cached base image that `--no-cache` alone
+does not refresh. A fresh `--pull` immediately dropped it back to the real count of 10. This is the
+exact same confusion #250's own 2026-08-10 entry (below) already hit and resolved by hand once, but the
+fix was never carried back into the T4 gate's own documented command — so it silently reproduced two
+milestones later. `docs/release-verification.md`'s T4 section and `docs/workflow/checklist.md`'s
+milestone-close item are now both updated to require `--pull` as part of the gate itself.
+
+**Previous scan (2026-08-10, #250):** 10 CVEs, up from 8 on 2026-08-06 — two new `systemd` findings
 (CVE-2026-16742, CVE-2026-15059, both Medium). Both report a fixed Ubuntu package version
-(`255.4-1ubuntu8.17`), unlike every other entry in this table, but that fix has **not** reached
-Microsoft's base image yet — confirmed by pulling `mcr.microsoft.com/dotnet/aspnet:10.0` fresh
+(`255.4-1ubuntu8.17`), unlike every other entry in this table, but that fix had **not** reached
+Microsoft's base image at that time — confirmed by pulling `mcr.microsoft.com/dotnet/aspnet:10.0` fresh
 (`docker pull`, not just `--no-cache`) and re-scanning it directly: still `systemd
-255.4-1ubuntu8.16`, same two CVEs. Still nothing actionable from Quotinator's side today — tracked
-here as the same accepted-residual-risk category as the rest, but re-check on the *next* rescan
-whether Microsoft has picked up the Ubuntu fix (unlike the other 8, this one could resolve itself on
-a routine rebuild once they do, no watching-for-a-CVE-fix required). All 10 originate in the base
-image itself, confirmed by scanning `mcr.microsoft.com/dotnet/aspnet:10.0` directly and getting an
-identical result — Quotinator's own application layer contributes none.
+255.4-1ubuntu8.16`, same two CVEs. All 10 originate in the base image itself, confirmed by scanning
+`mcr.microsoft.com/dotnet/aspnet:10.0` directly and getting an identical result — Quotinator's own
+application layer contributes none.
 
 | CVE | Package | Severity | Fixable |
 |---|---|---|---|

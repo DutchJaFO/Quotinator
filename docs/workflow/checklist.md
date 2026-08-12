@@ -160,11 +160,13 @@ Releases follow a two-stage model. See `docs/release-verification.md` for tier d
 - [ ] If the milestone added any migrations: full incremental migration path verified against a
       database matching the *last published release's* schema, not the accumulated dev database —
       see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md)
-- [ ] **T4 — Docker image freshness**: `docker build --no-cache -f docker/Dockerfile -t quotinator:local .`
+- [ ] **T4 — Docker image freshness**: `docker build --no-cache --pull -f docker/Dockerfile -t quotinator:local .`
       then `docker scout cves quotinator:local`; compare against `docs/security/README.md`'s "Docker
       base image (OS packages)" table and update it (at minimum the "Last scanned" date) in the same
-      commit — see `docs/release-verification.md`'s T4 section. Never skipped, never substituted by a
-      T2 pass's own (cache-permitted) `docker build`.
+      commit — see `docs/release-verification.md`'s T4 section. **`--pull` is required alongside
+      `--no-cache`** — `--no-cache` alone does not force a fresh base-image pull and can silently
+      reuse a stale cached base layer. Never skipped, never substituted by a T2 pass's own
+      (cache-permitted) `docker build`.
 - [ ] Build clean: `dotnet build --configuration Release` — 0 warnings, 0 errors
 - [ ] Tests pass: `dotnet test --configuration Release` — all tests pass, 0 warnings
 - [ ] Changelogs updated (`CHANGELOG.md`, `addon/CHANGELOG.md`, `addon-beta/CHANGELOG.md`) — optionally
