@@ -73,4 +73,16 @@ internal static partial class LogMessages
     /// <summary>Logs that a backup was skipped because the volume does not have enough real free space.</summary>
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] skipping backup — insufficient free disk space ({AvailableBytes} available, {EstimatedBytes} estimated bytes needed)")]
     public static partial void LogBackupSkippedInsufficientDiskSpace(this ILogger logger, long availableBytes, long estimatedBytes);
+
+    /// <summary>Logs that the separate changelog database's schema is already fully up to date — no migration needed.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Init] schema is up to date (v{Version})")]
+    public static partial void LogChangelogSchemaUpToDate(this ILogger logger, int version);
+
+    /// <summary>Logs completion of an incremental migration pass against the separate changelog database.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Init] schema updated v{From} → v{To}")]
+    public static partial void LogChangelogSchemaUpdated(this ILogger logger, int from, int to);
+
+    /// <summary>Logs that the separate changelog database was genuinely empty and its schema was created directly at baseline.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Init] schema created at baseline (v{Version})")]
+    public static partial void LogChangelogSchemaCreatedAtBaseline(this ILogger logger, int version);
 }

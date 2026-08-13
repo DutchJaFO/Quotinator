@@ -18,12 +18,14 @@ public class SqlBoundaryTests
     /// Import_FileResource/Import_FileResourceLine/Import_FileResourceBatch and the already-Data-owned
     /// Import_Batch, never a consumer-defined entity. <c>Notifications</c> (#278) stays here too —
     /// System_Notification is operational/system content, not quote-domain content, and never
-    /// references a consumer-defined entity.
+    /// references a consumer-defined entity. <c>ChangelogSchema</c> (#309) stays here too — it is
+    /// the separate changelog database's own version-bookkeeping SQL, with no relational or
+    /// transactional coupling to any consumer-defined entity (ADR 018).
     /// </summary>
     [TestMethod]
     public void Sql_ContainsOnlyGenericInfrastructureQueries()
     {
-        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides", "FileResources", "Notifications" };
+        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides", "FileResources", "Notifications", "ChangelogSchema" };
 
         var actual = typeof(Sql)
             .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)

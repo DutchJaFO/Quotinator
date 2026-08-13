@@ -85,6 +85,28 @@ internal static class Sql
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
     }
 
+    /// <summary>
+    /// Version-tracking bookkeeping for the separate changelog database (#309, ADR 018) — its own
+    /// <c>ChangelogSchemaVersion</c> table, independent of <see cref="Schema"/>'s
+    /// <c>System_SchemaVersion</c>/<c>System_ConsumerSchemaVersion</c> (those track the main
+    /// database only). Consumed by <see cref="Database.ChangelogDatabaseInitializer"/>.
+    /// </summary>
+    internal static class ChangelogSchema
+    {
+        // Same empty-database detection as Schema.AnyTableExists above, scoped to whichever
+        // connection it runs against — reused as a factory-free constant since the changelog
+        // database has no table-name overlap with the main database to disambiguate.
+        internal const string AnyTableExists =
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
+
+        internal const string CreateVersionTable =
+            "CREATE TABLE IF NOT EXISTS ChangelogSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);";
+        internal const string GetCurrentVersion =
+            "SELECT COALESCE(MAX(Version), 0) FROM ChangelogSchemaVersion;";
+        internal const string InsertVersion =
+            "INSERT INTO ChangelogSchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
+    }
+
     /// <summary>JOIN fragment helpers — assembles INNER JOIN and LEFT JOIN clauses with bracket-quoted identifiers.</summary>
     /// <remarks>
     /// Parameters must always be compile-time string literals — never user input, never runtime strings.

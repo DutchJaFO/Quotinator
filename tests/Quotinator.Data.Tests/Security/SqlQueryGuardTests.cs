@@ -157,6 +157,8 @@ public class SqlQueryGuardTests
             "SystemAudit.SelectDateRange",        // MIN(...)/MAX(...) — #249's date-range discovery endpoint
             "SystemChangeLog.SelectDateRange",    // MIN(...)/MAX(...) — #249's date-range discovery endpoint
             "Notifications.CountAll",             // COUNT(*) — total row count for the paginated list endpoint (#278)
+            "ChangelogSchema.GetCurrentVersion",  // COALESCE(MAX(...)) — separate changelog database's own version bookkeeping (#309)
+            "ChangelogSchema.AnyTableExists",     // COUNT(*) — fresh-database detection for the changelog database's own baseline path (#309)
         };
 
         var actual = EnumerateSqlConstants()

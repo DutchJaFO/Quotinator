@@ -311,6 +311,8 @@ var changelogConnectionFactory = new SqliteConnectionFactory(
 builder.Services.AddKeyedSingleton<IDbConnectionFactory>(
     DatabaseConnectionKeys.Changelog, (_, _) => changelogConnectionFactory);
 builder.Services.AddSingleton<ChangelogConnectionKeepAlive>();
+builder.Services.AddSingleton<ChangelogDatabaseInitializer>();
+builder.Services.AddSingleton<ChangelogRepository>();
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
 // InitiatorContext implements both interfaces over the same AsyncLocal-backed instance, so
@@ -747,11 +749,12 @@ await app.StartAsync();
 try
 {
     app.Services.GetRequiredService<ChangelogConnectionKeepAlive>();
+    await app.Services.GetRequiredService<ChangelogDatabaseInitializer>().InitialiseAsync();
 }
 catch (Exception ex)
 {
     app.Services.GetRequiredService<ILogger<Program>>()
-        .LogWarning(ex, "[Database - Init] failed to open the changelog database's keep-alive connection — " +
+        .LogWarning(ex, "[Database - Init] failed to initialise the changelog database — " +
             "non-fatal, startup continues. The changelog will fall back to reading its JSON files directly.");
 }
 
