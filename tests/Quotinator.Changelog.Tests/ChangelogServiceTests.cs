@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Quotinator.Changelog.Enums;
 using Quotinator.Changelog.Services;
 
 namespace Quotinator.Changelog.Tests;
@@ -6,6 +7,8 @@ namespace Quotinator.Changelog.Tests;
 [TestClass]
 public sealed class ChangelogServiceTests
 {
+    private static readonly string[] ExpectedNotificationHighlights = ["Shorter notification entry."];
+
     private static ChangelogService Build(string dir) =>
         new ChangelogService(dir, NullLogger<ChangelogService>.Instance);
 
@@ -145,5 +148,38 @@ public sealed class ChangelogServiceTests
     {
         var service = Build(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString()));
         Assert.IsNull(service.GetForCulture("en"));
+    }
+
+    [TestMethod]
+    public void NotificationAudienceKey_RoundTripsThroughGetHighlightsFor()
+    {
+        var dir = TempDir();
+        try
+        {
+            var json = """
+                {
+                  "language": "en",
+                  "sourceLanguage": "en",
+                  "releases": [
+                    {
+                      "version": "1.0.0",
+                      "date": "2024-01-01",
+                      "highlights": ["Full changelog entry."],
+                      "audienceHighlights": { "notification": ["Shorter notification entry."] }
+                    }
+                  ]
+                }
+                """;
+            File.WriteAllText(Path.Combine(dir, "changelog.en.json"), json);
+
+            var doc     = Build(dir).GetForCulture("en");
+            var release = doc?.Releases.SingleOrDefault(r => r.Version == "1.0.0");
+
+            Assert.IsNotNull(release);
+            Assert.AreSequenceEqual(
+                ExpectedNotificationHighlights,
+                release.GetHighlightsFor(ChangelogReservedAudience.Notification));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
     }
 }

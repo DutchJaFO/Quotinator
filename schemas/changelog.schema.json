@@ -70,7 +70,7 @@
         },
         "audienceHighlights": {
           "type": "object",
-          "description": "Audience-specific highlight overrides keyed by audience identifier (e.g. 'ha-addon'). When a key is present and non-empty, the generator uses those items for that audience instead of the standard highlights. When present but empty ([]), the generator emits 'No user-facing changes.' When the key is absent, the standard highlights are used as fallback.",
+          "description": "Audience-specific highlight overrides keyed by audience identifier (e.g. 'ha-addon'). When a key is present and non-empty, the generator uses those items for that audience instead of the standard highlights. When present but empty ([]), the generator emits 'No user-facing changes.' When the key is absent, the standard highlights are used as fallback. The 'notification' key is reserved: it is never passed to the generator's --audience flag and produces no markdown output. It is read directly by the running application (Quotinator.Changelog.Models.ChangelogUnreleased.GetHighlightsFor, keyed by Quotinator.Changelog.Enums.ChangelogReservedAudience.Notification) to populate a startup notification, and never falls back to the standard highlights when absent.",
           "additionalProperties": {
             "type": "array",
             "items": { "type": "string", "minLength": 1 }

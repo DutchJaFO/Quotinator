@@ -143,6 +143,29 @@ public sealed partial class ChangelogSchemaTests
     }
 
     [TestMethod]
+    public void NotificationAudienceKey_IsSchemaValid()
+    {
+        var json = """
+            {
+              "language": "en",
+              "sourceLanguage": "en",
+              "machineTranslated": false,
+              "releases": [
+                {
+                  "version": "1.9.0",
+                  "date": "2026-08-01",
+                  "highlights": ["Full changelog entry."],
+                  "audienceHighlights": { "notification": ["Shorter notification entry."] }
+                }
+              ]
+            }
+            """;
+        var element = JsonSerializer.Deserialize<JsonElement>(json);
+        var result  = DocumentSchema.Evaluate(element, StrictOptions);
+        Assert.IsTrue(result.IsValid, FormatErrors("synthetic release with audienceHighlights.notification", result));
+    }
+
+    [TestMethod]
     public void ReleaseQuoteMissingText_FailsValidation()
     {
         var json = """

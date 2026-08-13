@@ -1,3 +1,5 @@
+using Quotinator.Changelog.Enums;
+
 namespace Quotinator.Changelog.Models;
 
 /// <summary>
@@ -29,4 +31,16 @@ public class ChangelogUnreleased
 
     /// <summary>Audience-specific highlight overrides, keyed by audience name (e.g. <c>ha-addon</c>).</summary>
     public Dictionary<string, List<string>> AudienceHighlights { get; init; } = [];
+
+    /// <summary>
+    /// Highlights for a reserved audience — e.g. <see cref="ChangelogReservedAudience.Notification"/>.
+    /// Returns an empty list when the key is absent; never falls back to <see cref="Highlights"/>,
+    /// unlike <c>scripts/changelog.csx</c>'s own markdown-generation fallback behaviour.
+    /// </summary>
+    public List<string> GetHighlightsFor(ChangelogReservedAudience audience) =>
+        AudienceHighlights.GetValueOrDefault(audience switch
+        {
+            ChangelogReservedAudience.Notification => "notification",
+            _ => throw new ArgumentOutOfRangeException(nameof(audience))
+        }, []);
 }

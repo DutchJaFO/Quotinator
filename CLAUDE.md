@@ -1043,6 +1043,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    - **Good:** `["Internal improvements — no user-facing changes."]` / `["Quotes can now be loaded from multiple data sources."]` / `["Security: a database query vulnerability (CVE-2025-6965) was identified and mitigated; no user data was affected."]`
    - **Security fixes** should always appear in highlights — include the CVE ID so users can verify, but keep the surrounding language non-technical
    - `ChangelogSchemaTests` validates structure (no null entries, CVE format) — run `dotnet test --filter ChangelogSchema` to verify before committing
+   - **`audienceHighlights.notification`** is a reserved key (distinct from an ordinary audience like `ha-addon`) for highlights worth surfacing as a startup notification — read at runtime via `ChangelogUnreleased.GetHighlightsFor(ChangelogReservedAudience.Notification)`, never falling back to the full `highlights` list when absent. See `schemas/changelog.schema.json`'s `audienceHighlights` description for the full contract.
 
    After editing `changelog.en.json`, regenerate the markdown files (run from repo root). All three
    are permanently capped to the 3 most recent releases (`--max-releases 3`) — older history stays on
