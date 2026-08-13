@@ -1,6 +1,6 @@
 # #307 — Changelog highlights: mark specific entries as notification-worthy
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #307 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
@@ -119,25 +119,26 @@ get the method for free.
 **Status:** ✅ Done
 
 ### 2. `ChangelogReservedAudience` enum + `ChangelogUnreleased.GetHighlightsFor(...)`
-**Status:** Not started
+**Status:** ✅ Done
+
+`src/Quotinator.Changelog/Enums/ChangelogReservedAudience.cs` (new — this project's first `Enums/`
+folder) and `ChangelogUnreleased.GetHighlightsFor(ChangelogReservedAudience)`.
 
 ### 3. Document the reserved key in `schemas/changelog.schema.json`
-**Status:** Not started
-
-Extend the `audienceHighlights` property description in the `changelogEntry` `$def` to name
-`"notification"` as a reserved key, distinct from ordinary audience keys, per the Design section above.
+**Status:** ✅ Done
 
 ### 4. Note the convention in CLAUDE.md's Pre-Push Checklist
-**Status:** Not started
-
-Add one sentence alongside the existing `highlights` rules in the changelog-authoring guidance, pointing
-at the schema's own description as the source of truth.
+**Status:** ✅ Done
 
 ### 5. Tests
-**Status:** Not started
+**Status:** ✅ Done
 
-Written against `ChangelogReservedAudience.Notification` and `GetHighlightsFor(...)`, never a bare
-string literal.
+`ChangelogUnreleasedTests` (new file, 2 tests), plus one test each added to `ChangelogSchemaTests`
+(`NotificationAudienceKey_IsSchemaValid`) and `ChangelogServiceTests`
+(`NotificationAudienceKey_RoundTripsThroughGetHighlightsFor` — placed there rather than
+`ChangelogSchemaTests` since it needs a real `ChangelogService` instance, matching that class's existing
+responsibility). All written against `ChangelogReservedAudience.Notification`/`GetHighlightsFor(...)`,
+never a bare string literal.
 
 ---
 
@@ -145,14 +146,14 @@ string literal.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `GetHighlightsFor(ChangelogReservedAudience.Notification)` returns the `notification` audience's highlights when present | Unit test | `ChangelogUnreleasedTests.GetHighlightsFor_NotificationKeyPresent_ReturnsItems` |
-| 2 | ❌ | `GetHighlightsFor(ChangelogReservedAudience.Notification)` returns an empty list (not null, no exception) when the key is absent | Unit test | `ChangelogUnreleasedTests.GetHighlightsFor_NotificationKeyAbsent_ReturnsEmptyList` |
-| 3 | ❌ | A changelog entry using `audienceHighlights.notification` is schema-valid | Unit test | `ChangelogSchemaTests.NotificationAudienceKey_IsSchemaValid` |
-| 4 | ❌ | The same entry's `notification` key round-trips through `IChangelogService.GetForCulture` into `GetHighlightsFor` | Unit test | `ChangelogSchemaTests.NotificationAudienceKey_RoundTripsThroughService` |
-| 5 | ❌ | `schemas/changelog.schema.json`'s `audienceHighlights` description documents the reserved `notification` key | Manual | Developer reads the updated schema file description |
-| 6 | ❌ | CLAUDE.md's Pre-Push Checklist references the convention | Manual | Developer reads the updated CLAUDE.md section |
-| 7 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 8 | ❌ | Full test suite green | Build | `dotnet test --configuration Release` |
+| 1 | ✅ | `GetHighlightsFor(ChangelogReservedAudience.Notification)` returns the `notification` audience's highlights when present | Unit test | `ChangelogUnreleasedTests.GetHighlightsFor_NotificationKeyPresent_ReturnsItems` |
+| 2 | ✅ | `GetHighlightsFor(ChangelogReservedAudience.Notification)` returns an empty list (not null, no exception) when the key is absent | Unit test | `ChangelogUnreleasedTests.GetHighlightsFor_NotificationKeyAbsent_ReturnsEmptyList` |
+| 3 | ✅ | A changelog entry using `audienceHighlights.notification` is schema-valid | Unit test | `ChangelogSchemaTests.NotificationAudienceKey_IsSchemaValid` |
+| 4 | ✅ | The same entry's `notification` key round-trips through `IChangelogService.GetForCulture` into `GetHighlightsFor` | Unit test | `ChangelogServiceTests.NotificationAudienceKey_RoundTripsThroughGetHighlightsFor` |
+| 5 | ❌ | `schemas/changelog.schema.json`'s `audienceHighlights` description documents the reserved `notification` key | Manual | Developer reads the updated schema file description — pending confirmation |
+| 6 | ❌ | CLAUDE.md's Pre-Push Checklist references the convention | Manual | Developer reads the updated CLAUDE.md section — pending confirmation |
+| 7 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s), confirmed |
+| 8 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` — all projects passed, confirmed |
 
 No T1/T2/T3 tiers — this issue changes no runtime code path, only schema documentation and a test.
 
