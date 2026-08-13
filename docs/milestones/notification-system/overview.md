@@ -103,7 +103,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#304](https://github.com/DutchJaFO/Quotinator/issues/304) | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) (revised — content-change trigger moves into the seeding loop) | Planning | TBD | No plan doc yet |
 | [#307](https://github.com/DutchJaFO/Quotinator/issues/307) | Changelog highlights: mark specific entries as notification-worthy | In progress | N/A (library code, no runtime path) | [307-changelog-notification-audience-key-plan.md](307-changelog-notification-audience-key-plan.md) |
 | [#308](https://github.com/DutchJaFO/Quotinator/issues/308) | Notification: multi-line/rich message layout | Planning | TBD | No plan doc yet |
-| [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | Planning | TBD | No plan doc yet |
+| [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | Planning | TBD | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
 | [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify all expected tables exist at startup, not just row counts | Planning | TBD | No plan doc yet |
 | [#306](https://github.com/DutchJaFO/Quotinator/issues/306) | Bug: empty "Unreleased" section renders on the About page after a release tag | Planning | TBD | No plan doc yet |
 
@@ -134,7 +134,10 @@ v1.9.0, not here.
          field addition doesn't itself need System_Changelog to exist yet)
 #308 ─── depends on #278 (extends its shipped NotificationTable component)
 #309 ─── depends on ADR 005's revision and ADR 018 (design basis); Quotinator.Data takes a new
-         dependency on Quotinator.Changelog as part of this issue
+         dependency on Quotinator.Changelog as part of this issue; its fallback (when
+         System_Changelog is missing/broken) reuses #293's exact narrow-exception-catch idiom and
+         stays structurally compatible with #305's future general DB-integrity warning, without
+         duplicating it
 #305 ─── (none) — independent bug
 #306 ─── (none) — independent bug
 ```

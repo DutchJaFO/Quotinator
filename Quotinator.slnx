@@ -278,6 +278,7 @@
     <File Path="docs/milestones/notification-system/83-notification-system-design-research-plan.md" />
     <File Path="docs/milestones/notification-system/81-startup-whats-new-notification-plan.md" />
     <File Path="docs/milestones/notification-system/307-changelog-notification-audience-key-plan.md" />
+    <File Path="docs/milestones/notification-system/309-system-changelog-table-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
