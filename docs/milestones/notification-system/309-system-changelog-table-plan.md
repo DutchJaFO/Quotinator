@@ -1,6 +1,6 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
@@ -252,7 +252,11 @@ Verified: `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s).
 `RepositoryStructureTests`) — all green.
 
 ### 3. `Quotinator.Data` → `Quotinator.Changelog` project reference
-**Status:** Not started
+**Status:** ✅ Done
+
+Added to `Quotinator.Data.csproj`. Confirmed no circular dependency — `Quotinator.Changelog` itself
+only references `Quotinator.Logging`, never `Quotinator.Data` (per ADR 005's dependency-isolation
+invariant, unchanged). Build clean, 0 warnings/0 errors.
 
 ### 4. Separate in-memory database: keep-alive connection, keyed `IDbConnectionFactory`
 **Status:** Not started

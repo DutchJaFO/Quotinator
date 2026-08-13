@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Quotinator.Changelog\Quotinator.Changelog.csproj" />
     <ProjectReference Include="..\Quotinator.Logging\Quotinator.Logging.csproj" />
   </ItemGroup>
 
