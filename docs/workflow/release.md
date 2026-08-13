@@ -44,7 +44,7 @@ Both must report `0 Warning(s)  0 Error(s)`.
 
 ### Step 2 — Update the `unreleased` section of `changelog.en.json`
 
-`src/Quotinator.Api/resources/changelog.en.json` is the source of truth. **Never edit `CHANGELOG.md`, `addon/CHANGELOG.md`, or `addon-beta/CHANGELOG.md` directly.**
+`data/changelog/changelog.en.json` is the source of truth. **Never edit `CHANGELOG.md`, `addon/CHANGELOG.md`, or `addon-beta/CHANGELOG.md` directly.**
 
 **Before writing any entries, read `schemas/changelog.schema.json`** — it is the authoritative definition of every field, its type, and which fields are required. Do not infer the format from prior entries in the file or from git history; the schema may have changed since those were written.
 
@@ -58,9 +58,9 @@ Rules for `highlights`:
 Regenerate the markdown changelogs after every edit to `changelog.en.json`:
 
 ```bash
-dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md --max-releases 3
-dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
-dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format keepachangelog --input data/changelog/changelog.en.json --output CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input data/changelog/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input data/changelog/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
 ```
 
 Verify structure: `dotnet test --filter ChangelogSchema`
@@ -131,9 +131,9 @@ Increment following semver:
 Regenerate the changelogs one final time after promoting the release entry:
 
 ```bash
-dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md --max-releases 3
-dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
-dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format keepachangelog --input data/changelog/changelog.en.json --output CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input data/changelog/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input data/changelog/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
 ```
 
 ### Step 7 — Run the pre-push checklist and T1/T2 verification

@@ -5,8 +5,8 @@
 // CHANGELOG.md in one of two formats.
 //
 // Usage (run from repo root):
-//   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md
-//   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md
+//   dotnet-script scripts/changelog.csx -- --format keepachangelog --input data/changelog/changelog.en.json --output CHANGELOG.md
+//   dotnet-script scripts/changelog.csx -- --format ha-addon        --input data/changelog/changelog.en.json --output addon/CHANGELOG.md
 //
 // Options:
 //   --input              <path>    JSON source file (required)

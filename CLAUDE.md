@@ -923,9 +923,9 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `src/Quotinator.Data/Import/IQuoteSourceConverter.cs` | Converter plugin contract — implement one per raw upstream source format |
 | `src/Quotinator.Api/Program.cs` | API entry point |
 | `src/Quotinator.Api/wwwroot/lib/bootstrap/` | Vendored Bootstrap v5.3.8 (CSS/JS, no CDN/npm) — upgrade by replacing the `dist/` files directly |
-| `src/Quotinator.Api/resources/changelog.en.json` | Changelog source of truth — edit this, never the generated `.md` files |
-| `src/Quotinator.Api/resources/changelog.nl.json` | Dutch changelog (lockstep with `en.json`) |
-| `src/Quotinator.Api/resources/changelog.de.json` | German changelog (lockstep with `en.json`) |
+| `data/changelog/changelog.en.json` | Changelog source of truth — edit this, never the generated `.md` files |
+| `data/changelog/changelog.nl.json` | Dutch changelog (lockstep with `en.json`) |
+| `data/changelog/changelog.de.json` | German changelog (lockstep with `en.json`) |
 | `src/Quotinator.Api/i18ntext/UI.en-GB.json` | English UI string baseline — source of truth for all UI keys |
 | `src/Quotinator.Core/Models/Quote.cs` | Canonical Quote model |
 | `src/Quotinator.Core/Models/QuoteTranslation.cs` | Translation entry model |
@@ -1021,7 +1021,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`. The same 0-warnings policy that applies to `dotnet build` applies here — any compiler warning surfaced during test build is a blocking failure.
-3. **Changelog updated** — `src/Quotinator.Api/resources/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md`, `addon/CHANGELOG.md`, or `addon-beta/CHANGELOG.md` directly — they are generated files.**
+3. **Changelog updated** — `data/changelog/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md`, `addon/CHANGELOG.md`, or `addon-beta/CHANGELOG.md` directly — they are generated files.**
 
    **Before writing any entries, read `schemas/changelog.schema.json`** — it is the authoritative definition of every field and which fields are required. Do not infer the format from prior entries or git history.
 
@@ -1050,9 +1050,9 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    [GitHub Releases](https://github.com/DutchJaFO/Quotinator/releases), linked from a closing note in
    each generated file:
    ```bash
-   dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md --max-releases 3
-   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
-   dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
+   dotnet-script scripts/changelog.csx -- --format keepachangelog --input data/changelog/changelog.en.json --output CHANGELOG.md --max-releases 3
+   dotnet-script scripts/changelog.csx -- --format ha-addon        --input data/changelog/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
+   dotnet-script scripts/changelog.csx -- --format ha-addon        --input data/changelog/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
    ```
    Commit the regenerated files alongside the JSON change.
 4. **Versions in sync** — two of these must match the tag (without the `v` prefix) **at the moment the
@@ -1109,7 +1109,7 @@ Workflow:
    outside a milestone" — release preparation is its own standing exception, distinct from whatever
    milestone branch produced the code being released)
 6. `git pull` to bring dependency bumps onto this branch
-7. Add the dependency bump entry to `src/Quotinator.Api/resources/changelog.en.json`; regenerate
+7. Add the dependency bump entry to `data/changelog/changelog.en.json`; regenerate
    `CHANGELOG.md` with `scripts/changelog.csx` (`--max-releases 3`). **Do not regenerate
    `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` yet — see step 11.**
 8. Bump `Directory.Build.props` → `<Version>` and `changelog.en.json`'s version entry, and commit —

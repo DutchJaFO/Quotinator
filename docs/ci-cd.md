@@ -87,7 +87,7 @@ channels") — **only one of their `config.yaml`s is bumped per tag**, never bot
 |---|---|
 | `Directory.Build.props` | `<Version>` — the only file to edit; `AssemblyVersion` and `FileVersion` derive from it automatically |
 | `addon-beta/config.yaml` (beta tag only) **or** `addon/config.yaml` (final tag only) | `version` — HA Supervisor appends this as the Docker image tag when pulling from GHCR |
-| `src/Quotinator.Api/resources/changelog.en.json` | new release entry at top of `releases` array (+ `nl.json`, `de.json` lockstep); regenerate `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md` (all three, every tag) |
+| `data/changelog/changelog.en.json` | new release entry at top of `releases` array (+ `nl.json`, `de.json` lockstep); regenerate `CHANGELOG.md`, `addon/CHANGELOG.md`, and `addon-beta/CHANGELOG.md` (all three, every tag) |
 
 ---
 

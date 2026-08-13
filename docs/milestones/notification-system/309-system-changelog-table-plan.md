@@ -1,6 +1,6 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
-**Status:** Planning
+**Status:** In progress (step 3)
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
@@ -231,7 +231,25 @@ directly. This is a change to #81's plan doc (update after this issue lands, not
 **Status:** ✅ Done
 
 ### 2. `DataPaths.ChangelogFolder`, relocate JSON files, update `Program.cs`/`.csproj`
-**Status:** Not started
+**Status:** ✅ Done
+
+`changelog.{en,nl,de}.json` moved to `data/changelog/` (git-tracked rename, not copy). New
+`DataPaths.ChangelogFolder` constant; `Quotinator.Api.csproj` gets a `data/changelog/**/*` content-copy
+rule mirroring `data/sources/`'s own; `Program.cs`'s `IChangelogService` registration points at
+`AppContext.BaseDirectory/data/changelog`. Updated everything that referenced the old
+`src/Quotinator.Api/resources/changelog.*.json` path: `RepositoryStructureTests` (fixed + extended with
+the same disk↔slnx bidirectional check `data/sources/` already has), `ChangelogSchemaTests`'
+file-discovery helper, `CLAUDE.md`, `docs/workflow/release.md`, `docs/ci-cd.md`,
+`docs/workflow/issue-closure.md`, `scripts/changelog.csx`'s usage comment, and `.github/workflows/
+_build-test.yml`'s publish-output assertion (added a `data/changelog/` check mirroring the existing
+`data/sources/` one). Left `scripts/README.md` and the historical `changelog-upgrade.csx`-related
+mentions untouched — those describe the unrelated, already-dead `changelog.json` migration artifact
+that stays in `src/Quotinator.Api/resources/`, never matched by `ChangelogService`'s own
+`changelog.*.json` glob.
+
+Verified: `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s).
+`Quotinator.Changelog.Tests` (41), `Quotinator.Api.Tests` (673, including the 3 new/updated
+`RepositoryStructureTests`) — all green.
 
 ### 3. `Quotinator.Data` → `Quotinator.Changelog` project reference
 **Status:** Not started

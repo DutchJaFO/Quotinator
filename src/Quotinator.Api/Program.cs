@@ -278,9 +278,12 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddExceptionHandler<BadRequestExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
+// #309: bundled changelog files read from the Docker image (AppContext.BaseDirectory/data/changelog/),
+// mirroring bundledSourcesDir above — no longer compiled resources, per ADR 005's revision.
+var bundledChangelogDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.ChangelogFolder);
 builder.Services.AddSingleton<IChangelogService>(sp =>
     new ChangelogService(
-        Path.Combine(AppContext.BaseDirectory, "resources"),
+        bundledChangelogDir,
         sp.GetRequiredService<ILogger<ChangelogService>>()));
 
 var dbPath     = Path.Combine(dataDir, DataPaths.DatabaseFile);

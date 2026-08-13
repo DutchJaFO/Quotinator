@@ -6,6 +6,13 @@ public static class DataPaths
     /// <summary>Subdirectory containing one JSON file per bundled quote dataset plus a <c>manifest.json</c>.</summary>
     public const string SourcesFolder = "sources";
 
+    /// <summary>
+    /// Subdirectory containing one JSON file per language of changelog content (#309) — bundled into
+    /// the publish output alongside <see cref="SourcesFolder"/>, not compiled as an embedded resource
+    /// (ADR 005's revision), so it can be read by the changelog importer without a recompile.
+    /// </summary>
+    public const string ChangelogFolder = "changelog";
+
     /// <summary>Subdirectory for user-supplied import files. Optional — omitted in the default install.</summary>
     public const string ImportsFolder = "imports";
 

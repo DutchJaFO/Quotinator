@@ -38,7 +38,7 @@ public sealed partial class ChangelogSchemaTests
     public void AtLeastOneChangelogFile_IsLoaded()
     {
         Assert.IsNotEmpty(_docs,
-            "No changelog.*.json files found in src/Quotinator.Api/resources/ — expected at least changelog.en.json.");
+            "No changelog.*.json files found in data/changelog/ — expected at least changelog.en.json.");
     }
 
     [TestMethod]
@@ -270,16 +270,16 @@ public sealed partial class ChangelogSchemaTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
-            var resourceDir = Path.Combine(dir.FullName, "src", "Quotinator.Api", "resources");
-            if (Directory.Exists(resourceDir))
+            var changelogDir = Path.Combine(dir.FullName, "data", "changelog");
+            if (Directory.Exists(changelogDir))
             {
-                var files = Directory.GetFiles(resourceDir, "changelog.*.json");
+                var files = Directory.GetFiles(changelogDir, "changelog.*.json");
                 if (files.Length > 0) return files;
             }
             dir = dir.Parent;
         }
         throw new DirectoryNotFoundException(
-            "changelog.*.json not found — expected at src/Quotinator.Api/resources/ under the repo root.");
+            "changelog.*.json not found — expected at data/changelog/ under the repo root.");
     }
 
     private static string FindSchemaFile()

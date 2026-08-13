@@ -72,6 +72,11 @@
     <File Path="data/sources/nikhilnamal17-conflict-rules.json" />
     <File Path="data/sources/nikhilnamal17-source-aliases.json" />
   </Folder>
+  <Folder Name="/data/changelog/">
+    <File Path="data/changelog/changelog.en.json" />
+    <File Path="data/changelog/changelog.nl.json" />
+    <File Path="data/changelog/changelog.de.json" />
+  </Folder>
   <Folder Name="/data/system/">
     <File Path="data/system/README.md" />
   </Folder>

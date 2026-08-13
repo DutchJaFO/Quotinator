@@ -43,6 +43,9 @@ jobs:
           test -d /tmp/publish/data/sources && \
             ls /tmp/publish/data/sources/*.json > /dev/null 2>&1 || \
             (echo "ERROR: data/sources/ missing or empty in publish output" && exit 1)
+          test -d /tmp/publish/data/changelog && \
+            ls /tmp/publish/data/changelog/*.json > /dev/null 2>&1 || \
+            (echo "ERROR: data/changelog/ missing or empty in publish output" && exit 1)
 
   validate-apparmor-profiles:
     name: Validate AppArmor profiles

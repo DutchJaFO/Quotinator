@@ -101,7 +101,7 @@ The output is the earliest tag that includes the fix. Record this as the release
 
 ### Step 6 — Verify the issue is listed in `changelog.en.json`
 
-Check that the correct release entry in `src/Quotinator.Api/resources/changelog.en.json` includes this issue number in its `issues` array. If it is absent, add it:
+Check that the correct release entry in `data/changelog/changelog.en.json` includes this issue number in its `issues` array. If it is absent, add it:
 
 ```json
 "issues": [82]
@@ -110,9 +110,9 @@ Check that the correct release entry in `src/Quotinator.Api/resources/changelog.
 After editing, regenerate all three markdown changelogs:
 
 ```bash
-dotnet-script scripts/changelog.csx -- --format keepachangelog --input src/Quotinator.Api/resources/changelog.en.json --output CHANGELOG.md --max-releases 3
-dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
-dotnet-script scripts/changelog.csx -- --format ha-addon        --input src/Quotinator.Api/resources/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format keepachangelog --input data/changelog/changelog.en.json --output CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input data/changelog/changelog.en.json --output addon/CHANGELOG.md --max-releases 3
+dotnet-script scripts/changelog.csx -- --format ha-addon        --input data/changelog/changelog.en.json --output addon-beta/CHANGELOG.md --max-releases 3
 ```
 
 Run `dotnet test --filter ChangelogSchema` to confirm structure is valid after the edit.

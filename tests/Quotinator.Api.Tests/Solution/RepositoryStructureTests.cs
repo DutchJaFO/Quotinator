@@ -19,6 +19,7 @@ public class RepositoryStructureTests
     private static readonly string RepoRoot = FindRepoRoot();
     private static readonly string SlnxPath = Path.Combine(RepoRoot, "Quotinator.slnx");
     private static readonly string DataSourcesDir = Path.Combine(RepoRoot, "data", "sources");
+    private static readonly string DataChangelogDir = Path.Combine(RepoRoot, "data", "changelog");
 
     private static string FindRepoRoot()
     {
@@ -41,13 +42,49 @@ public class RepositoryStructureTests
             .Select(p => p!.Replace('\\', '/'))];
     }
 
-    /// <summary>src/Quotinator.Api/resources/changelog.en.json must exist on disk as the English source file.</summary>
+    /// <summary>data/changelog/changelog.en.json must exist on disk as the English source file.</summary>
     [TestMethod]
     public void ChangelogEnJson_ExistsOnDisk()
     {
         Assert.IsTrue(
-            File.Exists(Path.Combine(RepoRoot, "src", "Quotinator.Api", "resources", "changelog.en.json")),
-            "src/Quotinator.Api/resources/changelog.en.json does not exist.");
+            File.Exists(Path.Combine(DataChangelogDir, "changelog.en.json")),
+            "data/changelog/changelog.en.json does not exist.");
+    }
+
+    /// <summary>Every data/changelog/ entry listed in Quotinator.slnx must exist on disk.</summary>
+    [TestMethod]
+    public void SlnxDataChangelogEntries_AllExistOnDisk()
+    {
+        var paths = LoadSlnxFilePaths();
+        var changelogEntries = paths
+            .Where(p => p.StartsWith("data/changelog/", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.IsNotEmpty(changelogEntries, "No data/changelog/ entries found in Quotinator.slnx.");
+
+        var failures = changelogEntries
+            .Where(p => !File.Exists(Path.Combine(RepoRoot, p.Replace('/', Path.DirectorySeparatorChar))))
+            .ToList();
+
+        Assert.IsEmpty(failures,
+            $"Files listed in Quotinator.slnx do not exist on disk:\n{string.Join("\n", failures)}");
+    }
+
+    /// <summary>Every .json file in data/changelog/ on disk must be listed in Quotinator.slnx.</summary>
+    [TestMethod]
+    public void DataChangelogFiles_OnDisk_AreAllInSlnx()
+    {
+        var paths = LoadSlnxFilePaths();
+        var diskFiles = Directory.GetFiles(DataChangelogDir, "*.json")
+            .Select(f => "data/changelog/" + Path.GetFileName(f))
+            .ToList();
+
+        Assert.IsNotEmpty(diskFiles, "No .json files found in data/changelog/.");
+
+        var failures = diskFiles.Where(f => !paths.Contains(f)).ToList();
+
+        Assert.IsEmpty(failures,
+            $"Files exist in data/changelog/ on disk but are missing from Quotinator.slnx:\n{string.Join("\n", failures)}");
     }
 
     /// <summary>CHANGELOG.md must exist on disk as a generated file.</summary>
