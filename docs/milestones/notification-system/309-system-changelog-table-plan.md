@@ -1,6 +1,6 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 5)
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
@@ -259,7 +259,27 @@ only references `Quotinator.Logging`, never `Quotinator.Data` (per ADR 005's dep
 invariant, unchanged). Build clean, 0 warnings/0 errors.
 
 ### 4. Separate in-memory database: keep-alive connection, keyed `IDbConnectionFactory`
-**Status:** Not started
+**Status:** ✅ Done
+
+New `Quotinator.Data.Connections.DatabaseConnectionKeys.Changelog` (the keyed-DI service key, not a
+bare string literal at call sites) and `ChangelogConnectionKeepAlive` (opens and holds one connection
+for the app's lifetime, disposed at shutdown). `Program.cs` registers `SqliteConnectionFactory` under
+this key with the shared-cache in-memory connection string
+(`file:quotinatorchangelog?mode=memory&cache=shared`, `useMemoryTempStore: true` for the same #294
+reason as the main database), and eagerly resolves `ChangelogConnectionKeepAlive` right after
+`app.StartAsync()`, wrapped in its own non-fatal try/catch separate from the main database's own —
+a changelog-database failure must never affect the main database's health status.
+
+**Found while testing:** `Microsoft.Data.Sqlite` pools connections by default — disposing the
+keep-alive connection alone did *not* immediately destroy the shared-cache database in a first test
+attempt, because the connection pool kept a dormant native connection open underneath. Confirmed via
+`SqliteConnection.ClearAllPools()` that the keep-alive is still genuinely load-bearing once pooling is
+actually bypassed (matching real conditions — pooled connections do get reclaimed under memory
+pressure) — not merely defensive against a scenario pooling already prevented on its own. Both
+directions are now covered by `ChangelogConnectionKeepAliveTests` (`Quotinator.Data.Tests`).
+
+Verified: build 0 warnings/0 errors; full solution test suite green (Data.Tests 1081, Core.Tests 1462,
+Api.Tests 673, Changelog.Tests 41).
 
 ### 5. `ChangelogDatabaseInitializer` (own `DatabaseInitializer` instance, migration 1 + baseline SQL + schema-drift parity test), `ChangelogEntity`/`ChangelogLineEntity`, `ChangelogRepository : AggregateRepository<Changelog, ChangelogLine>`
 **Status:** Not started

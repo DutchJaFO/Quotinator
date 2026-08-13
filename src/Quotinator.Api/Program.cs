@@ -299,6 +299,18 @@ var dbOptions          = new DatabaseOptions { DbPath = dbPath, BackupsPath = ba
 var connectionFactory  = new SqliteConnectionFactory(dbPath, useMemoryTempStore: true);
 builder.Services.AddSingleton<IDiskSpaceProvider, DiskSpaceProvider>();
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
+
+// #309: separate, in-memory database for changelog content (ADR 018) — no relational or transactional
+// coupling to domain data, so it lives outside quotinatordata.db entirely. Shared-cache mode
+// (mode=memory&cache=shared) lets every separately-opened connection see the same in-memory database;
+// ChangelogConnectionKeepAlive (resolved eagerly below, after app.Build()) holds one connection open
+// for the app's lifetime, since a shared-cache in-memory database is destroyed the moment its last
+// open connection closes. useMemoryTempStore: true for the same #294 reason as the main database.
+var changelogConnectionFactory = new SqliteConnectionFactory(
+    "file:quotinatorchangelog?mode=memory&cache=shared", useMemoryTempStore: true);
+builder.Services.AddKeyedSingleton<IDbConnectionFactory>(
+    DatabaseConnectionKeys.Changelog, (_, _) => changelogConnectionFactory);
+builder.Services.AddSingleton<ChangelogConnectionKeepAlive>();
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
 // InitiatorContext implements both interfaces over the same AsyncLocal-backed instance, so
@@ -724,6 +736,24 @@ app.MapGet(ApiRoutes.CultureSet, (string? culture, string redirectUri, HttpConte
 // non-exempt request (registered above, before this point was reached), so initialisation runs here,
 // after StartAsync, instead of before it as it did prior to #280.
 await app.StartAsync();
+
+// #309: force eager construction of the changelog database's keep-alive connection — DI singletons
+// are otherwise resolved lazily, on first use, which would be too late (the shared-cache in-memory
+// database wouldn't exist yet when the changelog schema/import step below needs it). Wrapped
+// separately from the main database's own init try/catch below: a changelog-database failure must
+// never affect the main database's own initialisation or health status, matching ADR 018's fallback
+// requirement (IChangelogReader, once built, falls back to the JSON-file-based IChangelogService
+// regardless of why the changelog database is unavailable).
+try
+{
+    app.Services.GetRequiredService<ChangelogConnectionKeepAlive>();
+}
+catch (Exception ex)
+{
+    app.Services.GetRequiredService<ILogger<Program>>()
+        .LogWarning(ex, "[Database - Init] failed to open the changelog database's keep-alive connection — " +
+            "non-fatal, startup continues. The changelog will fall back to reading its JSON files directly.");
+}
 
 // A database initialisation failure must never crash the whole process outright — that would
 // also make POST /api/v1/admin/database/reset unreachable, the one endpoint actually capable of
