@@ -58,15 +58,14 @@ the what's-new path as designed below.
 
 ## Design
 
-**Revised (2026-08-12), same session — depends on a new prerequisite issue.** The producer below
-originally joined every entry in `release.Highlights` into one message. Per developer direction, a
-release's full highlights list isn't necessarily what belongs in a notification — some entries may be
-too minor, too technical, or better shortened for a notification's own audience. A new issue
-(`#307`, split out this same session) adds a way to mark specific highlights as
-notification-worthy in the changelog JSON itself (`schemas/changelog.schema.json`,
-`Quotinator.Changelog.Models`) — this issue's producer reads that flagged subset instead of the full
-`Highlights` list once it exists. This issue cannot start implementation until `#307`
-lands.
+**Revised (2026-08-12), same session — depends on a prerequisite issue.** The producer below originally
+joined every entry in `release.Highlights` into one message. Per developer direction, a release's full
+highlights list isn't necessarily what belongs in a notification. #307 (split out this same session, then
+revised again once it started) resolves this by reusing the already-shipped
+`ChangelogUnreleased.AudienceHighlights` dictionary — no new field — with a reserved `"notification"` key:
+this producer reads `release.AudienceHighlights.GetValueOrDefault("notification", [])` instead of the
+full `Highlights` list. This issue cannot start implementation until #307 lands (documents the
+convention + adds its own test; no schema/model change is actually required).
 
 **Also revised:** the message now supports multiple lines (one per flagged highlight) rather than one
 joined sentence, since a release commonly has more than one highlight worth surfacing. Rendering
@@ -95,11 +94,12 @@ reasoning (announcing something is inherently non-critical, unlike schema init).
 var currentVersion = versionService.Version;
 var release = changelogService.GetForCulture(null)?.Releases
     .FirstOrDefault(r => r.Version == currentVersion);
-if (release is not null && release.NotificationHighlights.Count > 0)   // field name TBD — see #307
+var notificationHighlights = release?.GetHighlightsFor(ChangelogReservedAudience.Notification) ?? [];
+if (notificationHighlights.Count > 0)
 {
-    var dedupeKey = $"WhatsNew:v{release.Version}:";
+    var dedupeKey = $"WhatsNew:v{release!.Version}:";
     var message = $"{dedupeKey} What's new in v{release.Version}:\n" +
-                   string.Join("\n", release.NotificationHighlights);
+                   string.Join("\n", notificationHighlights);
     await NotificationSeeding.SeedOnceAsync(
         notificationReader, notificationWriter, NotificationType.Information, dedupeKey, message);
 }
@@ -180,7 +180,7 @@ itself as thin as the two existing producers.
   issue's own what's-new path.
 - **#309** — hard dependency; implements ADR 005's/018's resolution (`System_Changelog`). This issue's
   producer reads changelog content through whatever service #309 introduces for querying it.
-- **#307** — hard dependency; this issue's producer cannot be implemented until the flagged-highlight
-  field exists on `ChangelogRelease`.
+- **#307** — hard dependency; this issue's producer cannot be implemented until
+  `ChangelogReservedAudience.Notification` and `ChangelogUnreleased.GetHighlightsFor(...)` exist.
 - **#308** — soft dependency; improves how this issue's own multi-line message renders, but does not
   block writing it.
