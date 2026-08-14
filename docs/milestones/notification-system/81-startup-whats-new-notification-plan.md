@@ -1,9 +1,12 @@
 # #81 — Startup notification: what's new after upgrade
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #81 (open)
 **Depends on:** #278 (done, released v1.8.0), #80 (done, released — Changelog handling milestone),
-#309 (open — System_Changelog, not yet built), #307 (open — changelog highlight-flagging, not yet built)
+#309 (code complete on this branch, Waiting for release — `IChangelogReader` exists and is tested),
+#307 (code complete on this branch — `ChangelogReservedAudience.Notification`/`GetHighlightsFor` exist
+and are tested; two documentation-confirmation rows remain open on its own plan doc but don't block this
+issue, which only needs the code)
 
 ---
 
@@ -63,9 +66,25 @@ joined every entry in `release.Highlights` into one message. Per developer direc
 highlights list isn't necessarily what belongs in a notification. #307 (split out this same session, then
 revised again once it started) resolves this by reusing the already-shipped
 `ChangelogUnreleased.AudienceHighlights` dictionary — no new field — with a reserved `"notification"` key:
-this producer reads `release.AudienceHighlights.GetValueOrDefault("notification", [])` instead of the
-full `Highlights` list. This issue cannot start implementation until #307 lands (documents the
-convention + adds its own test; no schema/model change is actually required).
+this producer reads `release.GetHighlightsFor(ChangelogReservedAudience.Notification)` instead of the
+full `Highlights` list.
+
+**Revised (2026-08-14) — reads via `IChangelogReader`, not `IChangelogService` directly.** #309 (built
+after this plan doc was first written) introduced `IChangelogReader.GetDocumentAsync(string? culture)` —
+DB-first, falling back to the JSON-backed `IChangelogService` when the changelog database isn't ready or
+available — and its own plan doc explicitly calls for every consumer, this one included, to go through
+it instead of `IChangelogService` directly. This is the change: `GetForCulture(null)` (synchronous)
+becomes `await changelogReader.GetDocumentAsync(null)` (async) — the lookup itself is otherwise
+unchanged (still `Releases.FirstOrDefault(r => r.Version == currentVersion)`).
+
+**Known timing characteristic, not a bug:** #309's own background changelog-database import runs as a
+detached task that does not block `StartupPhaseState.MarkComplete()` (see #309's Step 6 notes). This
+producer, like #279's and #289's, runs synchronously during startup, well before that background import
+typically finishes — so in practice it will almost always read through `IChangelogReader`'s fallback
+path (the JSON-backed `IChangelogService`) rather than the database, on every normal startup. This is
+harmless: both paths return equivalent data (the fallback exists specifically so a consumer never needs
+to care which one served a given call), and is noted here only so a future reader doesn't mistake it for
+a defect if they observe the fallback path being hit consistently in logs.
 
 **Also revised:** the message now supports multiple lines (one per flagged highlight) rather than one
 joined sentence, since a release commonly has more than one highlight worth surfacing. Rendering
@@ -92,8 +111,8 @@ reasoning (announcing something is inherently non-critical, unlike schema init).
 
 ```
 var currentVersion = versionService.Version;
-var release = changelogService.GetForCulture(null)?.Releases
-    .FirstOrDefault(r => r.Version == currentVersion);
+var document = await changelogReader.GetDocumentAsync(null);
+var release = document?.Releases.FirstOrDefault(r => r.Version == currentVersion);
 var notificationHighlights = release?.GetHighlightsFor(ChangelogReservedAudience.Notification) ?? [];
 if (notificationHighlights.Count > 0)
 {
@@ -133,10 +152,32 @@ notification is *displayed*, not whether it's correctly written. This issue does
 **Status:** ✅ Done
 
 ### 2. Write the producer in `Program.cs`
-**Status:** Not started
+**Status:** ✅ Done
+
+`WhatsNewNotification` (`Quotinator.Api.Startup`) splits the pure lookup/dedupe-key logic
+(`BuildSeed(ChangelogDocument?, string currentVersion)`, returning a `Seed?` record struct) from the I/O
+(`SeedAsync`, which calls `BuildSeed` then `NotificationSeeding.SeedOnceAsync`) — matching Step 3's own
+design intent below. Wired into `Program.cs` as the third producer, alongside #279's and #289's, inside
+the same `if (dbHealth.IsHealthy)` pattern.
+
+**Startup-latency regression found and fixed, second occurrence of the exact pattern #309's Step 6 fixed
+once already.** Awaiting `IChangelogReader.GetDocumentAsync(null)` inline (before
+`StartupPhaseState.MarkComplete()` runs) reintroduced the identical race — this time breaking 87 tests
+across `Quotinator.Api.Tests`, not just one, since every `WebApplicationFactory`-based test spins up its
+own full startup sequence and the added latency shifted the whole suite's timing distribution. Fixed the
+same way: the producer block now runs as a detached `Task.Run(...)` (its own internal try/catch,
+identical non-fatal logging), matching #309's own precedent exactly. Confirmed the fix by running the
+full solution test suite twice in a row.
 
 ### 3. Tests
-**Status:** Not started
+**Status:** ✅ Done
+
+`WhatsNewNotificationTests` (`Quotinator.Api.Tests`) — five tests against `WhatsNewNotification.SeedAsync`
+using the existing `FakeNotificationReader`/`FakeNotificationWriter` (#279's own test doubles, no new
+fakes needed): a matching release with flagged highlights writes exactly one `Information` notification
+containing only the flagged text, not the full highlights list; no matching release writes nothing; a
+matching release with zero flagged highlights writes nothing; nested version numbers (`1.9.1` vs
+`1.9.10`) don't falsely dedupe against each other; an already-seeded version is a no-op.
 
 Unlike #279/#289 (whose producers were verified only via T1/T2 live checks, per their own plan docs —
 no unit test exists for `NotificationSeeding.SeedOnceAsync`'s call sites in `Program.cs` itself, since
@@ -156,16 +197,16 @@ itself as thin as the two existing producers.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A matching release's flagged notification highlights are written as a multi-line `Information` notification on startup | Unit test | `WhatsNewNotificationTests.Seed_MatchingReleaseWithFlaggedHighlights_WritesInformationNotification` (name TBD at implementation — extracted helper per Step 3) |
-| 2 | ❌ | No notification is written when the running version has no matching changelog release | Unit test | `WhatsNewNotificationTests.Seed_NoMatchingRelease_WritesNothing` |
-| 3 | ❌ | No notification is written when a matching release exists but has zero notification-flagged highlights | Unit test | `WhatsNewNotificationTests.Seed_MatchingReleaseNoFlaggedHighlights_WritesNothing` |
-| 4 | ❌ | Two different versions whose digits nest (e.g. `1.9.1` vs `1.9.10`) do not falsely dedupe against each other | Unit test | `WhatsNewNotificationTests.Seed_NestedVersionNumbers_DoNotFalselyDedupe` |
-| 5 | ❌ | A version already seeded is not re-seeded on a later restart (dedupe holds across restarts) | Unit test | `WhatsNewNotificationTests.Seed_AlreadySeededVersion_IsNoOp` |
+| 1 | ✅ | A matching release's flagged notification highlights are written as a multi-line `Information` notification on startup | Unit test | `WhatsNewNotificationTests.Seed_MatchingReleaseWithFlaggedHighlights_WritesInformationNotification` |
+| 2 | ✅ | No notification is written when the running version has no matching changelog release | Unit test | `WhatsNewNotificationTests.Seed_NoMatchingRelease_WritesNothing` |
+| 3 | ✅ | No notification is written when a matching release exists but has zero notification-flagged highlights | Unit test | `WhatsNewNotificationTests.Seed_MatchingReleaseNoFlaggedHighlights_WritesNothing` |
+| 4 | ✅ | Two different versions whose digits nest (e.g. `1.9.1` vs `1.9.10`) do not falsely dedupe against each other | Unit test | `WhatsNewNotificationTests.Seed_NestedVersionNumbers_DoNotFalselyDedupe` |
+| 5 | ✅ | A version already seeded is not re-seeded on a later restart (dedupe holds across restarts) | Unit test | `WhatsNewNotificationTests.Seed_AlreadySeededVersion_IsNoOp` |
 | 6 | ❌ | Dismissing the what's-new notification persists — it does not reappear on the next restart | Live | Docker: seed a matching release, confirm notification appears in `GET /api/v1/notifications`, dismiss via `POST /api/v1/notifications/{id}/dismiss`, restart the container, confirm it does not reappear |
 | 7 | ❌ | T1 — app starts in Visual Studio with no error; `StartupSuccessModal` shows the what's-new notification when the running version has flagged changelog highlights | Live | Developer confirms in Visual Studio |
 | 8 | ❌ | T2 — Docker build and smoke test | Live | `docker build -f docker/Dockerfile -t quotinator:local .`; confirm `GET /api/v1/notifications` includes the what's-new entry when the built version matches a changelog release |
-| 9 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 10 | ❌ | Full test suite green | Build | `dotnet test --configuration Release` |
+| 9 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 10 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run twice to rule out the startup-latency flakiness found in Step 2) |
 
 ---
 

@@ -889,6 +889,40 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
     }
 }
 
+// #81: third producer for #278's notification mechanism — announces the running release's
+// notification-flagged changelog highlights (#307's ChangelogReservedAudience.Notification
+// convention), once per version. Reads via IChangelogReader (#309), which falls back to the
+// JSON-backed IChangelogService on its own if the changelog database isn't ready or available — this
+// producer doesn't need to know or care which path served the document. "Seen" state is the existing
+// notification history itself (dismissing via POST /notifications/{id}/dismiss stops it reappearing);
+// no separate cookie or localStorage marker is needed. Runs detached, like #309's own changelog-import
+// task — found live: awaiting IChangelogReader.GetDocumentAsync inline here delayed
+// StartupPhaseState.MarkComplete() enough to reintroduce the exact race #309's Step 6 fix already
+// solved once, this time affecting far more of the test suite since every WebApplicationFactory-based
+// test spins up its own full startup sequence. Timing relative to MarkComplete() doesn't matter for
+// correctness here, the same as #279's/#289's producers — writing an announcement is inherently
+// non-critical.
+if (dbHealth.IsHealthy)
+{
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            var whatsNewDocument = await app.Services.GetRequiredService<IChangelogReader>().GetDocumentAsync(null);
+            await Quotinator.Api.Startup.WhatsNewNotification.SeedAsync(
+                app.Services.GetRequiredService<INotificationReader>(),
+                app.Services.GetRequiredService<INotificationWriter>(),
+                whatsNewDocument,
+                app.Services.GetRequiredService<IVersionService>().Version);
+        }
+        catch (Exception ex)
+        {
+            app.Services.GetRequiredService<ILogger<Program>>()
+                .LogWarning(ex, "[Server] Failed to seed the #81 what's-new notification — non-fatal, startup continues.");
+        }
+    });
+}
+
 // #280: initialisation (successful or not) is now finished — StartupWaitMiddleware stops
 // intercepting requests from this point on. Marked complete regardless of dbHealth's outcome: a
 // failed startup has its own existing degraded-state UI (DatabaseHealthGateMiddleware/#263's
