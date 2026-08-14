@@ -1,6 +1,6 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
-**Status:** In progress (step 10)
+**Status:** Waiting for release
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
@@ -506,7 +506,7 @@ remained by the time this step was reached; recorded as its own step in the veri
 rather than folded silently into 6/7's own entries, since it names a distinct requirement.
 
 ### 10. Full verification (T1, T2)
-**Status:** In progress
+**Status:** ✅ Done
 
 **Row 11's original plan (a #293-style Docker fault injection) is not meaningfully constructible for
 this database, and the verification method was changed rather than left unmet.** #293's own T2
@@ -522,11 +522,19 @@ real-SQLite unit tests (rows 7, 8, 9b), which is a strictly more precise reprodu
 failure condition than a Docker-level fault would have been. Step 8's live Docker run additionally
 confirms the happy path renders correctly with zero warnings/errors across a full real startup.
 
-**Row 10 is the one item this session cannot complete — it requires the developer's own action in
-Visual Studio**, per this project's standing rule that local `dotnet run`/T1 verification is exclusively
-the developer's own action (a prior local `dotnet run` by the assistant caused a real IIS Express
-outage). Everything else in the verification table is done; row 10 is the only open item before this
-issue can be closed.
+**Row 10 (T1) confirmed by the developer in Visual Studio (2026-08-14).** A local `dotnet run` started
+cleanly (`[Changelog - Import] refreshed 126 entries across 3 language(s)`, no changelog-related
+warnings), and a screenshot of the live `/about` page (Dutch culture) shows the DB-backed content
+rendering correctly — the new unreleased #309 entry appears translated under "Niet uitgebracht", and the
+v1.8.3 release's full highlight list renders beneath it, matching the JSON source content exactly.
+
+**T2 re-confirmed against the final commit state (2026-08-14), not just Step 8's earlier snapshot.**
+Step 8's own live Docker run happened before Step 9's added test and before the unreleased #309
+changelog entry existed. Rebuilt the image and re-ran the full startup sequence from the actual final
+state: zero warnings/errors/exceptions anywhere in the container's log for the whole run, `/about`
+returned `200` with all 43 `changelog-entry` elements present, and the new unreleased entry's own text
+(`"Changelog content (shown on the About page)…"`) appears exactly once in the rendered page — the live
+app, not just the JSON source file, serves the change just added to `changelog.en.json`.
 
 ---
 
@@ -544,7 +552,7 @@ issue can be closed.
 | 8 | ✅ | The fallback logs a warning explaining the condition, not silently | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_LogsWarning` |
 | 9 | ✅ | A genuinely different SQL error (not "table missing") still propagates, not swallowed | Unit test | `ChangelogReaderTests.GetDocumentAsync_UnrelatedSqlError_Propagates` |
 | 9b | ✅ | An empty (zero-row) database — schema created, background import not finished yet — falls back the same way a missing table does | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabaseEmpty_FallsBackToFileService` |
-| 10 | ❌ | `About.razor` renders correctly via `IChangelogReader` | Live (T1) | Developer confirms in Visual Studio |
+| 10 | ✅ | `About.razor` renders correctly via `IChangelogReader` | Live (T1) | Developer confirmed in Visual Studio (2026-08-14) — screenshot of `/about` (Dutch culture) shows the DB-backed unreleased #309 entry and v1.8.3 release rendering correctly |
 | 11 | ✅ | `About.razor` still renders (fallback path) when the changelog database is unavailable, matching #293's degraded-state precedent | Unit test (see Step 10 note) | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_FallsBackToFileService`/`_DatabaseEmpty_FallsBackToFileService`, plus a live Docker happy-path run (Step 8) confirming zero errors/warnings end to end |
 | 12 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 13 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run repeatedly across Steps 5–9 to rule out flakiness) |
