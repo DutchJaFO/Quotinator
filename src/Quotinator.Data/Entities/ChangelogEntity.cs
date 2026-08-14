@@ -22,6 +22,15 @@ public sealed class ChangelogEntity : RecordBase
     /// <summary>Release date (ISO 8601), or <see langword="null"/> for <c>unreleased</c>.</summary>
     public string? Date { get; init; }
 
+    /// <summary>
+    /// Whether <see cref="Language"/>'s content was machine-translated rather than manually curated —
+    /// mirrors <c>ChangelogDocument.MachineTranslated</c> (document-level, one value per language file).
+    /// Repeated on every row for a given <see cref="Language"/>, the same denormalization already
+    /// applied to <see cref="Language"/> itself, since this schema has no separate one-row-per-language
+    /// document table.
+    /// </summary>
+    public bool MachineTranslated { get; init; }
+
     /// <summary>Optional release-note flavour quote text.</summary>
     public string? QuoteText { get; init; }
 

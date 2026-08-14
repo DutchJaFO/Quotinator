@@ -313,6 +313,7 @@ builder.Services.AddKeyedSingleton<IDbConnectionFactory>(
 builder.Services.AddSingleton<ChangelogConnectionKeepAlive>();
 builder.Services.AddSingleton<ChangelogDatabaseInitializer>();
 builder.Services.AddSingleton<ChangelogRepository>();
+builder.Services.AddSingleton<ChangelogSystemContentImporter>();
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
 // InitiatorContext implements both interfaces over the same AsyncLocal-backed instance, so
@@ -741,11 +742,13 @@ await app.StartAsync();
 
 // #309: force eager construction of the changelog database's keep-alive connection — DI singletons
 // are otherwise resolved lazily, on first use, which would be too late (the shared-cache in-memory
-// database wouldn't exist yet when the changelog schema/import step below needs it). Wrapped
-// separately from the main database's own init try/catch below: a changelog-database failure must
-// never affect the main database's own initialisation or health status, matching ADR 018's fallback
-// requirement (IChangelogReader, once built, falls back to the JSON-file-based IChangelogService
-// regardless of why the changelog database is unavailable).
+// database wouldn't exist yet when the changelog schema step below needs it). Wrapped separately from
+// the main database's own init try/catch below: a changelog-database failure must never affect the
+// main database's own initialisation or health status, matching ADR 018's fallback requirement
+// (IChangelogReader, once built, falls back to the JSON-file-based IChangelogService regardless of why
+// the changelog database is unavailable). Schema creation itself stays synchronous here — it's a single
+// connection and a couple of DDL statements, fast enough not to matter — but the content refresh below
+// is deliberately NOT awaited inline; see that block's own comment.
 try
 {
     app.Services.GetRequiredService<ChangelogConnectionKeepAlive>();
@@ -757,6 +760,27 @@ catch (Exception ex)
         .LogWarning(ex, "[Database - Init] failed to initialise the changelog database — " +
             "non-fatal, startup continues. The changelog will fall back to reading its JSON files directly.");
 }
+
+// #309: the changelog content refresh (one atomic parent+children insert per release, across every
+// loaded language) runs detached in the background rather than being awaited here — found live: awaiting
+// it inline pushed StartupPhaseState.MarkComplete() (below) meaningfully later, widening the window a
+// request can observe "starting" instead of the app's real health, for content whose own read path
+// (IChangelogReader, once built) already tolerates the changelog database not being ready yet by falling
+// back to the JSON-backed IChangelogService — the same fallback it uses for a genuine failure. There is
+// nothing else in this process that can race the keyed changelog connection factory before this runs.
+_ = Task.Run(async () =>
+{
+    try
+    {
+        await app.Services.GetRequiredService<ChangelogSystemContentImporter>().RefreshAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Database - Import] failed to refresh changelog content — non-fatal, " +
+                "startup continues. The changelog will fall back to reading its JSON files directly.");
+    }
+});
 
 // A database initialisation failure must never crash the whole process outright — that would
 // also make POST /api/v1/admin/database/reset unreachable, the one endpoint actually capable of

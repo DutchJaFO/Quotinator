@@ -107,6 +107,21 @@ internal static class Sql
             "INSERT INTO ChangelogSchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
     }
 
+    /// <summary>
+    /// Bulk content-refresh SQL for the separate changelog database's own <c>Changelog</c>/
+    /// <c>ChangelogLine</c> tables (#309, ADR 018). Consumed by
+    /// <see cref="Import.ChangelogSystemContentImporter"/>. Separate from <see cref="ChangelogSchema"/>
+    /// — that class covers schema/version bookkeeping, this one covers the domain content itself.
+    /// </summary>
+    internal static class ChangelogContent
+    {
+        // Child before parent — FK enforcement (PRAGMA foreign_keys) is off by default on this
+        // project's connections (only toggled on where a specific operation needs it), so deleting
+        // Changelog first would silently orphan ChangelogLine rows rather than fail loudly.
+        internal const string ClearLines      = "DELETE FROM ChangelogLine;";
+        internal const string ClearChangelogs = "DELETE FROM Changelog;";
+    }
+
     /// <summary>JOIN fragment helpers — assembles INNER JOIN and LEFT JOIN clauses with bracket-quoted identifiers.</summary>
     /// <remarks>
     /// Parameters must always be compile-time string literals — never user input, never runtime strings.

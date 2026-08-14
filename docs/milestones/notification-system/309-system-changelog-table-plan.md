@@ -1,6 +1,6 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 7)
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
@@ -122,16 +122,17 @@ list-shaped field (`highlights`, `added`, `changed`, `fixed`, `removed`, `issues
 
 ```
 CREATE TABLE IF NOT EXISTS Changelog (
-    Id               TEXT NOT NULL PRIMARY KEY,
-    Language         TEXT NOT NULL,
-    Version          TEXT,                 -- NULL = that language's 'unreleased' entry
-    Date             TEXT,                 -- NULL for 'unreleased'
-    QuoteText        TEXT,
-    QuoteAttribution TEXT,
-    DateCreated      TEXT NOT NULL,
-    DateModified     TEXT,
-    DateDeleted      TEXT,
-    IsDeleted        INTEGER NOT NULL DEFAULT 0
+    Id                TEXT NOT NULL PRIMARY KEY,
+    Language          TEXT NOT NULL,
+    Version           TEXT,                 -- NULL = that language's 'unreleased' entry
+    Date              TEXT,                 -- NULL for 'unreleased'
+    MachineTranslated INTEGER NOT NULL DEFAULT 0,  -- repeated per row for one Language; added during Step 6, see its notes
+    QuoteText         TEXT,
+    QuoteAttribution  TEXT,
+    DateCreated       TEXT NOT NULL,
+    DateModified      TEXT,
+    DateDeleted       TEXT,
+    IsDeleted         INTEGER NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS UX_Changelog_Language_Version
     ON Changelog (Language, Version) WHERE Version IS NOT NULL;
@@ -363,7 +364,64 @@ Verified: full solution `dotnet build --configuration Release` — 0 Warning(s),
 673, Changelog.Tests 41, plus the smaller supporting test projects).
 
 ### 6. `ChangelogSystemContentImporter`
-**Status:** Not started
+**Status:** ✅ Done
+
+`ChangelogSystemContentImporter` (`Quotinator.Data.Import`) reads every loaded language via
+`IChangelogService.AvailableLanguages`/`GetForCulture`, clears existing `ChangelogLine`/`Changelog`
+content first (child before parent — FK enforcement is off by default on this project's connections, so
+deleting the parent first would silently orphan children rather than fail loudly), then writes one
+`ChangelogEntity` per release plus, where present, one per language's `unreleased` entry, each via
+`ChangelogRepository.InsertWithLinesAsync`. `SortOrder` restarts at 0 for every `(Kind, AudienceKey)`
+list, preserving each source list's own original order rather than a single global write-order counter.
+`Issues` (`List<int>`) are stored as their string form, parsed back to `int` only when the reader (Step
+7) reassembles a `ChangelogUnreleased`/`ChangelogRelease`.
+
+**Schema gap found and fixed in the same step:** the Step 5 schema omitted `ChangelogDocument
+.MachineTranslated` — actively rendered by `About.razor` (`@if (_document.MachineTranslated)`) to show a
+disclaimer, unlike `SectionHeaders`, which is populated by `ChangelogService` but read by no consumer
+anywhere in the codebase and was deliberately left out (YAGNI, add later per real need). Added
+`MachineTranslated INTEGER NOT NULL DEFAULT 0` to `ChangelogContentMigrations.CreateChangelogTables` and
+a matching property to `ChangelogEntity` — edited migration 1 directly rather than adding migration 2,
+since migration 1 has never shipped to any real database (feature branch, unreleased issue), matching
+this project's own precedent for a pre-release schema gap (see `System_ChangeLog`'s own history in
+`ChangeLogMigrations.cs`). Since every row for one language repeats the same document-level
+`MachineTranslated` value (this schema has no separate one-row-per-language document table), storing it
+on `Changelog` is a deliberate denormalisation, the same one already applied to `Language` itself.
+
+The importer's own bulk-clear SQL (`DELETE FROM ChangelogLine;`/`DELETE FROM Changelog;`) was moved into
+a new `Sql.ChangelogContent` nested class (`Quotinator.Data.Queries.Sql`) from the start, per the SQL
+string-centralisation policy already applied in Step 5 — `SqlBoundaryTests
+.Sql_ContainsOnlyGenericInfrastructureQueries` was updated to include the new nested class name.
+
+**Startup-latency regression found and fixed before commit:** wiring `ChangelogSystemContentImporter
+.RefreshAsync()` into `Program.cs` as a third `await` inside the same try/catch as
+`ChangelogDatabaseInitializer.InitialiseAsync()` (right after `app.StartAsync()`) pushed
+`StartupPhaseState.MarkComplete()` — which runs sequentially after all startup work, including this
+block — meaningfully later, which broke `ProgramNotificationSeedingRegressionTests
+.Health_NoOpDatabaseInitializer_StaysHealthyDespiteMissingNotificationTable` (`Quotinator.Api.Tests`):
+the test's request now arrived before `MarkComplete()` ran, so `/api/v1/health` reported `"starting"`
+(503) instead of the expected `"healthy"` (200) — a real, deterministic regression (reproduced in
+isolation), not test flakiness. Fixed by detaching the content-refresh call into its own
+`Task.Run(...)`-backed background task (its own internal try/catch, same warning-log-and-continue
+behaviour), leaving only `ChangelogConnectionKeepAlive`/`ChangelogDatabaseInitializer.InitialiseAsync()`
+(fast — one connection, a couple of DDL statements) on the synchronous startup path. This is consistent
+with, not a workaround around, ADR 018's fallback design: `IChangelogReader` (Step 7) already tolerates
+the changelog database not being ready by falling back to the JSON-backed `IChangelogService` — the same
+path it uses for a genuine failure, so a request racing the background import simply exercises that
+fallback once instead of blocking on it.
+
+`ChangelogSystemContentImporterTests` (`Quotinator.Data.Tests`) —
+`RefreshAsync_WritesReleasesAndOrderedLines` (one release + one unreleased entry from a hand-built fake
+`IChangelogService`; asserts row counts, `SortOrder` preserves list order, `AudienceHighlights` land with
+the correct `AudienceKey`, `Issues` store as strings, quote/`MachineTranslated` round-trip) and
+`RefreshAsync_RunTwice_OverwritesNotDuplicates` (calling `RefreshAsync` twice leaves row counts
+unchanged, proving the clear-then-reimport step, not the `(Language, Version)` unique constraint,
+is what makes re-running safe).
+
+Verified: full solution `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s). Full solution
+`dotnet test --configuration Release` — all projects green (run twice to confirm the startup-latency fix
+is not merely flaky-passing), including the previously-broken
+`Health_NoOpDatabaseInitializer_StaysHealthyDespiteMissingNotificationTable`.
 
 ### 7. `ChangelogLineRow` + `IJoinStrategy` + `IChangelogReader`/`ChangelogReader` — DB-first, JSON-fallback
 **Status:** Not started
@@ -390,8 +448,8 @@ confirm `IChangelogReader` falls back to the JSON path instead of throwing.
 | 1 | ✅ | The keep-alive connection keeps the shared-cache in-memory database alive across multiple separately-opened connections | Unit test | `ChangelogConnectionKeepAliveTests.MultipleConnections_WithKeepAliveOpen_ShareSameInMemoryDatabase` |
 | 2 | ✅ | `ChangelogDatabaseInitializer`'s baseline and incremental replay produce identical schema (parity, matching the main database's own schema-drift test pattern) | Unit test | `ChangelogDatabaseInitializerTests.Baseline_And_IncrementalReplay_ProduceIdenticalSchema` |
 | 3 | ✅ | A genuinely empty (fresh) changelog database takes the one-step baseline path, matching `DatabaseInitializer`'s existing rule | Unit test | `ChangelogDatabaseInitializerTests.EmptyDatabase_AppliesBaseline` |
-| 4 | ❌ | Importer writes one `Changelog` row per release + one per language's `unreleased`, with correctly-ordered `ChangelogLine` children | Unit test | `ChangelogSystemContentImporterTests.RefreshAsync_WritesReleasesAndOrderedLines` |
-| 5 | ❌ | Re-running the importer overwrites (not duplicates) existing rows | Unit test | `ChangelogSystemContentImporterTests.RefreshAsync_RunTwice_OverwritesNotDuplicates` |
+| 4 | ✅ | Importer writes one `Changelog` row per release + one per language's `unreleased`, with correctly-ordered `ChangelogLine` children | Unit test | `ChangelogSystemContentImporterTests.RefreshAsync_WritesReleasesAndOrderedLines` |
+| 5 | ✅ | Re-running the importer overwrites (not duplicates) existing rows | Unit test | `ChangelogSystemContentImporterTests.RefreshAsync_RunTwice_OverwritesNotDuplicates` |
 | 6 | ❌ | `IChangelogReader.GetDocumentAsync` returns DB-backed content, correctly reassembled (including `AudienceHighlights["notification"]`), when the database is populated | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabasePopulated_ReturnsReassembledContent` |
 | 7 | ❌ | `IChangelogReader.GetDocumentAsync` falls back to `IChangelogService` (not an exception) when the tables don't exist | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_FallsBackToFileService` |
 | 8 | ❌ | The fallback logs a warning explaining the condition, not silently | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_LogsWarning` |

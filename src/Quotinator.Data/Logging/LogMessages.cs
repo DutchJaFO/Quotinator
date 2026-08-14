@@ -85,4 +85,8 @@ internal static partial class LogMessages
     /// <summary>Logs that the separate changelog database was genuinely empty and its schema was created directly at baseline.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Init] schema created at baseline (v{Version})")]
     public static partial void LogChangelogSchemaCreatedAtBaseline(this ILogger logger, int version);
+
+    /// <summary>Logs completion of a changelog content refresh — how many release/unreleased entries were imported, across how many languages.</summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Import] refreshed {EntryCount} entries across {LanguageCount} language(s)")]
+    public static partial void LogChangelogContentRefreshed(this ILogger logger, int entryCount, int languageCount);
 }

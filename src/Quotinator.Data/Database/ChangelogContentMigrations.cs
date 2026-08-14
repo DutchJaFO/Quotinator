@@ -28,16 +28,17 @@ public static class ChangelogContentMigrations
     /// </summary>
     public const string CreateChangelogTables = """
         CREATE TABLE IF NOT EXISTS Changelog (
-            Id               TEXT NOT NULL PRIMARY KEY,
-            Language         TEXT NOT NULL,
-            Version          TEXT,
-            Date             TEXT,
-            QuoteText        TEXT,
-            QuoteAttribution TEXT,
-            DateCreated      TEXT NOT NULL,
-            DateModified     TEXT,
-            DateDeleted      TEXT,
-            IsDeleted        INTEGER NOT NULL DEFAULT 0
+            Id                TEXT NOT NULL PRIMARY KEY,
+            Language          TEXT NOT NULL,
+            Version           TEXT,
+            Date              TEXT,
+            MachineTranslated INTEGER NOT NULL DEFAULT 0,
+            QuoteText         TEXT,
+            QuoteAttribution  TEXT,
+            DateCreated       TEXT NOT NULL,
+            DateModified      TEXT,
+            DateDeleted       TEXT,
+            IsDeleted         INTEGER NOT NULL DEFAULT 0
         );
         CREATE UNIQUE INDEX IF NOT EXISTS UX_Changelog_Language_Version
             ON Changelog (Language, Version) WHERE Version IS NOT NULL;
