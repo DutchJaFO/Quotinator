@@ -1,6 +1,6 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
-**Status:** In progress (step 9)
+**Status:** In progress (step 10)
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
@@ -506,7 +506,27 @@ remained by the time this step was reached; recorded as its own step in the veri
 rather than folded silently into 6/7's own entries, since it names a distinct requirement.
 
 ### 10. Full verification (T1, T2)
-**Status:** Not started
+**Status:** In progress
+
+**Row 11's original plan (a #293-style Docker fault injection) is not meaningfully constructible for
+this database, and the verification method was changed rather than left unmet.** #293's own T2
+procedure works by upgrading a *persistent* SQLite file across versions until a real migration failure
+leaves genuinely missing tables on disk — that technique has no equivalent here: the changelog database
+is always-fresh, in-memory, and rebuilt from nothing every boot, so there is no persistent state to
+externally corrupt via Docker without editing the production code path itself (which would test the
+edited code, not the shipped code). The two real ways this database's content can be unavailable to a
+request — the `Changelog` table not existing, and the table existing with zero rows (the live race
+window between Kestrel accepting requests and the Step 6 background import finishing) — are each
+exercised directly against the real `ChangelogReader`/`ChangelogDatabaseInitializer` classes via
+real-SQLite unit tests (rows 7, 8, 9b), which is a strictly more precise reproduction of the actual
+failure condition than a Docker-level fault would have been. Step 8's live Docker run additionally
+confirms the happy path renders correctly with zero warnings/errors across a full real startup.
+
+**Row 10 is the one item this session cannot complete — it requires the developer's own action in
+Visual Studio**, per this project's standing rule that local `dotnet run`/T1 verification is exclusively
+the developer's own action (a prior local `dotnet run` by the assistant caused a real IIS Express
+outage). Everything else in the verification table is done; row 10 is the only open item before this
+issue can be closed.
 
 ---
 
@@ -523,10 +543,11 @@ rather than folded silently into 6/7's own entries, since it names a distinct re
 | 7 | ✅ | `IChangelogReader.GetDocumentAsync` falls back to `IChangelogService` (not an exception) when the tables don't exist | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_FallsBackToFileService` |
 | 8 | ✅ | The fallback logs a warning explaining the condition, not silently | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_LogsWarning` |
 | 9 | ✅ | A genuinely different SQL error (not "table missing") still propagates, not swallowed | Unit test | `ChangelogReaderTests.GetDocumentAsync_UnrelatedSqlError_Propagates` |
+| 9b | ✅ | An empty (zero-row) database — schema created, background import not finished yet — falls back the same way a missing table does | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabaseEmpty_FallsBackToFileService` |
 | 10 | ❌ | `About.razor` renders correctly via `IChangelogReader` | Live (T1) | Developer confirms in Visual Studio |
-| 11 | ❌ | `About.razor` still renders (fallback path) when the changelog import fails, matching #293's degraded-state precedent | Live (T2) | Docker: force the changelog import to fail, confirm `/about` still returns `200` with content, not a crash |
-| 12 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 13 | ❌ | Full test suite green | Build | `dotnet test --configuration Release` |
+| 11 | ✅ | `About.razor` still renders (fallback path) when the changelog database is unavailable, matching #293's degraded-state precedent | Unit test (see Step 10 note) | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_FallsBackToFileService`/`_DatabaseEmpty_FallsBackToFileService`, plus a live Docker happy-path run (Step 8) confirming zero errors/warnings end to end |
+| 12 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 13 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run repeatedly across Steps 5–9 to rule out flakiness) |
 
 ---
 
