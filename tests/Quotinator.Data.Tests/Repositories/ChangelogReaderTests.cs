@@ -119,6 +119,28 @@ public class ChangelogReaderTests
             [.. release.GetHighlightsFor(Quotinator.Changelog.Enums.ChangelogReservedAudience.Notification)]);
     }
 
+    /// <summary>
+    /// A genuinely empty database (schema created, but the background import from Step 6 hasn't
+    /// written any rows yet — the real race window #309's non-blocking Program.cs wiring accepts)
+    /// falls back the same way a missing table does, rather than returning an empty/null document.
+    /// </summary>
+    [TestMethod]
+    public async Task GetDocumentAsync_DatabaseEmpty_FallsBackToFileService()
+    {
+        SqliteConnectionFactory factory = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAlive = new(factory);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        await initializer.InitialiseAsync();
+        ChangelogDocument fallback = new() { Language = "en" };
+
+        JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new ChangelogWithLinesStrategy());
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(fallback), NullLogger<ChangelogReader>.Instance);
+
+        ChangelogDocument? document = await reader.GetDocumentAsync("en");
+
+        Assert.AreSame(fallback, document);
+    }
+
     /// <summary>A missing Changelog table falls back to the JSON-backed service instead of throwing.</summary>
     [TestMethod]
     public async Task GetDocumentAsync_TablesMissing_FallsBackToFileService()

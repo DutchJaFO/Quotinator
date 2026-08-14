@@ -495,11 +495,15 @@ Verified: full solution `dotnet build --configuration Release` — 0 Warning(s),
 `dotnet test --configuration Release` — all projects green.
 
 ### 9. Tests
-**Status:** Not started
+**Status:** ✅ Done
 
-Real-SQLite tests (in-memory, matching the production storage mode) for the importer and reader; a
-reproduction of #293's own pattern — build a database with no `Changelog`/`ChangelogLine` tables,
-confirm `IChangelogReader` falls back to the JSON path instead of throwing.
+Already satisfied incrementally by Steps 6 and 7's own test coverage, written alongside each class
+rather than deferred to a separate pass — `ChangelogSystemContentImporterTests` (real-SQLite,
+shared-cache in-memory, matching the production storage mode) and `ChangelogReaderTests`, including the
+#293-pattern reproduction this step specifically called for
+(`GetDocumentAsync_TablesMissing_FallsBackToFileService`/`_LogsWarning`). No further test-writing work
+remained by the time this step was reached; recorded as its own step in the verification table below
+rather than folded silently into 6/7's own entries, since it names a distinct requirement.
 
 ### 10. Full verification (T1, T2)
 **Status:** Not started
