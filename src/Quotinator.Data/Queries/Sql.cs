@@ -108,10 +108,12 @@ internal static class Sql
     }
 
     /// <summary>
-    /// Bulk content-refresh SQL for the separate changelog database's own <c>Changelog</c>/
-    /// <c>ChangelogLine</c> tables (#309, ADR 018). Consumed by
-    /// <see cref="Import.ChangelogSystemContentImporter"/>. Separate from <see cref="ChangelogSchema"/>
-    /// — that class covers schema/version bookkeeping, this one covers the domain content itself.
+    /// Content SQL for the separate changelog database's own <c>Changelog</c>/<c>ChangelogLine</c>
+    /// tables (#309, ADR 018) — both the bulk refresh (write) SQL consumed by
+    /// <see cref="Import.ChangelogSystemContentImporter"/> and the flattening read query consumed by
+    /// <see cref="ChangelogWithLinesStrategy"/>/<see cref="Repositories.ChangelogReader"/>. Separate
+    /// from <see cref="ChangelogSchema"/> — that class covers schema/version bookkeeping, this one
+    /// covers the domain content itself.
     /// </summary>
     internal static class ChangelogContent
     {
@@ -120,6 +122,25 @@ internal static class Sql
         // Changelog first would silently orphan ChangelogLine rows rather than fail loudly.
         internal const string ClearLines      = "DELETE FROM ChangelogLine;";
         internal const string ClearChangelogs = "DELETE FROM Changelog;";
+
+        /// <summary>
+        /// Every <c>Changelog</c> row LEFT JOINed with its <c>ChangelogLine</c> children, flattened
+        /// into <see cref="ChangelogLineRow"/> — a row with no lines still appears once, with every
+        /// line-only column <c>NULL</c>. No language filter: the whole dataset (bounded by release
+        /// count × line count, a handful of KB in practice) is pulled into memory once and grouped in
+        /// C#, reusing <c>IChangelogService.GetForCulture</c>'s own normalise-then-fallback-to-en
+        /// logic rather than duplicating it as a second SQL-side implementation.
+        /// </summary>
+        internal static string SelectAllWithLines() => $"""
+            SELECT {IdClauses.SelectColumn("[c].[Id]", "ChangelogId")},
+                   [c].[Language], [c].[Version], [c].[Date], [c].[MachineTranslated],
+                   [c].[QuoteText], [c].[QuoteAttribution],
+                   [l].[Kind], [l].[AudienceKey], [l].[Value], [l].[SortOrder]
+            FROM   [Changelog] [c]
+            LEFT JOIN [ChangelogLine] [l] ON {IdClauses.Join("[l].[ChangelogId]", "[c].[Id]")} AND [l].[IsDeleted] = 0
+            WHERE  [c].[IsDeleted] = 0
+            ORDER BY [c].[Language], [c].[Version], [l].[Kind], [l].[SortOrder]
+            """;
     }
 
     /// <summary>JOIN fragment helpers — assembles INNER JOIN and LEFT JOIN clauses with bracket-quoted identifiers.</summary>

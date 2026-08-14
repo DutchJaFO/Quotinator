@@ -1,6 +1,6 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 8)
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
@@ -424,7 +424,53 @@ is not merely flaky-passing), including the previously-broken
 `Health_NoOpDatabaseInitializer_StaysHealthyDespiteMissingNotificationTable`.
 
 ### 7. `ChangelogLineRow` + `IJoinStrategy` + `IChangelogReader`/`ChangelogReader` — DB-first, JSON-fallback
-**Status:** Not started
+**Status:** ✅ Done
+
+`ChangelogLineRow` (`Quotinator.Data.Queries`) is the flat read model — every `Changelog` column plus
+`ChangelogLine`'s `Kind`/`AudienceKey`/`Value`/`SortOrder`, all nullable on the line side so a
+`Changelog` row with zero lines still appears once via the LEFT JOIN. `ChangelogWithLinesStrategy :
+IJoinStrategy<ChangelogLineRow>` wraps a new `Sql.ChangelogContent.SelectAllWithLines()` factory method
+— hand-written `LEFT JOIN ... ON {IdClauses.Join(...)} AND [l].[IsDeleted] = 0` matching
+`Sql.Quotes.SelectBase`'s own idiom (not the generic `Sql.Joins.Left` helper, which doesn't
+case-insensitively wrap its join condition), per ADR 017 (never a hand-rolled query outside this
+pattern) and the case-insensitive-by-default rule (`Changelog.Id`'s own SELECT-list appearance also
+goes through `IdClauses.SelectColumn`).
+
+**Deviation from this section's original design snippet, documented here rather than silently
+diverging:** the sketch above showed `_joinRepo.QueryAsync(new { language })` — a SQL-side language
+filter. `ChangelogReader` instead queries with no filter at all and resolves the language (including the
+same normalise-then-fallback-to-`en` logic `IChangelogService.GetForCulture`/`ChangelogService.Normalise`
+already implement) in C#, after grouping the flat rows by `Language` then by `ChangelogId`. Reasoning:
+the whole changelog dataset (bounded by release count × line count — a handful of KB in practice) is
+cheap to pull into memory once, and duplicating the normalise/fallback rule as a second, SQL-side
+implementation would be a second place for that logic to drift from the JSON-backed service's own rule.
+`Issues` lines parse back from their stored string form to `int` here (`int.Parse`); `Releases` re-sort
+by `Date` descending (ISO 8601 strings sort correctly lexically — the same assumption this project
+already relies on for `RecordBase`'s own string-stored timestamps) since `Changelog` itself has no
+explicit ordering column, unlike `ChangelogLine.SortOrder`.
+
+The missing-table fallback (`IsMissingChangelogTable`, checking `SqliteErrorCode == 1` and the message
+containing `"no such table: Changelog"`) is #293's `NotificationReader.IsMissingNotificationTable` idiom
+applied verbatim — checking for `Changelog` alone (the query's driving table) covers the realistic
+failure mode, since `ChangelogLine` is created in the same migration/baseline. An empty result set (zero
+rows — e.g. a request racing the background import from Step 6, which #309's own `Program.cs` wiring
+deliberately doesn't block startup on) is treated the same as a missing table: both fall back to
+`IChangelogService` rather than returning an empty/null document, which is the same degraded case the
+missing-table path already had to handle.
+
+`ChangelogReaderTests` (`Quotinator.Data.Tests`) —
+`GetDocumentAsync_DatabasePopulated_ReturnsReassembledContent` (imports a document via
+`ChangelogSystemContentImporter`, then reads it back through `ChangelogReader` and asserts every
+field — including `GetHighlightsFor(ChangelogReservedAudience.Notification)` round-tripping through the
+DB, closing the loop #307 opened), `GetDocumentAsync_TablesMissing_FallsBackToFileService`,
+`GetDocumentAsync_TablesMissing_LogsWarning` (a hand-rolled `RecordingLogger : ILogger<ChangelogReader>`,
+matching `SourceCacheUpdaterTests`' own existing pattern — no test-logging package was added), and
+`GetDocumentAsync_UnrelatedSqlError_Propagates` (a deliberately broken `IJoinStrategy` producing a SQL
+syntax error, proving the narrow exception filter doesn't over-match).
+
+Verified: full solution `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s). Full solution
+`dotnet test --configuration Release` — all projects green (run twice), including
+`Health_NoOpDatabaseInitializer_StaysHealthyDespiteMissingNotificationTable` (Step 6's fix still holds).
 
 ### 8. Wire `About.razor` to `IChangelogReader`
 **Status:** Not started
@@ -450,10 +496,10 @@ confirm `IChangelogReader` falls back to the JSON path instead of throwing.
 | 3 | ✅ | A genuinely empty (fresh) changelog database takes the one-step baseline path, matching `DatabaseInitializer`'s existing rule | Unit test | `ChangelogDatabaseInitializerTests.EmptyDatabase_AppliesBaseline` |
 | 4 | ✅ | Importer writes one `Changelog` row per release + one per language's `unreleased`, with correctly-ordered `ChangelogLine` children | Unit test | `ChangelogSystemContentImporterTests.RefreshAsync_WritesReleasesAndOrderedLines` |
 | 5 | ✅ | Re-running the importer overwrites (not duplicates) existing rows | Unit test | `ChangelogSystemContentImporterTests.RefreshAsync_RunTwice_OverwritesNotDuplicates` |
-| 6 | ❌ | `IChangelogReader.GetDocumentAsync` returns DB-backed content, correctly reassembled (including `AudienceHighlights["notification"]`), when the database is populated | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabasePopulated_ReturnsReassembledContent` |
-| 7 | ❌ | `IChangelogReader.GetDocumentAsync` falls back to `IChangelogService` (not an exception) when the tables don't exist | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_FallsBackToFileService` |
-| 8 | ❌ | The fallback logs a warning explaining the condition, not silently | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_LogsWarning` |
-| 9 | ❌ | A genuinely different SQL error (not "table missing") still propagates, not swallowed | Unit test | `ChangelogReaderTests.GetDocumentAsync_UnrelatedSqlError_Propagates` |
+| 6 | ✅ | `IChangelogReader.GetDocumentAsync` returns DB-backed content, correctly reassembled (including `AudienceHighlights["notification"]`), when the database is populated | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabasePopulated_ReturnsReassembledContent` |
+| 7 | ✅ | `IChangelogReader.GetDocumentAsync` falls back to `IChangelogService` (not an exception) when the tables don't exist | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_FallsBackToFileService` |
+| 8 | ✅ | The fallback logs a warning explaining the condition, not silently | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_LogsWarning` |
+| 9 | ✅ | A genuinely different SQL error (not "table missing") still propagates, not swallowed | Unit test | `ChangelogReaderTests.GetDocumentAsync_UnrelatedSqlError_Propagates` |
 | 10 | ❌ | `About.razor` renders correctly via `IChangelogReader` | Live (T1) | Developer confirms in Visual Studio |
 | 11 | ❌ | `About.razor` still renders (fallback path) when the changelog import fails, matching #293's degraded-state precedent | Live (T2) | Docker: force the changelog import to fail, confirm `/about` still returns `200` with content, not a crash |
 | 12 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |

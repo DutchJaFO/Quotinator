@@ -89,4 +89,8 @@ internal static partial class LogMessages
     /// <summary>Logs completion of a changelog content refresh — how many release/unreleased entries were imported, across how many languages.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Import] refreshed {EntryCount} entries across {LanguageCount} language(s)")]
     public static partial void LogChangelogContentRefreshed(this ILogger logger, int entryCount, int languageCount);
+
+    /// <summary>Logs that the changelog database's own Changelog table is missing — falling back to reading its JSON files directly, matching #293's NotificationReader precedent.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Changelog - Read] Changelog table missing — falling back to the JSON-backed changelog service")]
+    public static partial void LogChangelogTableMissingFallingBackToFile(this ILogger logger, Exception ex);
 }

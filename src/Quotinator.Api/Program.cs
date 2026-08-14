@@ -314,6 +314,15 @@ builder.Services.AddSingleton<ChangelogConnectionKeepAlive>();
 builder.Services.AddSingleton<ChangelogDatabaseInitializer>();
 builder.Services.AddSingleton<ChangelogRepository>();
 builder.Services.AddSingleton<ChangelogSystemContentImporter>();
+// JoinQueryRepository/IJoinStrategy per ADR 017. Factory overload (not the bare AddSingleton<
+// JoinQueryRepository<T>>() every other join query below uses) — those all resolve the main
+// database's own unkeyed IDbConnectionFactory; this one must resolve the changelog database's keyed
+// factory instead, which the container can't supply implicitly at registration time.
+builder.Services.AddSingleton<IJoinStrategy<ChangelogLineRow>, ChangelogWithLinesStrategy>();
+builder.Services.AddSingleton(sp => new JoinQueryRepository<ChangelogLineRow>(
+    sp.GetRequiredKeyedService<IDbConnectionFactory>(DatabaseConnectionKeys.Changelog),
+    sp.GetRequiredService<IJoinStrategy<ChangelogLineRow>>()));
+builder.Services.AddSingleton<IChangelogReader, ChangelogReader>();
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
 // InitiatorContext implements both interfaces over the same AsyncLocal-backed instance, so
