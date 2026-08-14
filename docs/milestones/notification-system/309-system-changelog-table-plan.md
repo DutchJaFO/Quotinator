@@ -1,6 +1,6 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 9)
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
@@ -473,7 +473,26 @@ Verified: full solution `dotnet build --configuration Release` — 0 Warning(s),
 `Health_NoOpDatabaseInitializer_StaysHealthyDespiteMissingNotificationTable` (Step 6's fix still holds).
 
 ### 8. Wire `About.razor` to `IChangelogReader`
-**Status:** Not started
+**Status:** ✅ Done
+
+`About.razor.cs` now injects `IChangelogReader` instead of `IChangelogService` and awaits
+`GetDocumentAsync(...)` inside the existing `OnInitializedAsync` (already async, no shape change to the
+method needed). `About.razor`'s own markup was untouched — it only ever consumed `_document`, never
+`IChangelogService` directly.
+
+**Live-verified in Docker (T2), not just unit-tested** — built the image, ran the container, and
+confirmed via the container's own startup logs that `[Changelog - Import] refreshed 126 entries across 3
+language(s)` completed before `/about` was requested. Fetched `/about` after full startup completed (the
+first fetch, made too early, correctly returned the `StartupWaitMiddleware` "starting up" page instead —
+itself a confirmation that #280's existing wait-page behaviour still works correctly with the new
+background changelog task in flight). The second fetch returned real rendered content: 43
+`changelog-entry` elements, correct `data-version` attributes (`1.0.0`, `1.0.0-beta.1`, `1.0.1`, …), and
+real highlight text — proving the DB-backed path actually served the page, not a silent fallback (no
+`[Changelog - Read]`/`[Database - Init]` warning appeared anywhere in the container's logs for the whole
+run). Container logs showed zero warnings or errors end to end.
+
+Verified: full solution `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s). Full solution
+`dotnet test --configuration Release` — all projects green.
 
 ### 9. Tests
 **Status:** Not started
