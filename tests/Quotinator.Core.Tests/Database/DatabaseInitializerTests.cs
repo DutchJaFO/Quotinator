@@ -1070,7 +1070,7 @@ public class DatabaseInitializerTests
             Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
         }
 
-        Assert.AreEqual(3, db2.DataSchemaVersion, "Data migrations 2-3 (the #155 consolidation, plus #289's consolidation of the two AppliedPolicy CHECK constraint migrations, #253's domain-prefix rename, #251's FileResource tables, #252's FileResourceOrigin generalization, and #278's System_Notification table into one) should have replayed from the correctly-seeded starting point of 1");
+        Assert.AreEqual(4, db2.DataSchemaVersion, "Data migrations 2-4 (the #155 consolidation, plus #289's consolidation of the two AppliedPolicy CHECK constraint migrations, #253's domain-prefix rename, #251's FileResource tables, #252's FileResourceOrigin generalization, and #278's System_Notification table into one, plus #81's System_AppVersion table) should have replayed from the correctly-seeded starting point of 1");
     }
 
     /// <summary>Replaying from a legacy v1.7.2 AuditEntries table renames it all the way to Audit_Entry (via migration 2's Audit_Entry then migration 3's domain-prefix rename) and preserves existing rows and both indexes.</summary>
@@ -1511,7 +1511,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(3, db.DataSchemaVersion);
+        Assert.AreEqual(4, db.DataSchemaVersion);
         Assert.AreEqual(5, db.SchemaVersion);
     }
 

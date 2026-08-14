@@ -146,6 +146,64 @@ notification is *displayed*, not whether it's correctly written. This issue does
 
 ---
 
+## Design revision (2026-08-14) — catch up across every version missed, not just the currently running one
+
+**Finding, confirmed with the developer:** the original design above only ever checked whether the
+*currently running* version had flagged highlights. An operator who upgrades across several versions in
+one go (e.g. skipping three patch releases between restarts) would only ever see the landing version's
+notification — everything flagged in the skipped versions would never surface at all, since this
+producer only ever runs at startup and only ever looked at one version.
+
+**Behaviour, as directed by the developer:**
+- On a genuine upgrade, walk every release strictly newer than the last version this app instance
+  actively ran, up to and including the version now running, and write one notification per release
+  that has flagged highlights (not one combined notification — each keeps its own version in its own
+  dedupe key/message, so a multi-version catch-up produces several distinct notifications).
+- On a **genuinely fresh install** (no version ever recorded before), show only the current version's
+  notification — never the full historical backlog of every release that has ever had a flagged
+  highlight.
+
+### `System_AppVersion` — a new table tracking the last version that ran
+
+A single-row table (`Quotinator.Data`-owned, `System_AppVersion`, Data-owned migration 4, `RecordBase`
+per ADR 002) records the version string as of the last healthy startup. Read via
+`IAppVersionTracker.GetLastActiveVersionAsync()` **before migrations run** on the following boot — a
+missing table (a fresh install, or literally the first boot after this table was introduced) reads as
+`null`, which is exactly the correct "fresh install" signal per the behaviour above; no separate
+bootstrap flag is needed. Written via `RecordCurrentVersionAsync(version)` — an upsert (update the one
+existing row if present, insert if not), called once startup is healthy.
+
+**`Program.cs` sequencing:** `GetLastActiveVersionAsync()` is called synchronously, before
+`dbInitializer.InitialiseAsync()` — fast (a single row against the main database, no separate connection
+factory involved, unlike #309's changelog database), and captures the *old* value before anything
+changes it. `RecordCurrentVersionAsync` is called synchronously too, right after `dbHealth.IsHealthy` —
+also fast, matching #279's/#289's own synchronous read+write producers, so it does not reintroduce the
+`StartupPhaseState.MarkComplete()` timing regression found twice already in this issue and in #309.
+Only the *changelog-dependent* catch-up logic (`IChangelogReader.GetDocumentAsync`, the actual slow
+part) stays in its own detached background task.
+
+**Range matching uses `ChangelogDocument.Releases`' own newest-first array order, not semver parsing** —
+`WhatsNewNotification.BuildSeeds` finds the array position of the last-active version and the current
+version, then takes everything from the current version's index up to (but not including) the last-
+active version's index. `.NET`'s own `Take(int)` treats a non-positive count as empty, which naturally
+handles "no upgrade" (same version, `Take(0)`) and a downgrade (current version newer in the array,
+negative count) the same way — nothing to report, no special-case code needed for either. A last-active
+version that isn't found in the changelog at all (predates its history) falls back to just the current
+version rather than guessing how far back to walk.
+
+**`System_AppVersion` must always have content, the same "structurally required" reasoning CLAUDE.md's
+endpoint side-effect policy applies elsewhere** — found live: `POST /admin/database/reset` (and the
+identical `NotificationDismissTrigger.DatabaseReset` action-executor path) rebuilds this table empty
+along with every other table (#156, no protected/excluded set). Left alone, it would stay empty until
+the next full app restart, meaning a Reset immediately followed by a real version upgrade (without an
+intervening restart) would lose the "last active version" signal and wrongly treat the upgrade as a
+fresh install. Both Reset call sites now also call `appVersionTracker.RecordCurrentVersionAsync(...)`
+immediately after a successful reset, in their own non-fatal try/catch (a version-recording failure must
+never turn a successful Reset into a failed response — found live via a real test failure, see Step 5's
+notes).
+
+---
+
 ## Steps
 
 ### 1. Plan doc, slnx, overview.md
@@ -215,6 +273,52 @@ itself as thin as the two existing producers.
 **T1 is the one item this session cannot complete** — per this project's standing rule that local
 `dotnet run`/T1 verification is exclusively the developer's own action.
 
+### 5. Multi-version catch-up: `System_AppVersion`, range-based `WhatsNewNotification.BuildSeeds`
+**Status:** ✅ Done
+
+`AppVersionMigrations.CreateAppVersionTable` (Data-owned migration 4, baseline updated in the same
+commit), `AppVersionEntity`, `Sql.AppVersion` (`SelectCurrent`/`UpdateVersionById`), and
+`IAppVersionTracker`/`AppVersionTracker` (`Quotinator.Data.Repositories`) — the read tolerates a missing
+table via #293's exact idiom (`SqliteErrorCode == 1` + message match), matching every other "read before
+the schema is guaranteed to exist" case in this codebase.
+
+`WhatsNewNotification.BuildSeed`/`SeedAsync` became `BuildSeeds`/`SeedAsync` (plural) — array-position
+range matching against `document.Releases` as described in the Design revision above, returning zero or
+more `Seed`s instead of at most one.
+
+**Two real gaps found and fixed while implementing this, both via genuine test failures, not
+inspection:**
+- **Three pre-existing tests hardcoded the Data-owned migration count as `3`** (schema-drift and
+  legacy-upgrade tests in both `Quotinator.Data.Tests` and `Quotinator.Core.Tests`) — adding migration 4
+  correctly broke all three; updated the literals to `4` rather than treating the failure as
+  suspicious, since the count genuinely changed.
+- **`POST /admin/database/reset`'s new `RecordCurrentVersionAsync` call was unguarded** — a real test
+  (`AdminEndpointsTests`, which defaults to `NoOpDatabaseInitializer` and so never actually creates
+  `System_AppVersion`) turned a successful Reset into a `500 InternalServerError`, since the unguarded
+  call threw past the point where the response was already determined. Both Reset call sites
+  (`AdminEndpoints.cs` and `NotificationActionExecutor.cs`) now wrap this call in the same non-fatal
+  try/catch pattern `Program.cs`'s own startup wiring already uses — a version-recording failure must
+  never turn a successful Reset into a failed response.
+
+`AppVersionTrackerTests` (`Quotinator.Data.Tests`, real SQLite) — missing table and empty table both
+read as `null`; a first write inserts; a second write updates the same row in place, not a duplicate.
+`DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAppVersionSchema` (schema-drift parity,
+matching the existing pattern for every other Data-owned table). `WhatsNewNotificationTests` gained six
+new `BuildSeeds_*` tests covering fresh install, a multi-version upgrade (with an unflagged release and
+an out-of-range release both correctly excluded), same-version (no-op), downgrade, a last-active version
+missing from the changelog, and a current version missing from the changelog.
+
+**Live-verified in Docker, twice.** First run (fresh install → restart, same version): zero
+warnings/errors either boot, and the notification count stayed at just the pre-existing #279 entry
+across the restart — proving the version write on first boot and the read-back on the second boot both
+work, and that a same-version restart correctly produces no new catch-up notification. Second run (the
+Reset endpoint specifically, with `Quotinator__AdminApiKey` set): `POST /admin/database/reset` returned
+`200` with zero warnings/errors in the log — directly proving the try/catch fix found via the failing
+unit test also holds against a real running app, not just the test harness.
+
+Verified: full solution `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s). Full solution
+`dotnet test --configuration Release` — all projects green (run twice).
+
 ---
 
 ## Verification
@@ -231,6 +335,15 @@ itself as thin as the two existing producers.
 | 8 | ✅ | T2 — Docker build and smoke test | Live | Confirmed both directions: real (unmodified) v1.8.3 content correctly writes nothing (zero flagged highlights); a temporarily-flagged local copy (never committed) correctly writes the notification, visible via `GET /api/v1/notifications` |
 | 9 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 10 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run twice to rule out the startup-latency flakiness found in Step 2) |
+| 11 | ✅ | `GetLastActiveVersionAsync` returns `null` when `System_AppVersion` doesn't exist or is empty | Unit test | `AppVersionTrackerTests.GetLastActiveVersionAsync_TableMissing_ReturnsNull`, `_TableEmpty_ReturnsNull` |
+| 12 | ✅ | `RecordCurrentVersionAsync` inserts on first call, updates the same row (not a duplicate) on later calls | Unit test | `AppVersionTrackerTests.RecordCurrentVersionAsync_FirstCall_InsertsRow`, `_CalledTwice_UpdatesInPlaceNotDuplicate` |
+| 13 | ✅ | `System_AppVersion`'s baseline and incremental replay produce identical schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAppVersionSchema` |
+| 14 | ✅ | A fresh install considers only the current version, never the historical backlog | Unit test | `WhatsNewNotificationTests.BuildSeeds_FreshInstall_OnlyConsidersCurrentVersion` |
+| 15 | ✅ | An upgrade across multiple versions returns one seed per flagged release in range, excluding unflagged and out-of-range releases | Unit test | `WhatsNewNotificationTests.BuildSeeds_UpgradeAcrossMultipleVersions_ReturnsOneSeedPerFlaggedReleaseInRange` |
+| 16 | ✅ | Same version as last active (no upgrade) and a downgrade both return nothing | Unit test | `WhatsNewNotificationTests.BuildSeeds_SameVersionAsLastActive_ReturnsNothing`, `_Downgrade_ReturnsNothing` |
+| 17 | ✅ | A last-active version missing from the changelog falls back to current-version-only; a current version missing from the changelog returns nothing | Unit test | `WhatsNewNotificationTests.BuildSeeds_LastActiveVersionNotInChangelog_FallsBackToCurrentVersionOnly`, `_CurrentVersionNotInChangelog_ReturnsNothing` |
+| 18 | ✅ | `POST /admin/database/reset` re-populates `System_AppVersion` immediately, and a failure to do so never turns a successful Reset into a failed response | Unit test + Live (T2) | `NotificationActionExecutorTests.ExecuteAsync_DatabaseReset_...` asserts the recorded version; Docker: `POST /admin/database/reset` with a real admin key returned `200` with zero warnings/errors |
+| 19 | ✅ | The version-tracking round-trip works against a real running app: written on first boot, read back and correctly produces no spurious catch-up notification on a same-version restart | Live (T2) | Docker: fresh install → restart, notification count unchanged, zero warnings/errors either boot |
 
 ---
 

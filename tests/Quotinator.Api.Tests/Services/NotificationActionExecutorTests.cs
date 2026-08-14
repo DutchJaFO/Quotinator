@@ -1,20 +1,43 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Api.Services;
 using Quotinator.Api.Startup;
 using Quotinator.Api.Tests.Fakes;
+using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
+using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Tests.Services;
 
-/// <summary>Exercises <see cref="NotificationActionExecutor"/> (#278).</summary>
+/// <summary>Exercises <see cref="NotificationActionExecutor"/> (#278, #81).</summary>
 [TestClass]
 public class NotificationActionExecutorTests
 {
+    private sealed class FakeVersionService : IVersionService
+    {
+        public string Version => "1.8.3";
+    }
+
+    private sealed class SpyAppVersionTracker : IAppVersionTracker
+    {
+        public List<string> RecordedVersions { get; } = [];
+
+        public Task<string?> GetLastActiveVersionAsync() => Task.FromResult<string?>(null);
+
+        public Task RecordCurrentVersionAsync(string version)
+        {
+            RecordedVersions.Add(version);
+            return Task.CompletedTask;
+        }
+    }
+
     [TestMethod]
     public void CanExecute_DatabaseReset_ReturnsTrue()
     {
-        var executor = new NotificationActionExecutor(new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter());
+        var executor = new NotificationActionExecutor(
+            new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
 
         Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.DatabaseReset));
     }
@@ -26,7 +49,9 @@ public class NotificationActionExecutorTests
         var health = new DatabaseHealthState();
         health.MarkFailed("some prior failure");
         var notificationWriter = new FakeNotificationWriter();
-        var executor = new NotificationActionExecutor(dbInitializer, health, notificationWriter);
+        var appVersionTracker = new SpyAppVersionTracker();
+        var executor = new NotificationActionExecutor(
+            dbInitializer, health, notificationWriter, appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
 
         await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
 
@@ -34,6 +59,8 @@ public class NotificationActionExecutorTests
         Assert.IsTrue(health.IsHealthy);
         Assert.HasCount(1, notificationWriter.DismissByTriggerCalls);
         Assert.AreEqual(NotificationDismissTrigger.DatabaseReset, notificationWriter.DismissByTriggerCalls[0]);
+        Assert.AreSequenceEqual(["1.8.3"], appVersionTracker.RecordedVersions,
+            "Reset must re-populate System_AppVersion immediately, matching AdminEndpoints.cs's own wiring.");
     }
 
     private sealed class SpyDatabaseInitializer : IDatabaseInitializer

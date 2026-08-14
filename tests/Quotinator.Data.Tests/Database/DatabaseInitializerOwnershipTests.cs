@@ -602,6 +602,33 @@ public class DatabaseInitializerOwnershipTests
         }
     }
 
+    /// <summary>
+    /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
+    /// for <c>System_AppVersion</c> (added by #81's Data-owned migration 4).
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAppVersionSchema()
+    {
+        using var tempA = new TempDatabase([]);
+        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using var tempB = new TempDatabase([]);
+        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync(TestContext.CancellationToken);
+        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync(TestContext.CancellationToken);
+
+        var schemaA = await DumpTableSchemaAsync(connA, "System_AppVersion");
+        var schemaB = await DumpTableSchemaAsync(connB, "System_AppVersion");
+
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_AppVersion schema differs between Data's baseline and incremental paths — " +
+            "update DataBaselineSql to match DataOwnedMigrations' final result.");
+    }
+
     /// <summary>A fresh database with no consumer baseline defined always falls through to the full incremental path, even though it is empty.</summary>
     [TestMethod]
     public async Task ApplyBaselineAsync_NoConsumerBaselineDefined_FallsThroughToIncremental()
@@ -615,9 +642,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync(TestContext.CancellationToken);
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(3, dataRows,
+        Assert.AreEqual(4, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(3, db.DataSchemaVersion);
+        Assert.AreEqual(4, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

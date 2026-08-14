@@ -21,11 +21,13 @@ public class SqlBoundaryTests
     /// references a consumer-defined entity. <c>ChangelogSchema</c>/<c>ChangelogContent</c> (#309)
     /// stay here too — the separate changelog database's own version-bookkeeping and content-refresh
     /// SQL, with no relational or transactional coupling to any consumer-defined entity (ADR 018).
+    /// <c>AppVersion</c> (#81) stays here too — tracks the last app version that completed a healthy
+    /// startup, pure app-instance state with no consumer-entity coupling of any kind.
     /// </summary>
     [TestMethod]
     public void Sql_ContainsOnlyGenericInfrastructureQueries()
     {
-        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides", "FileResources", "Notifications", "ChangelogSchema", "ChangelogContent" };
+        var expected = new HashSet<string> { "Schema", "Joins", "Queries", "SystemAudit", "SystemImportActions", "SystemChangeLog", "ImportBatches", "SystemSourceFileOverrides", "FileResources", "Notifications", "ChangelogSchema", "ChangelogContent", "AppVersion" };
 
         var actual = typeof(Sql)
             .GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Static)

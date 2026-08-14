@@ -348,6 +348,7 @@ builder.Services.AddSingleton<INotificationReader, NotificationReader>();
 builder.Services.AddSingleton<INotificationWriter>(sp =>
     new NotificationWriter(sp.GetRequiredService<IDbConnectionFactory>(), notificationDefaultExpiryHours));
 builder.Services.AddSingleton<INotificationActionExecutor, NotificationActionExecutor>();
+builder.Services.AddSingleton<IAppVersionTracker, AppVersionTracker>();
 
 // #59: restorable-repository access for Quote/Source/Character/Person, needed only by batch-undo
 // (reversal) — nothing else in the app soft-deletes these tables today. Fully generic, already
@@ -791,6 +792,16 @@ _ = Task.Run(async () =>
     }
 });
 
+// #81: capture the version this app instance was running as of its *previous* healthy startup,
+// before migrations run — a missing System_AppVersion table (a fresh install, or the very first boot
+// after this table was introduced) reads as null, meaning "nothing to catch up on, only the current
+// version matters" (WhatsNewNotification.BuildSeeds' own fresh-install rule). Read here, synchronously
+// and fast (a single row against the main database, matching #279's/#289's own producers' own
+// synchronous read+write — unlike #309's changelog database, there is no separate, slower connection
+// factory involved), and used further down once the current version is known to be running healthily.
+var appVersionTracker = app.Services.GetRequiredService<IAppVersionTracker>();
+var lastActiveVersion = await appVersionTracker.GetLastActiveVersionAsync();
+
 // A database initialisation failure must never crash the whole process outright — that would
 // also make POST /api/v1/admin/database/reset unreachable, the one endpoint actually capable of
 // resolving the underlying schema/version mismatch (found live, 2026-08-02: exiting on this
@@ -889,11 +900,32 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
     }
 }
 
-// #81: third producer for #278's notification mechanism — announces the running release's
+// #81: System_AppVersion is meant to always carry the current version once startup is healthy —
+// the same "structurally required, not the caller's optional content" reasoning CLAUDE.md's endpoint
+// side-effect policy applies elsewhere, just applied to a startup step instead of an endpoint. Fast,
+// synchronous, single-row write against the already-open main database (matching #279's/#289's own
+// synchronous read+write producers) — safe to await inline, unlike #309's changelog database or the
+// slower catch-up logic below.
+if (dbHealth.IsHealthy)
+{
+    try
+    {
+        await appVersionTracker.RecordCurrentVersionAsync(versionService.Version);
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Server] Failed to record the current app version — non-fatal, startup continues. " +
+                "The what's-new notification's catch-up range may be inaccurate on the next restart.");
+    }
+}
+
+// #81: third producer for #278's notification mechanism — announces every release's
 // notification-flagged changelog highlights (#307's ChangelogReservedAudience.Notification
-// convention), once per version. Reads via IChangelogReader (#309), which falls back to the
-// JSON-backed IChangelogService on its own if the changelog database isn't ready or available — this
-// producer doesn't need to know or care which path served the document. "Seen" state is the existing
+// convention) missed since lastActiveVersion (captured above, before migrations ran), one
+// notification per release. Reads via IChangelogReader (#309), which falls back to the JSON-backed
+// IChangelogService on its own if the changelog database isn't ready or available — this producer
+// doesn't need to know or care which path served the document. "Seen" state is the existing
 // notification history itself (dismissing via POST /notifications/{id}/dismiss stops it reappearing);
 // no separate cookie or localStorage marker is needed. Runs detached, like #309's own changelog-import
 // task — found live: awaiting IChangelogReader.GetDocumentAsync inline here delayed
@@ -913,7 +945,8 @@ if (dbHealth.IsHealthy)
                 app.Services.GetRequiredService<INotificationReader>(),
                 app.Services.GetRequiredService<INotificationWriter>(),
                 whatsNewDocument,
-                app.Services.GetRequiredService<IVersionService>().Version);
+                lastActiveVersion,
+                versionService.Version);
         }
         catch (Exception ex)
         {

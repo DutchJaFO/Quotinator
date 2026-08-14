@@ -69,6 +69,10 @@ public class DatabaseInitializer(
         new SchemaMigration { Version = 1, Sql = AuditMigrations.CreateAuditEntriesTable },
         new SchemaMigration { Version = 2, Sql = DataConsolidatedMigrations.SinceV172 },
         new SchemaMigration { Version = 3, Sql = DataConsolidatedMigrations.SinceV182 },
+        // #81: System_AppVersion tracks the last app version that completed a healthy startup, read
+        // before migrations run on the following boot so the what's-new notification producer can walk
+        // every release missed since then, not just the one currently running.
+        new SchemaMigration { Version = 4, Sql = AppVersionMigrations.CreateAppVersionTable },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -262,6 +266,15 @@ public class DatabaseInitializer(
         );
         CREATE INDEX IF NOT EXISTS IX_System_Notification_Active ON System_Notification (IsDismissed, IsDeleted, ExpiresAt);
         CREATE INDEX IF NOT EXISTS IX_System_Notification_DismissTriggerKey ON System_Notification (DismissTriggerKey);
+
+        CREATE TABLE IF NOT EXISTS System_AppVersion (
+            Id           TEXT NOT NULL PRIMARY KEY,
+            Version      TEXT NOT NULL,
+            DateCreated  TEXT NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0
+        );
         """;
 
     private readonly IDbConnectionFactory _factory = factory;

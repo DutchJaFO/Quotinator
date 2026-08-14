@@ -209,7 +209,7 @@ internal static class AdminEndpoints
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, INotificationWriter notificationWriter, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
+        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, INotificationWriter notificationWriter, IAppVersionTracker appVersionTracker, IVersionService versionService, ILogger<Program> logger, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
         {
             await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh);
             dbHealth.MarkHealthy();
@@ -222,6 +222,22 @@ internal static class AdminEndpoints
             // (a future action that does *not* wipe the whole database would make it load-bearing),
             // and it's harmless here.
             await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
+            // #81: Reset rebuilds System_AppVersion empty like every other table (no protected set) —
+            // re-populate it immediately so it stays "always provided with content" rather than only
+            // getting a row again on the next full app restart. The version hasn't actually changed
+            // (Reset wipes data, not the running build), so this is a same-version overwrite in the
+            // common case — harmless, and correct if a Reset ever coincides with a version change.
+            // Non-fatal, matching Program.cs's own startup treatment of this same call — a test's
+            // stubbed IDatabaseInitializer (e.g. NoOpDatabaseInitializer) never actually creates
+            // System_AppVersion, and this must never turn a successful Reset into a failed response.
+            try
+            {
+                await appVersionTracker.RecordCurrentVersionAsync(versionService.Version);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "[Server] Failed to record the current app version after Reset — non-fatal, the reset itself still succeeded.");
+            }
             return Results.Ok(new DatabaseSeedSummaryResponse
             {
                 Quotes          = db.QuoteCount,

@@ -616,4 +616,21 @@ internal static class Sql
             $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DateModified = @dateModified " +
             $"WHERE IsDismissed = 0 AND IsDeleted = 0 AND {TextClauses.Equals("DismissTriggerKey", "trigger")};";
     }
+
+    /// <summary>
+    /// <c>System_AppVersion</c> (#81) — tracks the last app version that completed a healthy startup.
+    /// Exactly one non-deleted row is an application-level invariant enforced by
+    /// <see cref="Repositories.AppVersionTracker"/>'s own upsert logic, not the schema.
+    /// </summary>
+    internal static class AppVersion
+    {
+        /// <summary>The current row (there is at most one non-deleted row), or no rows if never recorded.</summary>
+        internal static readonly string SelectCurrent =
+            $"SELECT {IdClauses.SelectColumn("Id")}, Version FROM System_AppVersion WHERE IsDeleted = 0 LIMIT 1;";
+
+        /// <summary>Updates the existing row's version in place.</summary>
+        internal static readonly string UpdateVersionById =
+            $"UPDATE System_AppVersion SET Version = @version, DateModified = @dateModified " +
+            $"WHERE {IdClauses.Equals("Id", "id")};";
+    }
 }

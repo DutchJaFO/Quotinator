@@ -6,11 +6,12 @@ using Quotinator.Data.Repositories;
 namespace Quotinator.Api.Startup;
 
 /// <summary>
-/// Third producer for #278's notification mechanism (alongside #279's and #289's) — announces the
-/// current release's notification-flagged changelog highlights (#307's
-/// <c>ChangelogReservedAudience.Notification</c> convention) once per version. "Seen" state is the
-/// existing server-side notification history itself (#278) — no separate cookie or <c>localStorage</c>
-/// marker is needed.
+/// Third producer for #278's notification mechanism (alongside #279's and #289's) — announces every
+/// release's notification-flagged changelog highlights (#307's
+/// <c>ChangelogReservedAudience.Notification</c> convention) missed since the last version this app
+/// instance actively ran, one notification per release, each showing its own version. "Seen" state is
+/// the existing server-side notification history itself (#278) — no separate cookie or
+/// <c>localStorage</c> marker is needed.
 /// </summary>
 internal static class WhatsNewNotification
 {
@@ -18,37 +19,86 @@ internal static class WhatsNewNotification
     internal readonly record struct Seed(string DedupeKey, string Message);
 
     /// <summary>
-    /// Builds the notification to write for <paramref name="currentVersion"/>, or <see langword="null"/>
-    /// when there is nothing to report — no release in <paramref name="document"/> matches the running
-    /// version, or the matching release has no notification-flagged highlights. Pure function of its
-    /// inputs, kept separate from <see cref="SeedAsync"/> so it is unit-testable without a real
-    /// <see cref="INotificationReader"/>/<see cref="INotificationWriter"/>.
+    /// Builds one notification per release with notification-flagged highlights in the range this app
+    /// instance missed. <paramref name="lastActiveVersion"/> is <see langword="null"/> on a genuinely
+    /// fresh install (no prior startup ever recorded a version) — in that case only
+    /// <paramref name="currentVersion"/> is considered, never the full changelog history. Otherwise
+    /// every release strictly newer than <paramref name="lastActiveVersion"/> up to and including
+    /// <paramref name="currentVersion"/> is considered, using <see cref="ChangelogDocument.Releases"/>'
+    /// own newest-first array order rather than parsing semver — this project already treats that
+    /// order as authoritative. Pure function of its inputs, kept separate from <see cref="SeedAsync"/>
+    /// so it is unit-testable without a real <see cref="INotificationReader"/>/<see cref="INotificationWriter"/>.
     /// </summary>
-    internal static Seed? BuildSeed(ChangelogDocument? document, string currentVersion)
+    internal static List<Seed> BuildSeeds(ChangelogDocument? document, string? lastActiveVersion, string currentVersion)
     {
-        ChangelogRelease? release = document?.Releases.FirstOrDefault(r => r.Version == currentVersion);
-        List<string> highlights = release?.GetHighlightsFor(ChangelogReservedAudience.Notification) ?? [];
-        if (highlights.Count == 0)
-            return null;
+        if (document is null)
+            return [];
 
-        // Bare version numbers are not safe as a dedupe key on their own — "1.9.1" is a substring of
-        // "1.9.10", so SeedOnceAsync's Contains-based dedupe check would risk a false-positive match
-        // between two different patch versions whose digits happen to nest. The colon on both sides
-        // makes the key unambiguous, and the message includes that exact bracketed form verbatim.
-        string dedupeKey = $"WhatsNew:v{release!.Version}:";
-        string message = $"{dedupeKey} What's new in v{release.Version}:\n" + string.Join('\n', highlights);
-        return new Seed(dedupeKey, message);
+        IReadOnlyList<ChangelogRelease> releases = document.Releases; // newest first, by convention
+
+        IEnumerable<ChangelogRelease> candidates;
+        if (lastActiveVersion is null)
+        {
+            candidates = releases.Where(r => r.Version == currentVersion);
+        }
+        else
+        {
+            int currentIndex = IndexOfVersion(releases, currentVersion);
+            int lastActiveIndex = IndexOfVersion(releases, lastActiveVersion);
+
+            if (currentIndex < 0)
+                candidates = []; // the running version isn't in the changelog at all
+            else if (lastActiveIndex < 0)
+                // lastActiveVersion predates the changelog's own history (or was otherwise never
+                // recorded there) — fall back to just the current version rather than guessing how
+                // far back to walk.
+                candidates = releases.Where(r => r.Version == currentVersion);
+            else
+                // Skip/Take handles "no upgrade" (currentIndex == lastActiveIndex, Take(0)) and a
+                // downgrade (currentIndex > lastActiveIndex, negative count) the same way: nothing to
+                // report — .NET's own Take(int) treats a non-positive count as an empty sequence.
+                candidates = releases.Skip(currentIndex).Take(lastActiveIndex - currentIndex);
+        }
+
+        List<Seed> seeds = [];
+        foreach (ChangelogRelease release in candidates)
+        {
+            List<string> highlights = release.GetHighlightsFor(ChangelogReservedAudience.Notification);
+            if (highlights.Count == 0)
+                continue;
+
+            // Bare version numbers are not safe as a dedupe key on their own — "1.9.1" is a substring
+            // of "1.9.10", so SeedOnceAsync's Contains-based dedupe check would risk a false-positive
+            // match between two different patch versions whose digits happen to nest. The colon on
+            // both sides makes the key unambiguous, and the message includes that exact bracketed form
+            // verbatim.
+            string dedupeKey = $"WhatsNew:v{release.Version}:";
+            string message = $"{dedupeKey} What's new in v{release.Version}:\n" + string.Join('\n', highlights);
+            seeds.Add(new Seed(dedupeKey, message));
+        }
+
+        return seeds;
     }
 
-    /// <summary>Writes the what's-new notification for <paramref name="currentVersion"/>, if there is one, unless it was already seeded.</summary>
+    /// <summary>Writes one notification per release returned by <see cref="BuildSeeds"/>, skipping any already seeded.</summary>
     internal static async Task SeedAsync(
-        INotificationReader reader, INotificationWriter writer, ChangelogDocument? document, string currentVersion)
+        INotificationReader reader, INotificationWriter writer, ChangelogDocument? document, string? lastActiveVersion, string currentVersion)
     {
-        Seed? seed = BuildSeed(document, currentVersion);
-        if (seed is null)
-            return;
+        foreach (Seed seed in BuildSeeds(document, lastActiveVersion, currentVersion))
+        {
+            await NotificationSeeding.SeedOnceAsync(
+                reader, writer, NotificationType.Information, seed.DedupeKey, seed.Message);
+        }
+    }
 
-        await NotificationSeeding.SeedOnceAsync(
-            reader, writer, NotificationType.Information, seed.Value.DedupeKey, seed.Value.Message);
+    private static int IndexOfVersion(IReadOnlyList<ChangelogRelease> releases, string version)
+    {
+        for (int i = 0; i < releases.Count; i++)
+        {
+            if (releases[i].Version == version)
+                return i;
+        }
+
+        return -1;
     }
 }
