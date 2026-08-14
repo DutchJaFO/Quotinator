@@ -189,7 +189,31 @@ small internal static helper (matching `NotificationSeeding`'s own shape) rather
 itself as thin as the two existing producers.
 
 ### 4. Live verification (T1, T2)
-**Status:** Not started
+**Status:** T2 done; T1 needs the developer
+
+**T2 — three real Docker runs, both the negative and positive paths, plus dismissal persistence.**
+
+1. Built and ran the actual current image unmodified: `GET /api/v1/notifications` returned only the
+   pre-existing #279 notification — no what's-new entry, correctly, since the real, shipped v1.8.3
+   changelog entry has no `audienceHighlights.notification`-flagged highlights. Zero warnings/errors
+   anywhere in the container log for the whole run — confirms the detached producer runs cleanly on the
+   "nothing to report" path against real content, not just a unit-test double.
+2. To prove the write path itself live (not just via unit test), temporarily added one
+   `audienceHighlights.notification` entry to the v1.8.3 release in the local working copy of
+   `data/changelog/changelog.en.json`, built the image from that modified copy, then immediately reverted
+   the file via `git checkout` before the container was even started (confirmed clean via `git status`
+   — this change was never committed). `GET /api/v1/notifications` on the resulting image showed the
+   what's-new notification (`type: information`, message beginning `WhatsNew:v1.8.3:`) alongside the
+   existing #279 entry — the write path works correctly against a real running app, not only in the unit
+   tests' fakes.
+3. Dismissed the what's-new notification via `POST /notifications/{id}/dismiss` (with
+   `Quotinator__AdminApiKey` set for this run), then `docker restart`ed the same container (same
+   filesystem, same persistent `quotinatordata.db`) — after restart, the notification's `isDismissed`
+   remained `true` and no new duplicate was seeded, confirming `SeedOnceAsync`'s full-history dedupe scan
+   (active + dismissed) correctly prevents re-seeding on every subsequent boot.
+
+**T1 is the one item this session cannot complete** — per this project's standing rule that local
+`dotnet run`/T1 verification is exclusively the developer's own action.
 
 ---
 
@@ -202,9 +226,9 @@ itself as thin as the two existing producers.
 | 3 | ✅ | No notification is written when a matching release exists but has zero notification-flagged highlights | Unit test | `WhatsNewNotificationTests.Seed_MatchingReleaseNoFlaggedHighlights_WritesNothing` |
 | 4 | ✅ | Two different versions whose digits nest (e.g. `1.9.1` vs `1.9.10`) do not falsely dedupe against each other | Unit test | `WhatsNewNotificationTests.Seed_NestedVersionNumbers_DoNotFalselyDedupe` |
 | 5 | ✅ | A version already seeded is not re-seeded on a later restart (dedupe holds across restarts) | Unit test | `WhatsNewNotificationTests.Seed_AlreadySeededVersion_IsNoOp` |
-| 6 | ❌ | Dismissing the what's-new notification persists — it does not reappear on the next restart | Live | Docker: seed a matching release, confirm notification appears in `GET /api/v1/notifications`, dismiss via `POST /api/v1/notifications/{id}/dismiss`, restart the container, confirm it does not reappear |
+| 6 | ✅ | Dismissing the what's-new notification persists — it does not reappear on the next restart | Live (T2) | Docker: dismissed the temporarily-flagged v1.8.3 notification, `docker restart`ed the same container, confirmed `isDismissed: true` held and no duplicate was seeded |
 | 7 | ❌ | T1 — app starts in Visual Studio with no error; `StartupSuccessModal` shows the what's-new notification when the running version has flagged changelog highlights | Live | Developer confirms in Visual Studio |
-| 8 | ❌ | T2 — Docker build and smoke test | Live | `docker build -f docker/Dockerfile -t quotinator:local .`; confirm `GET /api/v1/notifications` includes the what's-new entry when the built version matches a changelog release |
+| 8 | ✅ | T2 — Docker build and smoke test | Live | Confirmed both directions: real (unmodified) v1.8.3 content correctly writes nothing (zero flagged highlights); a temporarily-flagged local copy (never committed) correctly writes the notification, visible via `GET /api/v1/notifications` |
 | 9 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 10 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run twice to rule out the startup-latency flakiness found in Step 2) |
 
