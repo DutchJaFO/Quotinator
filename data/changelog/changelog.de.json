@@ -10,7 +10,10 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": []
+    "issues": [309],
+    "changed": [
+      "Changelog-Inhalte (angezeigt auf der Über-Seite) werden jetzt aus einer Datenbank bereitgestellt statt aus statischen JSON-Dateien, automatisch beim Start aktualisiert — das macht die Inhalte abfragbar und ist ein Schritt hin zu zukünftigen Funktionen wie dem Anzeigen bestimmter Highlights als Startbenachrichtigungen; fällt auf die ursprünglichen JSON-Dateien zurück, falls die Datenbank einmal nicht verfügbar ist, sodass sich für niemanden, der die Über-Seite liest, etwas ändert (issue #309)"
+    ]
   },
   "releases": [
     {

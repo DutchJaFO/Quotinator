@@ -1,10 +1,17 @@
-##### *GENERATED FILE [2026-08-12 16:40 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-14 05:53 UTC] — do not edit by hand.*
 
 # Changelog
 
 All notable changes to Quotinator are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+### Changed
+- Changelog content (shown on the About page) is now served from a database instead of static JSON files, refreshed automatically at startup — this makes the content queryable and is a step toward future features such as surfacing specific highlights as startup notifications; falls back to the original JSON files if the database is ever unavailable, so nothing changes for anyone reading the About page (issue #309)
 
 ---
 

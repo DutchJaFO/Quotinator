@@ -10,7 +10,10 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": []
+    "issues": [309],
+    "changed": [
+      "Changelog-inhoud (getoond op de Over-pagina) wordt nu geleverd vanuit een database in plaats van statische JSON-bestanden, automatisch vernieuwd bij het opstarten — dit maakt de inhoud doorzoekbaar en is een stap richting toekomstige functies zoals het tonen van specifieke hoogtepunten als opstartmeldingen; valt terug op de oorspronkelijke JSON-bestanden als de database ooit niet beschikbaar is, dus er verandert niets voor wie de Over-pagina bekijkt (issue #309)"
+    ]
   },
   "releases": [
     {

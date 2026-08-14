@@ -3,7 +3,10 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": []
+    "issues": [309],
+    "changed": [
+      "Changelog content (shown on the About page) is now served from a database instead of static JSON files, refreshed automatically at startup — this makes the content queryable and is a step toward future features such as surfacing specific highlights as startup notifications; falls back to the original JSON files if the database is ever unavailable, so nothing changes for anyone reading the About page (issue #309)"
+    ]
   },
   "releases": [
     {
