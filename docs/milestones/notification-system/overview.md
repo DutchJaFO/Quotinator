@@ -73,6 +73,33 @@ long-open "where do changelog JSON files live" question: a new `System_Changelog
 startup from relocated JSON files). #309 implements that resolution and is a hard prerequisite for #307
 and #81. #310 (Genre-as-table) is filed as a placeholder in v1.9.0, not built by this milestone.
 
+**Fifth scope revision (2026-08-15) — the milestone's own goal, restated by the developer:** v1.8.0
+shipped a *basic* notification system; this milestone is about making it **complete and useful**, scoped
+specifically to the persisted notifications the database migration, reset, reseed and import paths need.
+That reframing changed what counts as fixed: #278's schema (one flat `Message`, always-on expiry, no
+structured metadata, no app-version linkage) had been treated as a constraint to build around, and is
+instead the milestone's real bottleneck. #312 was filed to own that foundation and now leads the order of
+operations.
+
+Concrete requirements settled in the same session, all folded into #312:
+
+- Notifications carry a **title and body**, not one flat string.
+- A **typed metadata** column (free-form JSON plus a `MetadataKind` discriminator, so a consumer can tell
+  what shape the payload is) — deliberately independent of `Type`, which is severity. Metadata also
+  carries **parameters for a notification's associated action**, which today cannot be parameterised at
+  all.
+- **Expiry only when there is a real need** — no more silently expiring every notification on a timer.
+- A table recording the **application name and version** (separate columns, never concatenated) used to
+  access the database, kept as an append-only history; each notification records **the app version that
+  added it**.
+- Startup-dialog notifications are about **application state** — migrations executed, database health,
+  files imported at startup.
+- **Not every notification has to persist.** Transient notifications (progress for long-running
+  UI-triggered tasks) are explicitly a later milestone; #312's only obligation is not to preclude them.
+
+Expect notifications and related items to keep evolving in future milestones — a shipped feature is
+extensible and revisable, which is what new issues and milestones are for.
+
 ---
 
 ## Verification tier definitions
@@ -96,6 +123,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
+| [#312](https://github.com/DutchJaFO/Quotinator/issues/312) | Notification schema: title/body, typed metadata, optional expiry, and app-version provenance | Planning | T1 ⬜ T2 ⬜ | [312-notification-schema-foundation-plan.md](312-notification-schema-foundation-plan.md) |
 | [#83](https://github.com/DutchJaFO/Quotinator/issues/83) | Research: notification system design | Planning | T3 ⬜ (live confirmation only, no other tier applies) | [83-notification-system-design-research-plan.md](83-notification-system-design-research-plan.md) |
 | [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: what's new after upgrade | In progress | T1 ⬜ T2 ⬜ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |
 | [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed (revised — writes from inside the seeding loop) | Planning | TBD | No plan doc yet |
@@ -117,22 +145,34 @@ v1.9.0, not here.
 ## Dependency map
 
 ```
+#312 ─── depends on #278 (the shipped mechanism it reshapes). Blocks #81, #302, #303, #304, #308 —
+         every one of them either writes or renders a notification. Also absorbs the "relocate the
+         dedupe helper into a project Quotinator.Core can reach" decision that #302, #303 and #304
+         each separately defer to their own planning phase, and extends #81's own System_AppVersion
+         table to an append-only Application/Version history so a provenance FK stays frozen
 #83  ─── (none) — narrowed scope; last open question is a live T3 confirmation, not a blocker for anything else
 #81  ─── depends on #278 (notification mechanism), #80 (IChangelogService) — both done, released;
-         depends on #309 (hard — needs System_Changelog to be queryable) and #307 (hard — cannot
-         implement without the flagged-highlight field); soft-depends on #308 (renders better once it
-         lands, not blocked by it)
-#304 ─── depends on #278 (notification mechanism) and #156 (Reset no longer auto-seeds, which is
-         exactly the gap it fills for the post-Reset trigger)
-#302 ─── depends on #278; writes from inside QuotinatorDatabaseInitializer's own seeding loop (#221's
-         FileImportReport data, read from the same call site rather than after the fact)
-#303 ─── depends on #278; same seeding-loop hook point as #302; its review page depends on the existing
-         #154 staging model (ImportAction, IImportActionReader/Service) and the existing
-         /import/actions REST endpoints — all already shipped, nothing new needed there
+         depends on #309 (hard — needs System_Changelog to be queryable), #307 (hard — cannot
+         implement without the flagged-highlight field), and #312 (hard — its producer moves off the
+         message-prefix dedupe onto typed metadata, and its own table changes shape underneath it);
+         soft-depends on #308 (renders better once it lands, not blocked by it)
+#304 ─── depends on #278 (notification mechanism), #156 (Reset no longer auto-seeds, which is
+         exactly the gap it fills for the post-Reset trigger), and #312 (hard — needs the relocated
+         dedupe helper for its Core-side trigger, and gains parameterised actions from #312's own
+         metadata-aware INotificationActionExecutor)
+#302 ─── depends on #278 and #312 (hard — the relocated dedupe helper, plus opt-in expiry, which
+         removes the aging mechanism this issue currently assumes); writes from inside
+         QuotinatorDatabaseInitializer's own seeding loop (#221's FileImportReport data, read from the
+         same call site rather than after the fact)
+#303 ─── depends on #278 and #312 (same as #302); same seeding-loop hook point as #302; its review page
+         depends on the existing #154 staging model (ImportAction, IImportActionReader/Service) and the
+         existing /import/actions REST endpoints — all already shipped, nothing new needed there
 #307 ─── depends on #80 (extends its shipped schema/generator/models) and, per ADR 018, on #309's
          importer abstraction existing conceptually (not a hard build-order dependency — #307's schema
          field addition doesn't itself need System_Changelog to exist yet)
-#308 ─── depends on #278 (extends its shipped NotificationTable component)
+#308 ─── depends on #278 (extends its shipped NotificationTable component) and #312 (hard — renders
+         the Title/Body split #312 introduces; #308's own body still claims a rendering-only fix with
+         no storage change, which #312 supersedes)
 #309 ─── depends on ADR 005's revision and ADR 018 (design basis); Quotinator.Data takes a new
          dependency on Quotinator.Changelog as part of this issue; its fallback (when
          System_Changelog is missing/broken) reuses #293's exact narrow-exception-catch idiom and
@@ -154,18 +194,32 @@ step, the other reuses it.
 
 ## Order of operations
 
+**Revised 2026-08-15**, after the developer restated the milestone's goal: v1.8.0 shipped a *basic*
+notification system, and this milestone is about making it complete and useful. That reframing made
+#278's schema — one flat `Message`, always-on expiry, no structured metadata, no app-version linkage —
+the milestone's real bottleneck rather than a fixed constraint to build around. #312 was filed to own
+that foundation, and now leads the order: five of the remaining issues write or render notifications and
+all of them are cheaper once it lands.
+
 | Order | Issue | Reason |
 |-------|-------|--------|
-| 1 | **#83** | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
-| 2 | **#309** | Implements ADR 005's/018's resolution; #307 and #81 both need it |
-| 3 | **#307** | #81 cannot start implementation without it; touches shipped #80 infrastructure |
-| 4 | **#81** | What's-new-after-upgrade path; builds on #278's, #80's, #309's, and #307's output |
-| 5 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
-| 6 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
-| 7 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 8 | **#308** | Improves #81's rendering; no hard dependency, can slot in anywhere after #278 (already done) |
-| 9 | **#305** | Independent bug; can slot in anywhere |
-| 10 | **#306** | Independent bug; can slot in anywhere |
+| 1 | **#312** | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
+| 2 | **#308** | Renders the richer content #312 introduces; landing it before the producers means everything they write displays correctly from the start |
+| 3 | **#81** | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
+| 4 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 5 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 6 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 7 | **#305** | Independent bug; can slot in anywhere |
+| 8 | **#306** | Independent bug; can slot in anywhere |
+| 9 | **#83** | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
+
+**#309 and #307 are not listed** — both are code-complete on this branch (#309 `Waiting for release`,
+#307 with only two documentation-confirmation rows outstanding), so neither gates anything below.
+
+**Migration consolidation, at the end of the milestone.** #81, #312 and #304 each add Data-owned
+migrations, and #312 deliberately does not optimise migration count. Per the developer's direction
+(2026-08-15), the accumulated migrations are consolidated into a smaller set before release, the same way
+#155 and #289 each consolidated their own predecessors.
 
 ---
 

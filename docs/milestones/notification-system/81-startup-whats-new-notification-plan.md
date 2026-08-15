@@ -6,7 +6,8 @@
 #309 (code complete on this branch, Waiting for release — `IChangelogReader` exists and is tested),
 #307 (code complete on this branch — `ChangelogReservedAudience.Notification`/`GetHighlightsFor` exist
 and are tested; two documentation-confirmation rows remain open on its own plan doc but don't block this
-issue, which only needs the code)
+issue, which only needs the code), #312 (open — notification schema foundation: typed metadata, the
+relocated dedupe helper, and `System_AppVersion`'s append-only `Application`/`Version` shape)
 
 ---
 
@@ -103,6 +104,16 @@ patch versions whose digits happen to nest. The producer wraps the version in an
 `dedupeKey: $"WhatsNew:v{release.Version}:"` (colon on both sides) — and the message text includes that
 exact bracketed form verbatim, not just the bare version number.
 
+**Superseded by #312 (2026-08-15) — this whole section describes a workaround, not a design.** Embedding
+a machine-readable key inside human-readable display text was only ever necessary because #278 gave
+notifications nowhere structured to put structured data. It got worse before it got better: this issue's
+own `unreleased` handling had to extend the trick with an embedded content hash
+(`WhatsNew:unreleased:{hash}:`), because unreleased content has no version to key on. #312 adds a typed
+`Metadata` JSON column with a reserved `dedupeKey` field and moves the shared helper's check onto it, so
+this producer's messages become pure display text. The substring-collision hazard described above
+disappears with the substring matching itself — but the *reason* it existed is worth keeping on record,
+since it is exactly the evidence that motivated #312.
+
 ### Producer (third one, alongside #279's and #289's in `Program.cs`)
 
 Added to the same non-fatal `if (dbHealth.IsHealthy)` block pattern #279/#289 already use — a failure to
@@ -165,13 +176,21 @@ producer only ever runs at startup and only ever looked at one version.
 
 ### `System_AppVersion` — a new table tracking the last version that ran
 
-A single-row table (`Quotinator.Data`-owned, `System_AppVersion`, Data-owned migration 4, `RecordBase`
-per ADR 002) records the version string as of the last healthy startup. Read via
+A `Quotinator.Data`-owned table (`System_AppVersion`, Data-owned migration 4, `RecordBase` per ADR 002)
+records the version as of the last healthy startup. Read via
 `IAppVersionTracker.GetLastActiveVersionAsync()` **before migrations run** on the following boot — a
 missing table (a fresh install, or literally the first boot after this table was introduced) reads as
 `null`, which is exactly the correct "fresh install" signal per the behaviour above; no separate
-bootstrap flag is needed. Written via `RecordCurrentVersionAsync(version)` — an upsert (update the one
-existing row if present, insert if not), called once startup is healthy.
+bootstrap flag is needed. Written via `RecordCurrentVersionAsync(...)`, called once startup is healthy.
+
+**Superseded in part by #312 (2026-08-15).** This issue introduced the table as a *single row, upserted
+in place*, storing only a version. #312 extends it to the shape the milestone actually needs: a separate
+`Application` column alongside `Version` (never concatenated), and **append-only** storage — one row per
+distinct application+version ever seen — so that a notification's provenance FK stays frozen instead of
+silently re-pointing when the app upgrades. This issue's own tracker therefore changes from upsert to
+append-if-changed, and its "last active version" read becomes "the most recent row". The behaviour
+described in this section is unaffected; only the storage shape underneath it changes, and that change
+belongs to #312, not here.
 
 **`Program.cs` sequencing:** `GetLastActiveVersionAsync()` is called synchronously, before
 `dbInitializer.InitialiseAsync()` — fast (a single row against the main database, no separate connection
