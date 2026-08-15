@@ -1,6 +1,6 @@
 # #312 — Notification schema: title/body, typed metadata, optional expiry, and app-version provenance
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 7)
 **GitHub issue:** #312 (open)
 **Depends on:** #278 (done, released v1.8.0 — the mechanism this issue reshapes)
 
@@ -72,10 +72,25 @@ No conflict found — proceeding with the design below.
 shape can appear under different severities, and one severity can carry several shapes. Conflating them
 would force a new `Type` member every time a producer needed a new payload.
 
-`Metadata` carries one reserved key, `dedupeKey`, read by the shared dedupe helper regardless of kind.
-Everything else in the object is the producing feature's own business — including, for #81, which
-version a what's-new notification is *about* (distinct from the provenance FK, which is always the
-version that wrote the row).
+**`Metadata` is the notification's machine-readable "why", not a dedupe mechanism that happens to be
+structured.** It has three consumers, and no reserved key of any kind:
+
+1. **Identity** — whether this notification already exists (step 5).
+2. **Presentation** — a renderer reads `MetadataKind` and the payload to show the notification *as what
+   it is*: a what's-new entry can badge its version, a schema-overshoot warning can display both
+   recorded versions as data rather than as a sentence. This is #308's input.
+3. **Action parameters** — what an executable action operates on (step 7), so `Reseed` can mean
+   "reseed *this* file" instead of only ever meaning the whole database.
+
+The original design here reserved a `dedupeKey` string for consumer 1. That was dropped: it was a
+fossil of #278, where identity had to be a token findable inside prose. Encoding identity as a string
+made the information *less* accessible than the data it was derived from — the reason a UI could not
+tell why a notification existed without parsing its message text. Expressing identity as the payload's
+own fields serves all three consumers from one representation. See step 5.
+
+For #81 specifically, the payload's `Version` (which release the notification is *about*) stays
+distinct from the provenance FK (which version *wrote* it) — a catch-up run writes several
+notifications about different releases, all written by one version.
 
 ### `System_AppVersion` — append-only history
 
@@ -253,11 +268,49 @@ running the suite, none by inspection:**
 
 Migration-count assertions in three pre-existing tests moved 4 → 5, as with every prior Data migration.
 
-### 5. Relocate the dedupe helper into `Quotinator.Data`, keyed on `Metadata.dedupeKey`
-**Status:** Not started
+### 5. Relocate the seeding helper into `Quotinator.Data`, identified structurally
+**Status:** ✅ Done — **merged with step 6**, for the same reason steps 2 and 4 were merged: moving the
+helper breaks every caller the moment it moves, so splitting them would leave an intermediate commit
+that does not build.
+
+`NotificationSeeding` moves to `Quotinator.Data.Notifications`. ADR 018 places notifications on this
+side as system content; the practical driver is that `Quotinator.Core`'s own producers (#302/#303/#304)
+cannot reach into `Quotinator.Api` — the dependency runs Api → Core, never the reverse — so a helper
+left in the Api layer would have had to be reimplemented per producer. Those three issues each deferred
+this decision to their own planning phase; it is settled here once.
+
+**The `dedupeKey` string was dropped entirely, on developer direction mid-implementation.** The plan
+called for keying on a `Metadata.dedupeKey` field, which fixed #278's false-substring match but kept the
+fossil: callers still hand-composed `"WhatsNew:v" + version`. The developer's point was that a key had
+to be a string only because it once lived inside message text, and that encoding identity as a string
+makes the information *less* usable than the data it came from. Identity is now
+`NotificationMetadataDto.Kind` plus each type's own `IdentityComponents`.
+
+The objection to a fully structural comparison is that the read side must know every payload shape — it
+does not, because `MetadataKind` is already a column. `NotificationMetadataKinds` maps kind → payload
+type, so a stored row deserializes back into its producer's own type without the reader knowing who
+wrote it. That is the round-trip the column exists to enable. `NotificationMetadataKindsTests` guards
+the map: a new enum member without a registered type fails a test, because at runtime it would instead
+be a silent bug — the row reads back unidentifiable and re-announces itself on every restart, with no
+exception and no log line.
+
+Payloads: `AnnouncementMetadataDto` (#279), `SchemaVersionOvershootMetadataDto` (#289, carrying both
+recorded versions as data), `WhatsNewMetadataDto` (#81, `Version` for a tagged release or `ContentHash`
+for `unreleased`). Comparison is case-insensitive on string components, per this project's rule for
+identifier-valued comparisons.
 
 ### 6. Migrate #279's and #289's shipped producers onto the new shape
-**Status:** Not started
+**Status:** ✅ Done — landed with step 5 (see above).
+
+All three producers (#279, #289, #81) now build a typed payload instead of a message string, and all
+three stamp `AppVersionId`. That required moving `RecordCurrentAsync` **ahead** of the producers in
+`Program.cs`, where it previously followed them: a foreign key cannot reference a row that does not
+exist yet. Safe because `lastActiveVersion` is captured earlier still, before migrations run, so #81's
+catch-up range is unaffected by recording the current version sooner.
+
+#81 also loses its trailing-delimiter workaround — the delimiter existed solely to stop
+`WhatsNew:v1.9.1` matching inside `WhatsNew:v1.9.10`, and comparing version values structurally has no
+substring relationship to get wrong.
 
 ### 7. `INotificationActionExecutor` gains metadata access
 **Status:** Not started
@@ -283,9 +336,10 @@ Migration-count assertions in three pre-existing tests moved 4 → 5, as with ev
 | 7 | ✅ | Recording the same application+version twice appends no second row; a different version appends a new one | Unit test | `AppVersionTrackerTests.RecordCurrentAsync_SamePairTwice_AppendsOnlyOnce`, `..._NewVersion_AppendsWithoutOverwritingHistory`, `..._SameVersionDifferentApplication_AppendsSeparately` |
 | 8 | ✅ | "Last active version" resolves to the most recent row, not an overwritten single row | Unit test | `AppVersionTrackerTests.GetLastActiveAsync_SeveralVersionsWithinOneTimestamp_ReturnsTheOneWrittenLast`, `RecordCurrentAsync_EachCall_TakesTheNextSequenceNumber`, `GetLastActiveAsync_RowWithNewerTimestampButOlderSequence_DoesNotWin` |
 | 9 | ❌ | A notification's `AppVersionId` still points at the version that wrote it after the app version changes | Unit test | Real-SQLite provenance test — write, record a newer version, re-read |
-| 10 | ❌ | Dedupe matches on `Metadata.dedupeKey`, not on message text | Unit test | Relocated helper's own tests |
-| 11 | ❌ | A dedupe key that appears in body text but not in metadata does **not** suppress a write | Unit test | Guards against the old message-substring behaviour surviving accidentally |
-| 12 | ❌ | #279's and #289's producers still write exactly once across restarts after migration | Unit test | Their existing regression tests, updated |
+| 10 | ✅ | A notification is identified by its structured metadata, not by message text | Unit test | `NotificationSeedingTests.SeedOnceAsync_SameIdentityTwice_WritesOnce`, `..._DifferentIdentity_WritesAgain`, `..._SameValuesDifferentKind_BothWrite` — real SQLite, not fakes, since the behaviour is a payload surviving a round-trip through the column |
+| 11 | ✅ | An identifier appearing in body text but not in metadata does **not** suppress a write | Unit test | `NotificationSeedingTests.SeedOnceAsync_IdentityAppearsInBodyButNotMetadata_StillWrites`; `..._VersionIsSubstringOfAnother_BothWrite` covers the specific `1.9.1`/`1.9.10` case |
+| 12 | ✅ | #279's and #289's producers still write exactly once across restarts after migration | Unit test | `ProgramNotificationSeedingRegressionTests` (unchanged, still green through the full startup path); `WhatsNewNotificationTests` updated for #81 |
+| 12b | ✅ | Every `NotificationMetadataKind` has a registered payload type, and each type reports the kind it is registered under | Unit test | `NotificationMetadataKindsTests` — without this a new kind is a silent re-announce-forever bug |
 | 13 | ❌ | `INotificationActionExecutor.ExecuteAsync` receives the originating notification's metadata | Unit test | `NotificationActionExecutorTests` |
 | 14 | ❌ | `GET /api/v1/notifications` returns `title`/`body`/`metadata`/`metadataKind`, and no longer returns `message` | Unit test | Endpoint test asserting the live response shape |
 | 15 | ❌ | Migration applies cleanly to a real copy of the last released (v1.8.3) database | Live (T2) | ADR 009 verification against a v1.8.3 database |

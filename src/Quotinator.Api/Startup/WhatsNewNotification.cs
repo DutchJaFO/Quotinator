@@ -3,6 +3,7 @@ using System.Text;
 using Quotinator.Changelog.Enums;
 using Quotinator.Changelog.Models;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Startup;
@@ -20,8 +21,11 @@ namespace Quotinator.Api.Startup;
 /// </summary>
 internal static class WhatsNewNotification
 {
-    /// <summary>A dedupe key and message ready to hand to <see cref="NotificationSeeding.SeedOnceAsync"/>.</summary>
-    internal readonly record struct Seed(string DedupeKey, string Message);
+    /// <summary>One notification's worth of content, ready to hand to <see cref="NotificationSeeding.SeedOnceAsync"/>.</summary>
+    /// <param name="Metadata">Identifies the notification and is stored alongside it — no composed key string is involved.</param>
+    /// <param name="Title">Short headline.</param>
+    /// <param name="Body">The flagged highlights, one per line.</param>
+    internal readonly record struct Seed(WhatsNewMetadataDto Metadata, string Title, string Body);
 
     /// <summary>
     /// Builds one notification per release with notification-flagged highlights in the range this app
@@ -79,27 +83,42 @@ internal static class WhatsNewNotification
             if (highlights.Count == 0)
                 continue;
 
-            // Bare version numbers are not safe as a dedupe key on their own — "1.9.1" is a substring
-            // of "1.9.10", so SeedOnceAsync's Contains-based dedupe check would risk a false-positive
-            // match between two different patch versions whose digits happen to nest. The colon on
-            // both sides makes the key unambiguous, and the message includes that exact bracketed form
-            // verbatim.
-            string dedupeKey = $"WhatsNew:v{release.Version}:";
-            string message = $"{dedupeKey} What's new in v{release.Version}:\n" + string.Join('\n', highlights);
-            seeds.Add(new Seed(dedupeKey, message));
+            // A released version identifies itself: its highlights are frozen once tagged, so the
+            // version alone is the identity. Nothing is concatenated, and nothing is embedded in the
+            // body — which is what makes the old "1.9.1 matches inside 1.9.10" hazard structurally
+            // impossible rather than merely worked around.
+            seeds.Add(new Seed(
+                new WhatsNewMetadataDto { Version = release.Version },
+                Title: $"What's new in v{release.Version}",
+                Body:  string.Join('\n', highlights)));
         }
 
         return seeds;
     }
 
     /// <summary>Writes one notification per seed returned by <see cref="BuildSeeds"/>, skipping any already seeded.</summary>
+    /// <param name="reader">Supplies the history each seed's dedupe check runs against.</param>
+    /// <param name="writer">Performs the writes.</param>
+    /// <param name="document">The changelog to draw highlights from.</param>
+    /// <param name="lastActiveVersion">The version this app instance last ran, or <see langword="null"/> on a fresh install.</param>
+    /// <param name="currentVersion">The version running now.</param>
+    /// <param name="appVersionId">
+    /// The <c>System_AppVersion</c> row for <paramref name="currentVersion"/>. Stamped on every
+    /// notification written here — note that a catch-up run writes several notifications about
+    /// *different* releases, all of them written *by* this one version, which is exactly the
+    /// distinction provenance draws.
+    /// </param>
     internal static async Task SeedAsync(
-        INotificationReader reader, INotificationWriter writer, ChangelogDocument? document, string? lastActiveVersion, string currentVersion)
+        INotificationReader reader, INotificationWriter writer, ChangelogDocument? document,
+        string? lastActiveVersion, string currentVersion, Guid? appVersionId = null)
     {
         foreach (Seed seed in BuildSeeds(document, lastActiveVersion, currentVersion))
         {
             await NotificationSeeding.SeedOnceAsync(
-                reader, writer, NotificationType.Information, seed.DedupeKey, seed.Message);
+                reader, writer, NotificationType.Information, seed.Metadata,
+                body:         seed.Body,
+                title:        seed.Title,
+                appVersionId: appVersionId);
         }
     }
 
@@ -114,10 +133,12 @@ internal static class WhatsNewNotification
         if (highlights.Count == 0)
             return null;
 
-        string contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', highlights))))[..8];
-        string dedupeKey = $"WhatsNew:unreleased:{contentHash}:";
-        string message = $"{dedupeKey} What's new (unreleased):\n" + string.Join('\n', highlights);
-        return new Seed(dedupeKey, message);
+        string body = string.Join('\n', highlights);
+        string contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(body)))[..8];
+        return new Seed(
+            new WhatsNewMetadataDto { Version = null, ContentHash = contentHash },
+            Title: "What's new (unreleased)",
+            Body:  body);
     }
 
     private static int IndexOfVersion(IReadOnlyList<ChangelogRelease> releases, string version)

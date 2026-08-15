@@ -26,6 +26,7 @@ using Quotinator.Api.Middleware;
 using Quotinator.Api.OpenApi;
 using Quotinator.Api.Services;
 using Quotinator.Data.Import;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
@@ -840,9 +841,36 @@ catch (Exception ex)
     dbHealth.MarkFailed(failureReason);
 }
 
+// #81: System_AppVersion is meant to always carry the current version once startup is healthy —
+// the same "structurally required, not the caller's optional content" reasoning CLAUDE.md's endpoint
+// side-effect policy applies elsewhere, just applied to a startup step instead of an endpoint. Fast,
+// synchronous, single-row write against the already-open main database (matching #279's/#289's own
+// synchronous read+write producers) — safe to await inline, unlike #309's changelog database or the
+// slower catch-up logic below.
+//
+// #312 moved this ahead of the notification producers below, which it used to follow. Every producer
+// now stamps AppVersionId on what it writes, and a foreign key cannot reference a row that does not
+// exist yet. Ordering is safe because lastActiveVersion was captured further up, before migrations
+// ran — recording the current version here cannot disturb what the catch-up range already read.
+AppVersionRecord? currentVersion = null;
+if (dbHealth.IsHealthy)
+{
+    try
+    {
+        currentVersion = await appVersionTracker.RecordCurrentAsync(versionService.Application, versionService.Version);
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Server] Failed to record the current app version — non-fatal, startup continues. " +
+                "The what's-new notification's catch-up range may be inaccurate on the next restart, and " +
+                "notifications written during this startup carry no app-version provenance.");
+    }
+}
+
 // #279: first concrete producer for #278's notification mechanism — announces the two breaking
-// operationId renames this release ships. Idempotent across restarts (checked via NotificationSeeding's
-// own dedupe-key lookup against notification history), so this call is safe to leave in place
+// operationId renames this release ships. Idempotent across restarts (NotificationSeeding compares
+// this payload structurally against notification history), so this call is safe to leave in place
 // indefinitely rather than needing to be removed after the first deploy. Deliberately outside the
 // critical DB-init try/catch above and in its own non-fatal guard: a failure here (e.g. a test's
 // NoOpDatabaseInitializer, which never creates System_Notification) must never mark the whole app
@@ -851,14 +879,16 @@ if (dbHealth.IsHealthy)
 {
     try
     {
-        await Quotinator.Api.Startup.NotificationSeeding.SeedOnceAsync(
+        await NotificationSeeding.SeedOnceAsync(
             app.Services.GetRequiredService<INotificationReader>(),
             app.Services.GetRequiredService<INotificationWriter>(),
             NotificationType.Warning,
-            dedupeKey: "GetAllImportBatches",
-            message: "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
-                      "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
-                      "This only affects a generated API client keyed by operation ID — routes and behaviour are unchanged.");
+            new AnnouncementMetadataDto { Announcement = "GetAllImportBatches" },
+            title: "Two API operation IDs were renamed",
+            body: "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
+                  "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
+                  "This only affects a generated API client keyed by operation ID — routes and behaviour are unchanged.",
+            appVersionId: currentVersion?.Id);
     }
     catch (Exception ex)
     {
@@ -883,44 +913,29 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
 {
     try
     {
-        string overshootDedupeKey = $"SchemaVersionOvershoot:data-v{dbInitializer.DataSchemaVersion}-app-v{dbInitializer.SchemaVersion}";
-        await Quotinator.Api.Startup.NotificationSeeding.SeedOnceAsync(
+        await NotificationSeeding.SeedOnceAsync(
             app.Services.GetRequiredService<INotificationReader>(),
             app.Services.GetRequiredService<INotificationWriter>(),
             NotificationType.ActionRequired,
-            dedupeKey: overshootDedupeKey,
-            message: $"This database's recorded schema version (data v{dbInitializer.DataSchemaVersion}, " +
-                      $"app v{dbInitializer.SchemaVersion}) is ahead of what this build expects — usually because " +
-                      "a set of not-yet-released migrations were consolidated after this database already applied " +
-                      "them individually (issue #289). The schema itself is complete and the app is working " +
-                      "normally; running a database Reset (POST /api/v1/admin/database/reset) will true up the " +
-                      "version bookkeeping.",
-            trigger: NotificationDismissTrigger.DatabaseReset);
+            new SchemaVersionOvershootMetadataDto
+            {
+                DataSchemaVersion = dbInitializer.DataSchemaVersion,
+                AppSchemaVersion  = dbInitializer.SchemaVersion,
+            },
+            title: "Recorded schema version is ahead of this build",
+            body: $"This database's recorded schema version (data v{dbInitializer.DataSchemaVersion}, " +
+                  $"app v{dbInitializer.SchemaVersion}) is ahead of what this build expects — usually because " +
+                  "a set of not-yet-released migrations were consolidated after this database already applied " +
+                  "them individually (issue #289). The schema itself is complete and the app is working " +
+                  "normally; running a database Reset (POST /api/v1/admin/database/reset) will true up the " +
+                  "version bookkeeping.",
+            dismissTrigger: NotificationDismissTrigger.DatabaseReset,
+            appVersionId: currentVersion?.Id);
     }
     catch (Exception ex)
     {
         app.Services.GetRequiredService<ILogger<Program>>()
             .LogWarning(ex, "[Server] Failed to seed the #289 schema-version-overshoot notification — non-fatal, startup continues.");
-    }
-}
-
-// #81: System_AppVersion is meant to always carry the current version once startup is healthy —
-// the same "structurally required, not the caller's optional content" reasoning CLAUDE.md's endpoint
-// side-effect policy applies elsewhere, just applied to a startup step instead of an endpoint. Fast,
-// synchronous, single-row write against the already-open main database (matching #279's/#289's own
-// synchronous read+write producers) — safe to await inline, unlike #309's changelog database or the
-// slower catch-up logic below.
-if (dbHealth.IsHealthy)
-{
-    try
-    {
-        await appVersionTracker.RecordCurrentAsync(versionService.Application, versionService.Version);
-    }
-    catch (Exception ex)
-    {
-        app.Services.GetRequiredService<ILogger<Program>>()
-            .LogWarning(ex, "[Server] Failed to record the current app version — non-fatal, startup continues. " +
-                "The what's-new notification's catch-up range may be inaccurate on the next restart.");
     }
 }
 
@@ -950,7 +965,8 @@ if (dbHealth.IsHealthy)
                 app.Services.GetRequiredService<INotificationWriter>(),
                 whatsNewDocument,
                 lastActiveVersion,
-                versionService.Version);
+                versionService.Version,
+                currentVersion?.Id);
         }
         catch (Exception ex)
         {

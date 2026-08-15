@@ -123,7 +123,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
-| [#312](https://github.com/DutchJaFO/Quotinator/issues/312) | Notification schema: title/body, typed metadata, optional expiry, and app-version provenance | In progress (step 5) | T1 ⬜ T2 ⬜ | [312-notification-schema-foundation-plan.md](312-notification-schema-foundation-plan.md) |
+| [#312](https://github.com/DutchJaFO/Quotinator/issues/312) | Notification schema: title/body, typed metadata, optional expiry, and app-version provenance | In progress (step 7) | T1 ⬜ T2 ⬜ | [312-notification-schema-foundation-plan.md](312-notification-schema-foundation-plan.md) |
 | [#313](https://github.com/DutchJaFO/Quotinator/issues/313) | Api tests can silently assert against the startup wait page instead of the endpoint under test | Waiting for release | N/A (test harness + docs only — no src/ change) | [313-api-test-startup-race-plan.md](313-api-test-startup-race-plan.md) |
 | [#83](https://github.com/DutchJaFO/Quotinator/issues/83) | Research: notification system design | Planning | T3 ⬜ (live confirmation only, no other tier applies) | [83-notification-system-design-research-plan.md](83-notification-system-design-research-plan.md) |
 | [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: what's new after upgrade | In progress | T1 ⬜ T2 ⬜ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |

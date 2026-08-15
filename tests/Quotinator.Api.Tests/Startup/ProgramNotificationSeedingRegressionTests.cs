@@ -49,8 +49,9 @@ public class ProgramNotificationSeedingRegressionTests
 
     /// <summary>
     /// #289: the second concrete producer for #278's notification mechanism — proves the actual
-    /// Program.cs wiring, not just <see cref="Quotinator.Api.Startup.NotificationSeeding.SeedOnceAsync"/>
-    /// in isolation (already covered by <see cref="NotificationSeedingTests"/>). A stub
+    /// Program.cs wiring, not just <c>NotificationSeeding.SeedOnceAsync</c> in isolation (covered by
+    /// <c>Quotinator.Data.Tests.Notifications.NotificationSeedingTests</c>, where #312 moved both the
+    /// helper and its tests). A stub
     /// <see cref="IDatabaseInitializer"/> reports a schema-version overshoot; a real startup must seed
     /// exactly one ActionRequired notification mentioning both recorded versions.
     /// </summary>
