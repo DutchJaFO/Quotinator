@@ -22,7 +22,7 @@ public enum NotificationType
 
     /// <summary>
     /// Recommends a specific follow-up action (e.g. "consider running a Reset"). The specific reason
-    /// lives in the notification's own <see cref="NotificationEntity.Message"/>, not as a separate
+    /// lives in the notification's own <see cref="NotificationEntity.Body"/>, not as a separate
     /// enum value per scenario.
     /// </summary>
     ActionRequired

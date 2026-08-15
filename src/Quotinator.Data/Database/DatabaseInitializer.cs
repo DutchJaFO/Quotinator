@@ -77,6 +77,12 @@ public class DatabaseInitializer(
         // AppVersionId provenance reference — the foundation the milestone's remaining producers and
         // its richer rendering both build on.
         new SchemaMigration { Version = 5, Sql = NotificationSchemaMigrations.SplitMessageAndAddMetadata },
+        // #312: System_AppVersion becomes an append-only Application+Version history, so a
+        // notification's provenance reference stays frozen instead of re-pointing on upgrade.
+        new SchemaMigration { Version = 6, Sql = AppVersionHistoryMigrations.AddApplicationColumn },
+        // #312: and gains an explicit recording-order counter, since neither DateCreated (second
+        // resolution) nor SQLite's implicit rowid is a trustworthy answer to "which version ran last".
+        new SchemaMigration { Version = 7, Sql = AppVersionHistoryMigrations.AddSequenceNumberColumn },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -282,14 +288,23 @@ public class DatabaseInitializer(
         CREATE INDEX IF NOT EXISTS IX_System_Notification_Active ON System_Notification (IsDismissed, IsDeleted, ExpiresAt);
         CREATE INDEX IF NOT EXISTS IX_System_Notification_DismissTriggerKey ON System_Notification (DismissTriggerKey);
 
+        -- Application and SequenceNumber trail after IsDeleted for the same reason System_Notification's
+        -- new columns do: #312 adds them via ALTER TABLE ADD COLUMN, which appends, and the schema-drift
+        -- parity test compares ordinals. See the note above System_Notification.
         CREATE TABLE IF NOT EXISTS System_AppVersion (
-            Id           TEXT NOT NULL PRIMARY KEY,
-            Version      TEXT NOT NULL,
-            DateCreated  TEXT NOT NULL,
-            DateModified TEXT,
-            DateDeleted  TEXT,
-            IsDeleted    INTEGER NOT NULL DEFAULT 0
+            Id             TEXT NOT NULL PRIMARY KEY,
+            Version        TEXT NOT NULL,
+            DateCreated    TEXT NOT NULL,
+            DateModified   TEXT,
+            DateDeleted    TEXT,
+            IsDeleted      INTEGER NOT NULL DEFAULT 0,
+            Application    TEXT,
+            SequenceNumber INTEGER NOT NULL DEFAULT 0
         );
+        CREATE UNIQUE INDEX IF NOT EXISTS UX_System_AppVersion_Application_Version
+            ON System_AppVersion (Application, Version);
+        CREATE UNIQUE INDEX IF NOT EXISTS UX_System_AppVersion_SequenceNumber
+            ON System_AppVersion (SequenceNumber);
         """;
 
     private readonly IDbConnectionFactory _factory = factory;

@@ -17,25 +17,27 @@ public class NotificationActionExecutorTests
     private sealed class FakeVersionService : IVersionService
     {
         public string Version => "1.8.3";
+        public string Application => "Quotinator.Api";
     }
 
     private sealed class SpyAppVersionTracker : IAppVersionTracker
     {
-        public List<string> RecordedVersions { get; } = [];
+        /// <summary>Every recorded pair, in call order — kept as the pair, since #312 made the pair the identity.</summary>
+        public List<(string Application, string Version)> Recorded { get; } = [];
 
-        public Task<string?> GetLastActiveVersionAsync() => Task.FromResult<string?>(null);
+        public Task<AppVersionRecord?> GetLastActiveAsync() => Task.FromResult<AppVersionRecord?>(null);
 
-        public Task RecordCurrentVersionAsync(string version)
+        public Task<AppVersionRecord> RecordCurrentAsync(string application, string version)
         {
-            RecordedVersions.Add(version);
-            return Task.CompletedTask;
+            Recorded.Add((application, version));
+            return Task.FromResult(new AppVersionRecord(Guid.NewGuid(), application, version));
         }
     }
 
     [TestMethod]
     public void CanExecute_DatabaseReset_ReturnsTrue()
     {
-        var executor = new NotificationActionExecutor(
+        NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
             new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
 
@@ -45,12 +47,12 @@ public class NotificationActionExecutorTests
     [TestMethod]
     public async Task ExecuteAsync_DatabaseReset_CallsResetAndMarksHealthyAndDismissesMatchingNotifications()
     {
-        var dbInitializer = new SpyDatabaseInitializer();
-        var health = new DatabaseHealthState();
+        SpyDatabaseInitializer dbInitializer = new();
+        DatabaseHealthState health = new();
         health.MarkFailed("some prior failure");
-        var notificationWriter = new FakeNotificationWriter();
-        var appVersionTracker = new SpyAppVersionTracker();
-        var executor = new NotificationActionExecutor(
+        FakeNotificationWriter notificationWriter = new();
+        SpyAppVersionTracker appVersionTracker = new();
+        NotificationActionExecutor executor = new(
             dbInitializer, health, notificationWriter, appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
 
         await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
@@ -59,7 +61,7 @@ public class NotificationActionExecutorTests
         Assert.IsTrue(health.IsHealthy);
         Assert.HasCount(1, notificationWriter.DismissByTriggerCalls);
         Assert.AreEqual(NotificationDismissTrigger.DatabaseReset, notificationWriter.DismissByTriggerCalls[0]);
-        Assert.AreSequenceEqual(["1.8.3"], appVersionTracker.RecordedVersions,
+        Assert.AreSequenceEqual([("Quotinator.Api", "1.8.3")], appVersionTracker.Recorded,
             "Reset must re-populate System_AppVersion immediately, matching AdminEndpoints.cs's own wiring.");
     }
 

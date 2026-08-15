@@ -41,7 +41,7 @@ internal sealed class NotificationActionExecutor(
                 // Non-fatal, same reasoning as AdminEndpoints.cs's own try/catch around this call.
                 try
                 {
-                    await appVersionTracker.RecordCurrentVersionAsync(versionService.Version);
+                    await appVersionTracker.RecordCurrentAsync(versionService.Application, versionService.Version);
                 }
                 catch (Exception ex)
                 {

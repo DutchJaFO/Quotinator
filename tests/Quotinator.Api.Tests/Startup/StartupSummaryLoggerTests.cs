@@ -59,6 +59,7 @@ public class StartupSummaryLoggerTests
     private sealed class StubVersionService(string version) : IVersionService
     {
         public string Version => version;
+        public string Application => "Quotinator.Api";
     }
 
     private sealed class StubDbInitializer(string? migrationApplied) : IDatabaseInitializer

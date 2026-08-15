@@ -626,13 +626,40 @@ internal static class Sql
     /// </summary>
     internal static class AppVersion
     {
-        /// <summary>The current row (there is at most one non-deleted row), or no rows if never recorded.</summary>
-        internal static readonly string SelectCurrent =
-            $"SELECT {IdClauses.SelectColumn("Id")}, Version FROM System_AppVersion WHERE IsDeleted = 0 LIMIT 1;";
+        /// <summary>
+        /// The most recently recorded row — "the version that ran last" now that #312 made this table
+        /// an append-only history rather than one upserted row.
+        /// <para>
+        /// Ordered by <c>SequenceNumber</c> alone, deliberately: recording order is precisely the
+        /// question being asked, so the explicit counter is the whole answer and no timestamp
+        /// tie-breaking is involved. <c>DateCreated</c> is not consulted at all — at second resolution
+        /// it cannot separate rows written within the same second, which is exactly the case this
+        /// query has to get right.
+        /// </para>
+        /// </summary>
+        internal static readonly string SelectMostRecent =
+            $"SELECT {IdClauses.SelectColumn("Id")}, Application, Version FROM System_AppVersion " +
+            "WHERE IsDeleted = 0 ORDER BY SequenceNumber DESC LIMIT 1;";
 
-        /// <summary>Updates the existing row's version in place.</summary>
-        internal static readonly string UpdateVersionById =
-            $"UPDATE System_AppVersion SET Version = @version, DateModified = @dateModified " +
-            $"WHERE {IdClauses.Equals("Id", "id")};";
+        /// <summary>
+        /// The sequence number a new row must take. Deliberately spans soft-deleted rows too — the
+        /// uniqueness index covers the whole table, so skipping them would collide.
+        /// </summary>
+        internal const string SelectNextSequenceNumber =
+            "SELECT COALESCE(MAX(SequenceNumber), 0) + 1 FROM System_AppVersion;";
+
+        /// <summary>
+        /// Looks up an existing row for one application+version pair, so recording the same pair twice
+        /// appends nothing. Case-insensitive on both columns per this project's own comparison rule.
+        /// A legacy row written by #81's version-only tracker carries no application name and therefore
+        /// never matches — deliberately, since the running application genuinely did not record itself
+        /// on that row; the first boot after #312 appends a properly attributed row instead of
+        /// retroactively claiming the legacy one.
+        /// </summary>
+        internal static readonly string SelectByApplicationAndVersion =
+            $"SELECT {IdClauses.SelectColumn("Id")}, Application, Version FROM System_AppVersion " +
+            $"WHERE IsDeleted = 0 AND {TextClauses.Equals("Version", "version")} " +
+            $"AND {TextClauses.Equals("Application", "application")} " +
+            "LIMIT 1;";
     }
 }

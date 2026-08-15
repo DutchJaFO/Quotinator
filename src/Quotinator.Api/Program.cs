@@ -800,7 +800,8 @@ _ = Task.Run(async () =>
 // synchronous read+write — unlike #309's changelog database, there is no separate, slower connection
 // factory involved), and used further down once the current version is known to be running healthily.
 var appVersionTracker = app.Services.GetRequiredService<IAppVersionTracker>();
-var lastActiveVersion = await appVersionTracker.GetLastActiveVersionAsync();
+var lastActive        = await appVersionTracker.GetLastActiveAsync();
+var lastActiveVersion = lastActive?.Version;
 
 // A database initialisation failure must never crash the whole process outright — that would
 // also make POST /api/v1/admin/database/reset unreachable, the one endpoint actually capable of
@@ -910,7 +911,7 @@ if (dbHealth.IsHealthy)
 {
     try
     {
-        await appVersionTracker.RecordCurrentVersionAsync(versionService.Version);
+        await appVersionTracker.RecordCurrentAsync(versionService.Application, versionService.Version);
     }
     catch (Exception ex)
     {

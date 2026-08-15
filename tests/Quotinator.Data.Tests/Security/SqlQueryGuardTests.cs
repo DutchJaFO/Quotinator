@@ -159,6 +159,7 @@ public class SqlQueryGuardTests
             "Notifications.CountAll",             // COUNT(*) — total row count for the paginated list endpoint (#278)
             "ChangelogSchema.GetCurrentVersion",  // COALESCE(MAX(...)) — separate changelog database's own version bookkeeping (#309)
             "ChangelogSchema.AnyTableExists",     // COUNT(*) — fresh-database detection for the changelog database's own baseline path (#309)
+            "AppVersion.SelectNextSequenceNumber",// COALESCE(MAX(...)) — next recording-order counter for the app-version history (#312)
         };
 
         var actual = EnumerateSqlConstants()

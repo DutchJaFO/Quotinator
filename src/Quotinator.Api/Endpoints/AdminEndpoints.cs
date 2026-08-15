@@ -232,7 +232,7 @@ internal static class AdminEndpoints
             // System_AppVersion, and this must never turn a successful Reset into a failed response.
             try
             {
-                await appVersionTracker.RecordCurrentVersionAsync(versionService.Version);
+                await appVersionTracker.RecordCurrentAsync(versionService.Application, versionService.Version);
             }
             catch (Exception ex)
             {
