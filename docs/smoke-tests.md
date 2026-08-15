@@ -50,7 +50,7 @@ verification command here in the same commit that fixes it — the list only gro
 36. [Startup wait page during database initialisation](#36-startup-wait-page-during-database-initialisation-280) (#280)
 37. [Migration replay under a restricted-write environment](#37-migration-replay-under-a-restricted-write-environment-294) (#294)
 38. [Degraded-state pages survive a genuine migration failure](#38-degraded-state-pages-survive-a-genuine-migration-failure-293) (#293)
-39. [Notification metadata, provenance, and the v1.8.3 → current migration path](#39-notification-metadata-provenance-and-the-v183--current-migration-path-312) (#312)
+39. [Notification metadata, provenance, and upgrade paths from v1.8.3 and intermediate versions](#39-notification-metadata-provenance-and-the-v183--current-migration-path-312) (#312)
 
 ---
 
@@ -1821,3 +1821,95 @@ curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"tota
   again, because a body match no longer suppresses anything.
 
 Clean up: `docker rm -f q312 && rm -rf /tmp/q312`.
+
+### 39e. Upgrade from an *intermediate* schema version, not just the last release
+
+**This sub-section exists because 39a alone missed a startup-killing bug.** 39a upgrades from v1.8.3,
+where `System_AppVersion` does not exist at all — so a pre-migration read of it hits the missing-table
+path and returns null. A database at data **v4 or v5** is a different state entirely: the table exists
+but the columns a later migration adds do not. That state crashed startup with
+`no such column: Application`, and only a T1 run on a real dev database exposed it.
+
+**Whenever a migration adds a column to a table that startup reads before migrating, verify the
+intermediate state as well as the released one.** ADR 009 mandates the last *released* schema; it is a
+floor, not a ceiling, and unreleased intermediate versions exist on every developer machine.
+
+Build the intermediate state from the released image plus the migrations in between:
+
+```bash
+# 1. released baseline (data v3)
+MSYS_NO_PATHCONV=1 docker run -d --name q183 -e Quotinator__DataDir=/data \
+  -v /tmp/qv4/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
+sleep 28 && docker rm -f q183
+
+# 2. hand-apply the next migration to reach data v4, plus a row the later read must survive
+cat > /tmp/qv4/data/promote.sql <<'SQL'
+CREATE TABLE IF NOT EXISTS System_AppVersion (
+    Id TEXT NOT NULL PRIMARY KEY, Version TEXT NOT NULL, DateCreated TEXT NOT NULL,
+    DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0);
+INSERT INTO System_AppVersion (Id, Version, DateCreated)
+VALUES (lower(hex(randomblob(16))), '1.8.4', '2026-08-15 20:00:00');
+INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (4, '2026-08-15 20:00:00');
+SQL
+docker run --rm -v /tmp/qv4/data:/data alpine \
+  sh -c "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db < /data/promote.sql"
+rm /tmp/qv4/data/promote.sql
+
+# 3. current build against that state
+MSYS_NO_PATHCONV=1 docker run -d --name qv4 -e Quotinator__DataDir=/data \
+  -v /tmp/qv4/data:/data -p 8080:8080 quotinator:local
+sleep 32
+docker logs qv4 2>&1 | grep -E "no such column|Unhandled|pending|schema updated|Quotinator ready"
+```
+- Must log `applying 3 pending "Data" migration(s) (version 4 → 7)`, `schema updated (data v7, app v5)`,
+  and reach `Quotinator ready`.
+- **Must not log `no such column` or `Unhandled exception`.** Before the fix this terminated the process
+  during startup, after the changelog database had already initialised — so a partial, healthy-looking
+  log prefix is not evidence of a successful start. Check for `Quotinator ready` explicitly.
+- The pre-existing row must survive with its `Application` still `NULL`, and the current version must be
+  **appended** rather than replacing it:
+
+```bash
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db /tmp/qv4/data/quotinatordata.db \
+  --sql "SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;"
+```
+  Expect exactly two rows: `NULL | 1.8.4 | 1` then `Quotinator.Api | <current> | 2`.
+
+> `Quotinator.Tools.DbInspector` opens the database `Mode=ReadOnly` by design, so it cannot be used for
+> step 2's writes — hence the `sqlite3` container. Do not "fix" the tool to allow writes.
+
+Clean up: `docker rm -f qv4 && rm -rf /tmp/qv4`.
+
+### 39f. Upgrading a v1.8.3 database must not duplicate its existing notification
+
+**#312 moved a notification's identity out of message text into structured metadata. A row written
+before that has no metadata, cannot be identified, and would be announced a second time.** Migration 8
+backfills v1.8.3's one shipped notification so the upgrade recognises it. This sub-section proves that.
+
+**Give v1.8.3 enough time.** It writes the #279 announcement *after* first-boot seeding of ~800 quotes,
+so a 45-second check sees zero notifications and looks like proof that nothing was written. It is not —
+that mistake is what let this defect reach a T1 run. Wait for the count to be non-zero before upgrading.
+
+```bash
+MSYS_NO_PATHCONV=1 docker run -d --name qA -e Quotinator__DataDir=/data \
+  -v /tmp/qdup/data:/data -p 8080:8080 ghcr.io/dutchjafo/quotinator:1.8.3
+sleep 70
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+docker rm -f qA
+```
+- Must report `"totalCount":1` before continuing. If it reports `0`, wait longer — seeding has not
+  finished, and upgrading now would test nothing.
+
+```bash
+MSYS_NO_PATHCONV=1 docker run -d --name qB -e Quotinator__DataDir=/data \
+  -v /tmp/qdup/data:/data -p 8080:8080 quotinator:local
+sleep 45
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+```
+- Must still be **`1`**, not `2`.
+- That one row must carry the backfilled `title` and `metadataKind: announcement`, **and still hold
+  v1.8.3's original `expiresAt`** — the old always-on 30-day expiry. That retained expiry is what proves
+  it is the original row enriched in place rather than a fresh write that happens to look similar; a new
+  row would have no expiry at all, since #312 made expiry opt-in.
+
+Clean up: `docker rm -f qB && rm -rf /tmp/qdup`.

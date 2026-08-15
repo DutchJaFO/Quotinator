@@ -796,16 +796,7 @@ _ = Task.Run(async () =>
     }
 });
 
-// #81: capture the version this app instance was running as of its *previous* healthy startup,
-// before migrations run — a missing System_AppVersion table (a fresh install, or the very first boot
-// after this table was introduced) reads as null, meaning "nothing to catch up on, only the current
-// version matters" (WhatsNewNotification.BuildSeeds' own fresh-install rule). Read here, synchronously
-// and fast (a single row against the main database, matching #279's/#289's own producers' own
-// synchronous read+write — unlike #309's changelog database, there is no separate, slower connection
-// factory involved), and used further down once the current version is known to be running healthily.
 IAppVersionTracker appVersionTracker = app.Services.GetRequiredService<IAppVersionTracker>();
-AppVersionRecord? lastActive        = await appVersionTracker.GetLastActiveAsync();
-string? lastActiveVersion = lastActive?.Version;
 
 // A database initialisation failure must never crash the whole process outright — that would
 // also make POST /api/v1/admin/database/reset unreachable, the one endpoint actually capable of
@@ -840,6 +831,30 @@ catch (Exception ex)
     startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
     dbHealth.MarkFailed(failureReason);
 }
+
+// #81: the version this app instance was running as of its *previous* healthy startup — the lower
+// bound of the what's-new catch-up range. Read here rather than before migrations, and the ordering is
+// load-bearing, not incidental.
+//
+// It originally ran before InitialiseAsync, on the reasoning that a missing System_AppVersion table
+// (a fresh install, or the first boot after #81 introduced it) reads as null — "nothing to catch up
+// on". #312 broke that: this query now selects Application and orders by SequenceNumber, columns
+// migrations 6 and 7 add, so a database where the table already exists but those columns do not — any
+// database at data v4 or v5, i.e. one that ran a build between #81 and #312 — threw
+// `no such column: Application` straight past the missing-table catch and killed startup. Found live
+// in T1 on exactly such a database; T2 could not have caught it, since it upgraded from v1.8.3, where
+// the table does not exist at all and the catch does apply.
+//
+// Reading after migrations is not a workaround, it is the correct order: migrations 6 and 7 only add
+// columns and backfill SequenceNumber — they never touch a recorded Version — so "which version ran
+// last" is identical either side of them, while only the later position is guaranteed to have a schema
+// matching the query. Widening the catch to swallow `no such column` was rejected: it would leave the
+// same trap armed for the next column added to this query, and CLAUDE.md's "no exception-based
+// recovery" rule is precisely about not inferring schema state from thrown exceptions.
+//
+// Still strictly before RecordCurrentAsync below, which is what would overwrite the answer.
+AppVersionRecord? lastActive = await appVersionTracker.GetLastActiveAsync();
+string? lastActiveVersion = lastActive?.Version;
 
 // #81: System_AppVersion is meant to always carry the current version once startup is healthy —
 // the same "structurally required, not the caller's optional content" reasoning CLAUDE.md's endpoint

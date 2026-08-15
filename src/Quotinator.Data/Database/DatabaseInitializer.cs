@@ -83,6 +83,10 @@ public class DatabaseInitializer(
         // #312: and gains an explicit recording-order counter, since neither DateCreated (second
         // resolution) nor SQLite's implicit rowid is a trustworthy answer to "which version ran last".
         new SchemaMigration { Version = 7, Sql = AppVersionHistoryMigrations.AddSequenceNumberColumn },
+        // #312: give v1.8.3's already-shipped notification the structured identity #312 introduced,
+        // so the upgrade recognises it instead of announcing it a second time. Data-only — no schema
+        // change, so the baseline needs no counterpart (a fresh database has no legacy row to fix).
+        new SchemaMigration { Version = 8, Sql = NotificationLegacyMetadataMigrations.BackfillAnnouncementMetadata },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,

@@ -383,9 +383,75 @@ exactly one notification, verified.
 already render as a single run-on line. That is a live rendering bug, not only a cosmetic wish, and
 #308 (multi-line/rich message layout) is where it belongs.
 
-**T1 remains outstanding** and is the developer's own action, per this project's standing rule. Held
-deliberately until every migration in this issue had landed, so the developer's database takes the
-whole chain (4 → 7) in one pass instead of intermediate states.
+**T1 found a startup-killing bug that T2 structurally could not.** The app terminated during startup
+with `no such column: Application`.
+
+`Program.cs` read the last active version *before* running migrations — #81's original ordering, chosen
+so a missing `System_AppVersion` table would read as null. #312 changed that query to select
+`Application` and order by `SequenceNumber`, columns migrations 6 and 7 add. On a database where the
+table already exists but those columns do not — **any database at data v4 or v5**, which is every
+machine that ran a build between #81 and #312 — the query threw straight past the missing-table catch
+and killed the process.
+
+T2 could not have caught it: it upgrades from v1.8.3, where the table does not exist at all, so the
+catch legitimately applies and the read returns null. **The gap was verifying only the last *released*
+schema.** ADR 009 mandates that as a floor; unreleased intermediate versions exist on every developer
+machine and needed covering too.
+
+Fixed by moving the read to *after* migrations, which is the correct order rather than a workaround:
+migrations 6 and 7 only add columns and backfill `SequenceNumber`, never touching a recorded `Version`,
+so the answer is identical either side of them while only the later position is guaranteed a schema
+matching the query. Still strictly before `RecordCurrentAsync`, which is what would overwrite it.
+Widening the catch to swallow `no such column` was rejected — it would leave the same trap armed for
+the next column added to this query, and CLAUDE.md's "no exception-based recovery" rule is precisely
+about not inferring schema state from thrown exceptions.
+
+Verified both directions in Docker against a database promoted to data v4: the pre-fix image reproduces
+`Unhandled exception … no such column: Application`; the fixed image logs
+`applying 3 pending "Data" migration(s) (version 4 → 7)` → `schema updated (data v7, app v5)` →
+`Quotinator ready`, with the pre-existing row surviving (`NULL | 1.8.4 | 1`) and the current version
+appended (`Quotinator.Api | 1.8.3 | 2`). Regression-guarded by
+`AppVersionTrackerTests.GetLastActiveAsync_DatabaseAtPre312Shape_ReadsExistingRowOnceMigrated`, and by
+new smoke-test section 39e, which exists specifically so the next migration touching a
+read-before-migrate table verifies the intermediate state and not only the released one.
+
+**T1's re-run then found a second defect, and this one affected every released install.** The
+notifications page showed the #279 announcement **twice**.
+
+Cause: #312 moved identity out of message text into structured metadata, so a row written before it
+carries none, cannot be identified, and #279's producer writes a fresh copy on the first startup after
+upgrading.
+
+**The impact assessment was initially wrong, and the correction is the point.** A 45-second check
+against a fresh v1.8.3 container returned zero notifications, which was reported as proof that no
+released build writes one — making this look like development-machine debris. The developer challenged
+it against a deployed instance that plainly showed an active notification. Re-testing with a longer wait
+showed v1.8.3 *does* write it: the producer runs after first-boot seeding of ~800 quotes, so the earlier
+check simply ran too early. **Every existing v1.8.3 install was affected.** Reproduced end-to-end: a real
+v1.8.3 database upgraded to this build yielded 2 rows.
+
+Fixed by Data migration 8 (`NotificationLegacyMetadataMigrations.BackfillAnnouncementMetadata`), which
+gives that one shipped notification the metadata #312 expects, plus the `Title` it predates. Matching
+its body text is sound *in a migration specifically* — the text shipped in v1.8.3 and can never change
+retroactively, and migration SQL is frozen once applied, so the match is against a fixed historical fact
+rather than a live value. That is precisely why the runtime path must never do it, and the migration
+says so at the point of the code. `Metadata IS NULL` keeps it narrow: an already-identified row is never
+rewritten. Data-only, so the baseline needs no counterpart — a fresh database has no legacy row.
+
+Verified against a real v1.8.3 database carrying its notification: `applying 5 pending "Data"
+migration(s) (version 3 → 8)` → `Quotinator ready` → **1 notification, not 2**, retaining v1.8.3's
+original `ExpiresAt` (proving the original row was enriched in place, not replaced) while gaining the
+title and kind. Unit-guarded by `NotificationSeedingTests.SeedOnceAsync_LegacyRowBackfilledByMigration8_DoesNotWriteADuplicate`
+and `Migration8_RowThatAlreadyHasMetadata_IsLeftUntouched`; smoke-test section 39f, which states the
+"wait long enough for v1.8.3 to write it" trap explicitly, since falling into it is what let this reach
+T1.
+
+**Known leftover, deliberately not cleaned up:** a machine that ran an intermediate #312 build before
+migration 8 existed already has the duplicate. Migration 8 prevents new ones but does not delete it —
+it is a real row the operator may have read, and removing user-visible history to tidy a transition is
+not a migration's business. Dismiss it.
+
+**T1 is otherwise the developer's own action and remains outstanding for a re-run** on the fixed build.
 
 ---
 
@@ -411,6 +477,8 @@ whole chain (4 → 7) in one pass instead of intermediate states.
 | 15 | ✅ | Migration applies cleanly to a real copy of the last released (v1.8.3) database | Live (T2) | `docker run ghcr.io/dutchjafo/quotinator:1.8.3` → `data v3, app v5`; current build → `applying 4 pending "Data" migration(s) (version 3 → 7)`, `schema updated (data v7, app v5)`, no exception, no repeat on restart |
 | 15b | ✅ | Stored payload carries no duplicate `Kind`, and `AppVersionId` joins to the writing version | Live (T2) | DbInspector against the migrated db: `Metadata` = `{"announcement":"GetAllImportBatches"}`, join yields `Quotinator.Api 1.8.3`. Regression-guarded by `NotificationMetadataKindsTests.SerializedPayload_NeverContainsTheKindDiscriminator` |
 | 15c | ✅ | `System_AppVersion` stays append-only across a restart | Live (T2) | One row (`Quotinator.Api / 1.8.3 / 1`) before and after `docker restart` |
+| 15e | ✅ | Upgrading a v1.8.3 database does not duplicate its existing notification | Live (T2) | Real v1.8.3 database carrying the #279 announcement, upgraded: `version 3 → 8`, 1 notification not 2, original `ExpiresAt` retained. Smoke-test 39f; unit-guarded by `NotificationSeedingTests.SeedOnceAsync_LegacyRowBackfilledByMigration8_DoesNotWriteADuplicate` and `Migration8_RowThatAlreadyHasMetadata_IsLeftUntouched` |
+| 15d | ✅ | Startup survives an upgrade from an *intermediate* (unreleased) schema version, not only from the last release | Live (T2) | Database promoted to data v4: pre-fix image reproduces `Unhandled exception … no such column: Application`; fixed image reaches `Quotinator ready` via `version 4 → 7`, legacy row preserved and current version appended. Smoke-test section 39e; unit-guarded by `AppVersionTrackerTests.GetLastActiveAsync_DatabaseAtPre312Shape_ReadsExistingRowOnceMigrated` |
 | 16 | ❌ | T1 — app starts in Visual Studio with no error; `/notifications` renders migrated rows correctly | Live (T1) | Developer confirms in Visual Studio |
 | 17 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 18 | ❌ | Full test suite green | Build | `dotnet test --configuration Release` |

@@ -24,6 +24,8 @@ namespace Quotinator.Data.Tests.Notifications;
 [TestClass]
 public class NotificationSeedingTests
 {
+    public TestContext TestContext { get; set; } = null!;
+
     private string _tempDir = null!;
     private string _dbPath = null!;
     private NotificationWriter _writer = null!;
@@ -190,6 +192,64 @@ public class NotificationSeedingTests
 
         NotificationEntity stored = (await _reader.GetPagedAsync(1, 0)).Items.Single();
         Assert.IsNull(stored.ExpiresAt.Parsed);
+    }
+
+    /// <summary>
+    /// A v1.8.3 notification, once migration 8 has backfilled its identity, suppresses the producer
+    /// that would otherwise re-announce it.
+    /// <para>
+    /// Regression test for a duplicate reproduced against a real v1.8.3 database: #312 moved identity
+    /// out of message text, so a row written before it could not be identified and #279's producer
+    /// wrote a second copy on the first startup after upgrading. Every existing install was affected,
+    /// not only development machines — v1.8.3 does write this notification, it simply takes longer than
+    /// a short smoke check because first-boot seeding runs first.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task SeedOnceAsync_LegacyRowBackfilledByMigration8_DoesNotWriteADuplicate()
+    {
+        // The v1.8.3 row exactly as that release wrote it: message text only, no Title, no Metadata,
+        // and the always-on expiry #312 later made opt-in.
+        await _writer.WriteAsync(
+            NotificationType.Warning,
+            body: "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
+                  "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources.",
+            expiresAt: DateTime.UtcNow.AddDays(30));
+
+        using (SqliteConnection connection = (SqliteConnection)new SqliteConnectionFactory(_dbPath).CreateConnection())
+        {
+            await connection.OpenAsync(TestContext.CancellationToken);
+            await connection.ExecuteAsync(NotificationLegacyMetadataMigrations.BackfillAnnouncementMetadata);
+        }
+
+        NotificationEntity? written = await NotificationSeeding.SeedOnceAsync(
+            _reader, _writer, NotificationType.Warning,
+            new AnnouncementMetadataDto { Announcement = "GetAllImportBatches" },
+            body: "Two REST API operation IDs were renamed …");
+
+        Assert.IsNull(written, "The backfilled v1.8.3 row must be recognised, so the producer writes nothing.");
+        Assert.HasCount(1, (await _reader.GetPagedAsync(1, 0)).Items);
+    }
+
+    /// <summary>The backfill leaves an already-identified row alone, so replaying the chain cannot rewrite correct metadata.</summary>
+    [TestMethod]
+    public async Task Migration8_RowThatAlreadyHasMetadata_IsLeftUntouched()
+    {
+        await NotificationSeeding.SeedOnceAsync(
+            _reader, _writer, NotificationType.Warning,
+            new AnnouncementMetadataDto { Announcement = "SomethingElse" },
+            body: "mentions GetAllImportBatches but was written after #312",
+            title: "Its own title");
+
+        using (SqliteConnection connection = (SqliteConnection)new SqliteConnectionFactory(_dbPath).CreateConnection())
+        {
+            await connection.OpenAsync(TestContext.CancellationToken);
+            await connection.ExecuteAsync(NotificationLegacyMetadataMigrations.BackfillAnnouncementMetadata);
+        }
+
+        NotificationEntity stored = (await _reader.GetPagedAsync(1, 0)).Items.Single();
+        Assert.Contains("SomethingElse", stored.Metadata!, "The backfill overwrote metadata it should have skipped.");
+        Assert.AreEqual("Its own title", stored.Title);
     }
 
     private Task<NotificationEntity?> SeedAsync(string announcement, string body) =>

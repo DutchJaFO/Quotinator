@@ -225,6 +225,44 @@ public class AppVersionTrackerTests
         Assert.AreEqual(2, await RowCountAsync(temp));
     }
 
+    /// <summary>
+    /// A database at the pre-#312 <c>System_AppVersion</c> shape — the table exists (migration 4 ran)
+    /// but <c>Application</c> and <c>SequenceNumber</c> do not — must be readable once the remaining
+    /// migrations have been applied, with its existing row intact.
+    /// <para>
+    /// Regression test for a live T1 startup crash: <c>Program.cs</c> read the last active version
+    /// <i>before</i> running migrations, and #312 changed this query to select <c>Application</c> and
+    /// order by <c>SequenceNumber</c>. Any database at data v4 or v5 therefore threw
+    /// <c>no such column: Application</c> past the missing-table catch and killed startup. T2 could not
+    /// have caught it — it upgrades from v1.8.3, where the table does not exist at all, so the catch
+    /// legitimately applies. This test pins the state in between.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task GetLastActiveAsync_DatabaseAtPre312Shape_ReadsExistingRowOnceMigrated()
+    {
+        using TempDatabase temp = new([AppVersionMigrations.CreateAppVersionTable]);
+
+        using (SqliteConnection seed = (SqliteConnection)temp.ConnectionFactory.CreateConnection())
+        {
+            await seed.OpenAsync(TestContext.CancellationToken);
+            await seed.ExecuteAsync(
+                "INSERT INTO System_AppVersion (Id, Version, DateCreated) VALUES (@id, '1.8.4', @now);",
+                new { id = Guid.NewGuid().ToString(), now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
+
+            // The remaining #312 migrations, exactly as startup applies them before the read.
+            await seed.ExecuteAsync(AppVersionHistoryMigrations.AddApplicationColumn);
+            await seed.ExecuteAsync(AppVersionHistoryMigrations.AddSequenceNumberColumn);
+        }
+
+        AppVersionTracker tracker = new(temp.ConnectionFactory);
+        AppVersionRecord? lastActive = await tracker.GetLastActiveAsync();
+
+        Assert.IsNotNull(lastActive, "The row written by the earlier build must survive the migration and still be readable.");
+        Assert.AreEqual("1.8.4", lastActive.Version);
+        Assert.IsNull(lastActive.Application);
+    }
+
     private static async Task<int> RowCountAsync(TempDatabase temp)
     {
         using SqliteConnection connection = (SqliteConnection)temp.ConnectionFactory.CreateConnection();
