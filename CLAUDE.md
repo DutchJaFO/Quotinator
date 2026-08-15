@@ -728,10 +728,36 @@ pass isn't the plan.
 anonymous type, a tuple literal relying on inferred element names, or any other construct with no
 expressible type name (e.g. some LINQ query-expression intermediates).
 
-`IDE0008` ("use explicit type") is **not** escalated in `.editorconfig` — turning it on would flag
-all ~13,298 existing occurrences as build warnings immediately, which would break the 0-warnings
-policy long before the boyscout rule could work through them. Do not escalate it without first
-reducing the outstanding count to something the build can realistically stay green against.
+**`IDE0008` is escalated to `warning` for the files a milestone touches — never solution-wide.**
+Relying on memory alone did not work: the boyscout rule above was silently missed across several
+consecutive #312 commits before the developer caught it by eye. The compiler enforces it instead.
+
+At the start of a milestone or issue, add a path-scoped section to `.editorconfig` naming the files
+that work creates or touches, and add each further file to that list *the moment* it is first
+touched:
+
+```ini
+[{src/Foo/Bar.cs,tests/Foo.Tests/BarTests.cs}]
+dotnet_diagnostic.IDE0008.severity = warning
+```
+
+The `csharp_style_var_*` preferences are stated solution-wide; only the **severity** is scoped, and
+that distinction is the whole point. Escalating the severity globally surfaces **14,286** warnings
+(measured 2026-08-15, not estimated) — the "convert everything at once" outcome #244 rejected, and an
+immediate breach of the 0-warnings gate. Never do that. The scoped list has a useful second effect:
+it is the milestone's own record of its blast radius.
+
+**Mechanics.** `dotnet format style <project> --diagnostics IDE0008 --severity warn` does most of the
+work, but **its fixer is iterative and one pass is not enough** — a second pass on the same file
+converted 21 further occurrences, a third took it to zero. Run it until the count stops dropping,
+then fix by hand what it never touches: `foreach (var x in …)`, `using var x = …`, `var (a, b) = …`
+deconstructions, and multi-line ternary assignments.
+
+**Expect follow-on warnings, and fix them in the same pass.** Giving a declaration an explicit type
+routinely exposes `IDE0028`/`IDE0305` ("collection initialization can be simplified") that `var` was
+masking — `List<T> x = (await …).ToList()` becomes `List<T> x = [.. await …]`. These are real
+warnings against the 0-warnings gate, not noise; `dotnet format --diagnostics IDE0028 IDE0305` fixes
+them, also iteratively.
 
 ### Primary constructors
 
@@ -813,6 +839,29 @@ The same principle applies across three domains in this project:
 - A SQL string typed anywhere outside `Sql.cs` is a violation. If the query is dynamic (WHERE clause appended at runtime), write a factory method in the appropriate `Sql.*` nested class and call it from the service. The method is then testable in isolation.
 - A UI string or error message typed anywhere outside an `i18ntext/*.json` file is a violation — including inside `.razor` markup (see localisation checklist).
 - When adding a new query or string, the corresponding test (`SqlQueryGuardTests`, `TranslationCompletenessTests`) must pass before the commit is pushed.
+
+**Column names inside a SQL string come from `nameof(TEntity.Property)`, not a literal** (developer
+decision, 2026-08-15). Adopted as a **boyscout rule**, exactly like explicit types above: apply it to
+any `Sql.*` nested class you touch, and do not sweep the file. This is not a naming trick — the
+project already treats property name == column name as mechanically true, since
+`ReflectedColumnMetadata` builds `ValidColumnNames` from `type.GetProperties().Select(p => p.Name)`.
+`nameof` states that existing invariant, so an IDE rename propagates into the query instead of
+silently leaving it pointing at a column that no longer exists. See `Sql.AppVersion` for the worked
+example.
+
+Three things stay literal, each for a concrete reason:
+
+- **Table names** — they come from `[Table("System_AppVersion")]`, which `nameof` cannot reach. Hold
+  the name in one `private const string Table` per nested class when it repeats.
+- **Dapper parameter names** — they must match the anonymous-object member names at the call site
+  (`new { application, version }`), and an anonymous type's members are identifiers, not values a
+  constant can supply. No constant can genuinely tie the two ends together, and a single-use one
+  would only look like it did.
+- **Migration SQL** — frozen text by the migration policy. A rename must *not* propagate into it.
+
+Note that any `private const string` added inside `Sql` is picked up by the guard tests, which
+enumerate with `BindingFlags.NonPublic`. That is harmless for a real SQL fragment, but it is a reason
+not to add single-use constants there just for tidiness.
 
 **How to audit:**
 

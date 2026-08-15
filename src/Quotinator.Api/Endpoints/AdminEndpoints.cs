@@ -14,6 +14,7 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -23,12 +24,12 @@ internal static class AdminEndpoints
     internal static void MapAdminEndpoints(this WebApplication app)
     {
         // Non-destructive endpoints — read-only; no API key required.
-        var publicGroup = app.MapGroup("/api/v1/admin")
+        RouteGroupBuilder publicGroup = app.MapGroup("/api/v1/admin")
                              .WithTags(ApiTags.Admin)
                              .RequireRateLimiting(RateLimitPolicies.Admin);
 
         // Destructive or sensitive endpoints — require X-Api-Key header.
-        var adminGroup = app.MapGroup("/api/v1/admin")
+        RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/admin")
                             .WithTags(ApiTags.Admin)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
                             .AddEndpointFilter<AdminApiKeyFilter>()
@@ -38,7 +39,7 @@ internal static class AdminEndpoints
 
         publicGroup.MapGet("/database/seed/preview", async (IDatabaseInitializer db, IApiLocalizer localizer) =>
         {
-            var preview = await db.PreviewSeedAsync();
+            SeedPreviewResult preview = await db.PreviewSeedAsync();
             return Results.Ok(new SeedPreviewResponse
             {
                 Files = [.. preview.Files.Select(f => new Quotinator.Core.Models.SeedFilePreview
@@ -84,11 +85,11 @@ internal static class AdminEndpoints
             [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
             IAuditEntryReader auditReader = null!) =>
         {
-            if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
+            if (!PaginationParsing.TryParse(page, pageSize, localizer, out int pageValue, out int pageSizeValue, out IResult? pageError))
                 return pageError!;
 
-            var result = await auditReader.GetPagedAsync(table, recordId, pageValue, pageSizeValue);
-            var mapped = new PagedItems<AuditEntryResponse>(
+            PagedItems<AuditEntryEntity> result = await auditReader.GetPagedAsync(table, recordId, pageValue, pageSizeValue);
+            PagedItems<AuditEntryResponse> mapped = new(
                 [.. result.Items.Select(ToAuditEntryResponse)], result.Page, result.PageSize, result.TotalCount);
 
             return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
@@ -107,8 +108,8 @@ internal static class AdminEndpoints
             IAuditEntryReader auditReader,
             IChangeReader changeReader) =>
         {
-            var (entryEarliest, entryLatest)   = await auditReader.GetDateRangeAsync();
-            var (changeEarliest, changeLatest) = await changeReader.GetDateRangeAsync();
+            (DateTime? entryEarliest, DateTime? entryLatest) = await auditReader.GetDateRangeAsync();
+            (DateTime? changeEarliest, DateTime? changeLatest) = await changeReader.GetDateRangeAsync();
 
             return Results.Ok(new AuditDateRangeResponse
             {
@@ -133,25 +134,25 @@ internal static class AdminEndpoints
             IConfiguration configuration,
             HttpContext httpContext) =>
         {
-            if (!TryParseUtcDate(startDate, out var start))
+            if (!TryParseUtcDate(startDate, out DateTime? start))
                 return Results.Problem(detail: localizer[ApiMessages.AuditExportDateInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
-            if (!TryParseUtcDate(endDate, out var end))
+            if (!TryParseUtcDate(endDate, out DateTime? end))
                 return Results.Problem(detail: localizer[ApiMessages.AuditExportDateInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
             if (start is not null && end is not null && start > end)
                 return Results.Problem(detail: localizer[ApiMessages.AuditExportDateRangeInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-            var entryCount  = await auditReader.CountInRangeAsync(start, end);
-            var changeCount = await changeReader.CountInRangeAsync(start, end);
-            var totalCount  = entryCount + changeCount;
-            var maxRows     = configuration.GetValue<int?>("Quotinator:AdminAuditExportMaxRows") ?? QueryParamDefaults.AdminAuditExportMaxRows;
+            int entryCount  = await auditReader.CountInRangeAsync(start, end);
+            int changeCount = await changeReader.CountInRangeAsync(start, end);
+            int totalCount  = entryCount + changeCount;
+            int maxRows     = configuration.GetValue<int?>("Quotinator:AdminAuditExportMaxRows") ?? QueryParamDefaults.AdminAuditExportMaxRows;
 
             if (totalCount > maxRows)
                 return Results.Problem(
                     detail: localizer.Format(ApiMessages.AuditExportRowCapExceeded, totalCount, maxRows),
                     statusCode: StatusCodes.Status422UnprocessableEntity);
 
-            var entries = await auditReader.GetAllInRangeAsync(start, end);
-            var changes = await changeReader.GetAllInRangeAsync(start, end);
+            IReadOnlyList<AuditEntryEntity> entries = await auditReader.GetAllInRangeAsync(start, end);
+            IReadOnlyList<ChangeEntity> changes = await changeReader.GetAllInRangeAsync(start, end);
 
             httpContext.Response.Headers.Append("Content-Disposition",
                 $"attachment; filename=\"quotinator-audit-export-{DateTime.UtcNow:yyyyMMddHHmmss}.json\"");
@@ -273,7 +274,7 @@ internal static class AdminEndpoints
 
         adminGroup.MapPost("/sources/refresh", async (IDatabaseInitializer db, bool force = false) =>
         {
-            var resolution = await db.RefreshSourcesAsync(force);
+            SourceCacheResolution resolution = await db.RefreshSourcesAsync(force);
             return Results.Ok(new SourceRefreshResponse
             {
                 Results = [.. resolution.Results.Select(r => new SourceRefreshResultResponse
@@ -324,7 +325,7 @@ internal static class AdminEndpoints
         if (value is null) { result = null; return true; }
 
         if (!DateTime.TryParse(value, CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime parsed))
         {
             result = null;
             return false;

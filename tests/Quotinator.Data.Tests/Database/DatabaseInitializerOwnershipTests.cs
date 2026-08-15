@@ -21,8 +21,8 @@ public class DatabaseInitializerOwnershipTests
     private static DatabaseInitializer CreateBareInitializer(
         string dbPath, IReadOnlyList<SchemaMigration> consumerMigrations, SchemaBaseline? baseline = null)
     {
-        var factory = new SqliteConnectionFactory(dbPath);
-        var options = new DatabaseOptions
+        SqliteConnectionFactory factory = new(dbPath);
+        DatabaseOptions options = new()
         {
             DbPath      = dbPath,
             BackupsPath = Path.Combine(Path.GetDirectoryName(dbPath)!, "backups"),
@@ -34,20 +34,20 @@ public class DatabaseInitializerOwnershipTests
 
     private static async Task<List<string>> DumpTableSchemaAsync(SqliteConnection conn, string table)
     {
-        var lines = new List<string>();
+        List<string> lines = [];
 
-        var columns = await conn.QueryAsync<(int cid, string name, string type, int notnull, string? dflt_value, int pk)>(
+        IEnumerable<(int cid, string name, string type, int notnull, string? dflt_value, int pk)> columns = await conn.QueryAsync<(int cid, string name, string type, int notnull, string? dflt_value, int pk)>(
             $"SELECT cid, name, type, [notnull], dflt_value, pk FROM pragma_table_info('{table}');");
-        foreach (var (cid, name, type, notnull, dflt_value, pk) in columns.OrderBy(c => c.cid))
+        foreach ((int cid, string? name, string? type, int notnull, string? dflt_value, int pk) in columns.OrderBy(c => c.cid))
             lines.Add($"COL {cid} {name} {type} notnull={notnull} default={dflt_value} pk={pk}");
 
-        var indexes = await conn.QueryAsync<(string name, int unique)>(
+        IEnumerable<(string name, int unique)> indexes = await conn.QueryAsync<(string name, int unique)>(
             $"SELECT name, [unique] FROM pragma_index_list('{table}');");
-        foreach (var (name, unique) in indexes.OrderBy(i => i.name))
+        foreach ((string? name, int unique) in indexes.OrderBy(i => i.name))
         {
-            var idxCols = await conn.QueryAsync<(int seqno, string? name)>(
+            IEnumerable<(int seqno, string? name)> idxCols = await conn.QueryAsync<(int seqno, string? name)>(
                 $"SELECT seqno, name FROM pragma_index_info('{name}');");
-            var colList = string.Join(",", idxCols.OrderBy(c => c.seqno).Select(c => c.name));
+            string colList = string.Join(",", idxCols.OrderBy(c => c.seqno).Select(c => c.name));
             lines.Add($"IDX {name} unique={unique} cols=({colList})");
         }
 
@@ -66,21 +66,21 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "Audit_Entry");
-        var schemaB = await DumpTableSchemaAsync(connB, "Audit_Entry");
+        List<string> schemaA = await DumpTableSchemaAsync(connA, "Audit_Entry");
+        List<string> schemaB = await DumpTableSchemaAsync(connB, "Audit_Entry");
 
         Assert.AreSequenceEqual(schemaB, schemaA, "Audit_Entry schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
@@ -94,21 +94,21 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemImportConflictsSchema()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "Import_Conflict");
-        var schemaB = await DumpTableSchemaAsync(connB, "Import_Conflict");
+        List<string> schemaA = await DumpTableSchemaAsync(connA, "Import_Conflict");
+        List<string> schemaB = await DumpTableSchemaAsync(connB, "Import_Conflict");
 
         Assert.AreSequenceEqual(schemaB, schemaA, "Import_Conflict schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
@@ -121,21 +121,21 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemChangeLogSchema()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "Audit_Change");
-        var schemaB = await DumpTableSchemaAsync(connB, "Audit_Change");
+        List<string> schemaA = await DumpTableSchemaAsync(connA, "Audit_Change");
+        List<string> schemaB = await DumpTableSchemaAsync(connB, "Audit_Change");
 
         Assert.AreSequenceEqual(schemaB, schemaA, "Audit_Change schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
@@ -149,21 +149,21 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemImportActionsSchema()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "Import_Action");
-        var schemaB = await DumpTableSchemaAsync(connB, "Import_Action");
+        List<string> schemaA = await DumpTableSchemaAsync(connA, "Import_Action");
+        List<string> schemaB = await DumpTableSchemaAsync(connB, "Import_Action");
 
         Assert.AreSequenceEqual(schemaB, schemaA, "Import_Action schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
@@ -173,21 +173,21 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemSourceFileOverridesSchema()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "Import_SourceFileOverride");
-        var schemaB = await DumpTableSchemaAsync(connB, "Import_SourceFileOverride");
+        List<string> schemaA = await DumpTableSchemaAsync(connA, "Import_SourceFileOverride");
+        List<string> schemaB = await DumpTableSchemaAsync(connB, "Import_SourceFileOverride");
 
         Assert.AreSequenceEqual(schemaB, schemaA, "Import_SourceFileOverride schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
@@ -201,23 +201,23 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalFileResourceSchema()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var table in new[] { "Import_FileResource", "Import_FileResourceLine", "Import_FileResourceBatch" })
+        foreach (string table in new[] { "Import_FileResource", "Import_FileResourceLine", "Import_FileResourceBatch" })
         {
-            var schemaA = await DumpTableSchemaAsync(connA, table);
-            var schemaB = await DumpTableSchemaAsync(connB, table);
+            List<string> schemaA = await DumpTableSchemaAsync(connA, table);
+            List<string> schemaB = await DumpTableSchemaAsync(connB, table);
 
             Assert.AreSequenceEqual(schemaB, schemaA, $"{table} schema differs between Data's baseline and incremental paths — " +
                 "update DataBaselineSql to match DataOwnedMigrations' final result.");
@@ -232,22 +232,22 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameFileResourceCheckConstraintValues()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var conn in new[] { connA, connB })
+        foreach (SqliteConnection? conn in new[] { connA, connB })
         {
-            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
                 "INSERT INTO Import_FileResource (Id, FileName, Origin, HomeDirectoryKey, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
@@ -291,16 +291,16 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task Migration007_RemapsPreGeneralizationOriginValuesAndPreservesChildRowLinks()
     {
-        using var temp = new TempDatabase([]);
-        using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
+        using TempDatabase temp = new([]);
+        using SqliteConnection conn = new($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         await conn.ExecuteAsync("CREATE TABLE IF NOT EXISTS Import_Batch (Id TEXT NOT NULL PRIMARY KEY, Name TEXT, Type TEXT, ImportedAt TEXT, DateCreated TEXT);");
         await conn.ExecuteAsync(FileResourceMigrations.CreateFileResourceTables);
 
-        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        var fileResourceId = Guid.NewGuid();
-        var batchId = Guid.NewGuid();
+        string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        Guid fileResourceId = Guid.NewGuid();
+        Guid batchId = Guid.NewGuid();
 
         await conn.ExecuteAsync(
             "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, DateCreated) VALUES (@id, 'test', 'Seed', @now, @now);",
@@ -328,17 +328,17 @@ public class DatabaseInitializerOwnershipTests
         await conn.ExecuteAsync(FileResourceOriginGeneralizationMigrations.GeneralizeOrigin);
         await conn.ExecuteAsync("PRAGMA foreign_keys = ON;");
 
-        var (origin, homeDirectoryKey) = await conn.QuerySingleAsync<(string, string?)>(
+        (string? origin, string? homeDirectoryKey) = await conn.QuerySingleAsync<(string, string?)>(
             "SELECT Origin, HomeDirectoryKey FROM Import_FileResource WHERE Id = @id;",
             new { id = fileResourceId.ToString() });
         Assert.AreEqual("System", origin, "Pre-#252 'Bundled' rows must be remapped to 'System', not just accepted by a widened CHECK.");
         Assert.AreEqual("sources", homeDirectoryKey, "A remapped System-origin row must backfill HomeDirectoryKey to 'sources' — the only directory 'Bundled' content was ever captured from.");
 
-        var lineCount = await conn.ExecuteScalarAsync<int>(
+        int lineCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Import_FileResourceLine WHERE FileResourceId = @id;", new { id = fileResourceId.ToString() });
         Assert.AreEqual(1, lineCount, "Import_FileResourceLine's FK link to the rebuilt Import_FileResource must survive the rebuild.");
 
-        var batchLinkCount = await conn.ExecuteScalarAsync<int>(
+        int batchLinkCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Import_FileResourceBatch WHERE FileResourceId = @id;", new { id = fileResourceId.ToString() });
         Assert.AreEqual(1, batchLinkCount, "Import_FileResourceBatch's FK link to the rebuilt Import_FileResource must survive the rebuild.");
     }
@@ -350,22 +350,22 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameSourceFileOverridesCheckConstraintValues()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var conn in new[] { connA, connB })
+        foreach (SqliteConnection? conn in new[] { connA, connB })
         {
-            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
                 "INSERT INTO Import_SourceFileOverride (Id, FileName, Origin, ContentHash, DateCreated) " +
@@ -388,23 +388,23 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameImportActionsCheckConstraintValues()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var conn in new[] { connA, connB })
+        foreach (SqliteConnection? conn in new[] { connA, connB })
         {
-            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-            var id  = Guid.NewGuid().ToString();
+            string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            string id  = Guid.NewGuid().ToString();
 
             await conn.ExecuteAsync(
                 "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, AppliedPolicy, Status, MarkCompletenessAs, DetectedAt, DateCreated) " +
@@ -449,22 +449,22 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameImportConflictsCheckConstraintValues()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var conn in new[] { connA, connB })
+        foreach (SqliteConnection? conn in new[] { connA, connB })
         {
-            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
                 "INSERT INTO Import_Conflict (Id, BatchId, EntityType, AppliedPolicy, Status, DetectedAt, DateCreated) " +
@@ -493,22 +493,22 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameChangeLogCheckConstraintValues()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var conn in new[] { connA, connB })
+        foreach (SqliteConnection? conn in new[] { connA, connB })
         {
-            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
                 "INSERT INTO Audit_Change (Id, EntityType, EntityId, InitiatedByType, Action, OccurredAt, DateCreated) " +
@@ -534,21 +534,21 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "System_Notification");
-        var schemaB = await DumpTableSchemaAsync(connB, "System_Notification");
+        List<string> schemaA = await DumpTableSchemaAsync(connA, "System_Notification");
+        List<string> schemaB = await DumpTableSchemaAsync(connB, "System_Notification");
 
         Assert.AreSequenceEqual(schemaB, schemaA, "System_Notification schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
@@ -562,22 +562,22 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var conn in new[] { connA, connB })
+        foreach (SqliteConnection? conn in new[] { connA, connB })
         {
-            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
                 "INSERT INTO System_Notification (Id, Type, Body, DismissTriggerKey, DateCreated) " +
@@ -609,21 +609,21 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAppVersionSchema()
     {
-        using var tempA = new TempDatabase([]);
-        var dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
         await dbA.InitialiseAsync();
 
-        using var tempB = new TempDatabase([]);
-        var dbB = CreateBareInitializer(tempB.DbPath, []);
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={tempA.DbPath}");
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={tempB.DbPath}");
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        var schemaA = await DumpTableSchemaAsync(connA, "System_AppVersion");
-        var schemaB = await DumpTableSchemaAsync(connB, "System_AppVersion");
+        List<string> schemaA = await DumpTableSchemaAsync(connA, "System_AppVersion");
+        List<string> schemaB = await DumpTableSchemaAsync(connB, "System_AppVersion");
 
         Assert.AreSequenceEqual(schemaB, schemaA, "System_AppVersion schema differs between Data's baseline and incremental paths — " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
@@ -633,14 +633,14 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task ApplyBaselineAsync_NoConsumerBaselineDefined_FallsThroughToIncremental()
     {
-        using var temp = new TempDatabase([]);
-        var db = CreateBareInitializer(temp.DbPath, []);
+        using TempDatabase temp = new([]);
+        DatabaseInitializer db = CreateBareInitializer(temp.DbPath, []);
 
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
+        using SqliteConnection conn = new($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
+        int dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
         Assert.AreEqual(7, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
@@ -658,7 +658,7 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task DataOwnedMigrations_AlwaysApplyBeforeConsumerMigrations()
     {
-        using var temp = new TempDatabase([]);
+        using TempDatabase temp = new([]);
         IReadOnlyList<SchemaMigration> consumerMigrations =
         [
             new SchemaMigration
@@ -668,15 +668,15 @@ public class DatabaseInitializerOwnershipTests
                       "VALUES (lower(hex(randomblob(16))), 'Probe', 'Inserted', '2026-01-01 00:00:00', '2026-01-01 00:00:00');",
             },
         ];
-        var db = CreateBareInitializer(temp.DbPath, consumerMigrations);
+        DatabaseInitializer db = CreateBareInitializer(temp.DbPath, consumerMigrations);
 
         // No exception means the consumer migration's INSERT succeeded — proving Audit_Entry
         // (created by Data's own migration 1) already existed by the time the consumer migration ran.
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
+        using SqliteConnection conn = new($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var probeCount = await conn.ExecuteScalarAsync<int>(
+        int probeCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Audit_Entry WHERE TableName = 'Probe';");
 
         Assert.AreEqual(1, probeCount,
@@ -698,8 +698,8 @@ public class DatabaseInitializerOwnershipTests
 
     private static ResettableTestInitializer CreateResettableInitializer(string dbPath, IReadOnlyList<SchemaMigration> consumerMigrations)
     {
-        var factory = new SqliteConnectionFactory(dbPath);
-        var options = new DatabaseOptions
+        SqliteConnectionFactory factory = new(dbPath);
+        DatabaseOptions options = new()
         {
             DbPath      = dbPath,
             BackupsPath = Path.Combine(Path.GetDirectoryName(dbPath)!, "backups"),
@@ -717,13 +717,13 @@ public class DatabaseInitializerOwnershipTests
     [TestMethod]
     public async Task ResetAsync_MigrationFailsDuringReplay_RestoresPreResetBackupAndRethrows()
     {
-        using var temp = new TempDatabase([]);
+        using TempDatabase temp = new([]);
 
         IReadOnlyList<SchemaMigration> workingMigrations =
         [
             new SchemaMigration { Version = 1, Sql = "CREATE TABLE IF NOT EXISTS Probe (Id INTEGER); INSERT INTO Probe (Id) VALUES (999);" },
         ];
-        var db = CreateResettableInitializer(temp.DbPath, workingMigrations);
+        ResettableTestInitializer db = CreateResettableInitializer(temp.DbPath, workingMigrations);
         await db.InitialiseAsync();
 
         // A different, deliberately-broken migration list for the same database file — forces the
@@ -733,13 +733,13 @@ public class DatabaseInitializerOwnershipTests
         [
             new SchemaMigration { Version = 1, Sql = "THIS IS NOT VALID SQL;" },
         ];
-        var db2 = CreateResettableInitializer(temp.DbPath, poisonMigrations);
+        ResettableTestInitializer db2 = CreateResettableInitializer(temp.DbPath, poisonMigrations);
 
         await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.ResetAsync());
 
-        using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
+        using SqliteConnection conn = new($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var probeValue = await conn.ExecuteScalarAsync<int>("SELECT Id FROM Probe;");
+        int probeValue = await conn.ExecuteScalarAsync<int>("SELECT Id FROM Probe;");
         Assert.AreEqual(999, probeValue, "Pre-reset data must be fully restored after a failed reset, not left dropped");
     }
 

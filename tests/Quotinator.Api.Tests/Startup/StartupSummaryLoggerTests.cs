@@ -32,17 +32,17 @@ public class StartupSummaryLoggerTests
         bool     logRequests         = false,
         bool     isHa                = false)
     {
-        var sink    = new CaptureSink();
-        var serilog = new LoggerConfiguration()
+        CaptureSink sink    = new CaptureSink();
+        Serilog.Core.Logger serilog = new LoggerConfiguration()
             .MinimumLevel.Is(LogEventLevel.Information)
             .WriteTo.Sink(sink)
             .CreateLogger();
-        var logger = new SerilogLoggerFactory(serilog)
+        ILogger<StartupSummaryLogger> logger = new SerilogLoggerFactory(serilog)
             .CreateLogger<StartupSummaryLogger>();
 
-        var db      = new StubDbInitializer(migrationApplied);
-        var version = new StubVersionService("1.2.3");
-        var startupLogger = new StartupSummaryLogger(
+        StubDbInitializer db      = new StubDbInitializer(migrationApplied);
+        StubVersionService version = new StubVersionService("1.2.3");
+        StartupSummaryLogger startupLogger = new StartupSummaryLogger(
             logger, db, version,
             dataDir:            "/data",
             dbPath:             "/data/quotinatordata.db",
@@ -98,7 +98,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogStarting_LogsExactlyOneEntry()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogStarting();
         Assert.HasCount(1, sink.Lines);
     }
@@ -106,7 +106,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogStarting_BannerContainsHashBorder()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogStarting();
         Assert.Contains("##############################", sink.Lines[0]);
     }
@@ -114,7 +114,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogStarting_BannerContainsStartingText()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogStarting();
         Assert.Contains("Quotinator starting", sink.Lines[0]);
     }
@@ -127,11 +127,11 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_ListeningLinesLoggedBeforeBanner()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
 
-        var listeningIdx = sink.Lines.ToList().FindIndex(m => m.Contains("listening on"));
-        var bannerIdx    = sink.Lines.ToList().FindIndex(m => m.Contains("Quotinator ready"));
+        int listeningIdx = sink.Lines.ToList().FindIndex(m => m.Contains("listening on"));
+        int bannerIdx    = sink.Lines.ToList().FindIndex(m => m.Contains("Quotinator ready"));
         Assert.IsGreaterThanOrEqualTo(0, listeningIdx,  "listening on line not found");
         Assert.IsGreaterThanOrEqualTo(0, bannerIdx,  "ready banner not found");
         Assert.IsLessThan(bannerIdx, listeningIdx, "listening line must come before the ready banner");
@@ -140,10 +140,10 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_EmitsOneListeningLinePerAddress()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080", "https://0.0.0.0:8443"]);
 
-        var listeningLines = sink.Lines.Where(m => m.Contains("listening on")).ToList();
+        List<string> listeningLines = [.. sink.Lines.Where(m => m.Contains("listening on"))];
         Assert.HasCount(2, listeningLines);
     }
 
@@ -152,10 +152,10 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_ListeningLine_AddressNotQuoted()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
 
-        var listeningLine = sink.Lines.Single(m => m.Contains("listening on"));
+        string listeningLine = sink.Lines.Single(m => m.Contains("listening on"));
         Assert.DoesNotContain("\"http://0.0.0.0:8080\"", listeningLine);
         Assert.Contains("listening on http://0.0.0.0:8080", listeningLine);
     }
@@ -168,7 +168,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsHashBorder()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("##############################", AllMessages(sink));
     }
@@ -176,7 +176,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsReadyText()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("Quotinator ready", AllMessages(sink));
     }
@@ -184,7 +184,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsVersion()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("Version:        1.2.3", AllMessages(sink));
     }
@@ -192,9 +192,9 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsDbStats()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
-        var all = AllMessages(sink);
+        string all = AllMessages(sink);
         Assert.Contains("schema v3", all);
         Assert.Contains("Statistics:", all);
         Assert.Contains("780 quotes", all);
@@ -209,9 +209,9 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsNewEntityTypeStats_OnePerLine()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
-        var all = AllMessages(sink);
+        string all = AllMessages(sink);
         Assert.Contains("0 series", all);
         Assert.Contains("0 universes", all);
         Assert.Contains("0 stage directions", all);
@@ -222,7 +222,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsMigrationLine_WhenMigrationApplied()
     {
-        var (logger, sink) = Build(migrationApplied: "v2 -> v3");
+        (StartupSummaryLogger logger, CaptureSink sink) = Build(migrationApplied: "v2 -> v3");
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("migration applied: v2 -> v3", AllMessages(sink));
     }
@@ -230,7 +230,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerOmitsMigrationLine_WhenNoMigration()
     {
-        var (logger, sink) = Build(migrationApplied: null);
+        (StartupSummaryLogger logger, CaptureSink sink) = Build(migrationApplied: null);
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.DoesNotContain("migration applied", AllMessages(sink),
             "migration line must not appear when no migration ran");
@@ -242,16 +242,16 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_SchemaLine_NoStrayQuotesWhenNoMigration()
     {
-        var (logger, sink) = Build(migrationApplied: null);
+        (StartupSummaryLogger logger, CaptureSink sink) = Build(migrationApplied: null);
         logger.LogReady(["http://0.0.0.0:8080"]);
-        var schemaLine = AllMessages(sink).Split('\n').Single(l => l.Contains("schema v3"));
+        string schemaLine = AllMessages(sink).Split('\n').Single(l => l.Contains("schema v3"));
         Assert.DoesNotContain("\"", schemaLine);
     }
 
     [TestMethod]
     public void LogReady_BannerContainsMcpNotImplemented()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("MCP server:     not implemented", AllMessages(sink));
     }
@@ -259,7 +259,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsLogLevel()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("Log level:      info", AllMessages(sink));
     }
@@ -267,7 +267,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_AdminKeySet_ShowsSet()
     {
-        var (logger, sink) = Build(adminKeyConfigured: true);
+        (StartupSummaryLogger logger, CaptureSink sink) = Build(adminKeyConfigured: true);
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("Admin API key:  set", AllMessages(sink));
     }
@@ -275,7 +275,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_AdminKeyNotSet_ShowsNotSet()
     {
-        var (logger, sink) = Build(adminKeyConfigured: false);
+        (StartupSummaryLogger logger, CaptureSink sink) = Build(adminKeyConfigured: false);
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("Admin API key:  not set", AllMessages(sink));
     }
@@ -283,7 +283,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_SslOn_ShowsOn()
     {
-        var (logger, sink) = Build(sslEnabled: true);
+        (StartupSummaryLogger logger, CaptureSink sink) = Build(sslEnabled: true);
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("SSL:            on", AllMessages(sink));
     }
@@ -291,7 +291,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_SslOff_ShowsOff()
     {
-        var (logger, sink) = Build(sslEnabled: false);
+        (StartupSummaryLogger logger, CaptureSink sink) = Build(sslEnabled: false);
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("SSL:            off", AllMessages(sink));
     }
@@ -299,7 +299,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_LogRequestsOn_ShowsOn()
     {
-        var (logger, sink) = Build(logRequests: true);
+        (StartupSummaryLogger logger, CaptureSink sink) = Build(logRequests: true);
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("Log requests:   on", AllMessages(sink));
     }
@@ -307,7 +307,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsRestApiUrl()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("REST API:", AllMessages(sink));
     }
@@ -315,7 +315,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsOpenApiUiUrl()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("OpenAPI UI:", AllMessages(sink));
     }
@@ -323,7 +323,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerContainsOpenApiSpecUrl()
     {
-        var (logger, sink) = Build();
+        (StartupSummaryLogger logger, CaptureSink sink) = Build();
         logger.LogReady(["http://0.0.0.0:8080"]);
         Assert.Contains("OpenAPI spec:", AllMessages(sink));
     }
@@ -334,9 +334,9 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void LogReady_BannerFields_NoneAreQuoted()
     {
-        var (logger, sink) = Build(migrationApplied: "v2 -> v3", adminKeyConfigured: true, sslEnabled: true, logRequests: true);
+        (StartupSummaryLogger logger, CaptureSink sink) = Build(migrationApplied: "v2 -> v3", adminKeyConfigured: true, sslEnabled: true, logRequests: true);
         logger.LogReady(["http://0.0.0.0:8080"]);
-        var all = AllMessages(sink);
+        string all = AllMessages(sink);
 
         Assert.DoesNotContain("\"1.2.3\"", all);
         Assert.DoesNotContain("\"/data\"", all);
@@ -357,7 +357,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void ResolveUrls_HaMode_AllFieldsReturnHaMessage()
     {
-        var (restApi, ui, spec) = StartupSummaryLogger.ResolveUrls(
+        (string restApi, string ui, string spec) = StartupSummaryLogger.ResolveUrls(
             ["http://0.0.0.0:8080"], isHa: true, sslEnabled: false, localIp: "192.168.1.1");
 
         const string expected = "(HA ingress - URL determined at runtime)";
@@ -374,7 +374,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void ResolveUrls_NoAddresses_AllFieldsReturnNotAvailable()
     {
-        var (restApi, ui, spec) = StartupSummaryLogger.ResolveUrls(
+        (string restApi, string ui, string spec) = StartupSummaryLogger.ResolveUrls(
             [], isHa: false, sslEnabled: false, localIp: "192.168.1.1");
 
         const string expected = "(address not available)";
@@ -386,7 +386,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void ResolveUrls_OnlyIngressPort8099_AllFieldsReturnNotAvailable()
     {
-        var (restApi, ui, spec) = StartupSummaryLogger.ResolveUrls(
+        (string restApi, string ui, string spec) = StartupSummaryLogger.ResolveUrls(
             ["http://0.0.0.0:8099"], isHa: false, sslEnabled: false, localIp: "192.168.1.1");
 
         const string expected = "(address not available)";
@@ -403,7 +403,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void ResolveUrls_HttpWildcard_ReplacesWithLocalIp()
     {
-        var (restApi, ui, spec) = StartupSummaryLogger.ResolveUrls(
+        (string restApi, string ui, string spec) = StartupSummaryLogger.ResolveUrls(
             ["http://0.0.0.0:8080"], isHa: false, sslEnabled: false, localIp: "192.168.1.5");
 
         Assert.AreEqual("http://192.168.1.5:8080/api/v1/", restApi);
@@ -414,7 +414,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void ResolveUrls_IPv6Wildcard_ReplacesWithLocalIp()
     {
-        var (restApi, ui, spec) = StartupSummaryLogger.ResolveUrls(
+        (string restApi, string ui, string spec) = StartupSummaryLogger.ResolveUrls(
             ["http://[::]:8080"], isHa: false, sslEnabled: false, localIp: "192.168.1.5");
 
         Assert.AreEqual("http://192.168.1.5:8080/api/v1/", restApi);
@@ -425,7 +425,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void ResolveUrls_SslEnabled_UsesHttpsScheme()
     {
-        var (restApi, ui, spec) = StartupSummaryLogger.ResolveUrls(
+        (string restApi, string ui, string spec) = StartupSummaryLogger.ResolveUrls(
             ["http://0.0.0.0:8080"], isHa: false, sslEnabled: true, localIp: "192.168.1.5");
 
         Assert.AreEqual("https://192.168.1.5:8080/api/v1/", restApi);
@@ -436,7 +436,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void ResolveUrls_MultipleAddresses_UsesPrimarySkippingIngressPort()
     {
-        var (restApi, _, _) = StartupSummaryLogger.ResolveUrls(
+        (string restApi, _, _) = StartupSummaryLogger.ResolveUrls(
             ["http://0.0.0.0:8099", "http://0.0.0.0:8080"],
             isHa: false, sslEnabled: false, localIp: "192.168.1.5");
 
@@ -447,7 +447,7 @@ public class StartupSummaryLoggerTests
     [TestMethod]
     public void ResolveUrls_LocalhostAddress_PassedThrough()
     {
-        var (restApi, _, _) = StartupSummaryLogger.ResolveUrls(
+        (string restApi, _, _) = StartupSummaryLogger.ResolveUrls(
             ["http://localhost:5000"], isHa: false, sslEnabled: false, localIp: "192.168.1.5");
 
         // Non-wildcard address is not replaced — it passes through as-is

@@ -58,7 +58,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AllNamedSqlConstants))]
     public void SqlConstant_PassesIdCaseGuard(string name, string sql)
     {
-        var violations = SqlIdCaseGuard.FindViolations(sql);
+        IReadOnlyList<string> violations = SqlIdCaseGuard.FindViolations(sql);
         Assert.IsEmpty(violations,
             $"Sql.{name} contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
             "Wrap both sides in UPPER(...) — see ADR 012.");
@@ -69,7 +69,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AssembledQueryCases))]
     public void AssembledQuery_PassesIdCaseGuard(string label, string fullSql)
     {
-        var violations = SqlIdCaseGuard.FindViolations(fullSql);
+        IReadOnlyList<string> violations = SqlIdCaseGuard.FindViolations(fullSql);
         Assert.IsEmpty(violations,
             $"Assembled query '{label}' contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
             "Wrap both sides in UPPER(...) — see ADR 012.");
@@ -86,7 +86,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AllNamedSqlConstants))]
     public void SqlConstant_PassesSelectPresentationGuard(string name, string sql)
     {
-        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
+        IReadOnlyList<string> violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
         Assert.IsEmpty(violations,
             $"Sql.{name} selects {string.Join(", ", violations)} unwrapped — wrap in LOWER(...) AS " +
             "ColumnName in the SELECT column list. See ADR 012's \"read-time presentation " +
@@ -98,7 +98,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AssembledQueryCases))]
     public void AssembledQuery_PassesSelectPresentationGuard(string label, string fullSql)
     {
-        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(fullSql);
+        IReadOnlyList<string> violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(fullSql);
         Assert.IsEmpty(violations,
             $"Assembled query '{label}' selects {string.Join(", ", violations)} unwrapped — wrap in " +
             "LOWER(...) AS ColumnName in the SELECT column list. See ADR 012's \"read-time " +
@@ -115,7 +115,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AllNamedSqlConstants))]
     public void SqlConstant_PassesTextCaseGuard(string name, string sql)
     {
-        var violations = SqlTextCaseGuard.FindViolations(sql, DataTextColumnNames);
+        IReadOnlyList<string> violations = SqlTextCaseGuard.FindViolations(sql, DataTextColumnNames);
         Assert.IsEmpty(violations,
             $"Sql.{name} contains a case-sensitive text comparison: {string.Join(", ", violations)}. " +
             "Wrap both sides via TextClauses.Equals(...) — see #211.");
@@ -126,7 +126,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AssembledQueryCases))]
     public void AssembledQuery_PassesTextCaseGuard(string label, string fullSql)
     {
-        var violations = SqlTextCaseGuard.FindViolations(fullSql, DataTextColumnNames);
+        IReadOnlyList<string> violations = SqlTextCaseGuard.FindViolations(fullSql, DataTextColumnNames);
         Assert.IsEmpty(violations,
             $"Assembled query '{label}' contains a case-sensitive text comparison: " +
             $"{string.Join(", ", violations)}. Wrap both sides via TextClauses.Equals(...) — see #211.");
@@ -143,8 +143,8 @@ public class SqlQueryGuardTests
         // These are the only SQL constants permitted to contain aggregate function calls.
         // All were reviewed when the CVE-2025-6965 guard was implemented (2026-06-19).
         // None use GROUP BY or HAVING, so none trigger the vulnerability.
-        var documented = new HashSet<string>
-        {
+        HashSet<string> documented =
+        [
             "Schema.GetDataCurrentVersion",       // COALESCE(MAX(...))
             "Schema.GetConsumerCurrentVersion",   // COALESCE(MAX(...))
             "Schema.LegacySchemaVersionExists",   // COUNT(*) — one-time bootstrap legacy-table detection (#141 amendment)
@@ -160,12 +160,14 @@ public class SqlQueryGuardTests
             "ChangelogSchema.GetCurrentVersion",  // COALESCE(MAX(...)) — separate changelog database's own version bookkeeping (#309)
             "ChangelogSchema.AnyTableExists",     // COUNT(*) — fresh-database detection for the changelog database's own baseline path (#309)
             "AppVersion.SelectNextSequenceNumber",// COALESCE(MAX(...)) — next recording-order counter for the app-version history (#312)
-        };
+        ];
 
-        var actual = EnumerateSqlConstants()
-            .Where(x => SqlAggregateGuard.HasAggregateFunction(x.Sql))
-            .Select(x => x.Name)
-            .ToHashSet();
+        HashSet<string> actual =
+        [
+            .. EnumerateSqlConstants()
+                .Where(x => SqlAggregateGuard.HasAggregateFunction(x.Sql))
+                .Select(x => x.Name)
+        ];
 
         Assert.AreSequenceEqual(
             [.. documented], [.. actual], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of SQL constants containing aggregate functions has changed. " +
@@ -182,7 +184,7 @@ public class SqlQueryGuardTests
     [TestMethod]
     public void AllNamedSqlConstants_DiscoversZeroArgAndAllOptionalStaticFactoryMethods()
     {
-        var names = EnumerateSqlConstants().Select(x => x.Name).ToHashSet();
+        HashSet<string> names = [.. EnumerateSqlConstants().Select(x => x.Name)];
 
         Assert.Contains("Queries.WidgetWithOwner()", names);
     }
@@ -193,14 +195,14 @@ public class SqlQueryGuardTests
         // guard-checks it automatically via AllNamedSqlConstants, so no manual case is needed here.
 
         // SystemAudit.SelectPaged/CountPaged — one case per filter-flag combination.
-        foreach (var (filterTable, filterRecordId) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        foreach ((bool filterTable, bool filterRecordId) in new[] { (false, false), (true, false), (false, true), (true, true) })
         {
             yield return [$"SystemAudit.SelectPaged({filterTable},{filterRecordId})", Sql.SystemAudit.SelectPaged(filterTable, filterRecordId)];
             yield return [$"SystemAudit.CountPaged({filterTable},{filterRecordId})", Sql.SystemAudit.CountPaged(filterTable, filterRecordId)];
         }
 
         // SystemImportActions.SelectPaged/CountPaged — one case per filter-flag combination.
-        foreach (var (filterBatchId, filterStatus, filterEntityType) in new[]
+        foreach ((bool filterBatchId, bool filterStatus, bool filterEntityType) in new[]
         {
             (false, false, false), (true, false, false), (false, true, false), (false, false, true),
             (true, true, false), (true, false, true), (false, true, true), (true, true, true),
@@ -211,28 +213,28 @@ public class SqlQueryGuardTests
         }
 
         // ImportBatches.SelectPaged/CountPaged (#251) — one case per filter-flag combination.
-        foreach (var (filterType, filterStatus) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        foreach ((bool filterType, bool filterStatus) in new[] { (false, false), (true, false), (false, true), (true, true) })
         {
             yield return [$"ImportBatches.SelectPaged({filterType},{filterStatus})", Sql.ImportBatches.SelectPaged(filterType, filterStatus)];
             yield return [$"ImportBatches.CountPaged({filterType},{filterStatus})", Sql.ImportBatches.CountPaged(filterType, filterStatus)];
         }
 
         // FileResources.SelectPage/CountPage (#251) — one case per filter-flag combination.
-        foreach (var (filterFileName, filterOrigin) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        foreach ((bool filterFileName, bool filterOrigin) in new[] { (false, false), (true, false), (false, true), (true, true) })
         {
             yield return [$"FileResources.SelectPage({filterFileName},{filterOrigin})", Sql.FileResources.SelectPage(filterFileName, filterOrigin)];
             yield return [$"FileResources.CountPage({filterFileName},{filterOrigin})", Sql.FileResources.CountPage(filterFileName, filterOrigin)];
         }
 
         // SystemAudit.SelectInRange/CountInRange (#249) — one case per filter-flag combination.
-        foreach (var (filterStart, filterEnd) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        foreach ((bool filterStart, bool filterEnd) in new[] { (false, false), (true, false), (false, true), (true, true) })
         {
             yield return [$"SystemAudit.SelectInRange({filterStart},{filterEnd})", Sql.SystemAudit.SelectInRange(filterStart, filterEnd)];
             yield return [$"SystemAudit.CountInRange({filterStart},{filterEnd})", Sql.SystemAudit.CountInRange(filterStart, filterEnd)];
         }
 
         // SystemChangeLog.SelectInRange/CountInRange (#249) — one case per filter-flag combination.
-        foreach (var (filterStart, filterEnd) in new[] { (false, false), (true, false), (false, true), (true, true) })
+        foreach ((bool filterStart, bool filterEnd) in new[] { (false, false), (true, false), (false, true), (true, true) })
         {
             yield return [$"SystemChangeLog.SelectInRange({filterStart},{filterEnd})", Sql.SystemChangeLog.SelectInRange(filterStart, filterEnd)];
             yield return [$"SystemChangeLog.CountInRange({filterStart},{filterEnd})", Sql.SystemChangeLog.CountInRange(filterStart, filterEnd)];
@@ -246,7 +248,7 @@ public class SqlQueryGuardTests
     [TestMethod]
     public void SqlJoins_Inner_OutputIsBracketQuoted()
     {
-        var sql = Sql.Joins.Inner("Owners", "o", "w", "OwnerId", "Id");
+        string sql = Sql.Joins.Inner("Owners", "o", "w", "OwnerId", "Id");
         Assert.Contains("[Owners]", sql,  "Table name must be bracket-quoted");
         Assert.Contains("[o]", sql,       "Right alias must be bracket-quoted");
         Assert.Contains("[w]", sql,       "Left alias must be bracket-quoted");
@@ -258,7 +260,7 @@ public class SqlQueryGuardTests
     [TestMethod]
     public void SqlJoins_Left_OutputIsBracketQuoted()
     {
-        var sql = Sql.Joins.Left("Owners", "o", "w", "OwnerId", "Id");
+        string sql = Sql.Joins.Left("Owners", "o", "w", "OwnerId", "Id");
         Assert.Contains("[Owners]", sql,  "Table name must be bracket-quoted");
         Assert.Contains("[o]", sql,       "Right alias must be bracket-quoted");
         Assert.Contains("[w]", sql,       "Left alias must be bracket-quoted");
@@ -304,10 +306,10 @@ public class SqlQueryGuardTests
     [TestMethod]
     public void ImportBatches_SelectColumns_ReflectsEveryImportBatchProperty()
     {
-        var columns = ReflectedColumnMetadata.For(typeof(ImportBatchEntity));
-        foreach (var name in columns.ValidColumnNames)
+        IEntityColumnMetadata columns = ReflectedColumnMetadata.For(typeof(ImportBatchEntity));
+        foreach (string name in columns.ValidColumnNames)
         {
-            var expected = columns.IdColumnNames.Contains(name) ? $"LOWER({name}) AS {name}" : name;
+            string expected = columns.IdColumnNames.Contains(name) ? $"LOWER({name}) AS {name}" : name;
             Assert.Contains(expected, Sql.ImportBatches.SelectAll,
                 $"Sql.ImportBatches.SelectAll is missing ImportBatch's '{name}' property — the column list must stay reflection-driven, not hand-typed.");
         }
@@ -336,7 +338,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AllJoinStrategyBuildSqlCases))]
     public void AllJoinStrategies_BuildSql_PassesIdCaseGuard(string typeName, string sql)
     {
-        var violations = SqlIdCaseGuard.FindViolations(sql);
+        IReadOnlyList<string> violations = SqlIdCaseGuard.FindViolations(sql);
         Assert.IsEmpty(violations,
             $"{typeName}.BuildSql() contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
             "Wrap both sides in UPPER(...) — see ADR 012.");
@@ -351,7 +353,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AllJoinStrategyBuildSqlCases))]
     public void AllJoinStrategies_BuildSql_PassesSelectPresentationGuard(string typeName, string sql)
     {
-        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
+        IReadOnlyList<string> violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
         Assert.IsEmpty(violations,
             $"{typeName}.BuildSql() selects {string.Join(", ", violations)} unwrapped — wrap in LOWER(...) AS " +
             "ColumnName in the SELECT column list. See ADR 012's \"read-time presentation normalization\" revision.");
@@ -359,7 +361,7 @@ public class SqlQueryGuardTests
 
     public static IEnumerable<object[]> AllJoinStrategyBuildSqlCases()
     {
-        var joinStrategyType = typeof(IJoinStrategy<>);
+        Type joinStrategyType = typeof(IJoinStrategy<>);
         return typeof(IJoinStrategy<>).Assembly
             .GetTypes()
             .Where(t => !t.IsAbstract && !t.IsInterface)
@@ -367,8 +369,8 @@ public class SqlQueryGuardTests
                 .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == joinStrategyType))
             .Select(t =>
             {
-                var instance = Activator.CreateInstance(t)!;
-                var sql      = (string)t.GetMethod("BuildSql")!.Invoke(instance, null)!;
+                object instance = Activator.CreateInstance(t)!;
+                string sql      = (string)t.GetMethod("BuildSql")!.Invoke(instance, null)!;
                 return new object[] { t.Name, sql };
             });
     }
@@ -398,8 +400,8 @@ public class SqlQueryGuardTests
     [TestMethod]
     public void ParameterizedSqlFactoryMethods_MatchDocumentedInventory()
     {
-        var documented = new HashSet<string>
-        {
+        HashSet<string> documented =
+        [
             "Joins.Inner",
             "Joins.Left",
             "SystemAudit.SelectPaged",
@@ -420,9 +422,9 @@ public class SqlQueryGuardTests
             "FileResources.SelectPage",
             "FileResources.CountPage",
             "FileResources.BuildWhere",
-        };
+        ];
 
-        var actual = EnumerateParameterizedSqlFactoryMethodNames().ToHashSet();
+        HashSet<string> actual = [.. EnumerateParameterizedSqlFactoryMethodNames()];
 
         Assert.AreSequenceEqual(
             [.. documented], [.. actual], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of static SQL factory methods requiring at least one parameter has changed. " +

@@ -68,14 +68,14 @@ public class DatabaseInitializerTests
         IAuditEntryWriter? auditWriter = null,
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null)
     {
-        var factory       = new SqliteConnectionFactory(_dbPath);
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1 };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var logger        = NullLogger<DatabaseInitializer>.Instance;
-        var actionReader   = new ImportActionReader(factory);
-        var actionWriter   = new ImportActionWriter(factory);
-        var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
+        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1 };
+        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        NullLogger<DatabaseInitializer> logger        = NullLogger<DatabaseInitializer>.Instance;
+        ImportActionReader actionReader   = new ImportActionReader(factory);
+        ImportActionWriter actionWriter   = new ImportActionWriter(factory);
+        ImportActionResolutionCoordinator coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
+        SqliteImportActionService actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -126,11 +126,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions()
     {
-        var db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
 
-        var allActions = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items;
-        var unresolved = allActions.Where(a => a.Status.Parsed is not (ImportActionStatus.Decided or ImportActionStatus.Applied)).ToList();
+        IReadOnlyList<ImportActionEntity> allActions = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items;
+        List<ImportActionEntity> unresolved = [.. allActions.Where(a => a.Status.Parsed is not (ImportActionStatus.Decided or ImportActionStatus.Applied))];
 
         Assert.IsEmpty(unresolved,
             $"Every action must auto-resolve under Review with the real rule file — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
@@ -141,13 +141,13 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_GaladrielQuoteGetsCharacterOnAdd()
     {
-        var db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var character = await conn.ExecuteScalarAsync<string?>(
+        string? character = await conn.ExecuteScalarAsync<string?>(
             "SELECT c.Name FROM Quotinator_Quote q JOIN Quotinator_Character c ON c.Id = q.CharacterId " +
             "WHERE q.Id = 'c124e692-04fc-7b49-af53-b6bcc0692dbe' AND q.IsDeleted = 0;");
 
@@ -160,7 +160,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AllSourceFiles_SeedsExpectedCounts()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
         Assert.AreEqual(799, db.QuoteCount,     "Unique quotes");
@@ -176,10 +176,10 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AllSourceFiles_PopulatesNewEntityTypeCounts()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Series WHERE IsDeleted = 0;"), db.SeriesCount);
@@ -201,12 +201,12 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        var modified = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0);
-        var pending  = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Pending ?? 0);
-        var blocked  = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Blocked ?? 0);
+        int modified = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0);
+        int pending  = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Pending ?? 0);
+        int blocked  = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Blocked ?? 0);
 
         Assert.AreEqual(45, modified, "Cross-file duplicates, resolved as modified Quote actions");
         Assert.AreEqual(0, pending, "NewestWins always resolves deterministically — nothing pending");
@@ -222,20 +222,20 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task PreviewSeedAsync_AfterFullSeed_ProducesReportWithoutWritingAnyRow()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
-        var actionsBefore = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
-        var batchesBefore = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Import_Batch;");
+        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        int actionsBefore = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+        int batchesBefore = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Import_Batch;");
 
-        var preview = await db.PreviewSeedAsync();
+        SeedPreviewResult preview = await db.PreviewSeedAsync();
 
-        var actionsAfter = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
-        var batchesAfter = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Import_Batch;");
+        int actionsAfter = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+        int batchesAfter = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Import_Batch;");
 
         Assert.AreEqual(actionsBefore, actionsAfter, "PreviewSeedAsync must never write to Import_Action");
         Assert.AreEqual(batchesBefore, batchesAfter, "PreviewSeedAsync must never create an ImportBatches row");
@@ -243,8 +243,8 @@ public class DatabaseInitializerTests
         Assert.HasCount(preview.Files.Count, preview.Reports, "One report per previewed file");
         Assert.IsTrue(preview.Reports.All(r => r.EntityTypes.ContainsKey("Quote")), "Every bundled file has at least one Quote action");
 
-        var modified = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0);
-        var newCount = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.New ?? 0);
+        int modified = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0);
+        int newCount = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.New ?? 0);
         Assert.AreEqual(844, modified, "799 unique quotes + 45 cross-file duplicate occurrences (AllFilesBatch's own vilaboim/NikhilNamal17 overlap) — every quote line across every file matches an already-existing row, since the database was already fully seeded");
         Assert.AreEqual(0, newCount, "Nothing is genuinely new — the database was already fully seeded from the same files");
     }
@@ -254,12 +254,12 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AutoPurgeBundledTrue_FullyAppliedBundledBatch_PurgesImportActionRows()
     {
-        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
-        var db    = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false);
+        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false);
         await db.InitialiseAsync();
 
-        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
-        var remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        int remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
 
         Assert.AreEqual(0, remaining, "a fully-applied bundled batch's Import_Action rows must be purged when AutoPurgeBundledImportActions is true");
     }
@@ -267,12 +267,12 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AutoPurgeBundledFalse_FullyAppliedBundledBatch_RetainsImportActionRows()
     {
-        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
-        var db    = CreateInitializer([batch], autoPurgeBundledImportActions: false, autoPurgeUserImportActions: true);
+        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], autoPurgeBundledImportActions: false, autoPurgeUserImportActions: true);
         await db.InitialiseAsync();
 
-        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
-        var remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        int remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
 
         Assert.IsGreaterThan(0, remaining, "a bundled batch's Import_Action rows must be retained when AutoPurgeBundledImportActions is false, regardless of the user-imports setting");
     }
@@ -280,12 +280,12 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AutoPurgeUserImportsTrue_FullyAppliedUserOriginBatch_PurgesImportActionRows()
     {
-        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "user", SeedBatchOrigin.UserImports);
-        var db    = CreateInitializer([batch], autoPurgeBundledImportActions: false, autoPurgeUserImportActions: true);
+        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "user", SeedBatchOrigin.UserImports);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], autoPurgeBundledImportActions: false, autoPurgeUserImportActions: true);
         await db.InitialiseAsync();
 
-        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
-        var remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        int remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
 
         Assert.AreEqual(0, remaining, "a fully-applied user-imports batch's Import_Action rows must be purged when AutoPurgeUserImportActions is true, independent of the bundled setting");
     }
@@ -293,12 +293,12 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AutoPurgeUserImportsFalse_UserOriginBatch_RetainsImportActionRowsEvenWhenBundledTrue()
     {
-        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "user", SeedBatchOrigin.UserImports);
-        var db    = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false);
+        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "user", SeedBatchOrigin.UserImports);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false);
         await db.InitialiseAsync();
 
-        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
-        var remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
+        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        int remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
 
         Assert.IsGreaterThan(0, remaining, "a user-imports batch must not be purged by the bundled setting — the two per-origin settings are independent");
     }
@@ -306,10 +306,10 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AutoPurgeEnabled_WritesAuditEntryRecordingThePurge()
     {
-        var batch            = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
-        var capturedEntries  = new List<AuditEntryEntity>();
-        var capturingWriter  = new CapturingAuditEntryWriter(capturedEntries);
-        var db = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false, auditWriter: capturingWriter);
+        SeedBatch batch            = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
+        List<AuditEntryEntity> capturedEntries  = [];
+        CapturingAuditEntryWriter capturingWriter  = new CapturingAuditEntryWriter(capturedEntries);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false, auditWriter: capturingWriter);
         await db.InitialiseAsync();
 
         Assert.Contains(e => e.TableName == "Import_Action" && e.Operation == AuditOperation.Purge, capturedEntries,
@@ -340,8 +340,8 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_CuratedFileOnly_SeedsFkChainCorrectly()
     {
-        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
-        var db    = CreateInitializer([batch]);
+        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
         Assert.AreEqual(13, db.QuoteCount,     "10 movie/tv quotes (Airplane!, Holy Grail, Princess Bride, Star Wars) + 3 person quotes (Churchill, Armstrong, MLK)");
@@ -361,15 +361,15 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_CuratedFileOnly_SeedsPersonDatesFromExplicitEntries()
     {
-        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
-        var db    = CreateInitializer([batch]);
+        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var people = (await conn.QueryAsync<(string Name, string? DateOfBirth, string? DateOfDeath)>(
-            "SELECT Name, DateOfBirth, DateOfDeath FROM Quotinator_Person WHERE IsDeleted = 0;")).ToList();
+        List<(string Name, string? DateOfBirth, string? DateOfDeath)> people = [.. (await conn.QueryAsync<(string Name, string? DateOfBirth, string? DateOfDeath)>(
+            "SELECT Name, DateOfBirth, DateOfDeath FROM Quotinator_Person WHERE IsDeleted = 0;"))];
 
         Assert.HasCount(3, people);
         Assert.Contains(p => p is { Name: "Winston Churchill", DateOfBirth: "1874-11-30", DateOfDeath: "1965-01-24" }, people);
@@ -381,17 +381,17 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AllSourceFiles_SeedsSourceDatesFromQuotes()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var airplaneDate = await conn.ExecuteScalarAsync<string?>(
+        string? airplaneDate = await conn.ExecuteScalarAsync<string?>(
             "SELECT Date FROM Quotinator_Source WHERE Title = 'Airplane!' AND Type = 'Movie' AND IsDeleted = 0;");
         Assert.AreEqual("1980", airplaneDate, "Sources.Date must be populated from the resolving quote's own Date");
 
-        var datedSourceCount = await conn.ExecuteScalarAsync<int>(
+        int datedSourceCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Quotinator_Source WHERE Date IS NOT NULL AND IsDeleted = 0;");
         Assert.IsGreaterThan(0, datedSourceCount, "At least some seeded Sources must now carry a Date — today every one of them is null");
     }
@@ -408,20 +408,20 @@ public class DatabaseInitializerTests
         File.WriteAllText(datedQuoteFile,
             """{"quotes":[{"id":"e1111111-1111-4111-8111-111111111111","quote":"A test line.","originalLanguage":"en","source":"Test Film","date":"1999","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}""");
 
-        var batch = new SeedBatch(
+        SeedBatch batch = new SeedBatch(
             [
                 new SeedFile(datelessEntryFile, null),
                 new SeedFile(datedQuoteFile, null),
             ],
             ManifestPolicy.HardcodedDefault, "dateless-entry-test");
 
-        var db = CreateInitializer([batch]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var date = await conn.ExecuteScalarAsync<string?>(
+        string? date = await conn.ExecuteScalarAsync<string?>(
             "SELECT Date FROM Quotinator_Source WHERE Title = 'Test Film' AND Type = 'Movie' AND IsDeleted = 0;");
         Assert.AreEqual("1999", date, "The dateless sources[] entry's Source must be backfilled from the later file's own dated quote");
     }
@@ -435,30 +435,30 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_CuratedFileOnly_SeedsConversationsStageDirectionsAndSoundCues()
     {
-        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
-        var db    = CreateInitializer([batch]);
+        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var conversationCount    = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Conversation WHERE IsDeleted = 0;");
-        var stageDirectionCount  = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_StageDirection WHERE IsDeleted = 0;");
-        var soundCueCount        = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_SoundCue WHERE IsDeleted = 0;");
-        var conversationLineCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_ConversationLine WHERE IsDeleted = 0;");
+        int conversationCount    = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Conversation WHERE IsDeleted = 0;");
+        int stageDirectionCount  = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_StageDirection WHERE IsDeleted = 0;");
+        int soundCueCount        = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_SoundCue WHERE IsDeleted = 0;");
+        int conversationLineCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_ConversationLine WHERE IsDeleted = 0;");
 
         Assert.AreEqual(4, conversationCount,     "4 conversations (Airplane!, Holy Grail, Princess Bride, Empire Strikes Back)");
         Assert.AreEqual(2, stageDirectionCount,   "2 stage directions (Princess Bride, Empire Strikes Back)");
         Assert.AreEqual(1, soundCueCount,         "1 sound cue (Holy Grail)");
         Assert.AreEqual(13, conversationLineCount, "2 + 4 + 2 + 5 lines across the four conversations");
 
-        var distinctBatchIds = await conn.QueryAsync<string>(
+        IEnumerable<string> distinctBatchIds = await conn.QueryAsync<string>(
             "SELECT DISTINCT ImportBatchId FROM Quotinator_Conversation UNION SELECT DISTINCT ImportBatchId FROM Quotinator_StageDirection UNION SELECT DISTINCT ImportBatchId FROM Quotinator_SoundCue;");
         Assert.HasCount(1, distinctBatchIds.ToList(), "All conversation-related rows from one file should share one ImportBatchId");
 
-        var actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
-        var actionEntityTypes = new List<string>();
-        foreach (var entityType in new[] { "Conversation", "StageDirection", "SoundCue" })
+        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        List<string> actionEntityTypes = [];
+        foreach (string? entityType in new[] { "Conversation", "StageDirection", "SoundCue" })
         {
             if ((await actionReader.GetPagedAsync(null, null, entityType, 1, 0)).TotalCount > 0)
                 actionEntityTypes.Add(entityType);
@@ -479,12 +479,12 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ReseedAsync_CuratedFileOnly_ReproducesSameConversationCountsNotDoubled()
     {
-        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
-        var db    = CreateInitializer([batch]);
+        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
         await db.ReseedAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(4, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Conversation WHERE IsDeleted = 0;"));
@@ -505,9 +505,9 @@ public class DatabaseInitializerTests
     public async Task InitialiseAsync_SecondFileReviewPolicyMatchingRule_AutoResolvesNoPendingActionLeft()
     {
         const string quoteId = "d1111111-1111-4111-8111-111111111111";
-        var baselinePath = Path.Combine(_tempDir, "baseline.json");
-        var conflictPath = Path.Combine(_tempDir, "conflict.json");
-        var rulesPath    = Path.Combine(_tempDir, "conflict-rules.json");
+        string baselinePath = Path.Combine(_tempDir, "baseline.json");
+        string conflictPath = Path.Combine(_tempDir, "conflict.json");
+        string rulesPath    = Path.Combine(_tempDir, "conflict-rules.json");
 
         File.WriteAllText(baselinePath,
             """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
@@ -519,17 +519,17 @@ public class DatabaseInitializerTests
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
-        var batch = new SeedBatch(
+        SeedBatch batch = new SeedBatch(
             [
                 new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
                 new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: rulesPath),
             ],
             ManifestPolicy.HardcodedDefault, "rule-file-test");
 
-        var db = CreateInitializer([batch]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(0, (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", null, 1, 0)).TotalCount,
@@ -547,9 +547,9 @@ public class DatabaseInitializerTests
     public async Task InitialiseAsync_RegisteredOverrideWithMatchingHash_IsPreferredOverBundledRuleFile()
     {
         const string quoteId = "d3111111-1111-4111-8111-111111111111";
-        var baselinePath = Path.Combine(_tempDir, "override-baseline.json");
-        var conflictPath = Path.Combine(_tempDir, "override-conflict.json");
-        var bundledRulesPath = Path.Combine(_tempDir, "override-conflict-rules.json");
+        string baselinePath = Path.Combine(_tempDir, "override-baseline.json");
+        string conflictPath = Path.Combine(_tempDir, "override-conflict.json");
+        string bundledRulesPath = Path.Combine(_tempDir, "override-conflict-rules.json");
 
         File.WriteAllText(baselinePath,
             """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
@@ -562,18 +562,18 @@ public class DatabaseInitializerTests
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
-        var internalDownloadDir = Path.Combine(_tempDir, "sources", "download");
-        var pathResolver = new RuleFileOverridePathResolver(internalDownloadDir, Path.Combine(_tempDir, "imports", "download"));
-        var overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
+        string internalDownloadDir = Path.Combine(_tempDir, "sources", "download");
+        RuleFileOverridePathResolver pathResolver = new RuleFileOverridePathResolver(internalDownloadDir, Path.Combine(_tempDir, "imports", "download"));
+        string overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
         Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
         // Override says Replace — the applied text must come from here instead.
-        var overrideContent =
+        string overrideContent =
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Replace"}]}]}"""
                 .Replace("QUOTE_ID", quoteId);
         File.WriteAllText(overridePath, overrideContent);
 
-        var registry = new SourceFileOverrideRegistry(new SqliteConnectionFactory(_dbPath));
-        var batch = new SeedBatch(
+        SourceFileOverrideRegistry registry = new SourceFileOverrideRegistry(new SqliteConnectionFactory(_dbPath));
+        SeedBatch batch = new SeedBatch(
             [
                 new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
                 new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: bundledRulesPath),
@@ -587,10 +587,10 @@ public class DatabaseInitializerTests
         await registry.RegisterAsync(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled,
             EffectiveRuleFileResolver.ComputeContentHash(overrideContent), sourceBatchId: null, TestContext.CancellationToken);
 
-        var db = CreateInitializer([batch], ruleFileOverridePathResolver: pathResolver, sourceFileOverrideRegistry: registry);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], ruleFileOverridePathResolver: pathResolver, sourceFileOverrideRegistry: registry);
         await db.ReseedAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual("Changed text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id;", new { id = quoteId }),
@@ -606,9 +606,9 @@ public class DatabaseInitializerTests
     public async Task InitialiseAsync_OverrideFileWithoutMatchingRegistration_FallsBackToBundledRuleFile()
     {
         const string quoteId = "d4111111-1111-4111-8111-111111111111";
-        var baselinePath = Path.Combine(_tempDir, "unregistered-baseline.json");
-        var conflictPath = Path.Combine(_tempDir, "unregistered-conflict.json");
-        var bundledRulesPath = Path.Combine(_tempDir, "unregistered-conflict-rules.json");
+        string baselinePath = Path.Combine(_tempDir, "unregistered-baseline.json");
+        string conflictPath = Path.Combine(_tempDir, "unregistered-conflict.json");
+        string bundledRulesPath = Path.Combine(_tempDir, "unregistered-conflict-rules.json");
 
         File.WriteAllText(baselinePath,
             """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
@@ -620,27 +620,27 @@ public class DatabaseInitializerTests
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
-        var internalDownloadDir = Path.Combine(_tempDir, "sources2", "download");
-        var pathResolver = new RuleFileOverridePathResolver(internalDownloadDir, Path.Combine(_tempDir, "imports2", "download"));
-        var overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
+        string internalDownloadDir = Path.Combine(_tempDir, "sources2", "download");
+        RuleFileOverridePathResolver pathResolver = new RuleFileOverridePathResolver(internalDownloadDir, Path.Combine(_tempDir, "imports2", "download"));
+        string overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
         Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
         // An override file exists on disk, but is never registered below.
         File.WriteAllText(overridePath,
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Replace"}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
-        var registry = new SourceFileOverrideRegistry(new SqliteConnectionFactory(_dbPath));
-        var batch = new SeedBatch(
+        SourceFileOverrideRegistry registry = new SourceFileOverrideRegistry(new SqliteConnectionFactory(_dbPath));
+        SeedBatch batch = new SeedBatch(
             [
                 new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
                 new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: bundledRulesPath),
             ],
             ManifestPolicy.HardcodedDefault, "unregistered-override-test");
 
-        var db = CreateInitializer([batch], ruleFileOverridePathResolver: pathResolver, sourceFileOverrideRegistry: registry);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], ruleFileOverridePathResolver: pathResolver, sourceFileOverrideRegistry: registry);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual("Original text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id;", new { id = quoteId }),
@@ -652,8 +652,8 @@ public class DatabaseInitializerTests
     public async Task InitialiseAsync_SecondFileReviewPolicyNoRuleFile_StagesPendingAsBefore()
     {
         const string quoteId = "d2111111-1111-4111-8111-111111111111";
-        var baselinePath = Path.Combine(_tempDir, "baseline2.json");
-        var conflictPath = Path.Combine(_tempDir, "conflict2.json");
+        string baselinePath = Path.Combine(_tempDir, "baseline2.json");
+        string conflictPath = Path.Combine(_tempDir, "conflict2.json");
 
         File.WriteAllText(baselinePath,
             """[{"id":"QUOTE_ID","quote":"Original text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
@@ -662,14 +662,14 @@ public class DatabaseInitializerTests
             """[{"id":"QUOTE_ID","quote":"Changed text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
                 .Replace("QUOTE_ID", quoteId));
 
-        var batch = new SeedBatch(
+        SeedBatch batch = new SeedBatch(
             [
                 new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
                 new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
             ],
             ManifestPolicy.HardcodedDefault, "no-rule-file-test");
 
-        var db = CreateInitializer([batch]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
         Assert.AreEqual(1, (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", null, 1, 0)).TotalCount,
@@ -684,9 +684,9 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_SecondFileMisspelledSourceWithMatchingAlias_ResolvesToExistingSourceNoDuplicate()
     {
-        var canonicalPath = Path.Combine(_tempDir, "canonical.json");
-        var misspeltPath  = Path.Combine(_tempDir, "misspelt.json");
-        var aliasPath     = Path.Combine(_tempDir, "source-aliases.json");
+        string canonicalPath = Path.Combine(_tempDir, "canonical.json");
+        string misspeltPath  = Path.Combine(_tempDir, "misspelt.json");
+        string aliasPath     = Path.Combine(_tempDir, "source-aliases.json");
 
         File.WriteAllText(canonicalPath,
             """[{"id":"e1111111-1111-4111-8111-111111111111","quote":"First quote.","originalLanguage":"en","source":"The Avengers","date":"2012","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]""");
@@ -695,17 +695,17 @@ public class DatabaseInitializerTests
         File.WriteAllText(aliasPath,
             """{"aliases":[{"title":"Marvel's The Avengers","type":"movie","canonicalTitle":"The Avengers","canonicalType":"movie"}]}""");
 
-        var batch = new SeedBatch(
+        SeedBatch batch = new SeedBatch(
             [
                 new SeedFile(canonicalPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
                 new SeedFile(misspeltPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), SourceAliasFilePath: aliasPath),
             ],
             ManifestPolicy.HardcodedDefault, "source-alias-test");
 
-        var db = CreateInitializer([batch]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Source WHERE Title = 'The Avengers';"),
@@ -717,7 +717,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_EmptyBatches_DatabaseIsEmpty()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
         Assert.AreEqual(0, db.QuoteCount);
@@ -727,10 +727,10 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_CalledTwice_IsIdempotent()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        var countAfterFirst = db.QuoteCount;
+        int countAfterFirst = db.QuoteCount;
         await db.InitialiseAsync();
 
         Assert.AreEqual(countAfterFirst, db.QuoteCount);
@@ -742,7 +742,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ResetAsync_AfterInitialise_RebuildsSchemaAndDoesNotReseed()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
         Assert.IsGreaterThan(0, db.QuoteCount, "Sanity check — initial seed must have produced quotes");
@@ -766,7 +766,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ResetAsync_AfterInitialise_WipesExistingAuditEntries()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
         await InsertAuditMarkerAsync();
@@ -780,7 +780,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ResetAsync_DefaultParameter_AlsoReplaysDataSchemaVersion()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
         await InsertSchemaVersionMarkerAsync();
@@ -795,7 +795,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ResetAsync_PreserveSchemaVersionTrue_AlsoKeepsExistingDataVersionRows()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
         await InsertSchemaVersionMarkerAsync();
@@ -810,7 +810,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ResetAsync_DefaultParameter_StillReplaysConsumerSchemaVersion()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
         await InsertConsumerSchemaVersionMarkerAsync();
@@ -825,7 +825,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ResetAsync_PreserveSchemaVersionTrue_KeepsExistingConsumerVersionRows()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
         await InsertConsumerSchemaVersionMarkerAsync();
@@ -840,7 +840,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ReseedAsync_AfterInitialise_LeavesAuditEntriesAndSchemaVersionUntouched()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
         await InsertAuditMarkerAsync();
@@ -854,7 +854,7 @@ public class DatabaseInitializerTests
 
     private async Task InsertAuditMarkerAsync()
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(
             "INSERT INTO Audit_Entry (Id, TableName, RecordId, Operation, Agent, PerformedAt, DateCreated) " +
@@ -864,13 +864,13 @@ public class DatabaseInitializerTests
 
     private async Task<int> CountAuditMarkerRowsAsync()
     {
-        var entries = (await new AuditEntryReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync("Quotes", null, 1, 0)).Items;
+        IReadOnlyList<AuditEntryEntity> entries = (await new AuditEntryReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync("Quotes", null, 1, 0)).Items;
         return entries.Count(e => e.Agent == MarkerValue);
     }
 
     private async Task InsertSchemaVersionMarkerAsync()
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(
             "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
@@ -878,7 +878,7 @@ public class DatabaseInitializerTests
 
     private async Task<int> CountSchemaVersionMarkerRowsAsync()
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_SchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
@@ -886,7 +886,7 @@ public class DatabaseInitializerTests
 
     private async Task InsertConsumerSchemaVersionMarkerAsync()
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(
             "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
@@ -894,7 +894,7 @@ public class DatabaseInitializerTests
 
     private async Task<int> CountConsumerSchemaVersionMarkerRowsAsync()
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_ConsumerSchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
@@ -910,14 +910,14 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task GetAllTables_ReturnsEveryTableRegardlessOfPrefix()
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("CREATE TABLE System_FooBar (Id INTEGER);");
         await conn.ExecuteAsync("CREATE TABLE Import_FooBar (Id INTEGER);");
         await conn.ExecuteAsync("CREATE TABLE Audit_FooBar (Id INTEGER);");
         await conn.ExecuteAsync("CREATE TABLE FooBar (Id INTEGER);");
 
-        var tables = (await conn.QueryAsync<string>(Sql.Schema.GetAllTables)).ToList();
+        List<string> tables = [.. (await conn.QueryAsync<string>(Sql.Schema.GetAllTables))];
 
         Assert.Contains("System_FooBar", tables, "System_-prefixed tables must no longer be excluded");
         Assert.Contains("Import_FooBar", tables, "Import_-prefixed tables must no longer be excluded");
@@ -929,14 +929,14 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_FreshDatabase_CreatesSystemSchemaVersionDirectly()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var legacyCount = await conn.ExecuteScalarAsync<int>(
+        int legacyCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SchemaVersion';");
-        var systemCount = await conn.ExecuteScalarAsync<int>(
+        int systemCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'System_SchemaVersion';");
 
         Assert.AreEqual(0, legacyCount, "A fresh database must never contain a table literally named SchemaVersion");
@@ -957,7 +957,7 @@ public class DatabaseInitializerTests
     /// </summary>
     private async Task DowngradeToLegacyNamesAsync()
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("DELETE FROM System_SchemaVersion;");
         await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion;");
@@ -1031,7 +1031,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_LegacyV172SchemaVersionTable_SplitsCorrectlyAndReplaysRemainingMigrations()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
         await DowngradeToLegacyNamesAsync();
 
@@ -1043,18 +1043,18 @@ public class DatabaseInitializerTests
         // replay against, so nothing can conflict; Data's own fixed migration list still applies
         // unconditionally regardless of what's passed here, so this still fully exercises the bug
         // this test guards against.
-        var db2 = CreateInitializer([], migrations: [], useBaseline: false);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([], migrations: [], useBaseline: false);
         await db2.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var legacyCount = await conn.ExecuteScalarAsync<int>(
+        int legacyCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SchemaVersion';");
-        var consumerRows = (await conn.QueryAsync<(int Version, string AppliedAt)>(
-            "SELECT Version, AppliedAt FROM System_ConsumerSchemaVersion ORDER BY Version;")).ToList();
-        var dataRows = (await conn.QueryAsync<(int Version, string AppliedAt)>(
-            "SELECT Version, AppliedAt FROM System_SchemaVersion ORDER BY Version;")).ToList();
+        List<(int Version, string AppliedAt)> consumerRows = [.. (await conn.QueryAsync<(int Version, string AppliedAt)>(
+            "SELECT Version, AppliedAt FROM System_ConsumerSchemaVersion ORDER BY Version;"))];
+        List<(int Version, string AppliedAt)> dataRows = [.. (await conn.QueryAsync<(int Version, string AppliedAt)>(
+            "SELECT Version, AppliedAt FROM System_SchemaVersion ORDER BY Version;"))];
 
         Assert.AreEqual(0, legacyCount, "The legacy SchemaVersion table must no longer exist after the split");
 
@@ -1074,9 +1074,9 @@ public class DatabaseInitializerTests
         // The actual bug symptom: these three tables must exist and be queryable — a bare rename
         // left them permanently missing on a real v1.7.2 upgrade despite DataSchemaVersion claiming
         // "up to date".
-        foreach (var table in new[] { "Audit_Entry", "Import_Conflict", "Audit_Change" })
+        foreach (string? table in new[] { "Audit_Entry", "Import_Conflict", "Audit_Change" })
         {
-            var tableExists = await conn.ExecuteScalarAsync<int>(
+            int tableExists = await conn.ExecuteScalarAsync<int>(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @table;", new { table });
             Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
         }
@@ -1089,11 +1089,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_LegacyAuditEntriesTable_MigratesToAuditEntryWithRowsPreserved()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
         await DowngradeToLegacyNamesAsync();
 
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(
@@ -1106,17 +1106,17 @@ public class DatabaseInitializerTests
         // for why: this database's domain tables are already fully migrated, so a genuine replay of
         // Consumer's own migrations would hit real column/table conflicts unrelated to what this
         // test is actually about (Data migration 2's AuditEntries rename).
-        var db2 = CreateInitializer([], migrations: [], useBaseline: false);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([], migrations: [], useBaseline: false);
         await db2.InitialiseAsync();
 
-        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         await verifyConn.OpenAsync(TestContext.CancellationToken);
-        var legacyCount = await verifyConn.ExecuteScalarAsync<int>(
+        int legacyCount = await verifyConn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'AuditEntries';");
-        var preservedRow = await verifyConn.ExecuteScalarAsync<int>(
+        int preservedRow = await verifyConn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Audit_Entry WHERE Agent = @marker;", new { marker = MarkerValue });
-        var indexNames = (await verifyConn.QueryAsync<string>(
-            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'Audit_Entry';")).ToList();
+        List<string> indexNames = [.. (await verifyConn.QueryAsync<string>(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'Audit_Entry';"))];
 
         Assert.AreEqual(0, legacyCount, "The legacy AuditEntries table must no longer exist after replay");
         Assert.AreEqual(1, preservedRow, "The pre-existing audit row must survive the rename");
@@ -1147,29 +1147,29 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_PartialMigrationState_FailsSafelyAndRequiresExplicitReset()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseForTestingAsync(forceIncremental: true);
 
-        var countAfterInit = db.QuoteCount;
+        int countAfterInit = db.QuoteCount;
 
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion WHERE Version >= 3;");
         }
 
-        var db2 = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([AllFilesBatch()]);
         await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.InitialiseAsync());
 
-        using (var verifyConn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await verifyConn.OpenAsync(TestContext.CancellationToken);
-            var quoteCountAfterFailedAttempt = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote;");
+            int quoteCountAfterFailedAttempt = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote;");
             Assert.AreEqual(countAfterInit, quoteCountAfterFailedAttempt,
                 "Database must be restored to its pre-attempt state after a failed migration, not left partially migrated");
         }
 
-        var db3 = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
         Assert.AreEqual(5, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
     }
@@ -1192,11 +1192,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_SeedingFailsOnAlreadyMigratedDatabase_BacksUpFirstAndRethrows()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
         Assert.IsGreaterThan(0, db.QuoteCount, "Precondition: the first InitialiseAsync call must have actually seeded data");
 
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
@@ -1204,12 +1204,12 @@ public class DatabaseInitializerTests
         }
 
         Directory.CreateDirectory(_backups);
-        var backupCountBefore = Directory.GetFiles(_backups, "*.db").Length;
+        int backupCountBefore = Directory.GetFiles(_backups, "*.db").Length;
 
-        var db2 = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([AllFilesBatch()]);
         await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.InitialiseAsync());
 
-        var backupCountAfter = Directory.GetFiles(_backups, "*.db").Length;
+        int backupCountAfter = Directory.GetFiles(_backups, "*.db").Length;
         Assert.AreEqual(backupCountBefore + 1, backupCountAfter,
             "A seeding failure on an already-migrated (non-baseline) database must take exactly one backup before attempting to seed");
     }
@@ -1218,14 +1218,14 @@ public class DatabaseInitializerTests
 
     private (QuotinatorDatabaseInitializer Db, string DbPath) CreateForcedIncrementalInitializer()
     {
-        var dbPath        = Path.Combine(_tempDir, $"test_incremental_{Guid.NewGuid():N}.db");
-        var factory       = new SqliteConnectionFactory(dbPath);
-        var options       = new DatabaseOptions { DbPath = dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var actionReader  = new ImportActionReader(factory);
-        var actionWriter  = new ImportActionWriter(factory);
-        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        string dbPath        = Path.Combine(_tempDir, $"test_incremental_{Guid.NewGuid():N}.db");
+        SqliteConnectionFactory factory       = new SqliteConnectionFactory(dbPath);
+        DatabaseOptions options       = new DatabaseOptions { DbPath = dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        ImportActionReader actionReader  = new ImportActionReader(factory);
+        ImportActionWriter actionWriter  = new ImportActionWriter(factory);
+        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
+        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -1234,7 +1234,7 @@ public class DatabaseInitializerTests
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory);
-        var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
+        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, actionWriter,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
@@ -1247,20 +1247,20 @@ public class DatabaseInitializerTests
 
     private static async Task<List<string>> DumpTableSchemaAsync(SqliteConnection conn, string table)
     {
-        var lines = new List<string>();
+        List<string> lines = [];
 
-        var columns = await conn.QueryAsync<(int cid, string name, string type, int notnull, string? dflt_value, int pk)>(
+        IEnumerable<(int cid, string name, string type, int notnull, string? dflt_value, int pk)> columns = await conn.QueryAsync<(int cid, string name, string type, int notnull, string? dflt_value, int pk)>(
             $"SELECT cid, name, type, [notnull], dflt_value, pk FROM pragma_table_info('{table}');");
-        foreach (var (cid, name, type, notnull, dflt_value, pk) in columns.OrderBy(c => c.cid))
+        foreach ((int cid, string? name, string? type, int notnull, string? dflt_value, int pk) in columns.OrderBy(c => c.cid))
             lines.Add($"COL {cid} {name} {type} notnull={notnull} default={dflt_value} pk={pk}");
 
-        var indexes = await conn.QueryAsync<(string name, int unique)>(
+        IEnumerable<(string name, int unique)> indexes = await conn.QueryAsync<(string name, int unique)>(
             $"SELECT name, [unique] FROM pragma_index_list('{table}');");
-        foreach (var (name, unique) in indexes.OrderBy(i => i.name))
+        foreach ((string? name, int unique) in indexes.OrderBy(i => i.name))
         {
-            var idxCols = await conn.QueryAsync<(int seqno, string? name)>(
+            IEnumerable<(int seqno, string? name)> idxCols = await conn.QueryAsync<(int seqno, string? name)>(
                 $"SELECT seqno, name FROM pragma_index_info('{name}');");
-            var colList = string.Join(",", idxCols.OrderBy(c => c.seqno).Select(c => c.name));
+            string colList = string.Join(",", idxCols.OrderBy(c => c.seqno).Select(c => c.name));
             lines.Add($"IDX {name} unique={unique} cols=({colList})");
         }
 
@@ -1284,21 +1284,21 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema()
     {
-        var dbA = CreateInitializer([]);
+        QuotinatorDatabaseInitializer dbA = CreateInitializer([]);
         await dbA.InitialiseAsync();
 
-        var (dbB, dbPathB) = CreateForcedIncrementalInitializer();
+        (QuotinatorDatabaseInitializer dbB, string dbPathB) = CreateForcedIncrementalInitializer();
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection connA = new SqliteConnection($"Data Source={_dbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={dbPathB}");
+        using SqliteConnection connB = new SqliteConnection($"Data Source={dbPathB}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var table in ConsumerDomainTables)
+        foreach (string table in ConsumerDomainTables)
         {
-            var schemaA = await DumpTableSchemaAsync(connA, table);
-            var schemaB = await DumpTableSchemaAsync(connB, table);
+            List<string> schemaA = await DumpTableSchemaAsync(connA, table);
+            List<string> schemaB = await DumpTableSchemaAsync(connB, table);
             Assert.AreSequenceEqual(schemaB, schemaA, $"Table '{table}' schema differs between the baseline and incremental paths — " +
                 "update QuotinatorMigrations.Baseline to match QuotinatorMigrations.All's final result.");
         }
@@ -1313,24 +1313,24 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Baseline_And_IncrementalReplay_AcceptSameCheckConstraintValues()
     {
-        var dbA = CreateInitializer([]);
+        QuotinatorDatabaseInitializer dbA = CreateInitializer([]);
         await dbA.InitialiseAsync();
 
-        var (dbB, dbPathB) = CreateForcedIncrementalInitializer();
+        (QuotinatorDatabaseInitializer dbB, string dbPathB) = CreateForcedIncrementalInitializer();
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using var connA = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection connA = new SqliteConnection($"Data Source={_dbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using var connB = new SqliteConnection($"Data Source={dbPathB}");
+        using SqliteConnection connB = new SqliteConnection($"Data Source={dbPathB}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var conn in new[] { connA, connB })
+        foreach (SqliteConnection? conn in new[] { connA, connB })
         {
             // QuoteGenres.QuoteId is a FK to Quotes(Id) — irrelevant to the CHECK constraint being
             // tested here, so disable enforcement rather than seed a matching Quotes row.
             await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
-            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
                 "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) " +
@@ -1375,7 +1375,7 @@ public class DatabaseInitializerTests
             // ConversationLines carries two independent CHECK constraints (#67): a simple
             // LineType-membership CHECK (ADR 008) and a separate cross-field CHECK enforcing that
             // exactly the FK matching LineType is populated. Both are exercised here.
-            var quoteLineId = Guid.NewGuid().ToString();
+            string quoteLineId = Guid.NewGuid().ToString();
             await conn.ExecuteAsync(
                 "INSERT INTO Quotinator_ConversationLine (Id, ConversationId, [Order], LineType, QuoteId, DateCreated, IsDeleted) " +
                 "VALUES (@id, @conversationId, 1, 'Quote', @quoteId, @now, 0);",
@@ -1403,18 +1403,18 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ConversationTables_AllHaveRecordBaseColumns()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var table in ConversationTablesWithRecordBase)
+        foreach (string table in ConversationTablesWithRecordBase)
         {
-            var columns = (await conn.QueryAsync<string>(
+            HashSet<string> columns = (await conn.QueryAsync<string>(
                 $"SELECT name FROM pragma_table_info('{table}');")).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var recordBaseColumn in new[] { "Id", "DateCreated", "DateModified", "DateDeleted", "IsDeleted" })
+            foreach (string? recordBaseColumn in new[] { "Id", "DateCreated", "DateModified", "DateDeleted", "IsDeleted" })
                 Assert.Contains(recordBaseColumn, columns, $"{table} is missing RecordBase column {recordBaseColumn}");
         }
     }
@@ -1423,15 +1423,15 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ConversationLines_UniqueConstraint_RejectsDuplicateOrder()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
-        var now            = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        var conversationId = Guid.NewGuid().ToString();
+        string now            = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        string conversationId = Guid.NewGuid().ToString();
 
         await conn.ExecuteAsync(
             "INSERT INTO Quotinator_ConversationLine (Id, ConversationId, [Order], LineType, QuoteId, DateCreated, IsDeleted) " +
@@ -1448,16 +1448,16 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task TranslationTables_UniqueConstraint_RejectsDuplicateLanguage()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
-        var now              = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        var stageDirectionId = Guid.NewGuid().ToString();
-        var soundCueId       = Guid.NewGuid().ToString();
+        string now              = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        string stageDirectionId = Guid.NewGuid().ToString();
+        string soundCueId       = Guid.NewGuid().ToString();
 
         await conn.ExecuteAsync(
             "INSERT INTO Quotinator_StageDirectionTranslation (Id, StageDirectionId, Language, Text, DateCreated, IsDeleted) " +
@@ -1484,14 +1484,14 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ConversationLineType_RoundTripsThroughDapper()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
-        var lineId = Guid.NewGuid();
+        Guid lineId = Guid.NewGuid();
         await conn.ExecuteAsync(
             "INSERT INTO Quotinator_ConversationLine (Id, ConversationId, [Order], LineType, StageDirectionId, DateCreated, IsDeleted) " +
             "VALUES (@id, @conversationId, 1, 'StageDirection', @stageDirectionId, @now, 0);",
@@ -1503,7 +1503,7 @@ public class DatabaseInitializerTests
                 now            = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")
             });
 
-        var line = await conn.QuerySingleAsync<ConversationLineEntity>(
+        ConversationLineEntity line = await conn.QuerySingleAsync<ConversationLineEntity>(
             "SELECT * FROM Quotinator_ConversationLine WHERE Id = @id;", new { id = lineId.ToString() });
 
         Assert.AreEqual(ConversationLineType.StageDirection, line.LineType.Parsed);
@@ -1513,13 +1513,13 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_TrulyEmptyDatabase_TakesBaselinePathNotIncremental()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var dataRows     = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
-        var consumerRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ConsumerSchemaVersion;");
+        int dataRows     = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
+        int consumerRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ConsumerSchemaVersion;");
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
@@ -1536,11 +1536,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_RecordedVersionExceedsKnownMigrations_TreatsAsUpToDateAndFlagsOvershoot()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
         Assert.IsFalse(db.SchemaVersionOvershootDetected, "Sanity check — a normal fresh database has no overshoot");
 
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(
@@ -1548,7 +1548,7 @@ public class DatabaseInitializerTests
                 new { v = QuotinatorMigrations.All.Count + 1, at = "2026-01-01T00:00:00Z" });
         }
 
-        var db2 = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([]);
         await db2.InitialiseAsync();
 
         Assert.IsTrue(db2.SchemaVersionOvershootDetected, "A recorded version ahead of the known migration list must be flagged");
@@ -1560,11 +1560,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_NoOvershoot_FlagStaysFalse()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
         Assert.IsFalse(db.SchemaVersionOvershootDetected);
 
-        var db2 = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([]);
         await db2.InitialiseAsync();
         Assert.IsFalse(db2.SchemaVersionOvershootDetected, "A second, already-up-to-date startup must not flag an overshoot either");
     }
@@ -1582,33 +1582,33 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_PreSplitCombinedCounterDatabase_FailsSafelyAndRequiresExplicitReset()
     {
-        var db = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
-        var quoteCountBefore = db.QuoteCount;
+        int quoteCountBefore = db.QuoteCount;
 
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync("DROP TABLE System_ConsumerSchemaVersion;");
             await conn.ExecuteAsync("DELETE FROM System_SchemaVersion;");
-            for (var v = 1; v <= 13; v++)
+            for (int v = 1; v <= 13; v++)
                 await conn.ExecuteAsync(
                     "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (@v, @at);",
                     new { v, at = $"2026-01-01T00:00:{v:D2}Z" });
         }
 
-        var db2 = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([AllFilesBatch()]);
         await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.InitialiseAsync());
 
-        using (var verifyConn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await verifyConn.OpenAsync(TestContext.CancellationToken);
-            var quoteCountAfterFailedAttempt = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote;");
+            int quoteCountAfterFailedAttempt = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote;");
             Assert.AreEqual(quoteCountBefore, quoteCountAfterFailedAttempt,
                 "Database must be restored to its pre-attempt state after the failed startup, not left partially migrated");
         }
 
-        var db3 = CreateInitializer([AllFilesBatch()]);
+        QuotinatorDatabaseInitializer db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
         Assert.AreEqual(5, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
@@ -1619,26 +1619,26 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Migration_SeriesUniverseSchema_AddsUniverseAndSeriesTables()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
-        var universeId = Guid.NewGuid().ToString();
+        string universeId = Guid.NewGuid().ToString();
         await conn.ExecuteAsync(
             "INSERT INTO Quotinator_Universe (Id, Name, DateCreated, IsDeleted, CompletenessStatus, NoValueKnown) " +
             "VALUES (@id, 'Middle Earth', @now, 0, 'Incomplete', '[]');",
             new { id = universeId, now });
 
-        var seriesId = Guid.NewGuid().ToString();
+        string seriesId = Guid.NewGuid().ToString();
         await conn.ExecuteAsync(
             "INSERT INTO Quotinator_Series (Id, Name, UniverseId, DateCreated, IsDeleted, CompletenessStatus, NoValueKnown) " +
             "VALUES (@id, 'The Lord of the Rings', @universeId, @now, 0, 'Incomplete', '[]');",
             new { id = seriesId, universeId, now });
 
-        var standaloneSeriesId = Guid.NewGuid().ToString();
+        string standaloneSeriesId = Guid.NewGuid().ToString();
         await conn.ExecuteAsync(
             "INSERT INTO Quotinator_Series (Id, Name, UniverseId, DateCreated, IsDeleted, CompletenessStatus, NoValueKnown) " +
             "VALUES (@id, 'Some Standalone Series', NULL, @now, 0, 'Incomplete', '[]');",
@@ -1653,21 +1653,21 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Migration_SeriesUniverseSchema_DropsCharactersSourceIdColumn()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var columns = (await conn.QueryAsync<string>(
+        HashSet<string> columns = (await conn.QueryAsync<string>(
             "SELECT name FROM pragma_table_info('Quotinator_Character');")).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         Assert.DoesNotContain("SourceId", columns, "Characters.SourceId must be dropped by Migration009");
 
-        var indexes = await conn.QueryAsync<string>("SELECT name FROM pragma_index_list('Quotinator_Character') WHERE [unique] = 1;");
-        foreach (var idx in indexes)
+        IEnumerable<string> indexes = await conn.QueryAsync<string>("SELECT name FROM pragma_index_list('Quotinator_Character') WHERE [unique] = 1;");
+        foreach (string idx in indexes)
         {
-            var idxCols = (await conn.QueryAsync<string>($"SELECT name FROM pragma_index_info('{idx}');")).ToList();
+            List<string> idxCols = [.. (await conn.QueryAsync<string>($"SELECT name FROM pragma_index_info('{idx}');"))];
             Assert.DoesNotContain("SourceId", idxCols, StringComparer.OrdinalIgnoreCase,
                 $"Index '{idx}' still references SourceId — the old UNIQUE(SourceId, Name) constraint must be gone");
         }
@@ -1706,12 +1706,12 @@ public class DatabaseInitializerTests
     {
         name2 ??= name;
 
-        var source1Id    = Guid.NewGuid().ToString();
-        var source2Id    = Guid.NewGuid().ToString();
-        var character1Id = Guid.NewGuid().ToString();
-        var character2Id = Guid.NewGuid().ToString();
+        string source1Id    = Guid.NewGuid().ToString();
+        string source2Id    = Guid.NewGuid().ToString();
+        string character1Id = Guid.NewGuid().ToString();
+        string character2Id = Guid.NewGuid().ToString();
 
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
@@ -1748,7 +1748,7 @@ public class DatabaseInitializerTests
             // Sources.SeriesId is never populated by any migration itself — only the app's own later
             // import/seeding path does this in reality. Simulate that here for whichever Sources this
             // specific test wants linked into a (real or shared) Series.
-            foreach (var seriesId in new[] { seriesId1, seriesId2 }.Where(s => s is not null).Distinct())
+            foreach (string? seriesId in new[] { seriesId1, seriesId2 }.Where(s => s is not null).Distinct())
                 await conn.ExecuteAsync(
                     "INSERT OR IGNORE INTO Series (Id, Name, DateCreated, IsDeleted) VALUES (@id, @name, @now, 0);",
                     new { id = seriesId, name = $"Series {seriesId}", now = dateCreated1 });
@@ -1766,26 +1766,26 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Migration_CharacterGlobalIdentity_ConsolidatesSameNameRowsWithinKnownSeries()
     {
-        var seriesId = Guid.NewGuid().ToString();
-        var (_, _, character1Id, character2Id) =
+        string seriesId = Guid.NewGuid().ToString();
+        (string _, string _, string? character1Id, string? character2Id) =
             await SeedPreMergeCharactersAsync(seriesId1: seriesId, seriesId2: seriesId);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var survivorCount = await conn.ExecuteScalarAsync<int>(
+        int survivorCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Characters WHERE Name = 'Gandalf' AND IsDeleted = 0;");
         Assert.AreEqual(1, survivorCount, "Two same-named Characters whose Sources share a Series must consolidate into one row");
 
-        var survivorId = await conn.ExecuteScalarAsync<string>(
+        string? survivorId = await conn.ExecuteScalarAsync<string>(
             "SELECT Id FROM Characters WHERE Name = 'Gandalf' AND IsDeleted = 0;");
         Assert.AreEqual(character1Id, survivorId, "The earlier-DateCreated row must survive");
 
-        var linkedSourceCount = await conn.ExecuteScalarAsync<int>(
+        int linkedSourceCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM CharacterSources WHERE CharacterId = @id AND IsDeleted = 0;", new { id = survivorId });
         Assert.AreEqual(2, linkedSourceCount, "The survivor must carry links to both original Sources");
 
-        var mergedAwayDeleted = await conn.ExecuteScalarAsync<int>(
+        int mergedAwayDeleted = await conn.ExecuteScalarAsync<int>(
             "SELECT IsDeleted FROM Characters WHERE Id = @id;", new { id = character2Id });
         Assert.AreEqual(1, mergedAwayDeleted, "The merged-away row must be soft-deleted, never hard-deleted");
     }
@@ -1799,22 +1799,22 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Migration_CharacterGlobalIdentity_MergesDespiteDifferingNameCasing()
     {
-        var seriesId = Guid.NewGuid().ToString();
-        var (_, _, character1Id, character2Id) = await SeedPreMergeCharactersAsync(
+        string seriesId = Guid.NewGuid().ToString();
+        (string _, string _, string? character1Id, string? character2Id) = await SeedPreMergeCharactersAsync(
             name: "Gandalf", name2: "GANDALF", seriesId1: seriesId, seriesId2: seriesId);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var survivorCount = await conn.ExecuteScalarAsync<int>(
+        int survivorCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Characters WHERE LOWER(Name) = 'gandalf' AND IsDeleted = 0;");
         Assert.AreEqual(1, survivorCount, "Differing casing of the same Name must still merge — only storage preserves original casing, not the comparison");
 
-        var survivorName = await conn.ExecuteScalarAsync<string>(
+        string? survivorName = await conn.ExecuteScalarAsync<string>(
             "SELECT Name FROM Characters WHERE Id = @id;", new { id = character1Id });
         Assert.AreEqual("Gandalf", survivorName, "The surviving row's own original casing must be preserved, never rewritten to match the merged-away row's casing");
 
-        var mergedAwayDeleted = await conn.ExecuteScalarAsync<int>(
+        int mergedAwayDeleted = await conn.ExecuteScalarAsync<int>(
             "SELECT IsDeleted FROM Characters WHERE Id = @id;", new { id = character2Id });
         Assert.AreEqual(1, mergedAwayDeleted);
     }
@@ -1822,14 +1822,14 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Migration_CharacterGlobalIdentity_NeverMergesAcrossDifferingSourceType()
     {
-        var seriesId = Guid.NewGuid().ToString();
+        string seriesId = Guid.NewGuid().ToString();
         await SeedPreMergeCharactersAsync(name: "Gandalf", type1: "Movie", type2: "Book",
             seriesId1: seriesId, seriesId2: seriesId);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var survivorCount = await conn.ExecuteScalarAsync<int>(
+        int survivorCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Characters WHERE Name = 'Gandalf' AND IsDeleted = 0;");
         Assert.AreEqual(2, survivorCount, "A shared Series must never override the Source.Type anchor invariant (ADR 011)");
     }
@@ -1839,10 +1839,10 @@ public class DatabaseInitializerTests
     {
         await SeedPreMergeCharactersAsync(name: "Sam", seriesId1: null, seriesId2: null);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var survivorCount = await conn.ExecuteScalarAsync<int>(
+        int survivorCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Characters WHERE Name = 'Sam' AND IsDeleted = 0;");
         Assert.AreEqual(2, survivorCount, "Same Name, same Type, but no known Series relationship — conservative default must leave both rows separate");
     }
@@ -1858,15 +1858,15 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Migration_CharacterGlobalIdentity_RepointsQuoteCharacterIdToMergedRow()
     {
-        var seriesId = Guid.NewGuid().ToString();
+        string seriesId = Guid.NewGuid().ToString();
 
-        var source1Id    = Guid.NewGuid().ToString();
-        var source2Id    = Guid.NewGuid().ToString();
-        var character1Id = Guid.NewGuid().ToString();
-        var character2Id = Guid.NewGuid().ToString();
-        var quoteId       = Guid.NewGuid().ToString();
+        string source1Id    = Guid.NewGuid().ToString();
+        string source2Id    = Guid.NewGuid().ToString();
+        string character1Id = Guid.NewGuid().ToString();
+        string character2Id = Guid.NewGuid().ToString();
+        string quoteId       = Guid.NewGuid().ToString();
 
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
@@ -1902,10 +1902,10 @@ public class DatabaseInitializerTests
             await conn.ExecuteAsync(QuotinatorMigrations.CharacterGlobalIdentityMerge);
         }
 
-        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         await verifyConn.OpenAsync(TestContext.CancellationToken);
 
-        var resolvedCharacterId = await verifyConn.ExecuteScalarAsync<string>(
+        string? resolvedCharacterId = await verifyConn.ExecuteScalarAsync<string>(
             "SELECT CharacterId FROM Quotes WHERE Id = @id;", new { id = quoteId });
         Assert.AreEqual(character1Id, resolvedCharacterId, "The quote's CharacterId must be re-pointed to the surviving row, not left dangling on the merged-away one");
     }
@@ -1913,15 +1913,15 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Migration_CharacterGlobalIdentity_PreservesCompletenessStatusPerAlgorithm()
     {
-        var seriesId = Guid.NewGuid().ToString();
-        var (_, _, character1Id, _) = await SeedPreMergeCharactersAsync(
+        string seriesId = Guid.NewGuid().ToString();
+        (string _, string _, string? character1Id, string _) = await SeedPreMergeCharactersAsync(
             seriesId1: seriesId, seriesId2: seriesId,
             completeness1: "Incomplete", completeness2: "Complete");
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var survivorStatus = await conn.ExecuteScalarAsync<string>(
+        string? survivorStatus = await conn.ExecuteScalarAsync<string>(
             "SELECT CompletenessStatus FROM Characters WHERE Id = @id;", new { id = character1Id });
         Assert.AreEqual("Complete", survivorStatus, "The most-reviewed CompletenessStatus across the merged group must win");
     }
@@ -1929,14 +1929,14 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task Migration_CharacterGlobalIdentity_BackfillsSourceTypeColumnFromLinkedSource()
     {
-        var (_, _, character1Id, character2Id) = await SeedPreMergeCharactersAsync(
+        (string _, string _, string? character1Id, string? character2Id) = await SeedPreMergeCharactersAsync(
             name: "Sam", type1: "Movie", type2: "Book", seriesId1: null, seriesId2: null);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var type1 = await conn.ExecuteScalarAsync<string>("SELECT SourceType FROM Characters WHERE Id = @id;", new { id = character1Id });
-        var type2 = await conn.ExecuteScalarAsync<string>("SELECT SourceType FROM Characters WHERE Id = @id;", new { id = character2Id });
+        string? type1 = await conn.ExecuteScalarAsync<string>("SELECT SourceType FROM Characters WHERE Id = @id;", new { id = character1Id });
+        string? type2 = await conn.ExecuteScalarAsync<string>("SELECT SourceType FROM Characters WHERE Id = @id;", new { id = character2Id });
         Assert.AreEqual("Movie", type1);
         Assert.AreEqual("Book", type2);
     }
@@ -1945,18 +1945,18 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task SeriesUniverseTables_AllHaveRecordBaseColumns()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        foreach (var table in new[] { "Quotinator_Universe", "Quotinator_Series", "Quotinator_CharacterSource" })
+        foreach (string? table in new[] { "Quotinator_Universe", "Quotinator_Series", "Quotinator_CharacterSource" })
         {
-            var columns = (await conn.QueryAsync<string>(
+            HashSet<string> columns = (await conn.QueryAsync<string>(
                 $"SELECT name FROM pragma_table_info('{table}');")).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var recordBaseColumn in new[] { "Id", "DateCreated", "DateModified", "DateDeleted", "IsDeleted" })
+            foreach (string? recordBaseColumn in new[] { "Id", "DateCreated", "DateModified", "DateDeleted", "IsDeleted" })
                 Assert.Contains(recordBaseColumn, columns, $"{table} is missing RecordBase column {recordBaseColumn}");
         }
     }
@@ -1981,10 +1981,10 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task SeedSeriesUniverseOverlay_NoExistingSeriesId_StagesPendingUnderReviewPolicy()
     {
-        var sourceId = Quotinator.Core.Import.EntityIdentity.SourceId("Test Movie", "Movie");
-        var quotesFile = Path.Combine(_tempDir, "quotes.json");
+        string sourceId = Quotinator.Core.Import.EntityIdentity.SourceId("Test Movie", "Movie");
+        string quotesFile = Path.Combine(_tempDir, "quotes.json");
         File.WriteAllText(quotesFile, """[{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello there.","source":"Test Movie","type":"movie"}]""");
-        var overlayFile = Path.Combine(_tempDir, "overlay.json");
+        string overlayFile = Path.Combine(_tempDir, "overlay.json");
         File.WriteAllText(overlayFile, $$"""
             {
               "quotes": [],
@@ -1993,19 +1993,19 @@ public class DatabaseInitializerTests
             }
             """);
 
-        var batch = new SeedBatch(
+        SeedBatch batch = new SeedBatch(
             [new SeedFile(quotesFile, null), new SeedFile(overlayFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "overlay-test");
-        var db = CreateInitializer([batch]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        var pendingCount = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", "Source", 1, 0)).TotalCount;
+        int pendingCount = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", "Source", 1, 0)).TotalCount;
         Assert.AreEqual(1, pendingCount, "Review policy stages Pending for any changed field, including a first-time null-to-value SeriesId fill");
 
-        var seriesId = await conn.ExecuteScalarAsync<string?>(
+        string? seriesId = await conn.ExecuteScalarAsync<string?>(
             "SELECT SeriesId FROM Quotinator_Source WHERE Id = @id;", new { id = sourceId });
         Assert.IsNull(seriesId, "Nothing applied yet — SeriesId stays null until the Pending action is decided and applied");
     }
@@ -2014,10 +2014,10 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task SeedSeriesUniverseOverlay_AlreadyTagged_NoActionStaged()
     {
-        var sourceId = Quotinator.Core.Import.EntityIdentity.SourceId("Test Movie", "Movie");
-        var quotesFile = Path.Combine(_tempDir, "quotes.json");
+        string sourceId = Quotinator.Core.Import.EntityIdentity.SourceId("Test Movie", "Movie");
+        string quotesFile = Path.Combine(_tempDir, "quotes.json");
         File.WriteAllText(quotesFile, """[{"id":"11111111-1111-1111-1111-111111111111","quote":"Hello there.","source":"Test Movie","type":"movie"}]""");
-        var overlayFile = Path.Combine(_tempDir, "overlay.json");
+        string overlayFile = Path.Combine(_tempDir, "overlay.json");
         File.WriteAllText(overlayFile, $$"""
             {
               "quotes": [],
@@ -2026,21 +2026,21 @@ public class DatabaseInitializerTests
             }
             """);
 
-        var batch = new SeedBatch(
+        SeedBatch batch = new SeedBatch(
             [new SeedFile(quotesFile, null), new SeedFile(overlayFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins))],
             ManifestPolicy.HardcodedDefault, "overlay-test-seed");
-        var db = CreateInitializer([batch]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var seriesId = await conn.ExecuteScalarAsync<string?>("SELECT SeriesId FROM Quotinator_Source WHERE Id = @id;", new { id = sourceId });
+        string? seriesId = await conn.ExecuteScalarAsync<string?>("SELECT SeriesId FROM Quotinator_Source WHERE Id = @id;", new { id = sourceId });
         Assert.IsNotNull(seriesId, "Sanity check — NewestWins applies immediately, so SeriesId must already be set before the second pass");
 
-        var reapplyBatchId = Guid.NewGuid();
-        using var reapplyConn = new SqliteConnection($"Data Source={_dbPath}");
+        Guid reapplyBatchId = Guid.NewGuid();
+        using SqliteConnection reapplyConn = new SqliteConnection($"Data Source={_dbPath}");
         await reapplyConn.OpenAsync(TestContext.CancellationToken);
-        var actions = await Quotinator.Core.Database.ImportActionPlanner.PlanAsync(
+        IReadOnlyList<ImportActionEntity> actions = await Quotinator.Core.Database.ImportActionPlanner.PlanAsync(
             (SqliteConnection)reapplyConn, [], reapplyBatchId, DuplicateResolutionPolicy.Review,
             sources: [new Quotinator.Core.Import.SourceEntryDto { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Enums.QuoteType.Movie, SeriesName = "Test Series" }]);
 
@@ -2057,7 +2057,7 @@ public class DatabaseInitializerTests
 
     private SeedBatch SimpleQuoteBatch()
     {
-        var quotesFile = Path.Combine(_tempDir, $"quotes-{Guid.NewGuid():N}.json");
+        string quotesFile = Path.Combine(_tempDir, $"quotes-{Guid.NewGuid():N}.json");
         File.WriteAllText(quotesFile,
             $$"""[{"id":"{{Guid.NewGuid()}}","quote":"Hello there.","source":"Test Movie","type":"movie","genres":["drama"]}]""");
         return new SeedBatch([new SeedFile(quotesFile, null)], ManifestPolicy.HardcodedDefault, "simple-test-seed");
@@ -2080,13 +2080,13 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AlreadySeeded_TakesNoBackup()
     {
-        var batch = SimpleQuoteBatch();
-        var db1 = CreateInitializer([batch], useBaseline: true);
+        SeedBatch batch = SimpleQuoteBatch();
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([batch], useBaseline: true);
         await db1.InitialiseAsync();
 
-        var before = BackupFileCount();
+        int before = BackupFileCount();
 
-        var db2 = CreateInitializer([batch], useBaseline: true);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true);
         await db2.InitialiseAsync();
 
         Assert.AreEqual(before, BackupFileCount(), "A restart against an already-seeded database must take no backup");
@@ -2095,11 +2095,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_ContentSeedNeeded_TakesBackup()
     {
-        var db1 = CreateInitializer([], useBaseline: true);
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
         await db1.InitialiseAsync();
         Assert.AreEqual(0, BackupFileCount(), "Sanity check — the baseline path itself never backs up");
 
-        var db2 = CreateInitializer([], useBaseline: true);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([], useBaseline: true);
         await db2.InitialiseAsync();
 
         Assert.AreEqual(1, BackupFileCount(), "A database still needing content-seed work must take a backup");
@@ -2108,14 +2108,14 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AfterReset_ContentSeedNeeded_TakesBackup()
     {
-        var batch = SimpleQuoteBatch();
-        var db = CreateInitializer([batch], useBaseline: true);
+        SeedBatch batch = SimpleQuoteBatch();
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], useBaseline: true);
         await db.InitialiseAsync();
         Assert.AreEqual(0, BackupFileCount(), "Sanity check — the baseline path itself never backs up");
 
         await db.ResetAsync();
         Assert.IsNull(db.MigrationApplied, "Reset sets schema-version counters directly via the baseline path — MigrationApplied stays null even though content-seed has real work to do next");
-        var afterReset = BackupFileCount();
+        int afterReset = BackupFileCount();
         Assert.AreEqual(1, afterReset, "Reset's own backup must still fire");
 
         await db.InitialiseAsync();
@@ -2130,18 +2130,18 @@ public class DatabaseInitializerTests
         // rename to Quotinator_Quote), breaking every later query in this test — instead, append a
         // harmless extra migration so db2 sees a genuinely pending migration on top of an otherwise
         // fully-migrated, correctly-named database.
-        var db1 = CreateInitializer([], QuotinatorMigrations.All, useBaseline: true);
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([], QuotinatorMigrations.All, useBaseline: true);
         await db1.InitialiseAsync();
 
-        var extraMigration = new SchemaMigration
+        SchemaMigration extraMigration = new SchemaMigration
         {
             Version = QuotinatorMigrations.All.Count + 1,
             Sql     = "CREATE TABLE IF NOT EXISTS Test_277_Dummy (Id INTEGER);",
         };
-        var extendedMigrations = QuotinatorMigrations.All.Append(extraMigration).ToList();
+        List<SchemaMigration> extendedMigrations = [.. QuotinatorMigrations.All, extraMigration];
 
-        var before = BackupFileCount();
-        var db2 = CreateInitializer([], extendedMigrations, useBaseline: true);
+        int before = BackupFileCount();
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([], extendedMigrations, useBaseline: true);
         await db2.InitialiseAsync();
 
         Assert.IsGreaterThan(before, BackupFileCount(), "A database with a pending migration must take a backup");
@@ -2150,29 +2150,29 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException()
     {
-        var db1 = CreateInitializer([], useBaseline: true);
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
         await db1.InitialiseAsync();
 
-        var batch = SimpleQuoteBatch();
-        var db2 = CreateInitializer([batch], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
+        SeedBatch batch = SimpleQuoteBatch();
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
         await db2.InitialiseAsync();
 
         Assert.AreEqual(0, BackupFileCount(), "Backup must be skipped, not written, when real free space is insufficient");
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote WHERE IsDeleted = 0;");
+        int quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote WHERE IsDeleted = 0;");
         Assert.AreEqual(1, quoteCount, "Seeding must still proceed even when the backup was skipped");
     }
 
     [TestMethod]
     public async Task CreateBackup_SufficientStorageSpace_ProceedsNormally()
     {
-        var db1 = CreateInitializer([], useBaseline: true);
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
         await db1.InitialiseAsync();
 
-        var batch = SimpleQuoteBatch();
-        var db2 = CreateInitializer([batch], useBaseline: true, diskSpaceProvider: NoOpDiskSpaceProvider.Instance);
+        SeedBatch batch = SimpleQuoteBatch();
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true, diskSpaceProvider: NoOpDiskSpaceProvider.Instance);
         await db2.InitialiseAsync();
 
         Assert.AreEqual(1, BackupFileCount(), "Backup must be written when both budget and real free space are sufficient");
@@ -2181,15 +2181,15 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason()
     {
-        var db1 = CreateInitializer([], useBaseline: true);
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
         await db1.InitialiseAsync();
 
         // Blocks Directory.CreateDirectory(_backups) inside CreateBackup — a file already exists
         // at that exact path, so creating it as a directory throws IOException.
         File.WriteAllText(_backups, "blocker");
 
-        var db2 = CreateInitializer([], useBaseline: true);
-        var ex = await Assert.ThrowsExactlyAsync<DatabaseBackupWriteException>(() => db2.InitialiseAsync());
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([], useBaseline: true);
+        DatabaseBackupWriteException ex = await Assert.ThrowsExactlyAsync<DatabaseBackupWriteException>(() => db2.InitialiseAsync());
 
         Assert.IsInstanceOfType<IOException>(ex.InnerException);
     }
@@ -2197,12 +2197,12 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_ExecuteStepFails_SurfacesDistinctFailureReason()
     {
-        var db1 = CreateInitializer([], useBaseline: true);
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
         await db1.InitialiseAsync();
         Assert.AreEqual(0, BackupFileCount(), "Sanity check — the baseline path itself never backs up");
 
-        var batch = SimpleQuoteBatch();
-        var db2 = CreateInitializer([batch], useBaseline: true, auditWriter: new ThrowingAuditEntryWriter());
+        SeedBatch batch = SimpleQuoteBatch();
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true, auditWriter: new ThrowingAuditEntryWriter());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => db2.InitialiseAsync());
 

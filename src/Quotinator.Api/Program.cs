@@ -37,27 +37,30 @@ using Quotinator.Core.Import;
 using Quotinator.Api.Logging;
 using Scalar.AspNetCore;
 using Toolbelt.Blazor.Extensions.DependencyInjection;
+using System.Text.Json;
+using Quotinator.Api.Startup;
+using Quotinator.Changelog.Models;
 
 new QuotinatorDapperConfiguration().Configure();
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // Read HA add-on options from /data/options.json when running inside the supervisor.
 // The supervisor writes the user's config panel values here; env_vars template rendering
 // is not reliably supported for optional options. This is the official HA approach.
-var haOptionsPath = "/data/options.json";
-var isHa = File.Exists(haOptionsPath);
+string haOptionsPath = "/data/options.json";
+bool isHa = File.Exists(haOptionsPath);
 if (isHa)
 {
-    var haOptions = System.Text.Json.JsonDocument.Parse(File.ReadAllText(haOptionsPath)).RootElement;
-    var haMap = new Dictionary<string, string?>();
-    if (haOptions.TryGetProperty("log_level",     out var ll))  haMap["Quotinator:LogLevel"]    = ll.GetString();
-    if (haOptions.TryGetProperty("log_requests",  out var lr))  haMap["Quotinator:LogRequests"] = lr.GetRawText();
-    if (haOptions.TryGetProperty("ssl",           out var ssl)) haMap["Quotinator:Ssl"]         = ssl.GetRawText();
-    if (haOptions.TryGetProperty("certfile",      out var cf))  haMap["Quotinator:SslCertFile"] = $"/ssl/{cf.GetString()}";
-    if (haOptions.TryGetProperty("keyfile",       out var kf))  haMap["Quotinator:SslKeyFile"]  = $"/ssl/{kf.GetString()}";
-    if (haOptions.TryGetProperty("admin_api_key", out var ak))  haMap["Quotinator:AdminApiKey"] = ak.GetString();
-    if (haOptions.TryGetProperty("backup_path",   out var bp))  haMap["Quotinator:BackupPath"]  = bp.GetString();
+    JsonElement haOptions = System.Text.Json.JsonDocument.Parse(File.ReadAllText(haOptionsPath)).RootElement;
+    Dictionary<string, string?> haMap = [];
+    if (haOptions.TryGetProperty("log_level",     out JsonElement ll))  haMap["Quotinator:LogLevel"]    = ll.GetString();
+    if (haOptions.TryGetProperty("log_requests",  out JsonElement lr))  haMap["Quotinator:LogRequests"] = lr.GetRawText();
+    if (haOptions.TryGetProperty("ssl",           out JsonElement ssl)) haMap["Quotinator:Ssl"]         = ssl.GetRawText();
+    if (haOptions.TryGetProperty("certfile",      out JsonElement cf))  haMap["Quotinator:SslCertFile"] = $"/ssl/{cf.GetString()}";
+    if (haOptions.TryGetProperty("keyfile",       out JsonElement kf))  haMap["Quotinator:SslKeyFile"]  = $"/ssl/{kf.GetString()}";
+    if (haOptions.TryGetProperty("admin_api_key", out JsonElement ak))  haMap["Quotinator:AdminApiKey"] = ak.GetString();
+    if (haOptions.TryGetProperty("backup_path",   out JsonElement bp))  haMap["Quotinator:BackupPath"]  = bp.GetString();
     builder.Configuration.AddInMemoryCollection(haMap);
 }
 
@@ -137,7 +140,7 @@ builder.Services.AddRateLimiter(options =>
 
     options.OnRejected = async (context, token) =>
     {
-        var localizer = context.HttpContext.RequestServices.GetRequiredService<IApiLocalizer>();
+        IApiLocalizer localizer = context.HttpContext.RequestServices.GetRequiredService<IApiLocalizer>();
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         await context.HttpContext.Response.WriteAsJsonAsync(
             new Microsoft.AspNetCore.Mvc.ProblemDetails
@@ -161,7 +164,7 @@ static string? HaFallbackDir()
     try { return Directory.Exists(haData) ? haData : null; }
     catch { return null; }
 }
-var dataDir = builder.Configuration["Quotinator:DataDir"]
+string dataDir = builder.Configuration["Quotinator:DataDir"]
     ?? HaFallbackDir()
     ?? Path.Combine(AppContext.BaseDirectory, "data");
 Directory.CreateDirectory(dataDir);
@@ -172,7 +175,7 @@ Directory.CreateDirectory(dataDir);
 // existing paths, minus the now-redundant "Default" sibling that used to live under
 // Quotinator:DuplicateResolution. Parsing itself lives in ConflictPolicyParser (Quotinator.Data)
 // so it's unit-testable outside these top-level statements.
-var configPolicy = new ManifestPolicy(
+ManifestPolicy configPolicy = new(
     Default:      ConflictPolicyParser.Parse(builder.Configuration["Quotinator:DefaultConflictPolicy"]),
     Quotes:       ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Quotes"]),
     Sources:      ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Sources"]),
@@ -180,55 +183,55 @@ var configPolicy = new ManifestPolicy(
     People:       ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:People"]),
     Translations: ConflictPolicyParser.ParseNullable(builder.Configuration["Quotinator:DuplicateResolution:Translations"]));
 
-var createMissingManifest  = builder.Configuration.GetValue("Quotinator:CreateMissingManifest", true);
-var includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeDefaultSources", true);
+bool createMissingManifest  = builder.Configuration.GetValue("Quotinator:CreateMissingManifest", true);
+bool includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeDefaultSources", true);
 
 // Auto-update: whether the app checks manifest downloadUrl/github entries for a fresher copy at
 // all (master switch — false means pure offline mode, no network calls ever), and how long a
 // downloaded copy is considered fresh before the next check re-verifies it.
-var autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoUpdateSources", true);
-var sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
-var sourceRefreshTimeoutSeconds = builder.Configuration.GetValue<int?>("Quotinator:SourceRefreshTimeoutSeconds")
+bool autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoUpdateSources", true);
+int sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
+int sourceRefreshTimeoutSeconds = builder.Configuration.GetValue<int?>("Quotinator:SourceRefreshTimeoutSeconds")
     ?? SourceCacheUpdater.DefaultHttpTimeoutSeconds;
 
 // #278: default expiry applied to a notification written without an explicit expiresAt. Read once
 // here (not per-request, unlike AdminAuditExportMaxRows) since it's a NotificationWriter constructor
 // dependency, not a per-call local — same pattern as sourceRefreshTimeoutSeconds above.
-var notificationDefaultExpiryHours = builder.Configuration.GetValue<int?>("Quotinator:NotificationDefaultExpiryHours")
+int notificationDefaultExpiryHours = builder.Configuration.GetValue<int?>("Quotinator:NotificationDefaultExpiryHours")
     ?? QueryParamDefaults.NotificationDefaultExpiryHours;
 
 // #249: once a seeded batch reaches zero pending actions, its Import_Action (conflict-resolution)
 // rows have served their purpose and are purged automatically — separate settings per origin so a
 // developer investigating one specific source (bundled or user-imports) can temporarily retain that
 // origin's resolution history without affecting the other.
-var autoPurgeBundledImportActions = builder.Configuration.GetValue("Quotinator:AutoPurgeBundledImportActions", true);
-var autoPurgeUserImportActions    = builder.Configuration.GetValue("Quotinator:AutoPurgeUserImportActions", true);
+bool autoPurgeBundledImportActions = builder.Configuration.GetValue("Quotinator:AutoPurgeBundledImportActions", true);
+bool autoPurgeUserImportActions    = builder.Configuration.GetValue("Quotinator:AutoPurgeUserImportActions", true);
 
 // Unicode-aware LIKE-style matching (issue #222) — opt-in, off by default until validated against
 // real-world non-ASCII search traffic. See docs/milestones/maintenance-milestone-v1.8.0/
 // 222-unicode-like-matching-plan.md for why this isn't unconditional.
-var unicodeAwareSearch = builder.Configuration.GetValue("Quotinator:UnicodeAwareSearch", false);
+bool unicodeAwareSearch = builder.Configuration.GetValue("Quotinator:UnicodeAwareSearch", false);
 
 // Bundled sources are always read from the Docker image (AppContext.BaseDirectory/data/sources/).
 // No file copy to the persistent volume is needed — only the database and DataProtection keys
 // need to be on a writable, persistent path.
-var bundledSourcesDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SourcesFolder);
+string bundledSourcesDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SourcesFolder);
 
 // User imports: optional directory in the data volume. Create it so users can drop files in.
 // Quotinator:ImportsPath overrides the default location when set.
-var importsDir = builder.Configuration["Quotinator:ImportsPath"] is { Length: > 0 } customImportsPath
+string importsDir = builder.Configuration["Quotinator:ImportsPath"] is { Length: > 0 } customImportsPath
     ? customImportsPath
     : Path.Combine(dataDir, DataPaths.ImportsFolder);
 
 // Auto-update download caches — always under the persistent data volume, never the read-only
 // bundled image path, so both are writable in every deployment shape including the HA add-on.
 // "Internal" is the default cache for bundled-manifest entries; "external" for user-imports entries.
-var internalDownloadDir = Path.Combine(dataDir, DataPaths.SourcesFolder, DataPaths.DownloadedSourcesFolder);
-var externalDownloadDir = Path.Combine(dataDir, DataPaths.ImportsFolder, DataPaths.DownloadedSourcesFolder);
+string internalDownloadDir = Path.Combine(dataDir, DataPaths.SourcesFolder, DataPaths.DownloadedSourcesFolder);
+string externalDownloadDir = Path.Combine(dataDir, DataPaths.ImportsFolder, DataPaths.DownloadedSourcesFolder);
 
 // Persist DataProtection keys to a subdirectory of the data volume so antiforgery tokens
 // and Blazor circuit descriptors survive container restarts and add-on updates.
-var keysDir = Path.Combine(dataDir, DataPaths.DataProtectionFolder);
+string keysDir = Path.Combine(dataDir, DataPaths.DataProtectionFolder);
 Directory.CreateDirectory(keysDir);
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(keysDir));
@@ -247,10 +250,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // Optional HTTPS via Kestrel — for direct-access deployments without a terminating proxy.
 // When running in a container, port binding is handled here instead of ASPNETCORE_HTTP_PORTS
 // so that HTTPS on 8080 and HTTP on 8099 (HA ingress) do not conflict.
-var sslEnabled  = builder.Configuration.GetValue<bool>("Quotinator:Ssl");
-var sslCertFile = builder.Configuration["Quotinator:SslCertFile"] ?? string.Empty;
-var sslKeyFile  = builder.Configuration["Quotinator:SslKeyFile"]  ?? string.Empty;
-var isContainer = string.Equals(
+bool   sslEnabled  = builder.Configuration.GetValue<bool>("Quotinator:Ssl");
+string sslCertFile = builder.Configuration["Quotinator:SslCertFile"] ?? string.Empty;
+string sslKeyFile  = builder.Configuration["Quotinator:SslKeyFile"]  ?? string.Empty;
+bool   isContainer = string.Equals(
     Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"), "true",
     StringComparison.OrdinalIgnoreCase);
 
@@ -280,23 +283,23 @@ builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
 // #309: bundled changelog files read from the Docker image (AppContext.BaseDirectory/data/changelog/),
 // mirroring bundledSourcesDir above — no longer compiled resources, per ADR 005's revision.
-var bundledChangelogDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.ChangelogFolder);
+string bundledChangelogDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.ChangelogFolder);
 builder.Services.AddSingleton<IChangelogService>(sp =>
     new ChangelogService(
         bundledChangelogDir,
         sp.GetRequiredService<ILogger<ChangelogService>>()));
 
-var dbPath     = Path.Combine(dataDir, DataPaths.DatabaseFile);
-var backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0 } customBackupPath
+string dbPath     = Path.Combine(dataDir, DataPaths.DatabaseFile);
+string backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: > 0 } customBackupPath
     ? customBackupPath
     : Path.Combine(dataDir, DataPaths.BackupsFolder);
-var maxBackupStorageGb = builder.Configuration.GetValue("Quotinator:MaxBackupStorageGb", 1);
-var dbOptions          = new DatabaseOptions { DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb };
+int             maxBackupStorageGb = builder.Configuration.GetValue("Quotinator:MaxBackupStorageGb", 1);
+DatabaseOptions dbOptions          = new() { DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb };
 // useMemoryTempStore: true — see SqliteConnectionFactory.cs's own comment for the #294 incident this
 // opts into working around. Safe here because Quotinator's own dataset (hundreds to low-thousands of
 // quotes) makes the resulting RAM cost negligible; Quotinator.Data itself stays unopinionated and
 // defaults to false since it doesn't know a future consumer's dataset size.
-var connectionFactory  = new SqliteConnectionFactory(dbPath, useMemoryTempStore: true);
+SqliteConnectionFactory connectionFactory = new(dbPath, useMemoryTempStore: true);
 builder.Services.AddSingleton<IDiskSpaceProvider, DiskSpaceProvider>();
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 
@@ -306,7 +309,7 @@ builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 // ChangelogConnectionKeepAlive (resolved eagerly below, after app.Build()) holds one connection open
 // for the app's lifetime, since a shared-cache in-memory database is destroyed the moment its last
 // open connection closes. useMemoryTempStore: true for the same #294 reason as the main database.
-var changelogConnectionFactory = new SqliteConnectionFactory(
+SqliteConnectionFactory changelogConnectionFactory = new(
     "file:quotinatorchangelog?mode=memory&cache=shared", useMemoryTempStore: true);
 builder.Services.AddKeyedSingleton<IDbConnectionFactory>(
     DatabaseConnectionKeys.Changelog, (_, _) => changelogConnectionFactory);
@@ -440,7 +443,7 @@ builder.Services.AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout
 // Converters are stateless, hardcoded per source — no DI registration needed for the individual
 // plugin instances themselves (CLAUDE.md's DI policy: bare `new` is permitted for a computed value
 // assembled before a factory closure, same shape already used for SourceCacheOptions itself).
-var quoteSourceConverters = new IQuoteSourceConverter[]
+Dictionary<string, IQuoteSourceConverter> quoteSourceConverters = new IQuoteSourceConverter[]
 {
     new RegexArrayConverter(),
     new BasicJsonArrayConverter(),
@@ -466,10 +469,10 @@ builder.Services.AddSingleton<IRuleFileOverridePathResolver>(_ =>
 
 builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
 {
-    var logger = sp.GetRequiredService<ILogger<Program>>();
+    ILogger<Program> logger = sp.GetRequiredService<ILogger<Program>>();
     LegacyConfigWarnings.WarnIfDataPathStillSet(builder.Configuration["Quotinator:DataPath"], logger);
 
-    var seedBatches = SeedBatchesBuilder.Build(
+    IReadOnlyList<SeedBatch> seedBatches = SeedBatchesBuilder.Build(
         bundledSourcesDir, importsDir, configPolicy, includeDefaultSources, createMissingManifest,
         sp.GetRequiredService<IManifestSeedPlanner>(), logger);
 
@@ -543,8 +546,8 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // Map HA log level names (trace/debug/info/notice/warning/error/fatal) to Serilog levels.
-var haLogLevel = builder.Configuration["Quotinator:LogLevel"] ?? "info";
-var serilogLevel = haLogLevel.ToLowerInvariant() switch
+string haLogLevel = builder.Configuration["Quotinator:LogLevel"] ?? "info";
+LogEventLevel serilogLevel = haLogLevel.ToLowerInvariant() switch
 {
     "trace"   => LogEventLevel.Verbose,
     "debug"   => LogEventLevel.Debug,
@@ -560,8 +563,8 @@ var serilogLevel = haLogLevel.ToLowerInvariant() switch
 // denies directory listing on /app, which Serilog.Settings.Configuration scans for sink DLLs.
 builder.Host.UseSerilog((ctx, _, config) =>
 {
-    var isDev = ctx.HostingEnvironment.IsDevelopment();
-    var template = isDev
+    bool isDev = ctx.HostingEnvironment.IsDevelopment();
+    string template = isDev
         ? "{Timestamp:HH:mm:ss} {Level:u3}: {SourceContext}[{EventId:0}] {Message}{NewLine}{Exception}"
         : "{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}: {SourceContext}[{EventId:0}] {Message}{NewLine}{Exception}";
 
@@ -577,16 +580,16 @@ builder.Host.UseSerilog((ctx, _, config) =>
         config.WriteTo.Debug();
 });
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
-var dbInitializer  = app.Services.GetRequiredService<IDatabaseInitializer>();
-var versionService = app.Services.GetRequiredService<IVersionService>();
-var logRequests    = app.Configuration.GetValue<bool>("Quotinator:LogRequests");
-var adminKeyConfigured = !string.IsNullOrEmpty(app.Configuration["Quotinator:AdminApiKey"]);
+IDatabaseInitializer dbInitializer  = app.Services.GetRequiredService<IDatabaseInitializer>();
+IVersionService versionService = app.Services.GetRequiredService<IVersionService>();
+bool logRequests    = app.Configuration.GetValue<bool>("Quotinator:LogRequests");
+bool adminKeyConfigured = !string.IsNullOrEmpty(app.Configuration["Quotinator:AdminApiKey"]);
 
 // StartupSummaryLogger is a one-shot startup utility, not a general-purpose service;
 // instantiated directly rather than registered with DI.
-var startupLog = new Quotinator.Api.Startup.StartupSummaryLogger(
+Quotinator.Api.Startup.StartupSummaryLogger startupLog = new(
     app.Services.GetRequiredService<ILogger<Quotinator.Api.Startup.StartupSummaryLogger>>(),
     dbInitializer, versionService,
     dataDir, dbPath, backupsDir, keysDir,
@@ -599,10 +602,10 @@ startupLog.LogStarting();
 // for every non-exempt request until it completes, instead of the app being completely unreachable
 // during this window as it was before. dbHealth is still resolved here since it's referenced by name
 // throughout the rest of this section's setup.
-var dbHealth = app.Services.GetRequiredService<Quotinator.Api.Startup.DatabaseHealthState>();
+DatabaseHealthState dbHealth = app.Services.GetRequiredService<Quotinator.Api.Startup.DatabaseHealthState>();
 
-var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-var logger   = app.Services.GetRequiredService<ILogger<Program>>();
+IHostApplicationLifetime lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+ILogger<Program> logger   = app.Services.GetRequiredService<ILogger<Program>>();
 lifetime.ApplicationStopping.Register(() =>
     logger.LogServerStopping(versionService.Version));
 
@@ -614,7 +617,7 @@ app.UseForwardedHeaders();
 // (blazor.web.js, CSS, etc.) resolve through the ingress proxy rather than HA's own server.
 app.Use(async (context, next) =>
 {
-    if (context.Request.Headers.TryGetValue("X-Ingress-Path", out var ingressPath)
+    if (context.Request.Headers.TryGetValue("X-Ingress-Path", out Microsoft.Extensions.Primitives.StringValues ingressPath)
         && !string.IsNullOrEmpty(ingressPath))
     {
         context.Request.PathBase = new PathString(ingressPath.ToString());
@@ -656,7 +659,7 @@ app.UseRateLimiter();
 // Only the value is read — the header name is not logged or stored anywhere.
 app.Use(async (context, next) =>
 {
-    var callerContext = context.RequestServices.GetRequiredService<ICallerContext>();
+    ICallerContext callerContext = context.RequestServices.GetRequiredService<ICallerContext>();
     callerContext.Agent = context.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null;
     await next();
 });
@@ -799,9 +802,9 @@ _ = Task.Run(async () =>
 // and fast (a single row against the main database, matching #279's/#289's own producers' own
 // synchronous read+write — unlike #309's changelog database, there is no separate, slower connection
 // factory involved), and used further down once the current version is known to be running healthily.
-var appVersionTracker = app.Services.GetRequiredService<IAppVersionTracker>();
-var lastActive        = await appVersionTracker.GetLastActiveAsync();
-var lastActiveVersion = lastActive?.Version;
+IAppVersionTracker appVersionTracker = app.Services.GetRequiredService<IAppVersionTracker>();
+AppVersionRecord? lastActive        = await appVersionTracker.GetLastActiveAsync();
+string? lastActiveVersion = lastActive?.Version;
 
 // A database initialisation failure must never crash the whole process outright — that would
 // also make POST /api/v1/admin/database/reset unreachable, the one endpoint actually capable of
@@ -817,7 +820,7 @@ try
 }
 catch (DatabaseBackupWriteException ex)
 {
-    var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    ILogger<Program> startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
     const string failureReason =
         "Database initialisation failed while writing a pre-change safety backup. This usually " +
         "means the data directory ran out of disk space or lost write access mid-write. Resolve " +
@@ -827,7 +830,7 @@ catch (DatabaseBackupWriteException ex)
 }
 catch (Exception ex)
 {
-    var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    ILogger<Program> startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
     const string failureReason =
         "Database initialisation failed. This often means the database's recorded schema " +
         "version doesn't match its actual on-disk schema (e.g. after an interrupted upgrade). " +
@@ -880,7 +883,7 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
 {
     try
     {
-        var overshootDedupeKey = $"SchemaVersionOvershoot:data-v{dbInitializer.DataSchemaVersion}-app-v{dbInitializer.SchemaVersion}";
+        string overshootDedupeKey = $"SchemaVersionOvershoot:data-v{dbInitializer.DataSchemaVersion}-app-v{dbInitializer.SchemaVersion}";
         await Quotinator.Api.Startup.NotificationSeeding.SeedOnceAsync(
             app.Services.GetRequiredService<INotificationReader>(),
             app.Services.GetRequiredService<INotificationWriter>(),
@@ -941,7 +944,7 @@ if (dbHealth.IsHealthy)
     {
         try
         {
-            var whatsNewDocument = await app.Services.GetRequiredService<IChangelogReader>().GetDocumentAsync(null);
+            ChangelogDocument? whatsNewDocument = await app.Services.GetRequiredService<IChangelogReader>().GetDocumentAsync(null);
             await Quotinator.Api.Startup.WhatsNewNotification.SeedAsync(
                 app.Services.GetRequiredService<INotificationReader>(),
                 app.Services.GetRequiredService<INotificationWriter>(),
@@ -966,10 +969,10 @@ app.Services.GetRequiredService<Quotinator.Api.Startup.StartupPhaseState>().Mark
 // "Ready" now means truly ready (initialisation complete), not merely "Kestrel bound" — logged
 // directly here instead of via the ApplicationStarted event hook, which fires as soon as StartAsync
 // returns, before initialisation even begins under this model.
-var readyAddresses = (app.Services
+List<string> readyAddresses = [.. app.Services
     .GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>()
     .Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()
-    ?.Addresses ?? []).ToList();
+    ?.Addresses ?? []];
 startupLog.LogReady(readyAddresses);
 
 await app.WaitForShutdownAsync();

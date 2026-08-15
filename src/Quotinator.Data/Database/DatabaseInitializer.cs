@@ -376,11 +376,11 @@ public class DatabaseInitializer(
     {
         MigrateFilenameIfNeeded();
 
-        using var connection = (SqliteConnection)_factory.CreateConnection();
+        using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
 
         EnableWal(connection);
-        var tookBaselinePath = await ApplyMigrationsAsync(connection);
+        bool tookBaselinePath = await ApplyMigrationsAsync(connection);
         await RunInitialisedHookAsync(connection, tookBaselinePath);
     }
 
@@ -393,11 +393,11 @@ public class DatabaseInitializer(
     {
         MigrateFilenameIfNeeded();
 
-        using var connection = (SqliteConnection)_factory.CreateConnection();
+        using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
 
         EnableWal(connection);
-        var tookBaselinePath = await ApplyMigrationsAsync(connection, forceIncremental);
+        bool tookBaselinePath = await ApplyMigrationsAsync(connection, forceIncremental);
         await RunInitialisedHookAsync(connection, tookBaselinePath);
     }
 
@@ -453,7 +453,7 @@ public class DatabaseInitializer(
             return;
         }
 
-        var backupPath = CreateBackup(connection, Math.Max(DataSchemaVersion, SchemaVersion));
+        string? backupPath = CreateBackup(connection, Math.Max(DataSchemaVersion, SchemaVersion));
         try
         {
             await OnInitialisedAsync(connection);
@@ -473,7 +473,7 @@ public class DatabaseInitializer(
     /// <inheritdoc/>
     public async Task ReseedAsync(bool forceSourceRefresh = false)
     {
-        using var connection = (SqliteConnection)_factory.CreateConnection();
+        using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
         await OnReseedAsync(connection, forceSourceRefresh);
     }
@@ -487,7 +487,7 @@ public class DatabaseInitializer(
     /// <inheritdoc/>
     public async Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false)
     {
-        using var connection = (SqliteConnection)_factory.CreateConnection();
+        using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
         await OnResetAsync(connection, preserveSchemaVersion, forceSourceRefresh);
     }
@@ -543,30 +543,30 @@ public class DatabaseInitializer(
     /// </summary>
     protected async Task DropAndRebuildAsync(SqliteConnection connection, bool preserveSchemaVersion = false)
     {
-        var savedDataVersions = preserveSchemaVersion
-            ? (await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllDataVersions)).ToList()
+        List<SystemSchemaVersionRow> savedDataVersions = preserveSchemaVersion
+            ? [.. await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllDataVersions)]
             : [];
-        var savedConsumerVersions = preserveSchemaVersion
-            ? (await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllConsumerVersions)).ToList()
+        List<SystemSchemaVersionRow> savedConsumerVersions = preserveSchemaVersion
+            ? [.. await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllConsumerVersions)]
             : [];
 
-        var backupPath = CreateBackup(connection, SchemaVersion);
+        string? backupPath = CreateBackup(connection, SchemaVersion);
 
         try
         {
             await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
             await DropAllTablesAsync(connection);
             await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
-            var tookBaselinePath = await ApplyMigrationsAsync(connection, skipOwnBackup: true);
+            bool tookBaselinePath = await ApplyMigrationsAsync(connection, skipOwnBackup: true);
 
             if (preserveSchemaVersion)
             {
                 await connection.ExecuteAsync(Sql.Schema.DeleteAllDataVersions);
-                foreach (var row in savedDataVersions)
+                foreach (SystemSchemaVersionRow row in savedDataVersions)
                     await connection.ExecuteAsync(Sql.Schema.InsertDataVersion, new { v = row.Version, at = row.AppliedAt });
 
                 await connection.ExecuteAsync(Sql.Schema.DeleteAllConsumerVersions);
-                foreach (var row in savedConsumerVersions)
+                foreach (SystemSchemaVersionRow row in savedConsumerVersions)
                     await connection.ExecuteAsync(Sql.Schema.InsertConsumerVersion, new { v = row.Version, at = row.AppliedAt });
             }
 
@@ -597,16 +597,16 @@ public class DatabaseInitializer(
 
     private void MigrateFilenameIfNeeded()
     {
-        var dataDir    = Path.GetDirectoryName(_options.DbPath)!;
-        var legacyPath = Path.Combine(dataDir, DataPaths.LegacyDatabaseFile);
+        string dataDir    = Path.GetDirectoryName(_options.DbPath)!;
+        string legacyPath = Path.Combine(dataDir, DataPaths.LegacyDatabaseFile);
         if (!File.Exists(legacyPath) || File.Exists(_options.DbPath)) return;
 
         if (Logger.IsEnabled(LogLevel.Information))
             Logger.LogLegacyFilenameMigrationStarting(Path.GetFileName(_options.DbPath));
-        foreach (var suffix in new[] { "", "-wal", "-shm" })
+        foreach (string? suffix in new[] { "", "-wal", "-shm" })
         {
-            var src = legacyPath + suffix;
-            var dst = _options.DbPath + suffix;
+            string src = legacyPath + suffix;
+            string dst = _options.DbPath + suffix;
             if (!File.Exists(src)) continue;
             if (Logger.IsEnabled(LogLevel.Information))
                 Logger.LogMovingLegacyFile(Path.GetFileName(src), Path.GetFileName(dst));
@@ -624,9 +624,9 @@ public class DatabaseInitializer(
     // distinct condition — DatabaseBackupWriteException, not a skip.
     private string? CreateBackup(SqliteConnection connection, int fromVersion)
     {
-        var estimatedBytes = File.Exists(_options.DbPath) ? new FileInfo(_options.DbPath).Length : 0L;
-        var budgetBytes    = _options.MaxBackupStorageGb * 1_073_741_824L;
-        var existingBytes  = Directory.Exists(_options.BackupsPath)
+        long estimatedBytes = File.Exists(_options.DbPath) ? new FileInfo(_options.DbPath).Length : 0L;
+        long budgetBytes    = _options.MaxBackupStorageGb * 1_073_741_824L;
+        long existingBytes  = Directory.Exists(_options.BackupsPath)
             ? Directory.EnumerateFiles(_options.BackupsPath).Sum(f => new FileInfo(f).Length)
             : 0L;
 
@@ -636,7 +636,7 @@ public class DatabaseInitializer(
             return null;
         }
 
-        var availableBytes = _diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath);
+        long availableBytes = _diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath);
         if (availableBytes < estimatedBytes)
         {
             Logger.LogBackupSkippedInsufficientDiskSpace(availableBytes, estimatedBytes);
@@ -652,15 +652,15 @@ public class DatabaseInitializer(
         // the second backup was never actually taking a distinct new file. Not specific to this one
         // version-number coincidence — any two same-version backups within the same wall-clock second
         // could always have collided this way; milliseconds make that effectively impossible.
-        var timestamp  = DateTime.UtcNow.ToString("yyyyMMddTHHmmssfff");
-        var backupName = $"{Path.GetFileNameWithoutExtension(_options.DbPath)}_v{fromVersion}_{timestamp}Z.db";
-        var backupPath = Path.Combine(_options.BackupsPath, backupName);
+        string timestamp  = DateTime.UtcNow.ToString("yyyyMMddTHHmmssfff");
+        string backupName = $"{Path.GetFileNameWithoutExtension(_options.DbPath)}_v{fromVersion}_{timestamp}Z.db";
+        string backupPath = Path.Combine(_options.BackupsPath, backupName);
 
         try
         {
             Directory.CreateDirectory(_options.BackupsPath);
             Logger.LogBackupStarting(fromVersion, backupPath);
-            using var dest = new SqliteConnection($"Data Source={backupPath}");
+            using SqliteConnection dest = new SqliteConnection($"Data Source={backupPath}");
             dest.Open();
             connection.BackupDatabase(dest);
             Logger.LogBackupComplete();
@@ -678,7 +678,7 @@ public class DatabaseInitializer(
     // rather than a partially-migrated or partially-rebuilt one.
     private static void RestoreBackup(SqliteConnection connection, string backupPath)
     {
-        using var source = new SqliteConnection($"Data Source={backupPath}");
+        using SqliteConnection source = new SqliteConnection($"Data Source={backupPath}");
         source.Open();
         source.BackupDatabase(connection);
     }
@@ -704,7 +704,7 @@ public class DatabaseInitializer(
     // straight into System_SchemaVersion).
     private static async Task SplitLegacySchemaVersionIfPresentAsync(SqliteConnection connection)
     {
-        var legacyExists = await connection.ExecuteScalarAsync<int>(Sql.Schema.LegacySchemaVersionExists);
+        int legacyExists = await connection.ExecuteScalarAsync<int>(Sql.Schema.LegacySchemaVersionExists);
         if (legacyExists == 0) return;
 
         await connection.ExecuteAsync(Sql.Schema.SplitLegacySchemaVersionIntoConsumer);
@@ -719,7 +719,7 @@ public class DatabaseInitializer(
         // fresh database register as "not empty" on the very next line, permanently disabling the
         // baseline path. A legacy (pre-split) database already has many other tables, so it never
         // reads as empty here regardless of whether the legacy SchemaVersion table has been split yet.
-        var isEmptyDatabase = await connection.ExecuteScalarAsync<int>(Sql.Schema.AnyTableExists) == 0;
+        bool isEmptyDatabase = await connection.ExecuteScalarAsync<int>(Sql.Schema.AnyTableExists) == 0;
 
         await connection.ExecuteAsync(Sql.Schema.CreateDataVersionTable);
         await connection.ExecuteAsync(Sql.Schema.CreateConsumerVersionTable);
@@ -731,8 +731,8 @@ public class DatabaseInitializer(
             return true;
         }
 
-        var dataCurrent     = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetDataCurrentVersion);
-        var consumerCurrent = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetConsumerCurrentVersion);
+        int dataCurrent     = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetDataCurrentVersion);
+        int consumerCurrent = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetConsumerCurrentVersion);
 
         // #289: a recorded version higher than this build's own known migration count is only
         // reachable after a migration squash, on a database that already applied the pre-squash
@@ -742,8 +742,8 @@ public class DatabaseInitializer(
         SchemaVersionOvershootDetected =
             dataCurrent > DataOwnedMigrations.Count || consumerCurrent > _consumerMigrations.Count;
 
-        var dataPending     = dataCurrent     < DataOwnedMigrations.Count;
-        var consumerPending = consumerCurrent < _consumerMigrations.Count;
+        bool dataPending     = dataCurrent     < DataOwnedMigrations.Count;
+        bool consumerPending = consumerCurrent < _consumerMigrations.Count;
 
         if (!dataPending && !consumerPending)
         {
@@ -769,7 +769,7 @@ public class DatabaseInitializer(
         await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
         try
         {
-            var dataApplied = await ApplyMigrationPhaseAsync(
+            string? dataApplied = await ApplyMigrationPhaseAsync(
                 connection, "Data", DataOwnedMigrations, dataCurrent, Sql.Schema.InsertDataVersion);
             // #289: Math.Max, not a bare assignment to DataOwnedMigrations.Count — when this side
             // overshoots while the other side has genuine pending work (so this whole method doesn't
@@ -778,7 +778,7 @@ public class DatabaseInitializer(
             // dataCurrent, not the smaller known count.
             DataSchemaVersion = Math.Max(dataCurrent, DataOwnedMigrations.Count);
 
-            var consumerApplied = await ApplyMigrationPhaseAsync(
+            string? consumerApplied = await ApplyMigrationPhaseAsync(
                 connection, "App", _consumerMigrations, consumerCurrent, Sql.Schema.InsertConsumerVersion);
             SchemaVersion = Math.Max(consumerCurrent, _consumerMigrations.Count);
 
@@ -810,7 +810,7 @@ public class DatabaseInitializer(
         await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
         try
         {
-            using var tx = connection.BeginTransaction();
+            using SqliteTransaction tx = connection.BeginTransaction();
             await connection.ExecuteAsync(DataBaselineSql, transaction: tx);
             await connection.ExecuteAsync(
                 Sql.Schema.InsertDataVersion,
@@ -855,9 +855,9 @@ public class DatabaseInitializer(
 
         Logger.LogApplyingMigrationPhase(migrations.Count - current, phaseName, current, migrations.Count);
 
-        for (var i = current; i < migrations.Count; i++)
+        for (int i = current; i < migrations.Count; i++)
         {
-            using var tx = connection.BeginTransaction();
+            using SqliteTransaction tx = connection.BeginTransaction();
             await connection.ExecuteAsync(migrations[i].Sql, transaction: tx);
             await connection.ExecuteAsync(
                 insertVersionSql,
@@ -882,8 +882,8 @@ public class DatabaseInitializer(
     // Table names come from sqlite_master (system metadata) — string interpolation is safe.
     private static async Task DropAllTablesAsync(SqliteConnection connection)
     {
-        var tables = (await connection.QueryAsync<string>(Sql.Schema.GetAllTables)).ToList();
-        foreach (var table in tables)
+        List<string> tables = [.. await connection.QueryAsync<string>(Sql.Schema.GetAllTables)];
+        foreach (string table in tables)
             await connection.ExecuteAsync($"DROP TABLE IF EXISTS [{table}];");
     }
 

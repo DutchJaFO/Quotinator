@@ -1,3 +1,5 @@
+using Quotinator.Data.Entities;
+
 namespace Quotinator.Data.Queries;
 
 /// <summary>Generic infrastructure SQL — schema/version bookkeeping, join helpers, and the System_-prefixed tables Quotinator.Data itself owns.</summary>
@@ -224,7 +226,7 @@ internal static class Sql
         // "GUID/enum/id/Name/Title comparisons are case-insensitive by default").
         private static string BuildWhere(bool filterType, bool filterStatus)
         {
-            var parts = new List<string>(2);
+            List<string> parts = new List<string>(2);
             if (filterType)   parts.Add(TextClauses.Equals("Type", "type"));
             if (filterStatus) parts.Add(TextClauses.Equals("Status", "status"));
             return parts.Count > 0 ? " AND " + string.Join(" AND ", parts) : string.Empty;
@@ -268,7 +270,7 @@ internal static class Sql
         // TableName comparison is case-insensitive too (#216) — same reasoning as DeleteByTable above.
         private static string BuildWhere(bool filterTable, bool filterRecordId)
         {
-            var parts = new List<string>(2);
+            List<string> parts = new List<string>(2);
             if (filterTable)    parts.Add(TextClauses.Equals("TableName", "table"));
             if (filterRecordId) parts.Add(IdClauses.Equals("RecordId", "recordId"));
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
@@ -292,7 +294,7 @@ internal static class Sql
 
         private static string BuildRangeWhere(bool filterStart, bool filterEnd)
         {
-            var parts = new List<string>(2);
+            List<string> parts = new List<string>(2);
             if (filterStart) parts.Add("PerformedAt >= @startDate");
             if (filterEnd)   parts.Add("PerformedAt <= @endDate");
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
@@ -396,7 +398,7 @@ internal static class Sql
         /// </summary>
         private static string BuildWhere(bool filterBatchId, bool filterStatus, bool filterEntityType)
         {
-            var parts = new List<string>(3);
+            List<string> parts = new List<string>(3);
             if (filterBatchId)    parts.Add(IdClauses.Equals("BatchId", "batchId"));
             if (filterStatus)     parts.Add(TextClauses.Equals("Status", "status"));
             if (filterEntityType) parts.Add(TextClauses.Equals("EntityType", "entityType"));
@@ -450,7 +452,7 @@ internal static class Sql
 
         private static string BuildRangeWhere(bool filterStart, bool filterEnd)
         {
-            var parts = new List<string>(2);
+            List<string> parts = new List<string>(2);
             if (filterStart) parts.Add("OccurredAt >= @startDate");
             if (filterEnd)   parts.Add("OccurredAt <= @endDate");
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
@@ -566,7 +568,7 @@ internal static class Sql
         // FileName/Origin comparisons are case-insensitive (project-wide convention).
         private static string BuildWhere(bool filterFileName, bool filterOrigin)
         {
-            var parts = new List<string>(2);
+            List<string> parts = new List<string>(2);
             if (filterFileName) parts.Add(TextClauses.Equals("fr.FileName", "fileName"));
             if (filterOrigin)   parts.Add(TextClauses.Equals("fr.Origin", "origin"));
             return parts.Count > 0 ? " AND " + string.Join(" AND ", parts) : string.Empty;
@@ -626,6 +628,18 @@ internal static class Sql
     /// </summary>
     internal static class AppVersion
     {
+        // Column names come from AppVersionEntity via nameof rather than as literals: the property
+        // name IS the column name, mechanically — ReflectedColumnMetadata builds ValidColumnNames from
+        // type.GetProperties().Select(p => p.Name) — so a rename refactor propagates here instead of
+        // silently leaving these queries pointing at a column that no longer exists. The table name
+        // stays a literal: it comes from [Table("System_AppVersion")], which nameof cannot reach.
+        private const string Table = "System_AppVersion";
+
+        // The Dapper parameter names below stay bare literals deliberately. They must match the
+        // anonymous-object member names in AppVersionTracker (new { application, version }), and an
+        // anonymous type's members are identifiers, not values a constant can supply — so no constant
+        // can actually tie the two ends together, and a single-use one would only look like it did.
+
         /// <summary>
         /// The most recently recorded row — "the version that ran last" now that #312 made this table
         /// an append-only history rather than one upserted row.
@@ -638,15 +652,17 @@ internal static class Sql
         /// </para>
         /// </summary>
         internal static readonly string SelectMostRecent =
-            $"SELECT {IdClauses.SelectColumn("Id")}, Application, Version FROM System_AppVersion " +
-            "WHERE IsDeleted = 0 ORDER BY SequenceNumber DESC LIMIT 1;";
+            $"SELECT {IdClauses.SelectColumn(nameof(AppVersionEntity.Id))}, " +
+            $"{nameof(AppVersionEntity.Application)}, {nameof(AppVersionEntity.Version)} FROM {Table} " +
+            $"WHERE {nameof(AppVersionEntity.IsDeleted)} = 0 " +
+            $"ORDER BY {nameof(AppVersionEntity.SequenceNumber)} DESC LIMIT 1;";
 
         /// <summary>
         /// The sequence number a new row must take. Deliberately spans soft-deleted rows too — the
         /// uniqueness index covers the whole table, so skipping them would collide.
         /// </summary>
-        internal const string SelectNextSequenceNumber =
-            "SELECT COALESCE(MAX(SequenceNumber), 0) + 1 FROM System_AppVersion;";
+        internal static readonly string SelectNextSequenceNumber =
+            $"SELECT COALESCE(MAX({nameof(AppVersionEntity.SequenceNumber)}), 0) + 1 FROM {Table};";
 
         /// <summary>
         /// Looks up an existing row for one application+version pair, so recording the same pair twice
@@ -657,9 +673,11 @@ internal static class Sql
         /// retroactively claiming the legacy one.
         /// </summary>
         internal static readonly string SelectByApplicationAndVersion =
-            $"SELECT {IdClauses.SelectColumn("Id")}, Application, Version FROM System_AppVersion " +
-            $"WHERE IsDeleted = 0 AND {TextClauses.Equals("Version", "version")} " +
-            $"AND {TextClauses.Equals("Application", "application")} " +
+            $"SELECT {IdClauses.SelectColumn(nameof(AppVersionEntity.Id))}, " +
+            $"{nameof(AppVersionEntity.Application)}, {nameof(AppVersionEntity.Version)} FROM {Table} " +
+            $"WHERE {nameof(AppVersionEntity.IsDeleted)} = 0 " +
+            $"AND {TextClauses.Equals(nameof(AppVersionEntity.Version), "version")} " +
+            $"AND {TextClauses.Equals(nameof(AppVersionEntity.Application), "application")} " +
             "LIMIT 1;";
     }
 }
