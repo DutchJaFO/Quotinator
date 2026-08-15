@@ -3,6 +3,8 @@ using Quotinator.Api.Components.Controls;
 using Quotinator.Api.Services;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
@@ -56,7 +58,7 @@ public partial class Notifications
 
     private bool MatchesFilter(NotificationEntity notification)
     {
-        var status = NotificationTable.GetDisplayStatus(notification, Now);
+        NotificationTable.NotificationDisplayStatus status = NotificationTable.GetDisplayStatus(notification, Now);
         return Filter switch
         {
             NotificationFilterMode.Active      => status == NotificationTable.NotificationDisplayStatus.Active,
@@ -67,7 +69,7 @@ public partial class Notifications
 
     private async Task LoadAsync()
     {
-        var page = await NotificationReader.GetPagedAsync(1, 0);
+        PagedItems<NotificationEntity> page = await NotificationReader.GetPagedAsync(1, 0);
         AllNotifications = page.Items;
         Now = DateTime.UtcNow;
     }
@@ -80,9 +82,17 @@ public partial class Notifications
 
     private async Task ExecuteActionAsync(Guid id)
     {
-        var notification = AllNotifications.FirstOrDefault(n => n.Id == id);
+        NotificationEntity? notification = AllNotifications.FirstOrDefault(n => n.Id == id);
         if (notification?.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger)
-            await ActionExecutor.ExecuteAsync(trigger);
+        {
+            // The row's own MetadataKind selects the type its payload reads back as, so the action
+            // receives the producer's own shape without this page knowing which producer wrote it.
+            NotificationMetadataDto? metadata =
+                NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
+
+            await ActionExecutor.ExecuteAsync(trigger, metadata);
+        }
+
         await LoadAsync();
     }
 

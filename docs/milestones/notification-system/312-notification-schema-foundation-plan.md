@@ -1,6 +1,6 @@
 # #312 — Notification schema: title/body, typed metadata, optional expiry, and app-version provenance
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 9)
 **GitHub issue:** #312 (open)
 **Depends on:** #278 (done, released v1.8.0 — the mechanism this issue reshapes)
 
@@ -313,10 +313,38 @@ catch-up range is unaffected by recording the current version sooner.
 substring relationship to get wrong.
 
 ### 7. `INotificationActionExecutor` gains metadata access
-**Status:** Not started
+**Status:** ✅ Done
+
+`ExecuteAsync(NotificationDismissTrigger)` becomes
+`ExecuteAsync(NotificationDismissTrigger, NotificationMetadataDto? metadata = null)`. `CanExecute` is
+unchanged — whether an action exists at all is a property of the trigger, not of any one notification's
+payload.
+
+**The payload, not the `NotificationEntity`.** Passing the entity would have been simpler at the call
+site, which already holds it, but this issue's own "not built here" section commits to transient,
+non-persisted notifications remaining possible in a later milestone — a contract taking the entity
+would hard-assume every notification is a database row, which is exactly what that section says not to
+do.
+
+`Notifications.razor.cs` resolves the payload via `NotificationMetadataKinds.TryDeserialize`, so the
+page hands the action the producer's own type without knowing which producer wrote it.
+
+**`DatabaseReset` ignores the payload today, and that is the honest state.** A schema-version overshoot
+is resolved by truing up the whole database, so there is nothing for a payload to narrow. The parameter
+exists so #304's `Reseed` — which genuinely needs "reseed *this* file" — is a new `case` in the existing
+switch rather than an interface change rippling through every caller. Per the project's "prove it or
+remove it" rule the seam is not taken on faith: `ExecuteAsync_WithMetadata_DeliversItAndStillPerformsTheAction`
+asserts the payload arrives by reference, and `..._WithoutMetadata_StillPerformsTheAction` covers the
+null case every pre-#312 row presents.
 
 ### 8. Tests
-**Status:** Not started
+**Status:** ✅ Done — written alongside each step rather than batched here.
+
+Steps 2/4, 3, 5/6 and 7 each landed with their own tests, which is why this step has no separate body:
+`AppVersionTrackerTests` (append-only history, ordering), `NotificationSeedingTests` (structural
+identity, real SQLite), `NotificationMetadataKindsTests` (the kind→type registry guard),
+`NotificationWriterTests`/`NotificationReaderTests` (schema round-trip), `WhatsNewNotificationTests` and
+`NotificationActionExecutorTests` (producers and the action seam).
 
 ### 9. Full verification (T1, T2)
 **Status:** Not started
@@ -340,7 +368,7 @@ substring relationship to get wrong.
 | 11 | ✅ | An identifier appearing in body text but not in metadata does **not** suppress a write | Unit test | `NotificationSeedingTests.SeedOnceAsync_IdentityAppearsInBodyButNotMetadata_StillWrites`; `..._VersionIsSubstringOfAnother_BothWrite` covers the specific `1.9.1`/`1.9.10` case |
 | 12 | ✅ | #279's and #289's producers still write exactly once across restarts after migration | Unit test | `ProgramNotificationSeedingRegressionTests` (unchanged, still green through the full startup path); `WhatsNewNotificationTests` updated for #81 |
 | 12b | ✅ | Every `NotificationMetadataKind` has a registered payload type, and each type reports the kind it is registered under | Unit test | `NotificationMetadataKindsTests` — without this a new kind is a silent re-announce-forever bug |
-| 13 | ❌ | `INotificationActionExecutor.ExecuteAsync` receives the originating notification's metadata | Unit test | `NotificationActionExecutorTests` |
+| 13 | ✅ | `INotificationActionExecutor.ExecuteAsync` receives the originating notification's metadata | Unit test | `NotificationActionExecutorTests.ExecuteAsync_WithMetadata_DeliversItAndStillPerformsTheAction`, `..._WithoutMetadata_StillPerformsTheAction` |
 | 14 | ❌ | `GET /api/v1/notifications` returns `title`/`body`/`metadata`/`metadataKind`, and no longer returns `message` | Unit test | Endpoint test asserting the live response shape |
 | 15 | ❌ | Migration applies cleanly to a real copy of the last released (v1.8.3) database | Live (T2) | ADR 009 verification against a v1.8.3 database |
 | 16 | ❌ | T1 — app starts in Visual Studio with no error; `/notifications` renders migrated rows correctly | Live (T1) | Developer confirms in Visual Studio |

@@ -1,4 +1,5 @@
 using Quotinator.Data.Enums;
+using Quotinator.Data.Notifications;
 
 namespace Quotinator.Api.Services;
 
@@ -17,6 +18,21 @@ internal interface INotificationActionExecutor
     /// </summary>
     bool CanExecute(NotificationDismissTrigger trigger);
 
-    /// <summary>Executes the action associated with <paramref name="trigger"/>.</summary>
-    Task ExecuteAsync(NotificationDismissTrigger trigger);
+    /// <summary>
+    /// Executes the action associated with <paramref name="trigger"/>, given the originating
+    /// notification's own payload.
+    /// </summary>
+    /// <param name="trigger">Which action to run.</param>
+    /// <param name="metadata">
+    /// The originating notification's metadata, or <see langword="null"/> when it has none (every row
+    /// written before #312, and any notification whose action needs no parameters). This is what lets
+    /// an action operate on something specific rather than only ever on everything — #304's
+    /// <c>Reseed</c> needs to mean "reseed *this* file", which a bare trigger cannot express.
+    /// <para>
+    /// Deliberately the payload rather than the <c>NotificationEntity</c>: a later milestone wants
+    /// transient, non-persisted notifications, and this contract must not assume every notification is
+    /// a database row.
+    /// </para>
+    /// </param>
+    Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null);
 }

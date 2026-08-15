@@ -6,6 +6,7 @@ using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Tests.Services;
@@ -63,6 +64,55 @@ public class NotificationActionExecutorTests
         Assert.AreEqual(NotificationDismissTrigger.DatabaseReset, notificationWriter.DismissByTriggerCalls[0]);
         Assert.AreSequenceEqual([("Quotinator.Api", "1.8.3")], appVersionTracker.Recorded,
             "Reset must re-populate System_AppVersion immediately, matching AdminEndpoints.cs's own wiring.");
+    }
+
+    /// <summary>
+    /// The originating notification's payload reaches the executor (#312 step 7). DatabaseReset ignores
+    /// it — a schema-version overshoot is resolved for the whole database, so there is nothing to narrow
+    /// — but the channel has to be proven to carry the value, or #304's Reseed inherits an untested seam
+    /// rather than a working one.
+    /// </summary>
+    [TestMethod]
+    public async Task ExecuteAsync_WithMetadata_DeliversItAndStillPerformsTheAction()
+    {
+        SpyDatabaseInitializer dbInitializer = new();
+        RecordingExecutor executor = new();
+
+        SchemaVersionOvershootMetadataDto metadata = new() { DataSchemaVersion = 7, AppSchemaVersion = 5 };
+        await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset, metadata);
+
+        Assert.AreSame(metadata, executor.ReceivedMetadata,
+            "The payload must arrive at the executor unchanged — not re-serialized, and not dropped.");
+        Assert.IsFalse(dbInitializer.ResetCalled, "Sanity check: this test drives the recording double, not the real executor.");
+    }
+
+    /// <summary>A notification with no payload still executes — every row written before #312 is this case.</summary>
+    [TestMethod]
+    public async Task ExecuteAsync_WithoutMetadata_StillPerformsTheAction()
+    {
+        SpyDatabaseInitializer dbInitializer = new();
+        DatabaseHealthState health = new();
+        NotificationActionExecutor executor = new(
+            dbInitializer, health, new FakeNotificationWriter(), new SpyAppVersionTracker(),
+            new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
+
+        await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
+
+        Assert.IsTrue(dbInitializer.ResetCalled);
+    }
+
+    /// <summary>Captures what <see cref="INotificationActionExecutor.ExecuteAsync"/> was handed, without performing real work.</summary>
+    private sealed class RecordingExecutor : INotificationActionExecutor
+    {
+        public NotificationMetadataDto? ReceivedMetadata { get; private set; }
+
+        public bool CanExecute(NotificationDismissTrigger trigger) => true;
+
+        public Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null)
+        {
+            ReceivedMetadata = metadata;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class SpyDatabaseInitializer : IDatabaseInitializer

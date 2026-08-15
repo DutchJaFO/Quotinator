@@ -3,6 +3,7 @@ using Quotinator.Api.Startup;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Services;
@@ -27,10 +28,15 @@ internal sealed class NotificationActionExecutor(
     };
 
     /// <inheritdoc/>
-    public async Task ExecuteAsync(NotificationDismissTrigger trigger)
+    public async Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null)
     {
         switch (trigger)
         {
+            // DatabaseReset takes no parameters from the notification: a schema-version overshoot is
+            // resolved by truing up the whole database's version bookkeeping, so there is nothing for
+            // the payload to narrow. metadata is accepted and ignored here rather than absent from the
+            // contract, so #304's Reseed — which genuinely needs "reseed *this* file" — is a new case
+            // in this switch instead of an interface change rippling through every caller.
             case NotificationDismissTrigger.DatabaseReset:
                 await databaseInitializer.ResetAsync();
                 databaseHealth.MarkHealthy();
