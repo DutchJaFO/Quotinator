@@ -30,18 +30,32 @@ public sealed class NotificationWriter(IDbConnectionFactory factory, int default
 
     /// <inheritdoc/>
     public async Task<NotificationEntity> WriteAsync(
-        NotificationType type, string message, DateTime? expiresAt = null, NotificationDismissTrigger? dismissTrigger = null)
+        NotificationType type,
+        string body,
+        string? title = null,
+        DateTime? expiresAt = null,
+        NotificationDismissTrigger? dismissTrigger = null,
+        string? metadata = null,
+        NotificationMetadataKind? metadataKind = null,
+        Guid? appVersionId = null)
     {
-        var effectiveExpiry = expiresAt ?? DateTime.UtcNow.AddHours(_defaultExpiryHours);
-
         var entity = new NotificationEntity
         {
-            Type              = new SafeValue<NotificationType?>(type.ToString(), type),
-            Message           = message,
-            ExpiresAt         = SafeDateValue.From(effectiveExpiry),
+            Type  = new SafeValue<NotificationType?>(type.ToString(), type),
+            Title = title,
+            Body  = body,
+            // #312: no expiry unless the caller asks for one. Previously this applied
+            // _defaultExpiryHours whenever expiresAt was null, so every notification silently aged out
+            // — including ones describing conditions that were still unresolved.
+            ExpiresAt         = expiresAt is null ? SafeDateValue.Empty : SafeDateValue.From(expiresAt.Value),
             DismissTriggerKey = dismissTrigger is null
                 ? SafeValue<NotificationDismissTrigger?>.Empty
                 : new SafeValue<NotificationDismissTrigger?>(dismissTrigger.Value.ToString(), dismissTrigger),
+            Metadata     = metadata,
+            MetadataKind = metadataKind is null
+                ? SafeValue<NotificationMetadataKind?>.Empty
+                : new SafeValue<NotificationMetadataKind?>(metadataKind.Value.ToString(), metadataKind),
+            AppVersionId = appVersionId,
         };
 
         using var conn = Factory.CreateConnection();

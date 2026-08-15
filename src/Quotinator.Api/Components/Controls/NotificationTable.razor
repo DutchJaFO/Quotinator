@@ -24,7 +24,7 @@
             <tr>
                 <td>@(notification.DateCreated.Parsed?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                 <td><span class="badge @BadgeClass(notification.Type.Parsed)">@TypeLabel(notification.Type.Parsed)</span></td>
-                <td>@notification.Message</td>
+                <td>@notification.Body</td>
                 <td>@(notification.ExpiresAt.Parsed?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
                 <td>
                     @switch (GetDisplayStatus(notification, Now))

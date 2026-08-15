@@ -73,6 +73,10 @@ public class DatabaseInitializer(
         // before migrations run on the following boot so the what's-new notification producer can walk
         // every release missed since then, not just the one currently running.
         new SchemaMigration { Version = 4, Sql = AppVersionMigrations.CreateAppVersionTable },
+        // #312: System_Notification gains a Title/Body split, a typed Metadata payload, and an
+        // AppVersionId provenance reference — the foundation the milestone's remaining producers and
+        // its richer rendering both build on.
+        new SchemaMigration { Version = 5, Sql = NotificationSchemaMigrations.SplitMessageAndAddMetadata },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -249,11 +253,17 @@ public class DatabaseInitializer(
         );
         CREATE INDEX IF NOT EXISTS IX_Audit_Change_Entity ON Audit_Change (EntityType, EntityId, OccurredAt DESC);
 
+        -- Column order below is deliberately not the "tidy" order: Title/Metadata/MetadataKind/
+        -- AppVersionId trail after IsDeleted because #312's migration adds them via ALTER TABLE ADD
+        -- COLUMN, which always appends. The schema-drift parity test compares PRAGMA table_info
+        -- including each column's ordinal, so the baseline has to reproduce the incremental path's
+        -- real result, not a prettier one. The milestone's own end-of-cycle migration consolidation
+        -- is what restores a clean ordering.
         CREATE TABLE IF NOT EXISTS System_Notification (
             Id                TEXT    NOT NULL PRIMARY KEY,
             Type              TEXT    NOT NULL
                               CHECK (Type IN ('Information', 'Warning', 'Error', 'Success', 'ActionRequired')),
-            Message           TEXT    NOT NULL,
+            Body              TEXT    NOT NULL,
             ExpiresAt         TEXT,
             IsDismissed       INTEGER NOT NULL DEFAULT 0,
             DismissedAt       TEXT,
@@ -262,7 +272,12 @@ public class DatabaseInitializer(
             DateCreated       TEXT    NOT NULL,
             DateModified      TEXT,
             DateDeleted       TEXT,
-            IsDeleted         INTEGER NOT NULL DEFAULT 0
+            IsDeleted         INTEGER NOT NULL DEFAULT 0,
+            Title             TEXT,
+            Metadata          TEXT,
+            MetadataKind      TEXT
+                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew')),
+            AppVersionId      TEXT    REFERENCES System_AppVersion(Id)
         );
         CREATE INDEX IF NOT EXISTS IX_System_Notification_Active ON System_Notification (IsDismissed, IsDeleted, ExpiresAt);
         CREATE INDEX IF NOT EXISTS IX_System_Notification_DismissTriggerKey ON System_Notification (DismissTriggerKey);

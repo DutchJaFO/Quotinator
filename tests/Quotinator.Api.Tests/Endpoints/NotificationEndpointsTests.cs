@@ -58,7 +58,7 @@ public class NotificationEndpointsTests
     private static NotificationEntity BuildNotification(NotificationType type = NotificationType.Information, string message = "test message") => new()
     {
         Type    = new SafeValue<NotificationType?>(type.ToString(), type),
-        Message = message,
+        Body    = message,
     };
 
     // ── GET /notifications — list ────────────────────────────────────────────

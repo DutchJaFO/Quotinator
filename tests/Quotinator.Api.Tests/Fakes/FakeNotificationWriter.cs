@@ -19,14 +19,31 @@ internal sealed class FakeNotificationWriter : INotificationWriter
     /// <summary>Registers a fixed notification for a test to look up by id.</summary>
     public void Seed(NotificationEntity notification) => _notifications[notification.Id] = notification;
 
+    /// <summary>Records the metadata passed to each <see cref="WriteAsync"/> call, so a test can assert on structured payloads rather than message text.</summary>
+    public List<(string? Metadata, NotificationMetadataKind? Kind)> WrittenMetadata { get; } = [];
+
     public Task<NotificationEntity> WriteAsync(
-        NotificationType type, string message, DateTime? expiresAt = null, NotificationDismissTrigger? dismissTrigger = null)
+        NotificationType type,
+        string body,
+        string? title = null,
+        DateTime? expiresAt = null,
+        NotificationDismissTrigger? dismissTrigger = null,
+        string? metadata = null,
+        NotificationMetadataKind? metadataKind = null,
+        Guid? appVersionId = null)
     {
-        WrittenMessages.Add(message);
+        WrittenMessages.Add(body);
+        WrittenMetadata.Add((metadata, metadataKind));
         var entity = new NotificationEntity
         {
-            Type    = new SafeValue<NotificationType?>(type.ToString(), type),
-            Message = message,
+            Type     = new SafeValue<NotificationType?>(type.ToString(), type),
+            Title    = title,
+            Body     = body,
+            Metadata = metadata,
+            MetadataKind = metadataKind is null
+                ? SafeValue<NotificationMetadataKind?>.Empty
+                : new SafeValue<NotificationMetadataKind?>(metadataKind.Value.ToString(), metadataKind),
+            AppVersionId = appVersionId,
         };
         _notifications[entity.Id] = entity;
         return Task.FromResult(entity);

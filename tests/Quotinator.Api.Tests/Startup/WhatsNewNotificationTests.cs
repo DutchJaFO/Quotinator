@@ -14,7 +14,7 @@ public class WhatsNewNotificationTests
     private static NotificationEntity BuildExisting(string message) => new()
     {
         Type    = new SafeValue<NotificationType?>(nameof(NotificationType.Information), NotificationType.Information),
-        Message = message,
+        Body    = message,
     };
 
     private static ChangelogRelease BuildRelease(string version, params string[] notificationHighlights) => new()

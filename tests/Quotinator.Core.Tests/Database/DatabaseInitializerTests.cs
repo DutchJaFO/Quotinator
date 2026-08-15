@@ -1000,6 +1000,17 @@ public class DatabaseInitializerTests
         await conn.ExecuteAsync("DROP TABLE Import_Conflict;");
         await conn.ExecuteAsync("DROP TABLE Import_Action;");
         await conn.ExecuteAsync("DROP TABLE Import_SourceFileOverride;");
+
+        // #312/#81: same reasoning as the four drops above, for the two tables migrations 3-5 own.
+        // This fixture reaches its "legacy" state by running the *full* migration chain and then
+        // undoing it, so without these drops System_Notification still carries migration 5's already-
+        // renamed Body column — and migration 5's ALTER TABLE ... RENAME COLUMN Message TO Body is no
+        // more idempotent than migration 3's RENAME TO, failing outright on replay with
+        // 'no such column: "Message"'. Dropping both restores a genuinely pre-migration-3 state.
+        // System_AppVersion goes too: migration 4 creates it, and migration 5's AppVersionId FK
+        // references it.
+        await conn.ExecuteAsync("DROP TABLE IF EXISTS System_Notification;");
+        await conn.ExecuteAsync("DROP TABLE IF EXISTS System_AppVersion;");
     }
 
     /// <summary>
@@ -1070,7 +1081,7 @@ public class DatabaseInitializerTests
             Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
         }
 
-        Assert.AreEqual(4, db2.DataSchemaVersion, "Data migrations 2-4 (the #155 consolidation, plus #289's consolidation of the two AppliedPolicy CHECK constraint migrations, #253's domain-prefix rename, #251's FileResource tables, #252's FileResourceOrigin generalization, and #278's System_Notification table into one, plus #81's System_AppVersion table) should have replayed from the correctly-seeded starting point of 1");
+        Assert.AreEqual(5, db2.DataSchemaVersion, "Data migrations 2-5 (the #155 consolidation, plus #289's consolidation of the two AppliedPolicy CHECK constraint migrations, #253's domain-prefix rename, #251's FileResource tables, #252's FileResourceOrigin generalization, and #278's System_Notification table into one, plus #81's System_AppVersion table and #312's System_Notification reshape) should have replayed from the correctly-seeded starting point of 1");
     }
 
     /// <summary>Replaying from a legacy v1.7.2 AuditEntries table renames it all the way to Audit_Entry (via migration 2's Audit_Entry then migration 3's domain-prefix rename) and preserves existing rows and both indexes.</summary>
@@ -1511,7 +1522,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(4, db.DataSchemaVersion);
+        Assert.AreEqual(5, db.DataSchemaVersion);
         Assert.AreEqual(5, db.SchemaVersion);
     }
 

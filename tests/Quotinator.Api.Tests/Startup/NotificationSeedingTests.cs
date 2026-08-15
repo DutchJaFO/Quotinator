@@ -13,7 +13,7 @@ public class NotificationSeedingTests
     private static NotificationEntity BuildExisting(string message) => new()
     {
         Type    = new SafeValue<NotificationType?>(nameof(NotificationType.Warning), NotificationType.Warning),
-        Message = message,
+        Body    = message,
     };
 
     [TestMethod]

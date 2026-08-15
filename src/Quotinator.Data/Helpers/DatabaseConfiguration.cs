@@ -63,6 +63,9 @@ public abstract class DatabaseConfiguration
         // assigns and transitions between.
         RegisterEnumHandler<NotificationType>();
         RegisterEnumHandler<NotificationDismissTrigger>();
+        // NotificationMetadataKind (#312) backs System_Notification.MetadataKind — same category, a
+        // closed set naming which payload shape this project's own producers wrote.
+        RegisterEnumHandler<NotificationMetadataKind>();
         // ChangelogLineKind (#309) backs ChangelogLine.Kind in the separate changelog database — same
         // category, a closed set this project's own changelog importer assigns.
         RegisterEnumHandler<ChangelogLineKind>();

@@ -12,8 +12,20 @@ public sealed class NotificationResponse
     /// <summary>Severity/kind: <c>information</c>, <c>warning</c>, <c>error</c>, <c>success</c>, or <c>actionrequired</c>.</summary>
     public required string Type { get; init; }
 
-    /// <summary>The specific message text.</summary>
-    public required string Message { get; init; }
+    /// <summary>Optional short headline shown above <see cref="Body"/>, or <see langword="null"/> when the producer supplied only a body.</summary>
+    public string? Title { get; init; }
+
+    /// <summary>
+    /// The specific message text. Named <c>message</c> in responses until #312 split it from
+    /// <see cref="Title"/> — a breaking change for any client reading the old field name.
+    /// </summary>
+    public required string Body { get; init; }
+
+    /// <summary>Free-form producer-owned JSON payload, or <see langword="null"/> when this notification carries none. Shape is named by <see cref="MetadataKind"/>.</summary>
+    public string? Metadata { get; init; }
+
+    /// <summary>Names the shape of <see cref="Metadata"/> (e.g. <c>whatsnew</c>), or <see langword="null"/> when there is no metadata.</summary>
+    public string? MetadataKind { get; init; }
 
     /// <summary>UTC timestamp when this notification was created.</summary>
     public DateTime? CreatedAt { get; init; }

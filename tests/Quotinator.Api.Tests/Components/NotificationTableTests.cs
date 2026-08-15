@@ -47,7 +47,7 @@ public class NotificationTableTests
     private static NotificationEntity Build(bool isDismissed, DateTime? expiresAt) => new()
     {
         Type        = new SafeValue<NotificationType?>(nameof(NotificationType.Information), NotificationType.Information),
-        Message     = "test",
+        Body        = "test",
         IsDismissed = isDismissed,
         ExpiresAt   = expiresAt is DateTime dt ? SafeDateValue.From(dt) : SafeDateValue.Empty,
     };

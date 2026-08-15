@@ -90,7 +90,11 @@ internal static class NotificationEndpoints
     {
         Id                = entity.Id.ToCanonicalId(),
         Type              = entity.Type.Parsed?.ToString().ToLowerInvariant() ?? entity.Type.Raw,
-        Message           = entity.Message,
+        Title             = entity.Title,
+        Body              = entity.Body,
+        Metadata          = entity.Metadata,
+        MetadataKind      = entity.MetadataKind.Parsed?.ToString().ToLowerInvariant()
+                            ?? (entity.MetadataKind.Raw.Length > 0 ? entity.MetadataKind.Raw : null),
         CreatedAt         = entity.DateCreated.Parsed,
         ExpiresAt         = entity.ExpiresAt.Parsed,
         IsDismissed       = entity.IsDismissed,

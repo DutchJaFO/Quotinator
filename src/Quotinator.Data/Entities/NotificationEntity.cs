@@ -17,8 +17,41 @@ public sealed class NotificationEntity : RecordBase
     /// <summary>Severity/kind of this notification.</summary>
     public SafeValue<NotificationType?> Type { get; init; } = SafeValue<NotificationType?>.Empty;
 
-    /// <summary>The specific message text — carries the concrete reason/recommendation, not the <see cref="Type"/>.</summary>
-    public string Message { get; init; } = string.Empty;
+    /// <summary>
+    /// Short headline. <see langword="null"/> when a producer supplies only a body — including every
+    /// row written before #312 introduced this column, which is why it is nullable rather than
+    /// backfilled with invented text.
+    /// </summary>
+    public string? Title { get; init; }
+
+    /// <summary>
+    /// The specific message text — carries the concrete reason/recommendation, not the
+    /// <see cref="Type"/>. Named <c>Message</c> until #312 split it from <see cref="Title"/>.
+    /// </summary>
+    public string Body { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Free-form, producer-owned JSON payload, or <see langword="null"/> when this notification carries
+    /// none. Shape is named by <see cref="MetadataKind"/> — never inferred. One reserved key,
+    /// <c>dedupeKey</c>, is read by the shared write-once helper regardless of kind; everything else
+    /// belongs to the producing feature, including any parameters its associated action needs.
+    /// </summary>
+    public string? Metadata { get; init; }
+
+    /// <summary>
+    /// Names the shape of <see cref="Metadata"/>. Empty when <see cref="Metadata"/> is
+    /// <see langword="null"/> — the absence of metadata is why
+    /// <see cref="NotificationMetadataKind"/> deliberately has no <c>None</c> member.
+    /// </summary>
+    public SafeValue<NotificationMetadataKind?> MetadataKind { get; init; } = SafeValue<NotificationMetadataKind?>.Empty;
+
+    /// <summary>
+    /// The <c>System_AppVersion</c> row for the application version that *added* this notification —
+    /// provenance, frozen at write time. Distinct from whatever version the notification may be
+    /// *about*, which is a producer concern recorded in <see cref="Metadata"/>.
+    /// <see langword="null"/> for rows written before #312 introduced this column.
+    /// </summary>
+    public Guid? AppVersionId { get; init; }
 
     /// <summary>
     /// When this notification stops being considered active. Always populated at write time — either

@@ -15,6 +15,7 @@ public class NotificationWriterTests
     private string _tempDir = null!;
     private string _dbPath  = null!;
     private NotificationWriter _writer = null!;
+    private NotificationReader _reader = null!;
 
     [TestInitialize]
     public void TestInitialize()
@@ -24,10 +25,16 @@ public class NotificationWriterTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
+        // Replays this table's real migration sequence rather than hand-writing its current shape:
+        // v1.8.0's CREATE, then #81's System_AppVersion (which #312's AppVersionId FK targets),
+        // then #312's own reshape. Keeps the fixture honest against what a real database has.
         conn.Execute(NotificationMigrations.CreateNotificationTable);
+        conn.Execute(AppVersionMigrations.CreateAppVersionTable);
+        conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
 
         var factory = new SqliteConnectionFactory(_dbPath);
         _writer = new NotificationWriter(factory, defaultExpiryHours: 720);
+        _reader = new NotificationReader(factory);
     }
 
     [TestCleanup]
@@ -54,16 +61,23 @@ public class NotificationWriterTests
         Assert.AreSequenceEqual(types, [.. rows.Select(r => r.Type.Parsed!.Value)], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
+    /// <summary>
+    /// #312 reversed this deliberately. It previously asserted the opposite — that omitting
+    /// <c>expiresAt</c> applied the configured 720-hour default — which meant every notification aged
+    /// out on a timer, including ones describing conditions that were still unresolved. Expiry is now
+    /// opt-in: a producer that wants time-limited behaviour asks for it (see the test below).
+    /// </summary>
     [TestMethod]
-    public async Task WriteAsync_NoExpirySpecified_AppliesConfiguredDefault()
+    public async Task WriteAsync_NoExpirySpecified_DoesNotExpire()
     {
-        var before = DateTime.UtcNow;
         var entity = await _writer.WriteAsync(NotificationType.Information, "no explicit expiry");
-        var after  = DateTime.UtcNow;
 
-        Assert.IsNotNull(entity.ExpiresAt.Parsed);
-        Assert.IsTrue(entity.ExpiresAt.Parsed >= before.AddHours(720).AddMinutes(-1), "Expiry must be roughly 720 hours (the configured default) from creation");
-        Assert.IsTrue(entity.ExpiresAt.Parsed <= after.AddHours(720).AddMinutes(1), "Expiry must be roughly 720 hours (the configured default) from creation");
+        Assert.IsNull(entity.ExpiresAt.Parsed, "Omitting expiresAt must mean 'never expires', not 'apply the configured default'.");
+
+        // Round-trip through the database, not just the returned entity — a value defaulted on write
+        // and a value defaulted on read are different bugs, and only the stored row proves which.
+        var stored = (await _reader.GetPagedAsync(1, 0)).Items.Single(n => n.Id == entity.Id);
+        Assert.IsNull(stored.ExpiresAt.Parsed);
     }
 
     [TestMethod]

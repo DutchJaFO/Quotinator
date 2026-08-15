@@ -123,7 +123,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
-| [#312](https://github.com/DutchJaFO/Quotinator/issues/312) | Notification schema: title/body, typed metadata, optional expiry, and app-version provenance | Planning | T1 ⬜ T2 ⬜ | [312-notification-schema-foundation-plan.md](312-notification-schema-foundation-plan.md) |
+| [#312](https://github.com/DutchJaFO/Quotinator/issues/312) | Notification schema: title/body, typed metadata, optional expiry, and app-version provenance | In progress (step 3) | T1 ⬜ T2 ⬜ | [312-notification-schema-foundation-plan.md](312-notification-schema-foundation-plan.md) |
 | [#83](https://github.com/DutchJaFO/Quotinator/issues/83) | Research: notification system design | Planning | T3 ⬜ (live confirmation only, no other tier applies) | [83-notification-system-design-research-plan.md](83-notification-system-design-research-plan.md) |
 | [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: what's new after upgrade | In progress | T1 ⬜ T2 ⬜ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |
 | [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed (revised — writes from inside the seeding loop) | Planning | TBD | No plan doc yet |

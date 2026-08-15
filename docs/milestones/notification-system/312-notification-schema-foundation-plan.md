@@ -1,6 +1,6 @@
 # #312 — Notification schema: title/body, typed metadata, optional expiry, and app-version provenance
 
-**Status:** Planning
+**Status:** In progress (step 3)
 **GitHub issue:** #312 (open)
 **Depends on:** #278 (done, released v1.8.0 — the mechanism this issue reshapes)
 
@@ -129,13 +129,35 @@ rewrite.
 ## Steps
 
 ### 1. Plan doc, slnx
-**Status:** Not started
+**Status:** ✅ Done
+
+Written alongside the issue itself, and added to `Quotinator.slnx` under
+`/docs/milestones/notification-system/`.
 
 ### 2. `MetadataKind` enum + `System_Notification` schema migration
-**Status:** Not started
+**Status:** ✅ Done — **merged with step 4** (see below)
 
-`Title`, `Message`→`Body`, `Metadata`, `MetadataKind` (inline `CHECK`), `AppVersionId`. Baseline SQL
-updated in the same commit, per the schema-drift parity rule.
+`NotificationMetadataKind` (`Quotinator.Data.Enums`, per ADR 016) with three members —
+`Announcement`, `SchemaVersionOvershoot`, `WhatsNew` — covering the producers that exist today (#279,
+#289, #81). Data-owned migration 5 (`NotificationSchemaMigrations.SplitMessageAndAddMetadata`) does the
+whole reshape in five `ALTER TABLE` statements, no rebuild, with `MetadataKind`'s `CHECK` declared
+inline on `ADD COLUMN` exactly as ADR 008 verified is permitted. `RegisterEnumHandler<NotificationMetadataKind>()`
+added to `DatabaseConfiguration.Configure()`.
+
+**Steps 2 and 4 were done as one unit, not separately — a column rename cannot land half-done.** The
+plan listed the schema (step 2) and the entity/writer/reader/REST updates (step 4) as separate steps,
+but `RENAME COLUMN Message TO Body` breaks `Sql.Notifications`, `NotificationEntity`,
+`NotificationWriter`, `NotificationSeeding`, `NotificationTable.razor` and `ToResponse` the instant it
+applies. Splitting them would have produced an intermediate commit that does not build. They are
+therefore one commit; the step numbering is left as-is rather than renumbered, since the plan's
+*content* was right and only its commit granularity was wrong.
+
+**Baseline column order is deliberately untidy, and the parity test is why.** `ADD COLUMN` always
+appends, so the incremental path leaves `Title`/`Metadata`/`MetadataKind`/`AppVersionId` *after*
+`IsDeleted`. `DumpTableSchemaAsync` compares each column's ordinal, so the baseline had to reproduce
+that real result rather than a prettier grouping. Verified by running the parity test, not by
+reasoning — `DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` passes.
+The milestone's end-of-cycle migration consolidation is what restores a clean ordering.
 
 ### 3. `System_AppVersion`: `Application` column + append-only conversion
 **Status:** Not started
@@ -144,10 +166,33 @@ Includes revising #81's `AppVersionTracker` from upsert to append-if-changed, an
 version" read to "most recent row".
 
 ### 4. Entity, writer, reader, and REST response updates
-**Status:** Not started
+**Status:** ✅ Done — landed with step 2 (see above for why they are inseparable)
 
-`NotificationEntity`, `INotificationWriter.WriteAsync` (opt-in expiry, new fields), `NotificationReader`,
-`NotificationResponse`/`ToResponse` (`Message`→`Body`, plus `title`/`metadata`/`metadataKind`).
+`NotificationEntity` gains `Title`/`Metadata`/`MetadataKind`/`AppVersionId` and renames `Message`→`Body`;
+`Sql.Notifications.SelectColumns` updated (with `AppVersionId` wrapped in `IdClauses.SelectColumn`, per
+the project's read-time id-presentation rule); `INotificationWriter.WriteAsync` takes the new fields and
+**no longer defaults the expiry**; `NotificationResponse`/`ToResponse` expose `title`/`body`/`metadata`/
+`metadataKind`.
+
+**Three test fixtures were genuinely wrong afterwards, each for a different reason — all found by
+running the suite, none by inspection:**
+
+1. `NotificationReaderTests`/`NotificationWriterTests` built their table from
+   `NotificationMigrations.CreateNotificationTable` alone — the v1.8.0 shape. They now replay the real
+   sequence (v1.8.0 create → #81's `System_AppVersion` → #312's reshape), which is both correct and
+   more honest about what a real database contains.
+2. `DowngradeToLegacyNamesAsync` (`Quotinator.Core.Tests`) reaches its "legacy" state by running the
+   *full* migration chain and then undoing parts of it — but it never undid migration 5's rename, so
+   the replay hit `no such column: "Message"` trying to rename `Body` again. Fixed by dropping
+   `System_Notification` and `System_AppVersion` in that helper, exactly matching the existing
+   precedent its own comment already documents for `Audit_Change`/`Import_Conflict`/`Import_Action`/
+   `Import_SourceFileOverride`, and for the identical reason: `ALTER TABLE … RENAME` is not idempotent.
+3. `WriteAsync_NoExpirySpecified_AppliesConfiguredDefault` asserted the *old* always-expire behaviour.
+   Rewritten as `WriteAsync_NoExpirySpecified_DoesNotExpire`, and strengthened while there — it now
+   re-reads the stored row rather than trusting the returned entity, since "defaulted on write" and
+   "defaulted on read" are different bugs and only the stored row distinguishes them.
+
+Migration-count assertions in three pre-existing tests moved 4 → 5, as with every prior Data migration.
 
 ### 5. Relocate the dedupe helper into `Quotinator.Data`, keyed on `Metadata.dedupeKey`
 **Status:** Not started

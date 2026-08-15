@@ -577,7 +577,9 @@ internal static class Sql
     internal static class Notifications
     {
         private static readonly string SelectColumns =
-            $"{IdClauses.SelectColumn("Id")}, Type, Message, ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DateCreated, DateModified, DateDeleted, IsDeleted";
+            $"{IdClauses.SelectColumn("Id")}, Type, Title, Body, Metadata, MetadataKind, " +
+            $"{IdClauses.SelectColumn("AppVersionId")}, " +
+            "ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DateCreated, DateModified, DateDeleted, IsDeleted";
 
         /// <summary>
         /// Undismissed, unexpired, non-deleted notifications, newest first — the set surfaced in the

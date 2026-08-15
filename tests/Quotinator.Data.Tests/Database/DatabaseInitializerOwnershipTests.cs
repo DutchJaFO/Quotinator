@@ -580,23 +580,23 @@ public class DatabaseInitializerOwnershipTests
             var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             await conn.ExecuteAsync(
-                "INSERT INTO System_Notification (Id, Type, Message, DismissTriggerKey, DateCreated) " +
+                "INSERT INTO System_Notification (Id, Type, Body, DismissTriggerKey, DateCreated) " +
                 "VALUES (@id, 'ActionRequired', 'Consider running a Reset.', 'DatabaseReset', @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             // DismissTriggerKey is nullable — most notifications carry no dismiss trigger.
             await conn.ExecuteAsync(
-                "INSERT INTO System_Notification (Id, Type, Message, DateCreated) " +
+                "INSERT INTO System_Notification (Id, Type, Body, DateCreated) " +
                 "VALUES (@id, 'Information', 'Just letting you know.', @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO System_Notification (Id, Type, Message, DateCreated) " +
+                "INSERT INTO System_Notification (Id, Type, Body, DateCreated) " +
                 "VALUES (@id, 'NotARealType', 'x', @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
-                "INSERT INTO System_Notification (Id, Type, Message, DismissTriggerKey, DateCreated) " +
+                "INSERT INTO System_Notification (Id, Type, Body, DismissTriggerKey, DateCreated) " +
                 "VALUES (@id, 'Information', 'x', 'NotARealTrigger', @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
         }
@@ -642,9 +642,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync(TestContext.CancellationToken);
         var dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(4, dataRows,
+        Assert.AreEqual(5, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(4, db.DataSchemaVersion);
+        Assert.AreEqual(5, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

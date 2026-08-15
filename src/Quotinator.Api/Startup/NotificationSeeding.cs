@@ -22,7 +22,7 @@ internal static class NotificationSeeding
         NotificationType type, string dedupeKey, string message, NotificationDismissTrigger? trigger = null)
     {
         var history = await reader.GetPagedAsync(1, 0);
-        if (history.Items.Any(n => n.Message.Contains(dedupeKey, StringComparison.Ordinal)))
+        if (history.Items.Any(n => n.Body.Contains(dedupeKey, StringComparison.Ordinal)))
             return;
 
         await writer.WriteAsync(type, message, dismissTrigger: trigger);

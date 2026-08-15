@@ -25,7 +25,12 @@ public class NotificationReaderTests
 
         using var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
+        // Replays this table's real migration sequence rather than hand-writing its current shape:
+        // v1.8.0's CREATE, then #81's System_AppVersion (which #312's AppVersionId FK targets),
+        // then #312's own reshape. Keeps the fixture honest against what a real database has.
         conn.Execute(NotificationMigrations.CreateNotificationTable);
+        conn.Execute(AppVersionMigrations.CreateAppVersionTable);
+        conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
 
         var factory = new SqliteConnectionFactory(_dbPath);
         _reader = new NotificationReader(factory);
