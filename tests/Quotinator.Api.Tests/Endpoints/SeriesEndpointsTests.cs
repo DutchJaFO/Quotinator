@@ -22,7 +22,7 @@ public class SeriesEndpointsTests
     private static WebApplicationFactory<Program> CreateFactory(
         FakeSeriesRepository? repository = null,
         FakeSeriesUniverseReferenceReader? universeReader = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());

@@ -21,7 +21,7 @@ public class ImportEndpointTests
 
     private static WebApplicationFactory<Program> CreateFactory(
         string? adminApiKey, FakeQuoteImportService importService) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {

@@ -19,7 +19,7 @@ public class AdminEndpointsTests
 
     private static WebApplicationFactory<Program> CreateFactory(
         string? adminApiKey = null, IDatabaseInitializer? dbInitializer = null, INotificationWriter? notificationWriter = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {

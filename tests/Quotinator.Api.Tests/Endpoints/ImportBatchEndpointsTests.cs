@@ -19,7 +19,7 @@ namespace Quotinator.Api.Tests.Endpoints;
 public class ImportBatchEndpointsTests
 {
     private static WebApplicationFactory<Program> CreateFactory(IImportBatchRepository? batches = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {

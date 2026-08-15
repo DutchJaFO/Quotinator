@@ -16,7 +16,7 @@ public class QuoteEndpointsTests
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private static WebApplicationFactory<Program> CreateFactory() =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());

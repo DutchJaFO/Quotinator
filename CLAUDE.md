@@ -12,8 +12,8 @@ It is the primary context document for AI assistants working in this repository.
 # Build (must be 0 warnings, 0 errors)
 dotnet build --configuration Release
 
-# Run all tests
-dotnet test --configuration Release --verbosity normal
+# Run all tests. -m:1 runs the test projects one at a time — see the note below; do not drop it.
+dotnet test --configuration Release --verbosity normal -m:1
 
 # Run a single test by name filter
 dotnet test --configuration Release --filter "FullyQualifiedName~GetRandom_NoN_ReturnsSingleQuote"
@@ -39,6 +39,15 @@ cp scripts/hooks/commit-msg .git/hooks/commit-msg
 cp scripts/hooks/post-commit .git/hooks/post-commit
 chmod +x .git/hooks/commit-msg .git/hooks/post-commit
 ```
+
+**`-m:1` on the full-solution test run is deliberate — do not drop it for speed.** Without it MSBuild runs
+the test projects concurrently, and the resulting CPU contention widens timing windows enough to surface
+intermittent failures that do not reproduce when a project is run alone. [ADR 006](docs/architecture-decisions/006-sequential-test-execution-by-default.md)
+already mandates sequential execution *within* each project (every project carries
+`[assembly: DoNotParallelize]`); `-m:1` extends the same reasoning across projects, which ADR 006 itself
+does not cover. This is a reproducibility measure, not a correctness fix: a test that only passes because
+projects ran sequentially is still a broken test — see #313, where cross-project contention exposed a real
+unguarded startup race in `Quotinator.Api.Tests` that had to be fixed on its own terms.
 
 The Scalar API reference is at `/scalar/v1` and the OpenAPI spec at `/openapi/v1.json` — available in all environments including production.
 
@@ -1020,7 +1029,7 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 **`main` must always be green.** A failing build or test is acceptable on a feature branch mid-development — it is never acceptable on `main`. This checklist exists specifically to guarantee that; do not skip steps because a deadline is close or the failure "looks unrelated."
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
-2. **Tests pass** — `dotnet test --configuration Release --verbosity normal` must report all tests passed with `0 Warning(s)  0 Error(s)`. The same 0-warnings policy that applies to `dotnet build` applies here — any compiler warning surfaced during test build is a blocking failure.
+2. **Tests pass** — `dotnet test --configuration Release --verbosity normal -m:1` must report all tests passed with `0 Warning(s)  0 Error(s)`. Keep `-m:1` (see the Commands section's note on why). The same 0-warnings policy that applies to `dotnet build` applies here — any compiler warning surfaced during test build is a blocking failure.
 3. **Changelog updated** — `data/changelog/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md`, `addon/CHANGELOG.md`, or `addon-beta/CHANGELOG.md` directly — they are generated files.**
 
    **Before writing any entries, read `schemas/changelog.schema.json`** — it is the authoritative definition of every field and which fields are required. Do not infer the format from prior entries or git history.

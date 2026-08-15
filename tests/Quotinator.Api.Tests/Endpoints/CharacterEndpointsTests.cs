@@ -23,7 +23,7 @@ public class CharacterEndpointsTests
     private static WebApplicationFactory<Program> CreateFactory(
         FakeCharacterRepository? repository = null,
         StubCharacterSourceLinkReader? linkReader = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());

@@ -19,7 +19,7 @@ namespace Quotinator.Api.Tests.Endpoints;
 public class StageDirectionEndpointsTests
 {
     private static WebApplicationFactory<Program> CreateFactory(FakeStageDirectionRepository? repository = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());

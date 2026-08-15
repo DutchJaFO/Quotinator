@@ -89,6 +89,23 @@ hold the file open), and see `DatabaseInitializerTests.cs` for the established p
 
 If you cannot confirm all four, leave the class sequential. The friction is intentional.
 
+**Cross-project: also sequential, via `-m:1`.** ADR 006 governs concurrency *within* a project. At the
+solution level MSBuild runs the test projects concurrently, which ADR 006 does not cover — so the
+documented full-suite command is `dotnet test --configuration Release --verbosity normal -m:1`. Drop the
+flag and CPU contention widens timing windows, producing failures that vanish when a project is run alone
+(exactly the symptom ADR 006's own Context describes).
+
+**`-m:1` is a reproducibility measure, not a correctness fix.** A test that passes only because projects
+ran one at a time is still broken; the flag just stops the noise from masking which. #313 is the worked
+example: cross-project contention surfaced an intermittent `Quotinator.Api.Tests` failure, and the actual
+cause was a real unguarded startup race — every test constructed its `WebApplicationFactory` and issued
+requests before the app had finished starting, so responses could come from the startup wait page instead
+of the endpoint. Measured on an idle machine, the unguarded factory saw startup incomplete on **5 of 5**
+runs; most tests passed only because the HTTP round-trip happened to outlast startup. That was fixed on
+its own terms (`QuotinatorWebApplicationFactory`, which waits for `StartupPhaseState.IsComplete`, plus a
+source-scanning guard test that stops a new test file reintroducing the bare factory). Treat an
+intermittent failure as a defect to diagnose, never as noise to suppress.
+
 **Global state must only be written once, before tests run.** The only safe place to write global state is `[AssemblyInitialize]` in `MSTestSettings.cs`. Never write global state in `[ClassInitialize]` or `[TestInitialize]`.
 
 **What counts as global state:**

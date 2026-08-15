@@ -19,7 +19,7 @@ namespace Quotinator.Api.Tests.Endpoints;
 public class PersonEndpointsTests
 {
     private static WebApplicationFactory<Program> CreateFactory(FakePersonRepository? repository = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());

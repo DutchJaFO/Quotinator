@@ -22,7 +22,7 @@ public class ConversationEndpointsTests
     private static WebApplicationFactory<Program> CreateFactory(
         FakeConversationRepository? repository = null,
         FakeConversationLineCountReader? lineCountReader = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());

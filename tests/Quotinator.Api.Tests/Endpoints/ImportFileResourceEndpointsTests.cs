@@ -23,7 +23,7 @@ public class ImportFileResourceEndpointsTests
 
     private static WebApplicationFactory<Program> CreateFactory(
         string? adminApiKey = null, IFileResourceRepository? fileResources = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {

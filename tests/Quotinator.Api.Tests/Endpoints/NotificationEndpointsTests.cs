@@ -24,7 +24,7 @@ public class NotificationEndpointsTests
 
     private static WebApplicationFactory<Program> CreateFactory(
         string? adminApiKey = null, FakeNotificationReader? notificationReader = null, FakeNotificationWriter? notificationWriter = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {

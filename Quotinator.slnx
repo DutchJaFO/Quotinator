@@ -285,6 +285,7 @@
     <File Path="docs/milestones/notification-system/307-changelog-notification-audience-key-plan.md" />
     <File Path="docs/milestones/notification-system/309-system-changelog-table-plan.md" />
     <File Path="docs/milestones/notification-system/312-notification-schema-foundation-plan.md" />
+    <File Path="docs/milestones/notification-system/313-api-test-startup-race-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

@@ -29,7 +29,7 @@ public class ImportActionEndpointsTests
     {
         var fakeService = service ?? new FakeImportActionService();
 
-        return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        return new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {

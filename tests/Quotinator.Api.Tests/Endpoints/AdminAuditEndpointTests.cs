@@ -31,7 +31,7 @@ public class AdminAuditEndpointTests
         var writer   = auditWriter  ?? new NoOpAuditEntryWriter();
         var changes  = changeReader ?? NoOpChangeReader.Instance;
 
-        return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        return new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {

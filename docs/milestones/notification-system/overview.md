@@ -124,6 +124,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | # | Title | Status | Tiers | Plan doc |
 |---|-------|--------|-------|----------|
 | [#312](https://github.com/DutchJaFO/Quotinator/issues/312) | Notification schema: title/body, typed metadata, optional expiry, and app-version provenance | In progress (step 3) | T1 ⬜ T2 ⬜ | [312-notification-schema-foundation-plan.md](312-notification-schema-foundation-plan.md) |
+| [#313](https://github.com/DutchJaFO/Quotinator/issues/313) | Api tests can silently assert against the startup wait page instead of the endpoint under test | Waiting for release | N/A (test harness + docs only — no src/ change) | [313-api-test-startup-race-plan.md](313-api-test-startup-race-plan.md) |
 | [#83](https://github.com/DutchJaFO/Quotinator/issues/83) | Research: notification system design | Planning | T3 ⬜ (live confirmation only, no other tier applies) | [83-notification-system-design-research-plan.md](83-notification-system-design-research-plan.md) |
 | [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: what's new after upgrade | In progress | T1 ⬜ T2 ⬜ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |
 | [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed (revised — writes from inside the seeding loop) | Planning | TBD | No plan doc yet |
@@ -180,6 +181,9 @@ v1.9.0, not here.
          duplicating it
 #305 ─── (none) — independent bug
 #306 ─── (none) — independent bug
+#313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
+         this milestone could be trusted, because Api tests asserted before the app finished starting
+         (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
 ```
 
 None of #302/#303/#304 depend on each other for their own correctness, but #304 is what makes #302's
@@ -203,6 +207,7 @@ all of them are cheaper once it lands.
 
 | Order | Issue | Reason |
 |-------|-------|--------|
+| 0 | **#313** ✅ | Done. Api tests were asserting before startup completed — measured at 5 of 5 runs, so every verification in this milestone was untrustworthy until it landed. Had to come first for that reason, not because of any dependency |
 | 1 | **#312** | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
 | 2 | **#308** | Renders the richer content #312 introduces; landing it before the producers means everything they write displays correctly from the start |
 | 3 | **#81** | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |

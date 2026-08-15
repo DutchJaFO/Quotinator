@@ -24,7 +24,7 @@ public class SourceEndpointsTests
     private static WebApplicationFactory<Program> CreateFactory(
         FakeSourceRepository? repository = null,
         FakeSourceSeriesReferenceReader? seriesReader = null) =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());

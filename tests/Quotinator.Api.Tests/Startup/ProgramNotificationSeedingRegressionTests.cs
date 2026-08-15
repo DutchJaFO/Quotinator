@@ -31,7 +31,7 @@ public class ProgramNotificationSeedingRegressionTests
     [TestMethod]
     public async Task Health_NoOpDatabaseInitializer_StaysHealthyDespiteMissingNotificationTable()
     {
-        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        using var factory = new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
@@ -59,7 +59,7 @@ public class ProgramNotificationSeedingRegressionTests
     {
         var writer = new FakeNotificationWriter();
 
-        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        using var factory = new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
@@ -88,7 +88,7 @@ public class ProgramNotificationSeedingRegressionTests
     [TestMethod]
     public async Task Stats_DatabaseDegraded_RendersWithoutQueryingFileResourceOrImportBatchRepositories()
     {
-        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        using var factory = new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());

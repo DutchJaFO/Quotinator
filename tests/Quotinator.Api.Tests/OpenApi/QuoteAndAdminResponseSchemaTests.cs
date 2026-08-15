@@ -18,7 +18,7 @@ namespace Quotinator.Api.Tests.OpenApi;
 public class QuoteAndAdminResponseSchemaTests
 {
     private static WebApplicationFactory<Program> CreateFactory() =>
-        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());

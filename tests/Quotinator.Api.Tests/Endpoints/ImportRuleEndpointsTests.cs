@@ -54,7 +54,7 @@ public class ImportRuleEndpointsTests
     {
         var pathResolver = new RuleFileOverridePathResolver(_overrideDir, Path.Combine(_tempDir, "override-external"), _bundledDir, Path.Combine(_tempDir, "bundled-external"));
 
-        return new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        return new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {
