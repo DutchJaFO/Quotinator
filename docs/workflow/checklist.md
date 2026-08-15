@@ -167,6 +167,12 @@ Releases follow a two-stage model. See `docs/release-verification.md` for tier d
       `--no-cache`** — `--no-cache` alone does not force a fresh base-image pull and can silently
       reuse a stale cached base layer. Never skipped, never substituted by a T2 pass's own
       (cache-permitted) `docker build`.
+- [ ] **`IDE0008` solution-wide trial** — temporarily move `dotnet_diagnostic.IDE0008.severity =
+      warning` into `.editorconfig`'s solution-wide block, build, and count the warnings. If the count
+      is small enough to clear as part of this milestone's close, keep it, clear the remainder, and
+      **delete the per-file scoped section**; otherwise revert the escalation and record the measured
+      count here so the trend is visible next milestone. Baseline: **14,286** (2026-08-15). See
+      `CLAUDE.md` → "Variable declarations" for the full rule and why the scoped list exists
 - [ ] Build clean: `dotnet build --configuration Release` — 0 warnings, 0 errors
 - [ ] Tests pass: `dotnet test --configuration Release` — all tests pass, 0 warnings
 - [ ] Changelogs updated (`CHANGELOG.md`, `addon/CHANGELOG.md`, `addon-beta/CHANGELOG.md`) — optionally

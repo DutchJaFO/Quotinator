@@ -742,10 +742,35 @@ dotnet_diagnostic.IDE0008.severity = warning
 ```
 
 The `csharp_style_var_*` preferences are stated solution-wide; only the **severity** is scoped, and
-that distinction is the whole point. Escalating the severity globally surfaces **14,286** warnings
-(measured 2026-08-15, not estimated) — the "convert everything at once" outcome #244 rejected, and an
-immediate breach of the 0-warnings gate. Never do that. The scoped list has a useful second effect:
+that distinction is the whole point. Escalating the severity globally *today* surfaces **14,286**
+warnings (measured 2026-08-15, not estimated) — the "convert everything at once" outcome #244
+rejected, and an immediate breach of the 0-warnings gate. The scoped list has a useful second effect:
 it is the milestone's own record of its blast radius.
+
+**This list is a ratchet with a defined end state — it is scaffolding, not permanent structure.**
+Files are only ever added, never removed, so as milestones progress the list grows monotonically
+toward covering the solution while the outstanding `var` count falls. Read the "never solution-wide"
+instruction above as **"not yet"**, not as "never" — the prohibition is on flipping it early and
+eating 14k warnings, not on the end state, which is no list at all.
+
+**At the close of every milestone, test whether the end state has arrived** (developer decision,
+2026-08-15). This is a concrete checklist step, not an aspiration:
+
+1. Temporarily set `dotnet_diagnostic.IDE0008.severity = warning` in the solution-wide block.
+2. `dotnet build --configuration Release` and count the `IDE0008` warnings.
+3. **If the count is within an acceptable range** — small enough to clear as part of that milestone's
+   own close — keep it solution-wide, clear the remainder, and **delete the scoped section**. Then
+   rewrite this rule to record that the migration is finished.
+4. **Otherwise revert the escalation**, leave the scoped section in place, and record the measured
+   count so the next milestone can see the trend.
+
+The baseline to measure against is **14,286** (2026-08-15, at the start of the notification-system
+milestone). Record each milestone's figure when you run step 2 — a count that is not falling means
+the boyscout rule is not actually being applied, which is itself the finding.
+
+A mechanical gate (a test asserting every file a branch touches appears in the list) has been raised
+as a possible addition. Not built, and not obviously worth it while the list is still growing toward
+its own deletion — raise it as its own issue if the manual list starts being forgotten in practice.
 
 **Mechanics.** `dotnet format style <project> --diagnostics IDE0008 --severity warn` does most of the
 work, but **its fixer is iterative and one pass is not enough** — a second pass on the same file

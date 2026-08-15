@@ -207,6 +207,23 @@ signal they carry — a read at a known-sane moment seeding a column authoritati
 ongoing dependency. Three tests pin the result: several versions written inside one timestamp, each call
 taking the next number, and a row with a far-future `DateCreated` but a lower sequence that must not win.
 
+**Two codebase conventions were introduced alongside this step, both by developer decision, and both
+recorded in CLAUDE.md rather than here.** Neither is specific to #312 — this issue is only where they
+were first applied.
+
+1. **`IDE0008` is now compiler-enforced per touched file.** The explicit-types boyscout rule was
+   silently missed across this issue's first commits; a path-scoped `.editorconfig` section now fails
+   the build instead of relying on memory. Scoped, never solution-wide — escalating globally surfaces
+   14,286 warnings at once. The list is a ratchet: entries are only added, and once the remainder is
+   small enough it moves solution-wide and the section is deleted.
+2. **Column names in `Sql.*` come from `nameof(TEntity.Property)`.** `Sql.AppVersion` is the worked
+   example. Boyscout-scoped like the above. Table names, Dapper parameter names, and migration SQL stay
+   literal, each for a reason CLAUDE.md states.
+
+Applying both to this issue's eight touched files cleared 426 `var` declarations that `dotnet format`
+could not auto-fix, and a follow-on wave of `IDE0028`/`IDE0305` warnings that explicit types exposed
+where `var` had been masking them.
+
 ### 4. Entity, writer, reader, and REST response updates
 **Status:** ✅ Done — landed with step 2 (see above for why they are inseparable)
 
