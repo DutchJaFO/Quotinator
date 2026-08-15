@@ -1,6 +1,6 @@
 # #312 — Notification schema: title/body, typed metadata, optional expiry, and app-version provenance
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 5)
 **GitHub issue:** #312 (open)
 **Depends on:** #278 (done, released v1.8.0 — the mechanism this issue reshapes)
 
@@ -160,10 +160,52 @@ reasoning — `DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNot
 The milestone's end-of-cycle migration consolidation is what restores a clean ordering.
 
 ### 3. `System_AppVersion`: `Application` column + append-only conversion
-**Status:** Not started
+**Status:** ✅ Done
 
-Includes revising #81's `AppVersionTracker` from upsert to append-if-changed, and its "last active
-version" read to "most recent row".
+Two Data-owned migrations, per CLAUDE.md's "one schema change per migration where possible" — both in
+`AppVersionHistoryMigrations`. Migration 6 adds the `Application` column and a unique index over
+`(Application, Version)`; migration 7 adds `SequenceNumber` and its own uniqueness index. The indexes
+are what make the table an append-only history, rather than a convention the tracker merely follows.
+`AppVersionEntity` gains both columns; the baseline was updated to match, with both trailing after
+`IsDeleted` for the same `ADD COLUMN`-appends reason step 2 documents.
+
+`IAppVersionTracker` changed shape, not just behaviour: both methods now return an `AppVersionRecord`
+(`Id`, `Application`, `Version`) rather than a bare version string, because step 4's provenance FK needs
+the row's id and nothing else could supply it. `RecordCurrentAsync(application, version)` is
+append-if-new — an identical pair returns the existing row. `IVersionService` gains `Application`,
+resolved from the entry assembly rather than hardcoded, since `Quotinator.Tools.DbInspector` opens the
+same database.
+
+`Application` is nullable rather than `NOT NULL DEFAULT`: rows written by #81's version-only tracker
+genuinely predate the concept, and inventing a name for them would fabricate history. Those rows stay
+readable and simply never match a lookup, so the first boot after this migration appends a properly
+attributed row instead of retroactively claiming the legacy one.
+
+**A real ordering defect surfaced here, caught by a test rather than by inspection — and its first fix
+was wrong.** `Sql.AppVersion.SelectMostRecent` originally tie-broke on `Id DESC`. `DateCreated` is
+stored at second resolution (`SafeDateHandler`'s formats), so rows written inside the same second all
+carry an identical timestamp and the tie-break decided the answer — with a random GUID. The test failed
+in the full-suite run and passed in isolation, purely on where the second boundary fell.
+
+The first fix ordered on SQLite's implicit `rowid`, which is correct today but is an implementation
+detail whose values become reusable once a table's highest row is removed — so a future change to how
+this table is pruned would corrupt the ordering silently rather than fail. **The developer rejected it:
+`rowid` cannot be trusted to stay sane, and an explicit column is the right answer.** Migration 7 adds
+`SequenceNumber`, assigned by the tracker as `MAX + 1` inside the insert's own transaction and covered
+by a uniqueness index, so a concurrent write fails loudly instead of producing two rows claiming the
+same position.
+
+`SequenceNumber` rather than `OrderId`, for a mechanical reason: `SqlSelectPresentationGuard` requires
+every `*Id`-suffixed column in a `SELECT` list to be `LOWER()`-wrapped and carries exactly one exemption
+in the whole codebase, so an INTEGER `OrderId` would have had to become the second — an exemption from a
+casing rule that only means anything for text ids.
+
+`SelectMostRecent` now orders on `SequenceNumber` alone; `DateCreated` is not consulted at all, so its
+resolution cannot make the answer arbitrary again. The migration's backfill does read `rowid`, and that
+is deliberate and bounded: once, at migration time, to give pre-existing rows the only insertion-order
+signal they carry — a read at a known-sane moment seeding a column authoritative from then on, not an
+ongoing dependency. Three tests pin the result: several versions written inside one timestamp, each call
+taking the next number, and a row with a far-future `DateCreated` but a lower sequence that must not win.
 
 ### 4. Entity, writer, reader, and REST response updates
 **Status:** ✅ Done — landed with step 2 (see above for why they are inseparable)
@@ -220,9 +262,9 @@ Migration-count assertions in three pre-existing tests moved 4 → 5, as with ev
 | 3 | ❌ | `MetadataKind`'s `CHECK` accepts every enum member and rejects an unknown value, on both the baseline and incremental paths | Unit test | Behavioural round-trip, matching the existing `AcceptSameNotificationCheckConstraintValues` pattern |
 | 4 | ❌ | A notification written with no explicit expiry has no expiry | Unit test | `NotificationWriter` test |
 | 5 | ❌ | A notification written with an explicit expiry keeps it | Unit test | `NotificationWriter` test |
-| 6 | ❌ | `System_AppVersion` stores `Application` and `Version` as separate columns | Unit test | Schema-shape test |
-| 7 | ❌ | Recording the same application+version twice appends no second row; a different version appends a new one | Unit test | `AppVersionTrackerTests` |
-| 8 | ❌ | "Last active version" resolves to the most recent row, not an overwritten single row | Unit test | `AppVersionTrackerTests` |
+| 6 | ✅ | `System_AppVersion` stores `Application` and `Version` as separate columns | Unit test | `AppVersionTrackerTests.RecordCurrentAsync_FirstCall_StoresApplicationAndVersionSeparately` — asserts the two stored columns directly, not just the reassembled record; schema parity covered by `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAppVersionSchema` |
+| 7 | ✅ | Recording the same application+version twice appends no second row; a different version appends a new one | Unit test | `AppVersionTrackerTests.RecordCurrentAsync_SamePairTwice_AppendsOnlyOnce`, `..._NewVersion_AppendsWithoutOverwritingHistory`, `..._SameVersionDifferentApplication_AppendsSeparately` |
+| 8 | ✅ | "Last active version" resolves to the most recent row, not an overwritten single row | Unit test | `AppVersionTrackerTests.GetLastActiveAsync_SeveralVersionsWithinOneTimestamp_ReturnsTheOneWrittenLast`, `RecordCurrentAsync_EachCall_TakesTheNextSequenceNumber`, `GetLastActiveAsync_RowWithNewerTimestampButOlderSequence_DoesNotWin` |
 | 9 | ❌ | A notification's `AppVersionId` still points at the version that wrote it after the app version changes | Unit test | Real-SQLite provenance test — write, record a newer version, re-read |
 | 10 | ❌ | Dedupe matches on `Metadata.dedupeKey`, not on message text | Unit test | Relocated helper's own tests |
 | 11 | ❌ | A dedupe key that appears in body text but not in metadata does **not** suppress a write | Unit test | Guards against the old message-substring behaviour surviving accidentally |
