@@ -37,6 +37,14 @@ public class WhatsNewNotificationTests
     private static ChangelogDocument BuildDocument(string version, params string[] notificationHighlights) =>
         BuildDocument(BuildRelease(version, notificationHighlights));
 
+    private static ChangelogUnreleased BuildUnreleased(params string[] notificationHighlights) => new()
+    {
+        Highlights = ["An unflagged unreleased highlight, not notification-worthy"],
+        AudienceHighlights = notificationHighlights.Length == 0
+            ? []
+            : new Dictionary<string, List<string>> { ["notification"] = [.. notificationHighlights] },
+    };
+
     [TestMethod]
     public async Task Seed_MatchingReleaseWithFlaggedHighlights_WritesInformationNotification()
     {
@@ -181,5 +189,100 @@ public class WhatsNewNotificationTests
         var seeds = WhatsNewNotification.BuildSeeds(document, lastActiveVersion: "1.8.1", currentVersion: "1.9.0-dev");
 
         Assert.IsEmpty(seeds);
+    }
+
+    // ── unreleased handling ─────────────────────────────────────────────────────────────────────
+    // unreleased has no version — per developer direction it's effectively "the current version",
+    // always considered regardless of lastActiveVersion/currentVersion, since a real release never
+    // carries an unreleased section of its own.
+
+    /// <summary>An unreleased entry with flagged highlights always produces a seed, even with no other releases in range.</summary>
+    [TestMethod]
+    public void BuildSeeds_UnreleasedWithFlaggedHighlights_IncludesUnreleasedSeed()
+    {
+        var document = new ChangelogDocument
+        {
+            Language   = "en",
+            Unreleased = BuildUnreleased("An unreleased flagged highlight"),
+            Releases   = [],
+        };
+
+        var seeds = WhatsNewNotification.BuildSeeds(document, lastActiveVersion: "1.8.3", currentVersion: "1.8.3");
+
+        Assert.HasCount(1, seeds);
+        Assert.Contains("WhatsNew:unreleased:", seeds[0].DedupeKey);
+        Assert.Contains("An unreleased flagged highlight", seeds[0].Message);
+        Assert.DoesNotContain("An unflagged unreleased highlight", seeds[0].Message);
+    }
+
+    /// <summary>No unreleased entry, or one with no flagged highlights, produces no unreleased seed.</summary>
+    [TestMethod]
+    public void BuildSeeds_UnreleasedAbsentOrNoFlaggedHighlights_NoUnreleasedSeed()
+    {
+        var noUnreleased = new ChangelogDocument { Language = "en", Unreleased = null, Releases = [] };
+        var emptyUnreleased = new ChangelogDocument { Language = "en", Unreleased = BuildUnreleased(), Releases = [] };
+
+        Assert.IsEmpty(WhatsNewNotification.BuildSeeds(noUnreleased, lastActiveVersion: "1.8.3", currentVersion: "1.8.3"));
+        Assert.IsEmpty(WhatsNewNotification.BuildSeeds(emptyUnreleased, lastActiveVersion: "1.8.3", currentVersion: "1.8.3"));
+    }
+
+    /// <summary>The unreleased seed and any in-range release seeds both appear together — unreleased isn't a substitute for the release walk.</summary>
+    [TestMethod]
+    public void BuildSeeds_UnreleasedAndReleaseBothFlagged_ReturnsBothSeeds()
+    {
+        var document = new ChangelogDocument
+        {
+            Language   = "en",
+            Unreleased = BuildUnreleased("An unreleased flagged highlight"),
+            Releases   = [BuildRelease("1.8.3", "A release flagged highlight")],
+        };
+
+        var seeds = WhatsNewNotification.BuildSeeds(document, lastActiveVersion: null, currentVersion: "1.8.3");
+
+        Assert.HasCount(2, seeds);
+        Assert.Contains(s => s.DedupeKey.StartsWith("WhatsNew:unreleased:", StringComparison.Ordinal), seeds);
+        Assert.Contains(s => s.DedupeKey == "WhatsNew:v1.8.3:", seeds);
+    }
+
+    /// <summary>Identical unreleased content produces the same dedupe key every time — no restart spam while nothing has changed.</summary>
+    [TestMethod]
+    public void BuildSeeds_UnreleasedContentUnchanged_ProducesSameDedupeKey()
+    {
+        var documentA = new ChangelogDocument { Language = "en", Unreleased = BuildUnreleased("Same highlight"), Releases = [] };
+        var documentB = new ChangelogDocument { Language = "en", Unreleased = BuildUnreleased("Same highlight"), Releases = [] };
+
+        var seedsA = WhatsNewNotification.BuildSeeds(documentA, lastActiveVersion: "1.8.3", currentVersion: "1.8.3");
+        var seedsB = WhatsNewNotification.BuildSeeds(documentB, lastActiveVersion: "1.8.3", currentVersion: "1.8.3");
+
+        Assert.AreEqual(seedsA[0].DedupeKey, seedsB[0].DedupeKey);
+    }
+
+    /// <summary>Changed unreleased content produces a different dedupe key, so the edit surfaces as a new notification instead of staying deduped against the stale one.</summary>
+    [TestMethod]
+    public void BuildSeeds_UnreleasedContentChanges_ProducesDifferentDedupeKey()
+    {
+        var before = new ChangelogDocument { Language = "en", Unreleased = BuildUnreleased("Original highlight"), Releases = [] };
+        var after = new ChangelogDocument { Language = "en", Unreleased = BuildUnreleased("Edited highlight"), Releases = [] };
+
+        var seedsBefore = WhatsNewNotification.BuildSeeds(before, lastActiveVersion: "1.8.3", currentVersion: "1.8.3");
+        var seedsAfter = WhatsNewNotification.BuildSeeds(after, lastActiveVersion: "1.8.3", currentVersion: "1.8.3");
+
+        Assert.AreNotEqual(seedsBefore[0].DedupeKey, seedsAfter[0].DedupeKey);
+    }
+
+    /// <summary>End-to-end through SeedAsync: unchanged unreleased content is not re-seeded on a later restart.</summary>
+    [TestMethod]
+    public async Task Seed_UnreleasedAlreadySeededWithSameContent_IsNoOp()
+    {
+        var document = new ChangelogDocument { Language = "en", Unreleased = BuildUnreleased("A flagged highlight"), Releases = [] };
+        var existingKey = WhatsNewNotification.BuildSeeds(document, lastActiveVersion: "1.8.3", currentVersion: "1.8.3")[0].DedupeKey;
+
+        var reader = new FakeNotificationReader();
+        reader.Seed(BuildExisting($"{existingKey} What's new (unreleased):\nA flagged highlight"));
+        var writer = new FakeNotificationWriter();
+
+        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: "1.8.3", currentVersion: "1.8.3");
+
+        Assert.IsEmpty(writer.WrittenMessages);
     }
 }
