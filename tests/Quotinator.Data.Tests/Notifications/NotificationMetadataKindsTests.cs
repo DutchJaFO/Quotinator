@@ -34,12 +34,39 @@ public class NotificationMetadataKindsTests
         foreach (NotificationMetadataKind kind in NotificationMetadataKinds.RegisteredKinds)
         {
             Type payloadType = NotificationMetadataKinds.PayloadTypeFor(kind);
-            NotificationMetadataDto instance = (NotificationMetadataDto)System.Runtime.CompilerServices
-                .RuntimeHelpers.GetUninitializedObject(payloadType);
+            NotificationMetadataDto instance = (NotificationMetadataDto)Activator.CreateInstance(payloadType)!;
 
             Assert.AreEqual(kind, instance.Kind,
                 $"{payloadType.Name} is registered under {kind} but reports {instance.Kind} — a row would be written " +
                 "with one discriminator and read back expecting another.");
+        }
+    }
+
+    /// <summary>
+    /// <c>Kind</c> must never reach the stored JSON: the row's own <c>MetadataKind</c> column already
+    /// carries it, and two copies can disagree.
+    /// <para>
+    /// Found live, by a Docker run against a real v1.8.3 database rather than by any unit test — stored
+    /// payloads read <c>{"announcement":"…","Kind":0}</c>. <c>Kind</c> was an abstract property with
+    /// <c>[JsonIgnore]</c> on the base, but <c>System.Text.Json</c> reads attributes from the
+    /// most-derived declaration, so every override silently dropped the attribute. No test caught it
+    /// because none asserted on the serialized text — round-tripping succeeded either way, since the
+    /// extra property simply deserialized back into an ignored member.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void SerializedPayload_NeverContainsTheKindDiscriminator()
+    {
+        foreach (NotificationMetadataKind kind in NotificationMetadataKinds.RegisteredKinds)
+        {
+            Type payloadType = NotificationMetadataKinds.PayloadTypeFor(kind);
+            object instance = Activator.CreateInstance(payloadType)!;
+
+            string json = System.Text.Json.JsonSerializer.Serialize(instance, payloadType);
+
+            Assert.DoesNotContain("Kind", json, StringComparison.OrdinalIgnoreCase,
+                $"{payloadType.Name} serialized its Kind into the payload ({json}) — the MetadataKind column already " +
+                "records it, and a stored copy can drift out of step with the column.");
         }
     }
 

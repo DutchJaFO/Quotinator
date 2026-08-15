@@ -347,7 +347,45 @@ identity, real SQLite), `NotificationMetadataKindsTests` (the kind→type regist
 `NotificationActionExecutorTests` (producers and the action seam).
 
 ### 9. Full verification (T1, T2)
-**Status:** Not started
+**Status:** In progress — T2 done, T1 outstanding (the developer's own action)
+
+**T2 / ADR 009 — migration path from a genuine v1.8.3 database.** `ghcr.io/dutchjafo/quotinator:1.8.3`
+created the starting database (`schema created at baseline (data v3, app v5)`), then the current build
+ran against that same volume: `applying 4 pending "Data" migration(s) (version 3 → 7)` →
+`schema updated (data v7, app v5)`, no exception, and no repeat on restart. Deliberately not the
+accumulated dev database, per ADR 009 and this project's "no smoke tests on a dev/shared DB" rule.
+
+**The T2 pass found a real bug the entire unit suite missed.** Stored payloads read
+`{"announcement":"GetAllImportBatches","Kind":0}` — `Kind` was an abstract property carrying
+`[JsonIgnore]` on the base, but `System.Text.Json` reads attributes from the most-derived declaration,
+so every derived override silently dropped it. The result duplicated the `MetadataKind` column inside
+the payload, as a bare enum ordinal, which is exactly the "two copies that can disagree" the attribute
+existed to prevent. No test caught it because round-tripping succeeded either way — the extra property
+deserialized straight back into an ignored member. Only reading the stored bytes exposed it.
+
+Fixed by removing the override entirely: `Kind` is now set through the base constructor, so there is no
+derived declaration to lose the attribute and a new producer cannot reintroduce the bug.
+`SerializedPayloadNeverContainsTheKindDiscriminator` asserts on the serialized text across every
+registered kind — the assertion class that was missing.
+
+Re-verified after the fix against a fresh v1.8.3 database: `{"announcement":"GetAllImportBatches"}`,
+and the `AppVersionId` FK joins to `Quotinator.Api 1.8.3`. `System_AppVersion` holds exactly one row
+(`Quotinator.Api | 1.8.3 | 1`) and a restart appends none.
+
+**Smoke tests updated, not just added** (`docs/smoke-tests.md`): new section 39 covers the migration
+path, stored payload, provenance join, append-only history, and structural dedupe. Section 33 was
+**wrong** after this issue — it asserted `totalCount: 0` and "No production code path writes a real
+notification yet", both untrue now that #279/#289/#81 are live producers; a fresh container carries
+exactly one notification, verified.
+
+**Found while verifying, routed to #308 rather than fixed here:** `NotificationTable.razor` renders
+`<td>@notification.Body</td>`, and HTML collapses whitespace — so #81's newline-joined highlight lists
+already render as a single run-on line. That is a live rendering bug, not only a cosmetic wish, and
+#308 (multi-line/rich message layout) is where it belongs.
+
+**T1 remains outstanding** and is the developer's own action, per this project's standing rule. Held
+deliberately until every migration in this issue had landed, so the developer's database takes the
+whole chain (4 → 7) in one pass instead of intermediate states.
 
 ---
 
@@ -370,7 +408,9 @@ identity, real SQLite), `NotificationMetadataKindsTests` (the kind→type regist
 | 12b | ✅ | Every `NotificationMetadataKind` has a registered payload type, and each type reports the kind it is registered under | Unit test | `NotificationMetadataKindsTests` — without this a new kind is a silent re-announce-forever bug |
 | 13 | ✅ | `INotificationActionExecutor.ExecuteAsync` receives the originating notification's metadata | Unit test | `NotificationActionExecutorTests.ExecuteAsync_WithMetadata_DeliversItAndStillPerformsTheAction`, `..._WithoutMetadata_StillPerformsTheAction` |
 | 14 | ❌ | `GET /api/v1/notifications` returns `title`/`body`/`metadata`/`metadataKind`, and no longer returns `message` | Unit test | Endpoint test asserting the live response shape |
-| 15 | ❌ | Migration applies cleanly to a real copy of the last released (v1.8.3) database | Live (T2) | ADR 009 verification against a v1.8.3 database |
+| 15 | ✅ | Migration applies cleanly to a real copy of the last released (v1.8.3) database | Live (T2) | `docker run ghcr.io/dutchjafo/quotinator:1.8.3` → `data v3, app v5`; current build → `applying 4 pending "Data" migration(s) (version 3 → 7)`, `schema updated (data v7, app v5)`, no exception, no repeat on restart |
+| 15b | ✅ | Stored payload carries no duplicate `Kind`, and `AppVersionId` joins to the writing version | Live (T2) | DbInspector against the migrated db: `Metadata` = `{"announcement":"GetAllImportBatches"}`, join yields `Quotinator.Api 1.8.3`. Regression-guarded by `NotificationMetadataKindsTests.SerializedPayload_NeverContainsTheKindDiscriminator` |
+| 15c | ✅ | `System_AppVersion` stays append-only across a restart | Live (T2) | One row (`Quotinator.Api / 1.8.3 / 1`) before and after `docker restart` |
 | 16 | ❌ | T1 — app starts in Visual Studio with no error; `/notifications` renders migrated rows correctly | Live (T1) | Developer confirms in Visual Studio |
 | 17 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 18 | ❌ | Full test suite green | Build | `dotnet test --configuration Release` |

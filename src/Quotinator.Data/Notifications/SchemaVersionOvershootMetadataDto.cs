@@ -15,7 +15,8 @@ namespace Quotinator.Data.Notifications;
 /// rather than pattern-matching a sentence.
 /// </para>
 /// </summary>
-public sealed class SchemaVersionOvershootMetadataDto : NotificationMetadataDto
+public sealed class SchemaVersionOvershootMetadataDto()
+    : NotificationMetadataDto(NotificationMetadataKind.SchemaVersionOvershoot)
 {
     /// <summary>The recorded version of Quotinator.Data's own migration history.</summary>
     [JsonPropertyName("dataSchemaVersion")]
@@ -24,9 +25,6 @@ public sealed class SchemaVersionOvershootMetadataDto : NotificationMetadataDto
     /// <summary>The recorded version of the consuming project's own migration history.</summary>
     [JsonPropertyName("appSchemaVersion")]
     public required int AppSchemaVersion { get; init; }
-
-    /// <inheritdoc/>
-    public override NotificationMetadataKind Kind => NotificationMetadataKind.SchemaVersionOvershoot;
 
     /// <summary>
     /// Both versions together. A repeat of the same already-notified overshoot (the operator hasn't

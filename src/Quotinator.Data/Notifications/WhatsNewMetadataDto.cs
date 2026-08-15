@@ -14,7 +14,7 @@ namespace Quotinator.Data.Notifications;
 /// different release.
 /// </para>
 /// </summary>
-public sealed class WhatsNewMetadataDto : NotificationMetadataDto
+public sealed class WhatsNewMetadataDto() : NotificationMetadataDto(NotificationMetadataKind.WhatsNew)
 {
     /// <summary>
     /// The release these highlights describe, or <see langword="null"/> for the <c>unreleased</c>
@@ -35,9 +35,6 @@ public sealed class WhatsNewMetadataDto : NotificationMetadataDto
     /// </summary>
     [JsonPropertyName("contentHash")]
     public string? ContentHash { get; init; }
-
-    /// <inheritdoc/>
-    public override NotificationMetadataKind Kind => NotificationMetadataKind.WhatsNew;
 
     /// <summary>
     /// Version and content hash together. Exactly one is populated in practice, and using both means

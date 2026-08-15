@@ -50,6 +50,7 @@ verification command here in the same commit that fixes it — the list only gro
 36. [Startup wait page during database initialisation](#36-startup-wait-page-during-database-initialisation-280) (#280)
 37. [Migration replay under a restricted-write environment](#37-migration-replay-under-a-restricted-write-environment-294) (#294)
 38. [Degraded-state pages survive a genuine migration failure](#38-degraded-state-pages-survive-a-genuine-migration-failure-293) (#293)
+39. [Notification metadata, provenance, and the v1.8.3 → current migration path](#39-notification-metadata-provenance-and-the-v183--current-migration-path-312) (#312)
 
 ---
 
@@ -1439,11 +1440,15 @@ Clean up: `docker rm -f smoke156`.
 
 `GET /api/v1/notifications` (list, no key) and `POST /api/v1/notifications/{id}/dismiss` (admin,
 key required), plus the `/notifications` Blazor page and the `StartupSuccessModal`/`StartupErrorModal`
-wiring. No production code path writes a real notification yet — the actual producers (e.g. a future
-"pre-seed backup skipped" case) are follow-on integrations tracked separately, so a fresh container has
-none. This section proves the mechanism (list/dismiss/tag/UI) works against an empty table; the
-write → active → dismiss round trip itself is covered by `NotificationWriterTests`/
-`NotificationReaderTests` (real SQLite, not live-command-verified here).
+wiring.
+
+**Updated by #312: real producers now exist, so a fresh container is no longer empty.** When this
+section was written no production code path wrote a notification, and it asserted an empty list. #279
+(operation-id renames), #289 (schema-version overshoot) and #81 (what's-new highlights) are all live
+producers now — a fresh container has **exactly one** notification, #279's announcement, verified
+against `quotinator:local`. #289's only appears on a database in an overshoot state and #81's only when
+the changelog has notification-flagged highlights for the running version, so neither shows on a fresh
+container. Section 39 covers the payload and provenance those producers write.
 
 ```bash
 docker rm -f smoke278
@@ -1456,15 +1461,22 @@ curl -s -w " [%{http_code}]\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
 curl -s "http://localhost:8080/openapi/v1.json" | grep -o '"Notifications"' | head -1
 ```
-- `GET /notifications` must return `200` with `{"items":[],"page":1,"pageSize":20,"totalCount":0}`.
+- `GET /notifications` must return `200` with `totalCount: 1` on a fresh container — #279's
+  announcement, titled "Two API operation IDs were renamed". It asserted `totalCount: 0` before #312
+  added real producers.
 - Dismissing a random id with no `X-Api-Key` must return `401`.
 - Dismissing the same id with the correct key must return `404` (no notification exists with that id).
 - The OpenAPI spec must contain the `Notifications` tag.
 
-**Blazor UI**: visit `http://localhost:8080/notifications` — must render the page heading and
-"No notifications yet." (no crash, no 503). Visit `http://localhost:8080/` — `StartupSuccessModal`
-must render with no notification section shown (nothing active yet); confirms `NotificationSummary`
-renders cleanly with zero rows rather than an empty heading with nothing under it.
+**Blazor UI**: visit `http://localhost:8080/notifications` — must render the page heading and #279's
+announcement row (no crash, no 503). Visit `http://localhost:8080/` — `StartupSuccessModal` must render
+with that notification shown in its summary section. **Take an actual screenshot for both**: page text
+alone cannot catch a CSS or layout regression, and a multi-line body is exactly where one shows up.
+
+The pre-#312 expectation here was "No notifications yet." plus an empty summary. To still exercise the
+genuinely-empty path — `NotificationSummary` rendering cleanly with zero rows rather than an empty
+heading with nothing under it — dismiss the announcement first via
+`POST /api/v1/notifications/{id}/dismiss`, then reload both pages.
 
 **Status filter and Action button (requires seeded rows — insert directly via a SQLite client against
 `System_Notification`, e.g. one `ActionRequired` row with `DismissTriggerKey = 'DatabaseReset'`, one
@@ -1722,3 +1734,90 @@ calls the page makes while degraded); anything else (a JS exception, a Blazor ci
 
 Clean up: `docker rm -f smoke293 && docker volume rm smoke293-data`.
 
+
+---
+
+## 39. Notification metadata, provenance, and the v1.8.3 → current migration path (#312)
+
+Covers what #312 added on top of #278's mechanism: the `Title`/`Body` split, the typed `Metadata`
+payload and its `MetadataKind` discriminator, opt-in expiry, and the `AppVersionId` link to the
+append-only `System_AppVersion` history. Also serves as this issue's ADR 009 check — the migration path
+is exercised against a database created by the **last published release**, never an accumulated dev
+database.
+
+Every command below was run for real; the expected values are observed output, not predictions.
+
+### 39a. Migration path from a genuine v1.8.3 database
+
+```bash
+docker pull ghcr.io/dutchjafo/quotinator:1.8.3
+mkdir -p /tmp/q312/data
+MSYS_NO_PATHCONV=1 docker run -d --name q183 -e Quotinator__DataDir=/data \
+  -v /tmp/q312/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
+sleep 28
+docker logs q183 2>&1 | grep baseline
+docker rm -f q183
+
+MSYS_NO_PATHCONV=1 docker run -d --name q312 -e Quotinator__DataDir=/data \
+  -v /tmp/q312/data:/data -p 8080:8080 quotinator:local
+sleep 30
+docker logs q312 2>&1 | grep -E "pending|schema updated"
+```
+- v1.8.3 must report `schema created at baseline (data v3, app v5)` — that is the released schema this
+  upgrade starts from.
+- The current build must report `applying 4 pending "Data" migration(s) (version 3 → 7)` then
+  `schema updated (data v7, app v5)`. Four migrations: #81's `System_AppVersion` (4), #312's
+  notification reshape (5), `Application` column (6), `SequenceNumber` (7).
+- **No exception, and no repeat of the migration on a second start.** `docker restart q312` must not
+  log `applying … pending` again.
+
+### 39b. Stored payload and provenance
+
+Query the migrated database with the DbInspector dev tool (never shipped in the image, so run it on the
+host against the same file):
+
+```bash
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db /tmp/q312/data/quotinatordata.db \
+  --sql "SELECT n.Title, n.MetadataKind, n.Metadata, v.Application || ' ' || v.Version AS WrittenBy FROM System_Notification n LEFT JOIN System_AppVersion v ON v.Id = n.AppVersionId;"
+```
+- `MetadataKind` must be `Announcement`, and `Metadata` exactly `{"announcement":"GetAllImportBatches"}`.
+- **`Metadata` must not contain a `Kind` property.** Found live during #312's own T2 pass: payloads
+  stored `{"announcement":"…","Kind":0}`, because `[JsonIgnore]` on an abstract base property is not
+  inherited by the derived override — `System.Text.Json` reads attributes from the most-derived
+  declaration. The column already records the kind, so a second copy in the payload can drift out of
+  step with it. No unit test caught this (round-tripping succeeded either way); only reading the stored
+  bytes did.
+- `WrittenBy` must resolve to `Quotinator.Api 1.8.3` — the `AppVersionId` FK actually joins, rather
+  than being written null or dangling.
+
+### 39c. Append-only version history
+
+```bash
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db /tmp/q312/data/quotinatordata.db \
+  --sql "SELECT Application, Version, SequenceNumber, COUNT(*) OVER () AS TotalRows FROM System_AppVersion;"
+```
+- Exactly one row: `Quotinator.Api | 1.8.3 | 1 | 1`. `Application` and `Version` are separate columns —
+  never one concatenated value.
+- After `docker restart q312`, still exactly one row. Recording the same application+version twice must
+  append nothing, or every restart would grow the table.
+- `SequenceNumber` is the explicit recording order. It exists because `DateCreated` is second-resolution
+  and cannot separate rows written within the same second, and because SQLite's implicit `rowid` is
+  reusable once a table's highest row is removed — neither is a trustworthy answer to "which version
+  ran last".
+
+### 39d. Dedupe is structural, not textual
+
+```bash
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+docker restart q312 && sleep 30
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+```
+- `totalCount` must be identical before and after the restart. A producer runs on every startup; the
+  history is what stops it writing twice.
+- The identity lives in `Metadata`, never in `Body`. #278 embedded a key in the message text and matched
+  it with `Contains`, which could not distinguish `WhatsNew:v1.9.1` from `WhatsNew:v1.9.10`. To confirm
+  the text path is genuinely dead, insert a row whose `Body` mentions `GetAllImportBatches` but whose
+  `Metadata` is `NULL`, restart, and check `totalCount` **increases** — the announcement must be written
+  again, because a body match no longer suppresses anything.
+
+Clean up: `docker rm -f q312 && rm -rf /tmp/q312`.

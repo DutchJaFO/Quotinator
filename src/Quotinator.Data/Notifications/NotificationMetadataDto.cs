@@ -21,7 +21,8 @@ namespace Quotinator.Data.Notifications;
 /// composes a key, and no substring hazard can exist in the first place.
 /// </para>
 /// </summary>
-public abstract class NotificationMetadataDto
+/// <param name="kind">Which payload shape this is; supplied by each derived type's own constructor.</param>
+public abstract class NotificationMetadataDto(NotificationMetadataKind kind)
 {
     /// <summary>
     /// Which payload shape this is. Persisted to the row's own <c>MetadataKind</c> column, which is
@@ -31,9 +32,17 @@ public abstract class NotificationMetadataDto
     /// <see cref="JsonIgnoreAttribute"/> because the column already carries it; storing it twice would
     /// create two copies that can disagree.
     /// </para>
+    /// <para>
+    /// Set through the constructor rather than declared <c>abstract</c> and overridden, which is what
+    /// it was until a Docker run against a real database showed <c>"Kind":0</c> written into the stored
+    /// JSON. <see cref="JsonIgnoreAttribute"/> is not inherited by an overriding property —
+    /// <c>System.Text.Json</c> reads attributes from the most-derived declaration — so every derived
+    /// type silently reintroduced the duplicate this attribute exists to prevent. With no override to
+    /// declare, a producer cannot forget the attribute, because there is nowhere to forget it.
+    /// </para>
     /// </summary>
     [JsonIgnore]
-    public abstract NotificationMetadataKind Kind { get; }
+    public NotificationMetadataKind Kind { get; } = kind;
 
     /// <summary>
     /// The values that together identify this notification, in a fixed order. Two payloads of the same
