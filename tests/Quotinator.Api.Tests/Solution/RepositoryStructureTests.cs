@@ -118,6 +118,39 @@ public class RepositoryStructureTests
             "Directory.Packages.props is not referenced in Quotinator.slnx.");
     }
 
+    /// <summary>
+    /// Every Markdown file under docs/ must be listed in Quotinator.slnx, so it is visible in Visual
+    /// Studio Solution Explorer — the place these documents are actually read.
+    /// </summary>
+    /// <remarks>
+    /// ADR 018 shipped without its solution entry (commit 7d70708 added the file and its README index
+    /// row but not the .slnx one) and stayed invisible until it was spotted by eye during #320.
+    /// Nothing mechanical caught it, which is what this test exists to change.
+    ///
+    /// Enumerating from disk under docs/ rather than from git keeps this runnable without a git
+    /// process; the .claude/worktrees/ copies that would otherwise interfere live outside docs/.
+    /// </remarks>
+    [TestMethod]
+    public void DocsMarkdownFiles_OnDisk_AreAllInSlnx()
+    {
+        HashSet<string> paths = LoadSlnxFilePaths();
+        string docsDir = Path.Combine(RepoRoot, "docs");
+
+        List<string> diskFiles =
+        [
+            .. Directory.GetFiles(docsDir, "*.md", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(RepoRoot, f).Replace('\\', '/'))
+        ];
+
+        Assert.IsNotEmpty(diskFiles, "No .md files found under docs/.");
+
+        List<string> failures = [.. diskFiles.Where(f => !paths.Contains(f)).Order()];
+
+        Assert.IsEmpty(failures,
+            "Markdown files exist under docs/ but are missing from Quotinator.slnx, so they are "
+            + $"invisible in Solution Explorer:\n{string.Join("\n", failures)}");
+    }
+
     /// <summary>data/changelog/changelog.en.json must exist on disk as the English source file.</summary>
     [TestMethod]
     public void ChangelogEnJson_ExistsOnDisk()
