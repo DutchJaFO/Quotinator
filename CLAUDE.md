@@ -152,6 +152,16 @@ Active milestones, open issues, and development priorities are tracked in GitHub
 
 **Audit-trail tables never purge dangling references, and Reset is a full wipe that does not preserve them.** `Audit_Entry`, `Import_Conflict` (dead schema — nothing reads or writes it, see #249's plan doc), `Import_Action`, and `Audit_Change` each record an event via an `EntityId`/`RecordId` column pointing at a domain row. Every domain entity id in this project (`QuoteIdentity.StableId`, `EntityIdentity.SourceId`/`CharacterId`/`PersonId`/`SeriesId`/`UniverseId`) is a deterministic hash of normalised content, not a random UUID — reimporting unchanged source content after a wipe reproduces the same id, so a Reseed does not, by itself, orphan every audit-trail row the way a random-UUID scheme would. A row only goes dangling when the entity's content actually changes or is removed across a reimport. Per [ADR 014](docs/architecture-decisions/014-audit-trail-tables-do-not-purge-dangling-references.md), that dangling state is permanent and intentional — no purge/flag mechanism exists or will be built (aside from #249's own conflict-resolution-data auto-purge, a separate, narrower concern — see its own section above). Since #156 (Reset rebuilds from the fresh-database baseline instead of selectively preserving tables), these tables no longer survive Reset at all — a deliberate tradeoff, not a gap: an operator who wants to keep this data retrieves it beforehand via the admin audit export endpoint (`GET /admin/audit/export`, #249), which ADR 014 required to ship in the same release as this behaviour.
 
+### Package versions are managed centrally
+
+**Every NuGet package version lives in `Directory.Packages.props` at the repo root, declared exactly
+once as a `<PackageVersion>`; a `<PackageReference>` must never carry a `Version` attribute** — see
+[ADR 019](docs/architecture-decisions/019-central-package-version-management.md) for the full rule,
+the `NU1605` failure it removes, and why `VersionOverride` is not used.
+`RepositoryStructureTests.PackageReferences_DoNotCarryInlineVersions` enforces it mechanically.
+Security-driven pins (CVE-2025-6965, CVE-2026-49451) carry their rationale in that file — read the
+linked CVE doc before changing one.
+
 ### Project structure
 ```
 src/
@@ -995,6 +1005,7 @@ Boyscout rule: when you edit any file that emits log lines without the `[Subsyst
 | `SOURCES.md` | Attribution for seed data |
 | `CHANGELOG.md` | Generated changelog — do not edit directly |
 | `Directory.Build.props` | Shared version number (`<Version>`) — only file to update when bumping |
+| `Directory.Packages.props` | Central package versions — the only place a NuGet version is declared |
 | `Quotinator.slnx` | Visual Studio solution — all non-generated files must be listed here |
 | `data/sources/` | Bundled source files — one JSON per dataset + `manifest.json` |
 | `data/sources/quotinator-curated.json` | Manually verified curated entries |

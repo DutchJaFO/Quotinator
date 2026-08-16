@@ -11,8 +11,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MSTest" Version="4.3.0" />
-    <PackageReference Include="JsonSchema.Net" Version="9.4.0" />
+    <PackageReference Include="MSTest" />
+    <PackageReference Include="JsonSchema.Net" />
   </ItemGroup>
 
   <ItemGroup>

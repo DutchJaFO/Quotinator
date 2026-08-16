@@ -28,12 +28,12 @@ public class CsvQuoteConverterTests
     [TestMethod]
     public async Task ConvertAsync_MinimalColumns_ParsesQuoteAndSource()
     {
-        var inputPath  = WriteInput("quote,source\n\"A quote.\",A Source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("quote,source\n\"A quote.\",A Source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
         Assert.AreEqual("A Source", quote.Source);
         Assert.AreEqual("en", quote.OriginalLanguage);
@@ -47,25 +47,25 @@ public class CsvQuoteConverterTests
     [TestMethod]
     public async Task ConvertAsync_NoIdColumnValue_DerivesStableId()
     {
-        var inputPath  = WriteInput("quote,source\nA quote.,A Source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("quote,source\nA quote.,A Source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual(QuoteIdentity.StableId("A quote.", "A Source"), quote.Id);
     }
 
     [TestMethod]
     public async Task ConvertAsync_ExplicitIdColumn_TakesPrecedenceOverDerivedId()
     {
-        var explicitId = Guid.NewGuid().ToString();
-        var inputPath  = WriteInput($"id,quote,source\n{explicitId},A quote.,A Source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string explicitId = Guid.NewGuid().ToString();
+        string inputPath  = WriteInput($"id,quote,source\n{explicitId},A quote.,A Source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual(explicitId, quote.Id);
         Assert.AreNotEqual(QuoteIdentity.StableId("A quote.", "A Source"), quote.Id);
     }
@@ -73,57 +73,57 @@ public class CsvQuoteConverterTests
     [TestMethod]
     public async Task ConvertAsync_AllColumnsPopulated_MapsEveryField()
     {
-        var inputPath = WriteInput(
+        string inputPath = WriteInput(
             "id,quote,originalLanguage,source,date,character,author,type,genres\n" +
             "11111111-1111-4111-8111-111111111111,A quote.,nl,A Source,1994,A Character,An Author,book,drama;sci-fi\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("11111111-1111-4111-8111-111111111111", quote.Id);
         Assert.AreEqual("nl", quote.OriginalLanguage);
         Assert.AreEqual("1994", quote.Date);
         Assert.AreEqual("A Character", quote.Character);
         Assert.AreEqual("An Author", quote.Author);
         Assert.AreEqual(QuoteType.Book, quote.Type);
-        CollectionAssert.AreEqual(DramaSciFiGenres, quote.Genres.ToList());
+        Assert.AreSequenceEqual(DramaSciFiGenres, quote.Genres);
     }
 
     [TestMethod]
     public async Task ConvertAsync_QuotedFieldWithEmbeddedComma_ParsesAsSingleField()
     {
-        var inputPath  = WriteInput("quote,source\n\"A quote, with a comma.\",A Source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("quote,source\n\"A quote, with a comma.\",A Source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote, with a comma.", quote.QuoteText);
     }
 
     [TestMethod]
     public async Task ConvertAsync_QuotedFieldWithEscapedQuote_UnescapesCorrectly()
     {
-        var inputPath  = WriteInput("quote,source\n\"She said \"\"hello\"\".\",A Source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("quote,source\n\"She said \"\"hello\"\".\",A Source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("She said \"hello\".", quote.QuoteText);
     }
 
     [TestMethod]
     public async Task ConvertAsync_OneRowMissingSource_SkipsItButConvertsTheRest()
     {
-        var inputPath  = WriteInput("quote,source\nMissing a source,\nA real quote.,A Real Source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("quote,source\nMissing a source,\nA real quote.,A Real Source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
-        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        string text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out List<SourceQuoteDto>? quotes));
         Assert.HasCount(1, quotes!);
         Assert.AreEqual("A real quote.", quotes![0].QuoteText);
     }
@@ -131,8 +131,8 @@ public class CsvQuoteConverterTests
     [TestMethod]
     public async Task ConvertAsync_HeaderOnlyNoDataRows_ThrowsSourceConversionException()
     {
-        var inputPath  = WriteInput("quote,source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("quote,source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
@@ -141,8 +141,8 @@ public class CsvQuoteConverterTests
     [TestMethod]
     public async Task ConvertAsync_MissingRequiredColumns_ThrowsSourceConversionException()
     {
-        var inputPath  = WriteInput("character,author\nSome Character,Some Author\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("character,author\nSome Character,Some Author\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
@@ -151,8 +151,8 @@ public class CsvQuoteConverterTests
     [TestMethod]
     public async Task ConvertAsync_AllRowsMissingRequiredFields_ThrowsSourceConversionException()
     {
-        var inputPath  = WriteInput("quote,source\n,\n,\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("quote,source\n,\n,\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
@@ -161,12 +161,12 @@ public class CsvQuoteConverterTests
     [TestMethod]
     public async Task ConvertAsync_ColumnHeaderCasing_IsCaseInsensitive()
     {
-        var inputPath  = WriteInput("QUOTE,SOURCE\nA quote.,A Source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("QUOTE,SOURCE\nA quote.,A Source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
     }
 
@@ -181,16 +181,16 @@ public class CsvQuoteConverterTests
     public async Task ConvertAsync_ColumnMapping_MapsColumnsByPosition()
     {
         // Header labels deliberately don't match canonical names — mapping must be used exclusively.
-        var inputPath  = WriteInput("Text,Movie\nA quote.,A Source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new CsvConverterOptionsDto
+        string inputPath  = WriteInput("Text,Movie\nA quote.,A Source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
+        JsonElement options = ToOptions(new CsvConverterOptionsDto
         {
             ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
         });
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
         Assert.AreEqual("A Source", quote.Source);
     }
@@ -198,9 +198,9 @@ public class CsvQuoteConverterTests
     [TestMethod]
     public async Task ConvertAsync_HasHeaderFalse_TreatsFirstRowAsData()
     {
-        var inputPath  = WriteInput("A quote.,A Source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new CsvConverterOptionsDto
+        string inputPath  = WriteInput("A quote.,A Source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
+        JsonElement options = ToOptions(new CsvConverterOptionsDto
         {
             HasHeader     = false,
             ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
@@ -208,23 +208,23 @@ public class CsvQuoteConverterTests
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
     }
 
     [TestMethod]
     public async Task ConvertAsync_Defaults_PopulatesUnmappedField()
     {
-        var inputPath  = WriteInput("quote,source\nA quote.,A Source\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new CsvConverterOptionsDto
+        string inputPath  = WriteInput("quote,source\nA quote.,A Source\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
+        JsonElement options = ToOptions(new CsvConverterOptionsDto
         {
             Defaults = new QuoteFieldDefaults { OriginalLanguage = "nl", Type = QuoteType.Book }
         });
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("nl", quote.OriginalLanguage);
         Assert.AreEqual(QuoteType.Book, quote.Type);
     }
@@ -232,9 +232,9 @@ public class CsvQuoteConverterTests
     [TestMethod]
     public async Task ConvertAsync_ColumnMappingWithRowValue_RowValueTakesPrecedenceOverDefault()
     {
-        var inputPath  = WriteInput("A quote.,A Source,book\n");
-        var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new CsvConverterOptionsDto
+        string inputPath  = WriteInput("A quote.,A Source,book\n");
+        string outputPath = Path.Combine(_tempDir, "output.json");
+        JsonElement options = ToOptions(new CsvConverterOptionsDto
         {
             HasHeader     = false,
             ColumnMapping = new IndexedFieldMapping { Quote = 1, Source = 2, Type = 3 },
@@ -243,7 +243,7 @@ public class CsvQuoteConverterTests
 
         await new CsvQuoteConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual(QuoteType.Book, quote.Type);
     }
 
@@ -254,15 +254,15 @@ public class CsvQuoteConverterTests
 
     private string WriteInput(string content)
     {
-        var path = Path.Combine(_tempDir, "input.csv");
+        string path = Path.Combine(_tempDir, "input.csv");
         File.WriteAllText(path, content);
         return path;
     }
 
     private static async Task<SourceQuoteDto> ReadSingle(string outputPath)
     {
-        var text = await File.ReadAllTextAsync(outputPath);
-        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        string text = await File.ReadAllTextAsync(outputPath);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out List<SourceQuoteDto>? quotes));
         return quotes!.Single();
     }
 

@@ -38,12 +38,12 @@ public class BasicJsonArrayConverterTests
     [TestMethod]
     public async Task ConvertAsync_CanonicalPropertyNames_NoOptionsNeeded()
     {
-        var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","type":"book"}]""");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","type":"book"}]""");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("A quote.", quote.QuoteText);
         Assert.AreEqual("A Source", quote.Source);
         Assert.AreEqual(QuoteType.Book, quote.Type);
@@ -57,32 +57,32 @@ public class BasicJsonArrayConverterTests
     [TestMethod]
     public async Task ConvertAsync_PropertyMapping_RemapsField()
     {
-        var inputPath  = WriteInput("""[{"quote":"A quote.","movie":"A Source"}]""");
-        var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
+        string inputPath  = WriteInput("""[{"quote":"A quote.","movie":"A Source"}]""");
+        string outputPath = Path.Combine(_tempDir, "output.json");
+        JsonElement options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie" }
         });
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("A Source", quote.Source);
     }
 
     [TestMethod]
     public async Task ConvertAsync_Defaults_PopulatesUnmappedField()
     {
-        var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source"}]""");
-        var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
+        string inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source"}]""");
+        string outputPath = Path.Combine(_tempDir, "output.json");
+        JsonElement options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             Defaults = new QuoteFieldDefaults { OriginalLanguage = "nl" }
         });
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("nl", quote.OriginalLanguage);
     }
 
@@ -94,36 +94,36 @@ public class BasicJsonArrayConverterTests
     [TestMethod]
     public async Task ConvertAsync_GenresAsArray_ProducesMultipleGenres()
     {
-        var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","genres":["drama","sci-fi"]}]""");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","genres":["drama","sci-fi"]}]""");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
-        CollectionAssert.AreEqual(DramaSciFiGenres, quote.Genres.ToList());
+        SourceQuoteDto quote = await ReadSingle(outputPath);
+        Assert.AreSequenceEqual(DramaSciFiGenres, quote.Genres);
     }
 
     [TestMethod]
     public async Task ConvertAsync_GenresAsSingleString_ProducesOneGenre()
     {
-        var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","genres":"drama"}]""");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source","genres":"drama"}]""");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
-        CollectionAssert.AreEqual(DramaGenre, quote.Genres.ToList());
+        SourceQuoteDto quote = await ReadSingle(outputPath);
+        Assert.AreSequenceEqual(DramaGenre, quote.Genres);
     }
 
     [TestMethod]
     public async Task ConvertAsync_GenresAbsent_ProducesEmptyList()
     {
-        var inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source"}]""");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("""[{"quote":"A quote.","source":"A Source"}]""");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.IsEmpty(quote.Genres);
     }
 
@@ -135,16 +135,16 @@ public class BasicJsonArrayConverterTests
     [TestMethod]
     public async Task ConvertAsync_RowMissingQuoteOrSource_SkipsRow()
     {
-        var inputPath  = WriteInput("""
+        string inputPath  = WriteInput("""
             [{"quote":"","source":"A Source"},
              {"quote":"A real quote.","source":"A Real Source"}]
             """);
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
-        var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
-        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        string text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out List<SourceQuoteDto>? quotes));
         Assert.HasCount(1, quotes!);
         Assert.AreEqual("A real quote.", quotes![0].QuoteText);
     }
@@ -152,8 +152,8 @@ public class BasicJsonArrayConverterTests
     [TestMethod]
     public async Task ConvertAsync_InvalidJson_ThrowsSourceConversionException()
     {
-        var inputPath  = WriteInput("{ this is not an array");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("{ this is not an array");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
@@ -162,8 +162,8 @@ public class BasicJsonArrayConverterTests
     [TestMethod]
     public async Task ConvertAsync_ZeroValidEntries_ThrowsSourceConversionException()
     {
-        var inputPath  = WriteInput("""[{"quote":"","source":""}]""");
-        var outputPath = Path.Combine(_tempDir, "output.json");
+        string inputPath  = WriteInput("""[{"quote":"","source":""}]""");
+        string outputPath = Path.Combine(_tempDir, "output.json");
 
         await Assert.ThrowsExactlyAsync<SourceConversionException>(
             () => new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken));
@@ -180,36 +180,36 @@ public class BasicJsonArrayConverterTests
     [TestMethod]
     public async Task ConvertAsync_AgainstCommittedNikhilNamal17Fixture_IdsMatchExactly()
     {
-        var expectedId = FindBaselineId("Do, or do not. There is no try.", "Star Wars: Episode V - The Empire Strikes Back");
-        var inputPath  = WriteInput("""
+        string expectedId = FindBaselineId("Do, or do not. There is no try.", "Star Wars: Episode V - The Empire Strikes Back");
+        string inputPath  = WriteInput("""
             [{"quote":"Do, or do not. There is no try.","movie":"Star Wars: Episode V - The Empire Strikes Back","type":"movie","year":1980}]
             """);
-        var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
+        string outputPath = Path.Combine(_tempDir, "output.json");
+        JsonElement options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
-        var text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
-        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        string text = await File.ReadAllTextAsync(outputPath, TestContext.CancellationToken);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out List<SourceQuoteDto>? quotes));
         Assert.AreEqual(expectedId, quotes!.Single().Id);
     }
 
     [TestMethod]
     public async Task ConvertAsync_NumericYear_NormalisedToString()
     {
-        var inputPath  = WriteInput("""[{"quote":"A quote.","movie":"A Movie","year":1994}]""");
-        var outputPath = Path.Combine(_tempDir, "output.json");
-        var options = ToOptions(new BasicJsonArrayConverterOptionsDto
+        string inputPath  = WriteInput("""[{"quote":"A quote.","movie":"A Movie","year":1994}]""");
+        string outputPath = Path.Combine(_tempDir, "output.json");
+        JsonElement options = ToOptions(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
 
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, options, TestContext.CancellationToken);
 
-        var quote = await ReadSingle(outputPath);
+        SourceQuoteDto quote = await ReadSingle(outputPath);
         Assert.AreEqual("1994", quote.Date);
     }
 
@@ -217,22 +217,22 @@ public class BasicJsonArrayConverterTests
 
     private string WriteInput(string content)
     {
-        var path = Path.Combine(_tempDir, "input.json");
+        string path = Path.Combine(_tempDir, "input.json");
         File.WriteAllText(path, content);
         return path;
     }
 
     private static string FindBaselineId(string quote, string source)
     {
-        var text = File.ReadAllText(BaselineFile);
-        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        string text = File.ReadAllText(BaselineFile);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out List<SourceQuoteDto>? quotes));
         return quotes!.Single(q => q.QuoteText == quote && q.Source == source).Id;
     }
 
     private static async Task<SourceQuoteDto> ReadSingle(string outputPath)
     {
-        var text = await File.ReadAllTextAsync(outputPath);
-        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
+        string text = await File.ReadAllTextAsync(outputPath);
+        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out List<SourceQuoteDto>? quotes));
         return quotes!.Single();
     }
 
