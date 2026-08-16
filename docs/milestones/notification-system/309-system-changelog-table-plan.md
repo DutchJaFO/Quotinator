@@ -593,16 +593,86 @@ apart by database, and the remedy would be splitting `Sql.cs`, not the table nam
 
 **Status:** ⬜ Not started
 
-`Changelog` → `Changelog_Entry`, `ChangelogLine` → `Changelog_Line`, `ChangelogSchemaVersion` →
-`Changelog_SchemaVersion`, across the migration, the baseline, `ChangelogEntity`/`ChangelogLineEntity`'s
-`[Table(...)]` attributes, `Sql.ChangelogSchema`/`Sql.ChangelogContent`, and the tests.
-
 Applied by **editing this database's migration and baseline in place**, not by adding a rename
 migration. That is only correct because the changelog database is in-memory only and no persistent copy
-exists anywhere — ADR 015's revision records that this window closes the moment a persistent-file variant ships.
+exists anywhere — ADR 015's revision records that this window closes the moment a persistent-file
+variant ships.
 
-`CLAUDE.md`'s table-naming section gains `Changelog_` alongside the existing domains, in the same
-commit.
+#### What changes
+
+| From | To |
+|---|---|
+| table `Changelog` | `Changelog_Entry` |
+| table `ChangelogLine` | `Changelog_Line` |
+| table `ChangelogSchemaVersion` | `Changelog_SchemaVersion` |
+| index `UX_Changelog_Language_Version` | `UX_Changelog_Entry_Language_Version` |
+| index `UX_Changelog_Language_Unreleased` | `UX_Changelog_Entry_Language_Unreleased` |
+| index `IX_ChangelogLine_ChangelogId` | `IX_Changelog_Line_ChangelogEntryId` |
+| column `ChangelogLine.ChangelogId` | `Changelog_Line.ChangelogEntryId` |
+| class `ChangelogEntity` | `ChangelogEntryEntity` (file renamed to match) |
+
+Index naming follows the main database's existing convention — `IX_`/`UX_` + the full prefixed table
+name + columns, as in `IX_Audit_Entry_TableName_RecordId`. The class and column renames are developer
+decisions (2026-08-16); ADR 015 governs table names only, and the existing class names are not
+self-consistent (`Audit_Entry` → `AuditEntryEntity`, but `Audit_Change` → `ChangeEntity`), so precedent
+could not settle them.
+
+#### Files, from a full inventory (2026-08-16)
+
+**`Quotinator.Data` — schema**
+- `Database/ChangelogContentMigrations.cs` — both `CREATE TABLE`s, all three indexes, the FK
+  `REFERENCES`, and the class doc, whose "No `System_`/domain prefix on either table" justification is
+  now obsolete and is replaced by a pointer to ADR 015's revision.
+
+**`Quotinator.Data` — queries**
+- `Queries/Sql.cs`, `ChangelogSchema` — `CreateVersionTable`, `GetCurrentVersion`, `InsertVersion`, and
+  the doc comment naming the version table.
+- `Queries/Sql.cs`, `ChangelogContent` — `ClearLines`, `ClearChangelogs`, and `SelectAllWithLines()`'s
+  `FROM`/`LEFT JOIN`/join condition. Its `IdClauses.SelectColumn("[c].[Id]", "ChangelogId")` alias
+  becomes `ChangelogEntryId` so the read model matches; the `LOWER()` wrap stays, keeping
+  `SqlSelectPresentationGuard` satisfied under the new name.
+- `Queries/ChangelogLineRow.cs` — property `ChangelogId` → `ChangelogEntryId`.
+- `Queries/ChangelogWithLinesStrategy.cs` — doc comment only.
+
+**`Quotinator.Data` — entities, repositories, import**
+- `Entities/ChangelogEntity.cs` → `Entities/ChangelogEntryEntity.cs`, class renamed,
+  `[Table("Changelog_Entry")]`.
+- `Entities/ChangelogLineEntity.cs` — `[Table("Changelog_Line")]`, property `ChangelogId` →
+  `ChangelogEntryId`, and its two `<see cref="ChangelogEntity"/>` references.
+- `Repositories/ChangelogRepository.cs` — the `AggregateRepository<,>` type arguments,
+  `InsertWithLinesAsync`, `GetChildren`, and two doc references.
+- `Repositories/ChangelogReader.cs` — `GroupBy(r => r.ChangelogId)`.
+- `Import/ChangelogSystemContentImporter.cs` — `new ChangelogEntity` and `ChangelogId = changelogId`.
+- `Logging/LogMessages.cs` — the fallback warning text naming the `Changelog` table, and its summary.
+
+**Tests**
+- `Quotinator.Data.Tests/Database/ChangelogDatabaseInitializerTests.cs` — the table-name array and four
+  raw SQL statements.
+- `Quotinator.Data.Tests/Import/ChangelogSystemContentImporterTests.cs` — eight raw SQL statements.
+- `Quotinator.Data.Tests/Repositories/ChangelogReaderTests.cs` — `BrokenSqlStrategy`'s deliberately
+  malformed SQL, plus doc comments.
+
+**Docs**
+- `CLAUDE.md`'s table-naming line and `docs/database-conventions.md`'s "Table naming" row gain
+  `Changelog_`.
+- `data/changelog/changelog.{en,nl,de}.json` — `unreleased` entries, in lockstep.
+
+#### Verified as *not* affected
+
+- `Quotinator.Data.Tests/Connections/ChangelogConnectionKeepAliveTests.cs` — uses its own scratch table
+  `T`.
+- `SqlBoundaryTests`/`SqlQueryGuardTests` — they enumerate the *nested class* names
+  `ChangelogSchema`/`ChangelogContent`, which do not change.
+- `DatabaseConnectionKeys.Changelog` (`"changelog"`) — a connection key, not a table name.
+- `Quotinator.Changelog` the project, and every `IChangelogService`/`ChangelogRoot`/`ChangelogRelease`
+  type — JSON-side, no table involved.
+
+#### Order
+
+Schema first, then queries, then entities/repositories/import, then tests, then docs. The build stays
+red in between — this is one rename, not an incremental refactor, and splitting it into separately
+green steps would mean writing compatibility shims for a change that has no consumers outside this
+repository.
 
 **T2 re-confirmed against the final commit state (2026-08-14), not just Step 8's earlier snapshot.**
 Step 8's own live Docker run happened before Step 9's added test and before the unreleased #309
