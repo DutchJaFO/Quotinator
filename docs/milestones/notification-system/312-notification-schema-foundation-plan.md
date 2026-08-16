@@ -1,14 +1,12 @@
 # #312 — Notification schema: title/body, typed metadata, optional expiry, and app-version provenance
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #312 (open)
 **Depends on:** #278 (done, released v1.8.0 — the mechanism this issue reshapes)
 
-> **Next action: implement the three items under "Follow-on work, agreed 2026-08-16".** The issue had
-> reached `Waiting for release` with every verification row green when the developer inspected the
-> stored rows and found two design faults and a migration gap. Nothing already verified is invalidated
-> — this is additional work on top — but it must land before release, because two of the three change
-> stored data.
+> **Next action: nothing until the release ships.** Every step and every verification row is green, and
+> the changelog entries are written. The issue stays open until the tagged release actually goes out,
+> per the two-gate closing rule — its Definition of done is ticked except the closing-comment box.
 
 ---
 
@@ -362,7 +360,8 @@ identity, real SQLite), `NotificationMetadataKindsTests` (the kind→type regist
 `NotificationActionExecutorTests` (producers and the action seam).
 
 ### 9. Full verification (T1, T2)
-**Status:** In progress — T2 done, T1 outstanding (the developer's own action)
+**Status:** ✅ Done — ran twice, both tiers each time; every pass found real bugs, all fixed and
+re-verified on the final build
 
 **T2 / ADR 009 — migration path from a genuine v1.8.3 database.** `ghcr.io/dutchjafo/quotinator:1.8.3`
 created the starting database (`schema created at baseline (data v3, app v5)`), then the current build
@@ -466,7 +465,139 @@ migration 8 existed already has the duplicate. Migration 8 prevents new ones but
 it is a real row the operator may have read, and removing user-visible history to tidy a transition is
 not a migration's business. Dismiss it.
 
-**T1 is otherwise the developer's own action and remains outstanding for a re-run** on the fixed build.
+**T1 then passed on the fixed build** (developer, 2026-08-16), and again on the final build after steps
+10–14 — each of which changes what is stored, so neither pass could stand in for the other.
+
+**T2 re-run after steps 10–12** — full chain from a genuine v1.8.3 database: `applying 7 pending "Data"
+migration(s) (version 3 → 10)` → `Quotinator ready`, the shipped announcement still one row retaining
+its original expiry, and stored payloads carrying an explicit release state with no `"version":null`.
+
+**Run with the version temporarily bumped to 1.8.4, and that is not incidental.** This build's own
+version is 1.8.3, so migration 9's backfilled row and the row the app records for itself would have been
+the same row — the migration would appear to work whether or not it did anything. Bumping
+`Directory.Build.props` for the image build (restored immediately afterwards) separates them: the
+history reads `1.8.3 / 1` then `1.8.4 / 2`, the legacy announcement attributes to 1.8.3, and the
+what's-new written during that same startup attributes to 1.8.4 — provenance recording who wrote a row
+rather than who is running. Smoke-test section 39g states the requirement so the next reader does not
+repeat the ambiguous version of this check.
+
+### 10. `Unreleased`/`Released` becomes an explicit state
+**Status:** ✅ Done
+
+`WhatsNewMetadataDto` currently distinguishes the two by `Version` being null. **Inferring a state from
+a missing value is the fault**: null is indistinguishable from "not set", "failed to parse", and "the
+producer forgot", so every future reader has to know the convention to interpret the row, and any of
+those three accidents silently reads as "unreleased".
+
+- `WhatsNewReleaseState` (`Quotinator.Data/Enums/`, per ADR 016), two members: `Released`,
+  `Unreleased`. Named after the payload it belongs to rather than a bare `ReleaseState`, matching the
+  `Notification*` prefixing every sibling enum in that folder already uses.
+- `WhatsNewMetadataDto` gains it as a `required` property, serialized as a string per CLAUDE.md's JSON
+  policy. `IdentityComponents` becomes `[ReleaseState, Version, ContentHash]`, so a released and an
+  unreleased entry can never collide even if their other components coincided.
+- `Version` still stays null for the unreleased case — it genuinely has no version — but nothing has to
+  *infer* anything from that any more.
+- Serialization omits nulls (`JsonIgnoreCondition.WhenWritingNull`), so a stored payload stops carrying
+  `"version":null`. Identity is unaffected: an absent property deserializes back to null.
+
+Scoped to what's-new here, and widened to every payload by step 13.
+
+A `required` property that a stored row predates cannot be deserialized, so an existing what's-new row
+would go unidentified and re-announce itself. That only affects databases carrying rows written by an
+intermediate #312 build — #81 has never shipped — but "only developer machines" is exactly the
+assumption step 9's second T1 defect punished, so it is fixed rather than assumed harmless. Migration 10
+sets `releaseState` on those rows from the very convention that wrote them (a `version` key present
+means `Released`), which is a fixed historical fact about already-written rows in the same way
+migration 8's body-text match is.
+
+### 11. Provenance for the legacy notification, and the `1.8.3` row it points at
+**Status:** ✅ Done
+
+Migration 8 backfilled `Metadata`/`MetadataKind`/`Title` on the legacy notification but left
+`AppVersionId` null, so the two stored rows disagree: the what's-new entry has provenance, the
+v1.8.3-era announcement does not.
+
+**Its writer is knowable, not a guess.** v1.8.3 was the last official release, and it is the only
+version that could have written that row.
+
+- A new migration — **not** an edit to 8, which has already been applied to a real database and is
+  frozen by CLAUDE.md's never-edit-an-applied-migration rule — inserts a `System_AppVersion` row for
+  `Quotinator.Api` / `1.8.3`, then points the legacy notification's `AppVersionId` at it.
+- **The insert is conditional on that notification actually being present**, which is what keeps it
+  from fabricating history. A database created fresh by an intermediate #312 build takes the baseline
+  path, records data v7 or v8, and then upgrades incrementally through this migration — it never ran
+  v1.8.3, and must not gain a row claiming it did. A notification carrying #279's payload with a *null*
+  `AppVersionId` is precisely a row written before the provenance column existed, i.e. by v1.8.3.
+- **A fresh database must not get the row either.** That falls out of the existing design rather than
+  needing a guard: a genuinely empty database takes the one-step baseline path and never replays
+  migrations at all, so a migration is by construction upgrade-only. Stated in the migration's own
+  comment, since it is load-bearing and invisible from the SQL.
+- **Sequence number below the existing minimum, not `MAX + 1`.** v1.8.3 predates every row the table can
+  already hold: `System_AppVersion` did not exist in v1.8.3 (#81 introduced it, unreleased), so any
+  pre-existing row was written by a later build. Appending at the end would make `GetLastActiveAsync`
+  answer "1.8.3" on a machine that has since run newer builds, and #81's catch-up range would replay
+  releases it already announced.
+- Useful side effect on the genuine v1.8.3 upgrade path, where the table *is* empty: it gains a correct
+  `lastActiveVersion`, so #81's catch-up works on the first post-upgrade start rather than falling back
+  to current-version-only.
+
+### 12. Provenance becomes as hard to forget as identity
+**Status:** ✅ Done
+
+`NotificationMetadataDto.IdentityComponents` is abstract, so no payload can exist without an identity —
+the compiler enforces it. `AppVersionId` is an optional `Guid?` that defaults to null, so provenance is
+trivially omitted, and *was* omitted by migration 8. The asymmetry is the defect.
+
+Provenance stays a first-class column, never a metadata field, per the developer's boundary. The fix is
+to `INotificationWriter.WriteAsync`'s and `NotificationSeeding.SeedOnceAsync`'s signatures: the
+parameter keeps its `Guid?` type — null is a legitimate answer when `RecordCurrentAsync` failed — but
+loses its default, so a caller has to state it. Guarded mechanically as well as by the compiler, since
+a future edit could re-add the default: a reflection test asserts the parameter has none.
+
+### 13. Release state, version and content hash become common to every payload
+**Status:** ✅ Done
+
+Found by the developer reading the stored rows after step 12's T1 pass: the announcement's payload said
+only `{"announcement":"GetAllImportBatches"}` while the what's-new entry beside it stated a release
+state and a content hash. Two kinds disagreeing about what a payload states is the defect — an
+announcement belongs to a release just as much as a what's-new entry does.
+
+- All three properties move onto `NotificationMetadataDto`. `WhatsNewMetadataDto` is left with no
+  fields of its own, which is the correct outcome rather than an accident: they were always the common
+  case, discovered through the one producer that needed them first.
+- `WhatsNewReleaseState` becomes `NotificationReleaseState` and gains `NotApplicable`, because a
+  schema-version overshoot is not about a release at all. Stating that is not the null-inference this
+  issue removed — it is a claim a producer makes. Borrowing the running version instead would also make
+  the same unresolved overshoot re-announce itself on every upgrade, since the version now participates
+  in identity.
+- `NotApplicable` is the zero value, so a payload that somehow reached storage without stating its
+  state cannot silently claim to describe a tagged release.
+- Identity is `[ReleaseState, Version, ContentHash]` plus whatever the payload adds, compared on the
+  base rather than assembled by each derived type — the same reasoning that moved `Kind` and the
+  null-omission rule off the derived types.
+- `NotificationContentHash` replaces the hashing #81 did inline. A second copy of "SHA-256, take eight
+  hex characters" that drifted would not fail; it would silently re-announce every affected
+  notification.
+- Migration 11 backfills the remaining stored shapes. The announcement's values are historical fact,
+  not a guess: v1.8.3 shipped the renames, and its body text shipped with that release, which is what
+  makes hashing it here sound. The hash is a literal because SQLite has no hashing function — and
+  because migration SQL is frozen regardless, which is the same reason migration 8's body-text match is
+  sound.
+
+**Editing the announcement's wording will re-announce it to everyone**, since the producer's hash then
+stops matching the frozen one. That is what a content hash is for, but it is worth knowing before
+touching that string.
+
+### 14. Expiry has no configured default at all
+**Status:** ✅ Done
+
+Step 4 made expiry opt-in but left `NotificationWriter` taking a `defaultExpiryHours` it no longer used,
+with an XML doc still claiming it was applied when no expiry was given. Expiry is always optional
+(developer decision, 2026-08-16), so there is nothing for that value to mean: the constructor
+parameter, the `Quotinator:NotificationDefaultExpiryHours` config key and
+`QueryParamDefaults.NotificationDefaultExpiryHours` are all removed, and the DI registration goes back
+to the plain two-type overload. Never an HA add-on option, so no `addon/`/`addon-beta/` mirroring
+applies.
 
 ---
 
@@ -486,17 +617,27 @@ not a migration's business. Dismiss it.
 | 10 | ✅ | A notification is identified by its structured metadata, not by message text | Unit test | `NotificationSeedingTests.SeedOnceAsync_SameIdentityTwice_WritesOnce`, `..._DifferentIdentity_WritesAgain`, `..._SameValuesDifferentKind_BothWrite` — real SQLite, not fakes, since the behaviour is a payload surviving a round-trip through the column |
 | 11 | ✅ | An identifier appearing in body text but not in metadata does **not** suppress a write | Unit test | `NotificationSeedingTests.SeedOnceAsync_IdentityAppearsInBodyButNotMetadata_StillWrites`; `..._VersionIsSubstringOfAnother_BothWrite` covers the specific `1.9.1`/`1.9.10` case |
 | 12 | ✅ | #279's and #289's producers still write exactly once across restarts after migration | Unit test | `ProgramNotificationSeedingRegressionTests` (unchanged, still green through the full startup path); `WhatsNewNotificationTests` updated for #81 |
-| 12b | ✅ | Every `NotificationMetadataKind` has a registered payload type, and each type reports the kind it is registered under | Unit test | `NotificationMetadataKindsTests` — without this a new kind is a silent re-announce-forever bug |
-| 13 | ✅ | `INotificationActionExecutor.ExecuteAsync` receives the originating notification's metadata | Unit test | `NotificationActionExecutorTests.ExecuteAsync_WithMetadata_DeliversItAndStillPerformsTheAction`, `..._WithoutMetadata_StillPerformsTheAction` |
-| 14 | ✅ | `GET /api/v1/notifications` returns `title`/`body`/`metadata`/`metadataKind`, and no longer returns `message` | Unit test | `NotificationEndpointsTests.GetNotifications_ResponseCarriesTitleBodyAndMetadata_AndNoLongerMessage` — asserts the serialized JSON, not a deserialized DTO, since the requirement is about the wire format a client sees. Written only when the developer noticed this row was still ❌: live Docker evidence existed, but the stated method was a unit test and none had been written |
-| 15 | ✅ | Migration applies cleanly to a real copy of the last released (v1.8.3) database | Live (T2) | `docker run ghcr.io/dutchjafo/quotinator:1.8.3` → `data v3, app v5`; current build → `applying 4 pending "Data" migration(s) (version 3 → 7)`, `schema updated (data v7, app v5)`, no exception, no repeat on restart |
-| 15b | ✅ | Stored payload carries no duplicate `Kind`, and `AppVersionId` joins to the writing version | Live (T2) | DbInspector against the migrated db: `Metadata` = `{"announcement":"GetAllImportBatches"}`, join yields `Quotinator.Api 1.8.3`. Regression-guarded by `NotificationMetadataKindsTests.SerializedPayload_NeverContainsTheKindDiscriminator` |
-| 15c | ✅ | `System_AppVersion` stays append-only across a restart | Live (T2) | One row (`Quotinator.Api / 1.8.3 / 1`) before and after `docker restart` |
-| 15e | ✅ | Upgrading a v1.8.3 database does not duplicate its existing notification | Live (T2) | Real v1.8.3 database carrying the #279 announcement, upgraded: `version 3 → 8`, 1 notification not 2, original `ExpiresAt` retained. Smoke-test 39f; unit-guarded by `NotificationSeedingTests.SeedOnceAsync_LegacyRowBackfilledByMigration8_DoesNotWriteADuplicate` and `Migration8_RowThatAlreadyHasMetadata_IsLeftUntouched` |
-| 15d | ✅ | Startup survives an upgrade from an *intermediate* (unreleased) schema version, not only from the last release | Live (T2) | Database promoted to data v4: pre-fix image reproduces `Unhandled exception … no such column: Application`; fixed image reaches `Quotinator ready` via `version 4 → 7`, legacy row preserved and current version appended. Smoke-test section 39e; unit-guarded by `AppVersionTrackerTests.GetLastActiveAsync_DatabaseAtPre312Shape_ReadsExistingRowOnceMigrated` |
-| 16 | ✅ | T1 — app starts in Visual Studio with no error; `/notifications` renders migrated rows correctly | Live (T1) | Developer confirmed 2026-08-16: full chain replayed `data v3 → v8` on a restored backup, reaching `Quotinator ready`; `/notifications` shows exactly one #279 announcement retaining its original 2026-09-09 expiry, proving migration 8 enriched the existing row rather than duplicating it |
-| 17 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 18 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 3,424 passed, 0 failed |
+| 13 | ✅ | Every `NotificationMetadataKind` has a registered payload type, and each type reports the kind it is registered under | Unit test | `NotificationMetadataKindsTests` — without this a new kind is a silent re-announce-forever bug |
+| 14 | ✅ | `INotificationActionExecutor.ExecuteAsync` receives the originating notification's metadata | Unit test | `NotificationActionExecutorTests.ExecuteAsync_WithMetadata_DeliversItAndStillPerformsTheAction`, `..._WithoutMetadata_StillPerformsTheAction` |
+| 15 | ✅ | `GET /api/v1/notifications` returns `title`/`body`/`metadata`/`metadataKind`, and no longer returns `message` | Unit test | `NotificationEndpointsTests.GetNotifications_ResponseCarriesTitleBodyAndMetadata_AndNoLongerMessage` — asserts the serialized JSON, not a deserialized DTO, since the requirement is about the wire format a client sees. Written only when the developer noticed this row was still ❌: live Docker evidence existed, but the stated method was a unit test and none had been written |
+| 16 | ✅ | An unreleased what's-new entry is identified by an explicit state, not by a null version | Unit test | `NotificationSeedingTests.SeedOnceAsync_UnreleasedEntry_StoresAnExplicitStateAndNoNullVersion` — asserts the stored payload text, since the requirement is about what a later reader finds in the column. Confirmed live in T2: `{"releaseState":"Unreleased","contentHash":"2EE673F9"}` |
+| 17 | ✅ | A released and an unreleased entry never share an identity | Unit test | `NotificationSeedingTests.SeedOnceAsync_ReleasedAndUnreleasedWithIdenticalComponents_BothWrite` — identical content hash on both, so only the state can separate them |
+| 18 | ✅ | A stored payload contains no null-valued properties | Unit test | `NotificationMetadataKindsTests.SerializedPayload_NeverContainsANullValuedProperty`, across every registered kind and through `NotificationMetadataKinds.Serialize` — the same entry point a real write uses, so it cannot pass against a serializer configuration the app does not actually apply |
+| 19 | ✅ | A notification cannot be written without stating which version wrote it | Unit test | `NotificationWriterTests.WriteAsync_AppVersionIdParameter_HasNoDefault` — reflection over `INotificationWriter.WriteAsync` and `NotificationSeeding.SeedOnceAsync`, because the guarantee is a compile-time one and a later edit could restore the default with no test noticing |
+| 20 | ✅ | Migration applies cleanly to a real copy of the last released (v1.8.3) database | Live (T2) | `docker run ghcr.io/dutchjafo/quotinator:1.8.3` → `schema created at baseline (data v3, app v5)`; current build → `applying 8 pending "Data" migration(s) (version 3 → 11)`, `schema updated (data v11, app v5)`, `Quotinator ready`, no exception, and no repeat on `docker restart` |
+| 21 | ✅ | Stored payload carries no duplicate `Kind`, and `AppVersionId` joins to the writing version | Live (T2) | Against the migrated db: `Metadata` = `{"announcement":"GetAllImportBatches"}`, join yields `Quotinator.Api 1.8.3`. Regression-guarded by `NotificationMetadataKindsTests.SerializedPayload_NeverContainsTheKindDiscriminator` |
+| 22 | ✅ | `System_AppVersion` stays append-only across a restart | Live (T2) | One row (`Quotinator.Api / 1.8.3 / 1`) before and after `docker restart` |
+| 23 | ✅ | Startup survives an upgrade from an *intermediate* (unreleased) schema version, not only from the last release | Live (T2) | Database promoted to data v4: pre-fix image reproduces `Unhandled exception … no such column: Application`; fixed image reaches `Quotinator ready`, legacy row preserved and current version appended. Re-confirmed at data v9 → v10 while verifying row 27. Smoke-test section 39e; unit-guarded by `AppVersionTrackerTests.GetLastActiveAsync_DatabaseAtPre312Shape_ReadsExistingRowOnceMigrated` |
+| 24 | ✅ | Upgrading a v1.8.3 database does not duplicate its existing notification | Live (T2) | Real v1.8.3 database carrying the #279 announcement, upgraded through `version 3 → 11`: the announcement is still one row, retaining v1.8.3's original `ExpiresAt` (`2026-09-15`), and still one row after a restart. Smoke-test 39f; unit-guarded by `NotificationSeedingTests.SeedOnceAsync_LegacyRowBackfilledByTheMigrations_DoesNotWriteADuplicate` and `Migration8_RowThatAlreadyHasMetadata_IsLeftUntouched` |
+| 25 | ✅ | Upgrading a v1.8.3 database creates a `1.8.3` `System_AppVersion` row, sorted before existing history, and links the legacy notification to it | Unit test + Live (T2) | `NotificationLegacyBackfillMigrationTests.Migration9_LegacyAnnouncementPresent_CreatesTheV183RowAndLinksTheNotificationToIt` and `..._DatabaseWithLaterHistory_PlacesV183BeforeIt`. Live: run with the version temporarily bumped to 1.8.4, so the migration's row and the running build's own row are distinguishable — `1.8.3 / 1` then `1.8.4 / 2`, with the legacy announcement attributed to 1.8.3 and the startup's own what's-new to 1.8.4. Smoke-test 39g, which states that version-bump requirement, since with both at 1.8.3 the two causes are indistinguishable |
+| 26 | ✅ | A database that never ran v1.8.3 gains no `1.8.3` row, and a fresh database has exactly one `System_AppVersion` row — its own version, no history | Unit test + Live (T2) | `NotificationLegacyBackfillMigrationTests.Migration9_NoLegacyAnnouncement_InsertsNothing` and `..._AnnouncementAlreadyCarryingProvenance_IsLeftUntouched`; `DatabaseInitializerOwnershipTests.DataOwnedBaseline_FreshDatabase_RecordsNoAppVersionHistory`. Live: fresh volume → `schema created at baseline (data v10, app v5)`, one row (`Quotinator.Api / 1.8.4 / 1`) |
+| 27 | ✅ | A what's-new row written before the release state existed is backfilled rather than re-announced | Unit test + Live (T2) | `NotificationLegacyBackfillMigrationTests.Migration10_*` (three tests: backfill, already-stated row untouched, other kinds untouched). Live: injected `{"version":"1.8.4"}` row and rolled the counter back → `applying 1 pending "Data" migration(s) (version 9 → 10)` → `{"version":"1.8.4","releaseState":"Released"}`, the already-stated unreleased row unchanged. Smoke-test 39h |
+| 28 | ✅ | Every payload states a release state, and one about no release says so rather than borrowing a version | Unit test + Live (T2) | `NotificationLegacyBackfillMigrationTests.Migration11_LegacySchemaOvershoot_StatesThatNoReleaseApplies`; the required property makes omission a compile error, which `NotificationMetadataKindsTests` exercises across every registered kind. Live: the announcement reads `{"announcement":"GetAllImportBatches","releaseState":"Released","version":"1.8.3","contentHash":"E55328BB"}` |
+| 29 | ✅ | The backfilled legacy announcement is recognised by the producer that would otherwise re-announce it | Unit test + Live (T2) | `NotificationLegacyBackfillMigrationTests.Migration11_BackfilledAnnouncement_IsRecognisedByTheProducer` — compares against a payload built exactly as `Program.cs` builds it, so a hash computed differently on either side fails rather than passing on a matching pair of wrong values. `..._GainsTheCommonReleaseFields` pins the hash itself. Live: 2 notifications before and after `docker restart`, never 3 |
+| 30 | ✅ | No configured default expiry exists anywhere | Build | `grep -rn "NotificationDefaultExpiryHours\|defaultExpiryHours" src/ tests/` returns nothing; `NotificationWriter` is registered through the plain two-type overload again |
+| 31 | ✅ | T1 — app starts in Visual Studio with no error; `/notifications` renders migrated rows correctly | Live (T1) | Developer confirmed 2026-08-16 on the final build: `schema is up to date (data v11, app v5)` → `Quotinator ready`, no exception, 799 quotes intact. Re-run was required because this build adds migrations 9, 10 and 11 on top of the chain the earlier pass covered |
+| 32 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 33 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 3,441 passed, 0 failed |
 
 ---
 
@@ -513,67 +654,3 @@ not a migration's business. Dismiss it.
   planning phase; step 5 settles it once for all three. #304's own `Reseed` trigger additionally
   benefits from step 7's action parameters.
 - **#305** — independent; no interaction.
-
----
-
-## Follow-on work, agreed 2026-08-16
-
-Found by the developer reading the stored rows directly — not by any test, and after every verification
-row was green. Two design faults and one migration gap.
-
-### A. `Unreleased`/`Released` is an explicit state, not an inferred null
-
-`WhatsNewMetadataDto` currently distinguishes the two by `Version` being null. **Inferring a state from
-a missing value is the fault**: null is indistinguishable from "not set", "failed to parse", and "the
-producer forgot", so every future reader has to know the convention to interpret the row, and any of
-those three accidents silently reads as "unreleased".
-
-An explicit enum member states it. `Version` stays null for the unreleased case — it genuinely has no
-version — but nothing has to *infer* anything from that.
-
-- New enum in `Quotinator.Data/Enums/` per ADR 016, two members (`Released`, `Unreleased`).
-- `WhatsNewMetadataDto` gains it as a required property; `IdentityComponents` becomes
-  `[ReleaseState, Version, ContentHash]`, so a released and an unreleased entry can never collide even
-  if their other components coincided.
-- Serialization omits nulls (`JsonIgnoreCondition.WhenWritingNull`), so a stored payload stops carrying
-  `"version":null`. Identity is unaffected — an absent property deserializes back to null.
-
-### B. The migration must set `AppVersionId`, and create the `1.8.3` row it points at
-
-Migration 8 backfilled `Metadata`/`MetadataKind`/`Title` on the legacy notification but left
-`AppVersionId` null, so the two stored rows disagree: the what's-new entry has provenance, the
-v1.8.3-era announcement does not.
-
-**Its writer is knowable, not a guess.** v1.8.3 was the last official release, and it is the only
-version that could have written that row.
-
-- A new migration (**not** an edit to 8 — 8 has already been applied to a real database, and CLAUDE.md's
-  never-edit-an-applied-migration rule is absolute) inserts a `System_AppVersion` row for
-  `Quotinator.Api` / `1.8.3` when one is absent, then sets the legacy notification's `AppVersionId` to it.
-- **A fresh database must not get that row.** It has no history — only the version it was created under.
-  This falls out of the existing design rather than needing a guard: a genuinely empty database takes
-  the one-step baseline path and never replays migrations at all, so a migration is by construction
-  upgrade-only. Worth stating explicitly in the migration's own comment, since it is load-bearing and
-  invisible from the SQL.
-- Useful side effect: an upgrading v1.8.3 database gains a correct `lastActiveVersion`, so #81's
-  catch-up range works on the first post-upgrade start rather than falling back to current-version-only.
-
-### C. Provenance should be as hard to forget as identity
-
-`NotificationMetadataDto.IdentityComponents` is abstract, so no payload can exist without an identity —
-the compiler enforces it. `AppVersionId` is an optional `Guid?` that defaults to null, so provenance is
-trivially omitted, and *was* omitted by migration 8. The asymmetry is the defect.
-
-Provenance stays a first-class column, never a metadata field, per the developer's boundary. The fix is
-to `WriteAsync`'s signature, making the caller state it rather than letting it default away.
-
-### Verification to add
-
-| # | Requirement | Method |
-|---|---|---|
-| 19 | An unreleased what's-new entry is identified by an explicit state, not by a null version | Unit test |
-| 20 | A released and an unreleased entry never share an identity | Unit test |
-| 21 | A stored payload contains no null-valued properties | Unit test |
-| 22 | Upgrading a v1.8.3 database creates a `1.8.3` `System_AppVersion` row and links the legacy notification to it | Unit test + Live (T2) |
-| 23 | A fresh database has exactly one `System_AppVersion` row — its own version, no history | Unit test + Live (T2) |
-| 24 | A notification cannot be written without stating which version wrote it | Unit test |
