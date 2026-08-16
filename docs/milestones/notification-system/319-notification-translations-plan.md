@@ -4,11 +4,10 @@
 **GitHub issue:** #319 (open)
 **Depends on:** #278 (done, released v1.8.0 — the mechanism), #312 (done, this branch — the Title/Body split and the metadata contract that deliberately excludes text)
 
-> **Next action: answer question 1 below, then write the Steps.** This plan is not ready to execute.
-> The schema, read-side resolution and backfill are settled, but question 1 decides which request
-> signal selects the language — a rule CLAUDE.md draws a hard line around — and it determines the read
-> path's signature and most of the tests. Question 2 is a decision for #309, not a blocker here.
-> Nothing is blocked on code.
+> **Next action: execute the Steps.** This plan is ready. Schema, read-side resolution, language
+> selection and the backfill are all settled (developer decisions, 2026-08-16). The one open question
+> below is a decision for #309, not a blocker for this issue — it only affects whether a neighbouring
+> table gets renamed before or after this one lands.
 
 ---
 
@@ -49,12 +48,12 @@ direction, 2026-08-16): store translations at creation, record the original's la
 - **#309's changelog table is per-language**, so #81's producer genuinely can source all three
   languages: `ChangelogEntity` carries a `Language` column
   (`src/Quotinator.Data/Entities/ChangelogEntity.cs:17`). The issue says "from the per-language
-  changelog files it already reads" — since #309 that content is read from the database, not the JSON
-  files, but the per-language guarantee the claim depends on does hold.
+  changelog files it already reads" — since #309 that content is read from a database, not the JSON
+  files, but the per-language guarantee the claim depends on does hold. Note that it is a *separate*
+  database (#309, ADR 018), so this is a cross-database read, not a join — see step 9 and "Finding".
 
-**One claim in the issue body needs correcting.** It calls the new table `System_NotificationTranslation`,
-following ADR 015. That is the right name — but the sibling table it will sit next to is not named that
-way, which is question 3 below.
+**The issue body's `System_NotificationTranslation` name is correct.** It lives in the main database,
+where ADR 015's prefix rule applies unambiguously.
 
 ## Design
 
@@ -107,6 +106,41 @@ same way `NotificationMetadataDto` does.
 `NotificationSeeding.SeedOnceAsync` threads the same parameter through. Its identity comparison is
 untouched — identity is structural, from the metadata payload, and has never involved text.
 
+### Language selection — two inputs, one precedence rule
+
+Decided 2026-08-16: **the setting that determines the UI language determines a notification's language,
+and the REST endpoints additionally take a `lang` parameter, the way the quote endpoints do.**
+
+| Consumer | Language used |
+|---|---|
+| Blazor Notifications page, startup popups | `CultureInfo.CurrentUICulture` — the culture the `LanguageSelector` cookie and `Accept-Language` already resolve to |
+| `GET /api/v1/notifications`, `POST /api/v1/notifications/{id}/dismiss` | `lang` when supplied; `CurrentUICulture` otherwise |
+
+**This is a deliberate extension of CLAUDE.md's language rule, not a violation of it** — worth stating
+plainly, because that rule reads as forbidding exactly this shape. It separates two cases: `?lang=`
+selects *quote content*, `Accept-Language` selects *UI strings and error messages*. A notification is a
+third case the rule predates: persisted content that reads as a UI message. It gets the content
+treatment on the API (a `lang` parameter, transparent fallback, an echoed effective language) and the
+UI treatment everywhere it renders. The prohibition that still stands unchanged is the specific one:
+`?lang=` must never drive *error message* language.
+
+`lang` goes through `InputValidation.TryNormalizeLang` — the single choke point every `?lang=`-accepting
+endpoint already calls (`QuoteEndpoints.cs:98`, `ConversationEndpoints.cs:95`) — before reaching a SQL
+comparison or being echoed back. It lowercases the value, which is why the SQL side still needs its own
+`TextClauses.Equals` wrap for the never-canonicalised `Language` column.
+
+`GetActiveNotificationsAsync` has exactly one consumer, `NotificationSummary.razor.cs:26`, and no REST
+endpoint — so the active-notification path takes `CurrentUICulture` only, with no parameter to add.
+
+### Response shape
+
+`NotificationResponse` gains the three fields CLAUDE.md's "API response language" section requires of
+every read endpoint that accepts `lang`, matching `QuoteResponse`:
+
+- `language` — the language actually returned
+- `originalLanguage` — the notification's own `OriginalLanguage`
+- `isTranslated` — `true` when the two differ
+
 ### Already-persisted rows
 
 **Exactly one notification exists in any released database** — #279's v1.8.3 announcement. #289's
@@ -149,59 +183,156 @@ language through.
 
 ---
 
-## Open questions — for the developer, not to be assumed
+## Open question — for the developer, not to be assumed
 
-1. **Which request signal selects a notification's language — `?lang=` or `Accept-Language`?**
-   CLAUDE.md draws a hard line here and explicitly forbids conflating the two: `?lang=` selects *quote
-   content*; `Accept-Language` (via `IApiLocalizer`/`CurrentUICulture`) selects *UI strings and error
-   messages*. A notification is genuinely both — persisted content shaped like a UI message — so the
-   existing rule does not decide it.
-   - **(a) `Accept-Language`/`CurrentUICulture`.** Treats notifications as what they read like: UI
-     messages that happen to be persisted. The Blazor surfaces get it for free, since they already run
-     under the request's culture. `GET /api/v1/notifications` would follow the header like an error
-     message does.
-   - **(b) `?lang=`, mirroring quotes.** Consistent with the storage model being copied wholesale, and
-     with `EffectiveLanguage`/`isTranslated` already being a quote-response idiom. Requires the Blazor
-     pages to pass a language explicitly rather than inheriting it.
-   - **(c) Both — `?lang=` when supplied, `Accept-Language` otherwise.** Most convenient, but it is
-     exactly the conflation CLAUDE.md warns about, and it makes the answer to "what language is this
-     notification in" depend on two independent inputs.
-
-   **Recommendation: (a).** The text is UI-surface prose, its strings come from `UI.*.json`, and the
-   two places it renders are both UI. Note this would be the first read path where a `System_`-owned
-   row resolves by `CurrentUICulture` — worth stating in the ADR-adjacent docs if chosen.
-
-2. **#309's tables are not domain-prefixed — fix in #309 before this issue adds a sibling?**
-   `ChangelogContentMigrations.cs:30,48` create `Changelog` and `ChangelogLine`, and
-   `Sql.cs:105` creates `ChangelogSchemaVersion` — none carry a prefix, while ADR 015 binds every
-   `Quotinator.Data`-owned table to `Import_`/`Audit_`/`System_` with no exception, and both #309's own
-   plan doc and ADR 005's revision call it `System_Changelog`. This issue adds
-   `System_NotificationTranslation` right next to them, so the inconsistency becomes visible either way.
-   It is #309's defect, not this one's — but it is cheapest to fix before more tables land beside it.
-   See "Finding" below.
+1. **What are the table-naming rules when an application has more than one database?** ADR 015 assumes
+   one, and the changelog database is effectively a second user-domain database. Needs a clarification
+   ADR; not a blocker for this issue, whose own table lives in the main database. See "Finding" below.
 
 ---
 
 ## Steps
 
-Numbered on approval of the above. Question 1 decides the read-path signature and therefore most of the
-tests, so numbering them first would produce steps that need rewriting.
+Red-first throughout, per `docs/testing-policy.md`. Steps 1–3 are storage, 4–6 the read path, 7–9 the
+producers, 10 the surfaces.
+
+### 1. Schema
+
+**Status:** ⬜ Not started
+
+`System_Notification.OriginalLanguage` via `ALTER TABLE … ADD COLUMN` (`NOT NULL DEFAULT 'en'`), and a
+new `System_NotificationTranslation` table — `RecordBase` per ADR 002, `System_` prefix and singular per
+ADR 015, columns `NotificationId`/`Language`/`Title`/`Body` with `Title` nullable. No CHECK on
+`Language`, matching `Quotinator_QuoteTranslation`. Update `DataBaselineSql` in the same commit; the
+schema-drift parity tests fail otherwise.
+
+### 2. Entity and translation DTO
+
+**Status:** ⬜ Not started
+
+`NotificationTranslationEntity` mirroring `QuoteTranslationEntity`, plus the
+`NotificationTranslationDto(Language, Title, Body)` record the write side takes.
+
+### 3. Backfill migration for the one existing row
+
+**Status:** ⬜ Not started
+
+Translations for #279's v1.8.3 announcement — the only notification in any released database — sourced
+from `UI.*.json`, in the `NotificationLegacyMetadataMigrations` family that already updates that row.
+A new migration rather than an edit to 8 or 9 if either has already been applied anywhere, including
+locally. Must be conditional on the row existing, exactly as migration 9 already is.
+
+### 4. Read-path SQL
+
+**Status:** ⬜ Not started
+
+`Sql.Notifications.SelectColumns` becomes a projection over a `LEFT JOIN` on
+`System_NotificationTranslation`, with `COALESCE` per field and an `EffectiveLanguage` `CASE` — the
+`Sql.Quotes.SelectBase` shape. `@lang` bound on all of `SelectActive`, `SelectPage` and `SelectById`;
+a missed binding on one is the likely defect, so row 10 tests each.
+
+### 5. Reader signature
+
+**Status:** ⬜ Not started
+
+`INotificationReader`'s three methods take the requested language. `GetActiveNotificationsAsync`'s only
+caller is Blazor, so it takes `CurrentUICulture`'s value from the component rather than growing a
+parameter with no second caller — decide at implementation which reads better.
+
+### 6. Write side
+
+**Status:** ⬜ Not started
+
+`INotificationWriter.WriteAsync` and `NotificationSeeding.SeedOnceAsync` take
+`IReadOnlyList<NotificationTranslationDto>`, persisting one row per language in the same transaction as
+the notification. Identity comparison is untouched — it is structural, from the metadata payload, and
+has never involved text (row 11 guards this).
+
+### 7. Endpoint parameter
+
+**Status:** ⬜ Not started
+
+`lang` added to `GET /api/v1/notifications` and `POST /api/v1/notifications/{id}/dismiss`, normalised
+via `InputValidation.TryNormalizeLang`, falling back to `CurrentUICulture` when absent. `[Description]`
+attributes on both, and `docs/api-endpoints.md` updated in the same commit per CLAUDE.md's
+keep-API-docs-in-sync rule.
+
+### 8. Response shape
+
+**Status:** ⬜ Not started
+
+`NotificationResponse` gains `language`/`originalLanguage`/`isTranslated`, populated in `ToResponse`.
+
+### 9. Producers
+
+**Status:** ⬜ Not started
+
+#279's and #289's producers (`Program.cs`) supply translations from `UI.*.json`; #81's
+(`Startup/WhatsNewNotification.cs`) from the `Changelog` table's per-language rows. Reading every
+language at once is not what `IApiLocalizer` does — it resolves one, from `CurrentUICulture` — so this
+needs an all-languages reader that resolves no culture at all. A startup producer has no request
+culture, which is the reason this issue exists.
+
+### 10. Surfaces
+
+**Status:** ⬜ Not started
+
+`NotificationSummary` and `NotificationTable` pass `CurrentUICulture`'s language through to the reader.
+Neither renders text itself today, so no markup change beyond threading the language.
+
+### 11. Docs and housekeeping
+
+**Status:** ⬜ Not started
+
+New `UI.*.json` keys in all three locales; `data/changelog/changelog.{en,nl,de}.json` `unreleased`
+entries in lockstep; every touched file added to `.editorconfig`'s scoped `IDE0008` list with its `var`
+declarations converted; `[Subsystem - Phase]` prefixes on any new log lines.
+
+### 12. Verification
+
+**Status:** ⬜ Not started
+
+Work the table below top to bottom. T2 before T1, per `docs/release-verification.md`.
 
 ---
 
-## Finding — not this issue's to fix
+## Finding — ADR 015 assumes one database per application
 
-**#309 shipped three tables without ADR 015's domain prefix** (`Changelog`, `ChangelogLine`,
-`ChangelogSchemaVersion`). ADR 015 states the rule for `Quotinator.Data`'s own tables with no exception,
-and #309's own plan doc and ADR 005's revision both name the table `System_Changelog`. #309 is
-`Waiting for release` on this branch and has not shipped in any tagged release.
+**No table needs renaming, and no ADR is wrong.** This section originally recorded #309's
+`Changelog`/`ChangelogLine`/`ChangelogSchemaVersion` as an ADR 015 violation. That was wrong, and is
+corrected in place rather than deleted, because misreading it is the evidence for what the actual gap is.
 
-**It is not automatically safe to edit the migration**, per ADR 015's own #254 revision: "unreleased" is
-not the test — the test is whether any real database has already applied it, which includes the
-developer's own local database. That is why this is raised rather than fixed.
+**The separation is decided at ADR level, not in a code comment.** ADR 018's "Database placement"
+section rules that file-authored system content moves to a separate database when it has no
+transactional coupling to domain writes, names `System_Changelog` as its reference example, and adds
+that every database gets the same migration capability without exception. `ChangelogContentMigrations`'
+class doc restates the naming consequence: a dedicated, single-purpose database has nothing to
+disambiguate from, since ADR 015's prefixes substitute for SQLite's lack of schema qualification *within
+one flat namespace*.
 
-Recorded here because #319 is the issue that would otherwise silently sit next to it. Resolution belongs
-to #309 (reopen) or to a new issue, at the developer's direction.
+**ADR 005 is not wrong either** (developer clarification, 2026-08-16). Its `System_Changelog` naming was
+correct under the assumption in force when it was written — one database per application. ADR 018 later
+moved the content to its own database, and the implementation dropped the prefix as a consequence of
+that move. Neither document accounted for an application having more than one database, because at the
+time none did.
+
+**The changelog database is effectively a second user-domain database** (developer clarification,
+2026-08-16), not a system database — which is the part the existing vocabulary has no answer for. ADR
+015 defines `Import_`/`Audit_`/`System_` for `Quotinator.Data`'s own tables and one prefix
+(`Quotinator_`) for the consuming application's domain tables, all within a single namespace. It says
+nothing about what naming applies in a second database, or whether a database holding one domain needs a
+prefix at all.
+
+**So the open question is an ADR-level one:** when an application has more than one database, what are
+the naming and ownership rules per database? That is a clarification ADR (or an ADR 015 revision), not a
+correction to anything already written. #309's plan doc would follow whatever it settles.
+
+**Nothing in this issue depends on the outcome.** `System_NotificationTranslation` lives in the main
+database, where ADR 015 applies unambiguously.
+
+**One thing to carry into step 9:** the changelog being a separate database means #81's producer reads
+its per-language rows across a database boundary, not with a join. Worth confirming at implementation
+that the existing changelog reader already exposes what that producer needs.
 
 ---
 
@@ -224,7 +355,13 @@ to #309 (reopen) or to a new issue, at the developer's direction.
 | 13 | ❌ | #279's and #289's producers write translations from `UI.*.json` | Unit test | Per-producer |
 | 14 | ❌ | #81's producer writes translations from the `Changelog` table's per-language rows | Unit test | Per-producer |
 | 15 | ❌ | Every new key exists in all three locale files | Unit test | `TranslationCompletenessTests` (existing) |
-| 16 | ❌ | Both surfaces render resolved text | Live (T1) | Notifications page and startup popup, UI switched to `nl` — screenshot, not text extraction |
-| 17 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | ADR 009, plus smoke-test 39e's intermediate-version check |
-| 18 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 19 | ❌ | Full test suite green | Build | `dotnet test --configuration Release -m:1` |
+| 16 | ❌ | `GET /notifications?lang=nl` returns Dutch text | Unit test | Endpoint test |
+| 17 | ❌ | With no `lang`, the endpoint follows the request culture | Unit test | Endpoint test with `Accept-Language: nl` |
+| 18 | ❌ | `lang` takes precedence over the request culture when both are present | Unit test | Endpoint test — `Accept-Language: de` plus `?lang=nl` returns Dutch |
+| 19 | ❌ | A malformed `lang` is rejected consistently with the quote endpoints | Unit test | `InputValidation.TryNormalizeLang`'s existing contract — same status code as `/quotes` returns for the same input |
+| 20 | ❌ | `language`/`originalLanguage`/`isTranslated` are populated correctly | Unit test | Endpoint test, translated and fallback cases |
+| 21 | ❌ | The dismiss endpoint resolves text the same way | Unit test | Endpoint test — it echoes the notification back |
+| 22 | ❌ | Both surfaces render resolved text | Live (T1) | Notifications page and startup popup, UI switched to `nl` — screenshot, not text extraction |
+| 23 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | ADR 009, plus smoke-test 39e's intermediate-version check |
+| 24 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 25 | ❌ | Full test suite green | Build | `dotnet test --configuration Release -m:1` |
