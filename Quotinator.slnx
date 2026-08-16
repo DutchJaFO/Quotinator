@@ -22,6 +22,7 @@
     <File Path="LICENSE" />
     <File Path="repository.yaml" />
     <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
     <File Path=".gitignore" />
     <File Path=".gitattributes" />
   </Folder>
@@ -122,6 +123,8 @@
     <File Path="docs/architecture-decisions/015-domain-prefixed-table-naming.md" />
     <File Path="docs/architecture-decisions/016-class-naming-suffixes-and-enum-placement.md" />
     <File Path="docs/architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md" />
+    <File Path="docs/architecture-decisions/018-system-content-in-quotinator-data.md" />
+    <File Path="docs/architecture-decisions/019-central-package-version-management.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
