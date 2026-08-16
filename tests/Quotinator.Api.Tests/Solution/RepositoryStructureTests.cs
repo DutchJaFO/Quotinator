@@ -29,7 +29,7 @@ public class RepositoryStructureTests
 
     private static string FindRepoRoot()
     {
-        var dir = AppContext.BaseDirectory;
+        string? dir = AppContext.BaseDirectory;
         while (dir is not null)
         {
             if (File.Exists(Path.Combine(dir, "Quotinator.slnx")))
@@ -41,7 +41,7 @@ public class RepositoryStructureTests
 
     private static HashSet<string> LoadSlnxFilePaths()
     {
-        var doc = XDocument.Load(SlnxPath);
+        XDocument doc = XDocument.Load(SlnxPath);
         return [.. doc.Descendants("File")
             .Select(e => e.Attribute("Path")?.Value)
             .Where(p => p is not null)
@@ -148,7 +148,7 @@ public class RepositoryStructureTests
     [TestMethod]
     public void DataQuotesJson_DoesNotExistOnDisk()
     {
-        var path = Path.Combine(RepoRoot, "data", "quotes.json");
+        string path = Path.Combine(RepoRoot, "data", "quotes.json");
         Assert.IsFalse(File.Exists(path),
             "data/quotes.json still exists on disk — it should have been deleted in #61.");
     }
@@ -157,7 +157,7 @@ public class RepositoryStructureTests
     [TestMethod]
     public void DataQuotesJson_IsNotInSlnx()
     {
-        var paths = LoadSlnxFilePaths();
+        HashSet<string> paths = LoadSlnxFilePaths();
         Assert.DoesNotContain("data/quotes.json", paths,
             "data/quotes.json is still referenced in Quotinator.slnx.");
     }
@@ -166,16 +166,12 @@ public class RepositoryStructureTests
     [TestMethod]
     public void SlnxDataSourcesEntries_AllExistOnDisk()
     {
-        var paths = LoadSlnxFilePaths();
-        var sourceEntries = paths
-            .Where(p => p.StartsWith("data/sources/", StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        HashSet<string> paths = LoadSlnxFilePaths();
+        List<string> sourceEntries = [.. paths.Where(p => p.StartsWith("data/sources/", StringComparison.OrdinalIgnoreCase))];
 
         Assert.IsNotEmpty(sourceEntries, "No data/sources/ entries found in Quotinator.slnx.");
 
-        var failures = sourceEntries
-            .Where(p => !File.Exists(Path.Combine(RepoRoot, p.Replace('/', Path.DirectorySeparatorChar))))
-            .ToList();
+        List<string> failures = [.. sourceEntries.Where(p => !File.Exists(Path.Combine(RepoRoot, p.Replace('/', Path.DirectorySeparatorChar))))];
 
         Assert.IsEmpty(failures,
             $"Files listed in Quotinator.slnx do not exist on disk:\n{string.Join("\n", failures)}");
@@ -185,14 +181,12 @@ public class RepositoryStructureTests
     [TestMethod]
     public void DataSourcesFiles_OnDisk_AreAllInSlnx()
     {
-        var paths = LoadSlnxFilePaths();
-        var diskFiles = Directory.GetFiles(DataSourcesDir, "*.json")
-            .Select(f => "data/sources/" + Path.GetFileName(f))
-            .ToList();
+        HashSet<string> paths = LoadSlnxFilePaths();
+        List<string> diskFiles = [.. Directory.GetFiles(DataSourcesDir, "*.json").Select(f => "data/sources/" + Path.GetFileName(f))];
 
         Assert.IsNotEmpty(diskFiles, "No .json files found in data/sources/.");
 
-        var failures = diskFiles.Where(f => !paths.Contains(f)).ToList();
+        List<string> failures = [.. diskFiles.Where(f => !paths.Contains(f))];
 
         Assert.IsEmpty(failures,
             $"Files exist in data/sources/ on disk but are missing from Quotinator.slnx:\n{string.Join("\n", failures)}");
@@ -208,37 +202,37 @@ public class RepositoryStructureTests
     [TestMethod]
     public async Task ConverterPlugins_AgainstRawFixtures_ProduceFilesMatchingBaseline()
     {
-        var schema = JsonSchema.FromText(
+        JsonSchema schema = JsonSchema.FromText(
             File.ReadAllText(Path.Combine(RepoRoot, "schemas", "source-flat.schema.json")));
 
-        var nikhilNamal17Options = JsonSerializer.SerializeToElement(new BasicJsonArrayConverterOptionsDto
+        JsonElement nikhilNamal17Options = JsonSerializer.SerializeToElement(new BasicJsonArrayConverterOptionsDto
         {
             PropertyMapping = new NamedFieldMapping { Source = "movie", Date = "year" }
         });
 
-        var vilaboimOptions = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
+        JsonElement vilaboimOptions = JsonSerializer.SerializeToElement(new RegexArrayConverterOptionsDto
         {
             Pattern      = """^"(.+?)"\s+(.+)$""",
             GroupMapping = new IndexedFieldMapping { Quote = 1, Source = 2 }
         });
 
-        var cases = new (IQuoteSourceConverter Converter, string RawFixtureFile, string BaselineFile, JsonElement? Options)[]
-        {
+        (IQuoteSourceConverter Converter, string RawFixtureFile, string BaselineFile, JsonElement? Options)[] cases =
+        [
             (new RegexArrayConverter(), "vilaboim_raw.json", "vilaboim_movie-quotes.json", vilaboimOptions),
             (new BasicJsonArrayConverter(), "nikhilnamal17_raw.json", "NikhilNamal17_popular-movie-quotes.json", nikhilNamal17Options),
-        };
+        ];
 
-        var tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        string tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(tempDir);
         try
         {
-            var failures = new List<string>();
+            List<string> failures = [];
 
-            foreach (var (converter, rawFixtureFile, baselineFile, convOptions) in cases)
+            foreach ((IQuoteSourceConverter? converter, string? rawFixtureFile, string? baselineFile, JsonElement? convOptions) in cases)
             {
-                var rawPath      = Path.Combine(RepoRoot, "tests", "Quotinator.Api.Tests", "Solution", "Fixtures", rawFixtureFile);
-                var outputPath   = Path.Combine(tempDir, baselineFile);
-                var baselinePath = Path.Combine(RepoRoot, "data", "sources", baselineFile);
+                string rawPath      = Path.Combine(RepoRoot, "tests", "Quotinator.Api.Tests", "Solution", "Fixtures", rawFixtureFile);
+                string outputPath   = Path.Combine(tempDir, baselineFile);
+                string baselinePath = Path.Combine(RepoRoot, "data", "sources", baselineFile);
 
                 await converter.ConvertAsync(rawPath, outputPath, convOptions, TestContext.CancellationToken);
 
@@ -249,13 +243,13 @@ public class RepositoryStructureTests
                 }
 
                 // Schema validation
-                using var outputDoc = JsonDocument.Parse(File.ReadAllText(outputPath));
-                var result = schema.Evaluate(outputDoc.RootElement,
+                using JsonDocument outputDoc = JsonDocument.Parse(File.ReadAllText(outputPath));
+                EvaluationResults result = schema.Evaluate(outputDoc.RootElement,
                     new EvaluationOptions { OutputFormat = OutputFormat.List });
 
                 if (!result.IsValid)
                 {
-                    var errors = (result.Details ?? [])
+                    IEnumerable<string> errors = (result.Details ?? [])
                         .Where(d => !d.IsValid && d.Errors is not null)
                         .SelectMany(d => d.Errors!.Select(e => $"  {d.InstanceLocation}: {e.Value}"));
                     failures.Add($"{baselineFile}: schema validation failed:\n{string.Join("\n", errors)}");
@@ -265,12 +259,12 @@ public class RepositoryStructureTests
                 static HashSet<string> LoadIds(JsonElement root) =>
                     [.. root.EnumerateArray().Select(e => e.GetProperty("id").GetString()!)];
 
-                var outputIds   = LoadIds(outputDoc.RootElement);
-                using var baselineDoc = JsonDocument.Parse(File.ReadAllText(baselinePath));
-                var baselineIds = LoadIds(baselineDoc.RootElement);
+                HashSet<string> outputIds   = LoadIds(outputDoc.RootElement);
+                using JsonDocument baselineDoc = JsonDocument.Parse(File.ReadAllText(baselinePath));
+                HashSet<string> baselineIds = LoadIds(baselineDoc.RootElement);
 
-                var missing = baselineIds.Except(outputIds).ToList();
-                var extra   = outputIds.Except(baselineIds).ToList();
+                List<string> missing = [.. baselineIds.Except(outputIds)];
+                List<string> extra   = [.. outputIds.Except(baselineIds)];
 
                 if (missing.Count > 0)
                     failures.Add($"{baselineFile}: {missing.Count} IDs present in baseline are missing from output");

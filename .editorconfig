@@ -114,3 +114,29 @@ dotnet_diagnostic.CA1068.severity = warning
 # the enforceable rule this escalation exists to back, and this issue's plan doc for the full
 # per-file conversion list.
 dotnet_diagnostic.CA1873.severity = warning
+
+# Explicit types over var (#244, developer decision 2026-08-08). The preference is stated
+# solution-wide; the severity deliberately is not. Escalating IDE0008 globally surfaces 14,286
+# warnings in one go — measured, not estimated — which is the "fix everything at once" outcome #244
+# explicitly rejected and would break the 0-warnings build gate on its first run.
+csharp_style_var_for_built_in_types = false
+csharp_style_var_when_type_is_apparent = false
+csharp_style_var_elsewhere = false
+
+# IDE0008 escalated for exactly the files this work creates or touches, so the boyscout rule is
+# enforced by the compiler instead of by remembering it. Every file listed here has been fully
+# converted; the build therefore stays at 0 warnings, and any later edit to one of these files cannot
+# reintroduce var without failing.
+#
+# Add a file to this list the moment it is first touched — that is the whole mechanism. The list is
+# also each milestone's own record of its blast radius.
+#
+# This is a ratchet with a defined end state: entries are only ever added, never removed, so the list
+# grows toward covering the solution while the outstanding var count falls. Once the remainder is
+# small enough for the build to stay green, IDE0008 moves to the solution-wide block above and this
+# entire section is deleted. See CLAUDE.md's "Variable declarations" section.
+#
+# Started by #320 (central package versions). The notification-system milestone (#14) maintains its
+# own copy of this section on its branch; the two lists merge by union.
+[{tests/Quotinator.Api.Tests/Solution/RepositoryStructureTests.cs,tests/Quotinator.Converters.BasicJsonArray.Tests/BasicJsonArrayConverterTests.cs,tests/Quotinator.Converters.Csv.Tests/CsvQuoteConverterTests.cs}]
+dotnet_diagnostic.IDE0008.severity = warning
