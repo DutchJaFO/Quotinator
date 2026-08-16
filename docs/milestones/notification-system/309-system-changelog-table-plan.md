@@ -104,8 +104,18 @@ describes it; and **ADR 005 is not wrong** — its `System_Changelog` naming was
 one-database assumption in force when it was written, and it simply did not account for an application
 having more than one database.
 
-The ADR is the final step below. No table is renamed by this revision, and every previously-verified
-row stays ✅.
+The ADR is the final step below.
+
+**Outcome (2026-08-16): a revision to [ADR 015](../architecture-decisions/015-domain-prefixed-table-naming.md),
+not a new ADR.** A prefix names a domain, never a database, and an application defines a domain per
+distinct concern it owns — superseding that ADR's one-prefix-per-consumer rule. `Changelog_` is
+Quotinator's second domain, so this issue's three tables are renamed: `Changelog` → `Changelog_Entry`,
+`ChangelogLine` → `Changelog_Line`, `ChangelogSchemaVersion` → `Changelog_SchemaVersion`. Applied by
+editing this database's migration and baseline in place, since it is in-memory only and no persistent
+copy exists anywhere.
+
+Every previously-verified row stays ✅ — the rename changes table names, not behaviour, and the existing
+tests cover it.
 
 ## Authoritative-source cross-check
 
@@ -558,33 +568,41 @@ v1.8.3 release's full highlight list renders beneath it, matching the JSON sourc
 
 ### 11. ADR: table naming when an application has more than one database
 
+**Status:** ✅ Done
+
+Delivered as **"Revision — issue #309" in
+[ADR 015](../architecture-decisions/015-domain-prefixed-table-naming.md)**, not as a new ADR. The
+superseded paragraph carries a forward pointer to it.
+
+Decided: a prefix names a **domain** — intent and ownership — never a database; an application defines
+a domain per distinct concern it owns, superseding "exactly one"; and domains and databases are
+independent axes, so `Changelog_` would be correct wherever that content lived.
+
+A new ADR was drafted first and discarded. Stripped of narrative it held two things — the "exactly one"
+change and a new domain row — both of which are modifications to ADR 015's own rule inside ADR 015's
+own subject. A second document would have forced the two to be read together permanently.
+
+Two positions were considered and rejected. Keeping the tables unprefixed is defensible on this ADR's
+disambiguation rationale alone, but leaves a domain with no name. Making the prefix identify the
+*database* was rejected as overloading: which database a table is in is expressed structurally (the
+keyed connection factory, the initializer, the nested `Sql` class), and the revision records the
+resulting limitation explicitly — a reader still cannot tell `Changelog_Entry` and `System_Notification`
+apart by database, and the remedy would be splitting `Sql.cs`, not the table names.
+
+### 12. Rename the changelog tables per ADR 015's revision
+
 **Status:** ⬜ Not started
 
-Write the clarification ADR described in "Revision (2026-08-16)" below, and add it to `Quotinator.slnx`
-in the same commit.
+`Changelog` → `Changelog_Entry`, `ChangelogLine` → `Changelog_Line`, `ChangelogSchemaVersion` →
+`Changelog_SchemaVersion`, across the migration, the baseline, `ChangelogEntity`/`ChangelogLineEntity`'s
+`[Table(...)]` attributes, `Sql.ChangelogSchema`/`Sql.ChangelogContent`, and the tests.
 
-Scope: state what table-naming and ownership rules apply per database once an application has more than
-one. ADR 015 answers this only for a single namespace — `Import_`/`Audit_`/`System_` for
-`Quotinator.Data`'s own tables, one prefix (`Quotinator_`) for the consuming application's domain
-tables. It has no answer for a second database, nor for whether a database holding exactly one domain
-needs a prefix at all.
+Applied by **editing this database's migration and baseline in place**, not by adding a rename
+migration. That is only correct because the changelog database is in-memory only and no persistent copy
+exists anywhere — ADR 015's revision records that this window closes the moment a persistent-file variant ships.
 
-The ADR decides the rule; it does not rename anything. If it concludes the current names are correct,
-that is a valid outcome and the only artefact is the ADR itself.
-
-Inputs it has to account for:
-
-- The changelog database is effectively **a second user-domain database**, not a system database
-  (developer clarification, 2026-08-16) — so neither `System_` nor an existing `Quotinator.Data`
-  domain describes it.
-- ADR 015's stated rationale is SQLite's lack of schema qualification *within one flat namespace*,
-  which a single-domain database does not have a problem with.
-- ADR 015's second stated purpose does still apply: a reader scanning `Sql.cs` — one file spanning both
-  databases — should be able to tell which subsystem owns a table from its name alone.
-- ADR 018's "Database placement" section already decides *when* a separate database is used. This ADR
-  covers naming inside one, and should reference rather than restate it.
-- ADR 005 is not wrong and needs no correction: its `System_Changelog` naming was correct under the
-  one-database assumption in force when it was written.
+`CLAUDE.md`'s table-naming section gains `Changelog_` alongside the existing domains, in the same
+commit.
 
 **T2 re-confirmed against the final commit state (2026-08-14), not just Step 8's earlier snapshot.**
 Step 8's own live Docker run happened before Step 9's added test and before the unreleased #309
@@ -614,7 +632,8 @@ app, not just the JSON source file, serves the change just added to `changelog.e
 | 12 | ✅ | `About.razor` still renders (fallback path) when the changelog database is unavailable, matching #293's degraded-state precedent | Unit test (see the note under the full-verification step) | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_FallsBackToFileService`/`_DatabaseEmpty_FallsBackToFileService`, plus the live Docker happy-path run confirming zero errors/warnings end to end |
 | 13 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 14 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run repeatedly while implementing the reader and its tests, to rule out flakiness) |
-| 15 | ❌ | An ADR states the table-naming rule for an application with more than one database, and is listed in `Quotinator.slnx` | Doc | The ADR file exists, is numbered and accepted, and `RepositoryStructureTests` (which asserts every `docs/` Markdown file is in the solution) passes |
+| 15 | ✅ | The table-naming rule for an application with more than one database is stated in an ADR | Doc | ADR 015's "Revision — issue #309" section; `RepositoryStructureTests` passes (14/14, 2026-08-16) |
+| 16 | ❌ | The changelog tables carry the `Changelog_` prefix per ADR 015's revision, in the migration, baseline, entities, `Sql.cs` and tests | Unit test | Existing changelog test suite, unchanged in intent — it fails until every reference is renamed consistently |
 
 ---
 

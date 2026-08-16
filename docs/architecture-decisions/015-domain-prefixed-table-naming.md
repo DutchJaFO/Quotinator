@@ -72,6 +72,9 @@ split found in this ADR's own research, matching where the class and its enums a
 
 ### The consuming project's own domain
 
+> **"Exactly one" is superseded — see "Revision — issue #309" at the end of this ADR.** A consuming
+> application defines a domain per distinct concern it owns. Everything else in this section stands.
+
 Each project that consumes `Quotinator.Data` picks exactly one top-level domain prefix for all of its
 own domain tables. **Quotinator's is `Quotinator_`.** Every table `Quotinator.Core` currently owns
 gets it: `Quotinator_Quote`, `Quotinator_Source`, `Quotinator_Character`, `Quotinator_Person`,
@@ -161,3 +164,57 @@ had already applied to the local dev database via each issue's own T1 pass earli
 milestone. The squash was cancelled on that evidence alone. This is the same class of near-miss #254
 itself was, caught this time before any code was written rather than after — the corrected policy
 above held.
+
+---
+
+## Revision — issue #309: an application defines a domain per concern, and a domain may occupy its own database
+
+**Context.** [ADR 018](018-system-content-in-quotinator-data.md)'s "Database placement" section allows
+file-authored system content to live in its own SQLite database, and #309 built the first one. This ADR
+was written when the project had a single database, so it left two things unstated: whether a prefix
+describes a domain or a database, and whether one application may have more than one domain.
+
+### A prefix names a domain — intent and ownership — never a database
+
+Which database a table lives in is expressed structurally: the keyed `IDbConnectionFactory` a query
+executes against, the initializer that creates the table, and the nested `Sql` class the query lives in.
+It is never encoded in the table name.
+
+A consequence to accept rather than design around: one `Sql.cs` spans both databases, so `Changelog_Entry`
+and `System_Notification` read as siblings there. If that becomes confusing, split `Sql.cs`.
+
+### An application defines a domain per distinct concern it owns
+
+Not one per project. Quotinator's domains:
+
+| Domain | Covers |
+|---|---|
+| `Quotinator_` | Quote content and its masterdata — quotes, sources, characters, people, series, universes, conversations, and their translations |
+| `Changelog_` | Changelog content — releases, their line items, and that content's own schema version |
+
+`Quotinator.Data`'s three domains (`Import_`, `Audit_`, `System_`) are unchanged and remain the library's
+own; a consumer does not add to them. Adding a domain means adding a row above.
+
+### Domains and databases are independent
+
+A domain may occupy its own database, and one database may hold several domains. A domain's prefix does
+not change when its tables move between databases.
+
+### Effective table names
+
+| Table | Database |
+|---|---|
+| `Changelog_Entry` | changelog |
+| `Changelog_Line` | changelog |
+| `Changelog_SchemaVersion` | changelog |
+
+`Changelog_Entry`, not `Changelog_Changelog`: the prefix already says changelog, so the table part names
+what one row is.
+
+### Consequences
+
+- The changelog database is in-memory only, so these names are applied by editing its migration and
+  baseline in place. That is valid only until a persistent-file variant ships; from then its migrations
+  are frozen like any other database's.
+- No mechanical guard checks table prefixes. `SqlIdCaseGuard` and its siblings cover column-level
+  conventions only.
