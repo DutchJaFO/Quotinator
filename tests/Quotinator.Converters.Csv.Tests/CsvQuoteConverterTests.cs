@@ -87,7 +87,7 @@ public class CsvQuoteConverterTests
         Assert.AreEqual("A Character", quote.Character);
         Assert.AreEqual("An Author", quote.Author);
         Assert.AreEqual(QuoteType.Book, quote.Type);
-        CollectionAssert.AreEqual(DramaSciFiGenres, quote.Genres.ToList());
+        Assert.AreSequenceEqual(DramaSciFiGenres, quote.Genres);
     }
 
     [TestMethod]

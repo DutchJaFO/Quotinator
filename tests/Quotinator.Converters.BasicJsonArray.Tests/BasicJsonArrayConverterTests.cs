@@ -100,7 +100,7 @@ public class BasicJsonArrayConverterTests
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
-        CollectionAssert.AreEqual(DramaSciFiGenres, quote.Genres.ToList());
+        Assert.AreSequenceEqual(DramaSciFiGenres, quote.Genres);
     }
 
     [TestMethod]
@@ -112,7 +112,7 @@ public class BasicJsonArrayConverterTests
         await new BasicJsonArrayConverter().ConvertAsync(inputPath, outputPath, cancellationToken: TestContext.CancellationToken);
 
         var quote = await ReadSingle(outputPath);
-        CollectionAssert.AreEqual(DramaGenre, quote.Genres.ToList());
+        Assert.AreSequenceEqual(DramaGenre, quote.Genres);
     }
 
     [TestMethod]

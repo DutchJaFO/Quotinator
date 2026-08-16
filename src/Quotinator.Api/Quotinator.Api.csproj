@@ -22,18 +22,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
-    <!-- Direct override: Microsoft.AspNetCore.OpenApi 10.0.10 transitively pulls in the
-         vulnerable Microsoft.OpenApi 2.0.0 (CVE-2026-49451, GHSA-v5pm-xwqc-g5wc). Forces
-         resolution to the patched version until AspNetCore.OpenApi itself bumps its floor.
-         2.11.0 is the latest 2.x release — the ceiling until AspNetCore.OpenApi's bundled
-         XmlCommentGenerator supports Microsoft.OpenApi 3.x's read-only object model (see
-         dotnet/aspnetcore#64317; src/Quotinator.Api/CVE/archived/CVE-2026-49451.md). -->
-    <PackageReference Include="Microsoft.OpenApi" Version="2.11.0" />
-    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.16.18" />
-    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
-    <PackageReference Include="Toolbelt.Blazor.I18nText" Version="14.1.1" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Microsoft.OpenApi is referenced directly only to override the vulnerable version
+         AspNetCore.OpenApi pulls in transitively; the pin and its rationale are in
+         Directory.Packages.props. -->
+    <PackageReference Include="Microsoft.OpenApi" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" />
+    <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Toolbelt.Blazor.I18nText" />
   </ItemGroup>
 
   <ItemGroup>

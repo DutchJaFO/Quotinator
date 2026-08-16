@@ -20,6 +20,13 @@ public class RepositoryStructureTests
     private static readonly string SlnxPath = Path.Combine(RepoRoot, "Quotinator.slnx");
     private static readonly string DataSourcesDir = Path.Combine(RepoRoot, "data", "sources");
 
+    /// <summary>
+    /// The only directories holding real projects. Enumerating these rather than walking the whole
+    /// repository keeps checked-out git worktrees (e.g. .claude/worktrees/, git-excluded and holding
+    /// stale copies of every .csproj) from producing phantom failures.
+    /// </summary>
+    private static readonly string[] ProjectRoots = ["src", "tests", "tools"];
+
     private static string FindRepoRoot()
     {
         var dir = AppContext.BaseDirectory;
@@ -39,6 +46,75 @@ public class RepositoryStructureTests
             .Select(e => e.Attribute("Path")?.Value)
             .Where(p => p is not null)
             .Select(p => p!.Replace('\\', '/'))];
+    }
+
+    private static List<string> FindProjectFiles()
+    {
+        List<string> files = [];
+        foreach (string root in ProjectRoots)
+        {
+            string dir = Path.Combine(RepoRoot, root);
+            if (Directory.Exists(dir))
+                files.AddRange(Directory.GetFiles(dir, "*.csproj", SearchOption.AllDirectories));
+        }
+        return files;
+    }
+
+    /// <summary>
+    /// No PackageReference anywhere in the solution may carry an inline Version attribute — every
+    /// package version is declared centrally in Directory.Packages.props (#320).
+    /// </summary>
+    /// <remarks>
+    /// This is the regression guard for the failure mode #320 exists to remove: with per-project
+    /// pins, a dependency bump that reaches some projects and not others resolves to two versions of
+    /// the same package and fails restore with NU1605.
+    /// </remarks>
+    [TestMethod]
+    public void PackageReferences_DoNotCarryInlineVersions()
+    {
+        List<string> projectFiles = FindProjectFiles();
+        Assert.IsNotEmpty(projectFiles, "No .csproj files found under src/, tests/, or tools/.");
+
+        List<string> failures = [];
+        foreach (string file in projectFiles)
+        {
+            XDocument doc = XDocument.Load(file);
+            foreach (XElement reference in doc.Descendants("PackageReference")
+                         .Where(e => e.Attribute("Version") is not null))
+            {
+                string name = reference.Attribute("Include")?.Value ?? "(unnamed)";
+                string version = reference.Attribute("Version")!.Value;
+                failures.Add($"  {Path.GetRelativePath(RepoRoot, file).Replace('\\', '/')}: {name} = {version}");
+            }
+        }
+
+        Assert.IsEmpty(failures,
+            "PackageReference elements carry an inline Version attribute. Move the version to "
+            + $"Directory.Packages.props as a <PackageVersion> entry:\n{string.Join("\n", failures)}");
+    }
+
+    /// <summary>Directory.Packages.props must exist at the repo root and switch central package management on.</summary>
+    [TestMethod]
+    public void DirectoryPackagesProps_ExistsAndEnablesCentralManagement()
+    {
+        string path = Path.Combine(RepoRoot, "Directory.Packages.props");
+        Assert.IsTrue(File.Exists(path), "Directory.Packages.props does not exist at the repo root.");
+
+        XDocument doc = XDocument.Load(path);
+        string? enabled = doc.Descendants("ManagePackageVersionsCentrally").FirstOrDefault()?.Value;
+
+        Assert.IsTrue(
+            string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase),
+            $"ManagePackageVersionsCentrally must be true in Directory.Packages.props (found: {enabled ?? "absent"}).");
+    }
+
+    /// <summary>Directory.Packages.props must be listed in Quotinator.slnx so it is visible in Visual Studio.</summary>
+    [TestMethod]
+    public void DirectoryPackagesProps_IsInSlnx()
+    {
+        HashSet<string> paths = LoadSlnxFilePaths();
+        Assert.Contains("Directory.Packages.props", paths,
+            "Directory.Packages.props is not referenced in Quotinator.slnx.");
     }
 
     /// <summary>src/Quotinator.Api/resources/changelog.en.json must exist on disk as the English source file.</summary>
