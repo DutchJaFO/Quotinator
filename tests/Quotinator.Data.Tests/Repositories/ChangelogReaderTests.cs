@@ -45,7 +45,7 @@ public class ChangelogReaderTests
 
     private sealed class BrokenSqlStrategy : IJoinStrategy<ChangelogLineRow>
     {
-        public string BuildSql() => "SELCT * FROM Changelog;";
+        public string BuildSql() => "SELCT * FROM Changelog_Entry;";
     }
 
     private static ChangelogDocument SourceDocument() => new()
@@ -141,7 +141,7 @@ public class ChangelogReaderTests
         Assert.AreSame(fallback, document);
     }
 
-    /// <summary>A missing Changelog table falls back to the JSON-backed service instead of throwing.</summary>
+    /// <summary>A missing Changelog_Entry table falls back to the JSON-backed service instead of throwing.</summary>
     [TestMethod]
     public async Task GetDocumentAsync_TablesMissing_FallsBackToFileService()
     {
@@ -171,7 +171,7 @@ public class ChangelogReaderTests
         await reader.GetDocumentAsync("en");
 
         Assert.Contains(e => e.Level == LogLevel.Warning, logger.Entries,
-            "A missing Changelog table must log a warning, not fail silently.");
+            "A missing Changelog_Entry table must log a warning, not fail silently.");
     }
 
     /// <summary>A genuinely different SQL error (not "table missing") propagates rather than being swallowed by the narrow fallback filter.</summary>

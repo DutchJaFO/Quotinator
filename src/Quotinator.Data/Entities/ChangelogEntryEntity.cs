@@ -10,8 +10,8 @@ namespace Quotinator.Data.Entities;
 /// <see cref="ChangelogLineEntity"/> — every list-shaped field (highlights, added, etc.) is stored as
 /// child rows rather than columns on this entity.
 /// </summary>
-[Table("Changelog")]
-public sealed class ChangelogEntity : RecordBase
+[Table("Changelog_Entry")]
+public sealed class ChangelogEntryEntity : RecordBase
 {
     /// <summary>ISO 639-1 language code (matches one of the <c>changelog.*.json</c> files).</summary>
     public string Language { get; init; } = string.Empty;

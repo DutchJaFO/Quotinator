@@ -591,7 +591,7 @@ apart by database, and the remedy would be splitting `Sql.cs`, not the table nam
 
 ### 12. Rename the changelog tables per ADR 015's revision
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Applied by **editing this database's migration and baseline in place**, not by adding a rename
 migration. That is only correct because the changelog database is in-memory only and no persistent copy
@@ -653,9 +653,13 @@ could not settle them.
   malformed SQL, plus doc comments.
 
 **Docs**
-- `CLAUDE.md`'s table-naming line and `docs/database-conventions.md`'s "Table naming" row gain
-  `Changelog_`.
-- `data/changelog/changelog.{en,nl,de}.json` — `unreleased` entries, in lockstep.
+- `CLAUDE.md`'s table-naming line and `docs/database-conventions.md`'s "Table naming" rows gain
+  `Changelog_`, plus the prefix-names-a-domain rule and a "don't drop the prefix in a single-purpose
+  database" row.
+- **No changelog entry** (decided during execution, deviating from this plan's own earlier line). #309
+  is already in `unreleased.issues` with a `changed` entry describing the database-backed changelog;
+  this rename changes no behaviour a user can observe. An "internal tables renamed" line is the
+  technical detail the changelog's own rules exclude.
 
 #### Verified as *not* affected
 
@@ -703,7 +707,7 @@ app, not just the JSON source file, serves the change just added to `changelog.e
 | 13 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 14 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run repeatedly while implementing the reader and its tests, to rule out flakiness) |
 | 15 | ✅ | The table-naming rule for an application with more than one database is stated in an ADR | Doc | ADR 015's "Revision — issue #309" section; `RepositoryStructureTests` passes (14/14, 2026-08-16) |
-| 16 | ❌ | The changelog tables carry the `Changelog_` prefix per ADR 015's revision, in the migration, baseline, entities, `Sql.cs` and tests | Unit test | Existing changelog test suite, unchanged in intent — it fails until every reference is renamed consistently |
+| 16 | ✅ | The changelog tables carry the `Changelog_` prefix per ADR 015's revision, in the migration, baseline, entities, `Sql.cs` and tests | Unit test | 14/14 changelog tests pass against the renamed schema (2026-08-16); full solution builds 0 Warning(s) 0 Error(s) |
 
 ---
 

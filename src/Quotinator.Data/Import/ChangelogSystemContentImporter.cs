@@ -40,15 +40,15 @@ public sealed class ChangelogSystemContentImporter(
     /// </summary>
     public async Task RefreshAsync()
     {
-        using var connection = (SqliteConnection)factory.CreateConnection();
+        using SqliteConnection connection = (SqliteConnection)factory.CreateConnection();
         await connection.OpenAsync();
         await connection.ExecuteAsync(Sql.ChangelogContent.ClearLines);
         await connection.ExecuteAsync(Sql.ChangelogContent.ClearChangelogs);
 
-        var entryCount = 0;
-        foreach (var language in changelogService.AvailableLanguages)
+        int entryCount = 0;
+        foreach (string language in changelogService.AvailableLanguages)
         {
-            var document = changelogService.GetForCulture(language);
+            ChangelogDocument? document = changelogService.GetForCulture(language);
             if (document is null) continue;
 
             if (document.Unreleased is not null)
@@ -57,7 +57,7 @@ public sealed class ChangelogSystemContentImporter(
                 entryCount++;
             }
 
-            foreach (var release in document.Releases)
+            foreach (ChangelogRelease release in document.Releases)
             {
                 await WriteEntryAsync(document.Language, release.Version, release.Date, document.MachineTranslated, release, release.Quote);
                 entryCount++;
@@ -70,7 +70,7 @@ public sealed class ChangelogSystemContentImporter(
     private async Task WriteEntryAsync(
         string language, string? version, string? date, bool machineTranslated, ChangelogUnreleased content, ChangelogQuote? quote)
     {
-        var entity = new ChangelogEntity
+        ChangelogEntryEntity entity = new ChangelogEntryEntity
         {
             Language          = language,
             Version           = version,
@@ -85,7 +85,7 @@ public sealed class ChangelogSystemContentImporter(
 
     private static List<ChangelogLineEntity> BuildLines(Guid changelogId, ChangelogUnreleased content)
     {
-        var lines = new List<ChangelogLineEntity>();
+        List<ChangelogLineEntity> lines = new List<ChangelogLineEntity>();
 
         AddOrderedLines(lines, changelogId, ChangelogLineKind.Highlight, content.Highlights);
         AddOrderedLines(lines, changelogId, ChangelogLineKind.Added, content.Added);
@@ -95,7 +95,7 @@ public sealed class ChangelogSystemContentImporter(
         AddOrderedLines(lines, changelogId, ChangelogLineKind.Issue, content.Issues.Select(i => i.ToString()));
         AddOrderedLines(lines, changelogId, ChangelogLineKind.Cve, content.Cves);
 
-        foreach (var (audienceKey, values) in content.AudienceHighlights)
+        foreach ((string? audienceKey, List<string>? values) in content.AudienceHighlights)
             AddOrderedLines(lines, changelogId, ChangelogLineKind.AudienceHighlight, values, audienceKey);
 
         return lines;
@@ -106,12 +106,12 @@ public sealed class ChangelogSystemContentImporter(
     private static void AddOrderedLines(
         List<ChangelogLineEntity> lines, Guid changelogId, ChangelogLineKind kind, IEnumerable<string> values, string? audienceKey = null)
     {
-        var sortOrder = 0;
-        foreach (var value in values)
+        int sortOrder = 0;
+        foreach (string value in values)
         {
             lines.Add(new ChangelogLineEntity
             {
-                ChangelogId = changelogId,
+                ChangelogEntryId = changelogId,
                 Kind        = new SafeValue<ChangelogLineKind?>(kind.ToString(), kind),
                 AudienceKey = audienceKey,
                 Value       = value,

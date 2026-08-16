@@ -25,8 +25,11 @@ itself.
 |---|---|
 | ✅ Do | Name every table `[Domain]_[TableName]`, singular — `Quotinator_Person`, not `People` or `Quotinator_People`. |
 | ✅ Do | Use `Quotinator.Data`'s three standard domains for its own tables: `Import_` (import mechanism), `Audit_` (audit trail), `System_` (residual/generic infrastructure only — not a catch-all for anything import- or audit-related). |
-| ✅ Do | Use `Quotinator_` for every table `Quotinator.Core` owns — this project's one consumer-level domain prefix. |
+| ✅ Do | Use `Quotinator_` for every table `Quotinator.Core` owns — quote content and its masterdata. |
+| ✅ Do | Use `Changelog_` for the changelog database's tables (`Changelog_Entry`, `Changelog_Line`, `Changelog_SchemaVersion`) — this project's second consumer-level domain. An application defines a domain per distinct concern it owns, not one per project. |
+| ✅ Do | Treat a prefix as naming a **domain**, never a database. A domain may occupy its own database, and one database may hold several domains; which database a table lives in is expressed by its keyed connection factory and initializer, not its name. |
 | ❌ Don't | Add a table to `System_` because it's Data-owned infrastructure in general — `System_` is specifically for tables that are neither `Import_` nor `Audit_` (e.g. `System_SchemaVersion`). A new Data-owned import or audit table always gets `Import_`/`Audit_`, never `System_`. |
+| ❌ Don't | Drop the prefix because a table sits alone in its own single-purpose database — being alone is not an exemption, and the domain still needs naming. |
 | ❌ Don't | Assume a third-party consumer of `Quotinator.Data` must adopt this convention — it binds `Quotinator.Data`'s own tables and the Quotinator project's own tables, not anyone else's schema. |
 
 📖 [ADR 015](architecture-decisions/015-domain-prefixed-table-naming.md) — table names only; see

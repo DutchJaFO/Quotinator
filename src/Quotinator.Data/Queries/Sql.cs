@@ -89,7 +89,7 @@ internal static class Sql
 
     /// <summary>
     /// Version-tracking bookkeeping for the separate changelog database (#309, ADR 018) — its own
-    /// <c>ChangelogSchemaVersion</c> table, independent of <see cref="Schema"/>'s
+    /// <c>Changelog_SchemaVersion</c> table, independent of <see cref="Schema"/>'s
     /// <c>System_SchemaVersion</c>/<c>System_ConsumerSchemaVersion</c> (those track the main
     /// database only). Consumed by <see cref="Database.ChangelogDatabaseInitializer"/>.
     /// </summary>
@@ -102,15 +102,15 @@ internal static class Sql
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%';";
 
         internal const string CreateVersionTable =
-            "CREATE TABLE IF NOT EXISTS ChangelogSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);";
+            "CREATE TABLE IF NOT EXISTS Changelog_SchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL);";
         internal const string GetCurrentVersion =
-            "SELECT COALESCE(MAX(Version), 0) FROM ChangelogSchemaVersion;";
+            "SELECT COALESCE(MAX(Version), 0) FROM Changelog_SchemaVersion;";
         internal const string InsertVersion =
-            "INSERT INTO ChangelogSchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
+            "INSERT INTO Changelog_SchemaVersion (Version, AppliedAt) VALUES (@v, @at);";
     }
 
     /// <summary>
-    /// Content SQL for the separate changelog database's own <c>Changelog</c>/<c>ChangelogLine</c>
+    /// Content SQL for the separate changelog database's own <c>Changelog_Entry</c>/<c>Changelog_Line</c>
     /// tables (#309, ADR 018) — both the bulk refresh (write) SQL consumed by
     /// <see cref="Import.ChangelogSystemContentImporter"/> and the flattening read query consumed by
     /// <see cref="ChangelogWithLinesStrategy"/>/<see cref="Repositories.ChangelogReader"/>. Separate
@@ -121,12 +121,12 @@ internal static class Sql
     {
         // Child before parent — FK enforcement (PRAGMA foreign_keys) is off by default on this
         // project's connections (only toggled on where a specific operation needs it), so deleting
-        // Changelog first would silently orphan ChangelogLine rows rather than fail loudly.
-        internal const string ClearLines      = "DELETE FROM ChangelogLine;";
-        internal const string ClearChangelogs = "DELETE FROM Changelog;";
+        // Changelog_Entry first would silently orphan Changelog_Line rows rather than fail loudly.
+        internal const string ClearLines      = "DELETE FROM Changelog_Line;";
+        internal const string ClearChangelogs = "DELETE FROM Changelog_Entry;";
 
         /// <summary>
-        /// Every <c>Changelog</c> row LEFT JOINed with its <c>ChangelogLine</c> children, flattened
+        /// Every <c>Changelog_Entry</c> row LEFT JOINed with its <c>Changelog_Line</c> children, flattened
         /// into <see cref="ChangelogLineRow"/> — a row with no lines still appears once, with every
         /// line-only column <c>NULL</c>. No language filter: the whole dataset (bounded by release
         /// count × line count, a handful of KB in practice) is pulled into memory once and grouped in
@@ -134,12 +134,12 @@ internal static class Sql
         /// logic rather than duplicating it as a second SQL-side implementation.
         /// </summary>
         internal static string SelectAllWithLines() => $"""
-            SELECT {IdClauses.SelectColumn("[c].[Id]", "ChangelogId")},
+            SELECT {IdClauses.SelectColumn("[c].[Id]", "ChangelogEntryId")},
                    [c].[Language], [c].[Version], [c].[Date], [c].[MachineTranslated],
                    [c].[QuoteText], [c].[QuoteAttribution],
                    [l].[Kind], [l].[AudienceKey], [l].[Value], [l].[SortOrder]
-            FROM   [Changelog] [c]
-            LEFT JOIN [ChangelogLine] [l] ON {IdClauses.Join("[l].[ChangelogId]", "[c].[Id]")} AND [l].[IsDeleted] = 0
+            FROM   [Changelog_Entry] [c]
+            LEFT JOIN [Changelog_Line] [l] ON {IdClauses.Join("[l].[ChangelogEntryId]", "[c].[Id]")} AND [l].[IsDeleted] = 0
             WHERE  [c].[IsDeleted] = 0
             ORDER BY [c].[Language], [c].[Version], [l].[Kind], [l].[SortOrder]
             """;

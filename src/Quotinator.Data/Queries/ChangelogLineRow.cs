@@ -7,8 +7,8 @@ namespace Quotinator.Data.Queries;
 /// </summary>
 public sealed record ChangelogLineRow
 {
-    /// <summary>The owning <c>Changelog</c> row's id.</summary>
-    public Guid ChangelogId { get; init; }
+    /// <summary>The owning <c>Changelog_Entry</c> row's id.</summary>
+    public Guid ChangelogEntryId { get; init; }
 
     /// <summary>ISO 639-1 language code.</summary>
     public string Language { get; init; } = string.Empty;

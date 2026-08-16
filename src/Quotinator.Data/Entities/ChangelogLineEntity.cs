@@ -5,16 +5,16 @@ using Quotinator.Data.Models;
 namespace Quotinator.Data.Entities;
 
 /// <summary>
-/// One list-item line belonging to a <see cref="ChangelogEntity"/> — the child half of #309's
+/// One list-item line belonging to a <see cref="ChangelogEntryEntity"/> — the child half of #309's
 /// master/detail schema. Discriminated by <see cref="Kind"/> so every list-shaped changelog field
 /// (highlights, added, changed, fixed, removed, issues, cves, audienceHighlights) is covered by one
 /// child table instead of one column each.
 /// </summary>
-[Table("ChangelogLine")]
+[Table("Changelog_Line")]
 public sealed class ChangelogLineEntity : RecordBase
 {
-    /// <summary>The owning <see cref="ChangelogEntity"/>.</summary>
-    public Guid ChangelogId { get; init; }
+    /// <summary>The owning <see cref="ChangelogEntryEntity"/>.</summary>
+    public Guid ChangelogEntryId { get; init; }
 
     /// <summary>Which list-shaped field this line belongs to.</summary>
     public SafeValue<ChangelogLineKind?> Kind { get; init; } = SafeValue<ChangelogLineKind?>.Empty;

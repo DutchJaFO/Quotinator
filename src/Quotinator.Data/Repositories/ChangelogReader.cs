@@ -62,7 +62,7 @@ public sealed class ChangelogReader(
             List<ChangelogRelease> releases = [];
             bool machineTranslated = false;
 
-            foreach (IGrouping<Guid, ChangelogLineRow> changelogGroup in languageGroup.GroupBy(r => r.ChangelogId))
+            foreach (IGrouping<Guid, ChangelogLineRow> changelogGroup in languageGroup.GroupBy(r => r.ChangelogEntryId))
             {
                 ChangelogLineRow first = changelogGroup.First();
                 machineTranslated = first.MachineTranslated;
