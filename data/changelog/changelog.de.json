@@ -10,8 +10,9 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [309, 312, 313],
+    "issues": [81, 309, 312, 313],
     "highlights": [
+      "Nach einer Aktualisierung teilt Quotinator jetzt mit, was sich geändert hat: Eine Startbenachrichtigung zeigt die Highlights jeder übersprungenen Version, nicht nur der neuesten. Eine Neuinstallation sieht nur die Highlights der aktuellen Version, und es erscheint nichts, wenn eine Version nichts Nennenswertes enthält.",
       "Benachrichtigungen haben jetzt eine eigene kurze Überschrift, getrennt vom Nachrichtentext, wodurch die Benachrichtigungsseite und das Start-Pop-up leichter zu erfassen sind.",
       "Benachrichtigungen verschwinden nicht mehr standardmäßig nach Ablauf einer Frist. Zuvor lief jede Benachrichtigung nach 30 Tagen ab, auch solche zu einem noch ungelösten Problem; jetzt bleibt eine Benachrichtigung bestehen, bis sie geschlossen wird oder die empfohlene Aktion ausgeführt wurde."
     ],
@@ -21,6 +22,7 @@
       ]
     },
     "added": [
+      "Eine What's-new-Startbenachrichtigung nach einer Aktualisierung, die jede Version abdeckt, die seit der zuletzt tatsächlich ausgeführten Version übersprungen wurde — eine Benachrichtigung pro Version, zuzüglich des noch nicht veröffentlichten Abschnitts, sofern dort etwas markiert ist; eine Neuinstallation sieht nur die aktuelle Version (issue #81)",
       "Quotinator verzeichnet jetzt, welche Anwendungsversionen die Datenbank verwendet haben, und verknüpft jede Benachrichtigung mit der Version, die sie hinzugefügt hat — die Grundlage dafür, später anzuzeigen, wann eine Benachrichtigung zuerst erschien (issue #312)"
     ],
     "changed": [

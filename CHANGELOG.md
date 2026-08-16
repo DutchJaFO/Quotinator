@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-15 23:03 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-16 09:03 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -11,10 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Highlights
+- After updating, Quotinator now tells you what changed: a startup notification lists the highlights of every release you skipped, not just the newest one. A fresh install only sees the current version's highlights, and nothing appears when a release has nothing worth flagging.
 - Notifications now carry a short headline of their own, separate from the message text, so the Notifications page and the startup popup are easier to scan.
 - Notifications no longer disappear on a timer by default. Previously every notification expired after 30 days, including ones about a problem that was still unresolved; now a notification stays until it is dismissed, or until the action it recommends has been carried out.
 
 ### Added
+- A what's-new startup notification after an update, covering every release missed since the last version this instance actually ran — one notification per release, plus the in-development section when it has anything flagged; a fresh install sees only the current version (issue #81)
 - Quotinator now keeps a record of which application versions have used the database, and links each notification to the version that added it — the groundwork for showing when a notification first appeared (issue #312)
 
 ### Changed

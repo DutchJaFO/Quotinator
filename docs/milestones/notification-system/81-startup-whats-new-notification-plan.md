@@ -1,6 +1,6 @@
 # #81 — Startup notification: what's new after upgrade
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #81 (open)
 **Depends on:** #278 (done, released v1.8.0), #80 (done, released — Changelog handling milestone),
 #309 (code complete on this branch, Waiting for release — `IChangelogReader` exists and is tested),
@@ -266,7 +266,7 @@ small internal static helper (matching `NotificationSeeding`'s own shape) rather
 itself as thin as the two existing producers.
 
 ### 4. Live verification (T1, T2)
-**Status:** T2 done; T1 needs the developer
+**Status:** ✅ Done
 
 **T2 — three real Docker runs, both the negative and positive paths, plus dismissal persistence.**
 
@@ -289,8 +289,26 @@ itself as thin as the two existing producers.
    remained `true` and no new duplicate was seeded, confirming `SeedOnceAsync`'s full-history dedupe scan
    (active + dismissed) correctly prevents re-seeding on every subsequent boot.
 
-**T1 is the one item this session cannot complete** — per this project's standing rule that local
-`dotnet run`/T1 verification is exclusively the developer's own action.
+**T1 confirmed by the developer, 2026-08-16 — and against genuine content rather than a temporary
+edit.** The T2 runs above had to fabricate a flagged highlight (item 2) because no real changelog entry
+carried one at the time. #312's own changelog entry supplied the first real
+`audienceHighlights.notification` item, so the developer's Visual Studio run showed the what's-new
+notification produced from committed content: "Notifications now have their own headline and no longer
+expire on a timer by default…", type Informatie, no expiry, alongside #279's announcement.
+
+Re-confirmed at T2 on a fresh container from the same content: `title: What's new (unreleased)`,
+`metadata: {"version":null,"contentHash":"2EE673F9"}` — `version: null` plus a content hash being the
+correct identity for the unreleased section, which has no version to key on.
+
+**One diagnostic worth recording, because the first T1 attempt looked like a failure and was not.** The
+notification did not appear until the developer rebuilt. The changelog files are copied to
+`bin/Debug/net10.0/data/changelog/` at build time, so a run whose build predates a changelog edit reads
+the old content and correctly produces nothing. Before concluding the producer is broken, confirm the
+build is newer than the changelog edit — the same class of stale-output confusion this project has hit
+before with Razor components.
+
+This is also the first end-to-end proof of the whole chain on real content: #307's reserved audience key
+→ #309's changelog database → this issue's producer → #312's title/body split and typed metadata.
 
 ### 5. Multi-version catch-up: `System_AppVersion`, range-based `WhatsNewNotification.BuildSeeds`
 **Status:** ✅ Done
@@ -350,7 +368,7 @@ Verified: full solution `dotnet build --configuration Release` — 0 Warning(s),
 | 4 | ✅ | Two different versions whose digits nest (e.g. `1.9.1` vs `1.9.10`) do not falsely dedupe against each other | Unit test | `WhatsNewNotificationTests.Seed_NestedVersionNumbers_DoNotFalselyDedupe` |
 | 5 | ✅ | A version already seeded is not re-seeded on a later restart (dedupe holds across restarts) | Unit test | `WhatsNewNotificationTests.Seed_AlreadySeededVersion_IsNoOp` |
 | 6 | ✅ | Dismissing the what's-new notification persists — it does not reappear on the next restart | Live (T2) | Docker: dismissed the temporarily-flagged v1.8.3 notification, `docker restart`ed the same container, confirmed `isDismissed: true` held and no duplicate was seeded |
-| 7 | ❌ | T1 — app starts in Visual Studio with no error; `StartupSuccessModal` shows the what's-new notification when the running version has flagged changelog highlights | Live | Developer confirms in Visual Studio |
+| 7 | ✅ | T1 — app starts in Visual Studio with no error; `StartupSuccessModal` shows the what's-new notification when the running version has flagged changelog highlights | Live | Developer confirmed 2026-08-16: `StartupSuccessModal` shows "Notifications now have their own headline…" (Informatie, no expiry) alongside #279's announcement. Also confirmed at T2 on a fresh container: `title: What's new (unreleased)`, `metadata: {"version":null,"contentHash":"2EE673F9"}` |
 | 8 | ✅ | T2 — Docker build and smoke test | Live | Confirmed both directions: real (unmodified) v1.8.3 content correctly writes nothing (zero flagged highlights); a temporarily-flagged local copy (never committed) correctly writes the notification, visible via `GET /api/v1/notifications` |
 | 9 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 10 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run twice to rule out the startup-latency flakiness found in Step 2) |

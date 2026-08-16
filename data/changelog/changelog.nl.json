@@ -10,8 +10,9 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [309, 312, 313],
+    "issues": [81, 309, 312, 313],
     "highlights": [
+      "Na een update vertelt Quotinator nu wat er is veranderd: een opstartmelding toont de hoogtepunten van elke versie die je hebt overgeslagen, niet alleen van de nieuwste. Een nieuwe installatie ziet alleen de hoogtepunten van de huidige versie, en er verschijnt niets wanneer een versie niets noemenswaardigs bevat.",
       "Meldingen hebben nu een eigen korte kop, los van de berichttekst, waardoor de Meldingen-pagina en de opstartmelding makkelijker te overzien zijn.",
       "Meldingen verdwijnen niet langer standaard na verloop van tijd. Voorheen verliep elke melding na 30 dagen, ook meldingen over een probleem dat nog niet was opgelost; nu blijft een melding staan totdat je hem sluit, of totdat de aanbevolen actie is uitgevoerd."
     ],
@@ -21,6 +22,7 @@
       ]
     },
     "added": [
+      "Een what's-new-opstartmelding na een update, met elke versie die is gemist sinds de laatste versie die deze installatie daadwerkelijk heeft gedraaid — één melding per versie, plus het nog-niet-uitgebrachte gedeelte wanneer daar iets voor is aangemerkt; een nieuwe installatie ziet alleen de huidige versie (issue #81)",
       "Quotinator houdt nu bij welke applicatieversies de database hebben gebruikt en koppelt elke melding aan de versie die hem heeft toegevoegd — de basis om later te tonen wanneer een melding voor het eerst verscheen (issue #312)"
     ],
     "changed": [
