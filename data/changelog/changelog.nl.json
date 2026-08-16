@@ -10,9 +10,27 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [309],
+    "issues": [309, 312, 313],
+    "highlights": [
+      "Meldingen hebben nu een eigen korte kop, los van de berichttekst, waardoor de Meldingen-pagina en de opstartmelding makkelijker te overzien zijn.",
+      "Meldingen verdwijnen niet langer standaard na verloop van tijd. Voorheen verliep elke melding na 30 dagen, ook meldingen over een probleem dat nog niet was opgelost; nu blijft een melding staan totdat je hem sluit, of totdat de aanbevolen actie is uitgevoerd."
+    ],
+    "audienceHighlights": {
+      "notification": [
+        "Meldingen hebben nu een eigen kop en verlopen niet langer standaard automatisch — een melding over een onopgelost probleem blijft staan tot je hem sluit."
+      ]
+    },
+    "added": [
+      "Quotinator houdt nu bij welke applicatieversies de database hebben gebruikt en koppelt elke melding aan de versie die hem heeft toegevoegd — de basis om later te tonen wanneer een melding voor het eerst verscheen (issue #312)"
+    ],
     "changed": [
-      "Changelog-inhoud (getoond op de Over-pagina) wordt nu geleverd vanuit een database in plaats van statische JSON-bestanden, automatisch vernieuwd bij het opstarten — dit maakt de inhoud doorzoekbaar en is een stap richting toekomstige functies zoals het tonen van specifieke hoogtepunten als opstartmeldingen; valt terug op de oorspronkelijke JSON-bestanden als de database ooit niet beschikbaar is, dus er verandert niets voor wie de Over-pagina bekijkt (issue #309)"
+      "Changelog-inhoud (getoond op de Over-pagina) wordt nu geleverd vanuit een database in plaats van statische JSON-bestanden, automatisch vernieuwd bij het opstarten — dit maakt de inhoud doorzoekbaar en is een stap richting toekomstige functies zoals het tonen van specifieke hoogtepunten als opstartmeldingen; valt terug op de oorspronkelijke JSON-bestanden als de database ooit niet beschikbaar is, dus er verandert niets voor wie de Over-pagina bekijkt (issue #309)",
+      "Meldingen hebben een eigen titel gekregen, gestructureerde gegevens die beschrijven waar elke melding over gaat, en een vervaltermijn die nu alleen nog wordt toegepast wanneer een melding daadwerkelijk niet meer getoond hoeft te worden — voorheen verliep elke melding na 30 dagen, ongeacht de inhoud (issue #312)"
+    ],
+    "fixed": [
+      "Bij een upgrade verschijnt niet langer een tweede, dubbele kopie van een melding die al vóór de upgrade bestond (issue #312)",
+      "Een tijdens de ontwikkeling ontstane opstartfout opgelost waardoor de app niet kon starten op een database die door een tussentijdse ontwikkelversie was aangemaakt; uitgebrachte versies waren nooit getroffen (issue #312)",
+      "Een intern testprobleem opgelost waarbij tests konden draaien voordat de app volledig was opgestart, waardoor hun resultaten onbetrouwbaar werden — geen gevolgen voor de applicatie zelf (issue #313)"
     ]
   },
   "releases": [

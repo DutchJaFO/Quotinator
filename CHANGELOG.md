@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-14 05:53 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-15 23:03 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -10,8 +10,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Highlights
+- Notifications now carry a short headline of their own, separate from the message text, so the Notifications page and the startup popup are easier to scan.
+- Notifications no longer disappear on a timer by default. Previously every notification expired after 30 days, including ones about a problem that was still unresolved; now a notification stays until it is dismissed, or until the action it recommends has been carried out.
+
+### Added
+- Quotinator now keeps a record of which application versions have used the database, and links each notification to the version that added it — the groundwork for showing when a notification first appeared (issue #312)
+
 ### Changed
 - Changelog content (shown on the About page) is now served from a database instead of static JSON files, refreshed automatically at startup — this makes the content queryable and is a step toward future features such as surfacing specific highlights as startup notifications; falls back to the original JSON files if the database is ever unavailable, so nothing changes for anyone reading the About page (issue #309)
+- Notifications gained a separate title, structured details describing what each one is about, and an expiry that is now only applied when a notification genuinely should stop being shown — previously every notification expired after 30 days regardless (issue #312)
+
+### Fixed
+- Upgrading no longer shows a second, duplicate copy of a notification that already existed before the upgrade (issue #312)
+- Fixed a startup failure introduced during development that could stop the app from starting on a database created by an in-between development build; released versions were never affected (issue #312)
+- Fixed an internal test-suite defect where tests could run against the app before it had finished starting up, which made their results unreliable — no effect on the application itself (issue #313)
 
 ---
 

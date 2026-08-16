@@ -82,6 +82,15 @@ structured.** It has three consumers, and no reserved key of any kind:
 3. **Action parameters** — what an executable action operates on (step 7), so `Reseed` can mean
    "reseed *this* file" instead of only ever meaning the whole database.
 
+**`Metadata` holds strictly non-text data** (developer direction, 2026-08-16) — structured values that
+help render the notification and parameterise its actions: identifiers, version numbers, counts, ids.
+Never user-facing prose, and never the notification's language. Anything textual, including the language
+its text is written in, is a first-class column on the notification row instead. That boundary is what
+keeps notification text translatable through the same mechanism quotes already use, rather than frozen
+inside a JSON blob in whichever language was current at write time. The payloads this issue ships comply
+by construction (`Announcement`, `Version`, the two schema versions are all identifiers and values), but
+the rule is stated so the next producer does not put a message in there.
+
 The original design here reserved a `dedupeKey` string for consumer 1. That was dropped: it was a
 fossil of #278, where identity had to be a token findable inside prose. Encoding identity as a string
 made the information *less* accessible than the data it was derived from — the reason a UI could not

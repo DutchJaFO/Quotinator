@@ -10,9 +10,27 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [309],
+    "issues": [309, 312, 313],
+    "highlights": [
+      "Benachrichtigungen haben jetzt eine eigene kurze Überschrift, getrennt vom Nachrichtentext, wodurch die Benachrichtigungsseite und das Start-Pop-up leichter zu erfassen sind.",
+      "Benachrichtigungen verschwinden nicht mehr standardmäßig nach Ablauf einer Frist. Zuvor lief jede Benachrichtigung nach 30 Tagen ab, auch solche zu einem noch ungelösten Problem; jetzt bleibt eine Benachrichtigung bestehen, bis sie geschlossen wird oder die empfohlene Aktion ausgeführt wurde."
+    ],
+    "audienceHighlights": {
+      "notification": [
+        "Benachrichtigungen haben jetzt eine eigene Überschrift und laufen nicht mehr standardmäßig ab — eine zu einem ungelösten Problem bleibt bestehen, bis Sie sie schließen."
+      ]
+    },
+    "added": [
+      "Quotinator verzeichnet jetzt, welche Anwendungsversionen die Datenbank verwendet haben, und verknüpft jede Benachrichtigung mit der Version, die sie hinzugefügt hat — die Grundlage dafür, später anzuzeigen, wann eine Benachrichtigung zuerst erschien (issue #312)"
+    ],
     "changed": [
-      "Changelog-Inhalte (angezeigt auf der Über-Seite) werden jetzt aus einer Datenbank bereitgestellt statt aus statischen JSON-Dateien, automatisch beim Start aktualisiert — das macht die Inhalte abfragbar und ist ein Schritt hin zu zukünftigen Funktionen wie dem Anzeigen bestimmter Highlights als Startbenachrichtigungen; fällt auf die ursprünglichen JSON-Dateien zurück, falls die Datenbank einmal nicht verfügbar ist, sodass sich für niemanden, der die Über-Seite liest, etwas ändert (issue #309)"
+      "Changelog-Inhalte (angezeigt auf der Über-Seite) werden jetzt aus einer Datenbank bereitgestellt statt aus statischen JSON-Dateien, automatisch beim Start aktualisiert — das macht die Inhalte abfragbar und ist ein Schritt hin zu zukünftigen Funktionen wie dem Anzeigen bestimmter Highlights als Startbenachrichtigungen; fällt auf die ursprünglichen JSON-Dateien zurück, falls die Datenbank einmal nicht verfügbar ist, sodass sich für niemanden, der die Über-Seite liest, etwas ändert (issue #309)",
+      "Benachrichtigungen haben einen eigenen Titel erhalten, strukturierte Angaben dazu, worum es bei jeder einzelnen geht, und eine Ablauffrist, die jetzt nur noch angewendet wird, wenn eine Benachrichtigung tatsächlich nicht mehr angezeigt werden soll — zuvor lief jede Benachrichtigung nach 30 Tagen ab, unabhängig vom Inhalt (issue #312)"
+    ],
+    "fixed": [
+      "Bei einem Upgrade erscheint keine zweite, doppelte Kopie einer Benachrichtigung mehr, die bereits vor dem Upgrade vorhanden war (issue #312)",
+      "Ein während der Entwicklung entstandener Startfehler wurde behoben, durch den die Anwendung auf einer von einer Zwischenversion erstellten Datenbank nicht starten konnte; veröffentlichte Versionen waren nie betroffen (issue #312)",
+      "Ein internes Problem der Testsuite wurde behoben, bei dem Tests laufen konnten, bevor die Anwendung vollständig gestartet war, wodurch ihre Ergebnisse unzuverlässig wurden — keine Auswirkungen auf die Anwendung selbst (issue #313)"
     ]
   },
   "releases": [

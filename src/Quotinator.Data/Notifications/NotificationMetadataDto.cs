@@ -22,6 +22,19 @@ namespace Quotinator.Data.Notifications;
 /// </para>
 /// </summary>
 /// <param name="kind">Which payload shape this is; supplied by each derived type's own constructor.</param>
+/// <remarks>
+/// <b>Metadata is strictly non-text data</b> (developer direction, 2026-08-16): structured values that
+/// help a renderer display the notification and that parameterise its actions. Identifiers, version
+/// numbers, counts, ids. It never holds user-facing prose, and it never holds the notification's
+/// language.
+/// <para>
+/// Anything textual — title, body, and the language they are written in — is a first-class column on
+/// the notification itself, not a field smuggled into this payload. That is what keeps text
+/// translatable through the same mechanism quotes already use (an <c>OriginalLanguage</c> on the row
+/// plus a translations table), rather than trapped inside a JSON blob in whichever language happened to
+/// be current when it was written.
+/// </para>
+/// </remarks>
 public abstract class NotificationMetadataDto(NotificationMetadataKind kind)
 {
     /// <summary>
