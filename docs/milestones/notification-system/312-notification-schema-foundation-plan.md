@@ -1,8 +1,14 @@
 # #312 — Notification schema: title/body, typed metadata, optional expiry, and app-version provenance
 
-**Status:** Waiting for release
+**Status:** In progress
 **GitHub issue:** #312 (open)
 **Depends on:** #278 (done, released v1.8.0 — the mechanism this issue reshapes)
+
+> **Next action: implement the three items under "Follow-on work, agreed 2026-08-16".** The issue had
+> reached `Waiting for release` with every verification row green when the developer inspected the
+> stored rows and found two design faults and a migration gap. Nothing already verified is invalidated
+> — this is additional work on top — but it must land before release, because two of the three change
+> stored data.
 
 ---
 
@@ -507,3 +513,67 @@ not a migration's business. Dismiss it.
   planning phase; step 5 settles it once for all three. #304's own `Reseed` trigger additionally
   benefits from step 7's action parameters.
 - **#305** — independent; no interaction.
+
+---
+
+## Follow-on work, agreed 2026-08-16
+
+Found by the developer reading the stored rows directly — not by any test, and after every verification
+row was green. Two design faults and one migration gap.
+
+### A. `Unreleased`/`Released` is an explicit state, not an inferred null
+
+`WhatsNewMetadataDto` currently distinguishes the two by `Version` being null. **Inferring a state from
+a missing value is the fault**: null is indistinguishable from "not set", "failed to parse", and "the
+producer forgot", so every future reader has to know the convention to interpret the row, and any of
+those three accidents silently reads as "unreleased".
+
+An explicit enum member states it. `Version` stays null for the unreleased case — it genuinely has no
+version — but nothing has to *infer* anything from that.
+
+- New enum in `Quotinator.Data/Enums/` per ADR 016, two members (`Released`, `Unreleased`).
+- `WhatsNewMetadataDto` gains it as a required property; `IdentityComponents` becomes
+  `[ReleaseState, Version, ContentHash]`, so a released and an unreleased entry can never collide even
+  if their other components coincided.
+- Serialization omits nulls (`JsonIgnoreCondition.WhenWritingNull`), so a stored payload stops carrying
+  `"version":null`. Identity is unaffected — an absent property deserializes back to null.
+
+### B. The migration must set `AppVersionId`, and create the `1.8.3` row it points at
+
+Migration 8 backfilled `Metadata`/`MetadataKind`/`Title` on the legacy notification but left
+`AppVersionId` null, so the two stored rows disagree: the what's-new entry has provenance, the
+v1.8.3-era announcement does not.
+
+**Its writer is knowable, not a guess.** v1.8.3 was the last official release, and it is the only
+version that could have written that row.
+
+- A new migration (**not** an edit to 8 — 8 has already been applied to a real database, and CLAUDE.md's
+  never-edit-an-applied-migration rule is absolute) inserts a `System_AppVersion` row for
+  `Quotinator.Api` / `1.8.3` when one is absent, then sets the legacy notification's `AppVersionId` to it.
+- **A fresh database must not get that row.** It has no history — only the version it was created under.
+  This falls out of the existing design rather than needing a guard: a genuinely empty database takes
+  the one-step baseline path and never replays migrations at all, so a migration is by construction
+  upgrade-only. Worth stating explicitly in the migration's own comment, since it is load-bearing and
+  invisible from the SQL.
+- Useful side effect: an upgrading v1.8.3 database gains a correct `lastActiveVersion`, so #81's
+  catch-up range works on the first post-upgrade start rather than falling back to current-version-only.
+
+### C. Provenance should be as hard to forget as identity
+
+`NotificationMetadataDto.IdentityComponents` is abstract, so no payload can exist without an identity —
+the compiler enforces it. `AppVersionId` is an optional `Guid?` that defaults to null, so provenance is
+trivially omitted, and *was* omitted by migration 8. The asymmetry is the defect.
+
+Provenance stays a first-class column, never a metadata field, per the developer's boundary. The fix is
+to `WriteAsync`'s signature, making the caller state it rather than letting it default away.
+
+### Verification to add
+
+| # | Requirement | Method |
+|---|---|---|
+| 19 | An unreleased what's-new entry is identified by an explicit state, not by a null version | Unit test |
+| 20 | A released and an unreleased entry never share an identity | Unit test |
+| 21 | A stored payload contains no null-valued properties | Unit test |
+| 22 | Upgrading a v1.8.3 database creates a `1.8.3` `System_AppVersion` row and links the legacy notification to it | Unit test + Live (T2) |
+| 23 | A fresh database has exactly one `System_AppVersion` row — its own version, no history | Unit test + Live (T2) |
+| 24 | A notification cannot be written without stating which version wrote it | Unit test |
