@@ -278,14 +278,18 @@ file list as a parameter, `AfterReset`'s is fixed text — and write both notifi
 translation-carrying write API with `OriginalLanguage = en`. `TranslationCompletenessTests` covers the
 key-completeness half; row 17 covers resolution.
 
-### 10. Docs and housekeeping
+### 10. Docs
 
 **Status:** ⬜ Not started
 
 `docs/api-endpoints.md` if any endpoint description changes; `unreleased` entries in
-`data/changelog/changelog.{en,nl,de}.json` in lockstep; every touched file added to `.editorconfig`'s
-scoped `IDE0008` list with its `var` declarations converted (boyscout rule); `[Subsystem - Phase]`
-prefixes on any new log lines.
+`data/changelog/changelog.{en,nl,de}.json` in lockstep; `[Subsystem - Phase]` prefixes on any new log
+lines.
+
+**`.editorconfig` is not part of this step.** Per CLAUDE.md, a file joins the scoped `IDE0008` list
+*the moment it is first touched*, with its `var` declarations converted in that same commit — so it
+happens inside whichever step first opens each file, never batched here at the end. Listed as a
+non-step so a reader does not go looking for it as one.
 
 ### 11. Verification
 

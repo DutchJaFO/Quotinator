@@ -141,7 +141,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#304](https://github.com/DutchJaFO/Quotinator/issues/304) | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) (revised — content-change trigger moves into the seeding loop) | Planning | TBD | No plan doc yet |
 | [#307](https://github.com/DutchJaFO/Quotinator/issues/307) | Changelog highlights: mark specific entries as notification-worthy | In progress | N/A (library code, no runtime path) | [307-changelog-notification-audience-key-plan.md](307-changelog-notification-audience-key-plan.md) |
 | [#308](https://github.com/DutchJaFO/Quotinator/issues/308) | Notification: multi-line/rich message layout | Planning | TBD | No plan doc yet |
-| [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | Waiting for release | TBD | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
+| [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | In progress | T1 ✅ T2 ✅ | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
 | [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify all expected tables exist at startup, not just row counts | Planning | TBD | No plan doc yet |
 | [#306](https://github.com/DutchJaFO/Quotinator/issues/306) | Bug: empty "Unreleased" section renders on the About page after a release tag | Planning | TBD | No plan doc yet |
 | [#319](https://github.com/DutchJaFO/Quotinator/issues/319) | Notification title and body are not translated | Planning | T1 ⬜ T2 ⬜ | [319-notification-translations-plan.md](319-notification-translations-plan.md) |
@@ -245,8 +245,12 @@ app-version provenance and typed payloads available to render from.
 | 9 | **#83** | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
 | 10 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
 
-**#309 and #307 are not listed** — both are code-complete on this branch (#309 `Waiting for release`,
-#307 with only two documentation-confirmation rows outstanding), so neither gates anything below.
+**#309 and #307 are not listed** — both are code-complete on this branch, so neither gates anything
+below. #307 has two documentation-confirmation rows outstanding. #309 moved back from
+`Waiting for release` to `In progress` on 2026-08-16 with one doc-only item added: an ADR stating the
+table-naming rule for an application with more than one database, which this issue was the first to
+create. Nothing built in #309 was found wrong, and no table is renamed — see its plan doc's
+"Revision (2026-08-16)".
 
 **Migration consolidation, at the end of the milestone.** #81, #312, #319 and #304 each add Data-owned
 migrations, and #312 deliberately does not optimise migration count. Per the developer's direction

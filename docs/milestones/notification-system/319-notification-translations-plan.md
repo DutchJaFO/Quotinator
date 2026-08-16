@@ -280,13 +280,17 @@ culture, which is the reason this issue exists.
 `NotificationSummary` and `NotificationTable` pass `CurrentUICulture`'s language through to the reader.
 Neither renders text itself today, so no markup change beyond threading the language.
 
-### 11. Docs and housekeeping
+### 11. Docs
 
 **Status:** ⬜ Not started
 
 New `UI.*.json` keys in all three locales; `data/changelog/changelog.{en,nl,de}.json` `unreleased`
-entries in lockstep; every touched file added to `.editorconfig`'s scoped `IDE0008` list with its `var`
-declarations converted; `[Subsystem - Phase]` prefixes on any new log lines.
+entries in lockstep; `[Subsystem - Phase]` prefixes on any new log lines.
+
+**`.editorconfig` is not part of this step.** Per CLAUDE.md, a file joins the scoped `IDE0008` list
+*the moment it is first touched*, with its `var` declarations converted in that same commit — so it
+happens inside whichever step first opens each file, never batched here at the end. Listed as a
+non-step so a reader does not go looking for it as one.
 
 ### 12. Verification
 

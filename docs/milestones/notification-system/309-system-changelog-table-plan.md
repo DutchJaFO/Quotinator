@@ -1,8 +1,13 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
-**Status:** Waiting for release
+**Status:** In progress
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
+
+> **Reopened from `Waiting for release` (2026-08-16).** Every original step and verification row is
+> still ✅ — nothing built here was found wrong. One piece of scope is added: this issue made Quotinator
+> the first application in the project with more than one database, and no ADR states what table-naming
+> rules apply in that situation. See "Revision (2026-08-16)" below and the ADR step.
 
 ---
 
@@ -79,6 +84,28 @@ fails (malformed JSON, disk read error) and its tables never get created. The fa
 narrow-exception-catch idiom and logs a warning when it triggers, but deliberately does not build a
 user-visible warning UI — that's #305's job (general DB integrity detection, v1.9.0), not duplicated
 here.
+
+**Revision (2026-08-16) — one ADR added to scope; nothing built here is wrong.** This issue made
+Quotinator the first application in the project with more than one database. ADR 015's table-naming
+rule assumes one: it defines `Import_`/`Audit_`/`System_` for `Quotinator.Data`'s own tables and one
+prefix (`Quotinator_`) for the consuming application's domain tables, all inside a single namespace,
+because its whole rationale is SQLite's lack of schema qualification *within* that namespace. It says
+nothing about a second database.
+
+The gap surfaced while planning #319, when a reader took `Changelog`/`ChangelogLine`/
+`ChangelogSchemaVersion` for ADR 015 drift and filed it as a defect. It is not one — ADR 018's
+"Database placement" section decides the separation, and `ChangelogContentMigrations`' class doc states
+the naming consequence. But the rule that makes those names correct is not written down anywhere a
+reader would look first, which is why the misreading happened at all.
+
+Two clarifications from the developer (2026-08-16) frame what the ADR has to settle: **the changelog
+database is effectively a second user-domain database**, not a system one, so no existing domain prefix
+describes it; and **ADR 005 is not wrong** — its `System_Changelog` naming was correct under the
+one-database assumption in force when it was written, and it simply did not account for an application
+having more than one database.
+
+The ADR is the final step below. No table is renamed by this revision, and every previously-verified
+row stays ✅.
 
 ## Authoritative-source cross-check
 
@@ -508,7 +535,7 @@ rather than folded silently into 6/7's own entries, since it names a distinct re
 ### 10. Full verification (T1, T2)
 **Status:** ✅ Done
 
-**Row 11's original plan (a #293-style Docker fault injection) is not meaningfully constructible for
+**Row 12's original plan (a #293-style Docker fault injection) is not meaningfully constructible for
 this database, and the verification method was changed rather than left unmet.** #293's own T2
 procedure works by upgrading a *persistent* SQLite file across versions until a real migration failure
 leaves genuinely missing tables on disk — that technique has no equivalent here: the changelog database
@@ -518,15 +545,46 @@ edited code, not the shipped code). The two real ways this database's content ca
 request — the `Changelog` table not existing, and the table existing with zero rows (the live race
 window between Kestrel accepting requests and the Step 6 background import finishing) — are each
 exercised directly against the real `ChangelogReader`/`ChangelogDatabaseInitializer` classes via
-real-SQLite unit tests (rows 7, 8, 9b), which is a strictly more precise reproduction of the actual
-failure condition than a Docker-level fault would have been. Step 8's live Docker run additionally
-confirms the happy path renders correctly with zero warnings/errors across a full real startup.
+real-SQLite unit tests (rows 7, 8, 10), which is a strictly more precise reproduction of the actual
+failure condition than a Docker-level fault would have been. The live Docker run in the `About.razor`
+wiring step additionally confirms the happy path renders correctly with zero warnings/errors across a
+full real startup.
 
-**Row 10 (T1) confirmed by the developer in Visual Studio (2026-08-14).** A local `dotnet run` started
+**Row 11 (T1) confirmed by the developer in Visual Studio (2026-08-14).** A local `dotnet run` started
 cleanly (`[Changelog - Import] refreshed 126 entries across 3 language(s)`, no changelog-related
 warnings), and a screenshot of the live `/about` page (Dutch culture) shows the DB-backed content
 rendering correctly — the new unreleased #309 entry appears translated under "Niet uitgebracht", and the
 v1.8.3 release's full highlight list renders beneath it, matching the JSON source content exactly.
+
+### 11. ADR: table naming when an application has more than one database
+
+**Status:** ⬜ Not started
+
+Write the clarification ADR described in "Revision (2026-08-16)" below, and add it to `Quotinator.slnx`
+in the same commit.
+
+Scope: state what table-naming and ownership rules apply per database once an application has more than
+one. ADR 015 answers this only for a single namespace — `Import_`/`Audit_`/`System_` for
+`Quotinator.Data`'s own tables, one prefix (`Quotinator_`) for the consuming application's domain
+tables. It has no answer for a second database, nor for whether a database holding exactly one domain
+needs a prefix at all.
+
+The ADR decides the rule; it does not rename anything. If it concludes the current names are correct,
+that is a valid outcome and the only artefact is the ADR itself.
+
+Inputs it has to account for:
+
+- The changelog database is effectively **a second user-domain database**, not a system database
+  (developer clarification, 2026-08-16) — so neither `System_` nor an existing `Quotinator.Data`
+  domain describes it.
+- ADR 015's stated rationale is SQLite's lack of schema qualification *within one flat namespace*,
+  which a single-domain database does not have a problem with.
+- ADR 015's second stated purpose does still apply: a reader scanning `Sql.cs` — one file spanning both
+  databases — should be able to tell which subsystem owns a table from its name alone.
+- ADR 018's "Database placement" section already decides *when* a separate database is used. This ADR
+  covers naming inside one, and should reference rather than restate it.
+- ADR 005 is not wrong and needs no correction: its `System_Changelog` naming was correct under the
+  one-database assumption in force when it was written.
 
 **T2 re-confirmed against the final commit state (2026-08-14), not just Step 8's earlier snapshot.**
 Step 8's own live Docker run happened before Step 9's added test and before the unreleased #309
@@ -551,11 +609,12 @@ app, not just the JSON source file, serves the change just added to `changelog.e
 | 7 | ✅ | `IChangelogReader.GetDocumentAsync` falls back to `IChangelogService` (not an exception) when the tables don't exist | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_FallsBackToFileService` |
 | 8 | ✅ | The fallback logs a warning explaining the condition, not silently | Unit test | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_LogsWarning` |
 | 9 | ✅ | A genuinely different SQL error (not "table missing") still propagates, not swallowed | Unit test | `ChangelogReaderTests.GetDocumentAsync_UnrelatedSqlError_Propagates` |
-| 9b | ✅ | An empty (zero-row) database — schema created, background import not finished yet — falls back the same way a missing table does | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabaseEmpty_FallsBackToFileService` |
-| 10 | ✅ | `About.razor` renders correctly via `IChangelogReader` | Live (T1) | Developer confirmed in Visual Studio (2026-08-14) — screenshot of `/about` (Dutch culture) shows the DB-backed unreleased #309 entry and v1.8.3 release rendering correctly |
-| 11 | ✅ | `About.razor` still renders (fallback path) when the changelog database is unavailable, matching #293's degraded-state precedent | Unit test (see Step 10 note) | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_FallsBackToFileService`/`_DatabaseEmpty_FallsBackToFileService`, plus a live Docker happy-path run (Step 8) confirming zero errors/warnings end to end |
-| 12 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 13 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run repeatedly across Steps 5–9 to rule out flakiness) |
+| 10 | ✅ | An empty (zero-row) database — schema created, background import not finished yet — falls back the same way a missing table does | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabaseEmpty_FallsBackToFileService` |
+| 11 | ✅ | `About.razor` renders correctly via `IChangelogReader` | Live (T1) | Developer confirmed in Visual Studio (2026-08-14) — screenshot of `/about` (Dutch culture) shows the DB-backed unreleased #309 entry and v1.8.3 release rendering correctly |
+| 12 | ✅ | `About.razor` still renders (fallback path) when the changelog database is unavailable, matching #293's degraded-state precedent | Unit test (see the note under the full-verification step) | `ChangelogReaderTests.GetDocumentAsync_TablesMissing_FallsBackToFileService`/`_DatabaseEmpty_FallsBackToFileService`, plus the live Docker happy-path run confirming zero errors/warnings end to end |
+| 13 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 14 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run repeatedly while implementing the reader and its tests, to rule out flakiness) |
+| 15 | ❌ | An ADR states the table-naming rule for an application with more than one database, and is listed in `Quotinator.slnx` | Doc | The ADR file exists, is numbered and accepted, and `RepositoryStructureTests` (which asserts every `docs/` Markdown file is in the solution) passes |
 
 ---
 
