@@ -2,12 +2,16 @@
 
 **Status:** Planning
 **GitHub issue:** #304 (open)
-**Depends on:** #278 (done, released v1.8.0 — the mechanism), #312 (done, this branch — the schema and the relocated seeding helper)
+**Depends on:** #278 (done, released v1.8.0 — the mechanism), #312 (done, this branch — the schema and the relocated seeding helper), #319 (not started — sequenced ahead of this issue, so this producer supplies translated title/body from the start rather than being retrofitted)
 
-> **Next action: answer the three open questions below, then write the Steps.** This plan is not ready
-> to execute. The design and verification table are complete, but questions 1 and 3 change the metadata
-> payload's shape and therefore the tests, so numbering steps before they are answered would produce
-> steps that need rewriting. Nothing here is blocked on code — only on those answers.
+> **Next action: execute the Steps — but not yet.** All three open questions are answered
+> (2026-08-16) and the plan is complete: design, steps, and verification table. It is blocked only on
+> sequencing, not on any decision.
+>
+> **This issue is sequenced after #319** (developer direction, 2026-08-16). #319 adds
+> `OriginalLanguage` and a `System_NotificationTranslation` table and changes the write API to take
+> translations; this issue introduces a new producer with new user-facing text, so building it first
+> would mean writing that producer twice.
 
 ---
 
@@ -62,12 +66,56 @@ content is already in, and there is nothing to recommend.
 
 ### Schema
 
-Data migration 9, one table rebuild of `System_Notification` widening both CHECKs:
+One table rebuild of `System_Notification` widening both CHECKs:
 
 - `DismissTriggerKey IN ('DatabaseReset', 'Reseed')`
 - `MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended')`
 
 Baseline updated to match in the same commit, per the schema-drift parity tests.
+
+**Migration number is assigned at implementation time, not here.** `DataOwnedMigrations` currently ends
+at 11 (`DatabaseInitializer.cs:101`), and #319 lands first with migrations of its own, so this issue's
+number depends on how many #319 takes. The end-of-milestone consolidation pass folds them all anyway.
+
+### Dedupe scope: active-only, not full-history
+
+`NotificationSeeding.SeedOnceAsync` compares against the **full history — active, expired and
+dismissed** (`NotificationSeeding.cs:58-63`), deliberately, so a dismissed notification is not rewritten
+on the next restart. That is right for #279/#289/#81, whose notifications describe an event that
+happened once. It is wrong for this one, which describes a **condition that can recur**: dedupe must
+hold only while the condition is unresolved, and a Reset following a reseed or import must notify again
+(developer decision, 2026-08-16).
+
+So this issue adds a sibling helper — `NotificationSeeding.SeedWhileUnresolvedAsync` — identical to
+`SeedOnceAsync` except that it compares only against notifications still **active** (undismissed,
+unexpired, not soft-deleted), which `INotificationReader.GetActiveNotificationsAsync` already returns.
+`SeedOnceAsync`'s own behaviour is untouched; the existing three producers keep it.
+
+The rejected alternative was putting a timestamp or `System_AppVersion` row into
+`IdentityComponents` — a field whose only purpose is defeating dedupe, and one that re-notifies per
+Reset whether or not anything resolved the condition.
+
+This helper is shared infrastructure, not #304-local: #302 and #303 describe recurring conditions too
+(a file reseeding cleanly, a reseed leaving actions pending) and are the likely next callers.
+
+### What resolves the notification
+
+Active-only dedupe only encodes "unresolved" if the notification is actually dismissed when the
+condition is resolved. Two things resolve it, and **both** must dismiss:
+
+| Resolver | Where | Status today |
+|---|---|---|
+| A reseed | `NotificationActionExecutor`'s new `Reseed` case, and `POST /admin/database/reseed` | New wiring, both sides |
+| Any import that populates content | `IImportActionService.ApplyBatchAsync`'s success path — the single choke point both `POST /import/` (with a `batchId`) and `POST /import/actions/apply` funnel through (`ImportEndpoints.cs:94`, `:347`) | New wiring; nothing dismisses on import today |
+
+The import-side dismiss is what makes the second half of the answer ("or other import afterwards") hold
+— without it, an operator who imports rather than reseeds leaves the notification active, and the next
+Reset is silently deduped against it. Dismissing inside `ApplyBatchAsync` rather than at each endpoint
+follows this milestone's own relocation principle: notification writes belong in the import machinery,
+not bolted onto handlers reading its result afterward.
+
+Today the only `DismissByTriggerAsync` call sites are `AdminEndpoints.cs:225` and
+`NotificationActionExecutor.cs:43` — both `DatabaseReset`.
 
 ### Metadata payload
 
@@ -83,6 +131,31 @@ is a different notification while the same set restarting is not. This is also t
 executor receives, which is what makes a future per-file reseed a change to the executor rather than to
 the contract.
 
+`NotificationMetadataDto.ReleaseState` is `required` on the base type, so this payload must state one:
+`NotificationReleaseState.NotApplicable` — a reseed recommendation is not about a release. `Version` and
+`ContentHash` stay `null` for the same reason; the changed-file set is carried in `ChangedFiles`, where
+it participates in identity, rather than being hashed into `ContentHash`.
+
+**No text in the payload.** Per `NotificationMetadataDto`'s own remarks (developer direction,
+2026-08-16), metadata is strictly non-text: the file names here are identifiers the renderer and the
+action consume, not prose. Title and body — and the language they are written in — are columns on the
+row, which is exactly what #319 formalises.
+
+### Text and translations (#319)
+
+This producer writes two notifications with new user-facing text, and #319 lands first, so both supply
+translated title/body at write time rather than being retrofitted:
+
+- Strings live in `i18ntext/UI.*.json` (en-GB baseline, plus `de` and `nl`), per the localisation
+  checklist — never inline in the producer.
+- `ContentChanged`'s body names the changed files, so its string is a template taking the file list as a
+  parameter; `AfterReset`'s is fixed text.
+- `OriginalLanguage` is `en`, matching every notification written to date.
+
+The exact write-side signature comes from #319. If #319's shape turns out to differ from what is assumed
+here, this section is what gets corrected — not the identity or dismiss design above, which #319 does not
+touch.
+
 ### Action
 
 `NotificationActionExecutor` gains a `Reseed` case calling `IDatabaseInitializer.ReseedAsync()`, then
@@ -95,32 +168,135 @@ downloaded by the time trigger 1 fires, so forcing another network round-trip wo
 
 ---
 
-## Open questions — for the developer, not to be assumed
+## Decisions (2026-08-16)
 
-1. **Does trigger 2 (after Reset) need dedupe at all, or should every Reset re-notify?** A Reset leaves
-   an empty database; the notification is dismissed by the following reseed. If an operator resets
-   twice without reseeding, structural identity (`Reason = AfterReset`, no files) would suppress the
-   second notification even though the condition is freshly true again. Options: (a) accept — the first
-   notification is still active and says the same thing; (b) include the reset's timestamp or the
-   `System_AppVersion` row in identity so each Reset notifies once. **Recommendation: (a)** — the
-   notification is still on screen saying exactly the right thing, and (b) adds a field whose only
-   purpose is to defeat dedupe.
+2. **Should trigger 1 fire when `Quotinator:AutoUpdateSources` is off?** **No** — confirmed as the
+   issue reads. No network check happens, so there is nothing to detect. Verification row 6 stands.
 
-2. **Should trigger 1 fire when `Quotinator:AutoUpdateSources` is off?** Requirement 5 says no
-   notification when the setting is disabled, because no network check happens. Confirming that is the
-   intent rather than "check anyway, just don't download".
+3. **Is `ContentChanged`/`AfterReset` the right split, or should trigger 2 be its own kind?** **One
+   kind with a `Reason`**, as recommended. One registry entry, one payload type, executor stays
+   single-cased.
 
-3. **Is `ContentChanged`/`AfterReset` the right split, or should trigger 2 be its own kind?** They share
-   an action (reseed) and a trigger, differing only in why. One kind with a `Reason` keeps the executor
-   single-cased; two kinds would mean two registry entries and two payload types for one action.
-   **Recommendation: one kind with `Reason`.**
+1. **Does trigger 2 (after Reset) need dedupe at all?** Answered *"only dedupe if we do no reseed or
+   other import afterwards"* — dedupe holds only while the condition is unresolved. The existing
+   `SeedOnceAsync` cannot express that (it compares against dismissed rows on purpose), so this is
+   built as **option (a): an active-only dedupe variant, plus an import-side dismiss** (developer
+   decision, 2026-08-16). Option (b) — a timestamp or `System_AppVersion` row in identity — was
+   rejected: a field whose only purpose is defeating dedupe, which also re-notifies per Reset whether
+   or not anything resolved the condition. See "Dedupe scope" and "What resolves the notification"
+   above.
+
+**No open questions remain. This plan is ready to execute, once #319 has landed.**
 
 ---
 
 ## Steps
 
-Numbered on approval of the above. Written out once the open questions are answered, since 1 and 3
-change the payload's shape and therefore the tests.
+Red-first throughout, per `docs/testing-policy.md`: each step's tests are written and observed failing
+before its implementation. Steps 1–4 are infrastructure with no behaviour visible until step 5.
+
+### 1. Active-only dedupe helper
+
+**Status:** ⬜ Not started
+
+Add `NotificationSeeding.SeedWhileUnresolvedAsync`, identical to `SeedOnceAsync` except that it compares
+against `INotificationReader.GetActiveNotificationsAsync()` rather than `GetPagedAsync(1, 0)`. Factor the
+shared identity comparison out of `IdentifiesSameNotification` rather than copying it, so the two helpers
+cannot drift in how they read a stored payload back.
+
+`SeedOnceAsync` is not modified. Assert that as its own test: #279, #289 and #81 depend on its
+full-history behaviour, and silently narrowing it would make all three re-announce themselves.
+
+### 2. Enums
+
+**Status:** ⬜ Not started
+
+`NotificationDismissTrigger.Reseed` and `NotificationMetadataKind.ReseedRecommended`, plus a new
+`ReseedReason { ContentChanged, AfterReset }` in its own file under `Quotinator.Data/Enums/` per ADR 016.
+
+### 3. Migration and baseline
+
+**Status:** ⬜ Not started
+
+One table rebuild of `System_Notification` widening both CHECKs — SQLite has no
+`ALTER TABLE … MODIFY CHECK`, and both widenings belong in the same rebuild rather than two. Follow ADR
+008's enum-backed-column checklist. Update `DataBaselineSql` to match in the same commit; the schema-drift
+parity tests fail otherwise.
+
+### 4. Metadata payload
+
+**Status:** ⬜ Not started
+
+`ReseedRecommendedMetadataDto : NotificationMetadataDto` carrying `Reason` and `ChangedFiles`, with
+`ReleaseState = NotApplicable` and `IdentityComponents = [Reason, string.Join('\n', ChangedFiles)]`.
+Register it in `NotificationMetadataKinds` — that registry's guard test fails until you do.
+
+### 5. Trigger 1 producer — content changed upstream
+
+**Status:** ⬜ Not started
+
+Inject `INotificationReader`/`INotificationWriter` into `QuotinatorDatabaseInitializer`. In
+`OnInitialisedAsync`, keep the whole `SourceCacheResolution` rather than only `.EffectiveBatches`
+(`QuotinatorDatabaseInitializer.cs:87` discards `Results` today), and after `SeedIfEmptyAsync` write the
+notification when any `Results` entry is `SourceRefreshOutcome.Updated` **and** the seed did no work.
+
+Gate on `_autoUpdateSources`: no notification when auto-update is off, since no network check ran.
+
+### 6. Trigger 2 producer — after Reset
+
+**Status:** ⬜ Not started
+
+In `AdminEndpoints.cs`'s reset handler, at the existing `DismissByTriggerAsync(DatabaseReset)` call site
+(`:225`), write the `AfterReset` notification. Reset drops and rebuilds `System_Notification`, so this
+write must come after `ResetAsync` returns — it lands in an empty table.
+
+### 7. Action
+
+**Status:** ⬜ Not started
+
+`NotificationActionExecutor` gains a `Reseed` case: `ReseedAsync()` with its default
+`forceSourceRefresh` (the content is already downloaded by the time trigger 1 fires), then
+`DismissByTriggerAsync(Reseed)`. Add `Reseed` to `CanExecute` so `NotificationTable` renders its
+Run → Confirm control.
+
+### 8. Dismiss wiring
+
+**Status:** ⬜ Not started
+
+`POST /admin/database/reseed` dismisses `Reseed` on success, and `IImportActionService.ApplyBatchAsync`
+dismisses it on its own success path.
+
+This step is what makes step 1's active-only dedupe mean "unresolved" — without it the notification is
+never dismissed, so it stays active forever and dedupes every later occurrence against itself.
+
+### 9. Text and translations (#319)
+
+**Status:** ⬜ Not started
+
+Add the title/body keys to `i18ntext/UI.{en-GB,de,nl}.json` — `ContentChanged`'s body takes the changed
+file list as a parameter, `AfterReset`'s is fixed text — and write both notifications through #319's
+translation-carrying write API with `OriginalLanguage = en`. `TranslationCompletenessTests` covers the
+key-completeness half; row 17 covers resolution.
+
+### 10. Docs and housekeeping
+
+**Status:** ⬜ Not started
+
+`docs/api-endpoints.md` if any endpoint description changes; `unreleased` entries in
+`data/changelog/changelog.{en,nl,de}.json` in lockstep; every touched file added to `.editorconfig`'s
+scoped `IDE0008` list with its `var` declarations converted (boyscout rule); `[Subsystem - Phase]`
+prefixes on any new log lines.
+
+### 11. Verification
+
+**Status:** ⬜ Not started
+
+Work the table below top to bottom. T2 before T1, per `docs/release-verification.md`.
+
+**Not in scope:** per-file reseed. Step 4's payload carries `ChangedFiles` so the executor *could* narrow
+a reseed to one file later, but `ReseedAsync` has no per-file overload and adding one is its own issue.
+
+---
 
 ---
 
@@ -135,11 +311,17 @@ change the payload's shape and therefore the tests.
 | 5 | ❌ | Nothing is written when no content changed, or when the database was empty (the seed already applied it) | Unit test | Same fixture, negative cases |
 | 6 | ❌ | Nothing is written when `Quotinator:AutoUpdateSources` is disabled | Unit test | Same fixture, configuration off |
 | 7 | ❌ | A successful Reset writes one `ActionRequired` notification | Unit test | Endpoint test at the existing `DismissByTriggerAsync` call site |
-| 8 | ❌ | The same unresolved condition restarting does not add a second notification | Unit test | Structural-identity dedupe, real SQLite |
+| 8 | ❌ | The same unresolved condition restarting does not add a second notification | Unit test | Structural-identity dedupe against active rows, real SQLite |
 | 9 | ❌ | A different set of changed files is a different notification | Unit test | Guards identity being the file set, not just the reason |
-| 10 | ❌ | Running the action reseeds and dismisses the notification | Unit test | `NotificationActionExecutorTests`, mirroring the `DatabaseReset` case |
-| 11 | ❌ | `POST /admin/database/reseed` dismisses it too, not only the notification action | Unit test | Endpoint test |
-| 12 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | ADR 009, plus smoke-test 39e's intermediate-version check |
-| 13 | ❌ | T1 — the notification appears and its Run → Confirm action reseeds | Live (T1) | Developer confirms in Visual Studio |
-| 14 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 15 | ❌ | Full test suite green | Build | `dotnet test --configuration Release -m:1` |
+| 10 | ❌ | `SeedWhileUnresolvedAsync` suppresses only against *active* rows — a dismissed one does not suppress | Unit test | Real SQLite; the behavioural difference from `SeedOnceAsync` that the whole design rests on |
+| 11 | ❌ | `SeedOnceAsync`'s own full-history behaviour is unchanged — a dismissed row still suppresses | Unit test | Regression guard for #279/#289/#81, which depend on it |
+| 12 | ❌ | Running the action reseeds and dismisses the notification | Unit test | `NotificationActionExecutorTests`, mirroring the `DatabaseReset` case |
+| 13 | ❌ | `POST /admin/database/reseed` dismisses it too, not only the notification action | Unit test | Endpoint test |
+| 14 | ❌ | An import that populates content dismisses it | Unit test | `ApplyBatchAsync` success path — nothing dismisses on import today |
+| 15 | ❌ | A Reset **after** a reseed writes a fresh notification rather than being deduped | Unit test | The recurrence case the developer's answer asks for; fails under `SeedOnceAsync` |
+| 16 | ❌ | A Reset **after** an import likewise writes a fresh notification | Unit test | Same, via the step 8 import-side dismiss — the half that fails if only the reseed dismiss is wired |
+| 17 | ❌ | Title and body resolve in `de`/`nl`, falling back to `en` when absent | Unit test | #319's resolution path, exercised by this producer's own strings |
+| 18 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | ADR 009, plus smoke-test 39e's intermediate-version check |
+| 19 | ❌ | T1 — the notification appears and its Run → Confirm action reseeds | Live (T1) | Developer confirms in Visual Studio |
+| 20 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 21 | ❌ | Full test suite green | Build | `dotnet test --configuration Release -m:1` |
