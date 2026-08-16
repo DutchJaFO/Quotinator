@@ -33,6 +33,9 @@
       "Bij een upgrade verschijnt niet langer een tweede, dubbele kopie van een melding die al vóór de upgrade bestond (issue #312)",
       "Een tijdens de ontwikkeling ontstane opstartfout opgelost waardoor de app niet kon starten op een database die door een tussentijdse ontwikkelversie was aangemaakt; uitgebrachte versies waren nooit getroffen (issue #312)",
       "Een intern testprobleem opgelost waarbij tests konden draaien voordat de app volledig was opgestart, waardoor hun resultaten onbetrouwbaar werden — geen gevolgen voor de applicatie zelf (issue #313)"
+    ],
+    "removed": [
+      "De instelling `Quotinator__NotificationDefaultExpiryHours` is verwijderd. Deze bepaalde hoe lang een melding zichtbaar bleef voordat hij verliep, wat niet meer van toepassing is nu meldingen alleen nog verlopen wanneer degene die de melding aanmaakt dat aangeeft — de instelling had niets meer om te regelen (issue #312)"
     ]
   },
   "releases": [

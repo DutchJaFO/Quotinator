@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-16 09:03 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-16 14:57 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -27,6 +27,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Upgrading no longer shows a second, duplicate copy of a notification that already existed before the upgrade (issue #312)
 - Fixed a startup failure introduced during development that could stop the app from starting on a database created by an in-between development build; released versions were never affected (issue #312)
 - Fixed an internal test-suite defect where tests could run against the app before it had finished starting up, which made their results unreliable — no effect on the application itself (issue #313)
+
+### Removed
+- The `Quotinator__NotificationDefaultExpiryHours` setting has been removed. It set how long a notification stayed visible before expiring, which no longer applies now that notifications only expire when the one that created it says so — the setting had nothing left to control (issue #312)
 
 ---
 
