@@ -60,13 +60,38 @@ public class NotificationMetadataKindsTests
         foreach (NotificationMetadataKind kind in NotificationMetadataKinds.RegisteredKinds)
         {
             Type payloadType = NotificationMetadataKinds.PayloadTypeFor(kind);
-            object instance = Activator.CreateInstance(payloadType)!;
+            NotificationMetadataDto instance = (NotificationMetadataDto)Activator.CreateInstance(payloadType)!;
 
-            string json = System.Text.Json.JsonSerializer.Serialize(instance, payloadType);
+            // Through the same entry point a real write uses — asserting against a bare
+            // JsonSerializer.Serialize call would prove nothing about what actually reaches the column.
+            string json = NotificationMetadataKinds.Serialize(instance);
 
             Assert.DoesNotContain("Kind", json, StringComparison.OrdinalIgnoreCase,
                 $"{payloadType.Name} serialized its Kind into the payload ({json}) — the MetadataKind column already " +
                 "records it, and a stored copy can drift out of step with the column.");
+        }
+    }
+
+    /// <summary>
+    /// A stored payload never carries a null-valued property. A payload states what it means; a stored
+    /// <c>null</c> states nothing and invites the reader to infer — the same defect that made an absent
+    /// what's-new version stand in for "unreleased".
+    /// </summary>
+    [TestMethod]
+    public void SerializedPayload_NeverContainsANullValuedProperty()
+    {
+        foreach (NotificationMetadataKind kind in NotificationMetadataKinds.RegisteredKinds)
+        {
+            Type payloadType = NotificationMetadataKinds.PayloadTypeFor(kind);
+            NotificationMetadataDto instance = (NotificationMetadataDto)Activator.CreateInstance(payloadType)!;
+
+            // Through the same entry point a real write uses — asserting against a bare
+            // JsonSerializer.Serialize call would prove nothing about what actually reaches the column.
+            string json = NotificationMetadataKinds.Serialize(instance);
+
+            Assert.DoesNotContain("null", json, StringComparison.OrdinalIgnoreCase,
+                $"{payloadType.Name} serialized a null-valued property ({json}) — omit it instead, so a reader " +
+                "never has to decide what an explicit null was supposed to mean.");
         }
     }
 

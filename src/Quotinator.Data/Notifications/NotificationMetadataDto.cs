@@ -58,13 +58,52 @@ public abstract class NotificationMetadataDto(NotificationMetadataKind kind)
     public NotificationMetadataKind Kind { get; } = kind;
 
     /// <summary>
-    /// The values that together identify this notification, in a fixed order. Two payloads of the same
-    /// <see cref="Kind"/> whose components are all equal are the same notification.
+    /// Which kind of release this notification describes. Common to every payload, not a what's-new
+    /// concern: an announcement belongs to the release that shipped it, and a notification about
+    /// nothing releasable says <see cref="NotificationReleaseState.NotApplicable"/> outright rather
+    /// than leaving a reader to work out that the question does not apply.
+    /// <para>
+    /// <c>required</c>, so no payload can exist without stating it — the same guarantee
+    /// <see cref="IdentityComponents"/> gives identity.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("releaseState")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public required NotificationReleaseState ReleaseState { get; init; }
+
+    /// <summary>
+    /// The release this notification is *about*, or <see langword="null"/> when there is none to name
+    /// (the <c>unreleased</c> section, or a notification not about a release at all).
+    /// <para>
+    /// Deliberately distinct from the row's <c>AppVersionId</c> provenance column, and the two
+    /// routinely differ: provenance records the version that *wrote* the row. Upgrading from 1.2 to
+    /// 1.8.3 writes several what's-new notifications in one startup — every one written by 1.8.3, each
+    /// describing a different release.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("version")]
+    public string? Version { get; init; }
+
+    /// <summary>
+    /// Hash of the content this notification presents, for producers whose content can change under a
+    /// fixed identity — see <see cref="NotificationContentHash"/>.
+    /// <para>
+    /// <see langword="null"/> where the content is frozen by whatever else identifies the notification
+    /// (a tagged release's highlights, say, cannot change after the tag).
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("contentHash")]
+    public string? ContentHash { get; init; }
+
+    /// <summary>
+    /// The values *this payload adds* to the common ones above, in a fixed order. Two payloads of the
+    /// same <see cref="Kind"/> whose full identities match are the same notification.
     /// <para>
     /// Deliberately a chosen subset rather than "every property": a payload may carry detail that
     /// describes the notification without identifying it (a timestamp, a row count), and including
     /// such a field would make an otherwise-identical notification re-announce itself. Each derived
-    /// type states its own answer.
+    /// type states its own answer, and returns an empty sequence when the common fields already say
+    /// everything.
     /// </para>
     /// </summary>
     [JsonIgnore]
@@ -80,8 +119,13 @@ public abstract class NotificationMetadataDto(NotificationMetadataKind kind)
         ArgumentNullException.ThrowIfNull(other);
 
         return Kind == other.Kind
-            && IdentityComponents.SequenceEqual(other.IdentityComponents, IdentityComponentComparer);
+            && FullIdentity.SequenceEqual(other.FullIdentity, IdentityComponentComparer);
     }
+
+    // The common fields lead, then whatever the payload adds. Comparing them at this level rather than
+    // asking every derived type to remember to include them is the same reasoning that moved Kind and
+    // the null-omission rule out of the derived types: a rule nobody has to apply cannot be forgotten.
+    private IEnumerable<object?> FullIdentity => [ReleaseState, Version, ContentHash, .. IdentityComponents];
 
     // Strings compare case-insensitively, per this project's rule that identifier-valued comparisons
     // are case-insensitive by default; anything else falls back to its own Equals. A version string

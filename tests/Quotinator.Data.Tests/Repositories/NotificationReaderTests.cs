@@ -2,7 +2,9 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Tests.Helpers;
 
@@ -23,7 +25,7 @@ public class NotificationReaderTests
         _tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_test_").FullName;
         _dbPath  = Path.Combine(_tempDir, "test.db");
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         // Replays this table's real migration sequence rather than hand-writing its current shape:
         // v1.8.0's CREATE, then #81's System_AppVersion (which #312's AppVersionId FK targets),
@@ -32,9 +34,9 @@ public class NotificationReaderTests
         conn.Execute(AppVersionMigrations.CreateAppVersionTable);
         conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
 
-        var factory = new SqliteConnectionFactory(_dbPath);
+        SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
         _reader = new NotificationReader(factory);
-        _writer = new NotificationWriter(factory, defaultExpiryHours: 720);
+        _writer = new NotificationWriter(factory);
     }
 
     [TestCleanup]
@@ -48,11 +50,11 @@ public class NotificationReaderTests
     [TestMethod]
     public async Task GetActiveNotifications_ReturnsUndismissedOnly()
     {
-        var active    = await _writer.WriteAsync(NotificationType.Information, "still active");
-        var dismissed = await _writer.WriteAsync(NotificationType.Information, "already dismissed");
+        NotificationEntity active    = await _writer.WriteAsync(NotificationType.Information, "still active", appVersionId: null);
+        NotificationEntity dismissed = await _writer.WriteAsync(NotificationType.Information, "already dismissed", appVersionId: null);
         await _writer.DismissAsync(dismissed.Id);
 
-        var result = await _reader.GetActiveNotificationsAsync();
+        IReadOnlyList<NotificationEntity> result = await _reader.GetActiveNotificationsAsync();
 
         Assert.HasCount(1, result);
         Assert.AreEqual(active.Id.ToString("D"), result[0].Id.ToString("D"));
@@ -61,10 +63,10 @@ public class NotificationReaderTests
     [TestMethod]
     public async Task GetActiveNotifications_ExcludesExpiredNotifications()
     {
-        await _writer.WriteAsync(NotificationType.Warning, "already expired", expiresAt: DateTime.UtcNow.AddHours(-1));
-        var stillGood = await _writer.WriteAsync(NotificationType.Warning, "not expired yet", expiresAt: DateTime.UtcNow.AddHours(1));
+        await _writer.WriteAsync(NotificationType.Warning, "already expired", appVersionId: null, expiresAt: DateTime.UtcNow.AddHours(-1));
+        NotificationEntity stillGood = await _writer.WriteAsync(NotificationType.Warning, "not expired yet", appVersionId: null, expiresAt: DateTime.UtcNow.AddHours(1));
 
-        var result = await _reader.GetActiveNotificationsAsync();
+        IReadOnlyList<NotificationEntity> result = await _reader.GetActiveNotificationsAsync();
 
         Assert.HasCount(1, result);
         Assert.AreEqual(stillGood.Id.ToString("D"), result[0].Id.ToString("D"));
@@ -78,10 +80,10 @@ public class NotificationReaderTests
     [TestMethod]
     public async Task GetPagedAsync_PageSizeZero_ReturnsAllRows()
     {
-        for (var i = 0; i < 3; i++)
-            await _writer.WriteAsync(NotificationType.Information, $"notification {i}");
+        for (int i = 0; i < 3; i++)
+            await _writer.WriteAsync(NotificationType.Information, $"notification {i}", appVersionId: null);
 
-        var result = await _reader.GetPagedAsync(1, 0);
+        PagedItems<NotificationEntity> result = await _reader.GetPagedAsync(1, 0);
 
         Assert.HasCount(3, result.Items, "pageSize = 0 must reach SQLite as LIMIT -1, not a literal LIMIT 0");
         Assert.AreEqual(3, result.TotalCount);
@@ -91,11 +93,11 @@ public class NotificationReaderTests
     [TestMethod]
     public async Task GetPagedAsync_IncludesDismissedAndExpiredNotifications()
     {
-        var dismissed = await _writer.WriteAsync(NotificationType.Success, "dismissed");
+        NotificationEntity dismissed = await _writer.WriteAsync(NotificationType.Success, "dismissed", appVersionId: null);
         await _writer.DismissAsync(dismissed.Id);
-        await _writer.WriteAsync(NotificationType.Error, "expired", expiresAt: DateTime.UtcNow.AddHours(-1));
+        await _writer.WriteAsync(NotificationType.Error, "expired", appVersionId: null, expiresAt: DateTime.UtcNow.AddHours(-1));
 
-        var result = await _reader.GetPagedAsync(1, 0);
+        PagedItems<NotificationEntity> result = await _reader.GetPagedAsync(1, 0);
 
         Assert.HasCount(2, result.Items, "the full history endpoint must show dismissed/expired notifications too, unlike GetActiveNotificationsAsync");
     }
@@ -110,19 +112,19 @@ public class NotificationReaderTests
     [TestMethod]
     public async Task GetActiveNotificationsAsync_TableDoesNotExist_ReturnsEmptyInsteadOfThrowing()
     {
-        var tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_missing_table_test_").FullName;
+        string tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_missing_table_test_").FullName;
         try
         {
-            var dbPath = Path.Combine(tempDir, "no-notification-table.db");
-            using (var conn = new SqliteConnection($"Data Source={dbPath}"))
+            string dbPath = Path.Combine(tempDir, "no-notification-table.db");
+            using (SqliteConnection conn = new SqliteConnection($"Data Source={dbPath}"))
             {
                 conn.Open();
                 conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
             }
 
-            var reader = new NotificationReader(new SqliteConnectionFactory(dbPath));
+            NotificationReader reader = new NotificationReader(new SqliteConnectionFactory(dbPath));
 
-            var result = await reader.GetActiveNotificationsAsync();
+            IReadOnlyList<NotificationEntity> result = await reader.GetActiveNotificationsAsync();
 
             Assert.IsEmpty(result);
         }
@@ -137,19 +139,19 @@ public class NotificationReaderTests
     [TestMethod]
     public async Task GetPagedAsync_TableDoesNotExist_ReturnsEmptyInsteadOfThrowing()
     {
-        var tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_missing_table_test_").FullName;
+        string tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_missing_table_test_").FullName;
         try
         {
-            var dbPath = Path.Combine(tempDir, "no-notification-table.db");
-            using (var conn = new SqliteConnection($"Data Source={dbPath}"))
+            string dbPath = Path.Combine(tempDir, "no-notification-table.db");
+            using (SqliteConnection conn = new SqliteConnection($"Data Source={dbPath}"))
             {
                 conn.Open();
                 conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
             }
 
-            var reader = new NotificationReader(new SqliteConnectionFactory(dbPath));
+            NotificationReader reader = new NotificationReader(new SqliteConnectionFactory(dbPath));
 
-            var result = await reader.GetPagedAsync(1, 20);
+            PagedItems<NotificationEntity> result = await reader.GetPagedAsync(1, 20);
 
             Assert.IsEmpty(result.Items);
             Assert.AreEqual(0, result.TotalCount);

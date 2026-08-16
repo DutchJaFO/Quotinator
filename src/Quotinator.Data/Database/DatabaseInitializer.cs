@@ -87,6 +87,18 @@ public class DatabaseInitializer(
         // so the upgrade recognises it instead of announcing it a second time. Data-only — no schema
         // change, so the baseline needs no counterpart (a fresh database has no legacy row to fix).
         new SchemaMigration { Version = 8, Sql = NotificationLegacyMetadataMigrations.BackfillAnnouncementMetadata },
+        // #312: and give that same notification the provenance it predates, creating the 1.8.3
+        // System_AppVersion row it references — conditional on the row actually being there, so a
+        // database that never ran v1.8.3 gains no history it never had.
+        new SchemaMigration { Version = 9, Sql = NotificationLegacyMetadataMigrations.BackfillAnnouncementProvenance },
+        // #312: what's-new rows written by an intermediate build state their release state implicitly
+        // (by whether a version is present); the payload now requires it explicitly, so those rows are
+        // brought up to that shape rather than becoming unreadable and re-announcing themselves.
+        new SchemaMigration { Version = 10, Sql = NotificationLegacyMetadataMigrations.BackfillWhatsNewReleaseState },
+        // #312: release state, the version a notification is about, and its content hash became common
+        // to every payload rather than what's-new's alone — the remaining kinds' stored rows are
+        // brought onto that shape so they stay identifiable instead of re-announcing themselves.
+        new SchemaMigration { Version = 11, Sql = NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,

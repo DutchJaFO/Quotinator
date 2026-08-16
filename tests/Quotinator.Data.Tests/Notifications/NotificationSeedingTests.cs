@@ -26,6 +26,13 @@ public class NotificationSeedingTests
 {
     public TestContext TestContext { get; set; } = null!;
 
+    // v1.8.3's announcement body, exactly as that release wrote it — the text migration 11's content
+    // hash is taken over, and still the text Program.cs's producer writes today.
+    private const string V183AnnouncementBody =
+        "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
+        "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
+        "This only affects a generated API client keyed by operation ID — routes and behaviour are unchanged.";
+
     private string _tempDir = null!;
     private string _dbPath = null!;
     private NotificationWriter _writer = null!;
@@ -46,7 +53,7 @@ public class NotificationSeedingTests
         conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
 
         SqliteConnectionFactory factory = new(_dbPath);
-        _writer = new NotificationWriter(factory, defaultExpiryHours: 720);
+        _writer = new NotificationWriter(factory);
         _reader = new NotificationReader(factory);
     }
 
@@ -100,8 +107,8 @@ public class NotificationSeedingTests
         await SeedAsync("1.9.1", "an announcement that happens to be named like a version");
         await NotificationSeeding.SeedOnceAsync(
             _reader, _writer, NotificationType.Information,
-            new WhatsNewMetadataDto { Version = "1.9.1" },
-            body: "what's new in 1.9.1");
+            new WhatsNewMetadataDto { ReleaseState = NotificationReleaseState.Released, Version = "1.9.1" },
+            body: "what's new in 1.9.1", appVersionId: null);
 
         Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items);
     }
@@ -125,7 +132,7 @@ public class NotificationSeedingTests
     [TestMethod]
     public async Task SeedOnceAsync_IdentityAppearsInBodyButNotMetadata_StillWrites()
     {
-        await _writer.WriteAsync(NotificationType.Information, body: "this body mentions some-announcement in passing");
+        await _writer.WriteAsync(NotificationType.Information, body: "this body mentions some-announcement in passing", appVersionId: null);
 
         NotificationEntity? written = await SeedAsync("some-announcement", "the real one");
 
@@ -157,7 +164,7 @@ public class NotificationSeedingTests
     [TestMethod]
     public async Task SeedOnceAsync_HistoryContainsPre312RowWithNoMetadata_StillWrites()
     {
-        await _writer.WriteAsync(NotificationType.Warning, body: "a v1.8.0-era notification");
+        await _writer.WriteAsync(NotificationType.Warning, body: "a v1.8.0-era notification", appVersionId: null);
 
         NotificationEntity? written = await SeedAsync("some-announcement", "the new one");
 
@@ -170,8 +177,13 @@ public class NotificationSeedingTests
     {
         await NotificationSeeding.SeedOnceAsync(
             _reader, _writer, NotificationType.ActionRequired,
-            new SchemaVersionOvershootMetadataDto { DataSchemaVersion = 7, AppSchemaVersion = 5 },
-            body: "recorded version is ahead");
+            new SchemaVersionOvershootMetadataDto
+            {
+                DataSchemaVersion = 7,
+                AppSchemaVersion  = 5,
+                ReleaseState      = NotificationReleaseState.NotApplicable,
+            },
+            body: "recorded version is ahead", appVersionId: null);
 
         NotificationEntity stored = (await _reader.GetPagedAsync(1, 0)).Items.Single();
         Assert.IsNotNull(stored.Metadata);
@@ -195,8 +207,9 @@ public class NotificationSeedingTests
     }
 
     /// <summary>
-    /// A v1.8.3 notification, once migration 8 has backfilled its identity, suppresses the producer
-    /// that would otherwise re-announce it.
+    /// A v1.8.3 notification, once the legacy backfills have run, suppresses the producer that would
+    /// otherwise re-announce it — end to end through the writer and reader, not against the migration
+    /// SQL alone.
     /// <para>
     /// Regression test for a duplicate reproduced against a real v1.8.3 database: #312 moved identity
     /// out of message text, so a row written before it could not be identified and #279's producer
@@ -204,28 +217,40 @@ public class NotificationSeedingTests
     /// not only development machines — v1.8.3 does write this notification, it simply takes longer than
     /// a short smoke check because first-boot seeding runs first.
     /// </para>
+    /// <para>
+    /// Replays migration 8 <i>and</i> 11, because identity now includes the common release fields:
+    /// migration 8's metadata alone no longer deserializes, since the release state is required. The
+    /// body text is v1.8.3's own, since the content hash is taken over exactly that text.
+    /// </para>
     /// </summary>
     [TestMethod]
-    public async Task SeedOnceAsync_LegacyRowBackfilledByMigration8_DoesNotWriteADuplicate()
+    public async Task SeedOnceAsync_LegacyRowBackfilledByTheMigrations_DoesNotWriteADuplicate()
     {
         // The v1.8.3 row exactly as that release wrote it: message text only, no Title, no Metadata,
         // and the always-on expiry #312 later made opt-in.
         await _writer.WriteAsync(
             NotificationType.Warning,
-            body: "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
-                  "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources.",
+            body: V183AnnouncementBody,
+            appVersionId: null,
             expiresAt: DateTime.UtcNow.AddDays(30));
 
         using (SqliteConnection connection = (SqliteConnection)new SqliteConnectionFactory(_dbPath).CreateConnection())
         {
             await connection.OpenAsync(TestContext.CancellationToken);
             await connection.ExecuteAsync(NotificationLegacyMetadataMigrations.BackfillAnnouncementMetadata);
+            await connection.ExecuteAsync(NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields);
         }
 
         NotificationEntity? written = await NotificationSeeding.SeedOnceAsync(
             _reader, _writer, NotificationType.Warning,
-            new AnnouncementMetadataDto { Announcement = "GetAllImportBatches" },
-            body: "Two REST API operation IDs were renamed …");
+            new AnnouncementMetadataDto
+            {
+                Announcement = "GetAllImportBatches",
+                ReleaseState = NotificationReleaseState.Released,
+                Version      = "1.8.3",
+                ContentHash  = NotificationContentHash.Of(V183AnnouncementBody),
+            },
+            body: V183AnnouncementBody, appVersionId: null);
 
         Assert.IsNull(written, "The backfilled v1.8.3 row must be recognised, so the producer writes nothing.");
         Assert.HasCount(1, (await _reader.GetPagedAsync(1, 0)).Items);
@@ -237,8 +262,13 @@ public class NotificationSeedingTests
     {
         await NotificationSeeding.SeedOnceAsync(
             _reader, _writer, NotificationType.Warning,
-            new AnnouncementMetadataDto { Announcement = "SomethingElse" },
+            new AnnouncementMetadataDto
+            {
+                Announcement = "SomethingElse",
+                ReleaseState = NotificationReleaseState.NotApplicable,
+            },
             body: "mentions GetAllImportBatches but was written after #312",
+            appVersionId: null,
             title: "Its own title");
 
         using (SqliteConnection connection = (SqliteConnection)new SqliteConnectionFactory(_dbPath).CreateConnection())
@@ -252,15 +282,72 @@ public class NotificationSeedingTests
         Assert.AreEqual("Its own title", stored.Title);
     }
 
+    /// <summary>
+    /// The unreleased section states what it is, and stores no null-valued property to be interpreted.
+    /// <para>
+    /// Before #312's step 10 the two cases were told apart by <c>version</c> being null — a convention
+    /// every reader had to know, and one that "not set", "failed to parse" and "the producer forgot" are
+    /// all indistinguishable from. The stored payload now carries the state outright and omits the
+    /// version entirely rather than writing <c>"version":null</c>.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task SeedOnceAsync_UnreleasedEntry_StoresAnExplicitStateAndNoNullVersion()
+    {
+        await NotificationSeeding.SeedOnceAsync(
+            _reader, _writer, NotificationType.Information,
+            new WhatsNewMetadataDto { ReleaseState = NotificationReleaseState.Unreleased, ContentHash = "AB12CD34" },
+            body: "unreleased highlights", appVersionId: null);
+
+        NotificationEntity stored = (await _reader.GetPagedAsync(1, 0)).Items.Single();
+
+        Assert.Contains("\"releaseState\":\"Unreleased\"", stored.Metadata!,
+            "The unreleased state must be stated in the payload, not inferred from an absent version.");
+        Assert.DoesNotContain("version", stored.Metadata!, StringComparison.OrdinalIgnoreCase,
+            "An unreleased entry has no version, so the property is omitted rather than stored as null.");
+    }
+
+    /// <summary>
+    /// A released and an unreleased entry are never the same notification, even when every other
+    /// identity component coincides — which is exactly why the state is part of the identity rather than
+    /// merely stored alongside it.
+    /// </summary>
+    [TestMethod]
+    public async Task SeedOnceAsync_ReleasedAndUnreleasedWithIdenticalComponents_BothWrite()
+    {
+        WhatsNewMetadataDto released = new()
+        {
+            ReleaseState = NotificationReleaseState.Released,
+            ContentHash  = "AB12CD34",
+        };
+        WhatsNewMetadataDto unreleased = new()
+        {
+            ReleaseState = NotificationReleaseState.Unreleased,
+            ContentHash  = "AB12CD34",
+        };
+
+        await NotificationSeeding.SeedOnceAsync(
+            _reader, _writer, NotificationType.Information, released, body: "released", appVersionId: null);
+        NotificationEntity? second = await NotificationSeeding.SeedOnceAsync(
+            _reader, _writer, NotificationType.Information, unreleased, body: "unreleased", appVersionId: null);
+
+        Assert.IsNotNull(second, "The release state is part of the identity — these are two different notifications.");
+        Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items);
+    }
+
     private Task<NotificationEntity?> SeedAsync(string announcement, string body) =>
         NotificationSeeding.SeedOnceAsync(
             _reader, _writer, NotificationType.Information,
-            new AnnouncementMetadataDto { Announcement = announcement },
-            body: body);
+            new AnnouncementMetadataDto
+            {
+                Announcement = announcement,
+                ReleaseState = NotificationReleaseState.NotApplicable,
+            },
+            body: body, appVersionId: null);
 
     private Task<NotificationEntity?> SeedWhatsNewAsync(string version) =>
         NotificationSeeding.SeedOnceAsync(
             _reader, _writer, NotificationType.Information,
-            new WhatsNewMetadataDto { Version = version },
-            body: $"highlights for {version}");
+            new WhatsNewMetadataDto { ReleaseState = NotificationReleaseState.Released, Version = version },
+            body: $"highlights for {version}", appVersionId: null);
 }

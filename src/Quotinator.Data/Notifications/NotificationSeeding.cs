@@ -33,9 +33,14 @@ public static class NotificationSeeding
     /// runtime type is what gets serialized, so a derived type's own properties are preserved.
     /// </param>
     /// <param name="body">The message text.</param>
+    /// <param name="appVersionId">
+    /// The <c>System_AppVersion</c> row for the version adding this notification, or
+    /// <see langword="null"/> when it could not be determined. No default — see
+    /// <see cref="INotificationWriter.WriteAsync"/> for why provenance has to be stated rather than
+    /// omitted.
+    /// </param>
     /// <param name="title">Optional short headline shown above <paramref name="body"/>.</param>
     /// <param name="dismissTrigger">Which action, if performed, supersedes this notification.</param>
-    /// <param name="appVersionId">The <c>System_AppVersion</c> row for the version adding this notification.</param>
     /// <param name="expiresAt">When this notification stops being active. <see langword="null"/> means it never expires (#312's opt-in expiry).</param>
     public static async Task<NotificationEntity?> SeedOnceAsync(
         INotificationReader reader,
@@ -43,9 +48,9 @@ public static class NotificationSeeding
         NotificationType type,
         NotificationMetadataDto metadata,
         string body,
+        Guid? appVersionId,
         string? title = null,
         NotificationDismissTrigger? dismissTrigger = null,
-        Guid? appVersionId = null,
         DateTime? expiresAt = null)
     {
         ArgumentNullException.ThrowIfNull(metadata);
@@ -57,18 +62,16 @@ public static class NotificationSeeding
         if (history.Items.Any(stored => IdentifiesSameNotification(stored, metadata)))
             return null;
 
-        // Serialized against the runtime type, never the declared one: JsonSerializer only emits the
-        // properties of the type it is told about, so passing NotificationMetadataDto here would
-        // silently drop every field a producer's derived type added and store an empty payload.
-        string metadataJson = JsonSerializer.Serialize(metadata, metadata.GetType());
+        // Through the registry that also reads it back, so the write and read halves of the round-trip
+        // cannot drift apart in how they treat runtime types or unset properties.
+        string metadataJson = NotificationMetadataKinds.Serialize(metadata);
 
         return await writer.WriteAsync(
-            type, body, title,
+            type, body, appVersionId, title,
             expiresAt:      expiresAt,
             dismissTrigger: dismissTrigger,
             metadata:       metadataJson,
-            metadataKind:   metadata.Kind,
-            appVersionId:   appVersionId);
+            metadataKind:   metadata.Kind);
     }
 
     /// <summary>

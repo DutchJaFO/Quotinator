@@ -1,9 +1,11 @@
+using System.Reflection;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Data.Tests.Repositories;
@@ -23,7 +25,7 @@ public class NotificationWriterTests
         _tempDir = Directory.CreateTempSubdirectory("quotinator_notification_writer_test_").FullName;
         _dbPath  = Path.Combine(_tempDir, "test.db");
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         // Replays this table's real migration sequence rather than hand-writing its current shape:
         // v1.8.0's CREATE, then #81's System_AppVersion (which #312's AppVersionId FK targets),
@@ -35,8 +37,8 @@ public class NotificationWriterTests
         conn.Execute(AppVersionHistoryMigrations.AddSequenceNumberColumn);
         conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
 
-        var factory = new SqliteConnectionFactory(_dbPath);
-        _writer = new NotificationWriter(factory, defaultExpiryHours: 720);
+        SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
+        _writer = new NotificationWriter(factory);
         _reader = new NotificationReader(factory);
     }
 
@@ -53,12 +55,12 @@ public class NotificationWriterTests
     {
         NotificationType[] types = [NotificationType.Information, NotificationType.Warning, NotificationType.Error, NotificationType.Success, NotificationType.ActionRequired];
 
-        foreach (var type in types)
-            await _writer.WriteAsync(type, $"{type} message");
+        foreach (NotificationType type in types)
+            await _writer.WriteAsync(type, $"{type} message", appVersionId: null);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var rows = conn.Query<NotificationEntity>("SELECT * FROM System_Notification ORDER BY DateCreated;").ToList();
+        List<NotificationEntity> rows = [.. conn.Query<NotificationEntity>("SELECT * FROM System_Notification ORDER BY DateCreated;")];
 
         Assert.HasCount(5, rows);
         Assert.AreSequenceEqual(types, [.. rows.Select(r => r.Type.Parsed!.Value)], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
@@ -73,22 +75,23 @@ public class NotificationWriterTests
     [TestMethod]
     public async Task WriteAsync_NoExpirySpecified_DoesNotExpire()
     {
-        var entity = await _writer.WriteAsync(NotificationType.Information, "no explicit expiry");
+        NotificationEntity entity = await _writer.WriteAsync(NotificationType.Information, "no explicit expiry", appVersionId: null);
 
         Assert.IsNull(entity.ExpiresAt.Parsed, "Omitting expiresAt must mean 'never expires', not 'apply the configured default'.");
 
         // Round-trip through the database, not just the returned entity — a value defaulted on write
         // and a value defaulted on read are different bugs, and only the stored row proves which.
-        var stored = (await _reader.GetPagedAsync(1, 0)).Items.Single(n => n.Id == entity.Id);
+        NotificationEntity stored = (await _reader.GetPagedAsync(1, 0)).Items.Single(n => n.Id == entity.Id);
         Assert.IsNull(stored.ExpiresAt.Parsed);
     }
 
     [TestMethod]
     public async Task WriteAsync_ExplicitExpirySpecified_UsesExplicitValueNotDefault()
     {
-        var explicitExpiry = DateTime.UtcNow.AddHours(2);
+        DateTime explicitExpiry = DateTime.UtcNow.AddHours(2);
 
-        var entity = await _writer.WriteAsync(NotificationType.Warning, "custom expiry", expiresAt: explicitExpiry);
+        NotificationEntity entity = await _writer.WriteAsync(
+            NotificationType.Warning, "custom expiry", appVersionId: null, expiresAt: explicitExpiry);
 
         Assert.AreEqual(explicitExpiry.ToString("yyyy-MM-dd HH:mm:ss"), entity.ExpiresAt.Parsed!.Value.ToString("yyyy-MM-dd HH:mm:ss"));
     }
@@ -96,24 +99,24 @@ public class NotificationWriterTests
     [TestMethod]
     public async Task DismissAsync_ExistingId_MarksDismissedAndReturnsUpdatedEntity()
     {
-        var entity = await _writer.WriteAsync(NotificationType.Information, "dismiss me");
+        NotificationEntity entity = await _writer.WriteAsync(NotificationType.Information, "dismiss me", appVersionId: null);
 
-        var dismissed = await _writer.DismissAsync(entity.Id);
+        NotificationEntity? dismissed = await _writer.DismissAsync(entity.Id);
 
         Assert.IsNotNull(dismissed);
         Assert.IsTrue(dismissed.IsDismissed);
         Assert.IsNotNull(dismissed.DismissedAt.Parsed);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var persisted = conn.QuerySingle<NotificationEntity>("SELECT * FROM System_Notification WHERE Id = @id;", new { id = entity.Id.ToString("D") });
+        NotificationEntity persisted = conn.QuerySingle<NotificationEntity>("SELECT * FROM System_Notification WHERE Id = @id;", new { id = entity.Id.ToString("D") });
         Assert.IsTrue(persisted.IsDismissed, "dismissal must be persisted, not just reflected on the in-memory return value");
     }
 
     [TestMethod]
     public async Task DismissAsync_UnknownId_ReturnsNull()
     {
-        var result = await _writer.DismissAsync(Guid.NewGuid());
+        NotificationEntity? result = await _writer.DismissAsync(Guid.NewGuid());
 
         Assert.IsNull(result);
     }
@@ -121,15 +124,15 @@ public class NotificationWriterTests
     [TestMethod]
     public async Task DismissByTrigger_MarksMatchingActiveNotificationsAsDismissed()
     {
-        var matching1 = await _writer.WriteAsync(NotificationType.ActionRequired, "consider a reset", dismissTrigger: NotificationDismissTrigger.DatabaseReset);
-        var matching2 = await _writer.WriteAsync(NotificationType.ActionRequired, "another reset reminder", dismissTrigger: NotificationDismissTrigger.DatabaseReset);
-        var unrelated = await _writer.WriteAsync(NotificationType.Information, "no trigger at all");
+        NotificationEntity matching1 = await _writer.WriteAsync(NotificationType.ActionRequired, "consider a reset", appVersionId: null, dismissTrigger: NotificationDismissTrigger.DatabaseReset);
+        NotificationEntity matching2 = await _writer.WriteAsync(NotificationType.ActionRequired, "another reset reminder", appVersionId: null, dismissTrigger: NotificationDismissTrigger.DatabaseReset);
+        NotificationEntity unrelated = await _writer.WriteAsync(NotificationType.Information, "no trigger at all", appVersionId: null);
 
-        var dismissedCount = await _writer.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
+        int dismissedCount = await _writer.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
 
         Assert.AreEqual(2, dismissedCount);
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         Assert.IsTrue(conn.QuerySingle<bool>("SELECT IsDismissed FROM System_Notification WHERE Id = @id;", new { id = matching1.Id.ToString("D") }));
         Assert.IsTrue(conn.QuerySingle<bool>("SELECT IsDismissed FROM System_Notification WHERE Id = @id;", new { id = matching2.Id.ToString("D") }));
@@ -139,9 +142,9 @@ public class NotificationWriterTests
     [TestMethod]
     public async Task DismissByTrigger_NoMatchingTrigger_IsNoOp()
     {
-        await _writer.WriteAsync(NotificationType.Information, "no trigger at all");
+        await _writer.WriteAsync(NotificationType.Information, "no trigger at all", appVersionId: null);
 
-        var dismissedCount = await _writer.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
+        int dismissedCount = await _writer.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
 
         Assert.AreEqual(0, dismissedCount);
     }
@@ -149,10 +152,10 @@ public class NotificationWriterTests
     [TestMethod]
     public async Task DismissByTrigger_AlreadyDismissedMatchingRow_IsNotDoubleCountedOrReDismissed()
     {
-        var entity = await _writer.WriteAsync(NotificationType.ActionRequired, "already handled", dismissTrigger: NotificationDismissTrigger.DatabaseReset);
+        NotificationEntity entity = await _writer.WriteAsync(NotificationType.ActionRequired, "already handled", appVersionId: null, dismissTrigger: NotificationDismissTrigger.DatabaseReset);
         await _writer.DismissAsync(entity.Id);
 
-        var dismissedCount = await _writer.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
+        int dismissedCount = await _writer.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
 
         Assert.AreEqual(0, dismissedCount, "an already-dismissed row is not active, so a trigger sweep must not re-count it");
     }
@@ -186,6 +189,34 @@ public class NotificationWriterTests
 
         Assert.AreEqual("1.8.3", referencedVersion,
             "The notification's provenance must stay frozen at the version that wrote it, not follow the latest recorded version.");
+    }
+
+    /// <summary>
+    /// Provenance is as hard to forget as identity. <c>IdentityComponents</c> is abstract, so no payload
+    /// can exist without an identity — the compiler enforces it. An optional <c>appVersionId</c>
+    /// defaulting to null gave provenance no such guarantee, and it was duly forgotten (migration 8 left
+    /// the legacy announcement unattributed).
+    /// <para>
+    /// The parameter stays nullable — null is a legitimate answer when recording the current version
+    /// failed — but has no default, so a caller must state it. Asserted by reflection because the
+    /// guarantee is a compile-time one, and a later edit could quietly restore the default without any
+    /// test noticing.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void WriteAsync_AppVersionIdParameter_HasNoDefault()
+    {
+        AssertParameterHasNoDefault(typeof(INotificationWriter), nameof(INotificationWriter.WriteAsync), "appVersionId");
+        AssertParameterHasNoDefault(typeof(NotificationSeeding), nameof(NotificationSeeding.SeedOnceAsync), "appVersionId");
+    }
+
+    private static void AssertParameterHasNoDefault(Type declaringType, string methodName, string parameterName)
+    {
+        ParameterInfo parameter = declaringType.GetMethod(methodName)!.GetParameters().Single(p => p.Name == parameterName);
+
+        Assert.IsFalse(parameter.HasDefaultValue,
+            $"{declaringType.Name}.{methodName}'s {parameterName} has a default again — provenance can be omitted by " +
+            "saying nothing, which is exactly how the legacy notification ended up unattributed.");
     }
 
     public TestContext TestContext { get; set; }

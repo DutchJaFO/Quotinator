@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Quotinator.Changelog.Enums;
 using Quotinator.Changelog.Models;
 using Quotinator.Data.Enums;
@@ -88,7 +86,7 @@ internal static class WhatsNewNotification
             // body — which is what makes the old "1.9.1 matches inside 1.9.10" hazard structurally
             // impossible rather than merely worked around.
             seeds.Add(new Seed(
-                new WhatsNewMetadataDto { Version = release.Version },
+                new WhatsNewMetadataDto { ReleaseState = NotificationReleaseState.Released, Version = release.Version },
                 Title: $"What's new in v{release.Version}",
                 Body:  string.Join('\n', highlights)));
         }
@@ -110,7 +108,7 @@ internal static class WhatsNewNotification
     /// </param>
     internal static async Task SeedAsync(
         INotificationReader reader, INotificationWriter writer, ChangelogDocument? document,
-        string? lastActiveVersion, string currentVersion, Guid? appVersionId = null)
+        string? lastActiveVersion, string currentVersion, Guid? appVersionId)
     {
         foreach (Seed seed in BuildSeeds(document, lastActiveVersion, currentVersion))
         {
@@ -134,9 +132,12 @@ internal static class WhatsNewNotification
             return null;
 
         string body = string.Join('\n', highlights);
-        string contentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(body)))[..8];
         return new Seed(
-            new WhatsNewMetadataDto { Version = null, ContentHash = contentHash },
+            new WhatsNewMetadataDto
+            {
+                ReleaseState = NotificationReleaseState.Unreleased,
+                ContentHash  = NotificationContentHash.Of(body),
+            },
             Title: "What's new (unreleased)",
             Body:  body);
     }

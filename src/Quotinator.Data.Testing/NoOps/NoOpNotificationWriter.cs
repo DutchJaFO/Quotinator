@@ -15,12 +15,12 @@ public sealed class NoOpNotificationWriter : INotificationWriter
     public Task<NotificationEntity> WriteAsync(
         NotificationType type,
         string body,
+        Guid? appVersionId,
         string? title = null,
         DateTime? expiresAt = null,
         NotificationDismissTrigger? dismissTrigger = null,
         string? metadata = null,
-        NotificationMetadataKind? metadataKind = null,
-        Guid? appVersionId = null)
+        NotificationMetadataKind? metadataKind = null)
         => Task.FromResult(new NotificationEntity
         {
             Type  = new SafeValue<NotificationType?>(type.ToString(), type),

@@ -54,9 +54,9 @@ public sealed class NotificationEntity : RecordBase
     public Guid? AppVersionId { get; init; }
 
     /// <summary>
-    /// When this notification stops being considered active. Always populated at write time — either
-    /// an explicit value, or the configured default (<c>Quotinator:NotificationDefaultExpiryHours</c>)
-    /// applied by <see cref="Repositories.INotificationWriter"/> when none is supplied.
+    /// When this notification stops being considered active, or <see langword="null"/> when it never
+    /// expires. Expiry is always optional (#312): a producer that wants time-limited behaviour asks
+    /// for it explicitly, and nothing applies one on its behalf.
     /// </summary>
     public SafeValue<DateTime?> ExpiresAt { get; init; } = SafeValue<DateTime?>.Empty;
 

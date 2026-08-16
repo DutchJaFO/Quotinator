@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Quotinator.Data.Enums;
 
 namespace Quotinator.Data.Notifications;
@@ -27,9 +28,35 @@ public static class NotificationMetadataKinds
         [NotificationMetadataKind.WhatsNew]               = typeof(WhatsNewMetadataDto),
     };
 
+    // A null-valued property states nothing and leaves the reader to decide what it was supposed to
+    // mean, which is the same defect as inferring "unreleased" from an absent version — so an unset
+    // property is omitted rather than stored. Held here, alongside the deserialization it has to match,
+    // rather than as an attribute each payload repeats: a producer cannot forget a rule it never has to
+    // apply, exactly as Kind stopped being forgettable once there was no override to declare it on.
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     /// <summary>The payload type <paramref name="kind"/> deserializes into.</summary>
     /// <param name="kind">The kind recorded on the row.</param>
     public static Type PayloadTypeFor(NotificationMetadataKind kind) => PayloadTypes[kind];
+
+    /// <summary>
+    /// Serializes <paramref name="payload"/> for storage in a notification's <c>Metadata</c> column.
+    /// <para>
+    /// Always against the runtime type, never the declared one: <c>JsonSerializer</c> emits only the
+    /// properties of the type it is told about, so passing the base type would silently store an empty
+    /// payload and drop every field the producer actually set.
+    /// </para>
+    /// </summary>
+    /// <param name="payload">The producer's own payload instance.</param>
+    public static string Serialize(NotificationMetadataDto payload)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        return JsonSerializer.Serialize(payload, payload.GetType(), SerializerOptions);
+    }
 
     /// <summary>Every kind that has a registered payload type — the enumeration the guard test checks against.</summary>
     public static IReadOnlyCollection<NotificationMetadataKind> RegisteredKinds => PayloadTypes.Keys;
@@ -56,7 +83,7 @@ public static class NotificationMetadataKinds
 
         try
         {
-            return JsonSerializer.Deserialize(metadataJson, payloadType) as NotificationMetadataDto;
+            return JsonSerializer.Deserialize(metadataJson, payloadType, SerializerOptions) as NotificationMetadataDto;
         }
         catch (JsonException)
         {

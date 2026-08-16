@@ -78,7 +78,12 @@ public class NotificationActionExecutorTests
         SpyDatabaseInitializer dbInitializer = new();
         RecordingExecutor executor = new();
 
-        SchemaVersionOvershootMetadataDto metadata = new() { DataSchemaVersion = 7, AppSchemaVersion = 5 };
+        SchemaVersionOvershootMetadataDto metadata = new()
+        {
+            DataSchemaVersion = 7,
+            AppSchemaVersion  = 5,
+            ReleaseState      = NotificationReleaseState.NotApplicable,
+        };
         await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset, metadata);
 
         Assert.AreSame(metadata, executor.ReceivedMetadata,

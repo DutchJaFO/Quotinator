@@ -63,7 +63,7 @@ public class WhatsNewNotificationTests
         FakeNotificationWriter writer = new FakeNotificationWriter();
         ChangelogDocument document = BuildDocument("1.9.0", "A flagged highlight");
 
-        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: null, currentVersion: "1.9.0");
+        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: null, currentVersion: "1.9.0", appVersionId: null);
 
         Assert.HasCount(1, writer.WrittenMessages);
         string message = writer.WrittenMessages[0];
@@ -88,7 +88,7 @@ public class WhatsNewNotificationTests
         FakeNotificationWriter writer = new FakeNotificationWriter();
         ChangelogDocument document = BuildDocument("1.9.0", "A flagged highlight");
 
-        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: null, currentVersion: "2.0.0");
+        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: null, currentVersion: "2.0.0", appVersionId: null);
 
         Assert.IsEmpty(writer.WrittenMessages);
     }
@@ -100,7 +100,7 @@ public class WhatsNewNotificationTests
         FakeNotificationWriter writer = new FakeNotificationWriter();
         ChangelogDocument document = BuildDocument("1.9.0");
 
-        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: null, currentVersion: "1.9.0");
+        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: null, currentVersion: "1.9.0", appVersionId: null);
 
         Assert.IsEmpty(writer.WrittenMessages);
     }
@@ -109,11 +109,11 @@ public class WhatsNewNotificationTests
     public async Task Seed_NestedVersionNumbers_DoNotFalselyDedupe()
     {
         FakeNotificationReader reader = new FakeNotificationReader();
-        reader.Seed(BuildExisting(new WhatsNewMetadataDto { Version = "1.9.1" }));
+        reader.Seed(BuildExisting(new WhatsNewMetadataDto { ReleaseState = NotificationReleaseState.Released, Version = "1.9.1" }));
         FakeNotificationWriter writer = new FakeNotificationWriter();
         ChangelogDocument document = BuildDocument(BuildRelease("1.9.10", "A newer flagged highlight"), BuildRelease("1.9.1", "An earlier flagged highlight"));
 
-        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: "1.9.1", currentVersion: "1.9.10");
+        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: "1.9.1", currentVersion: "1.9.10", appVersionId: null);
 
         Assert.HasCount(1, writer.WrittenMessages, "v1.9.10 must not be falsely deduped against the existing v1.9.1 notification.");
         WhatsNewMetadataDto? payload = JsonSerializer.Deserialize<WhatsNewMetadataDto>(writer.WrittenMetadata[0].Metadata!);
@@ -125,11 +125,11 @@ public class WhatsNewNotificationTests
     public async Task Seed_AlreadySeededVersion_IsNoOp()
     {
         FakeNotificationReader reader = new FakeNotificationReader();
-        reader.Seed(BuildExisting(new WhatsNewMetadataDto { Version = "1.9.0" }));
+        reader.Seed(BuildExisting(new WhatsNewMetadataDto { ReleaseState = NotificationReleaseState.Released, Version = "1.9.0" }));
         FakeNotificationWriter writer = new FakeNotificationWriter();
         ChangelogDocument document = BuildDocument("1.9.0", "A flagged highlight");
 
-        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: "1.9.0", currentVersion: "1.9.0");
+        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: "1.9.0", currentVersion: "1.9.0", appVersionId: null);
 
         Assert.IsEmpty(writer.WrittenMessages);
     }
@@ -306,7 +306,7 @@ public class WhatsNewNotificationTests
         reader.Seed(BuildExisting(existing));
         FakeNotificationWriter writer = new FakeNotificationWriter();
 
-        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: "1.8.3", currentVersion: "1.8.3");
+        await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: "1.8.3", currentVersion: "1.8.3", appVersionId: null);
 
         Assert.IsEmpty(writer.WrittenMessages);
     }

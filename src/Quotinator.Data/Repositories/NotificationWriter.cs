@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using Dapper.Contrib.Extensions;
 using Quotinator.Data.Connections;
@@ -16,37 +17,30 @@ namespace Quotinator.Data.Repositories;
 /// the <c>[Table]</c> attribute on <see cref="NotificationEntity"/> and the <c>[ExplicitKey]</c> it
 /// inherits from <see cref="Models.RecordBase"/>; no SQL string is required for writes.
 /// </summary>
-/// <remarks>Initialises the writer with the connection factory and the configured default expiry.</remarks>
+/// <remarks>Initialises the writer with the connection factory.</remarks>
 /// <param name="factory">Factory used to open SQLite connections.</param>
-/// <param name="defaultExpiryHours">
-/// Applied when <see cref="WriteAsync"/> is called with no explicit <c>expiresAt</c> — sourced from
-/// <c>Quotinator:NotificationDefaultExpiryHours</c> (falling back to
-/// <c>QueryParamDefaults.NotificationDefaultExpiryHours</c>) at DI registration time.
-/// </param>
-public sealed class NotificationWriter(IDbConnectionFactory factory, int defaultExpiryHours)
+public sealed class NotificationWriter(IDbConnectionFactory factory)
     : SqliteRepositoryBase<NotificationEntity>(factory), INotificationWriter
 {
-    private readonly int _defaultExpiryHours = defaultExpiryHours;
-
     /// <inheritdoc/>
     public async Task<NotificationEntity> WriteAsync(
         NotificationType type,
         string body,
+        Guid? appVersionId,
         string? title = null,
         DateTime? expiresAt = null,
         NotificationDismissTrigger? dismissTrigger = null,
         string? metadata = null,
-        NotificationMetadataKind? metadataKind = null,
-        Guid? appVersionId = null)
+        NotificationMetadataKind? metadataKind = null)
     {
-        var entity = new NotificationEntity
+        NotificationEntity entity = new NotificationEntity
         {
             Type  = new SafeValue<NotificationType?>(type.ToString(), type),
             Title = title,
             Body  = body,
-            // #312: no expiry unless the caller asks for one. Previously this applied
-            // _defaultExpiryHours whenever expiresAt was null, so every notification silently aged out
-            // — including ones describing conditions that were still unresolved.
+            // #312: expiry is always optional. This previously applied a configured default whenever
+            // expiresAt was null, so every notification silently aged out — including ones describing
+            // conditions that were still unresolved.
             ExpiresAt         = expiresAt is null ? SafeDateValue.Empty : SafeDateValue.From(expiresAt.Value),
             DismissTriggerKey = dismissTrigger is null
                 ? SafeValue<NotificationDismissTrigger?>.Empty
@@ -58,7 +52,7 @@ public sealed class NotificationWriter(IDbConnectionFactory factory, int default
             AppVersionId = appVersionId,
         };
 
-        using var conn = Factory.CreateConnection();
+        using IDbConnection conn = Factory.CreateConnection();
         conn.Open();
         await conn.InsertAsync(entity);
         return entity;
@@ -67,14 +61,14 @@ public sealed class NotificationWriter(IDbConnectionFactory factory, int default
     /// <inheritdoc/>
     public async Task<NotificationEntity?> DismissAsync(Guid id)
     {
-        using var conn = Factory.CreateConnection();
+        using IDbConnection conn = Factory.CreateConnection();
         conn.Open();
 
-        var entity = await conn.QuerySingleOrDefaultAsync<NotificationEntity>(Sql.Notifications.SelectById, new { id });
+        NotificationEntity? entity = await conn.QuerySingleOrDefaultAsync<NotificationEntity>(Sql.Notifications.SelectById, new { id });
         if (entity is null)
             return null;
 
-        var now = SafeDateValue.Now;
+        SafeValue<DateTime?> now = SafeDateValue.Now;
         await conn.ExecuteAsync(Sql.Notifications.UpdateDismissById,
             new { id, dismissedAt = now.Raw, dateModified = now.Raw });
 
@@ -86,10 +80,10 @@ public sealed class NotificationWriter(IDbConnectionFactory factory, int default
     /// <inheritdoc/>
     public async Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger)
     {
-        using var conn = Factory.CreateConnection();
+        using IDbConnection conn = Factory.CreateConnection();
         conn.Open();
 
-        var now = SafeDateValue.Now;
+        SafeValue<DateTime?> now = SafeDateValue.Now;
         return await conn.ExecuteAsync(Sql.Notifications.UpdateDismissByTrigger,
             new { trigger = trigger.ToString(), dismissedAt = now.Raw, dateModified = now.Raw });
     }

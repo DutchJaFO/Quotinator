@@ -87,6 +87,30 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
+    /// A fresh database carries no application-version history at all — only whatever the running build
+    /// records for itself once startup completes.
+    /// <para>
+    /// #312's migration 9 backfills a <c>1.8.3</c> row on an upgrading database, and that must never
+    /// reach a database with no history to speak of. It cannot: a genuinely empty database takes the
+    /// one-step baseline path and never replays migrations. This asserts that structural guarantee
+    /// rather than trusting it, since the migration itself carries no guard of its own.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_FreshDatabase_RecordsNoAppVersionHistory()
+    {
+        using TempDatabase temp = new([]);
+        DatabaseInitializer db = CreateBareInitializer(temp.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await db.InitialiseAsync();
+
+        using SqliteConnection connection = new($"Data Source={temp.DbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+
+        Assert.AreEqual(0, await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_AppVersion;"),
+            "A fresh database has no history — a migration's backfill must not be able to invent one for it.");
+    }
+
+    /// <summary>
     /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
     /// for <c>Import_Conflict</c> (added by #64's Data-owned migration 3, retrofitted onto
     /// <c>RecordBase</c> by migration 6, and given <c>ExistingBatchId</c> by migration 7 for #149).
@@ -642,9 +666,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync(TestContext.CancellationToken);
         int dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(8, dataRows,
+        Assert.AreEqual(11, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(8, db.DataSchemaVersion);
+        Assert.AreEqual(11, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

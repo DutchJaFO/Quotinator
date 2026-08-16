@@ -195,12 +195,6 @@ int sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:Sourc
 int sourceRefreshTimeoutSeconds = builder.Configuration.GetValue<int?>("Quotinator:SourceRefreshTimeoutSeconds")
     ?? SourceCacheUpdater.DefaultHttpTimeoutSeconds;
 
-// #278: default expiry applied to a notification written without an explicit expiresAt. Read once
-// here (not per-request, unlike AdminAuditExportMaxRows) since it's a NotificationWriter constructor
-// dependency, not a per-call local — same pattern as sourceRefreshTimeoutSeconds above.
-int notificationDefaultExpiryHours = builder.Configuration.GetValue<int?>("Quotinator:NotificationDefaultExpiryHours")
-    ?? QueryParamDefaults.NotificationDefaultExpiryHours;
-
 // #249: once a seeded batch reaches zero pending actions, its Import_Action (conflict-resolution)
 // rows have served their purpose and are purged automatically — separate settings per origin so a
 // developer investigating one specific source (bundled or user-imports) can temporarily retain that
@@ -347,10 +341,7 @@ builder.Services.AddSingleton<IFileResourceRepository, SqliteFileResourceReposit
 builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
 builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
 builder.Services.AddSingleton<INotificationReader, NotificationReader>();
-// Factory overload — the container can't supply notificationDefaultExpiryHours (a computed config
-// value) at registration time, matching this project's documented DI exception.
-builder.Services.AddSingleton<INotificationWriter>(sp =>
-    new NotificationWriter(sp.GetRequiredService<IDbConnectionFactory>(), notificationDefaultExpiryHours));
+builder.Services.AddSingleton<INotificationWriter, NotificationWriter>();
 builder.Services.AddSingleton<INotificationActionExecutor, NotificationActionExecutor>();
 builder.Services.AddSingleton<IAppVersionTracker, AppVersionTracker>();
 
@@ -894,15 +885,29 @@ if (dbHealth.IsHealthy)
 {
     try
     {
+        // Hoisted so the payload's content hash covers exactly the text that gets written. Hashing a
+        // second copy of the same words would be a copy that can drift.
+        const string announcementBody =
+            "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
+            "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
+            "This only affects a generated API client keyed by operation ID — routes and behaviour are unchanged.";
+
         await NotificationSeeding.SeedOnceAsync(
             app.Services.GetRequiredService<INotificationReader>(),
             app.Services.GetRequiredService<INotificationWriter>(),
             NotificationType.Warning,
-            new AnnouncementMetadataDto { Announcement = "GetAllImportBatches" },
+            new AnnouncementMetadataDto
+            {
+                Announcement = "GetAllImportBatches",
+                // The release this announcement is about — v1.8.3 shipped the renames — not the version
+                // running now, which the row's own AppVersionId records. The two coincide only until
+                // the next release.
+                ReleaseState = NotificationReleaseState.Released,
+                Version      = "1.8.3",
+                ContentHash  = NotificationContentHash.Of(announcementBody),
+            },
             title: "Two API operation IDs were renamed",
-            body: "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
-                  "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
-                  "This only affects a generated API client keyed by operation ID — routes and behaviour are unchanged.",
+            body: announcementBody,
             appVersionId: currentVersion?.Id);
     }
     catch (Exception ex)
@@ -936,6 +941,11 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
             {
                 DataSchemaVersion = dbInitializer.DataSchemaVersion,
                 AppSchemaVersion  = dbInitializer.SchemaVersion,
+                // Not about a release at all — this describes the database's own recorded state, which
+                // no version number characterises. Said outright rather than borrowing the running
+                // version, which would also make the same unresolved overshoot re-announce itself on
+                // every upgrade.
+                ReleaseState = NotificationReleaseState.NotApplicable,
             },
             title: "Recorded schema version is ahead of this build",
             body: $"This database's recorded schema version (data v{dbInitializer.DataSchemaVersion}, " +

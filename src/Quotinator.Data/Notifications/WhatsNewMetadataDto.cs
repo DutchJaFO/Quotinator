@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using Quotinator.Data.Enums;
 
 namespace Quotinator.Data.Notifications;
@@ -7,38 +6,21 @@ namespace Quotinator.Data.Notifications;
 /// Payload for a <see cref="NotificationMetadataKind.WhatsNew"/> notification (#81, restructured by
 /// #312) — which release the highlights belong to.
 /// <para>
-/// <see cref="Version"/> is deliberately distinct from the notification's <c>AppVersionId</c>
-/// provenance reference, and the two routinely differ. Provenance records the version that *wrote*
-/// the row; this records the version the row is *about*. Upgrading from 1.2 to 1.8.3 writes several
-/// what's-new notifications in one startup — every one of them written by 1.8.3, each describing a
-/// different release.
+/// It adds no fields of its own: release state, version and content hash are common to every payload,
+/// and they are exactly what a what's-new entry is identified by. A tagged release states
+/// <see cref="NotificationReleaseState.Released"/> and its version — its highlights are frozen once
+/// tagged, so the version alone identifies it. The <c>unreleased</c> section states
+/// <see cref="NotificationReleaseState.Unreleased"/> and a content hash instead, because it has no
+/// version and its content changes freely during development: identifying it by content means it
+/// re-announces when the highlights actually change, and stays quiet across restarts when they don't.
 /// </para>
 /// </summary>
 public sealed class WhatsNewMetadataDto() : NotificationMetadataDto(NotificationMetadataKind.WhatsNew)
 {
     /// <summary>
-    /// The release these highlights describe, or <see langword="null"/> for the <c>unreleased</c>
-    /// section — which has no version number yet, and is why this is nullable rather than required.
+    /// Nothing beyond the common fields. Kept explicit rather than inherited-and-forgotten: the base
+    /// declares this abstract precisely so a payload cannot exist without answering the question, and
+    /// "the common fields already say everything" is a real answer.
     /// </summary>
-    [JsonPropertyName("version")]
-    public string? Version { get; init; }
-
-    /// <summary>
-    /// Hash of the highlight text, set only for the <c>unreleased</c> section and <see langword="null"/>
-    /// for a tagged release.
-    /// <para>
-    /// A released version's highlights are frozen, so its version number alone identifies it.
-    /// <c>unreleased</c> has no version and its content changes freely during development — identifying
-    /// it by content means it re-announces itself when the highlights actually change, and stays quiet
-    /// across restarts when they don't.
-    /// </para>
-    /// </summary>
-    [JsonPropertyName("contentHash")]
-    public string? ContentHash { get; init; }
-
-    /// <summary>
-    /// Version and content hash together. Exactly one is populated in practice, and using both means
-    /// the released and unreleased cases need no special-casing at the comparison site.
-    /// </summary>
-    protected override IEnumerable<object?> IdentityComponents => [Version, ContentHash];
+    protected override IEnumerable<object?> IdentityComponents => [];
 }

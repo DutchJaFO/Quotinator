@@ -25,16 +25,16 @@ internal sealed class FakeNotificationWriter : INotificationWriter
     public Task<NotificationEntity> WriteAsync(
         NotificationType type,
         string body,
+        Guid? appVersionId,
         string? title = null,
         DateTime? expiresAt = null,
         NotificationDismissTrigger? dismissTrigger = null,
         string? metadata = null,
-        NotificationMetadataKind? metadataKind = null,
-        Guid? appVersionId = null)
+        NotificationMetadataKind? metadataKind = null)
     {
         WrittenMessages.Add(body);
         WrittenMetadata.Add((metadata, metadataKind));
-        var entity = new NotificationEntity
+        NotificationEntity entity = new NotificationEntity
         {
             Type     = new SafeValue<NotificationType?>(type.ToString(), type),
             Title    = title,
@@ -51,7 +51,7 @@ internal sealed class FakeNotificationWriter : INotificationWriter
 
     public Task<NotificationEntity?> DismissAsync(Guid id)
     {
-        if (!_notifications.TryGetValue(id, out var entity))
+        if (!_notifications.TryGetValue(id, out NotificationEntity? entity))
             return Task.FromResult<NotificationEntity?>(null);
 
         entity.IsDismissed = true;
