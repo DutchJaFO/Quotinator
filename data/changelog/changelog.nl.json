@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 309, 312, 313],
+    "issues": [81, 309, 312, 313, 320],
     "highlights": [
       "Na een update vertelt Quotinator nu wat er is veranderd: een opstartmelding toont de hoogtepunten van elke versie die je hebt overgeslagen, niet alleen van de nieuwste. Een nieuwe installatie ziet alleen de hoogtepunten van de huidige versie, en er verschijnt niets wanneer een versie niets noemenswaardigs bevat.",
       "Meldingen hebben nu een eigen korte kop, los van de berichttekst, waardoor de Meldingen-pagina en de opstartmelding makkelijker te overzien zijn.",
@@ -27,7 +27,8 @@
     ],
     "changed": [
       "Changelog-inhoud (getoond op de Over-pagina) wordt nu geleverd vanuit een database in plaats van statische JSON-bestanden, automatisch vernieuwd bij het opstarten — dit maakt de inhoud doorzoekbaar en is een stap richting toekomstige functies zoals het tonen van specifieke hoogtepunten als opstartmeldingen; valt terug op de oorspronkelijke JSON-bestanden als de database ooit niet beschikbaar is, dus er verandert niets voor wie de Over-pagina bekijkt (issue #309)",
-      "Meldingen hebben een eigen titel gekregen, gestructureerde gegevens die beschrijven waar elke melding over gaat, en een vervaltermijn die nu alleen nog wordt toegepast wanneer een melding daadwerkelijk niet meer getoond hoeft te worden — voorheen verliep elke melding na 30 dagen, ongeacht de inhoud (issue #312)"
+      "Meldingen hebben een eigen titel gekregen, gestructureerde gegevens die beschrijven waar elke melding over gaat, en een vervaltermijn die nu alleen nog wordt toegepast wanneer een melding daadwerkelijk niet meer getoond hoeft te worden — voorheen verliep elke melding na 30 dagen, ongeacht de inhoud (issue #312)",
+      "De pakketversies waarmee Quotinator wordt gebouwd worden nu één keer in één centraal bestand vastgelegd in plaats van herhaald in elk project, zodat een afhankelijkheidsupdate niet langer een deel van de oplossing kan bijwerken en de rest kan overslaan — een wijziging in het bouwgereedschap zonder effect op de applicatie zelf (issue #320)"
     ],
     "fixed": [
       "Bij een upgrade verschijnt niet langer een tweede, dubbele kopie van een melding die al vóór de upgrade bestond (issue #312)",

@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 309, 312, 313],
+    "issues": [81, 309, 312, 313, 320],
     "highlights": [
       "After updating, Quotinator now tells you what changed: a startup notification lists the highlights of every release you skipped, not just the newest one. A fresh install only sees the current version's highlights, and nothing appears when a release has nothing worth flagging.",
       "Notifications now carry a short headline of their own, separate from the message text, so the Notifications page and the startup popup are easier to scan.",
@@ -20,7 +20,8 @@
     ],
     "changed": [
       "Changelog content (shown on the About page) is now served from a database instead of static JSON files, refreshed automatically at startup — this makes the content queryable and is a step toward future features such as surfacing specific highlights as startup notifications; falls back to the original JSON files if the database is ever unavailable, so nothing changes for anyone reading the About page (issue #309)",
-      "Notifications gained a separate title, structured details describing what each one is about, and an expiry that is now only applied when a notification genuinely should stop being shown — previously every notification expired after 30 days regardless (issue #312)"
+      "Notifications gained a separate title, structured details describing what each one is about, and an expiry that is now only applied when a notification genuinely should stop being shown — previously every notification expired after 30 days regardless (issue #312)",
+      "The package versions Quotinator is built from are now declared once in a single central file instead of being repeated in every project, so a dependency update can no longer reach part of the solution and miss the rest — a build-tooling change with no effect on the application itself (issue #320)"
     ],
     "fixed": [
       "Upgrading no longer shows a second, duplicate copy of a notification that already existed before the upgrade (issue #312)",

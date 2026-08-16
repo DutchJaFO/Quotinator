@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 309, 312, 313],
+    "issues": [81, 309, 312, 313, 320],
     "highlights": [
       "Nach einer Aktualisierung teilt Quotinator jetzt mit, was sich geändert hat: Eine Startbenachrichtigung zeigt die Highlights jeder übersprungenen Version, nicht nur der neuesten. Eine Neuinstallation sieht nur die Highlights der aktuellen Version, und es erscheint nichts, wenn eine Version nichts Nennenswertes enthält.",
       "Benachrichtigungen haben jetzt eine eigene kurze Überschrift, getrennt vom Nachrichtentext, wodurch die Benachrichtigungsseite und das Start-Pop-up leichter zu erfassen sind.",
@@ -27,7 +27,8 @@
     ],
     "changed": [
       "Changelog-Inhalte (angezeigt auf der Über-Seite) werden jetzt aus einer Datenbank bereitgestellt statt aus statischen JSON-Dateien, automatisch beim Start aktualisiert — das macht die Inhalte abfragbar und ist ein Schritt hin zu zukünftigen Funktionen wie dem Anzeigen bestimmter Highlights als Startbenachrichtigungen; fällt auf die ursprünglichen JSON-Dateien zurück, falls die Datenbank einmal nicht verfügbar ist, sodass sich für niemanden, der die Über-Seite liest, etwas ändert (issue #309)",
-      "Benachrichtigungen haben einen eigenen Titel erhalten, strukturierte Angaben dazu, worum es bei jeder einzelnen geht, und eine Ablauffrist, die jetzt nur noch angewendet wird, wenn eine Benachrichtigung tatsächlich nicht mehr angezeigt werden soll — zuvor lief jede Benachrichtigung nach 30 Tagen ab, unabhängig vom Inhalt (issue #312)"
+      "Benachrichtigungen haben einen eigenen Titel erhalten, strukturierte Angaben dazu, worum es bei jeder einzelnen geht, und eine Ablauffrist, die jetzt nur noch angewendet wird, wenn eine Benachrichtigung tatsächlich nicht mehr angezeigt werden soll — zuvor lief jede Benachrichtigung nach 30 Tagen ab, unabhängig vom Inhalt (issue #312)",
+      "Die Paketversionen, aus denen Quotinator gebaut wird, werden jetzt einmal in einer zentralen Datei deklariert, statt in jedem Projekt wiederholt zu werden, sodass ein Abhängigkeits-Update nicht mehr nur einen Teil der Projektmappe erreichen und den Rest auslassen kann — eine Änderung am Build-Werkzeug ohne Auswirkung auf die Anwendung selbst (issue #320)"
     ],
     "fixed": [
       "Bei einem Upgrade erscheint keine zweite, doppelte Kopie einer Benachrichtigung mehr, die bereits vor dem Upgrade vorhanden war (issue #312)",
