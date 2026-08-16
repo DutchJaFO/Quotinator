@@ -4,6 +4,11 @@
 **GitHub issue:** #304 (open)
 **Depends on:** #278 (done, released v1.8.0 — the mechanism), #312 (done, this branch — the schema and the relocated seeding helper)
 
+> **Next action: answer the three open questions below, then write the Steps.** This plan is not ready
+> to execute. The design and verification table are complete, but questions 1 and 3 change the metadata
+> payload's shape and therefore the tests, so numbering steps before they are answered would produce
+> steps that need rewriting. Nothing here is blocked on code — only on those answers.
+
 ---
 
 ## Background

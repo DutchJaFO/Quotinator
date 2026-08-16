@@ -1246,6 +1246,18 @@ pre-emptively.
 
 Bugs, defects, and planned improvements are tracked as **GitHub Issues**. Do not maintain lists here. Only add a temporary note in this file if something is discovered mid-session and has not yet been filed as a GitHub Issue.
 
+**A plan doc is never committed half-wired.** Every commit that adds or changes one does two things in
+the same commit, without being asked:
+
+1. **Add it to `Quotinator.slnx`**, under its milestone's `<Folder>` — a doc missing from the solution is
+   invisible in Visual Studio, which is where it gets read.
+2. **Make its state say what the next action is.** Since starting an issue always begins by reviewing
+   its plan, the plan must answer "what do I do now" on its own — *refine this plan* or *execute it* —
+   without the reader reconstructing it from the Steps section's absence. A plan whose Steps are unwritten
+   because a design question is open says so at the top, naming the question; a plan ready to execute
+   says that instead. `Status:` alone is not enough: `Planning` does not distinguish "still being
+   drafted" from "drafted, waiting on an answer".
+
 **Read the issue itself — both before starting work and before closing it.** Not the overview's summary
 of it, not the plan doc's restatement, not what an earlier session said about it: the issue body, as it
 currently stands. This applies to everything, not just issues that look risky.
