@@ -244,5 +244,44 @@ public class NotificationEndpointsTests
         Assert.Contains(t => t.GetString() == "Notifications", dismissTags.EnumerateArray());
     }
 
+    /// <summary>
+    /// The live response carries #312's shape — <c>title</c>, <c>body</c>, <c>metadata</c>,
+    /// <c>metadataKind</c> — and no longer carries <c>message</c>.
+    /// <para>
+    /// Asserted against the serialized JSON rather than a deserialized DTO, because the requirement is
+    /// about the wire format a client sees. A DTO round-trip would pass just as happily if a property
+    /// were renamed on both sides, and the removal of <c>message</c> is a breaking change for any
+    /// existing client — exactly the kind of thing that must fail a test rather than be noticed later.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task GetNotifications_ResponseCarriesTitleBodyAndMetadata_AndNoLongerMessage()
+    {
+        FakeNotificationReader reader = new();
+        reader.Seed(new NotificationEntity
+        {
+            Type         = new SafeValue<NotificationType?>(nameof(NotificationType.Warning), NotificationType.Warning),
+            Title        = "A headline",
+            Body         = "The message text",
+            Metadata     = "{\"announcement\":\"GetAllImportBatches\"}",
+            MetadataKind = new SafeValue<NotificationMetadataKind?>(
+                nameof(NotificationMetadataKind.Announcement), NotificationMetadataKind.Announcement),
+        });
+
+        using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader);
+        HttpResponseMessage response = await factory.CreateClient()
+            .GetAsync("/api/v1/notifications", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        string json = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.Contains("\"title\":\"A headline\"", json);
+        Assert.Contains("\"body\":\"The message text\"", json);
+        Assert.Contains("\"metadataKind\":\"announcement\"", json);
+        Assert.Contains("GetAllImportBatches", json, "The metadata payload must reach the client, not be dropped in mapping.");
+        Assert.DoesNotContain("\"message\"", json,
+            "#312 renamed Message to Body — a client still seeing 'message' means the rename never reached the wire.");
+    }
+
     public TestContext TestContext { get; set; }
 }

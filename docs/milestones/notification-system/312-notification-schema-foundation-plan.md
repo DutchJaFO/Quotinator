@@ -1,6 +1,6 @@
 # #312 — Notification schema: title/body, typed metadata, optional expiry, and app-version provenance
 
-**Status:** In progress (step 9)
+**Status:** Waiting for release
 **GitHub issue:** #312 (open)
 **Depends on:** #278 (done, released v1.8.0 — the mechanism this issue reshapes)
 
@@ -468,29 +468,29 @@ not a migration's business. Dismiss it.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `System_Notification` gains `Title`, `Body` (renamed from `Message`), `Metadata`, `MetadataKind`, `AppVersionId` | Unit test | Schema-shape test against a migrated database |
-| 2 | ❌ | Baseline and incremental replay produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` (existing test, must still pass) |
-| 3 | ❌ | `MetadataKind`'s `CHECK` accepts every enum member and rejects an unknown value, on both the baseline and incremental paths | Unit test | Behavioural round-trip, matching the existing `AcceptSameNotificationCheckConstraintValues` pattern |
-| 4 | ❌ | A notification written with no explicit expiry has no expiry | Unit test | `NotificationWriter` test |
-| 5 | ❌ | A notification written with an explicit expiry keeps it | Unit test | `NotificationWriter` test |
+| 1 | ✅ | `System_Notification` gains `Title`, `Body` (renamed from `Message`), `Metadata`, `MetadataKind`, `AppVersionId` | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` compares every column's name, type, nullability and ordinal against the migrated database — the shape assertion this row asks for, rather than a second test duplicating it |
+| 2 | ✅ | Baseline and incremental replay produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
+| 3 | ✅ | `MetadataKind`'s `CHECK` accepts every enum member and rejects an unknown value, on both the baseline and incremental paths | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` |
+| 4 | ✅ | A notification written with no explicit expiry has no expiry | Unit test | `NotificationWriterTests.WriteAsync_NoExpirySpecified_DoesNotExpire` — re-reads the stored row rather than trusting the returned entity, since "defaulted on write" and "defaulted on read" are different bugs |
+| 5 | ✅ | A notification written with an explicit expiry keeps it | Unit test | `NotificationWriterTests.WriteAsync_ExplicitExpirySpecified_UsesExplicitValueNotDefault` |
 | 6 | ✅ | `System_AppVersion` stores `Application` and `Version` as separate columns | Unit test | `AppVersionTrackerTests.RecordCurrentAsync_FirstCall_StoresApplicationAndVersionSeparately` — asserts the two stored columns directly, not just the reassembled record; schema parity covered by `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAppVersionSchema` |
 | 7 | ✅ | Recording the same application+version twice appends no second row; a different version appends a new one | Unit test | `AppVersionTrackerTests.RecordCurrentAsync_SamePairTwice_AppendsOnlyOnce`, `..._NewVersion_AppendsWithoutOverwritingHistory`, `..._SameVersionDifferentApplication_AppendsSeparately` |
 | 8 | ✅ | "Last active version" resolves to the most recent row, not an overwritten single row | Unit test | `AppVersionTrackerTests.GetLastActiveAsync_SeveralVersionsWithinOneTimestamp_ReturnsTheOneWrittenLast`, `RecordCurrentAsync_EachCall_TakesTheNextSequenceNumber`, `GetLastActiveAsync_RowWithNewerTimestampButOlderSequence_DoesNotWin` |
-| 9 | ❌ | A notification's `AppVersionId` still points at the version that wrote it after the app version changes | Unit test | Real-SQLite provenance test — write, record a newer version, re-read |
+| 9 | ✅ | A notification's `AppVersionId` still points at the version that wrote it after the app version changes | Unit test | `NotificationWriterTests.WriteAsync_AppVersionId_StillPointsAtTheWritingVersionAfterAnUpgrade` — real SQLite, joins the notification back to `System_AppVersion` after a newer version is recorded. **Was missing entirely** until the developer asked for the verification set to be audited; the guarantee had only ever been checked live in Docker, despite being the reason `System_AppVersion` became append-only |
 | 10 | ✅ | A notification is identified by its structured metadata, not by message text | Unit test | `NotificationSeedingTests.SeedOnceAsync_SameIdentityTwice_WritesOnce`, `..._DifferentIdentity_WritesAgain`, `..._SameValuesDifferentKind_BothWrite` — real SQLite, not fakes, since the behaviour is a payload surviving a round-trip through the column |
 | 11 | ✅ | An identifier appearing in body text but not in metadata does **not** suppress a write | Unit test | `NotificationSeedingTests.SeedOnceAsync_IdentityAppearsInBodyButNotMetadata_StillWrites`; `..._VersionIsSubstringOfAnother_BothWrite` covers the specific `1.9.1`/`1.9.10` case |
 | 12 | ✅ | #279's and #289's producers still write exactly once across restarts after migration | Unit test | `ProgramNotificationSeedingRegressionTests` (unchanged, still green through the full startup path); `WhatsNewNotificationTests` updated for #81 |
 | 12b | ✅ | Every `NotificationMetadataKind` has a registered payload type, and each type reports the kind it is registered under | Unit test | `NotificationMetadataKindsTests` — without this a new kind is a silent re-announce-forever bug |
 | 13 | ✅ | `INotificationActionExecutor.ExecuteAsync` receives the originating notification's metadata | Unit test | `NotificationActionExecutorTests.ExecuteAsync_WithMetadata_DeliversItAndStillPerformsTheAction`, `..._WithoutMetadata_StillPerformsTheAction` |
-| 14 | ❌ | `GET /api/v1/notifications` returns `title`/`body`/`metadata`/`metadataKind`, and no longer returns `message` | Unit test | Endpoint test asserting the live response shape |
+| 14 | ✅ | `GET /api/v1/notifications` returns `title`/`body`/`metadata`/`metadataKind`, and no longer returns `message` | Unit test | `NotificationEndpointsTests.GetNotifications_ResponseCarriesTitleBodyAndMetadata_AndNoLongerMessage` — asserts the serialized JSON, not a deserialized DTO, since the requirement is about the wire format a client sees. Written only when the developer noticed this row was still ❌: live Docker evidence existed, but the stated method was a unit test and none had been written |
 | 15 | ✅ | Migration applies cleanly to a real copy of the last released (v1.8.3) database | Live (T2) | `docker run ghcr.io/dutchjafo/quotinator:1.8.3` → `data v3, app v5`; current build → `applying 4 pending "Data" migration(s) (version 3 → 7)`, `schema updated (data v7, app v5)`, no exception, no repeat on restart |
 | 15b | ✅ | Stored payload carries no duplicate `Kind`, and `AppVersionId` joins to the writing version | Live (T2) | DbInspector against the migrated db: `Metadata` = `{"announcement":"GetAllImportBatches"}`, join yields `Quotinator.Api 1.8.3`. Regression-guarded by `NotificationMetadataKindsTests.SerializedPayload_NeverContainsTheKindDiscriminator` |
 | 15c | ✅ | `System_AppVersion` stays append-only across a restart | Live (T2) | One row (`Quotinator.Api / 1.8.3 / 1`) before and after `docker restart` |
 | 15e | ✅ | Upgrading a v1.8.3 database does not duplicate its existing notification | Live (T2) | Real v1.8.3 database carrying the #279 announcement, upgraded: `version 3 → 8`, 1 notification not 2, original `ExpiresAt` retained. Smoke-test 39f; unit-guarded by `NotificationSeedingTests.SeedOnceAsync_LegacyRowBackfilledByMigration8_DoesNotWriteADuplicate` and `Migration8_RowThatAlreadyHasMetadata_IsLeftUntouched` |
 | 15d | ✅ | Startup survives an upgrade from an *intermediate* (unreleased) schema version, not only from the last release | Live (T2) | Database promoted to data v4: pre-fix image reproduces `Unhandled exception … no such column: Application`; fixed image reaches `Quotinator ready` via `version 4 → 7`, legacy row preserved and current version appended. Smoke-test section 39e; unit-guarded by `AppVersionTrackerTests.GetLastActiveAsync_DatabaseAtPre312Shape_ReadsExistingRowOnceMigrated` |
-| 16 | ❌ | T1 — app starts in Visual Studio with no error; `/notifications` renders migrated rows correctly | Live (T1) | Developer confirms in Visual Studio |
-| 17 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 18 | ❌ | Full test suite green | Build | `dotnet test --configuration Release` |
+| 16 | ✅ | T1 — app starts in Visual Studio with no error; `/notifications` renders migrated rows correctly | Live (T1) | Developer confirmed 2026-08-16: full chain replayed `data v3 → v8` on a restored backup, reaching `Quotinator ready`; `/notifications` shows exactly one #279 announcement retaining its original 2026-09-09 expiry, proving migration 8 enriched the existing row rather than duplicating it |
+| 17 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 18 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 3,424 passed, 0 failed |
 
 ---
 

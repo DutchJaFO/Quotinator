@@ -30,6 +30,9 @@ public class NotificationWriterTests
         // then #312's own reshape. Keeps the fixture honest against what a real database has.
         conn.Execute(NotificationMigrations.CreateNotificationTable);
         conn.Execute(AppVersionMigrations.CreateAppVersionTable);
+        // #312's own reshape of that table, so AppVersionTracker's append-only writes work here too.
+        conn.Execute(AppVersionHistoryMigrations.AddApplicationColumn);
+        conn.Execute(AppVersionHistoryMigrations.AddSequenceNumberColumn);
         conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
 
         var factory = new SqliteConnectionFactory(_dbPath);
@@ -152,6 +155,37 @@ public class NotificationWriterTests
         var dismissedCount = await _writer.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
 
         Assert.AreEqual(0, dismissedCount, "an already-dismissed row is not active, so a trigger sweep must not re-count it");
+    }
+
+    /// <summary>
+    /// A notification's <c>AppVersionId</c> keeps pointing at the version that wrote it, even after a
+    /// newer version is recorded. This is the guarantee the whole append-only conversion of
+    /// <c>System_AppVersion</c> exists to provide (#312): against the single upserted row #81 shipped,
+    /// the referenced row would be overwritten on upgrade and every historical notification would start
+    /// claiming it came from the new version.
+    /// </summary>
+    [TestMethod]
+    public async Task WriteAsync_AppVersionId_StillPointsAtTheWritingVersionAfterAnUpgrade()
+    {
+        SqliteConnectionFactory factory = new(_dbPath);
+        AppVersionTracker tracker = new(factory);
+
+        AppVersionRecord writingVersion = await tracker.RecordCurrentAsync("Quotinator.Api", "1.8.3");
+        NotificationEntity written = await _writer.WriteAsync(
+            NotificationType.Information, body: "written under 1.8.3", appVersionId: writingVersion.Id);
+
+        // The upgrade: a newer version is recorded, which under the old single-row design would have
+        // overwritten the very row this notification references.
+        await tracker.RecordCurrentAsync("Quotinator.Api", "1.9.0");
+
+        using SqliteConnection connection = (SqliteConnection)factory.CreateConnection();
+        await connection.OpenAsync(TestContext.CancellationToken);
+        string? referencedVersion = await connection.ExecuteScalarAsync<string>(
+            "SELECT v.Version FROM System_Notification n JOIN System_AppVersion v ON LOWER(v.Id) = LOWER(n.AppVersionId) WHERE LOWER(n.Id) = LOWER(@id);",
+            new { id = written.Id.ToString() });
+
+        Assert.AreEqual("1.8.3", referencedVersion,
+            "The notification's provenance must stay frozen at the version that wrote it, not follow the latest recorded version.");
     }
 
     public TestContext TestContext { get; set; }

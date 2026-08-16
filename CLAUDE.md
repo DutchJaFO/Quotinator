@@ -1246,6 +1246,25 @@ pre-emptively.
 
 Bugs, defects, and planned improvements are tracked as **GitHub Issues**. Do not maintain lists here. Only add a temporary note in this file if something is discovered mid-session and has not yet been filed as a GitHub Issue.
 
+**Read the issue itself — both before starting work and before closing it.** Not the overview's summary
+of it, not the plan doc's restatement, not what an earlier session said about it: the issue body, as it
+currently stands. This applies to everything, not just issues that look risky.
+
+- **Before starting**, because an issue's own body can be wrong or stale — including one written days
+  earlier in the same milestone. Found live: #183's central premise was false, and #304's body still
+  told a later issue to perform a relocation that #312 had already done.
+- **Before closing**, because the Definition of done may not match the work, or may not match this
+  project's current format at all. Older issues predate the templates in `docs/workflow/issues.md`
+  entirely and can carry hand-written DoD lists whose items were reassigned to other issues, delivered
+  by a different issue, or scoped out — none of which can be honestly ticked. Found live: #81's DoD
+  listed import warnings that had moved to #302/#303/#304, and a component #278 had already delivered.
+- **Never tick a DoD box you have not verified**, and never infer one from a green build. "All expected
+  tests pass" is a different claim from "the tests were written red-first", and a clean run proves only
+  the first. If a box cannot be verified, say so rather than ticking it — an unverifiable box is itself
+  a finding about the issue.
+- **The full Definition of done is ticked when the issue reaches release status**, not before. Until
+  then, tick what is genuinely verified and leave the rest, with the closing-comment box last.
+
 **Closing protocol:** Issues are always closed explicitly via `gh issue close <N> --comment "..."` after the full closing checklist is complete. Never use `Fixes #N`, `Closes #N`, or any GitHub auto-close keyword in a **commit message or PR body** — these trigger auto-close on merge and bypass the verification comment requirement. The `commit-msg` hook guards commit messages; PR bodies must be checked manually. Deployment-verified issues are tracked in `project_post_deploy_verification.md` in memory until confirmed in the live HA add-on.
 
 **Milestone workflow:** The full process for planning, executing, and closing milestones is in `docs/workflow/process.md`. The session-start and issue-close checklists are in `docs/workflow/checklist.md`. Always read these before starting a milestone session or closing an issue.
