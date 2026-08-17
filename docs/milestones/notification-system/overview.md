@@ -145,11 +145,16 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify all expected tables exist at startup, not just row counts | Planning | TBD | No plan doc yet |
 | [#306](https://github.com/DutchJaFO/Quotinator/issues/306) | Bug: empty "Unreleased" section renders on the About page after a release tag | Planning | TBD | No plan doc yet |
 | [#319](https://github.com/DutchJaFO/Quotinator/issues/319) | Notification title and body are not translated | Planning | T1 ⬜ T2 ⬜ | [319-notification-translations-plan.md](319-notification-translations-plan.md) |
+| [#323](https://github.com/DutchJaFO/Quotinator/issues/323) | Source download: a stalled connection attempt outlives its request and fails every other source on the same host | Waiting for release | T2 ✅ | [323-source-download-connection-stall-plan.md](323-source-download-connection-stall-plan.md) |
+| [#324](https://github.com/DutchJaFO/Quotinator/issues/324) | Notification: report when a source update attempt fails | Planning | T1 ⬜ T2 ⬜ | [324-source-refresh-failure-notification-plan.md](324-source-refresh-failure-notification-plan.md) |
 
 #302, #303, and #304 replace an earlier, stale "import diagnostics" issue drafted during this same
 planning pass, before the developer redirected scope — see the Description above. #305–#309 were all
 filed the same session, before any of them had code; #310 (Genre-as-table placeholder) is tracked in
-v1.9.0, not here. #319 was filed later (2026-08-16), out of #312's own T1 pass.
+v1.9.0, not here. #319 was filed later (2026-08-16), out of #312's own T1 pass. #323 and #324 were filed
+later still (2026-08-17), both out of reading a normal development startup log: #323 is the bug that log
+exposed, #324 is the missing user-facing visibility that made it invisible outside the log in the first
+place.
 
 ---
 
@@ -200,6 +205,14 @@ v1.9.0, not here. #319 was filed later (2026-08-16), out of #312's own T1 pass.
          #319 changes. Migrates the three already-shipped producers (#279, #289, #81) as part of its
          own scope: the first two supply translations from i18ntext/UI.*.json, #81 from the
          per-language changelog files it already reads
+#323 ─── (none) — independent bug, found live 2026-08-17 reading a startup log. Fixes the HTTP client
+         registration only; does not change the import path. Not a blocker for #324: #324 reports a
+         failed refresh whatever its cause, and this issue removes one specific cause
+#324 ─── depends on #278 and #312 (the mechanism and the typed-metadata/opt-in-expiry shape) and on
+         #319 (hard — it writes new user-facing text, and #319 changes the shape that text is stored
+         in; building it first means building it twice). Consumes SourceRefreshResult.Failed, which
+         nothing reads for user-facing purposes today. Soft-relates to #323 only in that #323 makes
+         the failure it reports rarer
 #313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
          this milestone could be trusted, because Api tests asserted before the app finished starting
          (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
@@ -234,16 +247,18 @@ app-version provenance and typed payloads available to render from.
 | Order | Issue | Reason |
 |-------|-------|--------|
 | 0 | **#313** ✅ | Done. Api tests were asserting before startup completed — measured at 5 of 5 runs, so every verification in this milestone was untrustworthy until it landed. Had to come first for that reason, not because of any dependency |
-| 1 | **#312** | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
-| 2 | **#81** | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
-| 3 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped |
-| 4 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
-| 5 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
-| 6 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 7 | **#305** | Independent bug; can slot in anywhere |
-| 8 | **#306** | Independent bug; can slot in anywhere |
-| 9 | **#83** | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
-| 10 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
+| 1 | **#323** | Independent bug; taken first by developer direction (2026-08-17) because it was found live and its fix is self-contained to the HTTP client registration. Blocks nothing |
+| 2 | **#312** | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
+| 3 | **#81** | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
+| 4 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped |
+| 5 | **#324** | Reports a failed source refresh to the user. Placed directly after #319 for that rule's own reason — it writes new user-facing text |
+| 6 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 7 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 8 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 9 | **#305** | Independent bug; can slot in anywhere |
+| 10 | **#306** | Independent bug; can slot in anywhere |
+| 11 | **#83** | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
+| 12 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
 
 **#309 and #307 are not listed** — both are code-complete on this branch, so neither gates anything
 below. #307 has two documentation-confirmation rows outstanding. #309 moved back from
