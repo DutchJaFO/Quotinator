@@ -4,10 +4,14 @@
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
-> **Reopened from `Waiting for release` (2026-08-16).** Every original step and verification row is
-> still ✅ — nothing built here was found wrong. One piece of scope is added: this issue made Quotinator
-> the first application in the project with more than one database, and no ADR states what table-naming
-> rules apply in that situation. See "Revision (2026-08-16)" below and the ADR step.
+> **Reopened from `Waiting for release` (2026-08-16).** The ADR and the table rename it mandated are
+> both done and verified live. Two things now block a return to `Waiting for release`:
+>
+> 1. **The changelog database does not survive process uptime** — found in this issue's own T2 pass
+>    (2026-08-17). The database-backed read path dies silently after minutes, leaving the JSON fallback
+>    serving everything. Root cause is the in-memory-only storage mode, not the rename. Needs a scope
+>    decision; see the finding below.
+> 2. **T1 is outstanding.** The 2026-08-14 pass predates the rename.
 
 ---
 
@@ -678,6 +682,73 @@ red in between — this is one rename, not an incremental refactor, and splittin
 green steps would mean writing compatibility shims for a change that has no consumers outside this
 repository.
 
+### 13. T2 verification of the rename
+
+**Status:** ✅ Done (2026-08-17)
+
+Ran against `quotinator:t2`, built from this branch.
+
+| Check | Result |
+|---|---|
+| Baseline applies under the new names | `[Changelog - Init] schema created at baseline (v1)` |
+| Importer writes to the renamed tables | `[Changelog - Import] refreshed 126 entries across 3 language(s)` |
+| `/about` renders | HTTP 200, 42 `changelog-entry` elements |
+| **Served from the database, not the fallback** | No `falling back` warning in the log — the decisive check, since the page renders identically either way |
+| Whole-startup log clean | 0 `WRN`/`ERR`/`FTL` |
+| Upgrade from a real v1.8.3 database | `data v3 → v11`, 0 exceptions, and `schema is up to date` (not a repeat) on restart |
+
+Smoke-test sections run: 1 ✅, 33 ✅, 36 ✅, 37 ✅, 39a–39c ✅. **Not completed: 32, 38, 39d–39i** —
+see the two findings below.
+
+### 14. Finding — the changelog database does not survive process uptime
+
+**Status:** ⬜ Not started — needs its own decision on scope
+
+**Observed live during step 13's T2 run.** In a container started at 19:05:15, the baseline was created
+and 126 entries imported. The first read, at **19:18:47**, failed:
+
+```
+[Changelog - Read] Changelog_Entry table missing — falling back to the JSON-backed changelog service
+SqliteException: SQLite Error 1: 'no such table: Changelog_Entry'
+```
+
+Every subsequent read falls back too. No process restart occurred (one baseline log line). So the
+in-memory database is gone permanently, and the database-backed read path — this issue's entire
+purpose — is silently dead for the life of the process. Nothing is user-visible, because the JSON
+fallback works exactly as designed; that is why it went unnoticed.
+
+**Not caused by the rename.** The table existed and accepted 126 rows under its new name; a naming
+error would have failed at import, not thirteen minutes later.
+
+**Root cause (developer, 2026-08-17): a database that only ever exists in memory won't survive.**
+`ChangelogConnectionKeepAlive` is a workaround for a storage mode whose existence depends on a
+process-local handle staying open, not a fix for it. The remedy is the persistent-file variant this
+issue deferred as YAGNI — `Program.cs:306`'s connection string is the single config point, exactly as
+this plan predicted ("a wiring change, not a redesign"). The keep-alive class likely disappears with it.
+
+**Sequencing note:** the rename landing *before* this is correct and lucky. ADR 015's revision states the
+in-place migration edit is valid only while no persistent copy exists; going persistent first would have
+made the rename cost a real migration against user databases.
+
+Open: whether this lands here or as its own issue, where the file lives (`{dataDir}` implies HA `/data`
+and `HaFallbackDir()`), and what Reset/backup do with it.
+
+### 15. Finding — `docs/smoke-tests.md` defects found while running it
+
+**Status:** ⬜ Not started — belongs to the smoke-test document, not this issue
+
+Six defects, to be fixed as their own piece of work (developer, 2026-08-17: "we will fix the smoke tests
+tomorrow"):
+
+| Section | Defect |
+|---|---|
+| 33 | Stale — expects exactly one notification; two are correct now that the unreleased changelog carries a `notification` audience highlight |
+| 37 | Stale — expects `Data v2 → v3`; actual is `v2 → v11` |
+| 38 | **Guaranteed false pass** — its `--read-only` technique no longer forces a migration failure (#294 fixed that path), so its own "confirms we reached the failure state" check cannot hold. Sections 37 and 38 use an identical setup and assert opposite outcomes |
+| 39a | `-v /tmp/...:/data` leaves the host directory empty on Docker Desktop for Windows, so the documented DbInspector path cannot resolve |
+| 39b | Stale — expected `Metadata` predates migration 11's backfilled `releaseState`/`version`/`contentHash` |
+| 39 | Lettered sub-tests (39a–39i) encode real dependencies: 39b/39c query the database 39a creates, 39d restarts its container by name, and 39a's cleanup line sits between 39d and 39e. Per process.md, sequences are plain integers; per the developer (2026-08-17), a smoke test must never depend on another |
+
 **T2 re-confirmed against the final commit state (2026-08-14), not just Step 8's earlier snapshot.**
 Step 8's own live Docker run happened before Step 9's added test and before the unreleased #309
 changelog entry existed. Rebuilt the image and re-ran the full startup sequence from the actual final
@@ -707,7 +778,11 @@ app, not just the JSON source file, serves the change just added to `changelog.e
 | 13 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 14 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` (run repeatedly while implementing the reader and its tests, to rule out flakiness) |
 | 15 | ✅ | The table-naming rule for an application with more than one database is stated in an ADR | Doc | ADR 015's "Revision — issue #309" section; `RepositoryStructureTests` passes (14/14, 2026-08-16) |
-| 16 | ✅ | The changelog tables carry the `Changelog_` prefix per ADR 015's revision, in the migration, baseline, entities, `Sql.cs` and tests | Unit test | 14/14 changelog tests pass against the renamed schema (2026-08-16); full solution builds 0 Warning(s) 0 Error(s) |
+| 16 | ✅ | The changelog tables carry the `Changelog_` prefix per ADR 015's revision, in the migration, baseline, entities, `Sql.cs` and tests | Unit test | 14/14 changelog tests pass against the renamed schema (2026-08-16); full solution builds 0 Warning(s) 0 Error(s); full suite 3,445 passed |
+| 17 | ✅ | The renamed schema works live: baseline applies, the importer writes, and `/about` reads from the database rather than the JSON fallback | Live (T2) | 2026-08-17 against `quotinator:t2` — see the T2 step above. Decisive evidence is the *absence* of the `falling back` warning, since the page renders either way |
+| 18 | ✅ | Migration applies cleanly from the last released schema | Live (T2) | v1.8.3 → current: `data v3 → v11`, 0 exceptions, `schema is up to date` on restart (ADR 009) |
+| 19 | ❌ | The changelog database survives process uptime | Live (T2) | **Fails today** — `no such table: Changelog_Entry` at +13 min, permanent JSON fallback. Pre-existing storage-mode defect, not caused by the rename; see the finding above |
+| 20 | ⬜ | T1 — `/about` renders correctly from the renamed tables in Visual Studio | Live (T1) | Developer confirms. The 2026-08-14 T1 pass predates the rename and no longer proves anything about what ships |
 
 ---
 
