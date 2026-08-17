@@ -10,8 +10,9 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 309, 312, 313, 320],
+    "issues": [81, 309, 312, 313, 320, 323],
     "highlights": [
+      "Wanneer Quotinator tijdens het opstarten een quotebron niet kan bereiken, geeft het die bron nu snel op in plaats van er een halve minuut op te wachten — en de andere bronnen krijgen nog steeds hun eigen eerlijke poging in plaats van te worden meegesleept.",
       "Na een update vertelt Quotinator nu wat er is veranderd: een opstartmelding toont de hoogtepunten van elke versie die je hebt overgeslagen, niet alleen van de nieuwste. Een nieuwe installatie ziet alleen de hoogtepunten van de huidige versie, en er verschijnt niets wanneer een versie niets noemenswaardigs bevat.",
       "Meldingen hebben nu een eigen korte kop, los van de berichttekst, waardoor de Meldingen-pagina en de opstartmelding makkelijker te overzien zijn.",
       "Meldingen verdwijnen niet langer standaard na verloop van tijd. Voorheen verliep elke melding na 30 dagen, ook meldingen over een probleem dat nog niet was opgelost; nu blijft een melding staan totdat je hem sluit, of totdat de aanbevolen actie is uitgevoerd."
@@ -33,7 +34,9 @@
     "fixed": [
       "Bij een upgrade verschijnt niet langer een tweede, dubbele kopie van een melding die al vóór de upgrade bestond (issue #312)",
       "Een tijdens de ontwikkeling ontstane opstartfout opgelost waardoor de app niet kon starten op een database die door een tussentijdse ontwikkelversie was aangemaakt; uitgebrachte versies waren nooit getroffen (issue #312)",
-      "Een intern testprobleem opgelost waarbij tests konden draaien voordat de app volledig was opgestart, waardoor hun resultaten onbetrouwbaar werden — geen gevolgen voor de applicatie zelf (issue #313)"
+      "Een intern testprobleem opgelost waarbij tests konden draaien voordat de app volledig was opgestart, waardoor hun resultaten onbetrouwbaar werden — geen gevolgen voor de applicatie zelf (issue #313)",
+      "Het downloaden van quotebronnen wachtte veel langer dan nodig op een server die niet bereikbaar was: de poging om een verbinding te openen had geen eigen tijdslimiet en eindigde pas wanneer het hele verzoek verliep, waardoor elke onbereikbare bron ongeveer 30 seconden aan de opstarttijd toevoegde (issue #323)",
+      "Verbindingen met quotebronservers worden nu periodiek vernieuwd in plaats van onbeperkt bewaard, zodat een wijziging in het adres van een bronserver wordt opgepikt zonder herstart (issue #323)"
     ],
     "removed": [
       "De instelling `Quotinator__NotificationDefaultExpiryHours` is verwijderd. Deze bepaalde hoe lang een melding zichtbaar bleef voordat hij verliep, wat niet meer van toepassing is nu meldingen alleen nog verlopen wanneer degene die de melding aanmaakt dat aangeeft — de instelling had niets meer om te regelen (issue #312)"

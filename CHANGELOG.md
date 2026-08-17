@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-16 14:57 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-17 21:30 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Highlights
+- When Quotinator cannot reach a quote source while starting up, it now gives up on that source quickly instead of waiting half a minute for it — and the other sources still get their own fair attempt rather than being dragged down with it.
 - After updating, Quotinator now tells you what changed: a startup notification lists the highlights of every release you skipped, not just the newest one. A fresh install only sees the current version's highlights, and nothing appears when a release has nothing worth flagging.
 - Notifications now carry a short headline of their own, separate from the message text, so the Notifications page and the startup popup are easier to scan.
 - Notifications no longer disappear on a timer by default. Previously every notification expired after 30 days, including ones about a problem that was still unresolved; now a notification stays until it is dismissed, or until the action it recommends has been carried out.
@@ -22,11 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Changed
 - Changelog content (shown on the About page) is now served from a database instead of static JSON files, refreshed automatically at startup — this makes the content queryable and is a step toward future features such as surfacing specific highlights as startup notifications; falls back to the original JSON files if the database is ever unavailable, so nothing changes for anyone reading the About page (issue #309)
 - Notifications gained a separate title, structured details describing what each one is about, and an expiry that is now only applied when a notification genuinely should stop being shown — previously every notification expired after 30 days regardless (issue #312)
+- The package versions Quotinator is built from are now declared once in a single central file instead of being repeated in every project, so a dependency update can no longer reach part of the solution and miss the rest — a build-tooling change with no effect on the application itself (issue #320)
 
 ### Fixed
 - Upgrading no longer shows a second, duplicate copy of a notification that already existed before the upgrade (issue #312)
 - Fixed a startup failure introduced during development that could stop the app from starting on a database created by an in-between development build; released versions were never affected (issue #312)
 - Fixed an internal test-suite defect where tests could run against the app before it had finished starting up, which made their results unreliable — no effect on the application itself (issue #313)
+- Fixed quote-source downloads waiting far longer than necessary on a server that could not be reached: the attempt to open a connection had no time limit of its own and ended only when the whole request timed out, so every unreachable source added around 30 seconds to startup (issue #323)
+- Connections to quote-source servers are now recycled periodically instead of being kept indefinitely, so a change to a source server's address is picked up without needing a restart (issue #323)
 
 ### Removed
 - The `Quotinator__NotificationDefaultExpiryHours` setting has been removed. It set how long a notification stayed visible before expiring, which no longer applies now that notifications only expire when the one that created it says so — the setting had nothing left to control (issue #312)
