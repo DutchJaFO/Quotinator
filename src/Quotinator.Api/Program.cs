@@ -194,6 +194,8 @@ bool autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoU
 int sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
 int sourceRefreshTimeoutSeconds = builder.Configuration.GetValue<int?>("Quotinator:SourceRefreshTimeoutSeconds")
     ?? SourceCacheUpdater.DefaultHttpTimeoutSeconds;
+int sourceRefreshConnectTimeoutSeconds = builder.Configuration.GetValue<int?>("Quotinator:SourceRefreshConnectTimeoutSeconds")
+    ?? SourceCacheUpdater.DefaultConnectTimeoutSeconds;
 
 // #249: once a seeded batch reaches zero pending actions, its Import_Action (conflict-resolution)
 // rows have served their purpose and are purged automatically — separate settings per origin so a
@@ -430,7 +432,16 @@ builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepositor
 
 // Overridable via Quotinator:SourceRefreshTimeoutSeconds — see SourceCacheUpdater.DefaultHttpTimeoutSeconds
 // for why 30 s is the default.
-builder.Services.AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(sourceRefreshTimeoutSeconds));
+// #323: the primary handler must be configured explicitly. SocketsHttpHandler's ConnectTimeout and
+// PooledConnectionLifetime both default to infinite, so a stalled connect has no budget of its own and
+// a pooled connection never rotates — see SourceCacheUpdater's two Default* constants for the full why.
+builder.Services
+    .AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(sourceRefreshTimeoutSeconds))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        ConnectTimeout           = TimeSpan.FromSeconds(sourceRefreshConnectTimeoutSeconds),
+        PooledConnectionLifetime = TimeSpan.FromMinutes(SourceCacheUpdater.DefaultPooledConnectionLifetimeMinutes),
+    });
 
 // Converters are stateless, hardcoded per source — no DI registration needed for the individual
 // plugin instances themselves (CLAUDE.md's DI policy: bare `new` is permitted for a computed value

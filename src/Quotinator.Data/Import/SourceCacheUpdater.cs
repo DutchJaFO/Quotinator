@@ -23,6 +23,38 @@ public sealed class SourceCacheUpdater(
     /// </summary>
     public const int DefaultHttpTimeoutSeconds = 30;
 
+    /// <summary>
+    /// Default connect budget in seconds for <see cref="HttpClientName"/>'s primary handler, used when
+    /// <c>Quotinator:SourceRefreshConnectTimeoutSeconds</c> is not set (#323).
+    /// <para>
+    /// <see cref="System.Net.Http.SocketsHttpHandler.ConnectTimeout"/> defaults to
+    /// <see cref="System.Threading.Timeout.InfiniteTimeSpan"/>, which means a stalled connect or TLS
+    /// handshake has no budget of its own — it is bounded only by whichever request happens to be
+    /// waiting on it, and the attempt is not cancelled when that request gives up. Measured live
+    /// 2026-08-17: two sources each burned the full <see cref="DefaultHttpTimeoutSeconds"/> window
+    /// waiting on a connection that was never established, adding ~70 s to startup.
+    /// </para>
+    /// <para>
+    /// 10 s is deliberately well under <see cref="DefaultHttpTimeoutSeconds"/>: the request budget has
+    /// to cover connect *plus* transfer, so a connect budget at parity would leave nothing for the
+    /// download itself.
+    /// </para>
+    /// </summary>
+    public const int DefaultConnectTimeoutSeconds = 10;
+
+    /// <summary>
+    /// Default pooled-connection lifetime in minutes for <see cref="HttpClientName"/>'s primary handler
+    /// (#323).
+    /// <para>
+    /// <see cref="System.Net.Http.SocketsHttpHandler.PooledConnectionLifetime"/> also defaults to
+    /// infinite. <c>IHttpClientFactory</c>'s own handler lifetime recycles the *handler* but never the
+    /// connections already pooled inside it, so without this a connection never rotates and a DNS
+    /// change on the upstream host is never observed. 2 minutes matches the factory's default handler
+    /// lifetime, so the two expire on the same cadence rather than one outliving the other.
+    /// </para>
+    /// </summary>
+    public const int DefaultPooledConnectionLifetimeMinutes = 2;
+
     /// <inheritdoc/>
     public async Task<SourceCacheResolution> ResolveAsync(
         IReadOnlyList<SeedBatch> candidateBatches,
@@ -38,38 +70,40 @@ public sealed class SourceCacheUpdater(
 
         // Flatten every (batch, file) pair that declares a downloadUrl, preserving order so the
         // effective batch list can be rebuilt by walking candidateBatches again afterward.
-        var candidates = candidateBatches
-            .SelectMany(batch => batch.Files.Select(file => (Batch: batch, File: file)))
-            .Where(c => c.File.DownloadUrl is not null)
-            .Select(c => (c.Batch, c.File, TargetPath: ResolveTargetPath(c.Batch, c.File)))
-            .ToList();
+        List<(SeedBatch Batch, SeedFile File, string TargetPath)> candidates =
+        [
+            .. candidateBatches
+                .SelectMany(batch => batch.Files.Select(file => (Batch: batch, File: file)))
+                .Where(c => c.File.DownloadUrl is not null)
+                .Select(c => (c.Batch, c.File, TargetPath: ResolveTargetPath(c.Batch, c.File)))
+        ];
 
-        var collisionGroups = candidates
+        Dictionary<string, List<(SeedBatch Batch, SeedFile File, string TargetPath)>> collisionGroups = candidates
             .GroupBy(c => c.TargetPath, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
 
-        foreach (var (path, group) in collisionGroups)
+        foreach ((string? path, List<(SeedBatch Batch, SeedFile File, string TargetPath)>? group) in collisionGroups)
         {
-            var sources = string.Join(", ", group.Select(g => $"{Path.GetFileName(g.File.FilePath)} ({g.File.DownloadUrl})"));
+            string sources = string.Join(", ", group.Select(g => $"{Path.GetFileName(g.File.FilePath)} ({g.File.DownloadUrl})"));
             logger.LogError(
                 "[Database - SourceRefresh] {Count} sources resolve to the same cache path {Path} — skipping all of them: {Sources}",
                 group.Count, path, sources);
         }
 
-        var results        = new List<SourceRefreshResult>();
-        var effectivePaths = new Dictionary<(int BatchIndex, int FileIndex), string>();
+        List<SourceRefreshResult> results                                 = [];
+        Dictionary<(int BatchIndex, int FileIndex), string> effectivePaths = [];
 
-        for (var batchIndex = 0; batchIndex < candidateBatches.Count; batchIndex++)
+        for (int batchIndex = 0; batchIndex < candidateBatches.Count; batchIndex++)
         {
-            var batch = candidateBatches[batchIndex];
-            for (var fileIndex = 0; fileIndex < batch.Files.Count; fileIndex++)
+            SeedBatch batch = candidateBatches[batchIndex];
+            for (int fileIndex = 0; fileIndex < batch.Files.Count; fileIndex++)
             {
-                var file = batch.Files[fileIndex];
+                SeedFile file = batch.Files[fileIndex];
                 if (file.DownloadUrl is null) continue;
 
-                var targetPath = ResolveTargetPath(batch, file);
-                var name       = Path.GetFileName(file.FilePath);
+                string targetPath = ResolveTargetPath(batch, file);
+                string name       = Path.GetFileName(file.FilePath);
 
                 if (collisionGroups.ContainsKey(targetPath))
                 {
@@ -77,21 +111,23 @@ public sealed class SourceCacheUpdater(
                     continue;
                 }
 
-                var (effectivePath, result) = await ResolveOneAsync(file, targetPath, batch.Origin, allowNetwork, forceRefresh, cancellationToken);
+                (string? effectivePath, SourceRefreshResult? result) = await ResolveOneAsync(file, targetPath, batch.Origin, allowNetwork, forceRefresh, cancellationToken);
                 effectivePaths[(batchIndex, fileIndex)] = effectivePath;
                 results.Add(result);
             }
         }
 
-        var effectiveBatches = candidateBatches
-            .Select((batch, batchIndex) => batch with
-            {
-                Files = [.. batch.Files
-                    .Select((file, fileIndex) => effectivePaths.TryGetValue((batchIndex, fileIndex), out var effectivePath)
-                        ? file with { FilePath = effectivePath }
-                        : file)]
-            })
-            .ToList();
+        List<SeedBatch> effectiveBatches =
+        [
+            .. candidateBatches
+                .Select((batch, batchIndex) => batch with
+                {
+                    Files = [.. batch.Files
+                        .Select((file, fileIndex) => effectivePaths.TryGetValue((batchIndex, fileIndex), out string? effectivePath)
+                            ? file with { FilePath = effectivePath }
+                            : file)]
+                })
+        ];
 
         return new SourceCacheResolution(effectiveBatches, results);
     }
@@ -99,13 +135,13 @@ public sealed class SourceCacheUpdater(
     private async Task<(string EffectivePath, SourceRefreshResult Result)> ResolveOneAsync(
         SeedFile file, string targetPath, SeedBatchOrigin origin, bool allowNetwork, bool forceRefresh, CancellationToken cancellationToken)
     {
-        var name       = Path.GetFileName(file.FilePath);
-        var cacheExists = File.Exists(targetPath);
+        string name       = Path.GetFileName(file.FilePath);
+        bool cacheExists = File.Exists(targetPath);
 
         // Validating an existing cache hit (not just a freshly downloaded file) means a cache file
         // corrupted before this validation existed — or corrupted by any future bug — self-heals on
         // the next access, rather than being silently trusted forever just because it's not expired.
-        var cacheValid = cacheExists && IsCachedContentValid(targetPath, name);
+        bool cacheValid = cacheExists && IsCachedContentValid(targetPath, name);
 
         if (!allowNetwork)
         {
@@ -114,11 +150,11 @@ public sealed class SourceCacheUpdater(
                 : (file.FilePath, new SourceRefreshResult(name, file.DownloadUrl!, SourceRefreshOutcome.UpToDate));
         }
 
-        var needsRefresh = forceRefresh || !cacheValid || IsStale(targetPath, file);
+        bool needsRefresh = forceRefresh || !cacheValid || IsStale(targetPath, file);
         if (!needsRefresh)
             return (targetPath, new SourceRefreshResult(name, file.DownloadUrl!, SourceRefreshOutcome.UpToDate, LastRefreshedAtUtc: GetLastRefreshedAt(targetPath)));
 
-        var downloaded = await TryDownloadAndPrepareAsync(file, targetPath, origin, cancellationToken);
+        bool downloaded = await TryDownloadAndPrepareAsync(file, targetPath, origin, cancellationToken);
         if (downloaded)
             return (targetPath, new SourceRefreshResult(name, file.DownloadUrl!, SourceRefreshOutcome.Updated, LastRefreshedAtUtc: GetLastRefreshedAt(targetPath)));
 
@@ -154,21 +190,21 @@ public sealed class SourceCacheUpdater(
 
     private bool IsStale(string cachedPath, SeedFile file)
     {
-        var ttlHours = file.RefreshIntervalHours ?? options.DefaultRefreshIntervalHours;
-        var age      = DateTime.UtcNow - File.GetLastWriteTimeUtc(cachedPath);
+        int ttlHours = file.RefreshIntervalHours ?? options.DefaultRefreshIntervalHours;
+        TimeSpan age      = DateTime.UtcNow - File.GetLastWriteTimeUtc(cachedPath);
         return age >= TimeSpan.FromHours(ttlHours);
     }
 
     private async Task<bool> TryDownloadAndPrepareAsync(SeedFile file, string targetPath, SeedBatchOrigin origin, CancellationToken cancellationToken)
     {
-        var name         = Path.GetFileName(file.FilePath);
-        var rawTempPath  = targetPath + ".download.tmp";
-        var convertedTempPath = targetPath + ".converted.tmp";
+        string name         = Path.GetFileName(file.FilePath);
+        string rawTempPath  = targetPath + ".download.tmp";
+        string convertedTempPath = targetPath + ".converted.tmp";
 
         try
         {
-            var client = httpClientFactory.CreateClient(HttpClientName);
-            using var response = await client.GetAsync(file.DownloadUrl, cancellationToken);
+            HttpClient client = httpClientFactory.CreateClient(HttpClientName);
+            using HttpResponseMessage response = await client.GetAsync(file.DownloadUrl, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning(
@@ -177,7 +213,7 @@ public sealed class SourceCacheUpdater(
                 return false;
             }
 
-            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            byte[] bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
             // Downloaded content is written to its own temp file first, kept separate from any
@@ -185,11 +221,11 @@ public sealed class SourceCacheUpdater(
             // than risking a converter partially overwriting its own input mid-read.
             await File.WriteAllBytesAsync(rawTempPath, bytes, cancellationToken);
 
-            var preparedPath = rawTempPath;
+            string preparedPath = rawTempPath;
 
             if (file.Converter is not null)
             {
-                var converter = options.Converters?.GetValueOrDefault(file.Converter);
+                IQuoteSourceConverter? converter = options.Converters?.GetValueOrDefault(file.Converter);
                 if (converter is null)
                 {
                     logger.LogWarning(
@@ -225,7 +261,7 @@ public sealed class SourceCacheUpdater(
             // closes: fails validation here instead of silently corrupting the cache.
             if (options.ValidateCanonicalSchema is not null)
             {
-                var content = await File.ReadAllTextAsync(preparedPath, cancellationToken);
+                string content = await File.ReadAllTextAsync(preparedPath, cancellationToken);
                 if (!options.ValidateCanonicalSchema(content))
                 {
                     logger.LogWarning(
@@ -269,8 +305,8 @@ public sealed class SourceCacheUpdater(
 
     private string ResolveTargetPath(SeedBatch batch, SeedFile file)
     {
-        var target = file.DownloadTarget ?? (batch.Origin == SeedBatchOrigin.Bundled ? DownloadTarget.Internal : DownloadTarget.External);
-        var dir    = target == DownloadTarget.Internal ? options.InternalDownloadDir : options.ExternalDownloadDir;
+        DownloadTarget target = file.DownloadTarget ?? (batch.Origin == SeedBatchOrigin.Bundled ? DownloadTarget.Internal : DownloadTarget.External);
+        string dir    = target == DownloadTarget.Internal ? options.InternalDownloadDir : options.ExternalDownloadDir;
         return Path.Combine(dir, Path.GetFileName(file.FilePath));
     }
 }
