@@ -92,9 +92,12 @@ public class ChangelogSystemContentImporterTests
         string? releaseId = await connection.ExecuteScalarAsync<string>(
             "SELECT Id FROM Changelog_Entry WHERE Version = '1.0.0';");
 
-        List<(string Value, int SortOrder)> highlightValues = (await connection.QueryAsync<(string Value, int SortOrder)>(
-            "SELECT Value, SortOrder FROM Changelog_Line WHERE ChangelogEntryId = @id AND Kind = 'Highlight' ORDER BY SortOrder;",
-            new { id = releaseId })).ToList();
+        List<(string Value, int SortOrder)> highlightValues =
+        [
+            .. await connection.QueryAsync<(string Value, int SortOrder)>(
+                "SELECT Value, SortOrder FROM Changelog_Line WHERE ChangelogEntryId = @id AND Kind = 'Highlight' ORDER BY SortOrder;",
+                new { id = releaseId })
+        ];
 
         Assert.AreSequenceEqual(
             ExpectedHighlightOrder,
@@ -107,9 +110,12 @@ public class ChangelogSystemContentImporterTests
             new { id = releaseId });
         Assert.AreEqual("Notification-only highlight", audienceValue);
 
-        List<string> issueValues = (await connection.QueryAsync<string>(
-            "SELECT Value FROM Changelog_Line WHERE ChangelogEntryId = @id AND Kind = 'Issue' ORDER BY SortOrder;",
-            new { id = releaseId })).ToList();
+        List<string> issueValues =
+        [
+            .. await connection.QueryAsync<string>(
+                "SELECT Value FROM Changelog_Line WHERE ChangelogEntryId = @id AND Kind = 'Issue' ORDER BY SortOrder;",
+                new { id = releaseId })
+        ];
         Assert.AreSequenceEqual(ExpectedIssueValues, issueValues, "Issue numbers are stored as their string form.");
 
         (string? quoteText, string? quoteAttribution, bool machineTranslated) = await connection.QuerySingleAsync<(string?, string?, bool)>(

@@ -23,7 +23,7 @@ public class ChangelogDatabaseInitializerTests
 
     private static async Task<List<string>> DumpTableSchemaAsync(SqliteConnection conn, string table)
     {
-        List<string> lines = new List<string>();
+        List<string> lines = [];
 
         IEnumerable<(int cid, string name, string type, int notnull, string? dflt_value, int pk)> columns = await conn.QueryAsync<(int cid, string name, string type, int notnull, string? dflt_value, int pk)>(
             $"SELECT cid, name, type, [notnull], dflt_value, pk FROM pragma_table_info('{table}');");

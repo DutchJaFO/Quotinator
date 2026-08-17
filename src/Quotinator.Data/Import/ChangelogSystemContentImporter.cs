@@ -85,7 +85,7 @@ public sealed class ChangelogSystemContentImporter(
 
     private static List<ChangelogLineEntity> BuildLines(Guid changelogId, ChangelogUnreleased content)
     {
-        List<ChangelogLineEntity> lines = new List<ChangelogLineEntity>();
+        List<ChangelogLineEntity> lines = [];
 
         AddOrderedLines(lines, changelogId, ChangelogLineKind.Highlight, content.Highlights);
         AddOrderedLines(lines, changelogId, ChangelogLineKind.Added, content.Added);
