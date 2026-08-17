@@ -4,7 +4,10 @@ WORKDIR /src
 
 # Restore layer — selective copy of .csproj files and SDK config so NuGet packages
 # are layer-cached independently of source changes. Add a line here for each new project.
+# Directory.Packages.props is required, not optional: under Central Package Management (ADR 019) it
+# holds every package version, so a restore run without it fails NU1015 on every PackageReference.
 COPY Directory.Build.props .
+COPY Directory.Packages.props .
 COPY src/Quotinator.Constants/Quotinator.Constants.csproj src/Quotinator.Constants/
 COPY src/Quotinator.Changelog/Quotinator.Changelog.csproj src/Quotinator.Changelog/
 COPY src/Quotinator.Data/Quotinator.Data.csproj src/Quotinator.Data/
