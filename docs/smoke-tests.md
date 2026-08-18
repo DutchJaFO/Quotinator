@@ -85,8 +85,12 @@ against an actual database, container startup, ingress, file persistence across 
 36. [Startup wait page during database initialisation](#36-startup-wait-page-during-database-initialisation-280) (#280)
 37. [Migration replay under a restricted-write environment](#37-migration-replay-under-a-restricted-write-environment-294) (#294)
 38. [Degraded-state pages survive a genuine migration failure](#38-degraded-state-pages-survive-a-genuine-migration-failure-293) (#293)
-39. [Notification metadata, provenance, and upgrade paths from v1.8.3 and intermediate versions](#39-notification-metadata-provenance-and-the-v183--current-migration-path-312) (#312)
-40. [Changelog database survives process uptime](#40-changelog-database-survives-process-uptime-309-step-14) (#309)
+39. [Notification metadata, provenance, and the v1.8.3 → current migration path](#39-notification-metadata-provenance-and-the-v183--current-migration-path-312) (#312)
+40. [Upgrade from an intermediate schema version, not just the last release](#40-upgrade-from-an-intermediate-schema-version-not-just-the-last-release-312) (#312)
+41. [Upgrading a v1.8.3 database must not duplicate its existing notification](#41-upgrading-a-v183-database-must-not-duplicate-its-existing-notification) (#312)
+42. [The legacy notification gets provenance, and only a real v1.8.3 database gets a 1.8.3 row](#42-the-legacy-notification-gets-provenance-and-only-a-real-v183-database-gets-a-183-row) (#312)
+43. [A what's-new row written before the release state existed](#43-a-whats-new-row-written-before-the-release-state-existed) (#312)
+44. [Changelog database survives process uptime](#44-changelog-database-survives-process-uptime-309) (#309)
 
 ---
 
@@ -1797,7 +1801,7 @@ database.
 
 Every command below was run for real; the expected values are observed output, not predictions.
 
-### 39a. Migration path from a genuine v1.8.3 database
+#### Migration path from a genuine v1.8.3 database
 
 ```bash
 docker pull ghcr.io/dutchjafo/quotinator:1.8.3
@@ -1813,23 +1817,29 @@ MSYS_NO_PATHCONV=1 docker run -d --name q312 -e Quotinator__DataDir=/data \
 sleep 30
 docker logs q312 2>&1 | grep -E "pending|schema updated"
 ```
-- v1.8.3 must report `schema created at baseline (data v3, app v5)` — that is the released schema this
-  upgrade starts from.
-- The current build must report `applying 4 pending "Data" migration(s) (version 3 → 7)` then
-  `schema updated (data v7, app v5)`. Four migrations: #81's `System_AppVersion` (4), #312's
-  notification reshape (5), `Application` column (6), `SequenceNumber` (7).
+- v1.8.3 must report `schema created at baseline` — the released schema this upgrade starts from.
+- The current build must report `applying … pending "Data" migration(s)` followed by `schema updated`,
+  and must reach `Quotinator ready`. **Do not assert how many migrations ran or which versions were
+  involved** — per this document's rules, those numbers move every milestone and are consolidated before
+  release. What is being verified is that replay from a genuinely released database completes.
 - **No exception, and no repeat of the migration on a second start.** `docker restart q312` must not
   log `applying … pending` again.
 
-### 39b. Stored payload and provenance
+#### Stored payload and provenance
 
-Query the migrated database with the DbInspector dev tool (never shipped in the image, so run it on the
-host against the same file):
+Query the migrated database from inside a container, against the same mount the app used:
 
 ```bash
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db /tmp/q312/data/quotinatordata.db \
-  --sql "SELECT n.Title, n.MetadataKind, n.Metadata, v.Application || ' ' || v.Version AS WrittenBy FROM System_Notification n LEFT JOIN System_AppVersion v ON v.Id = n.AppVersionId;"
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
+  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
+   'SELECT n.Title, n.MetadataKind, n.Metadata, v.Application || \" \" || v.Version AS WrittenBy FROM System_Notification n LEFT JOIN System_AppVersion v ON v.Id = n.AppVersionId;'"
 ```
+
+> **Read the database from a container, not from the host.** `-v /tmp/…:/data` resolves inside the
+> Docker VM, while `dotnet run` executes on Windows where `/tmp` is a different directory entirely — so
+> a host-side `DbInspector` call against that path finds an empty or non-existent file and reports
+> nothing, which reads exactly like a passing check. Every query in this section therefore runs in the
+> same container filesystem the app wrote to.
 - `MetadataKind` must be `Announcement`, and `Metadata` exactly `{"announcement":"GetAllImportBatches"}`.
 - **`Metadata` must not contain a `Kind` property.** Found live during #312's own T2 pass: payloads
   stored `{"announcement":"…","Kind":0}`, because `[JsonIgnore]` on an abstract base property is not
@@ -1840,11 +1850,12 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db /tmp/q312/data/q
 - `WrittenBy` must resolve to `Quotinator.Api 1.8.3` — the `AppVersionId` FK actually joins, rather
   than being written null or dangling.
 
-### 39c. Append-only version history
+#### Append-only version history
 
 ```bash
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db /tmp/q312/data/quotinatordata.db \
-  --sql "SELECT Application, Version, SequenceNumber, COUNT(*) OVER () AS TotalRows FROM System_AppVersion;"
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
+  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
+   'SELECT Application, Version, SequenceNumber, COUNT(*) OVER () AS TotalRows FROM System_AppVersion;'"
 ```
 - Exactly one row: `Quotinator.Api | 1.8.3 | 1 | 1`. `Application` and `Version` are separate columns —
   never one concatenated value.
@@ -1855,7 +1866,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db /tmp/q312/data/q
   reusable once a table's highest row is removed — neither is a trustworthy answer to "which version
   ran last".
 
-### 39d. Dedupe is structural, not textual
+#### Dedupe is structural, not textual
 
 ```bash
 curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
@@ -1876,9 +1887,40 @@ curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"tota
   `Metadata` is `NULL`, restart, and check `totalCount` **increases** — the announcement must be written
   again, because a body match no longer suppresses anything.
 
+#### Every payload states its release, and the legacy announcement is not re-announced
+
+Release state, the version a notification is about, and its content hash are common to every payload,
+not what's-new's alone. Check the stored rows rather than the API response — this is about what a later
+reader finds in the column.
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
+  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
+   'SELECT Title, MetadataKind, Metadata FROM System_Notification;'"
+```
+- The #279 announcement's payload must carry its `announcement` key plus `releaseState`, the `version`
+  the announcement is *about* (v1.8.3 shipped the renames — not the version running now, which the row's
+  own `AppVersionId` records), and a `contentHash`. Read the row and confirm those fields are present
+  and self-consistent rather than matching a transcribed literal: the hash is recomputed whenever the
+  announcement's wording changes, so a pasted expected value goes stale the first time anyone edits it.
+- No payload may contain a null-valued property. An unset value is omitted, so a reader never has to
+  decide what an explicit `null` was supposed to mean.
+- **Restart and re-count.** The row above is only recognised if the migration's frozen content hash
+  still matches what the producer computes for its own body text, and nothing else in the suite can
+  prove that against a real stored row: `"totalCount"` must be unchanged after `docker restart`.
+- A notification about no release at all (a schema-version overshoot) must read
+  `"releaseState":"NotApplicable"` and carry no version. Borrowing the running version would make the
+  same unresolved overshoot re-announce itself on every upgrade.
+
+> Editing the announcement's wording in `Program.cs` deliberately re-announces it to everyone, since
+> the producer's hash then stops matching the migration-frozen one. That is what a content hash is
+> for — but it means a wording tweak is a user-visible change, not a cosmetic one.
+
 Clean up: `docker rm -f q312 && rm -rf /tmp/q312`.
 
-### 39e. Upgrade from an *intermediate* schema version, not just the last release
+---
+
+## 40. Upgrade from an *intermediate* schema version, not just the last release (#312)
 
 **This sub-section exists because 39a alone missed a startup-killing bug.** 39a upgrades from v1.8.3,
 where `System_AppVersion` does not exist at all — so a pre-migration read of it hits the missing-table
@@ -1890,15 +1932,24 @@ but the columns a later migration adds do not. That state crashed startup with
 intermediate state as well as the released one.** ADR 009 mandates the last *released* schema; it is a
 floor, not a ceiling, and unreleased intermediate versions exist on every developer machine.
 
-Build the intermediate state from the released image plus the migrations in between:
+Build the intermediate state from the released image plus the migrations in between.
+
+> **The one place version numbers are unavoidable.** This scenario's whole subject is a database sitting
+> *between* two schema versions, so it has to name which one — unlike every other section here, where a
+> number would be an incidental assertion. The numbers below therefore describe the state being
+> constructed, not an expected outcome, and they need re-deriving whenever migrations are consolidated.
+> The tell that they have gone stale is the current build logging no pending migrations at all, or
+> failing with a "table already exists" error instead of starting: both mean the hand-built state no
+> longer sits where this scenario needs it.
 
 ```bash
-# 1. released baseline (data v3)
+# 1. released baseline — the schema version the last published image creates
 MSYS_NO_PATHCONV=1 docker run -d --name q183 -e Quotinator__DataDir=/data \
   -v /tmp/qv4/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
 sleep 28 && docker rm -f q183
 
-# 2. hand-apply the next migration to reach data v4, plus a row the later read must survive
+# 2. hand-apply the migration that first creates System_AppVersion — one step past the baseline —
+#    plus a row the later column-adding migration must not destroy
 cat > /tmp/qv4/data/promote.sql <<'SQL'
 CREATE TABLE IF NOT EXISTS System_AppVersion (
     Id TEXT NOT NULL PRIMARY KEY, Version TEXT NOT NULL, DateCreated TEXT NOT NULL,
@@ -1917,8 +1968,8 @@ MSYS_NO_PATHCONV=1 docker run -d --name qv4 -e Quotinator__DataDir=/data \
 sleep 32
 docker logs qv4 2>&1 | grep -E "no such column|Unhandled|pending|schema updated|Quotinator ready"
 ```
-- Must log `applying 3 pending "Data" migration(s) (version 4 → 7)`, `schema updated (data v7, app v5)`,
-  and reach `Quotinator ready`.
+- Must log `applying … pending "Data" migration(s)`, then `schema updated`, and reach `Quotinator ready`.
+  As above, assert that replay completed — never the migration count or the version numbers.
 - **Must not log `no such column` or `Unhandled exception`.** Before the fix this terminated the process
   during startup, after the changelog database had already initialised — so a partial, healthy-looking
   log prefix is not evidence of a successful start. Check for `Quotinator ready` explicitly.
@@ -1926,17 +1977,20 @@ docker logs qv4 2>&1 | grep -E "no such column|Unhandled|pending|schema updated|
   **appended** rather than replacing it:
 
 ```bash
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db /tmp/qv4/data/quotinatordata.db \
-  --sql "SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;"
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qv4/data:/data alpine sh -c \
+  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
+   'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
 ```
   Expect exactly two rows: `NULL | 1.8.4 | 1` then `Quotinator.Api | <current> | 2`.
 
-> `Quotinator.Tools.DbInspector` opens the database `Mode=ReadOnly` by design, so it cannot be used for
-> step 2's writes — hence the `sqlite3` container. Do not "fix" the tool to allow writes.
+> Read from a container, not the host — `-v /tmp/…:/data` resolves inside the Docker VM while
+> `dotnet run` executes on Windows against a different `/tmp`, so a host-side query silently finds
+> nothing. `Quotinator.Tools.DbInspector` is additionally `Mode=ReadOnly` by design and so cannot
+> perform step 2's writes either; do not "fix" the tool to allow writes.
 
 Clean up: `docker rm -f qv4 && rm -rf /tmp/qv4`.
 
-### 39f. Upgrading a v1.8.3 database must not duplicate its existing notification
+## 41. Upgrading a v1.8.3 database must not duplicate its existing notification
 
 **#312 moved a notification's identity out of message text into structured metadata. A row written
 before that has no metadata, cannot be identified, and would be announced a second time.** The migration that backfills legacy notification metadata
@@ -1974,7 +2028,7 @@ curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -c 'Two A
 
 Clean up: `docker rm -f qB && rm -rf /tmp/qdup`.
 
-### 39g. The legacy notification gets provenance, and only a real v1.8.3 database gets a `1.8.3` row
+## 42. The legacy notification gets provenance, and only a real v1.8.3 database gets a `1.8.3` row
 
 The migration that backfills legacy notification metadata restored the legacy notification's identity but left its provenance null. A later migration fills
 that in and creates the `System_AppVersion` row it points at — conditionally, because a database created
@@ -1985,8 +2039,23 @@ the row the migration inserts and the row the app records for itself are the sam
 causes are indistinguishable. Temporarily set `Directory.Build.props`' `<Version>` to the next patch
 number, build the image, and restore the file immediately afterwards.
 
-Take a v1.8.3 database seeded the same way as the duplicate-notification scenario above (wait until the
-"Two API operation IDs were renamed" announcement is present, not for a total count), then:
+Seed a v1.8.3 database of this section's own, then upgrade it:
+
+```bash
+docker rm -f qprov 2>/dev/null; rm -rf /tmp/qprov; mkdir -p /tmp/qprov/data
+MSYS_NO_PATHCONV=1 docker run -d --name qprov -e Quotinator__DataDir=/data \
+  -v /tmp/qprov/data:/data -p 8080:8080 ghcr.io/dutchjafo/quotinator:1.8.3
+# wait until the announcement exists — v1.8.3 writes it after seeding ~800 quotes
+until [ "$(curl -s 'http://localhost:8080/api/v1/notifications?pageSize=0' \
+  | grep -c 'Two API operation IDs were renamed')" = "1" ]; do sleep 5; done
+docker rm -f qprov
+
+MSYS_NO_PATHCONV=1 docker run -d --name qprov -e Quotinator__DataDir=/data \
+  -v /tmp/qprov/data:/data -p 8080:8080 quotinator:local
+sleep 40
+```
+
+Then read the version history:
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qprov/data:/data alpine \
@@ -2004,7 +2073,9 @@ On a **fresh** database the same build must produce exactly one row (its own ver
 at all. That guarantee is structural rather than guarded in SQL — an empty database takes the one-step
 baseline path and never replays migrations — so it is worth confirming rather than assuming.
 
-### 39h. A what's-new row written before the release state existed
+Clean up: `docker rm -f qprov && rm -rf /tmp/qprov`.
+
+## 43. A what's-new row written before the release state existed
 
 `WhatsNewMetadataDto.ReleaseState` is a required property, so a row written by an earlier build cannot
 be deserialized, cannot be identified, and would re-announce itself. A later migration backfills it from the
@@ -2012,54 +2083,46 @@ convention that wrote those rows: a `version` key present meant a tagged release
 unreleased section.
 
 Only databases carrying rows from an unreleased build are affected, so the state has to be constructed.
-Against an already-upgraded database, insert the old shape and roll the version counter back one step so
-the migration re-applies on the next start:
+Stand up a database of this section's own, insert the old shape, then roll the schema counter back one
+step so the backfill re-applies on the next start:
 
 ```bash
+docker rm -f qws 2>/dev/null; rm -rf /tmp/qws; mkdir -p /tmp/qws/data
+
+# 1. a current, fully-migrated database of this section's own
+MSYS_NO_PATHCONV=1 docker run -d --name qws -e Quotinator__DataDir=/data \
+  -v /tmp/qws/data:/data -p 8080:8080 quotinator:local
+until curl -s http://localhost:8080/api/v1/health | grep -q healthy; do sleep 5; done
+docker stop -t 15 qws
+
+# 2. inject a what's-new row in the pre-backfill shape, and undo the newest applied migration
 MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qws/data:/data alpine sh -c \
   "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db \
    \"INSERT INTO System_Notification (Id, Type, Body, DateCreated, IsDismissed, IsDeleted, Title, Metadata, MetadataKind) \
      VALUES (lower(hex(randomblob(16))), 'Information', 'legacy highlights', '2026-08-16 09:00:00', 0, 0, \
              'What''s new in v1.8.4', '{\\\"version\\\":\\\"1.8.4\\\"}', 'WhatsNew'); \
-     DELETE FROM System_SchemaVersion WHERE Version = 10;\""
-docker start <container> && sleep 40
+     DELETE FROM System_SchemaVersion WHERE Version = (SELECT MAX(Version) FROM System_SchemaVersion);\""
+
+# 3. restart so the rolled-back migration replays over the injected row
+docker start qws && sleep 40
 ```
-- Must log `applying 1 pending "Data" migration(s) (version 9 → 10)` and reach `Quotinator ready`.
-- The injected row's `Metadata` must become `{"version":"1.8.4","releaseState":"Released"}`.
+- Must log `applying … pending "Data" migration(s)` and reach `Quotinator ready`. Do not assert which
+  version replayed — deleting `MAX(Version)` rolls back whichever migration is newest, so this stays
+  correct after migrations are consolidated.
+- The injected row's `Metadata` must become `{"version":"1.8.4","releaseState":"Released"}` — the
+  `version` key present meant a tagged release under the convention that wrote those rows.
 - A row that already states its own release state must be unchanged — `json_insert` only adds a key
   that is missing, so replaying the chain cannot rewrite correct data.
 
-### 39i. Every payload states its release, and the legacy announcement is not re-announced
+> This works only while the backfill is the newest Data migration. Once a later one lands, rolling back
+> `MAX(Version)` replays that instead and this scenario proves nothing — the tell is the injected row's
+> `Metadata` coming back unchanged. If that happens, roll back far enough to reach the backfill rather
+> than pasting its number in here.
 
-Release state, the version a notification is about, and its content hash are common to every payload,
-not what's-new's alone. Check the stored rows rather than the API response — this is about what a later
-reader finds in the column.
+Clean up: `docker rm -f qws && rm -rf /tmp/qws`.
 
-```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
-  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
-   'SELECT Title, MetadataKind, Metadata FROM System_Notification;'"
-```
-- The #279 announcement must read
-  `{"announcement":"GetAllImportBatches","releaseState":"Released","version":"1.8.3","contentHash":"E55328BB"}`.
-  The version is the release the announcement is *about* — v1.8.3 shipped the renames — not the version
-  running now, which the row's own `AppVersionId` records.
-- No payload may contain a null-valued property. An unset value is omitted, so a reader never has to
-  decide what an explicit `null` was supposed to mean.
-- **Restart and re-count.** The row above is only recognised if the migration's frozen content hash
-  still matches what the producer computes for its own body text, and nothing else in the suite can
-  prove that against a real stored row: `"totalCount"` must be unchanged after `docker restart`.
-- A notification about no release at all (a schema-version overshoot) must read
-  `"releaseState":"NotApplicable"` and carry no version. Borrowing the running version would make the
-  same unresolved overshoot re-announce itself on every upgrade.
 
-> Editing the announcement's wording in `Program.cs` deliberately re-announces it to everyone, since
-> the producer's hash then stops matching the migration-frozen one. That is what a content hash is
-> for — but it means a wording tweak is a user-visible change, not a cosmetic one.
-
----
-
-## 40. Changelog database survives process uptime (#309 step 14)
+## 44. Changelog database survives process uptime (#309)
 
 The changelog database was a shared-cache in-memory instance held open by a dedicated keep-alive
 connection. Found live during #309's own T2 run: thirteen minutes after a clean import of 126 entries,
