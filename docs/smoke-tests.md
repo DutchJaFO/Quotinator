@@ -51,6 +51,7 @@ verification command here in the same commit that fixes it — the list only gro
 37. [Migration replay under a restricted-write environment](#37-migration-replay-under-a-restricted-write-environment-294) (#294)
 38. [Degraded-state pages survive a genuine migration failure](#38-degraded-state-pages-survive-a-genuine-migration-failure-293) (#293)
 39. [Notification metadata, provenance, and upgrade paths from v1.8.3 and intermediate versions](#39-notification-metadata-provenance-and-the-v183--current-migration-path-312) (#312)
+40. [Changelog database survives process uptime](#40-changelog-database-survives-process-uptime-309-step-14) (#309)
 
 ---
 
@@ -1995,3 +1996,68 @@ MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
 > Editing the announcement's wording in `Program.cs` deliberately re-announces it to everyone, since
 > the producer's hash then stops matching migration 11's frozen one. That is what a content hash is
 > for — but it means a wording tweak is a user-visible change, not a cosmetic one.
+
+---
+
+## 40. Changelog database survives process uptime (#309 step 14)
+
+The changelog database was a shared-cache in-memory instance held open by a dedicated keep-alive
+connection. Found live during #309's own T2 run: thirteen minutes after a clean import of 126 entries,
+every read failed with `no such table: Changelog_Entry` and fell back to the JSON service permanently,
+with no process restart in between. **Nothing was user-visible, because the JSON fallback works exactly
+as designed** — which is why it went unnoticed, and why the decisive signal below is the absence of a
+fallback line in the log, not whether the About page renders.
+
+It is now a file beside the main database. Start a container with a mapped data directory:
+
+```bash
+MSYS_NO_PATHCONV=1 docker run -d --name qt-changelog -p 8080:8080 \
+  -v /tmp/qt-changelog/data:/data \
+  -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+```
+
+First, the file must exist alongside `quotinatordata.db` — an in-memory database leaves nothing on disk:
+
+```bash
+MSYS_NO_PATHCONV=1 docker exec qt-changelog ls -l /data/quotinatorchangelog.db
+```
+
+Then confirm the database-backed read path is actually being used, not the fallback:
+
+```bash
+docker logs qt-changelog 2>&1 | grep -E "Changelog - (Init|Import|Read)"
+```
+`[Changelog - Import] refreshed 126 entries across 3 language(s)` must appear, and **no**
+`Changelog_Entry table missing — falling back to the JSON-backed changelog service` line may appear at
+any point.
+
+**The uptime check is the point of this section — do not skip it.** Leave the container running and
+re-read after more than fifteen minutes have elapsed (the original failure appeared at +13 min):
+
+```bash
+sleep 960
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/about
+curl -s http://localhost:8080/about | grep -oE "Unreleased" | head -1
+docker logs qt-changelog 2>&1 | grep -c "falling back to the JSON-backed changelog service"
+```
+There is deliberately no REST endpoint here — changelog content is surfaced only on the About page
+(`Components/Pages/About.razor`), so that is what must be read. `/about` must return `200` and still
+render changelog content, and the fallback-line count must be **0**. A count of 1 or more means the
+database-backed path died mid-run again — the exact regression this section exists to catch, and one no
+shorter check can see.
+
+Note the fallback-line count is the decisive signal, not the page itself: the About page renders
+correctly either way, because the JSON fallback is doing its job. That is precisely why this defect
+survived a full T2 pass unnoticed.
+
+Finally, the file must survive a restart with its content intact (it is rebuilt from the bundled JSON at
+every startup, so this confirms the rebuild is idempotent rather than duplicating rows):
+
+```bash
+docker restart qt-changelog && sleep 30
+MSYS_NO_PATHCONV=1 docker exec qt-changelog sh -c "ls -l /data/quotinatorchangelog.db"
+docker logs qt-changelog 2>&1 | tail -40 | grep -E "Changelog - (Init|Import)"
+docker rm -f qt-changelog
+```
+Neither Reset nor the pre-migration backup touches this file (developer decision, 2026-08-18): its
+contents are wholly derived from JSON shipped in the image, so nothing user-authored is ever at risk.

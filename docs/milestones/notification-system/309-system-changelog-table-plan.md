@@ -702,7 +702,20 @@ see the two findings below.
 
 ### 14. Finding — the changelog database does not survive process uptime
 
-**Status:** ⬜ Not started — needs its own decision on scope
+**Status:** ✅ Done — fixed in this issue (developer decisions, 2026-08-18)
+
+**Scope decision:** this lands here, not as its own issue. The three questions left open below were
+answered by the developer on 2026-08-18:
+
+- **Where the file lives:** `{dataDir}/quotinatorchangelog.db`, a sibling of `quotinatordata.db`, via a
+  new `DataPaths.ChangelogDatabaseFile` constant. HA persistence comes free — `HaFallbackDir()` already
+  resolves `/data`, so no `addon/config.yaml` change is needed.
+- **Reset and backup:** neither touches it. Its contents are wholly derived from the changelog JSON
+  shipped in the image and re-imported at every startup, so nothing user-authored is ever at risk and
+  the file self-heals. Reset keeps its existing single responsibility (the main database only).
+- **`ChangelogConnectionKeepAlive`:** retained in `Quotinator.Data` rather than deleted or relocated.
+  It is no longer wired into `Program.cs`, but ~20 tests use in-memory SQLite deliberately for speed and
+  isolation and still need it. Its XML doc now states plainly that production does not use it.
 
 **Observed live during step 13's T2 run.** In a container started at 19:05:15, the baseline was created
 and 126 entries imported. The first read, at **19:18:47**, failed:
@@ -730,8 +743,27 @@ this plan predicted ("a wiring change, not a redesign"). The keep-alive class li
 in-place migration edit is valid only while no persistent copy exists; going persistent first would have
 made the rename cost a real migration against user databases.
 
-Open: whether this lands here or as its own issue, where the file lives (`{dataDir}` implies HA `/data`
-and `HaFallbackDir()`), and what Reset/backup do with it.
+**What changed.** `Program.cs` now builds the changelog `SqliteConnectionFactory` over
+`Path.Combine(dataDir, DataPaths.ChangelogDatabaseFile)` instead of
+`file:quotinatorchangelog?mode=memory&cache=shared`, and the eager keep-alive resolve at startup is
+gone — a file needs no scaffolding to stay alive. Exactly the "wiring change, not a redesign" this
+plan predicted.
+
+**Red tests** (`ChangelogDatabaseWiringTests`, `Quotinator.Api.Tests`) assert the real registration
+through the live DI container, not a stand-in factory: a test building its own factory would prove only
+that SQLite persists files, not that this application asked it to. Both were red against the in-memory
+wiring, reporting the actual connection string in their failure message.
+
+**Consequence for future changelog schema changes.** ADR 015's revision permitted editing the changelog
+migration in place *only while no persistent copy existed*. That is no longer true: from this release
+onward a real user database exists on disk, so `ChangelogDatabaseInitializer.Migrations` is frozen under
+the same append-only rule as `DatabaseInitializer.DataOwnedMigrations`, and its baseline must be kept in
+step with it.
+
+**Smoke test:** `docs/smoke-tests.md` section 40, added in the same commit as this fix per that
+document's own living-checklist rule. It checks the file exists on disk, that no JSON-fallback line is
+ever logged, and — the part that actually catches this regression — that the database-backed path is
+still alive after more than fifteen minutes of uptime. No shorter check can see it.
 
 ### 15. Finding — `docs/smoke-tests.md` defects found while running it
 
@@ -781,7 +813,8 @@ app, not just the JSON source file, serves the change just added to `changelog.e
 | 16 | ✅ | The changelog tables carry the `Changelog_` prefix per ADR 015's revision, in the migration, baseline, entities, `Sql.cs` and tests | Unit test | 14/14 changelog tests pass against the renamed schema (2026-08-16); full solution builds 0 Warning(s) 0 Error(s); full suite 3,445 passed |
 | 17 | ✅ | The renamed schema works live: baseline applies, the importer writes, and `/about` reads from the database rather than the JSON fallback | Live (T2) | 2026-08-17 against `quotinator:t2` — see the T2 step above. Decisive evidence is the *absence* of the `falling back` warning, since the page renders either way |
 | 18 | ✅ | Migration applies cleanly from the last released schema | Live (T2) | v1.8.3 → current: `data v3 → v11`, 0 exceptions, `schema is up to date` on restart (ADR 009) |
-| 19 | ❌ | The changelog database survives process uptime | Live (T2) | **Fails today** — `no such table: Changelog_Entry` at +13 min, permanent JSON fallback. Pre-existing storage-mode defect, not caused by the rename; see the finding above |
+| 19 | ✅ | The changelog database survives process uptime | Live (T2) | `docs/smoke-tests.md` section 40. Container with a mapped data dir: `quotinatorchangelog.db` present on disk beside `quotinatordata.db`, `[Changelog - Import] refreshed 126 entries across 3 language(s)`, and after >15 min uptime the endpoint still serves content with a JSON-fallback line count of 0. Previously failed at +13 min with `no such table: Changelog_Entry` and a permanent fallback |
+| 20 | ✅ | The changelog database is a file, not an in-memory instance | Unit test | `ChangelogDatabaseWiringTests.ChangelogDatabase_IsNotAnInMemoryDatabase` and `.ChangelogDatabase_IsAFileNamedAlongsideTheMainDatabase` — both red against the previous wiring |
 | 20 | ⬜ | T1 — `/about` renders correctly from the renamed tables in Visual Studio | Live (T1) | Developer confirms. The 2026-08-14 T1 pass predates the rename and no longer proves anything about what ships |
 
 ---
