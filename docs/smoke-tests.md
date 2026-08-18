@@ -10,6 +10,31 @@ verification command here in the same commit that fixes it — the list only gro
 
 ---
 
+## Rules every section here follows
+
+**Never assert a specific migration number or schema version.** Not `Data v2 → v11`, not "migration 8
+does X". Migration counts change whenever any milestone adds one, and they are consolidated before a
+release, so a hardcoded number goes stale on its own and gets "fixed" by editing the number rather than
+by anyone checking what actually happened. This is the same restriction the unit tests carry. Assert
+the *behaviour*: that a `migration applied:` line appears, that no SQLite error accompanies it, that the
+resulting state is healthy, that content is present and correct.
+
+**The application must never crash.** The worst acceptable outcome of any startup problem is a degraded
+UX plus an OpenAPI surface that still allows recovery (today: reset the database; later, possibly
+restoring an uploaded off-site backup). A section that provokes a startup problem is therefore testing a
+*feature* — the degradation path — not merely reproducing a historical incident. An unhandled exception,
+a container that exits, or a page that returns 500 is a failure of that feature regardless of what
+caused it.
+
+**Refer to a section by what it verifies, not by its number.** The numbers are only an index and shift
+whenever a section is inserted; they say nothing about which feature or foot-gun is at stake.
+
+**Some things can only be verified here.** Unit tests cover the rest, so a section earns its place by
+exercising something that genuinely needs a live database or a real environment — endpoint behaviour
+against an actual database, container startup, ingress, file persistence across a restart.
+
+---
+
 ## Contents
 
 1. [Baseline](#1-baseline--healthversionrandomsearch)
@@ -1449,7 +1474,8 @@ section was written no production code path wrote a notification, and it asserte
 producers now — a fresh container has **exactly one** notification, #279's announcement, verified
 against `quotinator:local`. #289's only appears on a database in an overshoot state and #81's only when
 the changelog has notification-flagged highlights for the running version, so neither shows on a fresh
-container. Section 39 covers the payload and provenance those producers write.
+container. "Notification metadata, provenance, and the v1.8.3 → current migration path" covers the payload and
+provenance those producers write.
 
 ```bash
 docker rm -f smoke278
@@ -1489,7 +1515,7 @@ already-expired row, one already-dismissed row):**
 - The `ActionRequired`/`DatabaseReset` row's Action column shows a **Run** button; clicking it replaces
   it with **Confirm**/**Cancel** — **Cancel** must revert to the plain **Run** button without calling
   the reset endpoint (confirm via the quote count / `/version` staying unchanged). **Confirm** must
-  actually run `POST /admin/database/reset` (quote count drops to 0, matching section 32's own Reset
+  actually run `POST /admin/database/reset` (quote count drops to 0, matching "Reset is a full wipe with no reseed"'s own Reset
   behaviour) and the row disappears from the list afterward (the whole `System_Notification` table is
   wiped by Reset, same as every other table).
 
@@ -1656,9 +1682,16 @@ curl -s "http://localhost:8080/api/v1/version"
 docker logs smoke294 2>&1 | grep "migration applied\|SqliteException\|SQLite Error"
 ```
 `/health` must return `200 {"status":"healthy"}`; `/version` must show the full post-migration
-`quotes: 799` and every other bundled count; the logs must show `migration applied: Data v2 → v3, App
-v4 → v5` and **no** `SqliteException`/`SQLite Error` line — the fix means the migration's own temp
-files never touch disk at all, so restricting every other writable path doesn't matter.
+`quotes: 799` and every other bundled count; the logs must show a `migration applied:` line and **no**
+`SqliteException`/`SQLite Error` line — the fix means the migration's own temp files never touch disk
+at all, so restricting every other writable path doesn't matter.
+
+**Never assert specific migration version numbers here.** What matters is that migration replay
+*completed* under the restricted environment, not which versions were involved: the counts move every
+time any milestone adds a migration, so a hardcoded `Data vN → vM` goes stale on its own and gets
+"fixed" by editing a number rather than by anyone checking what actually happened. This is the same
+restriction the unit tests carry. Assert that a `migration applied:` line is present, that no SQLite
+error accompanies it, and that the resulting state is healthy.
 
 **To confirm this test would actually have caught the original bug** (not required on every run — a
 one-time gut-check when this section itself changes): in `Program.cs`, temporarily change
@@ -1884,7 +1917,7 @@ Clean up: `docker rm -f qv4 && rm -rf /tmp/qv4`.
 ### 39f. Upgrading a v1.8.3 database must not duplicate its existing notification
 
 **#312 moved a notification's identity out of message text into structured metadata. A row written
-before that has no metadata, cannot be identified, and would be announced a second time.** Migration 8
+before that has no metadata, cannot be identified, and would be announced a second time.** The migration that backfills legacy notification metadata
 backfills v1.8.3's one shipped notification so the upgrade recognises it. This sub-section proves that.
 
 **Give v1.8.3 enough time.** It writes the #279 announcement *after* first-boot seeding of ~800 quotes,
@@ -1917,7 +1950,7 @@ Clean up: `docker rm -f qB && rm -rf /tmp/qdup`.
 
 ### 39g. The legacy notification gets provenance, and only a real v1.8.3 database gets a `1.8.3` row
 
-Migration 8 restored the legacy notification's identity but left its provenance null. Migration 9 fills
+The migration that backfills legacy notification metadata restored the legacy notification's identity but left its provenance null. A later migration fills
 that in and creates the `System_AppVersion` row it points at — conditionally, because a database created
 fresh by an unreleased build also reaches this migration and never ran v1.8.3.
 
@@ -1947,7 +1980,7 @@ baseline path and never replays migrations — so it is worth confirming rather 
 ### 39h. A what's-new row written before the release state existed
 
 `WhatsNewMetadataDto.ReleaseState` is a required property, so a row written by an earlier build cannot
-be deserialized, cannot be identified, and would re-announce itself. Migration 10 backfills it from the
+be deserialized, cannot be identified, and would re-announce itself. A later migration backfills it from the
 convention that wrote those rows: a `version` key present meant a tagged release, absent meant the
 unreleased section.
 
@@ -1994,7 +2027,7 @@ MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
   same unresolved overshoot re-announce itself on every upgrade.
 
 > Editing the announcement's wording in `Program.cs` deliberately re-announces it to everyone, since
-> the producer's hash then stops matching migration 11's frozen one. That is what a content hash is
+> the producer's hash then stops matching the migration-frozen one. That is what a content hash is
 > for — but it means a wording tweak is a user-visible change, not a cosmetic one.
 
 ---
@@ -2019,7 +2052,7 @@ MSYS_NO_PATHCONV=1 docker run -d --name qt-changelog -p 8080:8080 \
 First, the file must exist alongside `quotinatordata.db` — an in-memory database leaves nothing on disk:
 
 ```bash
-MSYS_NO_PATHCONV=1 docker exec qt-changelog ls -l /data/quotinatorchangelog.db
+docker exec qt-changelog sh -c "ls -l /data/quotinatorchangelog.db"
 ```
 
 Then confirm the database-backed read path is actually being used, not the fallback:
@@ -2055,7 +2088,7 @@ every startup, so this confirms the rebuild is idempotent rather than duplicatin
 
 ```bash
 docker restart qt-changelog && sleep 30
-MSYS_NO_PATHCONV=1 docker exec qt-changelog sh -c "ls -l /data/quotinatorchangelog.db"
+docker exec qt-changelog sh -c "ls -l /data/quotinatorchangelog.db"
 docker logs qt-changelog 2>&1 | tail -40 | grep -E "Changelog - (Init|Import)"
 docker rm -f qt-changelog
 ```
