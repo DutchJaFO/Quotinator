@@ -1,6 +1,6 @@
 # #83 — Research: notification system design
 
-**Status:** In progress (step 6)
+**Status:** Waiting for release
 **GitHub issue:** #83 (open)
 **Depends on:** none
 

@@ -134,7 +134,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 |---|-------|--------|-------|----------|
 | [#312](https://github.com/DutchJaFO/Quotinator/issues/312) | Notification schema: title/body, typed metadata, optional expiry, and app-version provenance | Waiting for release | T1 ✅ T2 ✅ | [312-notification-schema-foundation-plan.md](312-notification-schema-foundation-plan.md) |
 | [#313](https://github.com/DutchJaFO/Quotinator/issues/313) | Api tests can silently assert against the startup wait page instead of the endpoint under test | Waiting for release | N/A (test harness + docs only — no src/ change) | [313-api-test-startup-race-plan.md](313-api-test-startup-race-plan.md) |
-| [#83](https://github.com/DutchJaFO/Quotinator/issues/83) | Research: notification system design | Planning | T3 ⬜ (live confirmation only, no other tier applies) | [83-notification-system-design-research-plan.md](83-notification-system-design-research-plan.md) |
+| [#83](https://github.com/DutchJaFO/Quotinator/issues/83) | Research: notification system design | Waiting for release | T3 ⬜ (live confirmation only, no other tier applies) | [83-notification-system-design-research-plan.md](83-notification-system-design-research-plan.md) |
 | [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: what's new after upgrade | Waiting for release | T1 ✅ T2 ✅ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |
 | [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed (revised — writes from inside the seeding loop) | Planning | TBD | No plan doc yet |
 | [#303](https://github.com/DutchJaFO/Quotinator/issues/303) | Notification + minimal review page: alert when a reseed leaves import actions pending review (revised — writes from inside the seeding loop) | Planning | TBD | No plan doc yet |
@@ -251,27 +251,22 @@ app-version provenance and typed payloads available to render from.
 
 | Order | Issue | Reason |
 |-------|-------|--------|
-| 0 | **#313** ✅ | Done. Api tests were asserting before startup completed — measured at 5 of 5 runs, so every verification in this milestone was untrustworthy until it landed. Had to come first for that reason, not because of any dependency |
-| 1 | **#323** | Independent bug; taken first by developer direction (2026-08-17) because it was found live and its fix is self-contained to the HTTP client registration. Blocks nothing |
-| 1b | **#325** | Immediately after #323, because it is the same startup log's remaining half: #323 bounded how long a stalled connect may run, #325 stops it targeting a dead address family while a working one goes untried. Depends on #323's `ConnectTimeout` to bound the race it introduces |
-| 2 | **#312** | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
-| 3 | **#81** | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
-| 4 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped |
-| 5 | **#324** | Reports a failed source refresh to the user. Placed directly after #319 for that rule's own reason — it writes new user-facing text |
-| 6 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
-| 7 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
-| 8 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 9 | **#305** | Independent bug; can slot in anywhere |
-| 10 | **#306** | Independent bug; can slot in anywhere |
-| 11 | **#83** | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
-| 12 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
-
-**#309 and #307 are not listed** — both are code-complete on this branch, so neither gates anything
-below. #307 has two documentation-confirmation rows outstanding. #309 moved back from
-`Waiting for release` to `In progress` on 2026-08-16 with one doc-only item added: an ADR stating the
-table-naming rule for an application with more than one database, which this issue was the first to
-create. Nothing built in #309 was found wrong, and no table is renamed — see its plan doc's
-"Revision (2026-08-16)".
+| 1 | **#313** ✅ | Done. Api tests were asserting before startup completed — measured at 5 of 5 runs, so every verification in this milestone was untrustworthy until it landed. Had to come first for that reason, not because of any dependency |
+| 2 | **#323** ✅ | Independent bug; taken first by developer direction (2026-08-17) because it was found live and its fix is self-contained to the HTTP client registration. Blocks nothing |
+| 3 | **#325** ✅ | Immediately after #323, because it is the same startup log's remaining half: #323 bounded how long a stalled connect may run, #325 stops it targeting a dead address family while a working one goes untried. Depends on #323's `ConnectTimeout` to bound the race it introduces |
+| 4 | **#312** ✅ | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
+| 5 | **#81** ✅ | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
+| 6 | **#83** ✅ | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
+| 7 | **#309** | Next, by developer direction (2026-08-18). Verification row 19 fails live and step 14 needs a scope decision — see its plan doc |
+| 8 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
+| 9 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped |
+| 10 | **#324** | Reports a failed source refresh to the user. Placed directly after #319 for that rule's own reason — it writes new user-facing text |
+| 11 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 12 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 13 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 14 | **#305** | Independent bug; can slot in anywhere |
+| 15 | **#306** | Independent bug; can slot in anywhere |
+| 16 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
 
 **Migration consolidation, at the end of the milestone.** #81, #312, #319 and #304 each add Data-owned
 migrations, and #312 deliberately does not optimise migration count. Per the developer's direction
