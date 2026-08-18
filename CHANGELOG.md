@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-18 04:26 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-18 17:17 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Fixed quote-source downloads waiting far longer than necessary on a server that could not be reached: the attempt to open a connection had no time limit of its own and ended only when the whole request timed out, so every unreachable source added around 30 seconds to startup (issue #323)
 - Connections to quote-source servers are now recycled periodically instead of being kept indefinitely, so a change to a source server's address is picked up without needing a restart (issue #323)
 - Fixed quote sources being reported as unreachable on networks where one internet protocol version works and the other does not: Quotinator now tries both in parallel and uses whichever answers first, instead of exhausting the unusable one and giving up (issue #325)
+- Fixed the changelog store quietly going out of service a few minutes after startup, after which the About page was served from the original files for the rest of the session. It is now kept on disk rather than only in memory, so it stays available for as long as Quotinator is running (issue #309)
 
 ### Removed
 - The `Quotinator__NotificationDefaultExpiryHours` setting has been removed. It set how long a notification stayed visible before expiring, which no longer applies now that notifications only expire when the one that created it says so — the setting had nothing left to control (issue #312)
