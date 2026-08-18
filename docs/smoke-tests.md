@@ -19,6 +19,16 @@ by anyone checking what actually happened. This is the same restriction the unit
 the *behaviour*: that a `migration applied:` line appears, that no SQLite error accompanies it, that the
 resulting state is healthy, that content is present and correct.
 
+**Never assert a total count of notifications** — the same failure mode as migration numbers, and it has
+already produced two wrong expectations. The number of notifications present depends on which producers
+exist and what the bundled changelog flags for the running version, both of which move every milestone.
+
+Assert instead that the notification a **known cause** produces is present: a successful import, a
+failed import, an upgrade with notification-flagged highlights, a schema-version overshoot. The subject
+of such a section is the *cause* — that the condition is detected and reported — not the notification
+row as an object. Where a scenario genuinely is about counting (proving an upgrade enriched a row rather
+than duplicating it), count occurrences of that specific notification, never the total.
+
 **The application must never crash.** The worst acceptable outcome of any startup problem is a degraded
 UX plus an OpenAPI surface that still allows recovery (today: reset the database; later, possibly
 restoring an uploaded off-site backup). A section that provokes a startup problem is therefore testing a
@@ -1488,9 +1498,15 @@ curl -s -w " [%{http_code}]\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
 curl -s "http://localhost:8080/openapi/v1.json" | grep -o '"Notifications"' | head -1
 ```
-- `GET /notifications` must return `200` with `totalCount: 1` on a fresh container — #279's
-  announcement, titled "Two API operation IDs were renamed". It asserted `totalCount: 0` before #312
-  added real producers.
+- `GET /notifications` must return `200`, and the response must **contain** the announcement titled
+  "Two API operation IDs were renamed" — the notification a fresh container is known to produce.
+
+  **Never assert a total notification count here.** The number of notifications on a fresh container
+  changes whenever a producer is added or the bundled changelog gains a notification-flagged highlight
+  for the running version — this expectation has already been wrong twice (`0` before #312's producers
+  existed, then `1` until the unreleased changelog carried a `notification` audience highlight). Assert
+  the presence of the notification a *known cause* produces, which is what the section is actually
+  about; a count asserts something nobody intended and gets "fixed" by editing a digit.
 - Dismissing a random id with no `X-Api-Key` must return `401`.
 - Dismissing the same id with the correct key must return `404` (no notification exists with that id).
 - The OpenAPI spec must contain the `Notifications` tag.
@@ -1848,6 +1864,12 @@ curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"tota
 ```
 - `totalCount` must be identical before and after the restart. A producer runs on every startup; the
   history is what stops it writing twice.
+
+  This is the one place a *total* is the right thing to read, and it does not breach the no-count rule
+  above: nothing here expects a particular number, only that the number does not change across a
+  restart. Comparing the total rather than one notification is deliberately stronger — it catches *any*
+  producer duplicating itself, including one added after this section was written. Do not replace it
+  with a specific expected count, and do not narrow it to a single notification.
 - The identity lives in `Metadata`, never in `Body`. #278 embedded a key in the message text and matched
   it with `Contains`, which could not distinguish `WhatsNew:v1.9.1` from `WhatsNew:v1.9.10`. To confirm
   the text path is genuinely dead, insert a row whose `Body` mentions `GetAllImportBatches` but whose
@@ -1928,19 +1950,23 @@ that mistake is what let this defect reach a T1 run. Wait for the count to be no
 MSYS_NO_PATHCONV=1 docker run -d --name qA -e Quotinator__DataDir=/data \
   -v /tmp/qdup/data:/data -p 8080:8080 ghcr.io/dutchjafo/quotinator:1.8.3
 sleep 70
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -c 'Two API operation IDs were renamed'
 docker rm -f qA
 ```
-- Must report `"totalCount":1` before continuing. If it reports `0`, wait longer — seeding has not
-  finished, and upgrading now would test nothing.
+- Must report `1` — the v1.8.3 announcement is present, so seeding has finished. If it reports `0`, wait
+  longer; upgrading before the row exists would test nothing. This gates on the row this scenario is
+  *about*, rather than on a total that changes whenever another producer is added.
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run -d --name qB -e Quotinator__DataDir=/data \
   -v /tmp/qdup/data:/data -p 8080:8080 quotinator:local
 sleep 45
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -c 'Two API operation IDs were renamed'
 ```
-- Must still be **`1`**, not `2`.
+- Must still be **`1`**, not `2` — the upgrade enriched the existing announcement rather than writing a
+  second copy. Count only this announcement, never the total: the running version may legitimately add
+  its own notifications, and a total would then read `2` for an entirely correct reason and be "fixed"
+  by editing the digit, hiding a real duplicate the next time one occurs.
 - That one row must carry the backfilled `title` and `metadataKind: announcement`, **and still hold
   v1.8.3's original `expiresAt`** — the old always-on 30-day expiry. That retained expiry is what proves
   it is the original row enriched in place rather than a fresh write that happens to look similar; a new
@@ -1959,7 +1985,8 @@ the row the migration inserts and the row the app records for itself are the sam
 causes are indistinguishable. Temporarily set `Directory.Build.props`' `<Version>` to the next patch
 number, build the image, and restore the file immediately afterwards.
 
-Take a v1.8.3 database seeded exactly as in 39f (wait for `"totalCount":1` first), then:
+Take a v1.8.3 database seeded the same way as the duplicate-notification scenario above (wait until the
+"Two API operation IDs were renamed" announcement is present, not for a total count), then:
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qprov/data:/data alpine \
