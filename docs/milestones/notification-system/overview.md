@@ -147,6 +147,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#319](https://github.com/DutchJaFO/Quotinator/issues/319) | Notification title and body are not translated | Planning | T1 ⬜ T2 ⬜ | [319-notification-translations-plan.md](319-notification-translations-plan.md) |
 | [#323](https://github.com/DutchJaFO/Quotinator/issues/323) | Source download: a stalled connection attempt outlives its request and fails every other source on the same host | Waiting for release | T2 ✅ | [323-source-download-connection-stall-plan.md](323-source-download-connection-stall-plan.md) |
 | [#324](https://github.com/DutchJaFO/Quotinator/issues/324) | Notification: report when a source update attempt fails | Planning | T1 ⬜ T2 ⬜ | [324-source-refresh-failure-notification-plan.md](324-source-refresh-failure-notification-plan.md) |
+| [#325](https://github.com/DutchJaFO/Quotinator/issues/325) | Source download: no address-family fallback — a black-holed IPv6 path fails the download even though IPv4 works | Waiting for release | T2 ✅ | [325-address-family-fallback-plan.md](325-address-family-fallback-plan.md) |
 
 #302, #303, and #304 replace an earlier, stale "import diagnostics" issue drafted during this same
 planning pass, before the developer redirected scope — see the Description above. #305–#309 were all
@@ -213,6 +214,10 @@ place.
          in; building it first means building it twice). Consumes SourceRefreshResult.Failed, which
          nothing reads for user-facing purposes today. Soft-relates to #323 only in that #323 makes
          the failure it reports rarer
+#325 ─── depends on #323 (hard — its ConnectTimeout is what bounds the racing connect this issue adds;
+         without it the race would itself be unbounded). Found while re-checking #323 against a live
+         startup log: #323's fix was working exactly as designed, but it bounded the symptom's duration
+         and this issue is its cause. Blocks nothing
 #313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
          this milestone could be trusted, because Api tests asserted before the app finished starting
          (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
@@ -248,6 +253,7 @@ app-version provenance and typed payloads available to render from.
 |-------|-------|--------|
 | 0 | **#313** ✅ | Done. Api tests were asserting before startup completed — measured at 5 of 5 runs, so every verification in this milestone was untrustworthy until it landed. Had to come first for that reason, not because of any dependency |
 | 1 | **#323** | Independent bug; taken first by developer direction (2026-08-17) because it was found live and its fix is self-contained to the HTTP client registration. Blocks nothing |
+| 1b | **#325** | Immediately after #323, because it is the same startup log's remaining half: #323 bounded how long a stalled connect may run, #325 stops it targeting a dead address family while a working one goes untried. Depends on #323's `ConnectTimeout` to bound the race it introduces |
 | 2 | **#312** | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
 | 3 | **#81** | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
 | 4 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped |
