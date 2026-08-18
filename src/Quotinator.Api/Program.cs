@@ -25,6 +25,7 @@ using Quotinator.Core.Services;
 using Quotinator.Api.Middleware;
 using Quotinator.Api.OpenApi;
 using Quotinator.Api.Services;
+using Quotinator.Data.Http;
 using Quotinator.Data.Import;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Paths;
@@ -441,6 +442,13 @@ builder.Services
     {
         ConnectTimeout           = TimeSpan.FromSeconds(sourceRefreshConnectTimeoutSeconds),
         PooledConnectionLifetime = TimeSpan.FromMinutes(SourceCacheUpdater.DefaultPooledConnectionLifetimeMinutes),
+
+        // #325: without this the handler walks resolved addresses one family at a time, so a routed-but-
+        // unreachable IPv6 path spends the whole ConnectTimeout above while working IPv4 addresses are
+        // never tried. HappyEyeballsConnector races the two families instead.
+        ConnectCallback = (context, cancellationToken) => new ValueTask<Stream>(
+            HappyEyeballsConnector.Default.ConnectAsync(
+                context.DnsEndPoint.Host, context.DnsEndPoint.Port, cancellationToken)),
     });
 
 // Converters are stateless, hardcoded per source — no DI registration needed for the individual

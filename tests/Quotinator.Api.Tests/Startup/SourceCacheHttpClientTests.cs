@@ -60,6 +60,18 @@ public class SourceCacheHttpClientTests
         Assert.AreEqual(TimeSpan.FromSeconds(3), handler.ConnectTimeout);
     }
 
+    [TestMethod]
+    public void SourceCacheClient_PrimaryHandler_HasHappyEyeballsConnectCallback()
+    {
+        SocketsHttpHandler handler = ResolvePrimaryHandler();
+
+        Assert.IsNotNull(
+            handler.ConnectCallback,
+            "#325: without a ConnectCallback the handler walks resolved addresses one family at a time, so "
+            + "a black-holed IPv6 path consumes the whole connect budget while working IPv4 addresses are "
+            + "never tried.");
+    }
+
     #endregion
 
     #region Connection behaviour
