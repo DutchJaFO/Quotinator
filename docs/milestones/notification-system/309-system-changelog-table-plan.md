@@ -767,10 +767,28 @@ still alive after more than fifteen minutes of uptime. No shorter check can see 
 
 ### 15. Finding — `docs/smoke-tests.md` defects found while running it
 
-**Status:** ⬜ Not started — belongs to the smoke-test document, not this issue
+**Status:** ✅ Done (2026-08-18) — all six fixed in `docs/smoke-tests.md`, plus two further defects the
+fix pass surfaced. Two of the six were reframed rather than repaired, because the developer's own rules
+made the original expectation invalid rather than merely stale:
 
-Six defects, to be fixed as their own piece of work (developer, 2026-08-17: "we will fix the smoke tests
-tomorrow"):
+| Section | Outcome |
+|---|---|
+| 33 | Fixed by removing the count entirely — asserts the announcement a *known cause* produces is present. Counts are now forbidden document-wide |
+| 37 | Fixed by removing the version numbers, not by updating them — asserting a migration version is now forbidden document-wide |
+| 38 | Not repairable; its coverage is now owned by **#327**, which rebuilds it around the never-crash contract instead of one historical incident |
+| 39a | Fixed — every query now runs inside a container against the same mount, because `-v /tmp/…:/data` resolves in the Docker VM while `dotnet run` executes on Windows against a different `/tmp` |
+| 39b | Fixed — reads the payload's fields for self-consistency instead of matching a transcribed literal that goes stale whenever the announcement's wording changes |
+| 39 | Fixed — the five sub-tests sharing one container became named sub-parts of one section; the rest became independent sections 40–43, each with its own setup and cleanup. No lettered sub-tests remain |
+
+**Two further defects found while fixing the above**, neither previously recorded:
+
+- **The final sub-test could never run.** It read `/tmp/q312/data`, which an earlier sub-test's cleanup
+  line deletes — guaranteed to fail in document order. Merged into the section that owns that volume.
+- **The what's-new backfill sub-test was unrunnable as written** — no setup at all, a literal
+  `docker start <container>` placeholder, and a `/tmp/qws` directory no section creates. Rewritten
+  self-contained, with its migration rollback keyed off `MAX(Version)` rather than a hardcoded number.
+
+Original defect list, for the record:
 
 | Section | Defect |
 |---|---|
