@@ -301,17 +301,19 @@ SqliteConnectionFactory connectionFactory = new(dbPath, useMemoryTempStore: true
 builder.Services.AddSingleton<IDiskSpaceProvider, DiskSpaceProvider>();
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 
-// #309: separate, in-memory database for changelog content (ADR 018) — no relational or transactional
-// coupling to domain data, so it lives outside quotinatordata.db entirely. Shared-cache mode
-// (mode=memory&cache=shared) lets every separately-opened connection see the same in-memory database;
-// ChangelogConnectionKeepAlive (resolved eagerly below, after app.Build()) holds one connection open
-// for the app's lifetime, since a shared-cache in-memory database is destroyed the moment its last
-// open connection closes. useMemoryTempStore: true for the same #294 reason as the main database.
-SqliteConnectionFactory changelogConnectionFactory = new(
-    "file:quotinatorchangelog?mode=memory&cache=shared", useMemoryTempStore: true);
+// #309: separate database for changelog content (ADR 018) — no relational or transactional coupling
+// to domain data, so it lives outside quotinatordata.db entirely, as its own file beside it.
+//
+// Step 14: this was a shared-cache in-memory database held open by a dedicated keep-alive connection.
+// That storage mode is destroyed the moment its last connection closes, and was found live to take the
+// database-backed read path down thirteen minutes into a run — silently, because the JSON fallback
+// covered for it. A file has no such lifetime. Its contents are rebuilt from the bundled JSON at every
+// startup, so nothing user-authored is ever stored here and neither Reset nor the pre-migration backup
+// touches it. useMemoryTempStore: true for the same #294 reason as the main database.
+string changelogDbPath = Path.Combine(dataDir, DataPaths.ChangelogDatabaseFile);
+SqliteConnectionFactory changelogConnectionFactory = new(changelogDbPath, useMemoryTempStore: true);
 builder.Services.AddKeyedSingleton<IDbConnectionFactory>(
     DatabaseConnectionKeys.Changelog, (_, _) => changelogConnectionFactory);
-builder.Services.AddSingleton<ChangelogConnectionKeepAlive>();
 builder.Services.AddSingleton<ChangelogDatabaseInitializer>();
 builder.Services.AddSingleton<ChangelogRepository>();
 builder.Services.AddSingleton<ChangelogSystemContentImporter>();
@@ -764,18 +766,19 @@ app.MapGet(ApiRoutes.CultureSet, (string? culture, string redirectUri, HttpConte
 // after StartAsync, instead of before it as it did prior to #280.
 await app.StartAsync();
 
-// #309: force eager construction of the changelog database's keep-alive connection — DI singletons
-// are otherwise resolved lazily, on first use, which would be too late (the shared-cache in-memory
-// database wouldn't exist yet when the changelog schema step below needs it). Wrapped separately from
-// the main database's own init try/catch below: a changelog-database failure must never affect the
-// main database's own initialisation or health status, matching ADR 018's fallback requirement
-// (IChangelogReader, once built, falls back to the JSON-file-based IChangelogService regardless of why
-// the changelog database is unavailable). Schema creation itself stays synchronous here — it's a single
-// connection and a couple of DDL statements, fast enough not to matter — but the content refresh below
-// is deliberately NOT awaited inline; see that block's own comment.
+// #309: initialise the changelog database's schema. Wrapped separately from the main database's own
+// init try/catch below: a changelog-database failure must never affect the main database's own
+// initialisation or health status, matching ADR 018's fallback requirement (IChangelogReader, once
+// built, falls back to the JSON-file-based IChangelogService regardless of why the changelog database
+// is unavailable). Schema creation itself stays synchronous here — it's a single connection and a
+// couple of DDL statements, fast enough not to matter — but the content refresh below is deliberately
+// NOT awaited inline; see that block's own comment.
+//
+// Step 14 removed a keep-alive connection that was eagerly resolved here: it existed only to stop the
+// former shared-cache in-memory database from being destroyed when its last connection closed. A file
+// needs no such scaffolding.
 try
 {
-    app.Services.GetRequiredService<ChangelogConnectionKeepAlive>();
     await app.Services.GetRequiredService<ChangelogDatabaseInitializer>().InitialiseAsync();
 }
 catch (Exception ex)

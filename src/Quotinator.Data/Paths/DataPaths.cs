@@ -29,6 +29,23 @@ public static class DataPaths
     public const string DatabaseFile = "quotinatordata.db";
 
     /// <summary>
+    /// SQLite database file for the separate changelog database (#309, ADR 018), a sibling of
+    /// <see cref="DatabaseFile"/> in the same data directory.
+    /// <para>
+    /// Persistent rather than in-memory since #309 step 14: a shared-cache in-memory database is
+    /// destroyed the moment its last connection closes, which was found live to kill the
+    /// database-backed read path thirteen minutes into a run — invisibly, because the JSON fallback
+    /// covered for it.
+    /// </para>
+    /// <para>
+    /// Its contents are rebuilt from the bundled changelog JSON at every startup, so this file is a
+    /// cache, not a record: nothing user-authored is ever stored here, which is why neither Reset nor
+    /// the pre-migration backup touches it (developer decision, 2026-08-18).
+    /// </para>
+    /// </summary>
+    public const string ChangelogDatabaseFile = "quotinatorchangelog.db";
+
+    /// <summary>
     /// Legacy database filename used before v1.2.1.
     /// Renamed to <see cref="DatabaseFile"/> automatically on first startup after upgrade.
     /// </summary>
