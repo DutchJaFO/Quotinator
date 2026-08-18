@@ -10,9 +10,9 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 309, 312, 313, 320, 323],
+    "issues": [81, 309, 312, 313, 320, 323, 325],
     "highlights": [
-      "Wenn Quotinator beim Start eine Zitatquelle nicht erreichen kann, gibt es diese Quelle jetzt schnell auf, statt eine halbe Minute auf sie zu warten — und die übrigen Quellen erhalten weiterhin ihren eigenen fairen Versuch, statt mit heruntergezogen zu werden.",
+      "Zitatquellen werden jetzt zuverlässig aktualisiert, auch in Netzwerken, in denen eine der beiden Internetprotokollversionen nicht funktioniert — in Heimnetzwerken keine Seltenheit. Quotinator versucht beide parallel und nutzt diejenige, die antwortet; ist eine Quelle wirklich nicht erreichbar, gibt es schnell auf, statt eine halbe Minute zu warten.",
       "Nach einer Aktualisierung teilt Quotinator jetzt mit, was sich geändert hat: Eine Startbenachrichtigung zeigt die Highlights jeder übersprungenen Version, nicht nur der neuesten. Eine Neuinstallation sieht nur die Highlights der aktuellen Version, und es erscheint nichts, wenn eine Version nichts Nennenswertes enthält.",
       "Benachrichtigungen haben jetzt eine eigene kurze Überschrift, getrennt vom Nachrichtentext, wodurch die Benachrichtigungsseite und das Start-Pop-up leichter zu erfassen sind.",
       "Benachrichtigungen verschwinden nicht mehr standardmäßig nach Ablauf einer Frist. Zuvor lief jede Benachrichtigung nach 30 Tagen ab, auch solche zu einem noch ungelösten Problem; jetzt bleibt eine Benachrichtigung bestehen, bis sie geschlossen wird oder die empfohlene Aktion ausgeführt wurde."
@@ -36,7 +36,8 @@
       "Ein während der Entwicklung entstandener Startfehler wurde behoben, durch den die Anwendung auf einer von einer Zwischenversion erstellten Datenbank nicht starten konnte; veröffentlichte Versionen waren nie betroffen (issue #312)",
       "Ein internes Problem der Testsuite wurde behoben, bei dem Tests laufen konnten, bevor die Anwendung vollständig gestartet war, wodurch ihre Ergebnisse unzuverlässig wurden — keine Auswirkungen auf die Anwendung selbst (issue #313)",
       "Das Herunterladen von Zitatquellen wartete deutlich länger als nötig auf einen nicht erreichbaren Server: Der Verbindungsversuch hatte kein eigenes Zeitlimit und endete erst, wenn die gesamte Anfrage ablief, sodass jede nicht erreichbare Quelle rund 30 Sekunden zur Startzeit hinzufügte (issue #323)",
-      "Verbindungen zu Zitatquellen-Servern werden jetzt regelmäßig erneuert, statt unbegrenzt bestehen zu bleiben, sodass eine Änderung der Adresse eines Quellservers ohne Neustart übernommen wird (issue #323)"
+      "Verbindungen zu Zitatquellen-Servern werden jetzt regelmäßig erneuert, statt unbegrenzt bestehen zu bleiben, sodass eine Änderung der Adresse eines Quellservers ohne Neustart übernommen wird (issue #323)",
+      "Zitatquellen wurden fälschlich als nicht erreichbar gemeldet, wenn in einem Netzwerk die eine Internetprotokollversion funktioniert und die andere nicht: Quotinator versucht jetzt beide parallel und nutzt diejenige, die zuerst antwortet, statt die unbrauchbare auszuschöpfen und aufzugeben (issue #325)"
     ],
     "removed": [
       "Die Einstellung `Quotinator__NotificationDefaultExpiryHours` wurde entfernt. Sie legte fest, wie lange eine Benachrichtigung sichtbar blieb, bevor sie ablief — was nicht mehr zutrifft, da Benachrichtigungen nur noch ablaufen, wenn die erzeugende Stelle es angibt; die Einstellung hatte damit nichts mehr zu steuern (issue #312)"

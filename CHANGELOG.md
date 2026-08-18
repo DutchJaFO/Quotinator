@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-17 21:30 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-18 04:26 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Highlights
-- When Quotinator cannot reach a quote source while starting up, it now gives up on that source quickly instead of waiting half a minute for it — and the other sources still get their own fair attempt rather than being dragged down with it.
+- Quote sources now update reliably on networks where one internet protocol version is broken — a common situation on home networks. Quotinator tries both in parallel and uses whichever responds, and when a source genuinely cannot be reached it gives up quickly instead of waiting half a minute for it.
 - After updating, Quotinator now tells you what changed: a startup notification lists the highlights of every release you skipped, not just the newest one. A fresh install only sees the current version's highlights, and nothing appears when a release has nothing worth flagging.
 - Notifications now carry a short headline of their own, separate from the message text, so the Notifications page and the startup popup are easier to scan.
 - Notifications no longer disappear on a timer by default. Previously every notification expired after 30 days, including ones about a problem that was still unresolved; now a notification stays until it is dismissed, or until the action it recommends has been carried out.
@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Fixed an internal test-suite defect where tests could run against the app before it had finished starting up, which made their results unreliable — no effect on the application itself (issue #313)
 - Fixed quote-source downloads waiting far longer than necessary on a server that could not be reached: the attempt to open a connection had no time limit of its own and ended only when the whole request timed out, so every unreachable source added around 30 seconds to startup (issue #323)
 - Connections to quote-source servers are now recycled periodically instead of being kept indefinitely, so a change to a source server's address is picked up without needing a restart (issue #323)
+- Fixed quote sources being reported as unreachable on networks where one internet protocol version works and the other does not: Quotinator now tries both in parallel and uses whichever answers first, instead of exhausting the unusable one and giving up (issue #325)
 
 ### Removed
 - The `Quotinator__NotificationDefaultExpiryHours` setting has been removed. It set how long a notification stayed visible before expiring, which no longer applies now that notifications only expire when the one that created it says so — the setting had nothing left to control (issue #312)
