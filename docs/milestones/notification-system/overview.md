@@ -148,6 +148,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#323](https://github.com/DutchJaFO/Quotinator/issues/323) | Source download: a stalled connection attempt outlives its request and fails every other source on the same host | Waiting for release | T2 ✅ | [323-source-download-connection-stall-plan.md](323-source-download-connection-stall-plan.md) |
 | [#324](https://github.com/DutchJaFO/Quotinator/issues/324) | Notification: report when a source update attempt fails | Planning | T1 ⬜ T2 ⬜ | [324-source-refresh-failure-notification-plan.md](324-source-refresh-failure-notification-plan.md) |
 | [#325](https://github.com/DutchJaFO/Quotinator/issues/325) | Source download: no address-family fallback — a black-holed IPv6 path fails the download even though IPv4 works | Waiting for release | T2 ✅ | [325-address-family-fallback-plan.md](325-address-family-fallback-plan.md) |
+| [#326](https://github.com/DutchJaFO/Quotinator/issues/326) | Startup crashes instead of degrading when the data directory is read-only and a migration is pending | Planning | T2 ⬜ | No plan doc yet |
+| [#327](https://github.com/DutchJaFO/Quotinator/issues/327) | Smoke tests: prove startup problems degrade rather than crash | Planning | T2 ⬜ | No plan doc yet |
+| [#328](https://github.com/DutchJaFO/Quotinator/issues/328) | Smoke tests: verify bundled imports and endpoint behaviour against a real database | Planning | T2 ⬜ | No plan doc yet |
 
 #302, #303, and #304 replace an earlier, stale "import diagnostics" issue drafted during this same
 planning pass, before the developer redirected scope — see the Description above. #305–#309 were all
@@ -218,6 +221,15 @@ place.
          without it the race would itself be unbounded). Found while re-checking #323 against a live
          startup log: #323's fix was working exactly as designed, but it bounded the symptom's duration
          and this issue is its cause. Blocks nothing
+#326 ─── (none) — independent bug, found while re-checking the smoke tests. Violates the never-crash
+         rule: a read-only data directory plus a pending migration exits the process instead of
+         degrading. Blocks #327, whose degradation scenarios include this one
+#327 ─── depends on #326 (hard — one of its scenarios asserts the contract #326 currently breaks, so
+         the section cannot go green until that fix lands). Replaces the obsolete #293 reproduction,
+         whose --read-only technique #294 made survivable
+#328 ─── (none) — covers two guarantees no unit test can reach: bundled content imports cleanly, and
+         endpoints behave correctly against a real database rather than the stubs the endpoint tests
+         deliberately use
 #313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
          this milestone could be trusted, because Api tests asserted before the app finished starting
          (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
@@ -258,15 +270,18 @@ app-version provenance and typed payloads available to render from.
 | 5 | **#81** ✅ | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
 | 6 | **#83** ✅ | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
 | 7 | **#309** | Next, by developer direction (2026-08-18). Verification row 19 fails live and step 14 needs a scope decision — see its plan doc |
-| 8 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
-| 9 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped |
-| 10 | **#324** | Reports a failed source refresh to the user. Placed directly after #319 for that rule's own reason — it writes new user-facing text |
-| 11 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
-| 12 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
-| 13 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 14 | **#305** | Independent bug; can slot in anywhere |
-| 15 | **#306** | Independent bug; can slot in anywhere |
-| 16 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
+| 8 | **#326** | Violates the never-crash rule; blocks #327's degradation scenarios, so it lands before them |
+| 9 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature; needs #326 fixed to go green |
+| 10 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above |
+| 11 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
+| 12 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped |
+| 13 | **#324** | Reports a failed source refresh to the user. Placed directly after #319 for that rule's own reason — it writes new user-facing text |
+| 14 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 15 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 16 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 17 | **#305** | Independent bug; can slot in anywhere |
+| 18 | **#306** | Independent bug; can slot in anywhere |
+| 19 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
 
 **Migration consolidation, at the end of the milestone.** #81, #312, #319 and #304 each add Data-owned
 migrations, and #312 deliberately does not optimise migration count. Per the developer's direction
