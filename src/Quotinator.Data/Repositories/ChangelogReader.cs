@@ -24,6 +24,26 @@ public sealed class ChangelogReader(
     /// <inheritdoc/>
     public async Task<ChangelogDocument?> GetDocumentAsync(string? culture)
     {
+        // Wait *before* reading, not after finding the result empty. Whatever is in the database before
+        // this process's import concludes belongs to a previous run: complete, perhaps, but stale. On an
+        // upgrade that stale copy has none of the new release's content, and which copy a read sees is
+        // decided by a race between two detached startup tasks. Waiting first gives one stateable
+        // invariant — a read reflects this process's own import — and removes the race rather than
+        // narrowing it. Once an outcome is known this returns immediately, so only startup-window reads
+        // pay anything at all.
+        ChangelogImportOutcome outcome = await importReadiness.WaitAsync();
+
+        switch (outcome)
+        {
+            case ChangelogImportOutcome.Failed:
+                logger.LogChangelogImportFailedFallingBackToFile();
+                return changelogService.GetForCulture(culture);
+
+            case ChangelogImportOutcome.TimedOut:
+                logger.LogChangelogImportWaitTimedOut();
+                return changelogService.GetForCulture(culture);
+        }
+
         IReadOnlyList<ChangelogLineRow> rows;
         try
         {
@@ -35,49 +55,20 @@ public sealed class ChangelogReader(
             return changelogService.GetForCulture(culture);
         }
 
-        // An empty database is ambiguous, and treating it as a failure is what made the JSON fallback
-        // the normal path: #309's Program.cs wiring runs the import detached, so a read arriving during
-        // the startup window sees no rows purely because the import has not written them yet. Falling
-        // back there answers a question nobody has asked. Wait for the import to conclude first, and
-        // only then decide what the emptiness means.
-        if (rows.Count == 0)
-        {
-            ChangelogImportOutcome outcome = await importReadiness.WaitAsync();
-
-            switch (outcome)
-            {
-                case ChangelogImportOutcome.Failed:
-                    logger.LogChangelogImportFailedFallingBackToFile();
-                    return changelogService.GetForCulture(culture);
-
-                case ChangelogImportOutcome.TimedOut:
-                    logger.LogChangelogImportWaitTimedOut();
-                    return changelogService.GetForCulture(culture);
-            }
-
-            // Succeeded — the import wrote whatever there was to write while we waited, so ask again.
-            try
-            {
-                rows = await joinRepository.QueryAsync();
-            }
-            catch (SqliteException ex) when (IsMissingChangelogTable(ex))
-            {
-                logger.LogChangelogTableMissingFallingBackToFile(ex);
-                return changelogService.GetForCulture(culture);
-            }
-        }
-
-        // Still empty after a successful import: the database is authoritative and there is genuinely
-        // nothing to show. A new application has no changelog yet — that is an answer, not a fault, so
-        // it is neither a warning nor a reason to consult the JSON files. About.razor already renders
-        // a null document by omitting the changelog section entirely.
+        // Empty after a successful import: the database is authoritative and there is genuinely nothing
+        // to show. A new application has no changelog yet — that is an answer, not a fault, so it is
+        // neither a warning nor a reason to consult the JSON files. About.razor already renders a null
+        // document by omitting the changelog section entirely.
         if (rows.Count == 0)
         {
             logger.LogChangelogDatabaseHasNoEntries();
             return null;
         }
 
-        logger.LogChangelogServedFromDatabase(rows.Count);
+        // Entries, not rows: `rows` is the LEFT JOIN's own shape — roughly one per changelog *line* —
+        // which no reader of the log can reconcile with the importer's "refreshed N entries". Counting
+        // entries makes the two lines directly comparable.
+        logger.LogChangelogServedFromDatabase(rows.Select(row => row.ChangelogEntryId).Distinct().Count());
 
         Dictionary<string, ChangelogDocument> documents = AssembleDocuments(rows);
         string code = Normalise(culture);

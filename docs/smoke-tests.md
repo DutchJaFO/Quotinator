@@ -2151,8 +2151,11 @@ Then confirm the database-backed read path is actually being used, not the fallb
 docker logs qt-changelog 2>&1 | grep -E "Changelog - (Init|Import|Read)"
 ```
 `[Changelog - Import] refreshed 126 entries across 3 language(s)` must appear, and so must a
-`[Changelog - Read] served N row(s) from the database` line — the positive statement that the database
-itself answered. No `falling back to the JSON-backed changelog service` line may appear at any point.
+`[Changelog - Read] served N entries from the database` line — the positive statement that the database
+itself answered. **The two counts must match**: the reader and the importer report the same unit
+deliberately, so `refreshed 126 entries` and `served 126 entries` are directly comparable. A read
+reporting fewer entries than the import wrote means it was served a partial or stale copy. No
+`falling back to the JSON-backed changelog service` line may appear at any point.
 
 **The uptime check is the point of this section — do not skip it.** Leave the container running and
 re-read after more than fifteen minutes have elapsed (the original failure appeared at +13 min):
@@ -2161,7 +2164,7 @@ re-read after more than fifteen minutes have elapsed (the original failure appea
 sleep 960
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/about
 curl -s http://localhost:8080/about | grep -oE "Unreleased" | head -1
-docker logs qt-changelog 2>&1 | grep -c "served .* row(s) from the database"
+docker logs qt-changelog 2>&1 | grep -c "served .* entries from the database"
 docker logs qt-changelog 2>&1 | grep -c "falling back to the JSON-backed changelog service"
 ```
 There is deliberately no REST endpoint here — changelog content is surfaced only on the About page

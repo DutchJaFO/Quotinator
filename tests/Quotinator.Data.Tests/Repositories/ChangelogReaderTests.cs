@@ -221,6 +221,62 @@ public class ChangelogReaderTests
         Assert.Contains(e => e.Message.Contains("from the database", StringComparison.Ordinal), logger.Entries);
     }
 
+    /// <summary>
+    /// A read must reflect *this* process's import, never a previous run's leftovers. Before #309 the
+    /// what's-new producer read the JSON files directly and was therefore always current; moving it
+    /// behind a database rebuilt asynchronously at startup reintroduced staleness. Found live
+    /// (step 18): a startup read was served the previous run's complete content because the current
+    /// import had not committed yet. Identical content on a normal boot — but on an upgrade the old
+    /// changelog has none of the new release's highlights, which is exactly what the producer exists to
+    /// announce, and which of the two it sees is a race.
+    /// </summary>
+    [TestMethod]
+    public async Task GetDocumentAsync_PreviousRunsContentStillPresent_ReturnsThisImportsContentInstead()
+    {
+        SqliteConnectionFactory factory = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAlive = new(factory);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        await initializer.InitialiseAsync();
+        ChangelogRepository repository = new(factory, NoOpCallerContext.Instance);
+
+        // A previous run's content: complete, committed, and stale.
+        ChangelogDocument previousRun = new()
+        {
+            Language          = "en",
+            MachineTranslated = false,
+            Releases          = [PreviousRelease()],
+        };
+        await new ChangelogSystemContentImporter(
+            factory, new FakeChangelogService(previousRun), repository, NullLogger<ChangelogSystemContentImporter>.Instance)
+            .RefreshAsync();
+
+        ChangelogImportReadiness readiness = new();
+        JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new ChangelogWithLinesStrategy());
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(null), readiness, NullLogger<ChangelogReader>.Instance);
+
+        Task<ChangelogDocument?> read = reader.GetDocumentAsync("en");
+
+        // This process's import replaces it while the read is in flight — the upgrade case.
+        await new ChangelogSystemContentImporter(
+            factory, new FakeChangelogService(SourceDocument()), repository, NullLogger<ChangelogSystemContentImporter>.Instance)
+            .RefreshAsync();
+        readiness.MarkSucceeded();
+
+        ChangelogDocument? document = await read;
+
+        Assert.IsNotNull(document);
+        Assert.AreEqual("1.0.0", document.Releases[0].Version,
+            "A read must never be served the previous run's content — it has to wait for this process's own import.");
+    }
+
+    /// <summary>A release that only the previous run's content contains, so a stale read is identifiable by version alone.</summary>
+    private static ChangelogRelease PreviousRelease() => new()
+    {
+        Version    = "0.9.0",
+        Date       = "2025-12-01",
+        Highlights = ["Content from a previous run"],
+    };
+
     /// <summary>A genuinely failed import is the case the JSON fallback exists for — and it says so.</summary>
     [TestMethod]
     public async Task GetDocumentAsync_ImportFailed_FallsBackAndWarns()

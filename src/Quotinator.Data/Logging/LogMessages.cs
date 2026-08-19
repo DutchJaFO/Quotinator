@@ -100,8 +100,8 @@ internal static partial class LogMessages
     /// an identical page — so verification previously rested on the *absence* of a fallback warning,
     /// which proves nothing on its own and missed the silent empty-database path entirely.
     /// </summary>
-    [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Read] served {RowCount} row(s) from the database")]
-    public static partial void LogChangelogServedFromDatabase(this ILogger logger, int rowCount);
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Read] served {EntryCount} entries from the database")]
+    public static partial void LogChangelogServedFromDatabase(this ILogger logger, int entryCount);
 
     /// <summary>
     /// Logs that the changelog database holds no entries and the import already concluded successfully.
