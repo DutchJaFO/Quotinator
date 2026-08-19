@@ -4,7 +4,7 @@
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
-> **Next action: a live re-run (row 32) and smoke test 44 (row 33).** Every live check on this issue has
+> **Next action: smoke test 44 at T2 (row 34) — the only outstanding row.** Every live check on this issue has
 > found a further defect underneath the last — steps 14, 16, 17 and 18. The database did not survive
 > process uptime; verification rested on the absence of a message and so proved nothing; the JSON
 > fallback was silently serving the startup read on *every* boot; the refresh was not atomic, so a read
@@ -12,8 +12,8 @@
 > an upgrade is the wrong changelog entirely. All are fixed and unit-tested. The last three share one
 > root: the database is populated asynchronously, and each mechanism reading it assumed something
 > different about what an unexpected result meant. Two live runs on 2026-08-19 confirmed the current
-> shape — a fresh database (row 32) and an already-populated one on the upgrade path (row 32a), the
-> latter being the exact profile that failed at 22:27. **One row remains: 33, smoke test 44 at T2.**
+> shape — a fresh database (row 32) and an already-populated one on the upgrade path (row 33), the
+> latter being the exact profile that failed at 22:27. **One row remains: 34, smoke test 44 at T2.**
 
 ---
 
@@ -1021,8 +1021,8 @@ the previous shape, returning the stale `0.9.0` where `1.0.0` was expected.
 | 30 | ✅ | A read reflects this process's own import, never a previous run's content | Unit test | `ChangelogReaderTests.GetDocumentAsync_PreviousRunsContentStillPresent_ReturnsThisImportsContentInstead` — red against the previous shape, returning the stale `0.9.0` |
 | 31 | ✅ | The read log reports entries, the same unit the importer reports, so the two lines are comparable | Unit test + Live | `LogChangelogServedFromDatabase` emits `served {EntryCount} entries`; smoke test 44 asserts the counts match |
 | 32 | ✅ | Live: the startup read and the import report the same entry count, and the read is ordered after the import | Live (T1) | 2026-08-19 22:45, fresh database: `[Changelog - Init] schema created at baseline`, `refreshed 126 entries`, then `served 126 entries` on every read. No fallback line, no "holds no entries" line. Reversed from 22:27:21, where the read preceded the import |
-| 32a | ✅ | Live: on the fast-startup path that previously got it wrong, the read is ordered after the import | Live (T1) | 2026-08-19 22:46, already-populated main database (`v3 → v11`, no seeding delay — the same profile as 22:27): `refreshed 126 entries` then `served 126 entries`, reversed from 22:27:21. **A log cannot distinguish "waited" from "did not need to wait"** — the read now awaits readiness before querying at all, so correct ordering is structurally guaranteed rather than observed. That distinction is unobservable live by construction; `GetDocumentAsync_PreviousRunsContentStillPresent_…` is the conclusive coverage. This row confirms the guarantee holds in the exact conditions that previously failed |
-| 33 | ⬜ | Smoke test 44's rewritten assertion holds | Live (T2) | `docs/smoke-tests.md` section 44 — re-run needed, since the assertion it now makes did not exist when it was last run |
+| 33 | ✅ | Live: on the fast-startup path that previously got it wrong, the read is ordered after the import | Live (T1) | 2026-08-19 22:46, already-populated main database (`v3 → v11`, no seeding delay — the same profile as 22:27): `refreshed 126 entries` then `served 126 entries`, reversed from 22:27:21. **A log cannot distinguish "waited" from "did not need to wait"** — the read now awaits readiness before querying at all, so correct ordering is structurally guaranteed rather than observed. That distinction is unobservable live by construction; `GetDocumentAsync_PreviousRunsContentStillPresent_…` is the conclusive coverage. This row confirms the guarantee holds in the exact conditions that previously failed |
+| 34 | ⬜ | Smoke test 44's rewritten assertion holds | Live (T2) | `docs/smoke-tests.md` section 44 — re-run needed, since the assertion it now makes did not exist when it was last run |
 
 ---
 
