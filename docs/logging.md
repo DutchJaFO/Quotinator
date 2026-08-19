@@ -359,6 +359,44 @@ project-wide.
 
 ---
 
+## Verification log lines, and demoting them once verified
+
+**Some behaviour is only verifiable if the log states it outright.** Where two code paths produce
+identical observable output — a fallback that renders the same page as the real thing, a cache hit that
+looks like a cache miss — nothing in the system reveals which one ran. Verification then has nothing to
+stand on except the *absence* of an error message, and absence proves nothing: it is equally consistent
+with "the healthy path ran" and "a silent path ran that nobody thought to log".
+
+Found repeatedly in #309 (steps 16–18): the changelog's JSON fallback was serving reads on every boot,
+then a partially-rebuilt table was served as though complete, then a previous run's content was served
+as though current. All three rendered a plausible page, all three survived T1 and T2 passes that
+declared the feature complete, and all three became visible the moment one line stated *which source
+answered*.
+
+**The rule.** When a path's correctness cannot be observed from its output, add a log line that states
+what actually happened — positively, not by implication. Assert on that line in tests and smoke tests,
+never on the absence of a failure message.
+
+**Demote it once it has been verified.** A verification line earns Information level while the behaviour
+is being established and confirmed live. Once it is confirmed and covered by a test that will catch a
+regression, it becomes ordinary operational noise and should drop to Debug, matching the request log's
+own reasoning above — normal operation logs the bare minimum, and detail is opt-in for an operator who
+is actively investigating.
+
+Three things that make a demotion safe rather than a silent loss of coverage:
+
+- **A test must already cover the behaviour**, not just the log line. If the only thing proving the
+  behaviour is a human reading a log, demoting it deletes the coverage.
+- **Any smoke test grepping for that line must be updated in the same commit**, either to run the
+  container at `debug` level or to assert something else. A smoke test silently grepping for a line
+  that no longer appears at the default level is a guaranteed false failure — or worse, a false pass if
+  it asserts absence.
+- **Warnings are never demoted.** A line reporting a fallback, a degraded state, or a failure stays at
+  Warning regardless of how well verified it is. Demotion applies only to the positive "this is what
+  ran" statement, never to "this went wrong".
+
+---
+
 ## Security rule
 
 Never log a secret value. This applies everywhere — banners, structured log lines, diagnostic dumps, and the request log middleware:
