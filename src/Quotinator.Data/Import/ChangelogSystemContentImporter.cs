@@ -40,35 +40,51 @@ public sealed class ChangelogSystemContentImporter(
     /// </summary>
     public async Task RefreshAsync()
     {
-        using SqliteConnection connection = (SqliteConnection)factory.CreateConnection();
-        await connection.OpenAsync();
-        await connection.ExecuteAsync(Sql.ChangelogContent.ClearLines);
-        await connection.ExecuteAsync(Sql.ChangelogContent.ClearChangelogs);
-
         int entryCount = 0;
-        foreach (string language in changelogService.AvailableLanguages)
+
+        // The clear and every insert are one transaction, so a reader never observes the rebuild
+        // in progress. Found live (#309, step 17): with each statement committing on its own, a
+        // startup read landed mid-rebuild and was served 615 of an eventual 2292 rows — a partial
+        // changelog, indistinguishable from a complete one, which the what's-new producer then chose
+        // its announcements from. Atomicity is the fix; the readiness signal only covers the
+        // separate case of a database that is empty because nothing has been written yet.
+        await TransactionScope.ExecuteAsync(factory, async unitOfWork =>
         {
-            ChangelogDocument? document = changelogService.GetForCulture(language);
-            if (document is null) continue;
+            // Connection/Transaction are internal to this assembly, which is how every repository here
+            // reaches them. The raw clears have to run on the same transaction as the inserts below or
+            // the atomicity this scope exists for would not include them.
+            SqliteUnitOfWork sqliteUnitOfWork = (SqliteUnitOfWork)unitOfWork;
 
-            if (document.Unreleased is not null)
-            {
-                await WriteEntryAsync(document.Language, version: null, date: null, document.MachineTranslated, document.Unreleased, quote: null);
-                entryCount++;
-            }
+            await sqliteUnitOfWork.Connection.ExecuteAsync(
+                Sql.ChangelogContent.ClearLines, transaction: sqliteUnitOfWork.Transaction);
+            await sqliteUnitOfWork.Connection.ExecuteAsync(
+                Sql.ChangelogContent.ClearChangelogs, transaction: sqliteUnitOfWork.Transaction);
 
-            foreach (ChangelogRelease release in document.Releases)
+            foreach (string language in changelogService.AvailableLanguages)
             {
-                await WriteEntryAsync(document.Language, release.Version, release.Date, document.MachineTranslated, release, release.Quote);
-                entryCount++;
+                ChangelogDocument? document = changelogService.GetForCulture(language);
+                if (document is null) continue;
+
+                if (document.Unreleased is not null)
+                {
+                    await WriteEntryAsync(document.Language, version: null, date: null, document.MachineTranslated, document.Unreleased, quote: null, unitOfWork);
+                    entryCount++;
+                }
+
+                foreach (ChangelogRelease release in document.Releases)
+                {
+                    await WriteEntryAsync(document.Language, release.Version, release.Date, document.MachineTranslated, release, release.Quote, unitOfWork);
+                    entryCount++;
+                }
             }
-        }
+        });
 
         logger.LogChangelogContentRefreshed(entryCount, changelogService.AvailableLanguages.Count);
     }
 
     private async Task WriteEntryAsync(
-        string language, string? version, string? date, bool machineTranslated, ChangelogUnreleased content, ChangelogQuote? quote)
+        string language, string? version, string? date, bool machineTranslated, ChangelogUnreleased content, ChangelogQuote? quote,
+        IUnitOfWork unitOfWork)
     {
         ChangelogEntryEntity entity = new ChangelogEntryEntity
         {
@@ -80,7 +96,7 @@ public sealed class ChangelogSystemContentImporter(
             QuoteAttribution  = quote?.Attribution,
         };
 
-        await repository.InsertWithLinesAsync(entity, BuildLines(entity.Id, content));
+        await repository.InsertWithLinesAsync(entity, BuildLines(entity.Id, content), unitOfWork);
     }
 
     private static List<ChangelogLineEntity> BuildLines(Guid changelogId, ChangelogUnreleased content)

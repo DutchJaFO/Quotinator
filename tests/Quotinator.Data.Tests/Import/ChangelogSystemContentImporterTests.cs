@@ -150,5 +150,75 @@ public class ChangelogSystemContentImporterTests
         Assert.AreEqual(10, lineCount, "A second refresh must not duplicate child rows either.");
     }
 
+    /// <summary>
+    /// A refresh clears the tables and rebuilds them. If that is not one transaction, a failure partway
+    /// through leaves the database holding neither the old content nor the new — and, worse, a
+    /// concurrent reader observes the half-built state as if it were real. Found live (#309, step 17):
+    /// a startup read logged <c>served 615 row(s)</c> mid-rebuild where a complete set is 2292, and the
+    /// what's-new producer chose which highlights to announce from that partial content.
+    /// </summary>
+    [TestMethod]
+    public async Task RefreshAsync_FailsPartway_LeavesThePreviousContentIntact()
+    {
+        (SqliteConnectionFactory? factory, ChangelogConnectionKeepAlive? keepAlive) = await CreateInitialisedDatabaseAsync();
+        using ChangelogConnectionKeepAlive _ = keepAlive;
+
+        ChangelogRepository repository = new ChangelogRepository(factory, NoOpCallerContext.Instance);
+
+        // Each document must carry its own Language: the importer writes document.Language, not the
+        // dictionary key, and (Language, Version) is unique.
+        FakeChangelogService healthy = new FakeChangelogService(new Dictionary<string, ChangelogDocument>
+        {
+            ["en"] = OneReleaseDocument(),
+            ["nl"] = DocumentInLanguage("nl"),
+        });
+        await new ChangelogSystemContentImporter(factory, healthy, repository, NullLogger<ChangelogSystemContentImporter>.Instance)
+            .RefreshAsync();
+
+        using SqliteConnection connection = (SqliteConnection)factory.CreateConnection();
+        await connection.OpenAsync(TestContext.CancellationToken);
+        int entriesBefore = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Changelog_Entry;");
+        int linesBefore   = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Changelog_Line;");
+        Assert.AreNotEqual(0, entriesBefore, "Guard: the first import must have written something for this test to mean anything.");
+
+        // Second language throws, so the refresh dies after the clear and after "en" has been written.
+        FakeThrowingChangelogService failing = new FakeThrowingChangelogService(OneReleaseDocument(), failOn: "nl");
+        ChangelogSystemContentImporter importer =
+            new ChangelogSystemContentImporter(factory, failing, repository, NullLogger<ChangelogSystemContentImporter>.Instance);
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => importer.RefreshAsync());
+
+        int entriesAfter = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Changelog_Entry;");
+        int linesAfter   = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Changelog_Line;");
+
+        Assert.AreEqual(entriesBefore, entriesAfter,
+            "A failed refresh must roll back to the previous content — never leave the tables cleared or half-rebuilt.");
+        Assert.AreEqual(linesBefore, linesAfter,
+            "Child rows must roll back with their parents.");
+    }
+
+    /// <summary>The same shape as <see cref="OneReleaseDocument"/>, in a different language.</summary>
+    private static ChangelogDocument DocumentInLanguage(string language)
+    {
+        ChangelogDocument source = OneReleaseDocument();
+        return new ChangelogDocument
+        {
+            Language          = language,
+            MachineTranslated = source.MachineTranslated,
+            Unreleased        = source.Unreleased,
+            Releases          = source.Releases,
+        };
+    }
+
+    private sealed class FakeThrowingChangelogService(ChangelogDocument document, string failOn) : IChangelogService
+    {
+        public IReadOnlyList<string> AvailableLanguages { get; } = ["en", failOn];
+
+        public ChangelogDocument? GetForCulture(string? culture) =>
+            culture == failOn
+                ? throw new InvalidOperationException($"Simulated source failure for '{culture}'.")
+                : document;
+    }
+
     public TestContext TestContext { get; set; }
 }
