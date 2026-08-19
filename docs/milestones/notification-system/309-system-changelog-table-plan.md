@@ -4,10 +4,14 @@
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
-> **Next action: T1.** Every step is implemented and every other verification row is green. One row is
-> outstanding — the developer confirming `/about` renders correctly in Visual Studio. The 2026-08-14
-> T1 pass predates both the table rename and the move to a persistent file, so it proves nothing about
-> what ships. Once T1 is green this issue returns to `Waiting for release`.
+> **Next action: a live re-run (rows 27 and 28).** `/about` rendering is confirmed at T1 (2026-08-19),
+> but assessing that evidence unravelled three layers of a single defect — see step 16. The short
+> version: the JSON fallback had been serving the startup read on *every* boot, and nothing said so, so
+> the database-backed path this issue exists to build was never the one that answered. The reader now
+> waits for the import to conclude before interpreting an empty database, distinguishes "no entries yet"
+> from "import failed", and states which source served every read. All of that is unit-tested; none of
+> it is yet confirmed live, which is what rows 27 and 28 are for. Once they are, this issue returns to
+> `Waiting for release`.
 
 ---
 
@@ -811,6 +815,79 @@ returned `200` with all 43 `changelog-entry` elements present, and the new unrel
 (`"Changelog content (shown on the About page)…"`) appears exactly once in the rendered page — the live
 app, not just the JSON source file, serves the change just added to `changelog.en.json`.
 
+### 16. Finding — the JSON fallback was the normal path, and nothing said so
+
+**Status:** ✅ Done (2026-08-19)
+
+Found while assessing the T1 evidence for row 21, then corrected twice as the developer sharpened what
+was actually wrong. Three layers, each exposed by fixing the one above it.
+
+**Layer 1 — verification rested on the absence of a message.** Rows 17 and 19, and smoke test 44, all
+treated the *absence* of a `falling back` warning as proof that the database served `/about`. It was not
+proof: `GetDocumentAsync` had two fallback paths and only the missing-table one logged. The
+empty-database path returned the JSON document silently, indistinguishable from a healthy read in both
+the log and the rendered page — the same invisibility that let step 14's defect run for thirteen minutes.
+
+Per developer direction: *"you need a log entry to show that the changelog was read from the database
+instead of something else to prove it works."* Proving correctness by the absence of an error is
+fragile, because any new silent path reopens the hole. Every read now states which source answered.
+
+**Layer 2 — that log line immediately exposed a race on every boot.** The first run with it showed:
+
+```
+21:40:51 WRN [Changelog - Read] database has no entries — falling back to the JSON-backed changelog service
+21:40:52 INF [Changelog - Import] refreshed 126 entries across 3 language(s)
+21:40:57 INF [Changelog - Read] served 2292 row(s) from the database
+```
+
+`Program.cs` runs the changelog import (line ~798) and #81's what's-new producer (line ~1005) as two
+independent detached tasks with no ordering between them. The producer won that race on **every single
+boot**, so the startup read had always been served by the JSON fallback and the database-backed path
+this issue exists to build was never the one that answered. Each task's comment independently reasoned
+"the reader falls back on its own if the database isn't ready" — which is exactly what made the
+exceptional path the normal one.
+
+Per developer direction: *"of course you shouldn't try to read the json until you've established the
+import into the changelog database could not work."* Emptiness during the startup window is not a
+failure, it is an unfinished question. The reader now waits for the import to conclude before
+interpreting it — which also fixes the producer for free, since the producer simply reads and the reader
+does the waiting. No task reordering was needed.
+
+**Layer 3 — an empty changelog is not a failure either.** Per developer direction: *"no changelog
+entries does not mean the changelog failed to import. New applications may not have any entries yet."*
+`Quotinator.Data` is meant to be reusable (ADR 003/004), and a consumer with no changelog at all is a
+legitimate, permanent state — not a degraded one. So a successful import that wrote nothing is
+authoritative: the reader returns the empty result rather than consulting the JSON files, and says so at
+Information level rather than warning. `About.razor` already renders a null document by omitting the
+changelog section, so nothing downstream needed changing.
+
+**Resulting behaviour**, one branch per state the old code conflated into "empty → fall back":
+
+| State | Behaviour | Log |
+|---|---|---|
+| Rows returned | Serve from the database | `served {RowCount} row(s) from the database` — Information |
+| Empty, import still running | Wait for it, then re-query | none |
+| Empty, import succeeded | Serve the empty result — a new application has no changelog | `the database holds no changelog entries` — Information |
+| Empty, import failed | Fall back | `the changelog import failed — falling back…` — Warning |
+| Empty, wait budget expired | Fall back | `timed out waiting for the changelog import…` — Warning, distinct from failure |
+| Missing table | Fall back | unchanged Warning |
+
+`IChangelogImportReadiness`/`ChangelogImportReadiness` (`Quotinator.Data.Import`) carries the outcome,
+set by `Program.cs`'s import task on both its success and failure paths so a reader can never wait on a
+signal nobody will raise. The wait is bounded — `DefaultWaitBudget`, 30 s — purely so a dead import task
+cannot hang a page render; it is a backstop, not a tuned value. The budget belongs to the signal rather
+than the caller, since no individual reader has a basis for choosing one.
+
+**Red tests first** (`ChangelogReaderTests`). `GetDocumentAsync_DatabasePopulated_LogsThatTheDatabaseServedIt`
+was red against the original implementation in the ordinary way. The four readiness tests could not be
+red before compiling, since the interface they exercise did not exist — so they were verified by
+mutation instead: the reader was temporarily reverted to its old fall-back-on-empty behaviour and all
+four failed, confirming they are load-bearing rather than vacuous.
+
+`GetDocumentAsync_DatabaseEmpty_FallsBackToFileService` was **removed, not renamed**: it asserted that an
+empty database always falls back, which layers 2 and 3 establish is wrong. Three tests replace it, one
+per state it conflated.
+
 ---
 
 ## Verification
@@ -837,7 +914,14 @@ app, not just the JSON source file, serves the change just added to `changelog.e
 | 18 | ✅ | Migration applies cleanly from the last released schema | Live (T2) | v1.8.3 → current: `data v3 → v11`, 0 exceptions, `schema is up to date` on restart (ADR 009) |
 | 19 | ✅ | The changelog database survives process uptime | Live (T2) | `docs/smoke-tests.md` section 44. Container with a mapped data dir: `quotinatorchangelog.db` present on disk beside `quotinatordata.db`, `[Changelog - Import] refreshed 126 entries across 3 language(s)`, and after >15 min uptime the endpoint still serves content with a JSON-fallback line count of 0. Previously failed at +13 min with `no such table: Changelog_Entry` and a permanent fallback |
 | 20 | ✅ | The changelog database is a file, not an in-memory instance | Unit test | `ChangelogDatabaseWiringTests.ChangelogDatabase_IsNotAnInMemoryDatabase` and `.ChangelogDatabase_IsAFileNamedAlongsideTheMainDatabase` — both red against the previous wiring |
-| 21 | ⬜ | T1 — `/about` renders correctly from the renamed tables, reading the on-disk changelog database, in Visual Studio | Live (T1) | Developer confirms. The 2026-08-14 T1 pass predates both the rename and the move to a persistent file, so it no longer proves anything about what ships |
+| 21 | ✅ | T1 — `/about` renders correctly from the renamed tables, reading the on-disk changelog database, in Visual Studio | Live (T1) | 2026-08-19, `localhost:44368/about` under Dutch culture: the Wijzigingslog renders the unreleased section and the v1.8.3 release with its quote, and the machine-translation notice. Changelog schema created at baseline, `refreshed 126 entries across 3 language(s)`, `/about` loaded afterwards |
+| 22 | ✅ | A database-backed read states positively that the database served it, rather than being inferred from the absence of a fallback warning | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabasePopulated_LogsThatTheDatabaseServedIt` — red before, since no such line existed |
+| 23 | ✅ | A read arriving before the import has concluded waits for it, instead of reading emptiness as failure and falling back | Unit test | `ChangelogReaderTests.GetDocumentAsync_ImportStillRunning_WaitsForItRatherThanFallingBack` — verified by mutation (see step 16) |
+| 24 | ✅ | An empty database after a *successful* import is authoritative — no fallback, no warning, since a new application legitimately has no changelog | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabaseEmptyAfterSuccessfulImport_DoesNotFallBack` |
+| 25 | ✅ | A genuinely failed import falls back and warns | Unit test | `ChangelogReaderTests.GetDocumentAsync_ImportFailed_FallsBackAndWarns` |
+| 26 | ✅ | Giving up waiting is reported as its own condition, never as an import failure | Unit test | `ChangelogReaderTests.GetDocumentAsync_WaitTimesOut_FallsBackWithItsOwnMessage` |
+| 27 | ⬜ | Live: the startup read is served by the database, not the fallback — no `falling back` line anywhere in a healthy boot, and `served N row(s) from the database` present | Live (T1 + T2) | Developer re-run of the sequence that produced the 21:40:51 finding. This is the row that actually proves the race is closed; every row above it is a unit test |
+| 28 | ⬜ | Smoke test 44's rewritten assertion holds | Live (T2) | `docs/smoke-tests.md` section 44 — re-run needed, since the assertion it now makes did not exist when it was last run |
 
 ---
 
