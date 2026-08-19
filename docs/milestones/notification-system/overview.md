@@ -151,6 +151,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#326](https://github.com/DutchJaFO/Quotinator/issues/326) | Startup crashes instead of degrading when the data directory is read-only and a migration is pending | Planning | T2 ⬜ | No plan doc yet |
 | [#327](https://github.com/DutchJaFO/Quotinator/issues/327) | Smoke tests: prove startup problems degrade rather than crash | Planning | T2 ⬜ | No plan doc yet |
 | [#328](https://github.com/DutchJaFO/Quotinator/issues/328) | Smoke tests: verify bundled imports and endpoint behaviour against a real database | Planning | T2 ⬜ | No plan doc yet |
+| [#329](https://github.com/DutchJaFO/Quotinator/issues/329) | Source refresh: no retry on a marginal connect, and sources download sequentially | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 
 #302, #303, and #304 replace an earlier, stale "import diagnostics" issue drafted during this same
 planning pass, before the developer redirected scope — see the Description above. #305–#309 were all
@@ -158,7 +159,9 @@ filed the same session, before any of them had code; #310 (Genre-as-table placeh
 v1.9.0, not here. #319 was filed later (2026-08-16), out of #312's own T1 pass. #323 and #324 were filed
 later still (2026-08-17), both out of reading a normal development startup log: #323 is the bug that log
 exposed, #324 is the missing user-facing visibility that made it invisible outside the log in the first
-place.
+place. #329 came out of #309's own T1 run (2026-08-19), from the same subsystem again: one source's
+connect exhausted its budget while a second path on the *same* host succeeded nine seconds later, on a
+460 Mbps connection — a single marginal connect treated as terminal, with no retry and no parallelism.
 
 ---
 
@@ -230,6 +233,12 @@ place.
 #328 ─── (none) — covers two guarantees no unit test can reach: bundled content imports cleanly, and
          endpoints behave correctly against a real database rather than the stubs the endpoint tests
          deliberately use
+#329 ─── depends on #323 and #325 only in that it revises their arrangement, not in build order: it
+         removes the ConnectTimeout #323 added (the attempt timeout takes over that budget) and leaves
+         #325's HappyEyeballsConnector running per attempt. Blocks #324 (hard for its multi-attempt
+         reporting — #329 establishes the download statistics #324 becomes the first consumer of;
+         #324's plain failure reporting does not need it). Adds the first NuGet dependency this
+         milestone takes, Microsoft.Extensions.Http.Resilience
 #313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
          this milestone could be trusted, because Api tests asserted before the app finished starting
          (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
@@ -275,13 +284,14 @@ app-version provenance and typed payloads available to render from.
 | 10 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above |
 | 11 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
 | 12 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped |
-| 13 | **#324** | Reports a failed source refresh to the user. Placed directly after #319 for that rule's own reason — it writes new user-facing text |
-| 14 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
-| 15 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
-| 16 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 17 | **#305** | Independent bug; can slot in anywhere |
-| 18 | **#306** | Independent bug; can slot in anywhere |
-| 19 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
+| 13 | **#329** | Retry, parallel downloads, and the download statistics #324 below reports on. Placed before #324 because it establishes the statistics that issue becomes the first consumer of — building #324's multi-attempt reporting first means building it twice |
+| 14 | **#324** | Reports a failed source refresh to the user, and — via #329's statistics — a source that needed more than one attempt. Placed after #319 for that rule's own reason: it writes new user-facing text |
+| 15 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 16 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 17 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 18 | **#305** | Independent bug; can slot in anywhere |
+| 19 | **#306** | Independent bug; can slot in anywhere |
+| 20 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
 
 **Migration consolidation, at the end of the milestone.** #81, #312, #319 and #304 each add Data-owned
 migrations, and #312 deliberately does not optimise migration count. Per the developer's direction
@@ -292,9 +302,9 @@ migrations, and #312 deliberately does not optimise migration count. Per the dev
 
 ## PR merge plan
 
-All thirteen issues are self-contained on top of already-released infrastructure (#278, #80, #154,
+All twenty issues are self-contained on top of already-released infrastructure (#278, #80, #154,
 #156) — none leave anything half-wired if merged independently, except #81 (which genuinely cannot
 merge before #309 and #307) and #319 (which cannot merge before #312). Those are real
 implementation-order dependencies, not just sequencing preferences.
 Default assumption per `process.md`: the branch stays open until all issues in the milestone are done,
-then one PR — no known reason to depart from that default given how small this milestone is.
+then one PR — no known reason to depart from that default.
