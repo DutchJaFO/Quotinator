@@ -4,14 +4,16 @@
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
-> **Next action: a live re-run (rows 27 and 28).** `/about` rendering is confirmed at T1 (2026-08-19),
-> but assessing that evidence unravelled three layers of a single defect — see step 16. The short
-> version: the JSON fallback had been serving the startup read on *every* boot, and nothing said so, so
-> the database-backed path this issue exists to build was never the one that answered. The reader now
-> waits for the import to conclude before interpreting an empty database, distinguishes "no entries yet"
-> from "import failed", and states which source served every read. All of that is unit-tested; none of
-> it is yet confirmed live, which is what rows 27 and 28 are for. Once they are, this issue returns to
-> `Waiting for release`.
+> **Next action: a live re-run (row 32) and smoke test 44 (row 33).** Every live check on this issue has
+> found a further defect underneath the last — steps 14, 16, 17 and 18. The database did not survive
+> process uptime; verification rested on the absence of a message and so proved nothing; the JSON
+> fallback was silently serving the startup read on *every* boot; the refresh was not atomic, so a read
+> could be served a half-rebuilt changelog; and a read could be served a previous run's content, which on
+> an upgrade is the wrong changelog entirely. All are fixed and unit-tested. The last three share one
+> root: the database is populated asynchronously, and each mechanism reading it assumed something
+> different about what an unexpected result meant. Two live runs on 2026-08-19 confirmed the current
+> shape — a fresh database (row 32) and an already-populated one on the upgrade path (row 32a), the
+> latter being the exact profile that failed at 22:27. **One row remains: 33, smoke test 44 at T2.**
 
 ---
 
@@ -888,6 +890,99 @@ four failed, confirming they are load-bearing rather than vacuous.
 empty database always falls back, which layers 2 and 3 establish is wrong. Three tests replace it, one
 per state it conflated.
 
+### 17. Finding — the refresh was not atomic, so readers could observe a half-rebuilt changelog
+
+**Status:** ✅ Done (2026-08-19)
+
+Found immediately by step 16's own log line, on the first run after it landed:
+
+```
+22:15:10 INF [Changelog - Read] served 615 row(s) from the database
+22:15:11 INF [Changelog - Import] refreshed 126 entries across 3 language(s)
+22:15:16 INF [Changelog - Read] served 2292 row(s) from the database
+```
+
+615 is not a complete changelog. `RefreshAsync` cleared both tables and then re-inserted entry by entry,
+each insert its own transaction and the clears auto-committing on their own — nothing spanned the two.
+For the duration of every refresh a concurrent reader could observe any intermediate state between empty
+and complete, and **be served it as though it were the whole thing**. Here the startup read landed
+mid-rebuild and #81's what's-new producer chose which release highlights to announce from a partial
+changelog.
+
+Step 16's readiness signal does not catch this and never could: `615 > 0`, so the reader takes the
+"database has content" path without ever consulting the signal. Step 16 closed the empty case and left
+the torn one open.
+
+**The fix is atomicity, not more waiting.** The clear and every insert now share one transaction via
+`TransactionScope.ExecuteAsync` — the project's existing idiom — with `InsertWithLinesAsync` joining the
+caller's unit of work. A reader now sees either the previous complete content or the new complete
+content, never a rebuild in progress. The two mechanisms are complementary and both are needed: the
+transaction stops a *partial* read, the readiness signal handles a genuinely *empty* database on a fresh
+install, where there is no previous content to serve.
+
+**This defect predates step 16** — it has been present since step 5 built the importer, through the T1
+and T2 passes that declared this issue complete. It was invisible for the same reason everything else in
+steps 14–16 was: a partial changelog renders as a plausible page. The log line added in step 16 has now
+paid for itself three times over.
+
+**Red test** — `ChangelogSystemContentImporterTests.RefreshAsync_FailsPartway_LeavesThePreviousContentIntact`.
+Deterministic rather than concurrent: a source that throws on the second language, asserting the database
+still holds the first import's content afterwards. A timing-based test of the actual race would be flaky;
+this tests the invariant the race violates.
+
+The first red run was red for the *wrong* reason — a `UNIQUE constraint failed: Changelog_Entry.Language`
+caused by the test's own setup mapping an `en`-tagged document to the `nl` key, since the importer writes
+`document.Language` rather than the dictionary key. After fixing the fixture, red was re-established by
+mutating the implementation back to its non-atomic shape, which failed on the assertion itself:
+`expected: 4, actual: 2` — the clear committed, `en` written, `nl` threw. That is the defect, reproduced.
+
+### 18. Finding — a read could be served the previous run's content, and the log line was unreadable
+
+**Status:** ✅ Done (2026-08-19)
+
+Two things, both surfaced by the 22:27 run that confirmed step 17.
+
+**The count made no sense to a reader.** The developer's objection — *"you can't claim 126 entries and
+2292 rows at the same time"* — was correct about the log even though the numbers were not actually
+contradictory: `126` counts `Changelog_Entry` rows, `2292` counts the `LEFT JOIN Changelog_Line` result,
+so roughly one per changelog *line*. Both true, measuring different things, and impossible to reconcile
+from the log. Worse, "served 2292" describes neither what was asked for nor what was returned — the
+reader hands back a single document. It now reports **entries**, the same unit the importer uses, so
+`refreshed 126 entries` and `served 126 entries` are directly comparable and a mismatch is a signal.
+
+**A read could return a previous run's content.** Step 17 made the refresh atomic, which is what a
+reader observing a rebuild needs — but it also meant a read arriving before the commit is served the
+*previous* run's complete content:
+
+```
+22:27:21 INF [Changelog - Read] served 2292 row(s) from the database   ← the previous run's copy
+22:27:21 INF [Changelog - Import] refreshed 126 entries across 3 language(s)
+```
+
+Harmless on a normal boot, since both runs import identical JSON. Not harmless on an **upgrade**: the
+new image ships a changelog the database does not yet contain, so #81's what's-new producer would
+announce from the old copy and miss the new release's highlights — on the one boot where announcing them
+is the entire point. And because it depends on which of two detached tasks wins, it is intermittent
+rather than reliably wrong.
+
+**This is a regression this issue introduced**, which is why it is fixed here rather than filed against
+#81. Before #309 the producer read `IChangelogService` — the JSON files, directly, always current.
+Moving it behind an asynchronously-rebuilt database is what created the staleness.
+
+**The fix**: wait for readiness *before* reading, rather than only after finding the result empty. One
+stateable invariant — a read reflects this process's own import — and the race disappears instead of
+narrowing. `WaitAsync` returns immediately once an outcome is known, so only startup-window reads pay
+anything. It also collapses the double-query the previous shape needed: one wait, one query, no re-read.
+
+Three defects in three steps have now come from the same root: the database is populated asynchronously,
+and every mechanism that read it made a different wrong assumption about what an unexpected result meant
+— step 16 that empty means unavailable, step 17 that any non-empty result is complete, step 18 that any
+complete result is current.
+
+**Red test** — `ChangelogReaderTests.GetDocumentAsync_PreviousRunsContentStillPresent_ReturnsThisImportsContentInstead`.
+A previous run's content committed, a read started, then this process's import replaces it. Red against
+the previous shape, returning the stale `0.9.0` where `1.0.0` was expected.
+
 ---
 
 ## Verification
@@ -920,8 +1015,14 @@ per state it conflated.
 | 24 | ✅ | An empty database after a *successful* import is authoritative — no fallback, no warning, since a new application legitimately has no changelog | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabaseEmptyAfterSuccessfulImport_DoesNotFallBack` |
 | 25 | ✅ | A genuinely failed import falls back and warns | Unit test | `ChangelogReaderTests.GetDocumentAsync_ImportFailed_FallsBackAndWarns` |
 | 26 | ✅ | Giving up waiting is reported as its own condition, never as an import failure | Unit test | `ChangelogReaderTests.GetDocumentAsync_WaitTimesOut_FallsBackWithItsOwnMessage` |
-| 27 | ⬜ | Live: the startup read is served by the database, not the fallback — no `falling back` line anywhere in a healthy boot, and `served N row(s) from the database` present | Live (T1 + T2) | Developer re-run of the sequence that produced the 21:40:51 finding. This is the row that actually proves the race is closed; every row above it is a unit test |
-| 28 | ⬜ | Smoke test 44's rewritten assertion holds | Live (T2) | `docs/smoke-tests.md` section 44 — re-run needed, since the assertion it now makes did not exist when it was last run |
+| 27 | ✅ | Live: the startup read is served by the database, not the fallback | Live (T1) | 2026-08-19 22:15 — no `falling back` line anywhere in the boot; `served 615 row(s)` at startup and `served 2292 row(s)` for `/about`. The race from 21:40:51 is closed |
+| 28 | ✅ | A refresh is atomic — a failure partway leaves the previous content intact, so no reader can observe a half-rebuilt changelog | Unit test | `ChangelogSystemContentImporterTests.RefreshAsync_FailsPartway_LeavesThePreviousContentIntact` — red on the assertion (`expected: 4, actual: 2`) against the non-atomic shape |
+| 29 | ✅ | Live: the startup read reports a complete count, not a partial one | Live (T1) | 2026-08-19 22:27 — `served 2292 row(s)` at startup and for every later read, against 615-vs-2292 at 22:15. Step 17's atomicity fix confirmed |
+| 30 | ✅ | A read reflects this process's own import, never a previous run's content | Unit test | `ChangelogReaderTests.GetDocumentAsync_PreviousRunsContentStillPresent_ReturnsThisImportsContentInstead` — red against the previous shape, returning the stale `0.9.0` |
+| 31 | ✅ | The read log reports entries, the same unit the importer reports, so the two lines are comparable | Unit test + Live | `LogChangelogServedFromDatabase` emits `served {EntryCount} entries`; smoke test 44 asserts the counts match |
+| 32 | ✅ | Live: the startup read and the import report the same entry count, and the read is ordered after the import | Live (T1) | 2026-08-19 22:45, fresh database: `[Changelog - Init] schema created at baseline`, `refreshed 126 entries`, then `served 126 entries` on every read. No fallback line, no "holds no entries" line. Reversed from 22:27:21, where the read preceded the import |
+| 32a | ✅ | Live: on the fast-startup path that previously got it wrong, the read is ordered after the import | Live (T1) | 2026-08-19 22:46, already-populated main database (`v3 → v11`, no seeding delay — the same profile as 22:27): `refreshed 126 entries` then `served 126 entries`, reversed from 22:27:21. **A log cannot distinguish "waited" from "did not need to wait"** — the read now awaits readiness before querying at all, so correct ordering is structurally guaranteed rather than observed. That distinction is unobservable live by construction; `GetDocumentAsync_PreviousRunsContentStillPresent_…` is the conclusive coverage. This row confirms the guarantee holds in the exact conditions that previously failed |
+| 33 | ⬜ | Smoke test 44's rewritten assertion holds | Live (T2) | `docs/smoke-tests.md` section 44 — re-run needed, since the assertion it now makes did not exist when it was last run |
 
 ---
 
