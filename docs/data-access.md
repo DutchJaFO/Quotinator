@@ -336,6 +336,65 @@ var results = await _repo.QueryAsync(new { lang = "nl" });     // with Dapper pa
 
 ---
 
+## Readiness signals — reading a store that is populated asynchronously
+
+**An empty result is not an answer when something is still writing.** If a store is populated by a
+background task at startup, a read that arrives during that window sees zero rows for a reason that has
+nothing to do with the data. Treating that emptiness as "unavailable" and silently switching to a
+fallback answers a question nobody has asked yet — and because the fallback usually works, nothing looks
+wrong.
+
+Found live in #309, where it was invisible for the life of the feature: the changelog import and the
+consumer that reads it ran as two independent detached tasks, the consumer won the race on **every**
+boot, and so the JSON fallback served the startup read every single time while the database-backed path
+the work existed to build was never the one that answered. It surfaced only after a log line was added
+that stated which source had served each read.
+
+**The rule.** Before interpreting emptiness, establish whether the populate concluded, and distinguish
+three states that are easy to collapse into one:
+
+| State | Meaning | Correct response |
+|---|---|---|
+| Populate still running | Not an answer yet | Wait, then re-query |
+| Populate succeeded, zero rows | A real answer — this deployment genuinely has none | Serve the empty result. Not a warning |
+| Populate failed | The store cannot be trusted | Fall back, and say so |
+
+That middle row matters for anything in `Quotinator.Data`, which is meant to be reusable (ADR 003/004):
+a consuming application may legitimately have no rows at all, permanently. "Empty" and "broken" are
+different conditions and must not share a code path or a log level.
+
+**The mechanism** is a small signal the writer completes and readers await — see
+`IChangelogImportReadiness`/`ChangelogImportReadiness` (`Quotinator.Data.Import`) for the worked example:
+
+```csharp
+if (rows.Count == 0)
+{
+    ChangelogImportOutcome outcome = await importReadiness.WaitAsync();
+    if (outcome is ChangelogImportOutcome.Failed or ChangelogImportOutcome.TimedOut)
+        return fallback;                 // and log which of the two it was
+
+    rows = await joinRepository.QueryAsync();   // succeeded — ask again
+}
+```
+
+Three properties any such signal needs:
+
+- **The writer reports on every exit path**, success *and* failure, or readers wait out their whole
+  budget on a signal nobody will ever raise.
+- **The wait is bounded**, so a writer that dies without reporting cannot hang a page render. The budget
+  is a backstop against that, not a tuned performance value.
+- **The budget belongs to the signal, not the caller** — an individual reader has no basis for choosing
+  one, and every reader should wait the same amount.
+
+> ⚠️ **Registration is not optional.** A consumer that wires the reader but forgets to register the
+> readiness signal as a **singleton** gets behaviour that is correct but badly degraded: every
+> empty-store read waits out the full budget before falling back, and a non-singleton registration gives
+> each reader its own signal that the writer never completes. Neither fails loudly. Register the signal
+> and the reader together, and have the writer's own task set the outcome — as `Program.cs` does for the
+> changelog import.
+
+---
+
 ## `Sql.Joins` fragment helpers
 
 `Sql.Joins.Inner(rightTable, rightAlias, leftAlias, leftKey, rightKey)` and `Sql.Joins.Left(...)` return bracket-quoted JOIN clauses:
@@ -426,3 +485,4 @@ Useful for testing LEFT JOIN edge cases or filter variations without creating a 
 - **#76** — 1:1 relationship pattern
 - **#77** — many-to-many relationship pattern
 - **#121** — first real consumer: `SqliteQuoteService` joins (`Quotes → Sources → Characters → People`)
+- **#309** — readiness signals: why an empty store must not be read as an unavailable one

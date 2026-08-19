@@ -12,6 +12,17 @@ namespace Quotinator.Data.Import;
 /// tasks, and the producer won that race on every single boot, so the JSON fallback quietly served the
 /// startup read every time while the database-backed path this issue built was never the one that
 /// answered. Falling back on emptiness alone answers a question that has not been asked yet.
+/// <para>
+/// <b>Registration is not optional, and forgetting it fails quietly.</b> Any application wiring
+/// <see cref="Quotinator.Data.Repositories.ChangelogReader"/> must also register this as a
+/// <em>singleton</em> and have whatever runs the import call <see cref="MarkSucceeded"/> or
+/// <see cref="MarkFailed"/> on every exit path. Omit the registration and each empty-database read
+/// waits out its whole budget before falling back; register it per-scope instead of as a singleton and
+/// each reader gets its own signal that the importer never completes. Both are correct but badly
+/// degraded, and neither announces itself. This matters beyond Quotinator because
+/// <c>Quotinator.Data</c> is meant to be reusable (ADR 003/004) — see
+/// <c>docs/data-access.md</c>'s "Readiness signals" section.
+/// </para>
 /// </remarks>
 public interface IChangelogImportReadiness
 {
