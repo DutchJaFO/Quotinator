@@ -4,14 +4,10 @@
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
-> **Reopened from `Waiting for release` (2026-08-16).** The ADR and the table rename it mandated are
-> both done and verified live. Two things now block a return to `Waiting for release`:
->
-> 1. **The changelog database does not survive process uptime** — found in this issue's own T2 pass
->    (2026-08-17). The database-backed read path dies silently after minutes, leaving the JSON fallback
->    serving everything. Root cause is the in-memory-only storage mode, not the rename. Needs a scope
->    decision; see the finding below.
-> 2. **T1 is outstanding.** The 2026-08-14 pass predates the rename.
+> **Next action: T1.** Every step is implemented and every other verification row is green. One row is
+> outstanding — the developer confirming `/about` renders correctly in Visual Studio. The 2026-08-14
+> T1 pass predates both the table rename and the move to a persistent file, so it proves nothing about
+> what ships. Once T1 is green this issue returns to `Waiting for release`.
 
 ---
 
@@ -700,6 +696,14 @@ Ran against `quotinator:t2`, built from this branch.
 Smoke-test sections run: 1 ✅, 33 ✅, 36 ✅, 37 ✅, 39a–39c ✅. **Not completed: 32, 38, 39d–39i** —
 see the two findings below.
 
+**Disposition of the three not completed**, recorded so none of them is left silently unaccounted for:
+
+| Section | Where its coverage now lives |
+|---|---|
+| 32 (Reset is a full wipe, #156) | **Still not run.** Nothing in this issue touches Reset or the main database's wipe path, so it is not a gate on #309 — but no other issue has claimed it either, so it stays outstanding for whichever T2 pass next runs the checklist end to end |
+| 38 (degraded pages survive a migration failure, #293) | Owned by **#327**, which rebuilds it around the never-crash contract — see step 15 |
+| 39d–39i | Renumbered to sections 40–43 by step 15. Their scenarios were verified live under **#312**'s own T2 pass (its verification rows 23, 24, 25 and 27), against the same code this issue does not change |
+
 ### 14. Finding — the changelog database does not survive process uptime
 
 **Status:** ✅ Done — fixed in this issue (developer decisions, 2026-08-18)
@@ -760,7 +764,7 @@ onward a real user database exists on disk, so `ChangelogDatabaseInitializer.Mig
 the same append-only rule as `DatabaseInitializer.DataOwnedMigrations`, and its baseline must be kept in
 step with it.
 
-**Smoke test:** `docs/smoke-tests.md` section 40, added in the same commit as this fix per that
+**Smoke test:** `docs/smoke-tests.md` section 44, added in the same commit as this fix per that
 document's own living-checklist rule. It checks the file exists on disk, that no JSON-fallback line is
 ever logged, and — the part that actually catches this regression — that the database-backed path is
 still alive after more than fifteen minutes of uptime. No shorter check can see it.
@@ -831,9 +835,9 @@ app, not just the JSON source file, serves the change just added to `changelog.e
 | 16 | ✅ | The changelog tables carry the `Changelog_` prefix per ADR 015's revision, in the migration, baseline, entities, `Sql.cs` and tests | Unit test | 14/14 changelog tests pass against the renamed schema (2026-08-16); full solution builds 0 Warning(s) 0 Error(s); full suite 3,445 passed |
 | 17 | ✅ | The renamed schema works live: baseline applies, the importer writes, and `/about` reads from the database rather than the JSON fallback | Live (T2) | 2026-08-17 against `quotinator:t2` — see the T2 step above. Decisive evidence is the *absence* of the `falling back` warning, since the page renders either way |
 | 18 | ✅ | Migration applies cleanly from the last released schema | Live (T2) | v1.8.3 → current: `data v3 → v11`, 0 exceptions, `schema is up to date` on restart (ADR 009) |
-| 19 | ✅ | The changelog database survives process uptime | Live (T2) | `docs/smoke-tests.md` section 40. Container with a mapped data dir: `quotinatorchangelog.db` present on disk beside `quotinatordata.db`, `[Changelog - Import] refreshed 126 entries across 3 language(s)`, and after >15 min uptime the endpoint still serves content with a JSON-fallback line count of 0. Previously failed at +13 min with `no such table: Changelog_Entry` and a permanent fallback |
+| 19 | ✅ | The changelog database survives process uptime | Live (T2) | `docs/smoke-tests.md` section 44. Container with a mapped data dir: `quotinatorchangelog.db` present on disk beside `quotinatordata.db`, `[Changelog - Import] refreshed 126 entries across 3 language(s)`, and after >15 min uptime the endpoint still serves content with a JSON-fallback line count of 0. Previously failed at +13 min with `no such table: Changelog_Entry` and a permanent fallback |
 | 20 | ✅ | The changelog database is a file, not an in-memory instance | Unit test | `ChangelogDatabaseWiringTests.ChangelogDatabase_IsNotAnInMemoryDatabase` and `.ChangelogDatabase_IsAFileNamedAlongsideTheMainDatabase` — both red against the previous wiring |
-| 20 | ⬜ | T1 — `/about` renders correctly from the renamed tables in Visual Studio | Live (T1) | Developer confirms. The 2026-08-14 T1 pass predates the rename and no longer proves anything about what ships |
+| 21 | ⬜ | T1 — `/about` renders correctly from the renamed tables, reading the on-disk changelog database, in Visual Studio | Live (T1) | Developer confirms. The 2026-08-14 T1 pass predates both the rename and the move to a persistent file, so it no longer proves anything about what ships |
 
 ---
 

@@ -141,7 +141,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#304](https://github.com/DutchJaFO/Quotinator/issues/304) | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) (revised — content-change trigger moves into the seeding loop) | Planning | TBD | No plan doc yet |
 | [#307](https://github.com/DutchJaFO/Quotinator/issues/307) | Changelog highlights: mark specific entries as notification-worthy | In progress | N/A (library code, no runtime path) | [307-changelog-notification-audience-key-plan.md](307-changelog-notification-audience-key-plan.md) |
 | [#308](https://github.com/DutchJaFO/Quotinator/issues/308) | Notification: multi-line/rich message layout | Planning | TBD | No plan doc yet |
-| [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | In progress | T1 ✅ T2 ✅ | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
+| [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | In progress | T1 ⬜ T2 ✅ | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
 | [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify all expected tables exist at startup, not just row counts | Planning | TBD | No plan doc yet |
 | [#306](https://github.com/DutchJaFO/Quotinator/issues/306) | Bug: empty "Unreleased" section renders on the About page after a release tag | Planning | TBD | No plan doc yet |
 | [#319](https://github.com/DutchJaFO/Quotinator/issues/319) | Notification title and body are not translated | Planning | T1 ⬜ T2 ⬜ | [319-notification-translations-plan.md](319-notification-translations-plan.md) |
@@ -269,7 +269,7 @@ app-version provenance and typed payloads available to render from.
 | 4 | **#312** ✅ | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
 | 5 | **#81** ✅ | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
 | 6 | **#83** ✅ | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
-| 7 | **#309** | Next, by developer direction (2026-08-18). Verification row 19 fails live and step 14 needs a scope decision — see its plan doc |
+| 7 | **#309** | Current, by developer direction (2026-08-18). Every step implemented; T1 is the one outstanding verification row — see its plan doc |
 | 8 | **#326** | Violates the never-crash rule; blocks #327's degradation scenarios, so it lands before them |
 | 9 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature; needs #326 fixed to go green |
 | 10 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above |
