@@ -325,6 +325,8 @@ builder.Services.AddSingleton<IJoinStrategy<ChangelogLineRow>, ChangelogWithLine
 builder.Services.AddSingleton(sp => new JoinQueryRepository<ChangelogLineRow>(
     sp.GetRequiredKeyedService<IDbConnectionFactory>(DatabaseConnectionKeys.Changelog),
     sp.GetRequiredService<IJoinStrategy<ChangelogLineRow>>()));
+// Singleton: the import concludes once per process, and every reader must observe that same outcome.
+builder.Services.AddSingleton<IChangelogImportReadiness, ChangelogImportReadiness>();
 builder.Services.AddSingleton<IChangelogReader, ChangelogReader>();
 builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
@@ -797,12 +799,18 @@ catch (Exception ex)
 // nothing else in this process that can race the keyed changelog connection factory before this runs.
 _ = Task.Run(async () =>
 {
+    // Every exit path must report an outcome. A reader that finds the database empty waits on this
+    // rather than assuming the emptiness is meaningful, so a silent return here would leave it waiting
+    // out its whole budget before falling back.
+    IChangelogImportReadiness readiness = app.Services.GetRequiredService<IChangelogImportReadiness>();
     try
     {
         await app.Services.GetRequiredService<ChangelogSystemContentImporter>().RefreshAsync();
+        readiness.MarkSucceeded();
     }
     catch (Exception ex)
     {
+        readiness.MarkFailed();
         app.Services.GetRequiredService<ILogger<Program>>()
             .LogWarning(ex, "[Database - Import] failed to refresh changelog content — non-fatal, " +
                 "startup continues. The changelog will fall back to reading its JSON files directly.");

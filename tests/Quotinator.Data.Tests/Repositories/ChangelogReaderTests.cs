@@ -48,6 +48,17 @@ public class ChangelogReaderTests
         public string BuildSql() => "SELCT * FROM Changelog_Entry;";
     }
 
+    /// <summary>
+    /// A readiness signal already reporting a completed import — the steady state after startup, and
+    /// the right default for any test whose subject is not the import race itself.
+    /// </summary>
+    private static ChangelogImportReadiness SucceededImport()
+    {
+        ChangelogImportReadiness readiness = new();
+        readiness.MarkSucceeded();
+        return readiness;
+    }
+
     private static ChangelogDocument SourceDocument() => new()
     {
         Language          = "en",
@@ -94,7 +105,7 @@ public class ChangelogReaderTests
         using ChangelogConnectionKeepAlive _ = keepAlive;
 
         JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new ChangelogWithLinesStrategy());
-        ChangelogReader reader = new(joinRepository, new FakeChangelogService(null), NullLogger<ChangelogReader>.Instance);
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(null), SucceededImport(), NullLogger<ChangelogReader>.Instance);
 
         ChangelogDocument? document = await reader.GetDocumentAsync("en");
 
@@ -119,13 +130,43 @@ public class ChangelogReaderTests
             [.. release.GetHighlightsFor(Quotinator.Changelog.Enums.ChangelogReservedAudience.Notification)]);
     }
 
+    // GetDocumentAsync_DatabaseEmpty_FallsBackToFileService was removed here, not renamed: it asserted
+    // that an empty database always falls back, which step 16 established is wrong. Emptiness alone
+    // says nothing — during the startup window it means "the import has not written yet", and once the
+    // import has succeeded it means "this application genuinely has no changelog", which is an answer
+    // rather than a failure. The three tests below replace it, one per state it used to conflate.
+
     /// <summary>
-    /// A genuinely empty database (schema created, but the background import from Step 6 hasn't
-    /// written any rows yet — the real race window #309's non-blocking Program.cs wiring accepts)
-    /// falls back the same way a missing table does, rather than returning an empty/null document.
+    /// A successful database-backed read says so in the log. Verification that the database actually
+    /// served the changelog previously rested on the *absence* of a fallback warning, which the
+    /// silent empty-database path at the time made unsound — an absent message proves nothing about
+    /// which source answered. This positive statement is what smoke test 44 and this issue's own T1/T2
+    /// rows assert on instead.
     /// </summary>
     [TestMethod]
-    public async Task GetDocumentAsync_DatabaseEmpty_FallsBackToFileService()
+    public async Task GetDocumentAsync_DatabasePopulated_LogsThatTheDatabaseServedIt()
+    {
+        (SqliteConnectionFactory factory, ChangelogConnectionKeepAlive keepAlive) = await CreatePopulatedDatabaseAsync();
+        using ChangelogConnectionKeepAlive _ = keepAlive;
+
+        JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new ChangelogWithLinesStrategy());
+        RecordingLogger logger = new();
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(null), SucceededImport(), logger);
+
+        await reader.GetDocumentAsync("en");
+
+        Assert.Contains(
+            e => e.Level == LogLevel.Information && e.Message.Contains("from the database", StringComparison.Ordinal),
+            logger.Entries,
+            "A database-backed read must state that the database served it — verification cannot rest on the absence of a fallback warning.");
+    }
+
+    /// <summary>
+    /// An empty database after a *successful* import is authoritative, not a failure: a new application
+    /// legitimately has no changelog yet. It must not fall back to the JSON files and must not warn.
+    /// </summary>
+    [TestMethod]
+    public async Task GetDocumentAsync_DatabaseEmptyAfterSuccessfulImport_DoesNotFallBack()
     {
         SqliteConnectionFactory factory = new(UniqueConnectionString());
         using ChangelogConnectionKeepAlive keepAlive = new(factory);
@@ -133,12 +174,98 @@ public class ChangelogReaderTests
         await initializer.InitialiseAsync();
         ChangelogDocument fallback = new() { Language = "en" };
 
+        ChangelogImportReadiness readiness = new();
+        readiness.MarkSucceeded();
+
         JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new ChangelogWithLinesStrategy());
-        ChangelogReader reader = new(joinRepository, new FakeChangelogService(fallback), NullLogger<ChangelogReader>.Instance);
+        RecordingLogger logger = new();
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(fallback), readiness, logger);
+
+        ChangelogDocument? document = await reader.GetDocumentAsync("en");
+
+        Assert.IsNull(document, "A successfully-imported but empty changelog is an answer — the JSON fallback must not be consulted.");
+        Assert.IsEmpty(logger.Entries.Where(e => e.Level == LogLevel.Warning),
+            "An application with no changelog entries yet is not a fault and must not warn.");
+    }
+
+    /// <summary>
+    /// The startup race, which is what made the fallback the normal path: the import has not concluded
+    /// when the read arrives. The reader must wait for it rather than reading emptiness as failure.
+    /// </summary>
+    [TestMethod]
+    public async Task GetDocumentAsync_ImportStillRunning_WaitsForItRatherThanFallingBack()
+    {
+        SqliteConnectionFactory factory = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAlive = new(factory);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        await initializer.InitialiseAsync();
+
+        // Schema exists, no content yet — exactly the state a read hits during the startup window.
+        ChangelogImportReadiness readiness = new();
+        FakeChangelogService service = new(SourceDocument());
+        JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new ChangelogWithLinesStrategy());
+        RecordingLogger logger = new();
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(new ChangelogDocument { Language = "en" }), readiness, logger);
+
+        Task<ChangelogDocument?> read = reader.GetDocumentAsync("en");
+
+        // The import runs while the reader is already waiting, then reports — the real sequence.
+        ChangelogRepository repository = new(factory, NoOpCallerContext.Instance);
+        ChangelogSystemContentImporter importer = new(factory, service, repository, NullLogger<ChangelogSystemContentImporter>.Instance);
+        await importer.RefreshAsync();
+        readiness.MarkSucceeded();
+
+        ChangelogDocument? document = await read;
+
+        Assert.IsNotNull(document, "The reader must re-query after the import concludes, not fall back on the first empty result.");
+        Assert.Contains(e => e.Message.Contains("from the database", StringComparison.Ordinal), logger.Entries);
+    }
+
+    /// <summary>A genuinely failed import is the case the JSON fallback exists for — and it says so.</summary>
+    [TestMethod]
+    public async Task GetDocumentAsync_ImportFailed_FallsBackAndWarns()
+    {
+        SqliteConnectionFactory factory = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAlive = new(factory);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        await initializer.InitialiseAsync();
+        ChangelogDocument fallback = new() { Language = "en" };
+
+        ChangelogImportReadiness readiness = new();
+        readiness.MarkFailed();
+
+        JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new ChangelogWithLinesStrategy());
+        RecordingLogger logger = new();
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(fallback), readiness, logger);
 
         ChangelogDocument? document = await reader.GetDocumentAsync("en");
 
         Assert.AreSame(fallback, document);
+        Assert.Contains(e => e.Level == LogLevel.Warning && e.Message.Contains("import failed", StringComparison.Ordinal), logger.Entries);
+    }
+
+    /// <summary>Giving up waiting is reported as its own condition, never as an import failure.</summary>
+    [TestMethod]
+    public async Task GetDocumentAsync_WaitTimesOut_FallsBackWithItsOwnMessage()
+    {
+        SqliteConnectionFactory factory = new(UniqueConnectionString());
+        using ChangelogConnectionKeepAlive keepAlive = new(factory);
+        ChangelogDatabaseInitializer initializer = new(factory, NullLogger<ChangelogDatabaseInitializer>.Instance);
+        await initializer.InitialiseAsync();
+        ChangelogDocument fallback = new() { Language = "en" };
+
+        // Never marked — the import task died without reporting. A short budget keeps the test fast;
+        // the production value is ChangelogImportReadiness.DefaultWaitBudget.
+        ChangelogImportReadiness readiness = new(TimeSpan.FromMilliseconds(50));
+
+        JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new ChangelogWithLinesStrategy());
+        RecordingLogger logger = new();
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(fallback), readiness, logger);
+
+        ChangelogDocument? document = await reader.GetDocumentAsync("en");
+
+        Assert.AreSame(fallback, document);
+        Assert.Contains(e => e.Level == LogLevel.Warning && e.Message.Contains("timed out", StringComparison.Ordinal), logger.Entries);
     }
 
     /// <summary>A missing Changelog_Entry table falls back to the JSON-backed service instead of throwing.</summary>
@@ -150,7 +277,7 @@ public class ChangelogReaderTests
         ChangelogDocument fallback = new() { Language = "en" };
 
         JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new ChangelogWithLinesStrategy());
-        ChangelogReader reader = new(joinRepository, new FakeChangelogService(fallback), NullLogger<ChangelogReader>.Instance);
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(fallback), SucceededImport(), NullLogger<ChangelogReader>.Instance);
 
         ChangelogDocument? document = await reader.GetDocumentAsync("en");
 
@@ -166,7 +293,7 @@ public class ChangelogReaderTests
 
         JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new ChangelogWithLinesStrategy());
         RecordingLogger logger = new();
-        ChangelogReader reader = new(joinRepository, new FakeChangelogService(null), logger);
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(null), SucceededImport(), logger);
 
         await reader.GetDocumentAsync("en");
 
@@ -184,7 +311,7 @@ public class ChangelogReaderTests
         await initializer.InitialiseAsync();
 
         JoinQueryRepository<ChangelogLineRow> joinRepository = new(factory, new BrokenSqlStrategy());
-        ChangelogReader reader = new(joinRepository, new FakeChangelogService(null), NullLogger<ChangelogReader>.Instance);
+        ChangelogReader reader = new(joinRepository, new FakeChangelogService(null), SucceededImport(), NullLogger<ChangelogReader>.Instance);
 
         await Assert.ThrowsExactlyAsync<SqliteException>(() => reader.GetDocumentAsync("en"));
     }

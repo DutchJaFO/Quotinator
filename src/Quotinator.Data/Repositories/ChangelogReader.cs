@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Quotinator.Changelog.Models;
 using Quotinator.Changelog.Services;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Import;
 using Quotinator.Data.Logging;
 using Quotinator.Data.Queries;
 
@@ -12,10 +13,12 @@ namespace Quotinator.Data.Repositories;
 /// <remarks>Initialises the reader with the changelog database's own join repository, the JSON-backed fallback service, and a logger.</remarks>
 /// <param name="joinRepository">Reads every <c>Changelog</c>/<c>ChangelogLine</c> row, flattened (ADR 017 — never a hand-rolled query).</param>
 /// <param name="changelogService">Fallback used when the changelog database's tables don't exist yet or the query otherwise fails.</param>
-/// <param name="logger">Logger for the fallback warning.</param>
+/// <param name="importReadiness">Tells an empty-database read whether the import has concluded, so emptiness is only ever interpreted once it means something.</param>
+/// <param name="logger">Logger stating which source answered each read — the database itself, or whichever fallback condition applied.</param>
 public sealed class ChangelogReader(
     JoinQueryRepository<ChangelogLineRow> joinRepository,
     IChangelogService changelogService,
+    IChangelogImportReadiness importReadiness,
     ILogger<ChangelogReader> logger) : IChangelogReader
 {
     /// <inheritdoc/>
@@ -32,11 +35,49 @@ public sealed class ChangelogReader(
             return changelogService.GetForCulture(culture);
         }
 
-        // An empty database (e.g. the background import hasn't finished yet — #309's Program.cs
-        // wiring deliberately doesn't block startup on it) is the same "not ready" case as a missing
-        // table — fall back rather than returning an empty/null document.
+        // An empty database is ambiguous, and treating it as a failure is what made the JSON fallback
+        // the normal path: #309's Program.cs wiring runs the import detached, so a read arriving during
+        // the startup window sees no rows purely because the import has not written them yet. Falling
+        // back there answers a question nobody has asked. Wait for the import to conclude first, and
+        // only then decide what the emptiness means.
         if (rows.Count == 0)
-            return changelogService.GetForCulture(culture);
+        {
+            ChangelogImportOutcome outcome = await importReadiness.WaitAsync();
+
+            switch (outcome)
+            {
+                case ChangelogImportOutcome.Failed:
+                    logger.LogChangelogImportFailedFallingBackToFile();
+                    return changelogService.GetForCulture(culture);
+
+                case ChangelogImportOutcome.TimedOut:
+                    logger.LogChangelogImportWaitTimedOut();
+                    return changelogService.GetForCulture(culture);
+            }
+
+            // Succeeded — the import wrote whatever there was to write while we waited, so ask again.
+            try
+            {
+                rows = await joinRepository.QueryAsync();
+            }
+            catch (SqliteException ex) when (IsMissingChangelogTable(ex))
+            {
+                logger.LogChangelogTableMissingFallingBackToFile(ex);
+                return changelogService.GetForCulture(culture);
+            }
+        }
+
+        // Still empty after a successful import: the database is authoritative and there is genuinely
+        // nothing to show. A new application has no changelog yet — that is an answer, not a fault, so
+        // it is neither a warning nor a reason to consult the JSON files. About.razor already renders
+        // a null document by omitting the changelog section entirely.
+        if (rows.Count == 0)
+        {
+            logger.LogChangelogDatabaseHasNoEntries();
+            return null;
+        }
+
+        logger.LogChangelogServedFromDatabase(rows.Count);
 
         Dictionary<string, ChangelogDocument> documents = AssembleDocuments(rows);
         string code = Normalise(culture);

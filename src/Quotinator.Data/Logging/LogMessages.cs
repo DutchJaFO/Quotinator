@@ -93,4 +93,29 @@ internal static partial class LogMessages
     /// <summary>Logs that the changelog database's own Changelog_Entry table is missing — falling back to reading its JSON files directly, matching #293's NotificationReader precedent.</summary>
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Changelog - Read] Changelog_Entry table missing — falling back to the JSON-backed changelog service")]
     public static partial void LogChangelogTableMissingFallingBackToFile(this ILogger logger, Exception ex);
+
+    /// <summary>
+    /// Logs that the changelog database itself answered the read. Deliberately a positive statement:
+    /// whether the database or the JSON fallback served a request is otherwise invisible — both render
+    /// an identical page — so verification previously rested on the *absence* of a fallback warning,
+    /// which proves nothing on its own and missed the silent empty-database path entirely.
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Read] served {RowCount} row(s) from the database")]
+    public static partial void LogChangelogServedFromDatabase(this ILogger logger, int rowCount);
+
+    /// <summary>
+    /// Logs that the changelog database holds no entries and the import already concluded successfully.
+    /// Information, deliberately not a warning: a new application legitimately has no changelog yet, so
+    /// this is an answer rather than a fault.
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Read] the database holds no changelog entries")]
+    public static partial void LogChangelogDatabaseHasNoEntries(this ILogger logger);
+
+    /// <summary>Logs that the changelog import itself failed, so the database cannot be trusted to hold current content — falling back to the JSON files.</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Changelog - Read] the changelog import failed — falling back to the JSON-backed changelog service")]
+    public static partial void LogChangelogImportFailedFallingBackToFile(this ILogger logger);
+
+    /// <summary>Logs that a reader gave up waiting for the changelog import to conclude. Kept distinct from an import failure — "we stopped waiting" is not "the import broke".</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Changelog - Read] timed out waiting for the changelog import to finish — falling back to the JSON-backed changelog service")]
+    public static partial void LogChangelogImportWaitTimedOut(this ILogger logger);
 }

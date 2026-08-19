@@ -2150,9 +2150,9 @@ Then confirm the database-backed read path is actually being used, not the fallb
 ```bash
 docker logs qt-changelog 2>&1 | grep -E "Changelog - (Init|Import|Read)"
 ```
-`[Changelog - Import] refreshed 126 entries across 3 language(s)` must appear, and **no**
-`Changelog_Entry table missing — falling back to the JSON-backed changelog service` line may appear at
-any point.
+`[Changelog - Import] refreshed 126 entries across 3 language(s)` must appear, and so must a
+`[Changelog - Read] served N row(s) from the database` line — the positive statement that the database
+itself answered. No `falling back to the JSON-backed changelog service` line may appear at any point.
 
 **The uptime check is the point of this section — do not skip it.** Leave the container running and
 re-read after more than fifteen minutes have elapsed (the original failure appeared at +13 min):
@@ -2161,17 +2161,22 @@ re-read after more than fifteen minutes have elapsed (the original failure appea
 sleep 960
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/about
 curl -s http://localhost:8080/about | grep -oE "Unreleased" | head -1
+docker logs qt-changelog 2>&1 | grep -c "served .* row(s) from the database"
 docker logs qt-changelog 2>&1 | grep -c "falling back to the JSON-backed changelog service"
 ```
 There is deliberately no REST endpoint here — changelog content is surfaced only on the About page
 (`Components/Pages/About.razor`), so that is what must be read. `/about` must return `200` and still
-render changelog content, and the fallback-line count must be **0**. A count of 1 or more means the
-database-backed path died mid-run again — the exact regression this section exists to catch, and one no
-shorter check can see.
+render changelog content, the `served ... from the database` count must have **increased** as a result
+of that request, and the fallback count must be **0**. A database-backed path that died mid-run stops
+producing the first line and starts producing the second — the exact regression this section exists to
+catch, and one no shorter check can see.
 
-Note the fallback-line count is the decisive signal, not the page itself: the About page renders
-correctly either way, because the JSON fallback is doing its job. That is precisely why this defect
-survived a full T2 pass unnoticed.
+**Assert on the positive line, not on the absence of the negative one.** The About page renders
+identically whichever source served it, because the JSON fallback is doing its job — which is why this
+defect survived a full T2 pass unnoticed. An absent fallback warning was originally treated as the
+decisive signal, but absence proves nothing on its own: until this was fixed the empty-database fallback
+logged nothing at all, so a silently-fallen-back read and a healthy one produced identical output. Only
+a positive "the database answered" statement can distinguish them.
 
 Finally, the file must survive a restart with its content intact (it is rebuilt from the bundled JSON at
 every startup, so this confirms the rebuild is idempotent rather than duplicating rows):
