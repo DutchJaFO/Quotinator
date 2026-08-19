@@ -152,6 +152,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#327](https://github.com/DutchJaFO/Quotinator/issues/327) | Smoke tests: prove startup problems degrade rather than crash | Planning | T2 ⬜ | No plan doc yet |
 | [#328](https://github.com/DutchJaFO/Quotinator/issues/328) | Smoke tests: verify bundled imports and endpoint behaviour against a real database | Planning | T2 ⬜ | No plan doc yet |
 | [#329](https://github.com/DutchJaFO/Quotinator/issues/329) | Source refresh: no retry on a marginal connect, and sources download sequentially | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
+| [#330](https://github.com/DutchJaFO/Quotinator/issues/330) | File metadata: sidecar and database record for every file we create or inspect | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
+| [#331](https://github.com/DutchJaFO/Quotinator/issues/331) | Source refresh: conditional requests so an unchanged source is not re-downloaded | Planning | T1 ⬜ T2 ⬜ | No plan doc yet |
 
 #302, #303, and #304 replace an earlier, stale "import diagnostics" issue drafted during this same
 planning pass, before the developer redirected scope — see the Description above. #305–#309 were all
@@ -162,6 +164,10 @@ exposed, #324 is the missing user-facing visibility that made it invisible outsi
 place. #329 came out of #309's own T1 run (2026-08-19), from the same subsystem again: one source's
 connect exhausted its budget while a second path on the *same* host succeeded nine seconds later, on a
 460 Mbps connection — a single marginal connect treated as terminal, with no retry and no parallelism.
+#330 and #331 were filed the same day, out of reviewing #329: a refresh re-downloads byte-identical
+content because nothing records what we already hold (#331), and answering that properly needs a
+per-file record the project has never had (#330). The source-download subsystem has now produced five
+of this milestone's issues — #323, #325, #329, #330, #331 — none of them anticipated when it opened.
 
 ---
 
@@ -239,6 +245,15 @@ connect exhausted its budget while a second path on the *same* host succeeded ni
          reporting — #329 establishes the download statistics #324 becomes the first consumer of;
          #324's plain failure reporting does not need it). Adds the first NuGet dependency this
          milestone takes, Microsoft.Extensions.Http.Resilience
+#330 ─── (none) — independent foundation. Establishes a per-file record (sidecar + Import_FileMetadata
+         row, SHA-256 + MD5, first/last inspection) that the project has never had. References
+         Import_FileResource (#251/#252) rather than extending it: that table is keyed by content
+         version, this one by file identity. Blocks #331, which has nowhere to store HTTP validators
+         without it
+#331 ─── depends on #330 (hard — its ETag/Last-Modified are two more fields in #330's shape, and its
+         staleness rule is #330's reconciliation rule). Reports into #329's statistics but does not
+         depend on it; a 304 still needs the connection #329 makes reliable, so neither reduces the
+         other's problem. Introduces SourceRefreshOutcome.Unchanged, which #324 may choose to surface
 #313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
          this milestone could be trusted, because Api tests asserted before the app finished starting
          (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
@@ -285,13 +300,15 @@ app-version provenance and typed payloads available to render from.
 | 11 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
 | 12 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped |
 | 13 | **#329** | Retry, parallel downloads, and the download statistics #324 below reports on. Placed before #324 because it establishes the statistics that issue becomes the first consumer of — building #324's multi-attempt reporting first means building it twice |
-| 14 | **#324** | Reports a failed source refresh to the user, and — via #329's statistics — a source that needed more than one attempt. Placed after #319 for that rule's own reason: it writes new user-facing text |
-| 15 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
-| 16 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
-| 17 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 18 | **#305** | Independent bug; can slot in anywhere |
-| 19 | **#306** | Independent bug; can slot in anywhere |
-| 20 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
+| 14 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. Independent of everything above it, and #331 below cannot start without it |
+| 15 | **#331** | Conditional requests, storing validators in #330's shape. Lands before #324 so the source-download subsystem is finished before anything reports on it |
+| 16 | **#324** | Reports on the finished source-download subsystem: a failed refresh, a source that needed more than one attempt (#329's statistics), and optionally #331's `Unchanged`. Placed last in this cluster deliberately — reporting on it while #329/#330/#331 are still landing means revising it each time. Still after #319, for that rule's own reason: it writes new user-facing text |
+| 17 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 18 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 19 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 20 | **#305** | Independent bug; can slot in anywhere |
+| 21 | **#306** | Independent bug; can slot in anywhere |
+| 22 | **#308** | **Moved from position 2 to last** (developer direction, 2026-08-15). It was placed early on the reasoning that rendering should precede the producers so their output displays correctly from the start. That was the wrong way round: #308 is not a CSS fix but a design of how *each notification type* is laid out across *both* surfaces — the startup/popup dialogs and the notifications view — and it cannot settle those layouts before the notification types that need them exist. #302/#303/#304 each introduce a producer with its own payload shape; designing their presentation while they are still unwritten means guessing. Landing last also means it can exploit everything #312 made available, including app-version provenance |
 
 **Migration consolidation, at the end of the milestone.** #81, #312, #319 and #304 each add Data-owned
 migrations, and #312 deliberately does not optimise migration count. Per the developer's direction
@@ -302,9 +319,9 @@ migrations, and #312 deliberately does not optimise migration count. Per the dev
 
 ## PR merge plan
 
-All twenty issues are self-contained on top of already-released infrastructure (#278, #80, #154,
+All twenty-two issues are self-contained on top of already-released infrastructure (#278, #80, #154,
 #156) — none leave anything half-wired if merged independently, except #81 (which genuinely cannot
-merge before #309 and #307) and #319 (which cannot merge before #312). Those are real
-implementation-order dependencies, not just sequencing preferences.
+merge before #309 and #307), #319 (which cannot merge before #312) and #331 (which cannot merge before
+#330). Those are real implementation-order dependencies, not just sequencing preferences.
 Default assumption per `process.md`: the branch stays open until all issues in the milestone are done,
 then one PR — no known reason to depart from that default.
