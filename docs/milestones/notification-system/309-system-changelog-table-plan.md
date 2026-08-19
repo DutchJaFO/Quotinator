@@ -1,10 +1,10 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #309 (open)
 **Depends on:** #80 (done, released — Changelog handling milestone)
 
-> **Next action: smoke test 44 at T2 (row 34) — the only outstanding row.** Every live check on this issue has
+> **Every verification row is green (2026-08-19). Waiting for release.** Every live check on this issue has
 > found a further defect underneath the last — steps 14, 16, 17 and 18. The database did not survive
 > process uptime; verification rested on the absence of a message and so proved nothing; the JSON
 > fallback was silently serving the startup read on *every* boot; the refresh was not atomic, so a read
@@ -13,7 +13,8 @@
 > root: the database is populated asynchronously, and each mechanism reading it assumed something
 > different about what an unexpected result meant. Two live runs on 2026-08-19 confirmed the current
 > shape — a fresh database (row 32) and an already-populated one on the upgrade path (row 33), the
-> latter being the exact profile that failed at 22:27. **One row remains: 34, smoke test 44 at T2.**
+> latter being the exact profile that failed at 22:27. Smoke test 44 passed at T2 the same day (row 34),
+> with its sixteen-minute uptime wait removed as untestable — see the note under step 14.
 
 ---
 
@@ -771,9 +772,20 @@ the same append-only rule as `DatabaseInitializer.DataOwnedMigrations`, and its 
 step with it.
 
 **Smoke test:** `docs/smoke-tests.md` section 44, added in the same commit as this fix per that
-document's own living-checklist rule. It checks the file exists on disk, that no JSON-fallback line is
-ever logged, and — the part that actually catches this regression — that the database-backed path is
-still alive after more than fifteen minutes of uptime. No shorter check can see it.
+document's own living-checklist rule. It checks the file exists on disk beside `quotinatordata.db`,
+that a real `/about` request is served from the database, that no JSON-fallback line is ever logged,
+and that a restart finds the schema already present and re-imports without duplicating.
+
+**It originally slept sixteen minutes and re-read, and that wait was removed (developer direction,
+2026-08-19): a smoke test verifies a feature or a reliable behaviour, never a guessed delay.** The
+interval was picked to clear the single observed failure at +13 minutes, but the mechanism behind those
+13 minutes was never established — the fix removed the dependency on a process-local handle rather than
+explaining the timer. An undermined interval proves nothing in either direction: a regression failing at
+40 minutes passes it, and a green run buys confidence it has not earned. What replaces it is
+deterministic and instant — the file-exists check above, plus
+`ChangelogDatabaseWiringTests.ChangelogDatabase_IsNotAnInMemoryDatabase` and
+`.ChangelogDatabase_IsAFileNamedAlongsideTheMainDatabase` asserting the real DI registration through the
+live container (verification row 20).
 
 ### 15. Finding — `docs/smoke-tests.md` defects found while running it
 
@@ -1007,7 +1019,7 @@ the previous shape, returning the stale `0.9.0` where `1.0.0` was expected.
 | 16 | ✅ | The changelog tables carry the `Changelog_` prefix per ADR 015's revision, in the migration, baseline, entities, `Sql.cs` and tests | Unit test | 14/14 changelog tests pass against the renamed schema (2026-08-16); full solution builds 0 Warning(s) 0 Error(s); full suite 3,445 passed |
 | 17 | ✅ | The renamed schema works live: baseline applies, the importer writes, and `/about` reads from the database rather than the JSON fallback | Live (T2) | 2026-08-17 against `quotinator:t2` — see the T2 step above. Decisive evidence is the *absence* of the `falling back` warning, since the page renders either way |
 | 18 | ✅ | Migration applies cleanly from the last released schema | Live (T2) | v1.8.3 → current: `data v3 → v11`, 0 exceptions, `schema is up to date` on restart (ADR 009) |
-| 19 | ✅ | The changelog database survives process uptime | Live (T2) | `docs/smoke-tests.md` section 44. Container with a mapped data dir: `quotinatorchangelog.db` present on disk beside `quotinatordata.db`, `[Changelog - Import] refreshed 126 entries across 3 language(s)`, and after >15 min uptime the endpoint still serves content with a JSON-fallback line count of 0. Previously failed at +13 min with `no such table: Changelog_Entry` and a permanent fallback |
+| 19 | ✅ | The changelog is stored as a file, not an in-memory instance that cannot outlive its handle | Live (T2) | `docs/smoke-tests.md` section 44. `quotinatorchangelog.db` present on disk beside `quotinatordata.db`. Structurally guaranteed rather than waited for — see the note under step 14 on why the original sixteen-minute uptime check was removed |
 | 20 | ✅ | The changelog database is a file, not an in-memory instance | Unit test | `ChangelogDatabaseWiringTests.ChangelogDatabase_IsNotAnInMemoryDatabase` and `.ChangelogDatabase_IsAFileNamedAlongsideTheMainDatabase` — both red against the previous wiring |
 | 21 | ✅ | T1 — `/about` renders correctly from the renamed tables, reading the on-disk changelog database, in Visual Studio | Live (T1) | 2026-08-19, `localhost:44368/about` under Dutch culture: the Wijzigingslog renders the unreleased section and the v1.8.3 release with its quote, and the machine-translation notice. Changelog schema created at baseline, `refreshed 126 entries across 3 language(s)`, `/about` loaded afterwards |
 | 22 | ✅ | A database-backed read states positively that the database served it, rather than being inferred from the absence of a fallback warning | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabasePopulated_LogsThatTheDatabaseServedIt` — red before, since no such line existed |
@@ -1022,7 +1034,7 @@ the previous shape, returning the stale `0.9.0` where `1.0.0` was expected.
 | 31 | ✅ | The read log reports entries, the same unit the importer reports, so the two lines are comparable | Unit test + Live | `LogChangelogServedFromDatabase` emits `served {EntryCount} entries`; smoke test 44 asserts the counts match |
 | 32 | ✅ | Live: the startup read and the import report the same entry count, and the read is ordered after the import | Live (T1) | 2026-08-19 22:45, fresh database: `[Changelog - Init] schema created at baseline`, `refreshed 126 entries`, then `served 126 entries` on every read. No fallback line, no "holds no entries" line. Reversed from 22:27:21, where the read preceded the import |
 | 33 | ✅ | Live: on the fast-startup path that previously got it wrong, the read is ordered after the import | Live (T1) | 2026-08-19 22:46, already-populated main database (`v3 → v11`, no seeding delay — the same profile as 22:27): `refreshed 126 entries` then `served 126 entries`, reversed from 22:27:21. **A log cannot distinguish "waited" from "did not need to wait"** — the read now awaits readiness before querying at all, so correct ordering is structurally guaranteed rather than observed. That distinction is unobservable live by construction; `GetDocumentAsync_PreviousRunsContentStillPresent_…` is the conclusive coverage. This row confirms the guarantee holds in the exact conditions that previously failed |
-| 34 | ⬜ | Smoke test 44's rewritten assertion holds | Live (T2) | `docs/smoke-tests.md` section 44 — re-run needed, since the assertion it now makes did not exist when it was last run |
+| 34 | ✅ | Smoke test 44's rewritten assertions hold | Live (T2) | 2026-08-19 against `quotinator:local`. `quotinatorchangelog.db` (970 KB) on disk beside `quotinatordata.db`; `refreshed 126 entries` then `served 126 entries`, counts matching; `/about` 200 with 43 changelog entries; fallback-line count 0 throughout. After restart: `schema is up to date (v1)` (persisted, not re-baselined), `refreshed 126 entries` (idempotent, not 252), `served 126 entries`, still 0 fallbacks |
 
 ---
 

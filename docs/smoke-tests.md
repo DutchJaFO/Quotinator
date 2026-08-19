@@ -2122,16 +2122,31 @@ docker start qws && sleep 40
 Clean up: `docker rm -f qws && rm -rf /tmp/qws`.
 
 
-## 44. Changelog database survives process uptime (#309)
+## 44. Changelog is served from its own on-disk database (#309)
 
 The changelog database was a shared-cache in-memory instance held open by a dedicated keep-alive
 connection. Found live during #309's own T2 run: thirteen minutes after a clean import of 126 entries,
 every read failed with `no such table: Changelog_Entry` and fell back to the JSON service permanently,
 with no process restart in between. **Nothing was user-visible, because the JSON fallback works exactly
-as designed** — which is why it went unnoticed, and why the decisive signal below is the absence of a
-fallback line in the log, not whether the About page renders.
+as designed** — which is why it went unnoticed.
 
-It is now a file beside the main database. Start a container with a mapped data directory:
+It is now a file beside the main database. What this section verifies is that **file-backed storage is
+what ships and what serves reads** — a feature, checkable immediately.
+
+> **A sixteen-minute wait used to sit in this section, and was removed (developer direction,
+> 2026-08-19).** It slept past the one observed failure at +13 minutes and re-read. The reasoning was
+> that no shorter check could see the defect — but the mechanism behind that 13 minutes was never
+> established, because the fix removed the dependency rather than explaining the timer. An interval with
+> no basis in an understood mechanism tests nothing: it is not derived, so a regression failing at 40
+> minutes would sail past it, and a green result buys confidence it has not earned. **A smoke test
+> verifies a feature or a reliable behaviour, never a guessed delay.** What actually guards this now is
+> deterministic and instant: the file exists on disk (below), and
+> `ChangelogDatabaseWiringTests.ChangelogDatabase_IsNotAnInMemoryDatabase` /
+> `.ChangelogDatabase_IsAFileNamedAlongsideTheMainDatabase` assert the real DI registration is not an
+> in-memory connection string. A file does not evaporate; an in-memory database is caught before it
+> ships.
+
+Start a container with a mapped data directory:
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run -d --name qt-changelog -p 8080:8080 \
@@ -2157,22 +2172,18 @@ deliberately, so `refreshed 126 entries` and `served 126 entries` are directly c
 reporting fewer entries than the import wrote means it was served a partial or stale copy. No
 `falling back to the JSON-backed changelog service` line may appear at any point.
 
-**The uptime check is the point of this section — do not skip it.** Leave the container running and
-re-read after more than fifteen minutes have elapsed (the original failure appeared at +13 min):
+Then confirm a real page request is served from the database, not the fallback:
 
 ```bash
-sleep 960
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/about
-curl -s http://localhost:8080/about | grep -oE "Unreleased" | head -1
-docker logs qt-changelog 2>&1 | grep -c "served .* entries from the database"
+curl -s http://localhost:8080/about | grep -oE "changelog-entry" | wc -l
+docker logs qt-changelog 2>&1 | grep -c "entries from the database"
 docker logs qt-changelog 2>&1 | grep -c "falling back to the JSON-backed changelog service"
 ```
 There is deliberately no REST endpoint here — changelog content is surfaced only on the About page
-(`Components/Pages/About.razor`), so that is what must be read. `/about` must return `200` and still
-render changelog content, the `served ... from the database` count must have **increased** as a result
-of that request, and the fallback count must be **0**. A database-backed path that died mid-run stops
-producing the first line and starts producing the second — the exact regression this section exists to
-catch, and one no shorter check can see.
+(`Components/Pages/About.razor`), so that is what must be read. `/about` must return `200` and render
+changelog entries, the `entries from the database` count must have **increased** as a result of that
+request, and the fallback count must be **0**.
 
 **Assert on the positive line, not on the absence of the negative one.** The About page renders
 identically whichever source served it, because the JSON fallback is doing its job — which is why this
