@@ -23,6 +23,18 @@ public partial class NotificationSummary
     protected override async Task OnInitializedAsync()
     {
         Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
+
+        // #326: same gate, and the same reason, as DatabaseStatsSummary's own (#293). This is a live
+        // query, and NotificationReader only tolerates a missing System_Notification table — a data
+        // directory that cannot be written throws SQLITE_CANTOPEN straight past that catch. Since this
+        // component is embedded in StartupErrorModal, the modal that exists specifically to explain a
+        // failed startup, an ungated query here crashed the whole degraded page it was meant to render.
+        if (!DatabaseHealth.IsHealthy)
+        {
+            Notifications = [];
+            return;
+        }
+
         Notifications = await NotificationReader.GetActiveNotificationsAsync();
     }
 
@@ -32,6 +44,7 @@ public partial class NotificationSummary
 
     [Inject] private I18nTextService I18nText { get; set; } = default!;
     [Inject] private INotificationReader NotificationReader { get; set; } = default!;
+    [Inject] private Quotinator.Api.Startup.DatabaseHealthState DatabaseHealth { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
     private IReadOnlyList<NotificationEntity> Notifications = [];

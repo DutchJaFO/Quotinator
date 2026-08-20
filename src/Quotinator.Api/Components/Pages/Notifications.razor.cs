@@ -36,6 +36,19 @@ public partial class Notifications
     protected override async Task OnInitializedAsync()
     {
         Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
+
+        // #326: this route is exempt from DatabaseHealthGateMiddleware, so it is reachable precisely
+        // when the database is not — and LoadAsync is a live query that throws SQLITE_CANTOPEN past
+        // NotificationReader's missing-table catch when the data directory cannot be written. Rendering
+        // an empty list is the degraded answer; crashing the page is not one. Same gate as
+        // DatabaseStatsSummary (#293) and NotificationSummary.
+        if (!DatabaseHealth.IsHealthy)
+        {
+            AllNotifications = [];
+            Now = DateTime.UtcNow;
+            return;
+        }
+
         await LoadAsync();
     }
 
@@ -45,6 +58,7 @@ public partial class Notifications
 
     [Inject] private I18nTextService I18nText { get; set; } = default!;
     [Inject] private INotificationReader NotificationReader { get; set; } = default!;
+    [Inject] private Quotinator.Api.Startup.DatabaseHealthState DatabaseHealth { get; set; } = default!;
     [Inject] private INotificationWriter NotificationWriter { get; set; } = default!;
     [Inject] private INotificationActionExecutor ActionExecutor { get; set; } = default!;
 

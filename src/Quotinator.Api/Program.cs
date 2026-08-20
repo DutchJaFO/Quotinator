@@ -874,7 +874,29 @@ catch (Exception ex)
 // recovery" rule is precisely about not inferring schema state from thrown exceptions.
 //
 // Still strictly before RecordCurrentAsync below, which is what would overwrite the answer.
-AppVersionRecord? lastActive = await appVersionTracker.GetLastActiveAsync();
+//
+// #326: gated and guarded, matching RecordCurrentAsync immediately below. This was the one statement
+// in the whole post-StartAsync sequence that could still terminate the process: AppVersionTracker
+// catches only "no such table: System_AppVersion", so a data directory that cannot be written threw
+// SQLITE_CANTOPEN straight past it and killed startup before StartupPhaseState.MarkComplete() —
+// taking the degraded UI, /health, the OpenAPI surface and POST /admin/database/reset down with it.
+// A failure here leaves lastActiveVersion null, which the #81 producer below already treats as
+// "nothing to catch up on", and that producer is itself gated on dbHealth.IsHealthy anyway.
+AppVersionRecord? lastActive = null;
+if (dbHealth.IsHealthy)
+{
+    try
+    {
+        lastActive = await appVersionTracker.GetLastActiveAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Server] Failed to read the last active app version — non-fatal, startup continues. " +
+                "The what's-new notification has no catch-up range this startup.");
+    }
+}
+
 string? lastActiveVersion = lastActive?.Version;
 
 // #81: System_AppVersion is meant to always carry the current version once startup is healthy —

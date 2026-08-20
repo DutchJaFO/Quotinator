@@ -88,15 +88,25 @@ public class StartupResilienceTests
             + "POST /api/v1/admin/database/reset would be unreachable too");
     }
 
-    [TestMethod]
-    public async Task Startup_DataDirectoryNotWritable_BlazorPageRendersDegradedUiRatherThan500()
+    /// <summary>
+    /// Every Blazor route `DatabaseHealthGateMiddleware` exempts is, by construction, reachable exactly
+    /// when the database is broken — so each one must render rather than 500. Covering only "/" would
+    /// have missed that the same defect reaches several pages through shared components.
+    /// </summary>
+    [DataTestMethod]
+    [DataRow("/")]
+    [DataRow("/about")]
+    [DataRow("/stats")]
+    [DataRow("/notifications")]
+    [DataRow("/rest-api")]
+    public async Task Startup_DataDirectoryNotWritable_BlazorPageRendersDegradedUiRatherThan500(string route)
     {
         using WebApplicationFactory<Program> factory = FactoryWithUnopenableDatabase();
 
         using HttpClient client = factory.CreateClient();
-        HttpResponseMessage response = await client.GetAsync("/", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync(route, TestContext.CancellationToken);
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "the degraded UI must render, not 500");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, $"{route} must render degraded UI, not 500");
     }
 
     [TestMethod]
