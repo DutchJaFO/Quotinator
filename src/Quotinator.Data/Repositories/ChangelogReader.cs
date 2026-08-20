@@ -68,7 +68,13 @@ public sealed class ChangelogReader(
         // Entries, not rows: `rows` is the LEFT JOIN's own shape — roughly one per changelog *line* —
         // which no reader of the log can reconcile with the importer's "refreshed N entries". Counting
         // entries makes the two lines directly comparable.
-        logger.LogChangelogServedFromDatabase(rows.Select(row => row.ChangelogEntryId).Distinct().Count());
+        //
+        // Guarded because the count is a real traversal of every joined row, and [LoggerMessage]'s own
+        // IsEnabled check happens inside the generated method — the argument is evaluated at the call
+        // site regardless. See docs/logging.md, "A [LoggerMessage] conversion does not, by itself,
+        // defer an expensive argument".
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogChangelogServedFromDatabase(rows.Select(row => row.ChangelogEntryId).Distinct().Count());
 
         Dictionary<string, ChangelogDocument> documents = AssembleDocuments(rows);
         string code = Normalise(culture);
