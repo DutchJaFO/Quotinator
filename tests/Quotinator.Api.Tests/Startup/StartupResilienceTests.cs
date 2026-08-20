@@ -64,9 +64,9 @@ public class StartupResilienceTests
         string body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        StringAssert.Contains(body, "unhealthy", StringComparison.OrdinalIgnoreCase);
-        StringAssert.Contains(
-            body, "data directory", StringComparison.OrdinalIgnoreCase,
+        Assert.Contains("unhealthy", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "data directory", body, StringComparison.OrdinalIgnoreCase,
             "the stated reason must name the data directory and its remedy. The generic reason tells the "
             + "operator to run a database Reset, which also writes and therefore cannot work here");
     }
@@ -93,7 +93,7 @@ public class StartupResilienceTests
     /// when the database is broken — so each one must render rather than 500. Covering only "/" would
     /// have missed that the same defect reaches several pages through shared components.
     /// </summary>
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("/")]
     [DataRow("/about")]
     [DataRow("/stats")]

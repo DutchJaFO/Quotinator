@@ -4,6 +4,7 @@ using Serilog;
 using Serilog.Events;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Data.Sqlite;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.RateLimiting;
@@ -169,7 +170,45 @@ static string? HaFallbackDir()
 string dataDir = builder.Configuration["Quotinator:DataDir"]
     ?? HaFallbackDir()
     ?? Path.Combine(AppContext.BaseDirectory, "data");
-Directory.CreateDirectory(dataDir);
+
+// #326: one cause, one message, wherever it is first noticed — the database failing to open, or a
+// directory failing to be created below. DatabaseHealthState.MarkFailed is first-wins, so whichever
+// gets there first, the operator sees the same actionable text rather than two descriptions of one
+// problem. Deliberately says a Reset cannot help: the generic database-init reason recommends exactly
+// that, and following it here wastes the operator's time on an operation that also writes.
+const string DataDirectoryNotWritableReason =
+    "The data directory cannot be written. This usually means the volume is mounted read-only, or " +
+    "the container user lacks write permission on it. Restore write access to the data directory " +
+    "and restart. A database Reset cannot resolve this — it writes too.";
+
+// Walks the chain because the failure can arrive nested: DatabaseInitializer restores its backup and
+// rethrows on any migration exception, so the SqliteException that actually describes the cause is not
+// always the outermost one.
+static bool IsDataDirectoryNotWritable(Exception? exception)
+{
+    for (Exception? current = exception; current is not null; current = current.InnerException)
+    {
+        // 14 SQLITE_CANTOPEN — the directory cannot be written, so SQLite cannot create the file or
+        // its -shm wal-index. 8 SQLITE_READONLY — the directory is writable but the file is not.
+        if (current is SqliteException sqlite && sqlite.SqliteErrorCode is 14 or 8) return true;
+        if (current is UnauthorizedAccessException or IOException) return true;
+    }
+
+    return false;
+}
+
+// #326: this and the keys/ creation below both run before app.StartAsync(), so an unguarded throw
+// here kills the process before Kestrel binds — no wait page, no /health, no OpenAPI, nothing to tell
+// the operator what happened. Recorded and reported once dbHealth exists rather than thrown.
+string? dataDirectoryFailure = null;
+try
+{
+    Directory.CreateDirectory(dataDir);
+}
+catch (Exception ex) when (IsDataDirectoryNotWritable(ex))
+{
+    dataDirectoryFailure = DataDirectoryNotWritableReason;
+}
 
 // Duplicate-resolution policy from config — lowest-priority tier; a manifest's own
 // duplicateResolution section overrides this when present. Quotinator:DefaultConflictPolicy is a
@@ -230,7 +269,19 @@ string externalDownloadDir = Path.Combine(dataDir, DataPaths.ImportsFolder, Data
 // Persist DataProtection keys to a subdirectory of the data volume so antiforgery tokens
 // and Blazor circuit descriptors survive container restarts and add-on updates.
 string keysDir = Path.Combine(dataDir, DataPaths.DataProtectionFolder);
-Directory.CreateDirectory(keysDir);
+
+// #326: same guard, same reason as the data directory above. PersistKeysToFileSystem stays registered
+// regardless: no ephemeral-key fallback is introduced here (CLAUDE.md's DataProtection rule), so a
+// DataProtection failure surfaces per-request while degraded instead of at startup. Adding a fallback
+// chain for the keys location is #332's, not this issue's.
+try
+{
+    Directory.CreateDirectory(keysDir);
+}
+catch (Exception ex) when (IsDataDirectoryNotWritable(ex))
+{
+    dataDirectoryFailure ??= DataDirectoryNotWritableReason;
+}
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(keysDir));
 
@@ -619,6 +670,16 @@ startupLog.LogStarting();
 // throughout the rest of this section's setup.
 DatabaseHealthState dbHealth = app.Services.GetRequiredService<Quotinator.Api.Startup.DatabaseHealthState>();
 
+// #326: a directory that could not be created back at configuration time, reported at the first moment
+// there is somewhere to report it to. This is before app.StartAsync(), so the degraded state is in
+// place from the very first request rather than racing it.
+if (dataDirectoryFailure is not null)
+{
+    app.Services.GetRequiredService<ILogger<Program>>()
+        .LogWarning("[Config] {Reason:l}", dataDirectoryFailure);
+    dbHealth.MarkFailed(dataDirectoryFailure);
+}
+
 IHostApplicationLifetime lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
 ILogger<Program> logger   = app.Services.GetRequiredService<ILogger<Program>>();
 lifetime.ApplicationStopping.Register(() =>
@@ -840,6 +901,19 @@ catch (DatabaseBackupWriteException ex)
         "by freeing disk space or restoring write access, then restart.";
     startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
     dbHealth.MarkFailed(failureReason);
+}
+// #326: an unwritable data directory is a different fault with a different remedy, and the generic
+// reason below actively misdirects for it — it tells the operator to run a database Reset, which also
+// writes and therefore cannot work here. Measured by scripts/sqlite-storage-probe.csx: an unwritable
+// directory surfaces SQLITE_CANTOPEN (14), a writable directory holding a read-only file surfaces
+// SQLITE_READONLY (8). Matched on SqliteErrorCode, never SqliteExtendedErrorCode — the extended code
+// varies by cause (526 CANTOPEN_ISDIR for a directory at the database path) while the primary code
+// does not.
+catch (Exception ex) when (IsDataDirectoryNotWritable(ex))
+{
+    ILogger<Program> startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    startupLogger.LogStartupDatabaseInitFailed(ex, DataDirectoryNotWritableReason);
+    dbHealth.MarkFailed(DataDirectoryNotWritableReason);
 }
 catch (Exception ex)
 {
