@@ -1,15 +1,14 @@
 # #326 — Startup crashes instead of degrading when the data directory is read-only and a migration is pending
 
-**Status:** Planning
+**Status:** In progress (step 2)
 **GitHub issue:** #326 (open)
 **Depends on:** none
 
-> **Next action: execute step 1 — reproduce the failure in-process and confirm the SQLite error codes.**
-> The design is settled: three developer decisions were taken during planning (targeted guard only, a
-> distinct data-directory failure reason, and folding the pre-Kestrel `keys/` crash into this issue),
-> and the issue body was edited to match. Nothing is waiting on the developer — step 1 answers the one
-> remaining open question, which code the failure actually carries, by observation, and step 4's
-> classification depends on that answer.
+> **Next action: execute step 2 — write the five failing tests and confirm each is genuinely red.**
+> Step 1 measured what the fix has to classify: `SQLITE_CANTOPEN` (14) for an unwritable directory,
+> `SQLITE_READONLY` (8) for a read-only file, and a faithful, ACL-free in-process reproduction for
+> both. It also corrected this plan's own trigger hypothesis — see the Trigger finding — which #327
+> needs before it designs the same scenario.
 
 ---
 
@@ -69,10 +68,20 @@ statement against a directory with identical permissions, and `journal_mode=WAL`
 the SQLite backend was introduced (`git log -S`), so neither run is switching journal mode — it is a
 no-op read in both.
 
-The likelier trigger is the **WAL sidecar state the previous container left behind**: SQLite cannot open
-a WAL database read-only when it must create the `-shm` wal-index, and can when `-wal`/`-shm` were
-checkpointed away on a clean shutdown. That correlates with *which image seeded the volume and how it
-stopped*, not with pending migrations — the two runs differed in both.
+The real trigger is the **WAL sidecar state the previous container left behind** — measured in step 1,
+and the direction is the opposite of what this section originally guessed. SQLite cannot open a WAL
+database from an unwritable directory when it must *create* the `-shm` wal-index, which is exactly the
+state a clean shutdown leaves: `-wal` and `-shm` checkpointed away. When they are still present and
+readable, the same database opens and reads fine. So a volume whose previous container stopped
+*cleanly* fails, and one whose sidecars survived succeeds — which correlates with how the seeding
+container stopped, not with pending migrations.
+
+**What the control run's sidecar state actually was is unknown and was not recorded** — its recipe does
+not state how the seeding container was stopped. Sidecar state is now measured to be the variable that
+decides the outcome, so the control is uncontrolled with respect to it; that is a gap in the
+measurement, not evidence for a particular explanation. Reproducing it with the stop method pinned
+either way is #327's job, and is why #327 must control that variable rather than inherit "migration
+pending" as the precondition.
 
 **This does not change the fix.** Whatever makes SQLite fail, the crash is the unguarded
 `GetLastActiveAsync`, and the guard is the same. It changes two things only:
@@ -81,11 +90,10 @@ stopped*, not with pending migrations — the two runs differed in both.
    assumed to from the recipe. Assert the failure is present (a logged initialisation failure) rather
    than inferring it from the pending-migration framing.
 2. **#327's scenario design.** #327 enumerates "data directory not writable with a migration pending" as
-   a named scenario. If the real precondition is sidecar state, that scenario as written may not
-   reproduce reliably. Carry this finding into #327's plan doc rather than letting it re-derive it.
-
-To be confirmed in step 1 by observation, not argument — the reasoning above is code-grounded but the
-mechanism itself has not been measured.
+   a named scenario. The real precondition is sidecar state, so that scenario as written does not
+   reproduce reliably — it would pass or fail depending on how the container that seeded the volume
+   happened to stop. #327 must control that variable explicitly. Carry this finding into #327's plan
+   doc rather than letting it re-derive it.
 
 ## Scope changes
 
@@ -123,23 +131,39 @@ worth recording (which that document's own living-checklist rule would require a
 
 ### 1. Reproduce the failure in-process and confirm the SQLite error codes
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-Before any test is written, establish two facts by observation:
+Measured 2026-08-20 with a throwaway `dotnet-script` probe against Microsoft.Data.Sqlite 10.0.10,
+mirroring `SqliteConnectionFactory.CreateConnection` (including `temp_store=MEMORY`) and
+`InitialiseAsync`'s opening `PRAGMA journal_mode=WAL`. Windows, directory write blocked via an `icacls`
+deny ACE:
 
-1. **What error code the live failure actually carries.** The issue's trace shows *"SQLite Error 14:
-   'unable to open database file'"*. Confirm whether a write-blocked (rather than open-blocked) database
-   surfaces `SQLITE_READONLY` (8) instead, since step 4's classification keys on the code.
-2. **That an in-process reproduction is faithful.** Point `Quotinator:DataDir` at a temp directory
-   containing a **directory** named `quotinatordata.db`. SQLite then fails to open it, at `EnableWal`,
-   with the same code — the same throw site and the same propagation path as the live container, with no
-   ACL manipulation and identical behaviour on Windows and Linux.
+| Case | `journal_mode=WAL` | `SELECT` | `INSERT` |
+|---|---|---|---|
+| db path is a **directory** | `14` (ext `526`) | — | — |
+| WAL db, sidecars **absent**, directory unwritable | `14` | `14` | `14` |
+| WAL db, sidecars **present**, directory unwritable | OK | OK | — |
+| DELETE-mode db, directory unwritable | `14` | **OK** | — |
+| Writable directory, **file** read-only | `8` | **OK** | `8` |
 
-Also confirm the trigger finding above against the live container (which files exist in the volume in
-each of the two measured runs), so #327 inherits a measured answer rather than a hypothesis.
+Four findings, each of which changes something downstream:
 
-If the reproduction turns out not to carry the same error code, the classification in step 4 changes and
-this step's finding is recorded here before continuing.
+1. **Both codes are real and mean different things.** `14` (`SQLITE_CANTOPEN`) is an unwritable
+   *directory*; `8` (`SQLITE_READONLY`) is a writable directory holding a read-only *file*. Step 4's
+   classification covers both, as planned — this confirms it rather than narrowing it.
+2. **The in-process reproduction is faithful on the primary code.** A directory at the database path
+   produces `14` at the same throw site, with no ACL manipulation and identical behaviour on Windows
+   and Linux. Its extended code differs (`526`, `CANTOPEN_ISDIR`, versus `14` live), so the
+   classification must key on `SqliteErrorCode`, never `SqliteExtendedErrorCode`.
+3. **The trigger is sidecar state, and the opposite way round from this plan's first guess.** Sidecars
+   *absent* fails; sidecars *present* works. See the corrected Trigger finding above.
+4. **A non-WAL database on unwritable storage reads perfectly well.** Only the `journal_mode=WAL`
+   switch fails. This answers the question #332 would otherwise have had to research — read-only
+   operation needs no WAL — and it is why #335's requirement that its generated database not be left
+   in WAL mode is load-bearing rather than housekeeping.
+
+Also confirmed: `Directory.CreateDirectory` over a **file** of the same name throws `IOException`
+deterministically, which is the portable sabotage step 2's `keys/` test needs.
 
 ### 2. Write the five failing tests and confirm each is genuinely red
 
@@ -194,7 +218,9 @@ must not disturb that ordering, and the comment needs a sentence on why the call
 **Status:** ⬜ Not started
 
 Add a `catch (SqliteException ex) when (…)` beside the existing `DatabaseBackupWriteException` catch,
-matching the codes confirmed in step 1 (expected: `SQLITE_CANTOPEN` 14 and `SQLITE_READONLY` 8), setting
+matching the two codes step 1 measured — `SQLITE_CANTOPEN` (14) for an unwritable directory and
+`SQLITE_READONLY` (8) for a read-only file — on `SqliteErrorCode`, never `SqliteExtendedErrorCode`
+(step 1 finding 2: the in-process reproduction's extended code is `526`, the live one's is `14`). Setting
 one shared reason const naming the actual remedy — the data directory cannot be written, the mount is
 read-only or the container user lacks write permission, restore write access and restart — instead of the
 generic "run a Reset" text, which cannot work against a read-only mount.

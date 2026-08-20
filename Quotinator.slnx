@@ -325,6 +325,7 @@
   <Folder Name="/scripts/">
     <File Path="scripts/README.md" />
     <File Path="scripts/changelog.csx" />
+    <File Path="scripts/sqlite-storage-probe.csx" />
     <File Path="scripts/changelog-import.csx" />
     <File Path="scripts/changelog-upgrade.csx" />
     <File Path="scripts/execute-sql.csx" />
