@@ -4,12 +4,12 @@
 **GitHub issue:** #326 (open)
 **Depends on:** none
 
-> **Next action: edit the issue body for the folded scope (Scope changes below), then write the red tests
-> in step 2.** The design is settled — three developer decisions were taken during planning (fix shape,
-> failure-reason classification, and folding the pre-Kestrel `keys/` crash into this issue). Two items
-> need the developer before code: the issue-body edit adding the folded requirement and its two extra
-> tests to the Definition of done, and confirmation of how T2 should establish the failure state given
-> the trigger finding below.
+> **Next action: execute step 1 — reproduce the failure in-process and confirm the SQLite error codes.**
+> The design is settled: three developer decisions were taken during planning (targeted guard only, a
+> distinct data-directory failure reason, and folding the pre-Kestrel `keys/` crash into this issue),
+> and the issue body was edited to match. Nothing is waiting on the developer — step 1 answers the one
+> remaining open question, which code the failure actually carries, by observation, and step 4's
+> classification depends on that answer.
 
 ---
 
@@ -97,9 +97,9 @@ has no existing `keys/` subfolder, the first throws before Kestrel binds — str
 issue's own repro never hits it (its `keys/` already exists from the seeding run), which is why it went
 unnoticed.
 
-This widens #326 beyond its filed body and Definition of done. The issue body needs an edit adding the
-requirement and the two extra tests before implementation starts — drafted for approval, not filed
-silently.
+This widened #326 beyond its filed body and Definition of done, so the issue body was edited to match:
+it now carries the folded requirement as expected behaviour 4, a "Scope added during planning" section,
+and the two extra tests in its Failing tests table.
 
 **Explicitly not in scope.** Rewriting the smoke-test suite around the never-crash guarantee is #327's
 whole subject; this issue touches `docs/smoke-tests.md` only if a T2 pass here surfaces a new command
