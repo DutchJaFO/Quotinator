@@ -294,6 +294,7 @@
     <File Path="docs/milestones/notification-system/323-source-download-connection-stall-plan.md" />
     <File Path="docs/milestones/notification-system/324-source-refresh-failure-notification-plan.md" />
     <File Path="docs/milestones/notification-system/325-address-family-fallback-plan.md" />
+    <File Path="docs/milestones/notification-system/326-startup-degrades-on-unwritable-data-directory-plan.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
