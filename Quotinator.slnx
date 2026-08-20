@@ -95,6 +95,7 @@
     <File Path="docs/database-conventions.md" />
     <File Path="docs/docker.md" />
     <File Path="docs/home-assistant.md" />
+    <File Path="docs/knowledgebase.md" />
     <File Path="docs/localisation.md" />
     <File Path="docs/openapi.md" />
     <File Path="docs/running-locally.md" />

@@ -354,7 +354,11 @@ Three access patterns exist and are handled differently:
 
 **ForwardedHeaders** (`UseForwardedHeaders()`) is always enabled. It reads `X-Forwarded-For` and `X-Forwarded-Proto` from any upstream proxy. `KnownNetworks` and `KnownProxies` are intentionally cleared — homelab deployments use trusted LAN proxies, so restricting by IP is unnecessary overhead. **This must be the first middleware in the pipeline** so that all downstream middleware (cookie Secure flags, rate limiting, antiforgery) sees the correct scheme and client IP.
 
-**DataProtection keys** are persisted to a `keys/` subdirectory within the data directory via `PersistKeysToFileSystem`. This prevents antiforgery token decryption failures and Blazor circuit descriptor mismatches after container restarts. Never revert to `UseEphemeralDataProtectionProvider`.
+**DataProtection keys** are persisted to a `keys/` subdirectory within the data directory via `PersistKeysToFileSystem`. This prevents antiforgery token decryption failures and Blazor circuit descriptor mismatches after container restarts. Do not revert to `UseEphemeralDataProtectionProvider`.
+
+**What that rule actually rests on — read this before treating it as settled.** It entered with commit `63f9a57` (2026-06-14) as a single bullet, *"DataProtection keys persisted to /app/data instead of ephemeral memory"*, in a commit that changed six things at once — and that same commit credits a *different* change (removing `--no-restore` from `dotnet publish`) with the broken Blazor circuit it was fixing. There is no ADR, no issue, and no plan doc behind it. So what is established is that ephemeral keys were changed during an incident, not that they caused one, and **the negative effects of a non-persistent key ring have never been fully explored in this project.** The rule stands as the default because persisting is free and correct where a writable location exists — not because the alternative was measured and found harmful.
+
+Two consequences follow. First, do not cite this rule as a proven constraint or extend it by analogy to cases it does not name; where it genuinely conflicts with a design, say that it is unexamined rather than designing around it as settled. Second, its stated reason is *survival across restarts*, which does not by itself distinguish `UseEphemeralDataProtectionProvider` from a filesystem location that is equally non-persistent (a container temp directory) — so on storage where nothing can persist, the rule does not decide the question. **An ADR will settle this once the read-only-mode work has finished and produced actual evidence** (#332, plus the safe/degraded fallback that follows it); until then it is an open question with a default, not a decision.
 
 **HA add-on data directory:** The HA supervisor mounts its persistent volume at `/data` inside the container (via `map: data:rw` in `addon/config.yaml`). The add-on env var `Quotinator__DataDir=/data` points the app there. The database (`quotinatordata.db`) and DataProtection keys (`keys/`) are written to this directory. Bundled source files are read directly from the Docker image (`/app/data/sources/`) — no file copy to the persistent volume is needed. User imports can be placed in `{dataDir}/imports/` and are imported after the bundled sources.
 
@@ -977,6 +981,18 @@ See [`docs/testing-policy.md`](docs/testing-policy.md).
 See [`docs/logging.md`](docs/logging.md).
 
 Boyscout rule: when you edit any file that emits log lines without the `[Subsystem - Phase]` prefix, add the prefix in the same commit. Do not defer it to a cleanup PR.
+
+### Triaging a warning: ask what it costs before chasing it
+
+**A warning produced by a degraded or deliberately restricted environment is not automatically a defect, and must not be treated as one by default.** The first question about any warning in a log is always the same:
+
+> **Does it prevent the application or the API from functioning?**
+
+If the answer is no, it is information about the environment, not a fault to chase. Say so explicitly and move on. Investigate it further only when there is a concrete reason to — it blocks something real, it is the only evidence for a suspected bug, or the developer asks.
+
+**Why this rule exists:** the app now has states where warnings are the *expected, correct* output — a read-only data directory, a degraded startup, a fallback location in use instead of the preferred one. Every one of those legitimately produces log noise that looks alarming out of context. Treating each line as a lead means spending the session on symptoms of a condition already known and already reported, while the actual question — is anything broken? — goes unasked. It also produces speculative "fixes" for behaviour that was working as designed.
+
+This does not license ignoring warnings. It sets the order: establish impact first, then decide whether the cause is worth pursuing. A warning that *does* block functionality is a defect and gets the full treatment, degraded environment or not. And a warning whose impact you cannot determine is not "harmless by default" — that is an unanswered question, and it should be reported as one rather than resolved by assumption in either direction.
 
 ---
 

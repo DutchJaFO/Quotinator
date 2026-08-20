@@ -259,6 +259,54 @@ Format: `[Subsystem - Phase] message text`
 
 New subsystems must register a prefix in this table before their log lines land in a PR.
 
+### Knowledgebase codes in a log line
+
+A log line describing a condition an operator might need to understand or act on also carries a
+Knowledgebase code, after the prefix and before the message text.
+
+**The code is a message-template property, never concatenated into the string.** Serilog already
+does this job — a named property is captured structurally (queryable in a structured sink, not merely
+greppable) *and* rendered into the text. Building the same string by hand throws the structured half
+away and reinvents what the logger provides:
+
+```csharp
+// Wrong — the code is invisible to any structured sink, and re-typed at every call site
+_logger.LogWarning($"[Database - Init] {KnowledgebaseCodes.DataDirectoryNotWritable}: …");
+
+// Correct — captured as KbCode, rendered literally by the :l specifier
+_logger.LogWarning("[Database - Init] {KbCode:l}: the data directory cannot be written …",
+    KnowledgebaseCodes.DataDirectoryNotWritable);
+
+// With a status code, same treatment
+_logger.LogWarning("[Database - Init] {KbCode:l} {KbStatus:l}: the data directory cannot be written …",
+    KnowledgebaseCodes.DataDirectoryNotWritable, KnowledgebaseStatus.Investigating);
+```
+
+Renders as:
+
+```
+[Database - Init] QTN-DB-014: the data directory cannot be written …
+[Database - Init] QTN-DB-014 QTN-INV: the data directory cannot be written …
+```
+
+The `:l` specifier is required on both, per "Serilog quoting and the `{:l}` specifier" above — without
+it Serilog renders `"QTN-DB-014"` with quotes. Test the rendering with a `CaptureSink` over a real
+`LoggerConfiguration`, not the MEL formatter callback, for the same reason that section gives.
+
+Code values are `const string` in one place and referenced from every surface that reports the
+condition — the log line, the health response, the notification body, the degraded UI — never typed out
+a second time. That is the same rule endpoint names follow (see `CLAUDE.md`'s endpoint naming
+convention), and it is what makes one condition look up identically everywhere.
+
+The `[Subsystem - Phase]` prefix is unaffected; codes are additive and `grep` on either keeps working.
+Which conditions get a code is decided by triage, not by log level — the format, the area list and the
+allocation rules live in [`knowledgebase.md`](knowledgebase.md). Routine Debug output (request, asset)
+never carries one.
+
+This is not the numeric `EventId` convention ruled out below: a code is user-facing text appearing
+identically across every surface the condition reaches, not navigation metadata on a `[LoggerMessage]`
+attribute. See `knowledgebase.md`'s closing section for the full distinction.
+
 ### Example output between the banners
 
 ```

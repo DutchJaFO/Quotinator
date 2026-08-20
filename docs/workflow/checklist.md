@@ -62,6 +62,11 @@ A short flat per-issue index list of plan-doc links at the end is optional but e
 - [ ] The `gh issue create` command itself includes `--label` and `--milestone` — approving the draft
       approves all three (title/body, label, milestone) in one pass, not label/milestone as a
       follow-up round after the issue already exists
+- [ ] **If the issue concerns a condition that has a Knowledgebase entry, add the issue number to that
+      entry** — and if the condition has no entry yet but warrants one (run the triage question in
+      `docs/knowledgebase.md`), create it. This is what keeps a `QTN-INV` status honest: the guard test
+      that no investigating entry points at a closed issue only works if the link was made when the
+      issue was filed. Doing it later means doing it never.
 
 ---
 
