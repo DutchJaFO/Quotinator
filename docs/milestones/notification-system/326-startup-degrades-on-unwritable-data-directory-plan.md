@@ -1,14 +1,14 @@
 # #326 — Startup crashes instead of degrading when the data directory is read-only and a migration is pending
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 3)
 **GitHub issue:** #326 (open)
 **Depends on:** none
 
-> **Next action: execute step 2 — write the five failing tests and confirm each is genuinely red.**
-> Step 1 measured what the fix has to classify: `SQLITE_CANTOPEN` (14) for an unwritable directory,
-> `SQLITE_READONLY` (8) for a read-only file, and a faithful, ACL-free in-process reproduction for
-> both. It also corrected this plan's own trigger hypothesis — see the Trigger finding — which #327
-> needs before it designs the same scenario.
+> **Next action: execute step 3 — guard the one crashing call site.** Five tests are written and
+> confirmed red against unmodified `Program.cs` (step 2). Step 3 is deliberately the *only* change made
+> before re-running them: if guarding `GetLastActiveAsync` alone turns the four data-directory tests
+> green, that identifies the crashing statement by demonstration rather than by elimination. The `keys/`
+> test stays red until step 5.
 
 ---
 
@@ -167,7 +167,34 @@ deterministically, which is the portable sabotage step 2's `keys/` test needs.
 
 ### 2. Write the five failing tests and confirm each is genuinely red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+All five fail against unmodified `Program.cs`, and each fails during host construction rather than as
+an assertion — the shape this step existed to confirm. The two failure modes differ, and both are the
+ones the plan predicted:
+
+- **The `keys/` test** throws `IOException` straight out of `Program.cs:233`, before `app.StartAsync()`,
+  with `WebApplicationFactory.CreateHost` at the top of the stack. Nothing binds; there is no wait page,
+  no `/health`, no OpenAPI. This is the folded scope, reproduced.
+- **The four data-directory tests** fail as #313's `TimeoutException` after 30 s: startup never reaches
+  `StartupPhaseState.MarkComplete`, so the factory refuses to hand out a client. The unhandled
+  exception itself is not logged, because it propagates out of `Main` and the host thread dies
+  silently under `WebApplicationFactory`.
+
+The log up to that point is the positive evidence, and it establishes two things:
+
+1. **The guarded catch works.** `InitialiseAsync` fails with `SQLite Error 14` — at `OpenAsync`
+   (`DatabaseInitializer.cs:396`) rather than `EnableWal`, since a directory at the database path fails
+   the open itself — and is caught and logged. `dbHealth.MarkFailed` therefore ran.
+2. **The reason it logs is the wrong advice, observed rather than argued.** The live line is
+   *"…Resolve with an explicit database Reset (POST /api/v1/admin/database/reset)…"*, which writes and
+   so cannot work against unwritable storage. Step 4 is justified by this observation.
+
+After that line the log stops: no `Ready` banner, no `MarkComplete`. Between the catch at
+`Program.cs:854` and `MarkComplete` at `Program.cs:1038` there is exactly one unguarded statement — the
+`GetLastActiveAsync` at line 877 that the live stack trace named. Its identity is proved by step 3
+rather than by this step: guarding that one call, and changing nothing else, is what must turn these
+tests green.
 
 New file `tests/Quotinator.Api.Tests/Startup/StartupResilienceTests.cs`, following
 `ProgramNotificationSeedingRegressionTests`' `QuotinatorWebApplicationFactory` +
@@ -311,7 +338,7 @@ doc added to `Quotinator.slnx`. Doc updates commit separately from the code, per
 | 5 | ❌ | The documented recovery route stays reachable while degraded | Unit test | Same test as row 4 — the admin surface is not answered with the gate's `unavailable` payload |
 | 6 | ❌ | Blazor pages render degraded UI rather than 500 | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_BlazorPageRendersDegradedUiRatherThan500` — `GET /` → 200 |
 | 7 | ❌ | An uncreatable `keys/` directory degrades instead of crashing before Kestrel binds | Unit test | `StartupResilienceTests.Startup_KeysDirectoryCannotBeCreated_StartsDegradedInsteadOfCrashingBeforeKestrelBinds` |
-| 8 | ❌ | Every test above is genuinely red before the fix | Live | Run the new test class against unmodified `Program.cs`; each fails during host construction with the unhandled `SqliteException`, not as an assertion failure |
+| 8 | ✅ | Every test above is genuinely red before the fix | Live | `dotnet test tests/Quotinator.Api.Tests --configuration Release --filter "FullyQualifiedName~StartupResilienceTests"` against unmodified `Program.cs` → `Failed: 5, Passed: 0`, each failing during host construction (`IOException` at `Program.cs:233` for the `keys/` case; #313's `TimeoutException` for the other four), never as an assertion failure |
 | 9 | ❌ | No regression | Live | `dotnet build --configuration Release` → `0 Warning(s) 0 Error(s)`; `dotnet test --configuration Release --verbosity normal -m:1` → all pass |
 | 10 | ❌ | T2 — the issue's repro degrades instead of crashing | Live | Issue #326's repro commands → `running exit=0`; `curl -s -o /dev/null -w "%{http_code}" …/api/v1/health` → `503`; `…/openapi/v1.json` → `200`; `docker logs … \| grep -c "Unhandled exception"` → `0`; and the initialisation-failure log line is present, proving the failure state was actually reached |
 | 11 | ❌ | T2 negative control — a read-only mount that works today still works | Live | Issue #326's control setup → `running exit=0` and `/api/v1/health` → `200` `{"status":"healthy"}`, proving the fix did not degrade a healthy shape |
