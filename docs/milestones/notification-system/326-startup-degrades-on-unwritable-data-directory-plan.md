@@ -1,14 +1,13 @@
 # #326 — Startup crashes instead of degrading when the data directory is read-only and a migration is pending
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 8)
 **GitHub issue:** #326 (open)
 **Depends on:** none
 
-> **Next action: execute step 5 — classify an unwritable data directory into its own failure reason.**
-> Steps 3 and 4 are done and 7 of 9 test cases are green. The crash is gone, and every Blazor route
-> reachable while degraded now renders. The two remaining red cases belong to steps 5 (the health
-> reason must name the data directory rather than advising a Reset) and 6 (the pre-Kestrel `keys/`
-> crash).
+> **Next action: T1 (step 8) — the developer's own Visual Studio pass.** All code is written and every
+> unit-testable requirement is green: 9 of 9 in this issue's own class, 3,473 of 3,473 across the
+> solution, 0 warnings. Only the three live rows remain — T1, and T2's repro plus its negative control —
+> and T1 is the developer's action to perform, not something this assistant can substitute for.
 
 ---
 
@@ -282,7 +281,17 @@ fixes what it can reproduce.
 
 ### 5. Classify an unwritable data directory into its own failure reason
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+`catch (Exception ex) when (IsDataDirectoryNotWritable(ex))` sits ahead of the generic catch, and the
+classifier walks the inner-exception chain — `DatabaseInitializer` restores its backup and rethrows on
+any migration exception, so the `SqliteException` describing the cause is not reliably the outermost
+one. It matches `SqliteErrorCode` 14 or 8, never the extended code (step 1, finding 2), plus
+`UnauthorizedAccessException`/`IOException` for step 6's directory failures.
+
+The reason names the cause and the remedy, and heads off the wrong advice explicitly: *"A database
+Reset cannot resolve this — it writes too."* That sentence exists because the generic reason recommends
+exactly that, and step 2 observed it being logged against storage where it cannot work.
 
 Add a `catch (SqliteException ex) when (…)` beside the existing `DatabaseBackupWriteException` catch,
 matching the two codes step 1 measured — `SQLITE_CANTOPEN` (14) for an unwritable directory and
@@ -300,7 +309,16 @@ statement noticed it first.
 
 ### 6. Stop the two pre-Kestrel directory creations from terminating the process
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Both `Directory.CreateDirectory` calls record the failure into a local instead of throwing, and it is
+reported the moment there is somewhere to report it to — immediately after `dbHealth` is resolved and
+still before `app.StartAsync()`, so the degraded state is in place from the first request rather than
+racing it. `MarkFailed` is first-wins, and both this and step 5 pass the same const, so one cause
+produces one message regardless of which noticed it first.
+
+`PersistKeysToFileSystem(keysDir)` stays registered exactly as it was. No ephemeral-key fallback is
+introduced here; a keys-location fallback chain is #332's scope.
 
 Wrap `Directory.CreateDirectory(dataDir)` and `Directory.CreateDirectory(keysDir)` so neither can
 terminate the process, capturing the failure in a local. After `dbHealth` is resolved (`Program.cs:620`)
@@ -325,7 +343,24 @@ message's *why*.
 
 ### 7. Full suite and regression check
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+`dotnet build --configuration Release` → `0 Warning(s) 0 Error(s)`.
+`dotnet test --configuration Release --verbosity normal -m:1` → **3,473 passed, 0 failed**, across all
+ten test projects.
+
+Two warnings had to be cleared to get there, neither deferred:
+
+- **`CA1873` in `ChangelogReader.cs:71`** — pre-existing, from #309 on this branch, and exactly the case
+  `docs/logging.md` documents: `[LoggerMessage]`'s own `IsEnabled` check happens inside the generated
+  method, so a `Distinct().Count()` over every joined row is evaluated at the call site regardless.
+  Guarded with an explicit `IsEnabled`, and committed separately attributed to #309 rather than folded
+  into this issue's diff.
+- **`MSTEST0046`/`MSTEST0044` in this issue's own new test file** — `StringAssert.Contains` and
+  `[DataTestMethod]` are both superseded. Fixed in place.
+
+The large `Quotinator.Api.Tests` body that asserts `{"status":"healthy"}` is unaffected: step 6's new
+path to `MarkFailed` only fires when a directory genuinely cannot be created.
 
 `dotnet build --configuration Release` (0 warnings) and
 `dotnet test --configuration Release --verbosity normal -m:1`. Particular attention to the large body of
@@ -372,14 +407,14 @@ doc added to `Quotinator.slnx`. Doc updates commit separately from the code, per
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | Startup does not terminate the process when the database cannot be opened | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_EntersDegradedStateInsteadOfCrashing` |
-| 2 | ❌ | `/health` reports unhealthy rather than being unreachable | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_HealthReportsUnhealthyRatherThanBeingUnreachable` — 503 with `"status":"unhealthy"` |
-| 3 | ❌ | The stated reason names the data directory and its remedy, not a database Reset | Unit test | Same test as row 2 — asserts the reason text, not merely the status code |
+| 2 | ✅ | `/health` reports unhealthy rather than being unreachable | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_HealthReportsUnhealthyRatherThanBeingUnreachable` — 503 with `"status":"unhealthy"` |
+| 3 | ✅ | The stated reason names the data directory and its remedy, not a database Reset | Unit test | Same test as row 2 — asserts the reason text, not merely the status code |
 | 4 | ✅ | The OpenAPI surface stays reachable while degraded | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_OpenApiRemainsReachableForRecovery` — `GET /openapi/v1.json` → 200 |
 | 5 | ✅ | The documented recovery route stays reachable while degraded | Unit test | Same test as row 4 — the admin surface is not answered with the gate's `unavailable` payload |
 | 6 | ✅ | Blazor pages render degraded UI rather than 500 | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_BlazorPageRendersDegradedUiRatherThan500`, one case per gate-exempt route — `/`, `/about`, `/stats`, `/notifications`, `/rest-api` all → 200 |
-| 7 | ❌ | An uncreatable `keys/` directory degrades instead of crashing before Kestrel binds | Unit test | `StartupResilienceTests.Startup_KeysDirectoryCannotBeCreated_StartsDegradedInsteadOfCrashingBeforeKestrelBinds` |
+| 7 | ✅ | An uncreatable `keys/` directory degrades instead of crashing before Kestrel binds | Unit test | `StartupResilienceTests.Startup_KeysDirectoryCannotBeCreated_StartsDegradedInsteadOfCrashingBeforeKestrelBinds` |
 | 8 | ✅ | Every test above is genuinely red before the fix | Live | `dotnet test tests/Quotinator.Api.Tests --configuration Release --filter "FullyQualifiedName~StartupResilienceTests"` against unmodified `Program.cs` → `Failed: 5, Passed: 0`, each failing during host construction (`IOException` at `Program.cs:233` for the `keys/` case; #313's `TimeoutException` for the other four), never as an assertion failure |
-| 9 | ❌ | No regression | Live | `dotnet build --configuration Release` → `0 Warning(s) 0 Error(s)`; `dotnet test --configuration Release --verbosity normal -m:1` → all pass |
+| 9 | ✅ | No regression | Live | `dotnet build --configuration Release` → `0 Warning(s) 0 Error(s)`; `dotnet test --configuration Release --verbosity normal -m:1` → `3,473 passed, 0 failed` across all ten test projects |
 | 10 | ❌ | T2 — the issue's repro degrades instead of crashing | Live | Issue #326's repro commands → `running exit=0`; `curl -s -o /dev/null -w "%{http_code}" …/api/v1/health` → `503`; `…/openapi/v1.json` → `200`; `docker logs … \| grep -c "Unhandled exception"` → `0`; and the initialisation-failure log line is present, proving the failure state was actually reached |
 | 11 | ❌ | T2 negative control — a read-only mount that works today still works | Live | Issue #326's control setup → `running exit=0` and `/api/v1/health` → `200` `{"status":"healthy"}`, proving the fix did not degrade a healthy shape |
 | 12 | ❌ | T1 — Visual Studio pass | Live | Developer-run against a non-fresh dev database; app starts, Blazor UI loads, `/api/v1/health` → 200 healthy |
