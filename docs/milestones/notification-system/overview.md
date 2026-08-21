@@ -233,16 +233,18 @@ of this milestone's issues — #323, #325, #329, #330, #331 — none of them ant
 #326 ─── (none) — independent bug, found while re-checking the smoke tests. Violates the never-crash
          rule: a read-only data directory plus a pending migration exits the process instead of
          degrading. Blocks #327, whose degradation scenarios include this one
-#327 ─── depends on #326 (hard — one of its scenarios asserts the contract #326 currently breaks, so
-         the section cannot go green until that fix lands). Replaces the obsolete #293 reproduction,
-         whose --read-only technique #294 made survivable
+#327 ─── depended on #326, which is now done, so it is unblocked. Replaces the obsolete #293
+         reproduction, whose --read-only technique #294 made survivable. Inherits a corrected premise:
+         #326 measured that WAL sidecar state, not a pending migration, decides whether a read-only
+         mount degrades — so #327's named scenario must pin how the seeding container is stopped or it
+         reproduces only by luck
 #328 ─── (none) — covers two guarantees no unit test can reach: bundled content imports cleanly, and
          endpoints behave correctly against a real database rather than the stubs the endpoint tests
          deliberately use
 #329 ─── depends on #323 and #325 only in that it revises their arrangement, not in build order: it
-         revisits the ConnectTimeout #323 added and #325 raised to 60s, which is now the whole of the
-         download's resilience and is expected to be tuned alongside the retry. #325's connector is no
-         longer in the download path, so nothing runs per attempt. Blocks #324 (hard for its multi-attempt
+         revisits the ConnectTimeout #323 added and #325 raised to 60s, which is now the ENTIRE
+         resilience of the download path — there is no retry and no connector behind it. Moved from
+         13 to 11 on 2026-08-21 for that reason. Blocks #324 (hard for its multi-attempt
          reporting — #329 establishes the download statistics #324 becomes the first consumer of;
          #324's plain failure reporting does not need it). Adds the first NuGet dependency this
          milestone takes, Microsoft.Extensions.Http.Resilience
@@ -286,6 +288,20 @@ notifications view — and the remaining producers each bring a type with its ow
 those layouts before the types exist is guessing. It also gains from landing last, since #312 made
 app-version provenance and typed payloads available to render from.
 
+**Revised 2026-08-21**, after #326's implementation and #325's revert. Two of the changes are
+corrections rather than decisions: #326 is done, and the dependency map's description of #329 had
+become false — it said #329 would remove #323's `ConnectTimeout` and leave #325's connector running per
+attempt, and neither is true now that the connector is gone and the timeout is the download path's only
+protection.
+
+The one real decision was **#329, moved from 13 to 11**. The revert left source downloads with no retry
+and a connect budget raised to 60 s as an acknowledged stopgap, while #326's T2 showed the failures it
+guards against are intermittent rather than persistent. It was placed *after* #327 and #328 rather than
+ahead of them (developer direction): those two close the verification gap that let #326's crash ship
+unnoticed, and an unverified never-crash guarantee is the more expensive thing to leave open than a
+stopgap that is currently holding. #330 and #331 were reviewed and left where they are — nothing this
+session touched file metadata or conditional requests.
+
 | Order | Issue | Reason |
 |-------|-------|--------|
 | 1 | **#313** ✅ | Done. Api tests were asserting before startup completed — measured at 5 of 5 runs, so every verification in this milestone was untrustworthy until it landed. Had to come first for that reason, not because of any dependency |
@@ -295,15 +311,15 @@ app-version provenance and typed payloads available to render from.
 | 5 | **#81** ✅ | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
 | 6 | **#83** ✅ | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
 | 7 | **#309** ✅ | Done. T1 confirmed live (2026-08-19) surfaced four further defects — all fixed and verified; see steps 14–18 in its plan doc. T2 green the same day. Next: **#326** |
-| 8 | **#326** | Violates the never-crash rule; blocks #327's degradation scenarios, so it lands before them |
-| 9 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature; needs #326 fixed to go green |
+| 8 | **#326** ✅ | Done, `Waiting for release`. All 12 verification rows green including T1 and a T2 controlled pair. It also corrected its own premise, which #327 inherits: sidecar state decides whether a read-only mount degrades, **not** a pending migration |
+| 9 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. #326 is done, so it is unblocked. Must pin the WAL sidecar state explicitly — its named scenario does not reproduce reliably otherwise, and #326's plan doc carries the measurement |
 | 10 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above |
-| 11 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
-| 12 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped |
-| 13 | **#329** | Retry, parallel downloads, and the download statistics #324 below reports on. Placed before #324 because it establishes the statistics that issue becomes the first consumer of — building #324's multi-attempt reporting first means building it twice |
+| 11 | **#329** | **Moved from 13 to 11 (developer direction, 2026-08-21).** #325's revert left the download path with no retry at all, and its only protection is a connect budget raised from 10 s to 60 s as an explicit stopgap — `SourceCacheUpdater`'s own docs say #329 is expected to tune it. #326's T2 showed both sources failing and then answering in ~300 ms six minutes later, which is exactly the intermittency retry addresses. Placed after the two smoke-test issues rather than ahead of them: they close the verification gap that let #326 ship undetected, and that gap is the more expensive one to leave open. Still before #324, which consumes its statistics |
+| 12 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
+| 13 | **#319** | Translated title/body. Placed here (developer direction, 2026-08-16) because every producer below writes new user-facing text: building them against the untranslated shape means writing each one twice. Also migrates the three producers already shipped. Does not constrain #329 above, which writes no user-facing text |
 | 14 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. Independent of everything above it, and #331 below cannot start without it |
 | 15 | **#331** | Conditional requests, storing validators in #330's shape. Lands before #324 so the source-download subsystem is finished before anything reports on it |
-| 16 | **#324** | Reports on the finished source-download subsystem: a failed refresh, a source that needed more than one attempt (#329's statistics), and optionally #331's `Unchanged`. Placed last in this cluster deliberately — reporting on it while #329/#330/#331 are still landing means revising it each time. Still after #319, for that rule's own reason: it writes new user-facing text |
+| 16 | **#324** | Reports on the finished source-download subsystem: a failed refresh, a source that needed more than one attempt (#329's statistics), and optionally #331's `Unchanged`. Placed last in this cluster deliberately — reporting on it while #329/#330/#331 are still landing means revising it each time. Still after #319, for that rule's own reason: it writes new user-facing text. It ships **without** a diagnostic code: the Knowledgebase (#333) is v1.9.0, i.e. after this milestone, and retrofits codes onto every message that predates it — the same sequencing #326 already follows |
 | 17 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
 | 18 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
 | 19 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
