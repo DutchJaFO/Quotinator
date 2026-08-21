@@ -73,6 +73,27 @@ Routine Debug output — request logs, asset logs — never gets a code. **A cod
 it up produces an answer**, so allocating one for a line nobody would ever look up devalues every other
 code.
 
+### Bootstrapping: where the first entries come from
+
+Read on its own, the rule above cannot be satisfied the first time. A code needs an entry; an entry is
+written for a condition worth a code; with neither in existence, nothing ever starts. That circularity
+is real and it is resolved by direction of travel rather than by an exception:
+
+**Entries are derived from what the application already says, not invented alongside code assignment.**
+The initial content comes from a one-time sweep of every message the application emits — every
+`[LoggerMessage]` definition and every direct `logger.Log*` call site, plus the health-state failure
+reasons and the notification bodies — each run through the triage question, with the answer recorded as
+the entry's own field. Codes are allocated afterwards, to entries that already exist.
+
+That sweep is a step of its own, not a side effect of writing the first entry, because the population
+has to be enumerated mechanically: working from the messages someone happens to remember produces
+exactly the gap this document exists to close. It also has a finding of its own worth keeping — **a
+message nobody can write an entry for is a message that does not say enough**, and that is a defect in
+the message rather than a reason to invent an explanation for it.
+
+After the sweep, steady state applies: a new condition gets its entry when the code is allocated, at
+the point the message is written.
+
 ---
 
 ## Status codes
