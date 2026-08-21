@@ -20,8 +20,15 @@ public sealed class SourceCacheUpdater(
     /// a cold HttpClient's first request (fresh DNS + TCP + TLS) can legitimately exceed 5 s even against a
     /// healthy endpoint, which was tripping the fallback path more often than a genuinely unreachable upstream
     /// warranted.
+    /// <para>
+    /// 90 s (raised from 30 s, 2026-08-20) to stay above <see cref="DefaultConnectTimeoutSeconds"/>. If the
+    /// request budget were at or below the connect budget, the request would cancel first and the connect
+    /// budget would never apply — reintroducing exactly the defect #323 fixed, where a stalled connect was
+    /// bounded by whichever request happened to be waiting on it. The margin above connect is what covers
+    /// the transfer itself.
+    /// </para>
     /// </summary>
-    public const int DefaultHttpTimeoutSeconds = 30;
+    public const int DefaultHttpTimeoutSeconds = 90;
 
     /// <summary>
     /// Default connect budget in seconds for <see cref="HttpClientName"/>'s primary handler, used when
@@ -35,12 +42,20 @@ public sealed class SourceCacheUpdater(
     /// waiting on a connection that was never established, adding ~70 s to startup.
     /// </para>
     /// <para>
-    /// 10 s is deliberately well under <see cref="DefaultHttpTimeoutSeconds"/>: the request budget has
-    /// to cover connect *plus* transfer, so a connect budget at parity would leave nothing for the
-    /// download itself.
+    /// Kept deliberately under <see cref="DefaultHttpTimeoutSeconds"/>: the request budget has to cover
+    /// connect *plus* transfer, so a connect budget at parity would leave nothing for the download
+    /// itself. That relationship is the invariant — the specific numbers are not.
+    /// </para>
+    /// <para>
+    /// 60 s (raised from 10 s, 2026-08-20). The original 10 s was chosen only as a safe finite value
+    /// when the real defect was an infinite budget; it was never measured as correct. Raising it costs
+    /// nothing user-visible — a refresh that is still connecting happens behind the startup wait page
+    /// (#280), which already tells the user work is in progress — while a marginal or slow link now has
+    /// a realistic chance of completing instead of being abandoned. Retry behaviour is #329's, and
+    /// these values are expected to be tuned alongside it once that lands.
     /// </para>
     /// </summary>
-    public const int DefaultConnectTimeoutSeconds = 10;
+    public const int DefaultConnectTimeoutSeconds = 60;
 
     /// <summary>
     /// Default pooled-connection lifetime in minutes for <see cref="HttpClientName"/>'s primary handler
