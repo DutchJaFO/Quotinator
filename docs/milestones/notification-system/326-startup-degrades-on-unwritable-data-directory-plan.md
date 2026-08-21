@@ -1,14 +1,14 @@
 # #326 — Startup crashes instead of degrading when the data directory is read-only and a migration is pending
 
-**Status:** In progress (step 9)
+**Status:** Waiting for release
 **GitHub issue:** #326 (open)
 **Depends on:** none
 
-> **Next action: T2 (step 9) — the Docker pass, rows 10 and 11.** Everything else is green: 9 of 9 in
-> this issue's own class, 3,475 of 3,475 across the solution, 0 warnings, and T1 confirmed live on
-> 2026-08-21 against a database with 8 pending migrations. T2 is the only tier that can reach the
-> degraded path this issue exists for, and its setup must pin the WAL sidecar state explicitly rather
-> than run the issue's recipe verbatim — step 1 measured that as the deciding variable.
+> **Next action: step 10 — the changelog entries.** Every verification row is ✅: 9 of 9 in this
+> issue's own class, 3,475 of 3,475 across the solution at 0 warnings, T1 live on a database with 8
+> pending migrations, and T2 live as a controlled pair proving both that the degraded path works and
+> that a working read-only mount was not broken by the fix. What remains is release paperwork — the
+> changelog entries in all three languages, and step 11's tick of the issue's own Definition of done.
 
 ---
 
@@ -407,10 +407,33 @@ new quotes (unresolved, not chased — see step 11).
 
 ### 9. T2 — Docker pass
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-The issue's own repro, plus its control as a negative control (see verification rows 10 and 11). Run per
-`docs/smoke-tests.md`, on a dedicated volume, never a dev or shared database.
+Run 2026-08-21 on dedicated throwaway volumes, removed afterward — never a dev or shared database.
+
+**The setup deviates from the issue's recipe deliberately, and this is the point of the step.** The
+issue seeds with `1.8.2` to create a pending migration and never states how the seeding container is
+stopped. Step 1 measured that the pending migration is irrelevant and the *sidecar state* decides the
+outcome, so running the recipe verbatim would have produced whichever result the stop method happened
+to cause. Both runs here therefore use the same image, with no migration pending in either, and differ
+in exactly one variable:
+
+| | Seeding container stopped | `-wal`/`-shm` in volume | Result |
+|---|---|---|---|
+| Row 10 | `docker stop -t 30` (clean, checkpoints) | absent | **degraded** |
+| Row 11 | `docker kill` (abrupt) | present | **healthy** |
+
+That is a controlled pair, and it reproduces step 1's in-process finding in a real container: sidecar
+presence decides whether SQLite can open the database from a read-only mount. #327 must pin this
+variable rather than inherit "migration pending" as the precondition.
+
+Two things worth carrying beyond the row assertions:
+
+- **The reason served is the classified one**, not the generic "run a Reset" text — step 5 proven
+  against a real read-only mount rather than only in-process.
+- **The control's only warnings are the changelog import failing its write and falling back to JSON.**
+  That is #309's designed behaviour, and by `CLAUDE.md`'s triage rule it is information rather than a
+  fault: health and quotes both answer `200`.
 
 ### 10. Changelog entries
 
@@ -444,6 +467,6 @@ doc added to `Quotinator.slnx`. Doc updates commit separately from the code, per
 | 7 | ✅ | An uncreatable `keys/` directory degrades instead of crashing before Kestrel binds | Unit test | `StartupResilienceTests.Startup_KeysDirectoryCannotBeCreated_StartsDegradedInsteadOfCrashingBeforeKestrelBinds` |
 | 8 | ✅ | Every test above is genuinely red before the fix | Live | `dotnet test tests/Quotinator.Api.Tests --configuration Release --filter "FullyQualifiedName~StartupResilienceTests"` against unmodified `Program.cs` → `Failed: 5, Passed: 0`, each failing during host construction (`IOException` at `Program.cs:233` for the `keys/` case; #313's `TimeoutException` for the other four), never as an assertion failure |
 | 9 | ✅ | No regression | Live | `dotnet build --configuration Release` → `0 Warning(s) 0 Error(s)`; `dotnet test --configuration Release --verbosity normal -m:1` → `3,475 passed, 0 failed` across all ten test projects (re-run 2026-08-20 after #325's revert) |
-| 10 | ❌ | T2 — the issue's repro degrades instead of crashing | Live | Issue #326's repro commands → `running exit=0`; `curl -s -o /dev/null -w "%{http_code}" …/api/v1/health` → `503`; `…/openapi/v1.json` → `200`; `docker logs … \| grep -c "Unhandled exception"` → `0`; and the initialisation-failure log line is present, proving the failure state was actually reached |
-| 11 | ❌ | T2 negative control — a read-only mount that works today still works | Live | Issue #326's control setup → `running exit=0` and `/api/v1/health` → `200` `{"status":"healthy"}`, proving the fix did not degrade a healthy shape |
+| 10 | ✅ | T2 — an unwritable data directory degrades instead of crashing | Live | 2026-08-21, volume seeded then stopped with `docker stop -t 30` (sidecars checkpointed away, verified absent), remounted `:ro` → `running exit=0`; `/api/v1/health` → `503` with the data-directory reason; `/openapi/v1.json` → `200`; `/`, `/stats`, `/notifications` → `200`; `/api/v1/quotes/random` → `503` (correctly gated); `grep -c "Unhandled exception"` → `0`; the `LogStartupDatabaseInitFailed` line and the ready banner both present |
+| 11 | ✅ | T2 negative control — a read-only mount that works still works | Live | 2026-08-21, same image, volume stopped with `docker kill` (sidecars verified present), remounted `:ro` → `running exit=0`, `/api/v1/health` → `200` `{"status":"healthy"}`, `/api/v1/quotes/random` → `200`, `grep -c "Unhandled exception"` → `0` |
 | 12 | ✅ | T1 — Visual Studio pass | Live | Developer-run 2026-08-21 against a non-fresh dev database (`applying 8 pending Data migration(s) (version 3 → 11)`); app starts and reaches the ready banner, `GET /api/v1/health` → `200 OK` `{"status":"healthy"}`, Blazor UI renders with styling intact (screenshot) |
