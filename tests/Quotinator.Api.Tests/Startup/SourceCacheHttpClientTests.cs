@@ -60,16 +60,30 @@ public class SourceCacheHttpClientTests
         Assert.AreEqual(TimeSpan.FromSeconds(3), handler.ConnectTimeout);
     }
 
+    /// <summary>
+    /// The inverse of what this test once asserted, and deliberately so. #325 wired a custom
+    /// <see cref="SocketsHttpHandler.ConnectCallback"/> that raced the two address families; it was
+    /// reverted as disproportionate to what it protected. A manifest entry is a plain download link —
+    /// an ordinary URI or an IP-based one — and the default handler resolves and connects it.
+    /// <para>
+    /// Kept as a guard rather than deleted: taking over connection establishment is an easy thing to
+    /// reach for again the next time a download misbehaves, and the answer is a retry (#329), not a
+    /// custom connect path. <c>ConnectTimeout</c> is what bounds the failure, and its own tests are
+    /// above.
+    /// </para>
+    /// </summary>
     [TestMethod]
-    public void SourceCacheClient_PrimaryHandler_HasHappyEyeballsConnectCallback()
+    public void SourceCacheClient_PrimaryHandler_UsesTheDefaultConnectPath()
     {
         SocketsHttpHandler handler = ResolvePrimaryHandler();
 
-        Assert.IsNotNull(
+        Assert.IsNull(
             handler.ConnectCallback,
-            "#325: without a ConnectCallback the handler walks resolved addresses one family at a time, so "
-            + "a black-holed IPv6 path consumes the whole connect budget while working IPv4 addresses are "
-            + "never tried.");
+            "a ConnectCallback makes DNS resolution and connection establishment this project's "
+            + "responsibility. #325 did that and the cost outweighed it: a hardcoded address-family "
+            + "preference that overrode the host's own policy, a dependency on resolver ordering .NET "
+            + "does not document, and connect-cancellation noise that reads as a fault. A download that "
+            + "fails is a retry's problem.");
     }
 
     #endregion

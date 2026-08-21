@@ -498,12 +498,17 @@ builder.Services
         ConnectTimeout           = TimeSpan.FromSeconds(sourceRefreshConnectTimeoutSeconds),
         PooledConnectionLifetime = TimeSpan.FromMinutes(SourceCacheUpdater.DefaultPooledConnectionLifetimeMinutes),
 
-        // #325: without this the handler walks resolved addresses one family at a time, so a routed-but-
-        // unreachable IPv6 path spends the whole ConnectTimeout above while working IPv4 addresses are
-        // never tried. HappyEyeballsConnector races the two families instead.
-        ConnectCallback = (context, cancellationToken) => new ValueTask<Stream>(
-            HappyEyeballsConnector.Default.ConnectAsync(
-                context.DnsEndPoint.Host, context.DnsEndPoint.Port, cancellationToken)),
+        // No ConnectCallback (#325, reverted). A manifest entry is a plain download link — an ordinary
+        // URI or an IP-based one — and it is resolved and fetched as such, by the default handler. The
+        // custom address-family race that briefly lived here was disproportionate to what it protected:
+        // a source refresh is best-effort, SourceCacheUpdater already falls back to the local copy when
+        // a download fails, and the refresh runs again next cycle. What it cost was a family preference
+        // that overrode the operating system's own policy, a dependency on undocumented resolver
+        // ordering, and connect-cancellation noise that reads as a fault in a debugger.
+        //
+        // ConnectTimeout above is the part that earns its place: it bounds the failure instead of
+        // letting a routed-but-unreachable path hang. A first attempt that fails is a retry's problem
+        // (#329), not a reason to take over connection establishment.
     });
 
 // Converters are stateless, hardcoded per source — no DI registration needed for the individual
