@@ -1130,6 +1130,18 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 **`main` must always be green.** A failing build or test is acceptable on a feature branch mid-development — it is never acceptable on `main`. This checklist exists specifically to guarantee that; do not skip steps because a deadline is close or the failure "looks unrelated."
 
 1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
+
+   **Zero warnings means zero warnings at any time, not only at the moment of pushing.** A warning is
+   never acceptable in the build, whoever introduced it and whichever issue's file it sits in.
+
+   **That is not a licence to fix any warning you happen to see.** The escalated analyzer rules
+   (`IDE0008` and the rest — see "Variable declarations") exist so a boyscout pass has something to
+   act on, and that pass is deliberately narrow: **only files this issue actually touched, and only at
+   the end of the issue.** A warning in a file the current issue did not touch is not yours to clean
+   up as you go — surface it and let the developer decide who fixes it and when, exactly as
+   `docs/workflow/process.md` requires for a discovered process gap. Found live during #326: a
+   pre-existing `CA1873` in `ChangelogReader` (a #309 file) was fixed unprompted because the gate said
+   "0 warnings" and nothing said whose call that was.
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal -m:1` must report all tests passed with `0 Warning(s)  0 Error(s)`. Keep `-m:1` (see the Commands section's note on why). The same 0-warnings policy that applies to `dotnet build` applies here — any compiler warning surfaced during test build is a blocking failure.
 3. **Changelog updated** — `data/changelog/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md`, `addon/CHANGELOG.md`, or `addon-beta/CHANGELOG.md` directly — they are generated files.**
 
