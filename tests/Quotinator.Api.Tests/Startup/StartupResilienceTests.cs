@@ -144,7 +144,17 @@ public class StartupResilienceTests
 
     private static WebApplicationFactory<Program> FactoryFor(string dataDirectory) =>
         new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
-            builder.UseSetting("Quotinator:DataDir", dataDirectory));
+        {
+            builder.UseSetting("Quotinator:DataDir", dataDirectory);
+
+            // These tests are about what startup does when a directory cannot be written; nothing here
+            // concerns downloading sources. Left on, the keys/ case reaches the real refresh — its data
+            // directory is otherwise valid — and a slow or unreachable upstream then holds startup for
+            // up to the connect budget per source. That was invisible while the budget was 10 s and
+            // became a 30 s harness timeout when #323's budget was raised to 60 s. A test that can be
+            // failed by someone else's network is not testing what it claims to.
+            builder.UseSetting("Quotinator:AutoUpdateSources", "false");
+        });
 
     private string NewDataDirectory()
     {
