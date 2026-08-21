@@ -55,26 +55,27 @@ public sealed class ChangelogReader(
             return changelogService.GetForCulture(culture);
         }
 
+        // Entries, not rows: `rows` is the LEFT JOIN's own shape — roughly one per changelog *line* —
+        // which no reader of the log can reconcile with the importer's "refreshed N entries". Counting
+        // entries makes the two lines directly comparable.
+        //
+        // Counted once, and both decisions below read that one value. `rows` is already materialised by
+        // QueryAsync, so this is an in-memory pass rather than a query. It also subsumes the previous
+        // rows.Count check without changing behaviour: a non-empty list always yields at least one
+        // distinct entry id, so entryCount == 0 exactly when rows is empty.
+        int entryCount = rows.Select(row => row.ChangelogEntryId).Distinct().Count();
+
         // Empty after a successful import: the database is authoritative and there is genuinely nothing
         // to show. A new application has no changelog yet — that is an answer, not a fault, so it is
         // neither a warning nor a reason to consult the JSON files. About.razor already renders a null
         // document by omitting the changelog section entirely.
-        if (rows.Count == 0)
+        if (entryCount == 0)
         {
             logger.LogChangelogDatabaseHasNoEntries();
             return null;
         }
 
-        // Entries, not rows: `rows` is the LEFT JOIN's own shape — roughly one per changelog *line* —
-        // which no reader of the log can reconcile with the importer's "refreshed N entries". Counting
-        // entries makes the two lines directly comparable.
-        //
-        // Guarded because the count is a real traversal of every joined row, and [LoggerMessage]'s own
-        // IsEnabled check happens inside the generated method — the argument is evaluated at the call
-        // site regardless. See docs/logging.md, "A [LoggerMessage] conversion does not, by itself,
-        // defer an expensive argument".
-        if (logger.IsEnabled(LogLevel.Information))
-            logger.LogChangelogServedFromDatabase(rows.Select(row => row.ChangelogEntryId).Distinct().Count());
+        logger.LogChangelogServedFromDatabase(entryCount);
 
         Dictionary<string, ChangelogDocument> documents = AssembleDocuments(rows);
         string code = Normalise(culture);
