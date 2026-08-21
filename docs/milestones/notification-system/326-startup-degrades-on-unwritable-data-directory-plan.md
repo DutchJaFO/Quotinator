@@ -1,13 +1,14 @@
 # #326 — Startup crashes instead of degrading when the data directory is read-only and a migration is pending
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 9)
 **GitHub issue:** #326 (open)
 **Depends on:** none
 
-> **Next action: T1 (step 8) — the developer's own Visual Studio pass.** All code is written and every
-> unit-testable requirement is green: 9 of 9 in this issue's own class, 3,475 of 3,475 across the
-> solution, 0 warnings. Only the three live rows remain — T1, and T2's repro plus its negative control —
-> and T1 is the developer's action to perform, not something this assistant can substitute for.
+> **Next action: T2 (step 9) — the Docker pass, rows 10 and 11.** Everything else is green: 9 of 9 in
+> this issue's own class, 3,475 of 3,475 across the solution, 0 warnings, and T1 confirmed live on
+> 2026-08-21 against a database with 8 pending migrations. T2 is the only tier that can reach the
+> degraded path this issue exists for, and its setup must pin the WAL sidecar state explicitly rather
+> than run the issue's recipe verbatim — step 1 measured that as the deciding variable.
 
 ---
 
@@ -382,11 +383,27 @@ throwing.
 
 ### 8. T1 — Visual Studio pass
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-Developer-run. Program.cs changes only, no Razor, but T1 is required for every code-touching issue
-(`docs/release-verification.md`). Against a database that is *not* freshly created, per that document's
-own warning about dev-database staleness.
+Developer-run, 2026-08-21, and against a genuinely non-fresh database — the startup log shows
+`applying 8 pending Data migration(s) (version 3 → 11)`, which is exactly what
+`docs/release-verification.md` warns must not be substituted with a freshly created one. Three things
+confirmed, none inferred from the absence of an error:
+
+- **Startup healthy**, ready banner reached, 799 quotes, no exceptions in the log.
+- **`GET /api/v1/health` → `200 OK`, `{"status": "healthy"}`** — observed in the API client, not
+  assumed from the app being up.
+- **The Blazor UI renders correctly** — navigation, a quote, the language selector, styling intact.
+  Screenshot rather than text extraction, which would not have shown whether the CSS loaded (#263's
+  own failure was styling while the markup was fine).
+
+This exercises the **healthy** path — the point being that the guards added in steps 3–6 changed
+nothing for a working installation. The degraded path is step 9's (T2), and cannot be reached from a
+normal Visual Studio run.
+
+Four earlier runs the same evening also fed this issue and #325: they surfaced the connect-cancellation
+noise, the intermittency of the download failures, and the seed report's `new` counts not meaning net
+new quotes (unresolved, not chased — see step 11).
 
 ### 9. T2 — Docker pass
 
@@ -429,4 +446,4 @@ doc added to `Quotinator.slnx`. Doc updates commit separately from the code, per
 | 9 | ✅ | No regression | Live | `dotnet build --configuration Release` → `0 Warning(s) 0 Error(s)`; `dotnet test --configuration Release --verbosity normal -m:1` → `3,475 passed, 0 failed` across all ten test projects (re-run 2026-08-20 after #325's revert) |
 | 10 | ❌ | T2 — the issue's repro degrades instead of crashing | Live | Issue #326's repro commands → `running exit=0`; `curl -s -o /dev/null -w "%{http_code}" …/api/v1/health` → `503`; `…/openapi/v1.json` → `200`; `docker logs … \| grep -c "Unhandled exception"` → `0`; and the initialisation-failure log line is present, proving the failure state was actually reached |
 | 11 | ❌ | T2 negative control — a read-only mount that works today still works | Live | Issue #326's control setup → `running exit=0` and `/api/v1/health` → `200` `{"status":"healthy"}`, proving the fix did not degrade a healthy shape |
-| 12 | ❌ | T1 — Visual Studio pass | Live | Developer-run against a non-fresh dev database; app starts, Blazor UI loads, `/api/v1/health` → 200 healthy |
+| 12 | ✅ | T1 — Visual Studio pass | Live | Developer-run 2026-08-21 against a non-fresh dev database (`applying 8 pending Data migration(s) (version 3 → 11)`); app starts and reaches the ready banner, `GET /api/v1/health` → `200 OK` `{"status":"healthy"}`, Blazor UI renders with styling intact (screenshot) |
