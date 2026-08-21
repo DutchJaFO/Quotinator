@@ -10,9 +10,10 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 309, 312, 313, 320, 323, 325],
+    "issues": [81, 309, 312, 313, 320, 323, 325, 326],
     "highlights": [
-      "Quotebronnen worden nu betrouwbaar bijgewerkt op netwerken waar één internetprotocolversie niet werkt — een veelvoorkomende situatie op thuisnetwerken. Quotinator probeert beide tegelijk en gebruikt degene die antwoordt, en wanneer een bron echt niet bereikbaar is geeft het snel op in plaats van er een halve minuut op te wachten.",
+      "Quotinator start nu ook wanneer er niet naar de datamap geschreven kan worden — een alleen-lezen volume, of verkeerde rechten. In plaats van af te sluiten start het in een beperkte toestand, meldt duidelijk wat er mis is en hoe je het oplost, en houdt de pagina's en de API-documentatie bereikbaar zodat je er iets mee kunt.",
+      "Het bijwerken van quotebronnen krijgt nu aanzienlijk meer tijd om verbinding te maken voordat het opgeeft, zodat een trage of kortstondig onbereikbare verbinding niet langer een update overslaat. Wanneer een bron echt niet bereikbaar is, gaat Quotinator verder met de kopie die het al heeft.",
       "Na een update vertelt Quotinator nu wat er is veranderd: een opstartmelding toont de hoogtepunten van elke versie die je hebt overgeslagen, niet alleen van de nieuwste. Een nieuwe installatie ziet alleen de hoogtepunten van de huidige versie, en er verschijnt niets wanneer een versie niets noemenswaardigs bevat.",
       "Meldingen hebben nu een eigen korte kop, los van de berichttekst, waardoor de Meldingen-pagina en de opstartmelding makkelijker te overzien zijn.",
       "Meldingen verdwijnen niet langer standaard na verloop van tijd. Voorheen verliep elke melding na 30 dagen, ook meldingen over een probleem dat nog niet was opgelost; nu blijft een melding staan totdat je hem sluit, of totdat de aanbevolen actie is uitgevoerd."
@@ -29,7 +30,9 @@
     "changed": [
       "Changelog-inhoud (getoond op de Over-pagina) wordt nu geleverd vanuit een database in plaats van statische JSON-bestanden, automatisch vernieuwd bij het opstarten — dit maakt de inhoud doorzoekbaar en is een stap richting toekomstige functies zoals het tonen van specifieke hoogtepunten als opstartmeldingen; valt terug op de oorspronkelijke JSON-bestanden als de database ooit niet beschikbaar is, dus er verandert niets voor wie de Over-pagina bekijkt (issue #309)",
       "Meldingen hebben een eigen titel gekregen, gestructureerde gegevens die beschrijven waar elke melding over gaat, en een vervaltermijn die nu alleen nog wordt toegepast wanneer een melding daadwerkelijk niet meer getoond hoeft te worden — voorheen verliep elke melding na 30 dagen, ongeacht de inhoud (issue #312)",
-      "De pakketversies waarmee Quotinator wordt gebouwd worden nu één keer in één centraal bestand vastgelegd in plaats van herhaald in elk project, zodat een afhankelijkheidsupdate niet langer een deel van de oplossing kan bijwerken en de rest kan overslaan — een wijziging in het bouwgereedschap zonder effect op de applicatie zelf (issue #320)"
+      "De pakketversies waarmee Quotinator wordt gebouwd worden nu één keer in één centraal bestand vastgelegd in plaats van herhaald in elk project, zodat een afhankelijkheidsupdate niet langer een deel van de oplossing kan bijwerken en de rest kan overslaan — een wijziging in het bouwgereedschap zonder effect op de applicatie zelf (issue #320)",
+      "Het downloaden van quotebronnen krijgt nu tot een minuut om verbinding te maken en tot negentig seconden in totaal, in plaats van tien en dertig seconden. De kortere grenzen maakten van een af en toe trage verbinding vaker een overgeslagen update dan dat ze een echte wachttijd voorkwamen (issues #323, #325)",
+      "Wanneer er niet naar de datamap geschreven kan worden, benoemt de gemelde reden dat nu rechtstreeks en vertelt hoe je het oplost, in plaats van een database-reset voor te stellen — die naar dezelfde map schrijft en dus nooit had kunnen werken (issue #326)"
     ],
     "fixed": [
       "Bij een upgrade verschijnt niet langer een tweede, dubbele kopie van een melding die al vóór de upgrade bestond (issue #312)",
@@ -37,7 +40,9 @@
       "Een intern testprobleem opgelost waarbij tests konden draaien voordat de app volledig was opgestart, waardoor hun resultaten onbetrouwbaar werden — geen gevolgen voor de applicatie zelf (issue #313)",
       "Het downloaden van quotebronnen wachtte veel langer dan nodig op een server die niet bereikbaar was: de poging om een verbinding te openen had geen eigen tijdslimiet en eindigde pas wanneer het hele verzoek verliep, waardoor elke onbereikbare bron ongeveer 30 seconden aan de opstarttijd toevoegde (issue #323)",
       "Verbindingen met quotebronservers worden nu periodiek vernieuwd in plaats van onbeperkt bewaard, zodat een wijziging in het adres van een bronserver wordt opgepikt zonder herstart (issue #323)",
-      "Quotebronnen werden ten onrechte als onbereikbaar gemeld op netwerken waar de ene internetprotocolversie werkt en de andere niet: Quotinator probeert nu beide tegelijk en gebruikt degene die als eerste antwoordt, in plaats van de onbruikbare uit te putten en op te geven (issue #325)",
+      "Quotinator sloot af in plaats van te starten wanneer er niet naar de datamap geschreven kon worden. Eén opstartstap was onbeschermd en beëindigde het proces voordat er iets werd bediend, waarmee ook de statuspagina, de API-documentatie en de herstelmogelijkheden verdwenen; het opstarten gaat nu verder in een beperkte toestand die het probleem meldt (issue #326)",
+      "Quotinator sloot af voordat het begon te bedienen wanneer de map met de versleutelingssleutels niet aangemaakt kon worden — dezelfde soort fout, één stap eerder, waarna helemaal niets meer bereikbaar was (issue #326)",
+      "De pagina's in beperkte toestand werden niet getekend wanneer de database niet beschikbaar was: de startpagina en de meldingenpagina bevroegen die allebei tijdens het renderen, wat een foutpagina opleverde in plaats van de uitleg waarvoor ze bestaan (issue #326)",
       "De changelog-opslag viel enkele minuten na het opstarten stilzwijgend uit, waarna de Over-pagina de rest van de sessie vanuit de oorspronkelijke bestanden werd geleverd. De opslag staat nu op schijf in plaats van alleen in het geheugen, zodat deze beschikbaar blijft zolang Quotinator draait (issue #309)"
     ],
     "removed": [

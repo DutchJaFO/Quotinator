@@ -3,9 +3,10 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 309, 312, 313, 320, 323, 325],
+    "issues": [81, 309, 312, 313, 320, 323, 325, 326],
     "highlights": [
-      "Quote sources now update reliably on networks where one internet protocol version is broken — a common situation on home networks. Quotinator tries both in parallel and uses whichever responds, and when a source genuinely cannot be reached it gives up quickly instead of waiting half a minute for it.",
+      "Quotinator now starts even when its data folder cannot be written to — a read-only volume, or the wrong permissions. Instead of shutting down, it starts in a limited state, says plainly what is wrong and how to fix it, and keeps its pages and API documentation reachable so you can act on it.",
+      "Quote source updates now allow considerably more time to connect before giving up, so a slow or briefly unavailable connection no longer causes an update to be skipped. When a source genuinely cannot be reached, Quotinator carries on with the copy it already has.",
       "After updating, Quotinator now tells you what changed: a startup notification lists the highlights of every release you skipped, not just the newest one. A fresh install only sees the current version's highlights, and nothing appears when a release has nothing worth flagging.",
       "Notifications now carry a short headline of their own, separate from the message text, so the Notifications page and the startup popup are easier to scan.",
       "Notifications no longer disappear on a timer by default. Previously every notification expired after 30 days, including ones about a problem that was still unresolved; now a notification stays until it is dismissed, or until the action it recommends has been carried out."
@@ -22,7 +23,9 @@
     "changed": [
       "Changelog content (shown on the About page) is now served from a database instead of static JSON files, refreshed automatically at startup — this makes the content queryable and is a step toward future features such as surfacing specific highlights as startup notifications; falls back to the original JSON files if the database is ever unavailable, so nothing changes for anyone reading the About page (issue #309)",
       "Notifications gained a separate title, structured details describing what each one is about, and an expiry that is now only applied when a notification genuinely should stop being shown — previously every notification expired after 30 days regardless (issue #312)",
-      "The package versions Quotinator is built from are now declared once in a single central file instead of being repeated in every project, so a dependency update can no longer reach part of the solution and miss the rest — a build-tooling change with no effect on the application itself (issue #320)"
+      "The package versions Quotinator is built from are now declared once in a single central file instead of being repeated in every project, so a dependency update can no longer reach part of the solution and miss the rest — a build-tooling change with no effect on the application itself (issue #320)",
+      "Quote source downloads now allow up to a minute to establish a connection, and up to ninety seconds in total, instead of ten and thirty seconds. The shorter limits turned an intermittently slow connection into a skipped update more often than they prevented a genuine wait (issues #323, #325)",
+      "When the data directory cannot be written, the reported reason now names that directly and states how to resolve it, instead of suggesting a database reset — which writes to the same directory and therefore could not have worked (issue #326)"
     ],
     "fixed": [
       "Upgrading no longer shows a second, duplicate copy of a notification that already existed before the upgrade (issue #312)",
@@ -30,7 +33,9 @@
       "Fixed an internal test-suite defect where tests could run against the app before it had finished starting up, which made their results unreliable — no effect on the application itself (issue #313)",
       "Fixed quote-source downloads waiting far longer than necessary on a server that could not be reached: the attempt to open a connection had no time limit of its own and ended only when the whole request timed out, so every unreachable source added around 30 seconds to startup (issue #323)",
       "Connections to quote-source servers are now recycled periodically instead of being kept indefinitely, so a change to a source server's address is picked up without needing a restart (issue #323)",
-      "Fixed quote sources being reported as unreachable on networks where one internet protocol version works and the other does not: Quotinator now tries both in parallel and uses whichever answers first, instead of exhausting the unusable one and giving up (issue #325)",
+      "Fixed Quotinator shutting down instead of starting when its data folder could not be written to. One startup step was left unprotected and ended the process before anything was serving, taking the status page, the API documentation and the recovery options with it; startup now continues in a limited state that reports the problem (issue #326)",
+      "Fixed Quotinator shutting down before it began serving when the folder holding its encryption keys could not be created — the same class of failure, one step earlier, where nothing at all was reachable afterwards (issue #326)",
+      "Fixed the limited-state pages failing to draw when the database was unavailable: the home page and the notifications page each queried it while rendering, producing an error page in place of the explanation they exist to show (issue #326)",
       "Fixed the changelog store quietly going out of service a few minutes after startup, after which the About page was served from the original files for the rest of the session. It is now kept on disk rather than only in memory, so it stays available for as long as Quotinator is running (issue #309)"
     ],
     "removed": [

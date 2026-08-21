@@ -10,9 +10,10 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 309, 312, 313, 320, 323, 325],
+    "issues": [81, 309, 312, 313, 320, 323, 325, 326],
     "highlights": [
-      "Zitatquellen werden jetzt zuverlässig aktualisiert, auch in Netzwerken, in denen eine der beiden Internetprotokollversionen nicht funktioniert — in Heimnetzwerken keine Seltenheit. Quotinator versucht beide parallel und nutzt diejenige, die antwortet; ist eine Quelle wirklich nicht erreichbar, gibt es schnell auf, statt eine halbe Minute zu warten.",
+      "Quotinator startet jetzt auch dann, wenn sein Datenverzeichnis nicht beschreibbar ist — ein schreibgeschütztes Volume oder falsche Berechtigungen. Statt sich zu beenden, startet es in einem eingeschränkten Zustand, benennt klar das Problem und dessen Behebung und hält Seiten und API-Dokumentation erreichbar, damit Sie handeln können.",
+      "Beim Aktualisieren von Zitatquellen steht nun deutlich mehr Zeit für den Verbindungsaufbau zur Verfügung, bevor aufgegeben wird, sodass eine langsame oder kurzzeitig nicht erreichbare Verbindung keine Aktualisierung mehr ausfallen lässt. Ist eine Quelle wirklich nicht erreichbar, arbeitet Quotinator mit der bereits vorhandenen Kopie weiter.",
       "Nach einer Aktualisierung teilt Quotinator jetzt mit, was sich geändert hat: Eine Startbenachrichtigung zeigt die Highlights jeder übersprungenen Version, nicht nur der neuesten. Eine Neuinstallation sieht nur die Highlights der aktuellen Version, und es erscheint nichts, wenn eine Version nichts Nennenswertes enthält.",
       "Benachrichtigungen haben jetzt eine eigene kurze Überschrift, getrennt vom Nachrichtentext, wodurch die Benachrichtigungsseite und das Start-Pop-up leichter zu erfassen sind.",
       "Benachrichtigungen verschwinden nicht mehr standardmäßig nach Ablauf einer Frist. Zuvor lief jede Benachrichtigung nach 30 Tagen ab, auch solche zu einem noch ungelösten Problem; jetzt bleibt eine Benachrichtigung bestehen, bis sie geschlossen wird oder die empfohlene Aktion ausgeführt wurde."
@@ -29,7 +30,9 @@
     "changed": [
       "Changelog-Inhalte (angezeigt auf der Über-Seite) werden jetzt aus einer Datenbank bereitgestellt statt aus statischen JSON-Dateien, automatisch beim Start aktualisiert — das macht die Inhalte abfragbar und ist ein Schritt hin zu zukünftigen Funktionen wie dem Anzeigen bestimmter Highlights als Startbenachrichtigungen; fällt auf die ursprünglichen JSON-Dateien zurück, falls die Datenbank einmal nicht verfügbar ist, sodass sich für niemanden, der die Über-Seite liest, etwas ändert (issue #309)",
       "Benachrichtigungen haben einen eigenen Titel erhalten, strukturierte Angaben dazu, worum es bei jeder einzelnen geht, und eine Ablauffrist, die jetzt nur noch angewendet wird, wenn eine Benachrichtigung tatsächlich nicht mehr angezeigt werden soll — zuvor lief jede Benachrichtigung nach 30 Tagen ab, unabhängig vom Inhalt (issue #312)",
-      "Die Paketversionen, aus denen Quotinator gebaut wird, werden jetzt einmal in einer zentralen Datei deklariert, statt in jedem Projekt wiederholt zu werden, sodass ein Abhängigkeits-Update nicht mehr nur einen Teil der Projektmappe erreichen und den Rest auslassen kann — eine Änderung am Build-Werkzeug ohne Auswirkung auf die Anwendung selbst (issue #320)"
+      "Die Paketversionen, aus denen Quotinator gebaut wird, werden jetzt einmal in einer zentralen Datei deklariert, statt in jedem Projekt wiederholt zu werden, sodass ein Abhängigkeits-Update nicht mehr nur einen Teil der Projektmappe erreichen und den Rest auslassen kann — eine Änderung am Build-Werkzeug ohne Auswirkung auf die Anwendung selbst (issue #320)",
+      "Für das Herunterladen von Zitatquellen stehen jetzt bis zu einer Minute für den Verbindungsaufbau und bis zu neunzig Sekunden insgesamt zur Verfügung, statt zehn und dreißig Sekunden. Die kürzeren Grenzen machten aus einer zeitweise langsamen Verbindung häufiger eine ausgefallene Aktualisierung, als dass sie echte Wartezeit verhindert hätten (issues #323, #325)",
+      "Kann das Datenverzeichnis nicht beschrieben werden, benennt die gemeldete Ursache dies jetzt direkt und nennt den Lösungsweg, statt ein Zurücksetzen der Datenbank vorzuschlagen — das in dasselbe Verzeichnis schreibt und daher nie hätte funktionieren können (issue #326)"
     ],
     "fixed": [
       "Bei einem Upgrade erscheint keine zweite, doppelte Kopie einer Benachrichtigung mehr, die bereits vor dem Upgrade vorhanden war (issue #312)",
@@ -37,7 +40,9 @@
       "Ein internes Problem der Testsuite wurde behoben, bei dem Tests laufen konnten, bevor die Anwendung vollständig gestartet war, wodurch ihre Ergebnisse unzuverlässig wurden — keine Auswirkungen auf die Anwendung selbst (issue #313)",
       "Das Herunterladen von Zitatquellen wartete deutlich länger als nötig auf einen nicht erreichbaren Server: Der Verbindungsversuch hatte kein eigenes Zeitlimit und endete erst, wenn die gesamte Anfrage ablief, sodass jede nicht erreichbare Quelle rund 30 Sekunden zur Startzeit hinzufügte (issue #323)",
       "Verbindungen zu Zitatquellen-Servern werden jetzt regelmäßig erneuert, statt unbegrenzt bestehen zu bleiben, sodass eine Änderung der Adresse eines Quellservers ohne Neustart übernommen wird (issue #323)",
-      "Zitatquellen wurden fälschlich als nicht erreichbar gemeldet, wenn in einem Netzwerk die eine Internetprotokollversion funktioniert und die andere nicht: Quotinator versucht jetzt beide parallel und nutzt diejenige, die zuerst antwortet, statt die unbrauchbare auszuschöpfen und aufzugeben (issue #325)",
+      "Quotinator beendete sich, statt zu starten, wenn sein Datenverzeichnis nicht beschreibbar war. Ein Startschritt war ungeschützt und beendete den Prozess, bevor irgendetwas ausgeliefert wurde — samt Statusseite, API-Dokumentation und Wiederherstellungsmöglichkeiten; der Start läuft jetzt in einem eingeschränkten Zustand weiter, der das Problem meldet (issue #326)",
+      "Quotinator beendete sich, bevor es mit der Auslieferung begann, wenn das Verzeichnis für seine Verschlüsselungsschlüssel nicht angelegt werden konnte — dieselbe Art von Fehler, einen Schritt früher, wonach überhaupt nichts mehr erreichbar war (issue #326)",
+      "Die Seiten im eingeschränkten Zustand wurden nicht dargestellt, wenn die Datenbank nicht verfügbar war: Startseite und Benachrichtigungsseite fragten sie beide während des Renderns ab, was eine Fehlerseite anstelle der Erklärung ergab, für die sie gedacht sind (issue #326)",
       "Der Changelog-Speicher fiel wenige Minuten nach dem Start unbemerkt aus, woraufhin die Über-Seite für den Rest der Sitzung aus den ursprünglichen Dateien bereitgestellt wurde. Er liegt jetzt auf der Festplatte statt nur im Arbeitsspeicher und bleibt damit verfügbar, solange Quotinator läuft (issue #309)"
     ],
     "removed": [
