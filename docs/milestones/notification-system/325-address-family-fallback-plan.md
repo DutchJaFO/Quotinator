@@ -2,10 +2,62 @@
 
 **Status:** Waiting for release
 **GitHub issue:** #325 (open)
-**Depends on:** #323 (done, this branch — its `ConnectTimeout` is what bounds the racing attempt introduced here)
+**Depends on:** #323 (done, this branch — its `ConnectTimeout` now carries this issue's outcome on its own)
 
-> **Next action: the issue's own Definition-of-done checkboxes, then the commit.** Every verification row
-> below is ✅, including the live T2 pass and a direct live proof with IPv6 forced into a black hole.
+> **Next action: close the issue, recording that the fix was reverted as over-engineered.** The steps
+> below describe a `ConnectCallback`-based address-family race that was built, shipped to this branch,
+> and then removed again on 2026-08-20 without ever being released. **Read "Reverted" below before
+> anything else in this document** — the Design, Steps and Verification sections are retained as the
+> record of what was built and measured, not as a description of what the application does.
+
+---
+
+## Reverted (2026-08-20) — the fix was disproportionate to the fault
+
+The `ConnectCallback` was removed and the default handler now resolves and downloads the file. What
+remains of this issue is `ConnectTimeout` (#323's, raised here from 10 s to 60 s) and, when it lands,
+retry (#329).
+
+**The measurement that settled it.** A fresh database with forced downloads, 2026-08-20: both sources
+failed to connect and each fell back to its local copy, and the application seeded from those copies
+and served 799 quotes normally. Six minutes later the same two hosts, over the same default connect
+path, answered in 348 ms and 202 ms. So the condition is intermittent, the failure is already handled,
+and the handling is the designed behaviour rather than a gap — `SourceCacheUpdater` logs
+*"could not reach … — using local …"* and moves on.
+
+**What the race cost.** Every one of these was introduced by the fix, and none existed before it:
+
+- A hardcoded IPv6 preference that overrode the operating system's own RFC 6724 address-selection
+  policy, so a user who deprioritised IPv6 system-wide — the correct remedy for a black hole — got no
+  benefit from having done so. Fixed before removal (see below) rather than left wrong.
+- A dependency on resolver ordering that .NET's documentation does not describe in either direction.
+- `SocketsHttpConnectionContext.DnsEndPoint.AddressFamily` accepted and ignored.
+- Connect-cancellation `OperationCanceledException`s on every download, harmless and handled, but
+  indistinguishable from a fault in a debugger — they cost a live session's attention before being
+  explained.
+
+**What the RFC actually says**, having been read properly the second time: RFC 8305 states an
+*assumption* that the host's preference policy favours IPv6. It does not instruct an implementation to
+hardcode family order — that preference is RFC 6724's, applied by the operating system and
+reconfigurable by the user, and the resolver's returned order is how it speaks. The original reading of
+"IPv6 first" as a prescription was wrong.
+
+**What is kept, and why.** `HappyEyeballsConnector` and its seven tests remain in `Quotinator.Data`,
+unused by `Quotinator.Api`. The concepts were learned expensively and should not have to be reinvented,
+and a library offering a capability its consumer declines to use is exactly ADR 004's shape. The
+address-family ordering bug above was fixed before the connector was set aside, so what is retained is
+not quietly wrong. `SourceCacheHttpClientTests` keeps a test asserting the *absence* of a
+`ConnectCallback`, because taking over connection establishment is an easy thing to reach for again the
+next time a download misbehaves.
+
+**Why the timeout moved instead.** #323 chose 10 s only as a safe finite value when the real defect was
+an infinite budget; it was never measured as correct. A short budget converts an intermittent path into
+a failure that did not have to happen, and lengthening it costs nothing user-visible because the
+startup wait page (#280) already tells the user work is in progress. Connect is now 60 s and the
+request budget 90 s — the latter must stay above the former, or the request cancels first and
+`ConnectTimeout` never applies, which is the defect #323 fixed.
+
+**Commits:** `c7aac63` (revert), `00c35dd` (timeouts), `1f44ea8` (ordering fix in the retained code).
 
 ---
 

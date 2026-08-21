@@ -5,7 +5,7 @@
 **Depends on:** none
 
 > **Next action: T1 (step 8) — the developer's own Visual Studio pass.** All code is written and every
-> unit-testable requirement is green: 9 of 9 in this issue's own class, 3,473 of 3,473 across the
+> unit-testable requirement is green: 9 of 9 in this issue's own class, 3,475 of 3,475 across the
 > solution, 0 warnings. Only the three live rows remain — T1, and T2's repro plus its negative control —
 > and T1 is the developer's action to perform, not something this assistant can substitute for.
 
@@ -346,8 +346,20 @@ message's *why*.
 **Status:** ✅ Done
 
 `dotnet build --configuration Release` → `0 Warning(s) 0 Error(s)`.
-`dotnet test --configuration Release --verbosity normal -m:1` → **3,473 passed, 0 failed**, across all
-ten test projects.
+`dotnet test --configuration Release --verbosity normal -m:1` → **3,475 passed, 0 failed**, across all
+ten test projects (re-run 2026-08-20 after #325's revert; 3,473 at the time this step was first done,
+plus the two tests that revert added).
+
+**A later change to this issue's own test class, made under #325's revert.** Raising the source-refresh
+connect budget from 10 s to 60 s (`00c35dd`) broke
+`Startup_KeysDirectoryCannotBeCreated_StartsDegradedInsteadOfCrashingBeforeKestrelBinds`: its data
+directory is otherwise valid, so unlike the other four cases it reaches the real source refresh, and a
+slow upstream then held startup past #313's 30 s harness limit. The test had been network-dependent all
+along and the smaller budget hid it. `Quotinator:AutoUpdateSources` is now `false` for the whole class
+(`6356c4c`) — these tests are about what startup does when a directory cannot be written, and nothing in
+them concerns downloading. Worth carrying forward: 60 s is now the worst case any full-startup test can
+wait per source, so a future test that spins up a real initializer with auto-update left on will hit
+the same wall.
 
 Two warnings had to be cleared to get there, neither deferred:
 
@@ -414,7 +426,7 @@ doc added to `Quotinator.slnx`. Doc updates commit separately from the code, per
 | 6 | ✅ | Blazor pages render degraded UI rather than 500 | Unit test | `StartupResilienceTests.Startup_DataDirectoryNotWritable_BlazorPageRendersDegradedUiRatherThan500`, one case per gate-exempt route — `/`, `/about`, `/stats`, `/notifications`, `/rest-api` all → 200 |
 | 7 | ✅ | An uncreatable `keys/` directory degrades instead of crashing before Kestrel binds | Unit test | `StartupResilienceTests.Startup_KeysDirectoryCannotBeCreated_StartsDegradedInsteadOfCrashingBeforeKestrelBinds` |
 | 8 | ✅ | Every test above is genuinely red before the fix | Live | `dotnet test tests/Quotinator.Api.Tests --configuration Release --filter "FullyQualifiedName~StartupResilienceTests"` against unmodified `Program.cs` → `Failed: 5, Passed: 0`, each failing during host construction (`IOException` at `Program.cs:233` for the `keys/` case; #313's `TimeoutException` for the other four), never as an assertion failure |
-| 9 | ✅ | No regression | Live | `dotnet build --configuration Release` → `0 Warning(s) 0 Error(s)`; `dotnet test --configuration Release --verbosity normal -m:1` → `3,473 passed, 0 failed` across all ten test projects |
+| 9 | ✅ | No regression | Live | `dotnet build --configuration Release` → `0 Warning(s) 0 Error(s)`; `dotnet test --configuration Release --verbosity normal -m:1` → `3,475 passed, 0 failed` across all ten test projects (re-run 2026-08-20 after #325's revert) |
 | 10 | ❌ | T2 — the issue's repro degrades instead of crashing | Live | Issue #326's repro commands → `running exit=0`; `curl -s -o /dev/null -w "%{http_code}" …/api/v1/health` → `503`; `…/openapi/v1.json` → `200`; `docker logs … \| grep -c "Unhandled exception"` → `0`; and the initialisation-failure log line is present, proving the failure state was actually reached |
 | 11 | ❌ | T2 negative control — a read-only mount that works today still works | Live | Issue #326's control setup → `running exit=0` and `/api/v1/health` → `200` `{"status":"healthy"}`, proving the fix did not degrade a healthy shape |
 | 12 | ❌ | T1 — Visual Studio pass | Live | Developer-run against a non-fresh dev database; app starts, Blazor UI loads, `/api/v1/health` → 200 healthy |

@@ -147,7 +147,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#319](https://github.com/DutchJaFO/Quotinator/issues/319) | Notification title and body are not translated | Planning | T1 ⬜ T2 ⬜ | [319-notification-translations-plan.md](319-notification-translations-plan.md) |
 | [#323](https://github.com/DutchJaFO/Quotinator/issues/323) | Source download: a stalled connection attempt outlives its request and fails every other source on the same host | Waiting for release | T2 ✅ | [323-source-download-connection-stall-plan.md](323-source-download-connection-stall-plan.md) |
 | [#324](https://github.com/DutchJaFO/Quotinator/issues/324) | Notification: report when a source update attempt fails | Planning | T1 ⬜ T2 ⬜ | [324-source-refresh-failure-notification-plan.md](324-source-refresh-failure-notification-plan.md) |
-| [#325](https://github.com/DutchJaFO/Quotinator/issues/325) | Source download: no address-family fallback — a black-holed IPv6 path fails the download even though IPv4 works | Waiting for release | T2 ✅ | [325-address-family-fallback-plan.md](325-address-family-fallback-plan.md) |
+| [#325](https://github.com/DutchJaFO/Quotinator/issues/325) | Source download: no address-family fallback — a black-holed IPv6 path fails the download even though IPv4 works (fix reverted as over-engineered; a longer connect budget carries it) | Waiting for release | T1 ✅ T2 ✅ | [325-address-family-fallback-plan.md](325-address-family-fallback-plan.md) |
 | [#326](https://github.com/DutchJaFO/Quotinator/issues/326) | Startup crashes instead of degrading when the data directory is read-only and a migration is pending | In progress (step 8) | T1 ⬜ T2 ⬜ | [326-startup-degrades-on-unwritable-data-directory-plan.md](326-startup-degrades-on-unwritable-data-directory-plan.md) |
 | [#327](https://github.com/DutchJaFO/Quotinator/issues/327) | Smoke tests: prove startup problems degrade rather than crash | Planning | T2 ⬜ | No plan doc yet |
 | [#328](https://github.com/DutchJaFO/Quotinator/issues/328) | Smoke tests: verify bundled imports and endpoint behaviour against a real database | Planning | T2 ⬜ | No plan doc yet |
@@ -226,10 +226,10 @@ of this milestone's issues — #323, #325, #329, #330, #331 — none of them ant
          in; building it first means building it twice). Consumes SourceRefreshResult.Failed, which
          nothing reads for user-facing purposes today. Soft-relates to #323 only in that #323 makes
          the failure it reports rarer
-#325 ─── depends on #323 (hard — its ConnectTimeout is what bounds the racing connect this issue adds;
-         without it the race would itself be unbounded). Found while re-checking #323 against a live
-         startup log: #323's fix was working exactly as designed, but it bounded the symptom's duration
-         and this issue is its cause. Blocks nothing
+#325 ─── fix REVERTED 2026-08-20 as disproportionate; see its plan doc's "Reverted" section. What now
+         carries it is #323's ConnectTimeout, raised here from 10s to 60s (request budget 30s → 90s to
+         stay above it). The custom connect path is gone; the connector and its tests are kept in
+         Quotinator.Data, unused, so the concepts need not be reinvented. Blocks nothing
 #326 ─── (none) — independent bug, found while re-checking the smoke tests. Violates the never-crash
          rule: a read-only data directory plus a pending migration exits the process instead of
          degrading. Blocks #327, whose degradation scenarios include this one
@@ -240,8 +240,9 @@ of this milestone's issues — #323, #325, #329, #330, #331 — none of them ant
          endpoints behave correctly against a real database rather than the stubs the endpoint tests
          deliberately use
 #329 ─── depends on #323 and #325 only in that it revises their arrangement, not in build order: it
-         removes the ConnectTimeout #323 added (the attempt timeout takes over that budget) and leaves
-         #325's HappyEyeballsConnector running per attempt. Blocks #324 (hard for its multi-attempt
+         revisits the ConnectTimeout #323 added and #325 raised to 60s, which is now the whole of the
+         download's resilience and is expected to be tuned alongside the retry. #325's connector is no
+         longer in the download path, so nothing runs per attempt. Blocks #324 (hard for its multi-attempt
          reporting — #329 establishes the download statistics #324 becomes the first consumer of;
          #324's plain failure reporting does not need it). Adds the first NuGet dependency this
          milestone takes, Microsoft.Extensions.Http.Resilience
@@ -289,7 +290,7 @@ app-version provenance and typed payloads available to render from.
 |-------|-------|--------|
 | 1 | **#313** ✅ | Done. Api tests were asserting before startup completed — measured at 5 of 5 runs, so every verification in this milestone was untrustworthy until it landed. Had to come first for that reason, not because of any dependency |
 | 2 | **#323** ✅ | Independent bug; taken first by developer direction (2026-08-17) because it was found live and its fix is self-contained to the HTTP client registration. Blocks nothing |
-| 3 | **#325** ✅ | Immediately after #323, because it is the same startup log's remaining half: #323 bounded how long a stalled connect may run, #325 stops it targeting a dead address family while a working one goes untried. Depends on #323's `ConnectTimeout` to bound the race it introduces |
+| 3 | **#325** ✅ | Taken immediately after #323 as the same startup log's remaining half. Its fix was reverted on 2026-08-20 as disproportionate to a failure the application already handles by falling back to the local copy; #323's `ConnectTimeout`, raised to 60 s, carries it instead. See its plan doc's "Reverted" section |
 | 4 | **#312** ✅ | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
 | 5 | **#81** ✅ | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
 | 6 | **#83** ✅ | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |

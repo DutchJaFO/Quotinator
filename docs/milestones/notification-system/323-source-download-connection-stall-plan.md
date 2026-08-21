@@ -75,7 +75,13 @@ Bound the connection attempt itself, at the primary handler.
 
 1. **Two new `const`s on `SourceCacheUpdater`**, alongside the existing `DefaultHttpTimeoutSeconds` so
    every timeout governing this client is discoverable in one place:
-   - `DefaultConnectTimeoutSeconds = 10`
+   - `DefaultConnectTimeoutSeconds = 10` — **raised to 60 on 2026-08-20 (`00c35dd`, under #325)**, and
+     `DefaultHttpTimeoutSeconds` from 30 to 90 alongside it. 10 was only ever a safe finite value
+     chosen when the defect was an *infinite* budget; it was never measured as correct, and it turned
+     an intermittent path into a failure that need not have happened. What this issue established and
+     what still holds is the *relationship* — connect must stay below request, or the request cancels
+     first and `ConnectTimeout` never applies, which is this issue's own defect returning. The numbers
+     are expected to be tuned again alongside #329's retry.
    - `DefaultPooledConnectionLifetimeMinutes = 2`
 2. **`Program.cs` adds `.ConfigurePrimaryHttpMessageHandler(...)`** to the existing `AddHttpClient` call,
    constructing a `SocketsHttpHandler` with both values, and reads an optional
