@@ -68,6 +68,48 @@ public class HappyEyeballsConnectTests
             "a losing track's connection was returned to nobody and never disposed");
     }
 
+    /// <summary>
+    /// RFC 8305 states an <em>assumption</em> that the host's preference policy favours IPv6 — it does
+    /// not instruct an implementation to hardcode family order. That preference is RFC 6724's address
+    /// selection policy, which the operating system applies and the user can reconfigure, and it is
+    /// what the resolver's returned order expresses. Overriding it means a user who deprioritises IPv6
+    /// system-wide (the correct remedy for a black-holed IPv6 path) gets no benefit from having done so.
+    /// </summary>
+    [TestMethod]
+    public async Task Connect_ResolverReturnsIPv4First_PrefersIPv4RatherThanForcingIPv6()
+    {
+        using CancellationTokenSource guard = Guard();
+        RecordingConnector attempts = new();
+        HappyEyeballsConnector connector = Build([V4A, V6A], attempts.SucceedImmediately);
+
+        using Stream stream = await connector.ConnectAsync("example.test", 443, guard.Token);
+
+        Assert.AreEqual(
+            V4A,
+            StreamMarker.AddressOf(stream),
+            "the resolver returned IPv4 first, which is the host's own preference policy speaking — "
+            + "the preferred track must follow it rather than assert IPv6");
+    }
+
+    [TestMethod]
+    public async Task Connect_ResolverReturnsIPv4First_IPv6BlackHoled_StillFallsBackPromptly()
+    {
+        using CancellationTokenSource guard = Guard();
+        RecordingConnector attempts = new();
+        HappyEyeballsConnector connector = Build([V4A, V4B, V6A, V6B], attempts.BlackHoleV6ElseSucceed);
+
+        Stopwatch sw = Stopwatch.StartNew();
+        using Stream stream = await connector.ConnectAsync("example.test", 443, guard.Token);
+        sw.Stop();
+
+        Assert.AreEqual(V4A, StreamMarker.AddressOf(stream));
+        Assert.IsLessThan(
+            AttemptDelay,
+            sw.Elapsed,
+            "with IPv4 preferred by the host and reachable, the race should be won outright before the "
+            + "IPv6 track is even started");
+    }
+
     [TestMethod]
     public async Task Connect_OnlyIPv4Resolved_ConnectsWithoutDelay()
     {

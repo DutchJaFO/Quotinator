@@ -62,11 +62,20 @@ public sealed class HappyEyeballsConnector(
     {
         IPAddress[] addresses = await resolve(host, cancellationToken);
 
-        List<IPAddress> preferred = [.. addresses.Where(a => a.AddressFamily == AddressFamily.InterNetworkV6)];
-        List<IPAddress> secondary = [.. addresses.Where(a => a.AddressFamily == AddressFamily.InterNetwork)];
-
-        if (preferred.Count == 0 && secondary.Count == 0)
+        if (addresses.Length == 0)
             throw new SocketException((int)SocketError.HostNotFound);
+
+        // Which family goes first is the resolver's answer, not ours: the operating system has already
+        // applied RFC 6724's address-selection policy, and the returned order is that policy's output.
+        // RFC 8305 only *assumes* a host policy favouring IPv6 — it never tells an implementation to
+        // hardcode family order — so asserting IPv6 here would override the very preference it assumes,
+        // and would silently ignore a user who deprioritised IPv6 system-wide to work around a black
+        // hole. .NET's own documentation for Dns.GetHostAddressesAsync says nothing about ordering
+        // either way, so there is no documented guarantee to rely on and none to contradict.
+        AddressFamily preferredFamily = addresses[0].AddressFamily;
+
+        List<IPAddress> preferred = [.. addresses.Where(a => a.AddressFamily == preferredFamily)];
+        List<IPAddress> secondary = [.. addresses.Where(a => a.AddressFamily != preferredFamily)];
 
         // Only one family resolved: no race to run, and no attempt delay to pay.
         if (preferred.Count == 0 || secondary.Count == 0)
