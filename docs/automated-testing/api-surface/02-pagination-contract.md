@@ -8,9 +8,18 @@
 `/quotes`, `/admin/audit` and `/import/actions` share one pagination contract, and this proves it
 holds live on all three rather than at the stub level.
 
-**`/admin/audit` and `/import/actions` must already have rows.** Run the import and staged-action
-tests first. Two of the assertions below are only meaningful against a populated table — see
-Determinism.
+**`/admin/audit` and `/import/actions` must have rows before the assertions below mean anything** — two
+of them invert on an empty table, see Determinism.
+
+**Needing content is a legitimate precondition; inheriting it from an earlier test is not.** This
+document currently does the latter — it assumes rows are already there.
+
+> **Unresolved: which resolution this test uses.** Either it creates the rows itself as a setup step
+> and then runs anywhere in any order, or it declares that a broken import path blocks it and says so
+> plainly. The second is a real possibility here: these rows come from the application's own import,
+> so an import defect takes this test down with it even though the pagination contract may be
+> perfectly intact — which is the case for a prepared resource. Recorded for #339's audit; see the
+> index's *Depending on content is not the same as depending on another test*.
 
 ## Determinism
 

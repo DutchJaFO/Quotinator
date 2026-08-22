@@ -9,7 +9,8 @@ A staged batch with pending actions — the preview call below produces one unde
 
 ## Determinism
 
-- **`review` policy is required here**, unlike the alias test: the batch must have pending actions for
+- **`review` policy is required here**, unlike
+  [`03-batch-id-mode-alias.md`](03-batch-id-mode-alias.md): the batch must have pending actions for
   discard to have anything to mark.
 - The listing afterwards is scoped to that specific `batchId`, so other batches in the database cannot
   affect the result.

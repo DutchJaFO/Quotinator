@@ -91,6 +91,11 @@ specific feature or issue **cannot be tested any other way**. Do not build one b
 fragile: the bundled sources are what actually ships, and a test against them is testing the real
 thing.
 
+Two situations meet that bar. A feature whose condition cannot be reached through the application at
+all — the state has to be constructed. And a test whose precondition comes from a path that can itself
+break, where a fixture is what keeps the test runnable while that path is being fixed (see *Depending
+on content is not the same as depending on another test* above).
+
 **Never assert a total count of notifications.** The same failure mode, and it has already produced
 two wrong expectations. How many notifications exist depends on which producers exist and what the
 bundled changelog flags for the running version, both of which move every milestone. Assert instead
@@ -98,6 +103,62 @@ that the notification a **known cause** produces is present — a successful imp
 upgrade with notification-flagged highlights, a schema-version overshoot. The subject is the *cause*,
 not the notification row as an object. Where a scenario genuinely is about counting, count occurrences
 of that specific notification, never the total.
+
+**A test must not depend on which other tests ran, or in what order.** The only order that matters is
+the sequence of steps *inside* a test. Anything a test needs, it establishes itself — the rows it pages
+through, the batch it applies, the state it corrupts. A test that inherits its preconditions from a
+predecessor reports a false result the moment that predecessor is skipped, reordered, fails, or is
+deleted, and it cannot be run alone to investigate anything.
+
+This applies to what a test *leaves behind* as much as what it needs. Registered overrides, staged
+batches and applied migrations are state the next test did not ask for. Clean up, or scope the test to
+its own container and volume.
+
+**Prose like "run the import tests first" or "the tests that follow" is the symptom, not the fix.**
+Turning such a sentence into a link makes the dependency official rather than removing it — the fix is
+always to give the test its own setup.
+
+### Depending on content is not the same as depending on another test
+
+Some tests need a database with content before they mean anything — the pagination contract needs rows
+to page through, the masterdata reads need records to read. That is a legitimate precondition, and it
+is not what the rule above forbids. What it forbids is *how* the precondition gets satisfied: by
+whatever an earlier test happened to leave behind.
+
+A precondition has exactly two honest resolutions, and a document states which one it uses:
+
+1. **Guarantee it.** The test establishes the content itself — its own import, its own fixture, its own
+   container. It then runs anywhere, in any order, including alone.
+2. **Accept that it can be blocked.** If the content comes from the application's own import path, then
+   a broken import blocks this test too, and it cannot run until that is fixed. Say so, and name what
+   would block it, so a skipped run reads as a known consequence rather than an unexplained gap.
+
+**Option 2 is why a prepared resource can be worth building.** A test whose precondition depends on a
+feature that is currently broken is a test you lose exactly when you most want to run it — the
+bundled-import path failing takes the endpoint tests down with it, even though the endpoints may be
+perfectly fine. A fixture that does not go through that path keeps them runnable. That is a specific
+feature this cannot otherwise be tested around, which is the bar the exception rule below sets.
+
+**Prefer verification that needs no live environment.** A live test costs a container start, a human
+to read the output, and a judgement call about whether the output was right. A test that runs in
+`dotnet test` costs none of those and runs on every build, so anything provable in-process should be
+proven there — leaving the live tier to cover only what genuinely cannot be reached without a real
+container, volume or network.
+
+This is not theoretical. Three checks have already made that move, and each got stronger for it:
+
+- A `curl | grep` of the published OpenAPI spec became `OpenApiSpecEndpointTests`, which fetches
+  `/openapi/v1.json` through the full pipeline and asserts the type via `JsonDocument`. The original
+  command was wrong on its first outing — it assumed single-line JSON and matched nothing.
+- A sixteen-minute wait proving the changelog database survived became
+  `ChangelogDatabaseWiringTests`, asserting the DI registration is not an in-memory connection string.
+  Instant, and it cannot pass for the wrong reason.
+- #326's degraded-startup contract became `StartupResilienceTests`, which reaches the same states via
+  `WebApplicationFactory` using deterministic sabotage.
+
+**When a live test is written, ask what part of it needs to be live.** Often the answer is a smaller
+part than the whole document, and the rest belongs in a unit or integration test that runs
+continuously rather than once per release.
 
 **Cover both the happy flow and the unhappy flow.** A test that only proves the good path proves half
 a feature. What an operation does when its input is wrong, its precondition is absent, or its
@@ -167,6 +228,11 @@ line, and the remedy already exercised rather than reasoned about.
 
 The `Observed effect` field is what captures it. #333 sweeps these documents alongside its sweep of
 the application's own messages, and writes entries from what they record. No entry is written here.
+
+**The unhappy flow is the richer source.** An entry answers *what happened, does it stop the app
+working, and what do I do about it* — which is a description of a failure, not of a success. A test
+that provokes a failure deliberately and records what an operator would see has already done the work
+an entry needs; a happy-path-only test has nothing to contribute.
 
 ---
 

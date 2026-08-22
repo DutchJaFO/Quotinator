@@ -1,6 +1,6 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 9)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -240,7 +240,18 @@ smoke set from step 2, the three run scopes, and the reliability rule from step 
 
 ### 8. Convert cross-references into links
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-22
+
+A survey of all 43 documents found seventeen prose cross-references. **Seven named a specific document
+and are now links**; the rest are general statements about the suite — "the tests that follow", "an
+earlier test's batch", "every other test here" — with no single target. Converting those would have
+meant inventing one, so they stand.
+
+**Adding the links exposed a gap and closed it.** The existing guard checks only that the *index's*
+links resolve, so seven new inter-document links were created with nothing protecting them.
+`EveryAutomatedTestingCrossReference_ResolvesToAnExistingDocument` now covers every relative Markdown
+link in every document. Confirmed it can fail: one link was repointed at a nonexistent file, the test
+failed, and the link was restored.
 
 Today one section points at "section 37's opening paragraph" in prose, which survives neither a
 renumber nor a split. Every cross-reference becomes an explicit link to a named document.
@@ -290,7 +301,7 @@ suite as a coin flip.
 
 ### 12. Record the Knowledgebase relationship
 
-**Status:** 🟡 Half done — #333 updated 2026-08-22; the index half is not written
+**Status:** ✅ Done — 2026-08-22
 
 A test creates a specific circumstance on purpose and shows what it produces, which is what a
 Knowledgebase entry needs with the cause already established and the remedy already exercised. The
@@ -304,15 +315,62 @@ No entry is written here — #333 is milestone v1.9.0.
 
 ### 13. Resolve the live-only Definition-of-done gap in `docs/workflow/issues.md`
 
+**Status:** ✅ Done — 2026-08-22
+
+`issues.md` gains a **live-only variant**: a second fixed pair of Definition-of-done boxes an issue
+copies instead of the two that reference an Expected tests table. It preserves what red-to-green
+protects — the expectation is committed to before the result is seen — without pointing at a table
+that does not exist.
+
+The placeholder row (`| — | Live tests only | ❌ |`) is explicitly ruled out: it satisfies the shape
+and not the rule.
+
+**Follow-on, not done here:** #327 and #328 both carry that placeholder and should adopt the variant.
+That is an issue-body edit needing its own draft, best done once as a combined change after this issue
+closes.
+
+### 14. Audit every document against the rules the index now states
+
 **Status:** ⬜ Not started
 
-The Enhancement template says to omit the Expected tests section when all verification is live, but
-the Definition of done is copied verbatim and its first box reads "All expected tests listed above
-start red before implementation" — which then has no referent. The current workaround is a
-placeholder table row existing only to give the box something to point at (see #328). Fix it in the
-templates so a live-only issue has a Definition of done it can honestly tick.
+**#339 verifies the tests, it does not only relocate them** (developer direction, 2026-08-22). The move
+established the structure and the rules; this step checks each of the 43 documents against them rather
+than assuming the move produced compliance.
 
-### 14. Register every new document in `Quotinator.slnx` and confirm the guards green
+Per document:
+
+- **Both flows covered.** A document proving only the happy path is incomplete. Several already
+  satisfy this — bodyless validation, `batchId` validation, the degraded-startup tests — and several
+  do not.
+- **`Preconditions` states what must be true and how it is confirmed**, not inferred from the recipe.
+- **`Determinism` names every variable the outcome depends on.**
+- **No predicted count** survives in an Expected output section.
+- **Every wait is a condition**, or an elapsed-time exception that says what it measures.
+- **`Observed effect` is honest** — recorded where it exists, stated as absent where it does not.
+- **No dependency on execution order.** The test establishes everything it needs and leaves nothing
+  another test did not ask for.
+
+  **Needing content is a legitimate precondition; inheriting it from an earlier test is not.** Each
+  affected document picks one of two honest resolutions: guarantee the precondition itself, or declare
+  what blocks it and accept that it cannot run until that is fixed. The second is where a prepared
+  resource earns its place — a test whose content comes from the application's own import path is lost
+  exactly when an import defect makes it most worth running.
+
+  Four documents breach this today and carry a note: the pagination contract assumes populated audit
+  and import tables, the staged workflow deliberately leaves its applied batch, the read-time
+  presentation test leaves staged actions, and the two-phase reversal expects a batch a sibling
+  created. Resolving each means writing its own setup or its own fixture — new content, not a move.
+- **Nothing live that could be proven in-process.** Ask of each document what part genuinely needs a
+  container, a volume or a network; the rest belongs in a test that runs on every build. Where a
+  document is wholly or partly reducible, record which part and against which issue — writing the
+  replacement test is new work, not a move.
+
+Retrofitting a missing unhappy flow means writing new test content, not moving existing content. Where
+that is more than a small addition, record it as a finding for the issue that owns the feature rather
+than expanding this one — the audit's job is to establish which documents are complete, not to make
+every one complete regardless of cost.
+
+### 15. Register every new document in `Quotinator.slnx` and confirm the guards green
 
 **Status:** ⬜ Not started
 
@@ -344,4 +402,6 @@ resolve — see that step.
 | 14 | ❌ | Test outcomes are recorded as Knowledgebase material, and #333 sweeps the test documents | Live | #333 requirement 6 states the sweep (done 2026-08-22); the index states the relationship |
 | 15 | ❌ | A live-only issue has a Definition of done it can honestly tick | Live | `docs/workflow/issues.md` no longer requires a placeholder Expected-tests row for live-only verification |
 | 16 | ❌ | Every fixed wait is a readiness poll, or a duration justified in `Determinism` | Live | `grep -rn "sleep " docs/automated-testing/` returns only waits whose own document explains what the duration measures |
-| 17 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |
+| 17 | ❌ | Every document is audited against the index's rules, and each one's compliance is recorded | Live | Step 14's per-document checklist completed; documents needing new test content are recorded as findings rather than silently left non-compliant |
+| 18 | ❌ | No predicted count survives in an Expected output section | Live | Every count is non-zero, a relationship derived in the same run, or explicitly labelled an observation |
+| 19 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |

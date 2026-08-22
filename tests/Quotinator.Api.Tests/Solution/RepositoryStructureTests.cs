@@ -211,6 +211,43 @@ public partial class RepositoryStructureTests
             + string.Join("\n", failures));
     }
 
+    /// <summary>
+    /// A link from one test document to another must resolve. The index guard above covers only links
+    /// out of README.md, so without this the cross-references between documents can rot silently.
+    /// </summary>
+    [TestMethod]
+    public void EveryAutomatedTestingCrossReference_ResolvesToAnExistingDocument()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        List<string> failures = [];
+
+        foreach (string document in Directory.GetFiles(AutomatedTestingDir, "*.md", SearchOption.AllDirectories))
+        {
+            string directory = Path.GetDirectoryName(document)!;
+
+            foreach (System.Text.RegularExpressions.Match match in MarkdownLinkTarget().Matches(File.ReadAllText(document)))
+            {
+                string target = match.Groups["target"].Value;
+
+                // Only relative links to another Markdown file are this test's concern — an anchor,
+                // an absolute URL, or a link out to source/ADRs is somebody else's problem.
+                if (!target.EndsWith(".md", StringComparison.OrdinalIgnoreCase)) continue;
+                if (target.Contains("://", StringComparison.Ordinal)) continue;
+
+                string resolved = Path.GetFullPath(
+                    Path.Combine(directory, target.Replace('/', Path.DirectorySeparatorChar)));
+
+                if (!File.Exists(resolved))
+                    failures.Add($"{Path.GetRelativePath(RepoRoot, document).Replace('\\', '/')} → {target}");
+            }
+        }
+
+        Assert.IsEmpty(failures,
+            "Test documents link to files that do not exist:\n" + string.Join("\n", failures.Order()));
+    }
+
     private const string AutomatedTestingRelativePath = "docs/automated-testing";
 
     private static readonly string AutomatedTestingDir =

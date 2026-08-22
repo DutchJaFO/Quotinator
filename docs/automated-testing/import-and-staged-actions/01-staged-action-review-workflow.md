@@ -83,4 +83,8 @@ Not yet established as a captured record beyond the status transitions asserted 
 
 ## Cleanup
 
-None — the applied batch is left in place for the tests that follow.
+> **Outstanding.** This currently leaves its applied batch in place, and other documents have been
+> written assuming it. That is a dependency on execution order, which the index forbids: each test
+> establishes what it needs. Either this test cleans up after itself and the others gain their own
+> setup, or it runs against its own container and volume. Recorded as a finding for #339's audit —
+> resolving it means writing new setup steps, not moving existing ones.

@@ -13,7 +13,8 @@ required.
 - **`skip` policy is used deliberately**, so the staged batch leaves nothing pending and `apply`
   can return `200` rather than the `422` an undecided action would produce. Using `review` here would
   test the atomicity contract instead of the alias.
-- The `batchId` must come from the preview response, not from an earlier test's batch.
+- The `batchId` must come from this test's own preview response. A batch id found lying around in the
+  database belongs to something else and makes the result meaningless.
 
 ## Steps
 

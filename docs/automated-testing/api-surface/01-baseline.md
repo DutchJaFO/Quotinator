@@ -51,8 +51,8 @@ failure.
 ## Observed effect
 
 Not yet established. This document records what a pass requires; what the container actually emits
-while serving these requests — its log lines and their shape — has not been captured. See the index's
-Knowledgebase section for why that matters.
+while serving these requests — its log lines and their shape — has not been captured. See
+[the index](../README.md#test-outcomes-feed-the-knowledgebase) for why that matters.
 
 ## Cleanup
 

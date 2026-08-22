@@ -55,4 +55,6 @@ distinction matters more than the raw result.
 
 ## Cleanup
 
-None — the imported actions are left staged for the tests that page through them.
+> **Outstanding.** This currently leaves its imported actions staged, on the assumption that another
+> test will page through them. That is a dependency on execution order, which the index forbids.
+> Recorded as a finding for #339's audit.

@@ -9,7 +9,9 @@ A running container with an admin key.
 
 `Quotinator_ConversationLine` holds a real `FOREIGN KEY` to `Quotinator_Quote(Id)`. A line referencing
 a quote by an id whose casing does not match the quote's now-canonical form must still satisfy it —
-the same bug class #209 found for `StageDirectionId`/`SoundCueId`, now covering `QuoteId`.
+the same bug class
+[`01-canonicalize-explicit-ids-at-capture.md`](01-canonicalize-explicit-ids-at-capture.md) covers for
+`StageDirectionId`/`SoundCueId`, now covering `QuoteId`.
 
 ## Determinism
 

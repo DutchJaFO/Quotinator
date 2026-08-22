@@ -71,7 +71,9 @@ curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/notifications"
 `/health` returns `503 {"status":"unhealthy",...}`, confirming the test reached the failure state.
 `/`, `/stats` and `/notifications` all return `200` — never `500`, never a raw exception page.
 `GET /api/v1/notifications` correctly returns `503`; API traffic stays gated while degraded, which is
-#254's design and expected rather than a regression.
+the design
+[`01-seeding-backup-degraded-startup-and-reset-recovery.md`](01-seeding-backup-degraded-startup-and-reset-recovery.md)
+covers, and expected rather than a regression.
 
 Visiting the three Blazor pages in a real browser, the intended content was:
 

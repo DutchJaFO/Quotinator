@@ -7,7 +7,10 @@
 
 Before this issue, `characters[]` supported only Correction (`id` present, matched by id) or
 brand-new-via-natural-key — there was no way to correct an existing Character's `Name` through the
-staging/decide pipeline the way Source, Person, StageDirection and SoundCue already could.
+staging/decide pipeline the way Source, Person
+([`08-person-modify-and-lowercase-id-reversal.md`](08-person-modify-and-lowercase-id-reversal.md)),
+StageDirection and SoundCue
+([`07-stagedirection-soundcue-modify.md`](07-stagedirection-soundcue-modify.md)) already could.
 
 The widened schema adds `sourceTitle`/`sourceType`, required unconditionally and mirroring `source`'s
 own shape, so a no-id entry resolves through ADR 013's Type-anchored, Series-scoped matching algorithm

@@ -54,6 +54,29 @@ before the fix/feature is implemented, and green after.** This is verified by an
 not asserted, not inferred from "the code clearly didn't have this before." See `process.md` §
 "Working on an issue" for the full red-to-green rule.
 
+### The live-only variant
+
+An issue whose verification is entirely live has no `Expected tests` table, so the first and third
+`Definition of done` boxes — *"All expected tests listed above start red before implementation"* and
+*"All expected tests pass (green)"* — have nothing to point at. Ticking them is dishonest and leaving
+them unticked blocks the close for no reason.
+
+**Such an issue copies these two boxes verbatim instead of those two**, leaving the rest of the list
+unchanged:
+
+```
+- [ ] Every live check is written down before it is run, with its expected output stated
+- [ ] Every live check produces its expected output
+```
+
+This is a second fixed list, not a licence to customize: an issue uses the standard pair or this pair,
+never a hand-edited mixture. The rule it preserves is the same one red-to-green protects — the
+expectation is committed to before the result is seen, so a check cannot be quietly reshaped to match
+whatever happened.
+
+**Use it only when there is genuinely nothing to unit test.** A live-only issue is rare; an issue that
+merely *prefers* live verification still writes the tests.
+
 ### Bug
 
 ```
@@ -114,7 +137,10 @@ Use this table to make the red-to-green contract explicit.
 |---|---|---|
 | ExampleTests | MethodName_Condition_ExpectedResult | ❌ |
 
-Omit this section only if all verification is via live commands (rare).
+Omit this section only if all verification is via live commands (rare) — and when you do, use the
+live-only `Definition of done` variant above rather than leaving two boxes pointing at a table that
+isn't there. Do not substitute a placeholder row (`| — | Live tests only | ❌ |`) to give them
+something to reference; that satisfies the shape and not the rule.
 
 ## Definition of done
 

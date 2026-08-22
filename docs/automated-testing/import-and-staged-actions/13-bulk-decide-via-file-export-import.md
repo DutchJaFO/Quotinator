@@ -91,7 +91,8 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 - The CSV round trip also returns `200` with `errors: []`.
 - The malformed row returns **`200`, never `422` for the whole request**, with exactly one entry in
   `errors[]` naming the bad row's `actionId`, and every other row's action still decided. "One bad row
-  never aborts the rest of the file", matching `POST /import`'s own established contract.
+  never aborts the rest of the file", matching the contract
+  [`06-bodyless-request-validation.md`](06-bodyless-request-validation.md) covers for `POST /import`.
 - Unknown `format` returns `422`; no `X-Api-Key` returns `401`.
 - **No `batchId` and no body returns `422` with `"detail":"You must provide a batchId."`**
 

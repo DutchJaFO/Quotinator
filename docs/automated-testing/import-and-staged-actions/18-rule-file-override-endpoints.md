@@ -13,8 +13,8 @@ bundled copy at first. The generate step needs a real batch with a decided field
 
 ## Determinism
 
-- **The override must be deleted at the end.** It is registered state that would otherwise affect every
-  later test in a run.
+- **The override must be deleted at the end.** It is registered state, and a test leaves nothing behind
+  that another did not ask for.
 - **The alias-candidate check is structural, not a candidate count** — see Observed effect. Asserting a
   specific number of candidates would fail for a correct reason the moment a data-quality fix lands.
 
