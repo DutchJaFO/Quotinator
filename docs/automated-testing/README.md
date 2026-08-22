@@ -326,6 +326,65 @@ never beside it.
 
 ---
 
+## Where the previous suite's sections went
+
+Until #339 this suite was one file, `docs/smoke-tests.md`, whose tests were numbered `1`–`44`. Plan
+docs, issue comments and code comments written before the split refer to those numbers, and this table
+is what resolves them. It is a permanent key, not a migration aid — those references are historical
+records and are not going to stop existing.
+
+| Old | Now |
+|---|---|
+| 1 | [api-surface/01-baseline.md](api-surface/01-baseline.md) |
+| 2 | [import-and-staged-actions/01-staged-action-review-workflow.md](import-and-staged-actions/01-staged-action-review-workflow.md) |
+| 3 | [import-and-staged-actions/02-two-phase-decide-apply-reversal.md](import-and-staged-actions/02-two-phase-decide-apply-reversal.md) |
+| 4 | [import-and-staged-actions/03-batch-id-mode-alias.md](import-and-staged-actions/03-batch-id-mode-alias.md) |
+| 5 | [import-and-staged-actions/04-discard.md](import-and-staged-actions/04-discard.md) |
+| 6 | [import-and-staged-actions/05-reverse-and-resurrection.md](import-and-staged-actions/05-reverse-and-resurrection.md) |
+| 7 | [import-and-staged-actions/06-bodyless-request-validation.md](import-and-staged-actions/06-bodyless-request-validation.md) |
+| 8 | [import-and-staged-actions/07-stagedirection-soundcue-modify.md](import-and-staged-actions/07-stagedirection-soundcue-modify.md) |
+| 9 | [import-and-staged-actions/08-person-modify-and-lowercase-id-reversal.md](import-and-staged-actions/08-person-modify-and-lowercase-id-reversal.md) |
+| 10 | [import-and-staged-actions/09-character-source-many-to-many-identity.md](import-and-staged-actions/09-character-source-many-to-many-identity.md) |
+| 11 | [import-and-staged-actions/10-source-date-from-resolving-quote.md](import-and-staged-actions/10-source-date-from-resolving-quote.md) |
+| 12 | [identity-and-casing/01-canonicalize-explicit-ids-at-capture.md](identity-and-casing/01-canonicalize-explicit-ids-at-capture.md) |
+| 13 | [api-surface/02-pagination-contract.md](api-surface/02-pagination-contract.md) |
+| 14 | [identity-and-casing/02-quote-id-case-insensitive-lookup.md](identity-and-casing/02-quote-id-case-insensitive-lookup.md) |
+| 15 | [identity-and-casing/03-conversation-line-quote-id-fk-safety.md](identity-and-casing/03-conversation-line-quote-id-fk-safety.md) |
+| 16 | Folded into [identity-and-casing/02](identity-and-casing/02-quote-id-case-insensitive-lookup.md) — it was an explanatory note, not a test |
+| 17 | [identity-and-casing/04-read-time-presentation-of-string-typed-ids.md](identity-and-casing/04-read-time-presentation-of-string-typed-ids.md) |
+| 18 | [identity-and-casing/05-generic-repository-select-list-wrapping.md](identity-and-casing/05-generic-repository-select-list-wrapping.md) |
+| 19 | [import-and-staged-actions/11-batch-id-validation-and-request-log-status.md](import-and-staged-actions/11-batch-id-validation-and-request-log-status.md) |
+| 20 | [import-and-staged-actions/12-character-modify-and-explicit-id-on-add.md](import-and-staged-actions/12-character-modify-and-explicit-id-on-add.md) |
+| 21 | [import-and-staged-actions/13-bulk-decide-via-file-export-import.md](import-and-staged-actions/13-bulk-decide-via-file-export-import.md) |
+| 22 | [import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md](import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md) |
+| 23 | [import-and-staged-actions/15-rule-file-live-read-proof.md](import-and-staged-actions/15-rule-file-live-read-proof.md) |
+| 24 | [import-and-staged-actions/16-conflict-rule-staleness.md](import-and-staged-actions/16-conflict-rule-staleness.md) |
+| 25 | [import-and-staged-actions/17-source-alias-staleness.md](import-and-staged-actions/17-source-alias-staleness.md) |
+| 26 | [import-and-staged-actions/18-rule-file-override-endpoints.md](import-and-staged-actions/18-rule-file-override-endpoints.md) |
+| 27 | [import-and-staged-actions/19-per-file-import-report.md](import-and-staged-actions/19-per-file-import-report.md) |
+| 28 | [api-surface/03-unicode-aware-search-toggle.md](api-surface/03-unicode-aware-search-toggle.md) |
+| 29 | [startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) |
+| 30 | [database-lifecycle/01-file-resource-capture-and-reconstruction.md](database-lifecycle/01-file-resource-capture-and-reconstruction.md) |
+| 31 | [database-lifecycle/02-audit-export-and-conflict-data-purge.md](database-lifecycle/02-audit-export-and-conflict-data-purge.md) |
+| 32 | [database-lifecycle/03-reset-is-a-full-wipe.md](database-lifecycle/03-reset-is-a-full-wipe.md) |
+| 33 | [notifications-and-changelog/01-notification-system.md](notifications-and-changelog/01-notification-system.md) |
+| 34 | [api-surface/04-endpoint-naming-and-operation-ids.md](api-surface/04-endpoint-naming-and-operation-ids.md) |
+| 35 | [startup-and-degradation/02-startup-backup-gating-and-storage-budget.md](startup-and-degradation/02-startup-backup-gating-and-storage-budget.md) |
+| 36 | [startup-and-degradation/03-startup-wait-page.md](startup-and-degradation/03-startup-wait-page.md) |
+| 37 | [startup-and-degradation/04-migration-replay-under-restricted-write.md](startup-and-degradation/04-migration-replay-under-restricted-write.md) |
+| 38 | [startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) |
+| 39 | [notifications-and-changelog/02-notification-metadata-and-provenance.md](notifications-and-changelog/02-notification-metadata-and-provenance.md) |
+| 40 | [notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md](notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md) |
+| 41 | [notifications-and-changelog/04-upgrade-does-not-duplicate-the-legacy-notification.md](notifications-and-changelog/04-upgrade-does-not-duplicate-the-legacy-notification.md) |
+| 42 | [notifications-and-changelog/05-legacy-notification-provenance.md](notifications-and-changelog/05-legacy-notification-provenance.md) |
+| 43 | [notifications-and-changelog/06-whats-new-row-predating-release-state.md](notifications-and-changelog/06-whats-new-row-predating-release-state.md) |
+| 44 | [notifications-and-changelog/07-changelog-served-from-its-own-database.md](notifications-and-changelog/07-changelog-served-from-its-own-database.md) |
+
+**This table does not license numbering a test again.** Refer to a test by what it verifies; the
+numbers here exist only to resolve references written before the split.
+
+---
+
 ## Document template
 
 Every test document follows this shape.

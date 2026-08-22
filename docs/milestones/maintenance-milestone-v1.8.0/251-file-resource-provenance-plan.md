@@ -401,7 +401,8 @@ of the original 15:**
 `dotnet test --configuration Release -nodeReuse:false` — **2917/2917 passed**, 0 warnings, 0 errors
 (final count, including decision 6's 7 additional tests). ✅
 `docker build -f docker/Dockerfile -t quotinator:local .` — succeeded. ✅ T2 smoke-tested against a
-live container across two separate passes (see `docs/smoke-tests.md` §30, added per the living-checklist
+live container across two separate passes (see `docs/smoke-tests.md` §30 — now
+`docs/automated-testing/`, whose README maps the old section numbers — added per the living-checklist
 rule):
 - **First pass (Steps 1–7 scope):** all four bundled source files captured with correct `Bundled` origin
   on startup; the download endpoint reconstructs `quotinator-curated.json` **byte-for-byte identical** to
@@ -450,7 +451,7 @@ startup at schema v6, `POST /admin/database/reset` reimported all 4 bundled sour
 `GET /api/v1/import/file-resources` and `GET /api/v1/import/batches` both returned `200` against the
 live database.
 
-**T2 confirmed** — `docs/smoke-tests.md` §30's list/detail block: origin/type filter validation and a
+**T2 confirmed** — `docs/smoke-tests.md` §30's list/detail block (now `docs/automated-testing/`, whose README maps the old section numbers): origin/type filter validation and a
 `linkedBatchCount`/`linkedBatchIds` cross-check against `GET /import/batches`, against a live Docker
 container.
 
@@ -469,6 +470,7 @@ key updated to `api/v1/import/file-resources/prune`. Tests moved from `AdminEndp
 new `ImportFileResourceEndpointsTests.cs` (matching `ImportRuleEndpointsTests.cs`'s precedent), routes
 updated, otherwise unchanged — same 5 tests, same assertions. README.md/`addon/DOCS.md`/`addon-beta/DOCS.md`
 endpoint tables updated to move both rows into the Import section. `docs/smoke-tests.md` §30's curl
+(now `docs/automated-testing/`, whose README maps the old section numbers)
 commands updated to the new routes.
 
 ---
@@ -496,13 +498,13 @@ and the pre-decision Expected tests table.
 | 9 | ✅ | Prune endpoint follows this project's admin conventions | Endpoint test | `ImportFileResourceEndpointsTests.PruneFileResources_NoApiKey_Returns401`, `ImportFileResourceEndpointsTests.PruneFileResources_MalformedKeepPerFile_Returns422` |
 | 10 | ✅ | Full solution builds and tests pass | Live | `dotnet build --configuration Release -nodeReuse:false` and `dotnet test --configuration Release -nodeReuse:false` both 0 warnings, 0 errors, all green |
 | 11 | ✅ | T1 verified | Live | Developer started app in Visual Studio 2026-08-03 — clean v5→v6 migration, seeding completed, app served requests correctly |
-| 12 | ✅ | T2 verified | Live | `docs/smoke-tests.md` §30 — byte-exact download reconstruction, `lineEnding` override, error cases, and prune auth/validation, all confirmed against a live Docker container |
+| 12 | ✅ | T2 verified | Live | `docs/smoke-tests.md` §30 (now `docs/automated-testing/`, whose README maps the old section numbers) — byte-exact download reconstruction, `lineEnding` override, error cases, and prune auth/validation, all confirmed against a live Docker container |
 | 13 | ✅ | Paginated file-resources list, filterable by `fileName`/`origin`, follows the standard pagination contract | Endpoint test | `ImportFileResourceEndpointsTests.GetFileResources_Returns200WithPageShape` and the full 8-case pagination matrix (`...PageZero_Returns422` through `...PageBeyondLast_Returns422DistinctDetail`) |
 | 14 | ✅ | File-resource detail endpoint returns the full `linkedBatchIds` list | Endpoint test | `ImportFileResourceEndpointsTests.GetFileResourceById_ExistingId_ReturnsFullDetailIncludingLinkedBatchIds` |
 | 15 | ✅ | Paginated import-batches list, filterable by `type`/`status`, follows the standard pagination contract | Endpoint test | `ImportBatchEndpointsTests.GetImportBatches_Returns200WithPageShape` and the full 8-case pagination matrix (`...PageZero_Returns422` through `...PageBeyondLast_Returns422DistinctDetail`) |
 | 16 | ✅ | Import-batch detail endpoint, case-insensitive id match, 404 for unknown/malformed id | Endpoint test | `ImportBatchEndpointsTests.GetImportBatchById_ExistingId_ReturnsBatch`, `...UppercaseId_MatchesCaseInsensitively`, `...UnknownId_Returns404`, `...MalformedId_Returns404NotBadRequest` |
 | 17 | ✅ | T1 verified for the new GET endpoints | Live | Developer started app in Visual Studio 2026-08-04 (post-commit): reset reimported all bundled sources, `GET /api/v1/import/file-resources` and `GET /api/v1/import/batches` both returned `200` |
-| 18 | ✅ | T2 verified for the new GET endpoints | Live | **Correction (2026-08-04):** this row previously claimed T2 coverage that didn't actually exist — `docs/smoke-tests.md` §30 had no curl content for the list/detail endpoints at all at the time this row was first marked ✅. Actually added and run against a live Docker container while implementing #252 (which touches the same section) — see #252's own plan doc Step 5 |
+| 18 | ✅ | T2 verified for the new GET endpoints | Live | **Correction (2026-08-04):** this row previously claimed T2 coverage that didn't actually exist — `docs/smoke-tests.md` §30 (now `docs/automated-testing/`, whose README maps the old section numbers) had no curl content for the list/detail endpoints at all at the time this row was first marked ✅. Actually added and run against a live Docker container while implementing #252 (which touches the same section) — see #252's own plan doc Step 5 |
 
 ---
 

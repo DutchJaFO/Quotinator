@@ -362,7 +362,8 @@ Two distinct root causes across the 3 hits:
   updating to the new uniform-Debug behavior, not just a mechanical rename. `docs/logging.md` (the
   authoritative logging-standards doc, boyscout-touched per its own rule) also documented the old
   split in five separate places (the levels table, two example log blocks, a code sample, the prefix
-  table) — all updated to match. `docs/smoke-tests.md`'s #229 verification step also assumed
+  table) — all updated to match. `docs/smoke-tests.md`'s #229 verification step (the suite is now
+  `docs/automated-testing/`) also assumed
   `Quotinator__LogRequests=true` alone was enough to see `[Api - Request]` lines in `docker logs` —
   no longer true now that request logging is Debug-only, since `LogRequests` only registers the
   middleware and never touches the log level; the step now also requires
@@ -413,7 +414,8 @@ requirement, once the pattern is decided. #244 itself does not touch the 52 occu
 `dotnet build --configuration Release`: 0 warnings, 0 errors. `dotnet test --configuration Release`:
 9 test projects, 3169 tests, 0 failures.
 
-**T2 (Docker) — full 32-section `docs/smoke-tests.md` pass, per explicit developer choice to run the
+**T2 (Docker) — full 32-section `docs/smoke-tests.md` pass (the suite is now
+`docs/automated-testing/`), per explicit developer choice to run the
 complete checklist rather than a scoped subset, given #244's own changes touch logging and request
 handling directly.** Every section verified live against a rebuilt image, including the destructive/
 invasive ones (section 23's temporary rule-file mutation + double image rebuild, section 29's
@@ -436,7 +438,8 @@ behaviour with two exceptions, both found and fixed as part of this pass:
   successfully-applied bundled-seed `Import_Action` row immediately — so the row the check inspects no
   longer exists on a default container. Re-verified with `Quotinator__AutoPurgeBundledImportActions=
   false` and confirmed the underlying mechanism (rule live-read, `Replace` resolution) still works
-  exactly as documented; `docs/smoke-tests.md`'s section 23 should note the env var is now required for
+  exactly as documented; `docs/smoke-tests.md`'s section 23 (now `docs/automated-testing/`, whose
+  README maps the old section numbers) should note the env var is now required for
   this specific check. Two smaller doc-staleness items noted for the same reason, not acted on here:
   section 8's "Finally" paragraph doesn't yet reflect the `Complete`-blocks-`newest-wins` correction
   section 9 already documents for itself (worked around with a fresh, never-`Complete` fixture instead

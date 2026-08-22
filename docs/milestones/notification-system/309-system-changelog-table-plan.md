@@ -772,7 +772,7 @@ onward a real user database exists on disk, so `ChangelogDatabaseInitializer.Mig
 the same append-only rule as `DatabaseInitializer.DataOwnedMigrations`, and its baseline must be kept in
 step with it.
 
-**Smoke test:** `docs/smoke-tests.md` section 44, added in the same commit as this fix per that
+**Smoke test:** [`notifications-and-changelog/07-changelog-served-from-its-own-database.md`](../../automated-testing/notifications-and-changelog/07-changelog-served-from-its-own-database.md), added in the same commit as this fix per that
 document's own living-checklist rule. It checks the file exists on disk beside `quotinatordata.db`,
 that a real `/about` request is served from the database, that no JSON-fallback line is ever logged,
 and that a restart finds the schema already present and re-imports without duplicating.
@@ -788,9 +788,10 @@ deterministic and instant — the file-exists check above, plus
 `.ChangelogDatabase_IsAFileNamedAlongsideTheMainDatabase` asserting the real DI registration through the
 live container (verification row 20).
 
-### 15. Finding — `docs/smoke-tests.md` defects found while running it
+### 15. Finding — smoke-test defects found while running the suite
 
-**Status:** ✅ Done (2026-08-18) — all six fixed in `docs/smoke-tests.md`, plus two further defects the
+**Status:** ✅ Done (2026-08-18) — all six fixed in the suite, now
+[`docs/automated-testing/`](../../automated-testing/README.md), plus two further defects the
 fix pass surfaced. Two of the six were reframed rather than repaired, because the developer's own rules
 made the original expectation invalid rather than merely stale:
 
@@ -1020,7 +1021,7 @@ the previous shape, returning the stale `0.9.0` where `1.0.0` was expected.
 | 16 | ✅ | The changelog tables carry the `Changelog_` prefix per ADR 015's revision, in the migration, baseline, entities, `Sql.cs` and tests | Unit test | 14/14 changelog tests pass against the renamed schema (2026-08-16); full solution builds 0 Warning(s) 0 Error(s); full suite 3,445 passed |
 | 17 | ✅ | The renamed schema works live: baseline applies, the importer writes, and `/about` reads from the database rather than the JSON fallback | Live (T2) | 2026-08-17 against `quotinator:t2` — see the T2 step above. Decisive evidence is the *absence* of the `falling back` warning, since the page renders either way |
 | 18 | ✅ | Migration applies cleanly from the last released schema | Live (T2) | v1.8.3 → current: `data v3 → v11`, 0 exceptions, `schema is up to date` on restart (ADR 009) |
-| 19 | ✅ | The changelog is stored as a file, not an in-memory instance that cannot outlive its handle | Live (T2) | `docs/smoke-tests.md` section 44. `quotinatorchangelog.db` present on disk beside `quotinatordata.db`. Structurally guaranteed rather than waited for — see the note under step 14 on why the original sixteen-minute uptime check was removed |
+| 19 | ✅ | The changelog is stored as a file, not an in-memory instance that cannot outlive its handle | Live (T2) | [`notifications-and-changelog/07-changelog-served-from-its-own-database.md`](../../automated-testing/notifications-and-changelog/07-changelog-served-from-its-own-database.md). `quotinatorchangelog.db` present on disk beside `quotinatordata.db`. Structurally guaranteed rather than waited for — see the note under step 14 on why the original sixteen-minute uptime check was removed |
 | 20 | ✅ | The changelog database is a file, not an in-memory instance | Unit test | `ChangelogDatabaseWiringTests.ChangelogDatabase_IsNotAnInMemoryDatabase` and `.ChangelogDatabase_IsAFileNamedAlongsideTheMainDatabase` — both red against the previous wiring |
 | 21 | ✅ | T1 — `/about` renders correctly from the renamed tables, reading the on-disk changelog database, in Visual Studio | Live (T1) | 2026-08-19, `localhost:44368/about` under Dutch culture: the Wijzigingslog renders the unreleased section and the v1.8.3 release with its quote, and the machine-translation notice. Changelog schema created at baseline, `refreshed 126 entries across 3 language(s)`, `/about` loaded afterwards |
 | 22 | ✅ | A database-backed read states positively that the database served it, rather than being inferred from the absence of a fallback warning | Unit test | `ChangelogReaderTests.GetDocumentAsync_DatabasePopulated_LogsThatTheDatabaseServedIt` — red before, since no such line existed |

@@ -161,12 +161,14 @@ active" comparison.
 
 ## 7. Smoke tests (T2) — the toggle itself, against a real running container
 
-**Status:** ✅ Done — written to `docs/smoke-tests.md` section 28, and actually run live against
+**Status:** ✅ Done — written to `docs/smoke-tests.md` section 28 (now `docs/automated-testing/`,
+whose README maps the old section numbers), and actually run live against
 `quotinator:local` (not just documented): flag-off container returned `NoResults` for `q=CAFÉ&
 field=source`; a fresh flag-on container (`-e Quotinator__UnicodeAwareSearch=true`), same import,
 same query, returned `Ok` with the `Café de Flore` fixture — matching the unit tests exactly.
 
-New numbered section in `docs/smoke-tests.md` (`## 28. Unicode-aware search toggle (#222)`), following
+New numbered section in `docs/smoke-tests.md` (`## 28. Unicode-aware search toggle (#222)`; the suite
+is now `docs/automated-testing/`, whose README maps the old section numbers), following
 its established pattern (fenced `curl` commands + expected-output prose). Unlike the unit tests, this
 proves the **container-level** wiring — the env var actually reaches the app and flips real query
 behaviour — not the matching logic itself (already covered in step 6). No bundled/curated data

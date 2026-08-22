@@ -163,7 +163,7 @@ API client) plus two `changed` entries (the naming standardisation itself, and t
 const-sharing fix) to `changelog.en/nl/de.json`'s `unreleased` section, lockstep. Regenerated
 `CHANGELOG.md`/`addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md`.
 
-### 7. `docs/smoke-tests.md` sweep for stale operation-id references
+### 7. Smoke-test suite sweep for stale operation-id references
 **Status:** ✅ Done
 
 No existing section referenced either old `operationId` string. Added new section 34 — live checks that
@@ -248,7 +248,7 @@ database that already has prior notification history, not just a fresh one.
 | 8 | ✅ | `QuoteEndpoints.cs`'s `GetById` log tag now matches its `WithName` | Live | Docker log line for `GET /quotes/{id}` confirmed reading `[Api - GetQuoteById]` |
 | 9 | ✅ | No stale old-`operationId` references remain in docs/tests | Manual | Full-repo grep for `GetImportBatches`/`GetFileResources` (excluding `...ById`) found only the two endpoint files' own new names |
 | 10 | ✅ | Changelog highlights the breaking `operationId` renames | Manual | `changelog.en/nl/de.json` unreleased entries added, lockstep |
-| 11 | ✅ | `docs/smoke-tests.md` has no stale operation-id references | Manual | Grep sweep clean; new section 34 added |
+| 11 | ✅ | The smoke-test suite has no stale operation-id references | Manual | Grep sweep clean; new section 34 added. The suite is now `docs/automated-testing/`, whose README maps the old section numbers |
 | 12 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 13 | ✅ | Full test suite green | Build | 1074 Data.Tests + 1437 Core.Tests + 664 Api.Tests, 0 failures |
 | 14 | ✅ | T1 (developer's own Visual Studio run) | Live | Clean startup, notification visible in success modal with correct message/expiry/status |

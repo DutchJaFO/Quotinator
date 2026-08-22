@@ -184,7 +184,7 @@ that the new Blazor exemptions don't widen the gate for real REST data endpoints
 | 3 | ✅ | No regression | Build + test | `dotnet build --configuration Release` (0/0); `dotnet test --configuration Release` (625/625 passed) |
 | 4 | ✅ | Translation completeness holds with new keys | Unit test | `TranslationCompletenessTests` |
 | 5 | ✅ | T1 — degraded error card, startup-success modal, Statistics page, and nav all render correctly (and correctly *styled*) in Visual Studio | Live (T1) | Developer's own pass, confirmed 2026-08-08 |
-| 6 | ✅ | T2 — fresh startup shows the success modal over `QuoteCard`, dismissible, no reappearance after; a broken schema shows the degraded card (fully styled) with durable per-file history, Home disabled, REST API/About/Statistics reachable, REST data endpoints still 503; admin Reset recovers health and Home; Statistics page correct both healthy and degraded, and survives a container restart | Live (T2) | Docker, `execute-sql.csx` schema-break technique (smoke-tests.md §29), verified visually via screenshot — documented in Notes |
+| 6 | ✅ | T2 — fresh startup shows the success modal over `QuoteCard`, dismissible, no reappearance after; a broken schema shows the degraded card (fully styled) with durable per-file history, Home disabled, REST API/About/Statistics reachable, REST data endpoints still 503; admin Reset recovers health and Home; Statistics page correct both healthy and degraded, and survives a container restart | Live (T2) | Docker, `execute-sql.csx` schema-break technique (smoke-tests.md §29; now `docs/automated-testing/`, whose README maps the old section numbers), verified visually via screenshot — documented in Notes |
 
 ---
 
@@ -225,7 +225,8 @@ patch timing edge cases in it (see Design change above).
 
 **Real bug found in the delivered feature: `manifest.json` misattributed another file's source URL and
 record count.** `manifest.json` is captured and linked to *every* seed batch it drives (confirmed by
-smoke-tests.md §30's own `BatchLinks = 4` check), not just one. Naively picking "the most recently
+smoke-tests.md §30's own `BatchLinks = 4` check; now `docs/automated-testing/`, whose README maps the
+old section numbers), not just one. Naively picking "the most recently
 linked batch" for a file's displayed Source/Records attributed vilaboim's URL and record count to the
 manifest row, which is wrong — the manifest isn't sourced from that URL at all. Fixed in
 `DatabaseStatsSummary.razor.cs` by only showing Source/Records when every one of a file's linked batches

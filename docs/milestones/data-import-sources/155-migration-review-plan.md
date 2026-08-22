@@ -276,7 +276,7 @@ run as a separate pass — the audit below reflects what was actually found and 
   replacement technique.
 - `SqlQueryGuardTests.AggregateQueries_MatchDocumentedInventory`: no hit — none of the consolidated
   constant names appear in its inventory.
-- `CLAUDE.md` / `docs/smoke-tests.md`: no hit — neither file hard-codes a specific migration count or
+- `CLAUDE.md` / `docs/smoke-tests.md` (now `docs/automated-testing/`): no hit — neither hard-codes a specific migration count or
   version number for this migration set.
 - ADR 002/004/009/012/013: no hit — none reference a specific migration version number for this set.
 - **Historical milestone plan docs under `docs/milestones/` were not touched**, per this project's

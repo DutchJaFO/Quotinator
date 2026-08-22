@@ -264,7 +264,8 @@ this rule's scope, per Step 5's finding).
 **T1 (2026-08-09):** confirmed by the developer — clean Visual Studio start, normal startup log
 output.
 
-**T2 (2026-08-09): full 32-section `docs/smoke-tests.md` pass, all sections verified live against a
+**T2 (2026-08-09): full 32-section `docs/smoke-tests.md` pass (the suite is now
+`docs/automated-testing/`), all sections verified live against a
 rebuilt image.** Given no behaviour change was intended, this pass specifically watched for any
 divergence in logged output. One genuine bug was caught and fixed mid-pass: `SourceEndpoints.cs` had
 been drafted for conversion but the edit was never applied — its two `LogInformation` calls were still

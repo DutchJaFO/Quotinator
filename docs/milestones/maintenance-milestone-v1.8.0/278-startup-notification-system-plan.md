@@ -299,10 +299,11 @@ case), and `OpenApiSpecEndpointTests` (`/api/v1/notifications` page/pageSize int
 CLAUDE.md's "a new `NumericParameterSchemaTransformer` registration needs a live-pipeline test" rule).
 Full solution test suite green: 0 failures across all projects.
 
-### 10. Full verification (T1, T2), `docs/smoke-tests.md` update, changelog
+### 10. Full verification (T1, T2), smoke-test suite update, changelog
 **Status:** ✅ Done
 
-Added `docs/smoke-tests.md` section 33 (list/dismiss/tag checks against a fresh empty container,
+Added `docs/smoke-tests.md` section 33 — now `docs/automated-testing/`, whose README maps the old
+section numbers — (list/dismiss/tag checks against a fresh empty container,
 since no production code path writes a real notification yet — the write→dismiss round trip itself is
 covered by the real-SQLite `NotificationWriterTests`, not live-command-verified here). Added a
 changelog entry (`en`/`nl`/`de`, lockstep) to `unreleased.added` plus a `highlights` entry (new
@@ -404,7 +405,7 @@ correctly narrows to All/Expired only, the Expires column is visible, and Run �
 | 25 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` — 1074 Data.Tests + 1437 Core.Tests + 660 Api.Tests, 0 failures |
 | 26 | ✅ | T1 (developer's own Visual Studio run) | Live | Confirmed 2026-08-09 — clean startup, `schema is up to date (data v8, app v6)`, no errors; developer manually seeded example notifications and confirmed rendering, which surfaced the Step 7 revision above |
 | 27 | ✅ | T2 (Docker smoke tests) | Live | Section 33 pass, 2026-08-09 — see Step 10 |
-| 28 | ✅ | `docs/smoke-tests.md` updated with a Notifications section | Manual | Section 33 added |
+| 28 | ✅ | The smoke-test suite updated with a Notifications section | Manual | Section 33 added; the suite is now `docs/automated-testing/`, whose README maps the old section numbers |
 | 29 | ✅ | `docs/api-endpoints.md` documents the new endpoints | Manual | New rows added in Step 5 |
 | 30 | ✅ | `NotificationActionExecutor.CanExecute`/`ExecuteAsync` for `DatabaseReset` | Unit test | `NotificationActionExecutorTests.CanExecute_DatabaseReset_ReturnsTrue` + `ExecuteAsync_DatabaseReset_CallsResetAndMarksHealthyAndDismissesMatchingNotifications` |
 | 31 | ✅ | Run → Confirm on an `ActionRequired` row actually executes a Reset from the UI, and Cancel does not | Live | Confirmed 2026-08-09 — see Step 11 |

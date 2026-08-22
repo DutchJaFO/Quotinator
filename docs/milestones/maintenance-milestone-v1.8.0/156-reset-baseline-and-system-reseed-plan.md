@@ -180,7 +180,8 @@ fact — now describe the full-wipe baseline rebuild, and the stale `System_Audi
 `System_ImportConflicts`/`System_ImportActions`/`System_ChangeLog` names were corrected to their
 actual post-#253/#254 names in the same edit). Updated the `POST /admin/database/reset` endpoint's own
 `[Description]` and `docs/api-endpoints.md`'s matching row (per the "Keeping API documentation in
-sync" rule). Updated `docs/smoke-tests.md`: fixed two now-wrong expectations in existing sections
+sync" rule). Updated `docs/smoke-tests.md` (now `docs/automated-testing/`, whose README maps the old
+section numbers): fixed two now-wrong expectations in existing sections
 (#221's report-shape check, #254's degraded-state-recovery check both assumed Reset reseeds), and
 added a new §32 dedicated to #156. Full `dotnet build`/`dotnet test` — 0 warnings, 0 errors, 0 test
 failures. T2 (Docker) run end-to-end against §32's own checklist, including a real discrepancy found

@@ -387,7 +387,9 @@ Re-verified after the fix against a fresh v1.8.3 database: `{"announcement":"Get
 and the `AppVersionId` FK joins to `Quotinator.Api 1.8.3`. `System_AppVersion` holds exactly one row
 (`Quotinator.Api | 1.8.3 | 1`) and a restart appends none.
 
-**Smoke tests updated, not just added** (`docs/smoke-tests.md`): new section 39 covers the migration
+**Smoke tests updated, not just added** — now
+[`notifications-and-changelog/02-notification-metadata-and-provenance.md`](../../automated-testing/notifications-and-changelog/02-notification-metadata-and-provenance.md),
+which covers the migration
 path, stored payload, provenance join, append-only history, and structural dedupe. Section 33 was
 **wrong** after this issue — it asserted `totalCount: 0` and "No production code path writes a real
 notification yet", both untrue now that #279/#289/#81 are live producers; a fresh container carries

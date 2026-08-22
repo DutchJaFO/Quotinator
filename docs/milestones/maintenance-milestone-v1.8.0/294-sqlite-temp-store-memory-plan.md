@@ -34,7 +34,8 @@ fails) was never directly reproducible: Docker Desktop's WSL2 backend has no App
 all (confirmed live: `/sys/module/apparmor/parameters/enabled` reads `N`, no
 `/sys/kernel/security/apparmor` securityfs), and file-locking permission is an LSM concept with no
 Docker-mount equivalent. **A faithful reproduction of the general failure class was achieved locally on
-2026-08-11** instead (see `docs/smoke-tests.md` Section 37): a real, unmodified v1.8.2 database, migrated
+2026-08-11** instead (see `docs/smoke-tests.md` Section 37; now `docs/automated-testing/`, whose
+README maps the old section numbers): a real, unmodified v1.8.2 database, migrated
 by pre-#294 code under a `--read-only` container (stricter than the real profile — full write denial, not
 just lock denial), reproduced a genuine `SqliteException` (`SQLite Error 10: 'disk I/O error'`, not the
 original's `Error 14`, but the same failure class) and the identical degraded-startup symptom
@@ -106,7 +107,8 @@ codebase; kept here only so the step numbering below stays stable.
 
 ### 4. Add a repeatable restricted-write migration-replay smoke test
 
-**Status:** Done. `docs/smoke-tests.md` Section 37 — a real v1.8.2 image seeds a database under normal
+**Status:** Done. `docs/smoke-tests.md` Section 37 (now `docs/automated-testing/`, whose README maps
+the old section numbers) — a real v1.8.2 image seeds a database under normal
 conditions, then a `--read-only` container (current code) replays the migration against it. Live-run
 once during this issue to confirm both directions (Step 1's Background section has the full result);
 the documented procedure also includes the one-time revert-and-rerun steps to prove the test itself
@@ -123,7 +125,7 @@ would have caught the original bug, without requiring that revert on every futur
 | 3 | ✅ | The existing `UNICODE_CONTAINS` per-connection registration still works, independent of the flag | Unit test | `CreateConnection_OnOpen_StillRegistersUnicodeContainsFunction` |
 | 4 | ✅ | No other write target in the codebase is missing a required AppArmor permission | Live (review) | Full grep audit of every `File.Write`/`Directory.CreateDirectory`/temp-path call, cross-referenced against `apparmor.txt` — all resolve under `/data` or `/tmp` with sufficient permission for their actual needs |
 | 5 | ✅ | No regression | Unit test | Full solution, live-run 2026-08-11: 1077 (Data.Tests) + 1462 (Core.Tests) + 670 (Api.Tests) tests, 0 failures, 0 warnings |
-| 6 | ✅ | Real v1.8.2 → current migration replay survives a restricted-write (`--read-only`) environment; pre-#294 code fails the same test with a genuine `SqliteException` | Live (Docker) | `docs/smoke-tests.md` Section 37, live-run 2026-08-11 — GREEN: `healthy`, `quotes: 799`, `migration applied: Data v2 → v3, App v4 → v5`, no exception. RED (pre-#294 code, same test): `SQLite Error 10: 'disk I/O error'`, degraded `schemaVersion: 0`/`quotes: 0`/`503 unhealthy` |
+| 6 | ✅ | Real v1.8.2 → current migration replay survives a restricted-write (`--read-only`) environment; pre-#294 code fails the same test with a genuine `SqliteException` | Live (Docker) | `docs/smoke-tests.md` Section 37 (now `docs/automated-testing/`, whose README maps the old section numbers), live-run 2026-08-11 — GREEN: `healthy`, `quotes: 799`, `migration applied: Data v2 → v3, App v4 → v5`, no exception. RED (pre-#294 code, same test): `SQLite Error 10: 'disk I/O error'`, degraded `schemaVersion: 0`/`quotes: 0`/`503 unhealthy` |
 | 7 | ✅ | T1 — app starts cleanly with the fix in place | Live (T1) | Clean VS boot, 2026-08-11 23:28 — `schema is up to date`, live source refresh succeeded for both GitHub sources, `799 quotes` full stats, no errors; `/quotes/random` served repeatedly without issue |
 | 8 | ✅ | T2 — Docker smoke test | Live (Docker) | Re-run 2026-08-11 against the `useMemoryTempStore` redesign: basic boot/health/version sanity, Section 37's full real-migration-replay GREEN check (`healthy`, `quotes: 799`, `migration applied: Data v2 → v3, App v4 → v5`, no exception), and a basic import — all clean |
 | 9 | ✅ | The actual live HA upgrade succeeds with this fix in place | Live (T3) | Real HA supervisor upgrade to v1.8.3-beta2, 2026-08-12 06:17 — startup log shows `migration applied: Data v2 → v3, App v4 → v5` (the exact migration that failed in the original incident) completing cleanly, `799 quotes` full stats, `Data: /data` (the real persistent volume), no errors |
@@ -143,7 +145,8 @@ either mutating shared test-host process state or adding child-process test mach
 otherwise use, for a line with no independent decision logic to test in the first place.
 
 **Why item 6's reproduction used `--read-only` rather than a real AppArmor profile:** see
-`docs/smoke-tests.md` Section 37's own opening paragraph for the full reasoning — Docker Desktop's WSL2
+`docs/smoke-tests.md` Section 37's own opening paragraph (now `docs/automated-testing/`, whose README
+maps the old section numbers) for the full reasoning — Docker Desktop's WSL2
 backend cannot load AppArmor profiles at all, and even a Linux host that could would need file-locking
 denial specifically (an LSM concept), which no Docker mount option can express. `--read-only` denies
 write entirely rather than only locking, which is stricter than the real profile — sufficient to prove

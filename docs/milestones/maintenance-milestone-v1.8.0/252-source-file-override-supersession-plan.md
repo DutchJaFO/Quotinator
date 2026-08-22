@@ -185,7 +185,8 @@ comment as a `<remarks>` block, so a future reader hits the reasoning at the poi
   `DROP TABLE Import_FileResource` as cascading the delete to `Import_FileResourceLine` (`ON DELETE
   CASCADE`), losing the very row the test exists to prove survives — fixed by toggling the same PRAGMA
   the real migration runner already does.
-- `docs/api-endpoints.md` (the `origin` filter value list) and `docs/smoke-tests.md` §30 updated.
+- `docs/api-endpoints.md` (the `origin` filter value list) and `docs/smoke-tests.md` §30 updated (now
+  `docs/automated-testing/`, whose README maps the old section numbers).
   Found and fixed along the way: §30 still said "there is no list endpoint for `Import_FileResource`"
   and had zero curl coverage of the GET list/detail endpoints or the `linkedBatchCount`/`linkedBatchIds`
   cross-check against `GET /import/batches` — despite #251's own plan doc (verification row 18) already
@@ -199,7 +200,8 @@ comment as a `<remarks>` block, so a future reader hits the reasoning at the poi
 `dotnet build --configuration Release -nodeReuse:false` — 0 warnings, 0 errors. `dotnet test
 --configuration Release -nodeReuse:false` — full suite green (939 Data.Tests + 1418 Core.Tests + 591
 Api.Tests + smaller projects, 0 failures). `docker build -f docker/Dockerfile -t quotinator:local .` —
-succeeded. T2 smoke-tested against a live container (`docs/smoke-tests.md` §30, extended per the
+succeeded. T2 smoke-tested against a live container (`docs/smoke-tests.md` §30 — now
+`docs/automated-testing/`, whose README maps the old section numbers — extended per the
 living-checklist rule):
 - Fresh container log confirmed `data v7` at baseline (the new `Origin`/`HomeDirectoryKey` shape applied
   directly, no incremental replay needed for a fresh install).
@@ -214,9 +216,11 @@ living-checklist rule):
   `quotinatordata.db` without its `-wal`/`-shm` sidecars produced a stale snapshot (WAL-mode writes not
   yet checkpointed) that under-reported `manifest.json`'s batch links via the raw-SQL join check —
   re-copying with the sidecars included matched the live API exactly. Every `docker cp
-  .../quotinatordata.db` step across `docs/smoke-tests.md` (§11, §22, §23, §30) updated to always copy
+  .../quotinatordata.db` step across `docs/smoke-tests.md` (§11, §22, §23, §30 — now
+  `docs/automated-testing/`, whose README maps the old section numbers) updated to always copy
   the sidecars alongside it, since this affected sections this issue didn't otherwise touch.
-- Also ran the **full** `docs/smoke-tests.md` suite (all 30 sections, not just §30) end to end as a
+- Also ran the **full** `docs/smoke-tests.md` suite (all 30 sections as it then stood, not just §30;
+  now `docs/automated-testing/`) end to end as a
   regression pass — no functional failures; a few pre-existing doc-staleness notes found and left for a
   separate cleanup (unrelated to #251/#252's own code).
 
@@ -236,7 +240,7 @@ app v6)`, clean startup, correct stats (799 quotes etc.), no errors.
 | 5 | ✅ | API surface (`origin` filter, response field) updated consistently | Endpoint test | `ImportFileResourceEndpointsTests` |
 | 6 | ✅ | Full solution builds and tests pass | Live | `dotnet build`/`dotnet test --configuration Release -nodeReuse:false` — 0 warnings/0 errors, full suite green |
 | 7 | ✅ | T1 verified | Live | Developer ran the app in Visual Studio 2026-08-04 — `schema is up to date (data v7, app v6)`, clean startup, correct stats |
-| 8 | ✅ | T2 verified | Live | `docs/smoke-tests.md` §30 — origin filter with new values, `homeDirectoryKey`/`linkedBatchCount`/`linkedBatchIds` in responses, confirmed against a live Docker container; plus a full 30-section regression pass of the entire smoke-test suite |
+| 8 | ✅ | T2 verified | Live | `docs/smoke-tests.md` §30 (now `docs/automated-testing/`, whose README maps the old section numbers) — origin filter with new values, `homeDirectoryKey`/`linkedBatchCount`/`linkedBatchIds` in responses, confirmed against a live Docker container; plus a full 30-section regression pass of the entire smoke-test suite |
 
 ---
 

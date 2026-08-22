@@ -111,7 +111,7 @@ it now carries the folded requirement as expected behaviour 4, a "Scope added du
 and the two extra tests in its Failing tests table.
 
 **Explicitly not in scope.** Rewriting the smoke-test suite around the never-crash guarantee is #327's
-whole subject; this issue touches `docs/smoke-tests.md` only if a T2 pass here surfaces a new command
+whole subject; this issue touches [`docs/automated-testing/`](../../automated-testing/README.md) only if a T2 pass here surfaces a new command
 worth recording (which that document's own living-checklist rule would require anyway).
 
 ## Raised findings
