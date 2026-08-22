@@ -54,15 +54,34 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/preview"
 ```
 
+**Confirm the removed fields are actually absent**, on the seed-preview response specifically — an
+absence read by eye off a large JSON body is satisfied by default, so it is counted instead:
+
 ```bash
+curl -s "http://localhost:8080/api/v1/admin/database/seed/preview" \
+  | grep -o 'totalQuotes\|uniqueQuotes\|crossFileDuplicates' | wc -l
+```
+
+**Confirm the startup line exists before reading it.** `grep`'s own exit status is what distinguishes
+"the line is absent" from "the line is present and wrong", and a bare `grep` in a pipeline discards it:
+
+```bash
+docker logs qt-env 2>&1 | grep -q "\[Database - Stats\]" && echo PRESENT || echo MISSING
 docker logs qt-env 2>&1 | grep "\[Database - Stats\]"
 ```
 
 ## Expected output
 
-**Seed preview** — `200` with a top-level `reports` array. **Not** `totalQuotes`, `uniqueQuotes` or
-`crossFileDuplicates`, all removed. One entry per configured source file, each with a `fileName` and an
-`entityTypes` object keyed by entity type (`Quote`, `Source`, …), each carrying
+**Removed fields** — the count is `0`. This is the assertion that `totalQuotes`, `uniqueQuotes` and
+`crossFileDuplicates` are gone; reading their absence off the body by eye cannot fail, because nothing
+is being compared.
+
+**Startup log** — `PRESENT`, before anything is read off the line. If the line is missing entirely —
+wrong container, rotated log, never emitted — a plain `grep` prints nothing and exits `1`, and that
+silence is indistinguishable from a pass.
+
+**Seed preview** — `200` with a top-level `reports` array. One entry per configured source file, each
+with a `fileName` and an `entityTypes` object keyed by entity type (`Quote`, `Source`, …), each carrying
 `new`/`modified`/`blocked`/`discarded`/`pending`/`stale` counts.
 
 **Reseed** — `200` with all nine entity-type row counts —

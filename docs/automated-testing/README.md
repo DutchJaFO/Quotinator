@@ -97,6 +97,67 @@ all — the state has to be constructed. And a test whose precondition comes fro
 break, where a fixture is what keeps the test runnable while that path is being fixed (see *Depending
 on content is not the same as depending on another test* above).
 
+### A test that needs a defective input must own that input
+
+**Never let a test's ability to fail depend on shipped data happening to be wrong.** Shipped data gets
+fixed — that is the point of shipping it — and when it is, the test stops being able to fail without
+stopping being green. It keeps reporting coverage it no longer provides, and nothing announces the
+change.
+
+This is not hypothetical. Two documents were written against genuine defects found in the bundled
+files: a conflict rule whose recorded snapshot used a straight apostrophe where the data had a curly
+one, and source aliases flagged as stale. Both defects were then fixed, correctly. Both tests now
+assert that a list comes back empty — which is equally true when the mechanism under test is entirely
+broken, when the reseed silently failed, when the status filter regressed, and when the rows were
+purged. The subject of each test is a *mechanism*; its input was *production data*; and the two have
+different lifetimes.
+
+**The tell is an assertion that something is absent, with nothing in the run proving the mechanism was
+ever alive.** A test that can only observe "nothing happened" needs a positive control — a case where
+something *does* happen, produced by the test itself, in the same run.
+
+Three ways to own the input, best first:
+
+1. **Drive the application into the state through its own mechanisms.** A registered rule-file override,
+   an import, a recorded decision. Nothing outside the test changes, and restoring the profile clears
+   it. Staleness, for instance, is reachable this way end to end: decide a batch, `generate` a rule
+   recording that snapshot, change the underlying value, re-plan — the snapshot no longer matches.
+2. **Generate the defective input at run time** — a fixture the test writes and deletes, as most import
+   documents already do.
+3. **Keep a captured copy** from the moment the bug was found, stored beside the document. Never in
+   `data/sources/`, which ships.
+
+**The anti-pattern: mutating a bundled file and rebuilding the image.** It does reproduce the state,
+but it bakes the mutation into a shared image tag, and every sibling test running that tag is then
+running data that does not exist in the repository. Found live in `import-and-staged-actions/15`, whose
+cleanup now has to rebuild the image to undo it. Prefer option 1, which needs no rebuild at all.
+
+### Import behaviour is proven at every origin, not just the convenient one
+
+Content reaches the database by three routes, and `FileResourceOrigin` names them because they are not
+the same code path:
+
+| Origin | Where it comes from | How a test installs a file there |
+|---|---|---|
+| `System` | The bundled sources folder inside the image | Only by rebuilding the image, or by a registered override |
+| `User` | `{dataDir}/imports/` — inside the volume | `docker cp` into the volume, or a bind mount, before the container starts |
+| `Upload` | `POST /import` / `POST /import/preview` | A `curl` — no file placement at all |
+
+**Only one of the three needs an image step.** A defective user-import file goes into the volume with
+no rebuild, and an upload needs nothing but a request. Reach for a rebuild only when the behaviour under
+test is genuinely specific to the bundled folder.
+
+**Proving a behaviour at one origin does not prove it at the others**, and the application already says
+so: `AutoPurgeBundledImportActions` and `AutoPurgeUserImportActions` are deliberately separate settings.
+Where the paths are meant to agree, that agreement is a claim needing its own test; where they are meant
+to differ, the difference is intentional and the test states which it is. A parity test that treats every
+divergence as a bug is as wrong as no parity test at all.
+
+**Current state, recorded rather than assumed: `User` has no coverage anywhere in this suite.** Every
+document reaches the database through `Upload` or through the bundled seed. The `{dataDir}/imports/`
+folder — a real, documented, separately-configured path — has never been exercised here. That is new
+test content, not a gap this restructure can close by moving something.
+
 **Never assert a total count of notifications.** The same failure mode, and it has already produced
 two wrong expectations. How many notifications exist depends on which producers exist and what the
 bundled changelog flags for the running version, both of which move every milestone. Assert instead
