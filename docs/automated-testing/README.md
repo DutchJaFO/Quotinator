@@ -194,6 +194,19 @@ never beside it.
 | 06 | [A what's-new row predating release state is backfilled](notifications-and-changelog/06-whats-new-row-predating-release-state.md) | no |
 | 07 | [The changelog is served from its own on-disk database](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | yes |
 
+### `import-and-staged-actions/`
+
+Being moved — sections 8–11 and 19–27 of the previous suite are not here yet.
+
+| # | Test | Smoke |
+|---|---|---|
+| 01 | [The staged review → decide → apply workflow](import-and-staged-actions/01-staged-action-review-workflow.md) | yes |
+| 02 | [A batch applied through the staged flow can be reversed](import-and-staged-actions/02-two-phase-decide-apply-reversal.md) | no |
+| 03 | [`POST /import?batchId=` applies an already-staged batch](import-and-staged-actions/03-batch-id-mode-alias.md) | no |
+| 04 | [Discarding a staged batch applies nothing](import-and-staged-actions/04-discard.md) | no |
+| 05 | [Reversing an applied batch, and re-import resurrection](import-and-staged-actions/05-reverse-and-resurrection.md) | no |
+| 06 | [A bodyless import request is rejected with an actionable message](import-and-staged-actions/06-bodyless-request-validation.md) | no |
+
 ---
 
 ## Document template

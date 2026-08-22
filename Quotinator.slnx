@@ -345,6 +345,14 @@
     <File Path="docs/automated-testing/notifications-and-changelog/06-whats-new-row-predating-release-state.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/07-changelog-served-from-its-own-database.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/import-and-staged-actions/">
+    <File Path="docs/automated-testing/import-and-staged-actions/01-staged-action-review-workflow.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/02-two-phase-decide-apply-reversal.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/03-batch-id-mode-alias.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/04-discard.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/05-reverse-and-resurrection.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/06-bodyless-request-validation.md" />
+  </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
   </Folder>
