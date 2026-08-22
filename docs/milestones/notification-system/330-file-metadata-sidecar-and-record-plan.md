@@ -1,7 +1,7 @@
 # #330 — File metadata: sidecar and database record for every file we create or inspect
 
 **Status:** Planning
-**GitHub issue:** [#330](https://github.com/DutchJaFO/Quotinator/issues/330)
+**GitHub issue:** #330
 **Tiers required:** T1, T2
 **Depends on:** none
 

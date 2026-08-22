@@ -1,7 +1,8 @@
 # #83 — Research: notification system design
 
 **Status:** Waiting for release
-**GitHub issue:** #83 (open)
+**GitHub issue:** #83
+**Tiers required:** T1, T2, T3
 **Depends on:** none
 
 ---

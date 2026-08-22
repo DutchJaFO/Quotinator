@@ -1,8 +1,8 @@
 # #327 — Smoke tests: prove startup problems degrade rather than crash
 
 **Status:** Planning
-**GitHub issue:** [#327](https://github.com/DutchJaFO/Quotinator/issues/327)
-**Tiers required:** T2
+**GitHub issue:** #327
+**Tiers required:** T1, T2
 **Depends on:** #326, #339
 
 ---

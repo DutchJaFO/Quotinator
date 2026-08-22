@@ -1,7 +1,8 @@
 # #323 — Source download: a stalled connection attempt outlives its request and fails every other source on the same host
 
 **Status:** Waiting for release
-**GitHub issue:** #323 (open)
+**GitHub issue:** #323
+**Tiers required:** T1, T2
 **Depends on:** none
 
 > **Next action: the issue's own Definition-of-done checkboxes, then the commit.** Every verification row

@@ -1,13 +1,9 @@
 # #81 — Startup notification: what's new after upgrade
 
 **Status:** Waiting for release
-**GitHub issue:** #81 (open)
-**Depends on:** #278 (done, released v1.8.0), #80 (done, released — Changelog handling milestone),
-#309 (code complete on this branch, Waiting for release — `IChangelogReader` exists and is tested),
-#307 (code complete on this branch — `ChangelogReservedAudience.Notification`/`GetHighlightsFor` exist
-and are tested; two documentation-confirmation rows remain open on its own plan doc but don't block this
-issue, which only needs the code), #312 (open — notification schema foundation: typed metadata, the
-relocated dedupe helper, and `System_AppVersion`'s append-only `Application`/`Version` shape)
+**GitHub issue:** #81
+**Tiers required:** T1, T2
+**Depends on:** #278, #80, #309, #307, #312
 
 ---
 

@@ -1,8 +1,9 @@
 # #307 — Changelog highlights: mark specific entries as notification-worthy
 
 **Status:** In progress
-**GitHub issue:** #307 (open)
-**Depends on:** #80 (done, released — Changelog handling milestone)
+**GitHub issue:** #307
+**Tiers required:** T1, T2
+**Depends on:** #80
 
 ---
 

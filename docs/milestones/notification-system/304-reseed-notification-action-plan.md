@@ -1,8 +1,9 @@
 # #304 — Notification + action: let the user trigger a reseed
 
 **Status:** Planning
-**GitHub issue:** #304 (open)
-**Depends on:** #278 (done, released v1.8.0 — the mechanism), #312 (done, this branch — the schema and the relocated seeding helper), #319 (not started — sequenced ahead of this issue, so this producer supplies translated title/body from the start rather than being retrofitted)
+**GitHub issue:** #304
+**Tiers required:** T1, T2
+**Depends on:** #278, #312, #319
 
 > **Next action: execute the Steps — but not yet.** All three open questions are answered
 > (2026-08-16) and the plan is complete: design, steps, and verification table. It is blocked only on

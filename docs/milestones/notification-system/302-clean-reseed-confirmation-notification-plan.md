@@ -1,7 +1,7 @@
 # #302 — Notification: confirm files that reseed cleanly with no review needed
 
 **Status:** Planning
-**GitHub issue:** [#302](https://github.com/DutchJaFO/Quotinator/issues/302)
+**GitHub issue:** #302
 **Tiers required:** T1, T2
 **Depends on:** #278, #312, #319
 

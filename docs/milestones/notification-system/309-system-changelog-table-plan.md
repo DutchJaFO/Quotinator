@@ -1,8 +1,9 @@
 # #309 — Move changelog content to database-backed System_Changelog table
 
 **Status:** Waiting for release
-**GitHub issue:** #309 (open)
-**Depends on:** #80 (done, released — Changelog handling milestone)
+**GitHub issue:** #309
+**Tiers required:** T1, T2
+**Depends on:** #80
 
 > **Every verification row is green (2026-08-19). Waiting for release.** Every live check on this issue has
 > found a further defect underneath the last — steps 14, 16, 17 and 18. The database did not survive

@@ -1,7 +1,7 @@
 # #331 — Source refresh: conditional requests so an unchanged source is not re-downloaded
 
 **Status:** Planning
-**GitHub issue:** [#331](https://github.com/DutchJaFO/Quotinator/issues/331)
+**GitHub issue:** #331
 **Tiers required:** T1, T2
 **Depends on:** #330
 

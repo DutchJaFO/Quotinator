@@ -1,8 +1,9 @@
 # #319 — Notification title and body are not translated
 
 **Status:** Planning
-**GitHub issue:** #319 (open)
-**Depends on:** #278 (done, released v1.8.0 — the mechanism), #312 (done, this branch — the Title/Body split and the metadata contract that deliberately excludes text)
+**GitHub issue:** #319
+**Tiers required:** T1, T2
+**Depends on:** #278, #312
 
 > **Next action: execute the Steps.** This plan is ready. Schema, read-side resolution, language
 > selection and the backfill are all settled (developer decisions, 2026-08-16). The one open question

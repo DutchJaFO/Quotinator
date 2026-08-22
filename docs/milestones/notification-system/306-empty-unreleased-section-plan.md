@@ -1,7 +1,7 @@
 # #306 — Changelog: empty 'Unreleased' section renders on the About page after a release tag
 
 **Status:** Planning
-**GitHub issue:** [#306](https://github.com/DutchJaFO/Quotinator/issues/306)
+**GitHub issue:** #306
 **Tiers required:** T1, T2
 **Depends on:** none
 

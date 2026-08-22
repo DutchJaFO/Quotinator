@@ -1,8 +1,9 @@
 # #312 — Notification schema: title/body, typed metadata, optional expiry, and app-version provenance
 
 **Status:** Waiting for release
-**GitHub issue:** #312 (open)
-**Depends on:** #278 (done, released v1.8.0 — the mechanism this issue reshapes)
+**GitHub issue:** #312
+**Tiers required:** T1, T2
+**Depends on:** #278
 
 > **Next action: nothing until the release ships.** Every step and every verification row is green, and
 > the changelog entries are written. The issue stays open until the tagged release actually goes out,

@@ -78,7 +78,17 @@ When the change touches schema/reset logic, also exercise the affected admin end
 - Add-on config panel — options and translations visible and correct in the HA UI
 - Log output format — `[Subsystem - Phase]` prefixes visible in the supervisor log
 
-**When required:** any change that touches ingress middleware, `X-Ingress-Path` handling, `PathBase`, `UseForwardedHeaders`, DataProtection, SSL/Kestrel config, `addon/config.yaml` or `addon-beta/config.yaml`, addon translation files, or log output format.
+**When required:** T3 is where a feature is confirmed on an actual deployed version. The HA add-on has
+behaviour Docker cannot always replicate — the supervisor's own ingress proxy, its volume mount, its TLS
+termination, its config panel — so T2 passing says nothing about whether the feature works where users
+actually run it.
+
+Required for any change reaching that behaviour. The following are the known triggers, not a closed
+list: ingress middleware, `X-Ingress-Path` handling, `PathBase`, `UseForwardedHeaders`, DataProtection,
+SSL/Kestrel config, `addon/config.yaml` or `addon-beta/config.yaml`, addon translation files, or log
+output format. A change that touches none of these but still delivers a user-facing feature to the
+add-on needs T3 on the same reasoning — the question is whether the deployed environment can differ,
+not whether a listed file was edited.
 
 **Gate:** install the beta add-on in HA; confirm all T3-classified requirements for the release are working in the live add-on. Document confirmation in the closing comment.
 
@@ -182,9 +192,19 @@ or
 
 If an issue requires T3, it must go through a beta release before the final tag is pushed. See `docs/workflow/checklist.md → Milestone close` for the full gate sequence.
 
-T1 and T2 are always required (see each tier's own "When required" above) — `**Tiers required:** T2` alone
-or `**Tiers required:** T1` alone are not valid declarations for any issue that touches code; the minimum
-is `**Tiers required:** T1, T2`.
+**T1 and T2 are always required, for every issue, with no exception.** `**Tiers required:** T1, T2` is
+the minimum any plan doc may declare — `T2` alone, `T1` alone, and `N/A` are never valid declarations,
+whatever the issue touches. There is no docs-only, test-only, or library-only carve-out, and "no `src/`
+change" is not one either.
+
+The three answer different questions, which is why none substitutes for another:
+
+- **T1 confirms the thing still starts.** That is its whole job, and every issue can break startup
+  regardless of what it changed — which is why it is never waived.
+- **T2 verifies what this issue actually targeted**: its own tests, and the behaviour it set out to
+  change.
+- **T3 confirms a feature on an actual deployed version.** The HA add-on has behaviour Docker cannot
+  always replicate, so T2 passing does not answer whether it works where users run it.
 
 **T4 is never listed on a `**Tiers required:**` line.** It is not an issue-level tier — see its own
 "When required" above.

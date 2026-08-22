@@ -1,7 +1,7 @@
 # #305 — Database integrity check: verify all expected tables exist at startup, not just row counts
 
 **Status:** Planning
-**GitHub issue:** [#305](https://github.com/DutchJaFO/Quotinator/issues/305)
+**GitHub issue:** #305
 **Tiers required:** T1, T2
 **Depends on:** none
 

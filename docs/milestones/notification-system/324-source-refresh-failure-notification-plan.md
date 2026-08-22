@@ -1,8 +1,9 @@
 # #324 — Notification: report when a source update attempt fails
 
 **Status:** Planning
-**GitHub issue:** #324 (open)
-**Depends on:** #278 (done, released v1.8.0 — the mechanism), #312 (done, this branch — title/body, typed metadata, opt-in expiry, the relocated dedupe helper), #319 (hard, not started — translated title/body)
+**GitHub issue:** #324
+**Tiers required:** T1, T2
+**Depends on:** #278, #312, #319
 
 > **Next action: refine this plan once #319 lands.** The requirements and the verification checklist
 > below are settled and taken from the issue. The Steps are deliberately unwritten: this producer writes

@@ -1,7 +1,8 @@
 # #326 — Startup crashes instead of degrading when the data directory is read-only and a migration is pending
 
 **Status:** Waiting for release
-**GitHub issue:** #326 (open)
+**GitHub issue:** #326
+**Tiers required:** T1, T2
 **Depends on:** none
 
 > **Next action: step 10 — the changelog entries.** Every verification row is ✅: 9 of 9 in this

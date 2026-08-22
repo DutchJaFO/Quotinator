@@ -1,8 +1,9 @@
 # #325 — Source download: no address-family fallback — a black-holed IPv6 path fails the download even though IPv4 works
 
 **Status:** Waiting for release
-**GitHub issue:** #325 (closed 2026-08-20 — *"This bug was the result of an overengineered solution to a problem."*)
-**Depends on:** #323 (done, this branch — its `ConnectTimeout` now carries this issue's outcome on its own)
+**GitHub issue:** #325
+**Tiers required:** T1, T2
+**Depends on:** #323
 
 > **Next action: close the issue, recording that the fix was reverted as over-engineered.** The steps
 > below describe a `ConnectCallback`-based address-family race that was built, shipped to this branch,

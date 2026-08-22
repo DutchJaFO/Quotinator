@@ -1,8 +1,8 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
 **Status:** Planning
-**GitHub issue:** [#339](https://github.com/DutchJaFO/Quotinator/issues/339)
-**Tiers required:** N/A
+**GitHub issue:** #339
+**Tiers required:** T1, T2
 **Depends on:** none
 
 ---

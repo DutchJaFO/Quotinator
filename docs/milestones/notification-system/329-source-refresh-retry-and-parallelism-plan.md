@@ -1,7 +1,7 @@
 # #329 — Source refresh: no retry on a marginal connect, and sources download sequentially
 
 **Status:** Planning
-**GitHub issue:** [#329](https://github.com/DutchJaFO/Quotinator/issues/329)
+**GitHub issue:** #329
 **Tiers required:** T1, T2
 **Depends on:** #323, #325
 

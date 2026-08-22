@@ -1,7 +1,7 @@
 # #303 — Notification + minimal review page: alert when a reseed leaves import actions pending review
 
 **Status:** Planning
-**GitHub issue:** [#303](https://github.com/DutchJaFO/Quotinator/issues/303)
+**GitHub issue:** #303
 **Tiers required:** T1, T2
 **Depends on:** #278, #312, #319
 

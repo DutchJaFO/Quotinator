@@ -1,8 +1,9 @@
 # #313 — Api tests can silently assert against the startup wait page instead of the endpoint under test
 
 **Status:** Waiting for release
-**GitHub issue:** #313 (open)
-**Depends on:** #280 (done, released — introduced the listen-before-initialised model this race lives in)
+**GitHub issue:** #313
+**Tiers required:** T1, T2
+**Depends on:** #280
 
 ---
 

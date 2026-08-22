@@ -1,8 +1,8 @@
 # #328 — Smoke tests: verify bundled imports and endpoint behaviour against a real database
 
 **Status:** Planning
-**GitHub issue:** [#328](https://github.com/DutchJaFO/Quotinator/issues/328)
-**Tiers required:** T2
+**GitHub issue:** #328
+**Tiers required:** T1, T2
 **Depends on:** #339
 
 ---

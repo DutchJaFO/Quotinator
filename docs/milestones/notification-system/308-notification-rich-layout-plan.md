@@ -1,7 +1,7 @@
 # #308 — Notification: multi-line/rich message layout
 
 **Status:** Planning
-**GitHub issue:** [#308](https://github.com/DutchJaFO/Quotinator/issues/308)
+**GitHub issue:** #308
 **Tiers required:** T1, T2
 **Depends on:** #312, #302, #303, #304
 
