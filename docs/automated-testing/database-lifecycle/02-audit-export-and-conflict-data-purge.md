@@ -21,9 +21,9 @@ They are listed as separate starts for that reason, not out of caution.
   exactly what was just written.
 - **Each configuration gets a fresh container with no prior data.** The auto-purge-off run in
   particular is meaningless against a volume where the on-by-default run already purged.
-- **`PurgeTraces` is expected to be exactly 4** — one per bundled batch. That number moves if the
-  bundled file set changes, which makes it a count of a *known cause* rather than a total, per the
-  suite's counting rule.
+- **`PurgeTraces` equals the number of bundled seed batches** — one per batch. Derive it from the batch
+  count in the same run rather than fixing a number: the bundled file set changes, and this is a
+  relationship, not a prediction.
 
 ## Steps
 
@@ -123,8 +123,11 @@ The body has top-level `entries` and `changes` arrays, both non-empty after a fr
 combined row.
 
 **Auto-purge on** — `RemainingActions` is `0`: every bundled batch applies cleanly with no pending
-actions, so all four are auto-purged. `PurgeTraces` is `4` — one per bundled batch, even though the
-`Import_Action` rows themselves are gone.
+actions, so all of them are auto-purged. `PurgeTraces` equals the number of bundled seed batches — one
+per batch, even though the `Import_Action` rows themselves are gone.
+
+`RemainingActions = 0` is the zero-failures assertion in this test: nothing left `Pending`, `Blocked`
+or `Stale` after a bundled seed.
 
 **Auto-purge off** — `RemainingActions` is greater than `0`. With the bundled setting off the seeding
 path never purges, matching pre-#249 behaviour.

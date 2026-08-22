@@ -11,8 +11,10 @@ was present or not, because a fresh insert has nothing to conflict with and neve
 statement-journal code path at all. The real incident happened during **migration replay against an
 already-populated database**, so this test must start from one.
 
-`quotes` must read `799` after the seeding run before proceeding; a partially-seeded volume produces a
-misleading result.
+**The seeding run must have completed cleanly before proceeding** — a partially-seeded volume produces
+a misleading result. The fact to establish is not a dataset size but that seeding finished with zero
+failures: `quotes` is non-zero, and the seed's own report shows nothing `Pending`, `Blocked` or
+`Stale`. Record the count you observe so the upgrade below can be compared against it.
 
 ## Determinism
 
@@ -63,8 +65,10 @@ docker logs smoke294 2>&1 | grep "migration applied\|SqliteException\|SQLite Err
 
 ## Expected output
 
-`/health` returns `200 {"status":"healthy"}`. `/version` shows the full post-migration `quotes: 799`
-and every other bundled count. The logs show a `migration applied:` line and **no**
+`/health` returns `200 {"status":"healthy"}`. `/version` shows the **same** quote count as the seeding
+run recorded above, and every other bundled count non-zero — migration replay must not lose content,
+which is a relationship between the two runs rather than a number either of them should predict. The
+logs show a `migration applied:` line and **no**
 `SqliteException`/`SQLite Error` line — the fix means the migration's temp files never touch disk at
 all, so restricting every other writable path does not matter.
 

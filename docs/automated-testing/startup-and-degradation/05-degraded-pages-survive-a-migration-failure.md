@@ -48,7 +48,8 @@ curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
 docker stop -t 15 smoke293 && docker rm smoke293
 ```
 
-Seeds a real, unmodified v1.8.2 database. `quotes` must read `799` before proceeding.
+Seeds a real, unmodified v1.8.2 database. `quotes` must be non-zero and the seed must report zero
+failures before proceeding — a partially-seeded volume would make everything below meaningless.
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run -d --name smoke293 -p 8080:8080 \

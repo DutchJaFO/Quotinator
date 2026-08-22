@@ -68,6 +68,29 @@ than by anyone checking what actually happened. Assert the *behaviour*: that a `
 line appears, that no SQLite error accompanies it, that the resulting state is healthy, that content
 is present and correct.
 
+**We only observe facts. We never claim to know how many.** A test cannot legitimately assert that an
+import produces 799 quotes or 461 sources — that is a prediction about content, and content changes
+when a bundled file is updated, a converter changes, or a user import lands. Asserting it means the
+test fails for a correct reason, gets "fixed" by editing the digit, and absorbs a real regression the
+next time one occurs.
+
+What can be asserted are the facts the operation itself establishes:
+
+- **Zero import failures.** This is the invariant, and it is the same rule as zero errors and zero
+  warnings at compile time. Observably: the call succeeded, nothing threw, and the report shows zero in
+  the buckets that mean something needs attention — `Pending`, `Blocked`, `Stale`.
+- **Non-zero where content must exist.** An import into an empty database must produce at least one
+  quote. That is a fact about the operation, not a prediction about the dataset.
+- **Relationships that hold whatever the data is.** One seed batch per bundled file; the manifest linked
+  to every batch it drove; a count unchanged across a restart; a read reporting the same number the
+  write reported. These stay true when the dataset changes, because they are derived in the same run.
+
+**Stable resources are the exception, not the default.** A fixture owned by a test — created from
+scratch, or captured from a real database at the moment a bug is discovered — exists only where a
+specific feature or issue **cannot be tested any other way**. Do not build one because a count looks
+fragile: the bundled sources are what actually ships, and a test against them is testing the real
+thing.
+
 **Never assert a total count of notifications.** The same failure mode, and it has already produced
 two wrong expectations. How many notifications exist depends on which producers exist and what the
 bundled changelog flags for the running version, both of which move every milestone. Assert instead
@@ -206,6 +229,10 @@ Being moved — sections 8–11 and 19–27 of the previous suite are not here y
 | 04 | [Discarding a staged batch applies nothing](import-and-staged-actions/04-discard.md) | no |
 | 05 | [Reversing an applied batch, and re-import resurrection](import-and-staged-actions/05-reverse-and-resurrection.md) | no |
 | 06 | [A bodyless import request is rejected with an actionable message](import-and-staged-actions/06-bodyless-request-validation.md) | no |
+| 07 | [StageDirection and SoundCue Modify, and Complete blocking](import-and-staged-actions/07-stagedirection-soundcue-modify.md) | no |
+| 08 | [Person Modify, Complete blocking, and mixed-case id reversal](import-and-staged-actions/08-person-modify-and-lowercase-id-reversal.md) | no |
+| 09 | [Character↔Source links stay per-Source](import-and-staged-actions/09-character-source-many-to-many-identity.md) | no |
+| 10 | [A Source discovered from a quote carries that quote's date](import-and-staged-actions/10-source-date-from-resolving-quote.md) | no |
 
 ---
 

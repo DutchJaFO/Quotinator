@@ -99,23 +99,29 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18099/api/v1/
 
 ## Expected output
 
-**Provenance** — five rows: the four bundled source files (`NikhilNamal17_popular-movie-quotes.json`,
-`quotinator-curated.json`, `quotinator-series-universe.json`, `vilaboim_movie-quotes.json`) plus
-`manifest.json` itself, each with `Origin = System` and `HomeDirectoryKey = sources`.
+**Provenance** — one row per bundled source file plus `manifest.json` itself, each with
+`Origin = System` and `HomeDirectoryKey = sources`. At the time of writing that is
+`NikhilNamal17_popular-movie-quotes.json`, `quotinator-curated.json`,
+`quotinator-series-universe.json` and `vilaboim_movie-quotes.json` — check against `manifest.json`
+rather than against that list, which is illustrative.
 `NikhilNamal17_popular-movie-quotes.json` shows `Converter = basic-json-array` with its full
 `ConverterOptions` JSON; `vilaboim_movie-quotes.json` shows `Converter = regex-array` with its own
 options; the other three — `manifest.json` included — show `NULL` for both, having no `converter` entry
 in the manifest.
 
-**Batch links** — `manifest.json` shows `BatchLinks = 4`; every other row shows `1`.
+**Batch links** — `manifest.json`'s `BatchLinks` equals the number of seed batches, because it drove
+every one of them; every other row shows `1`, having driven only itself. Both are relationships that
+hold whatever the bundled file set contains — do not substitute the count you happen to observe.
 
 **List** — each item includes `homeDirectoryKey` (`"sources"` for bundled rows) and `linkedBatchCount`,
-but **no** `linkedBatchIds` key. `origin=bogus` returns `422`. `origin=system` reports `totalCount: 5`.
+but **no** `linkedBatchIds` key. `origin=bogus` returns `422`. `origin=system` reports one row per
+bundled source file plus the manifest, and none are `user` or `upload` origin on a fresh container.
 
-**Detail** — `linkedBatchCount: 4` and `linkedBatchIds` containing exactly 4 ids, matching the raw SQL
-join.
+**Detail** — `linkedBatchCount` and the length of `linkedBatchIds` both equal the `BatchLinks` figure
+the raw SQL join reported. The three agreeing is the assertion; the value they agree on is data.
 
-**Batches** — `type=seed` reports `totalCount: 4`, one seed batch per bundled file. `status=bogus`
+**Batches** — `type=seed` reports one seed batch per bundled file, matching the `BatchLinks` figure
+above rather than a fixed number. `status=bogus`
 returns `422`. The batch detail returns `200`, proving the FileResource detail and the batches endpoint
 agree on what exists.
 

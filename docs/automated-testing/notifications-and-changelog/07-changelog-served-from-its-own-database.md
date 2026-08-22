@@ -20,8 +20,9 @@ nothing at all, so a silently-fallen-back read and a healthy one produced identi
 positive *"the database answered"* statement distinguishes them.
 
 **The importer and reader counts must match.** They report the same unit deliberately, so
-`refreshed 126 entries` and `served 126 entries` are directly comparable; a read reporting fewer than
-the import wrote means it was served a partial or stale copy.
+`refreshed N entries` and `served N entries` are directly comparable; a read reporting fewer than the
+import wrote means it was served a partial or stale copy. **Compare the two numbers to each other —
+neither is predicted**, since the changelog grows with every release.
 
 > **A sixteen-minute wait used to sit here and was removed (developer direction, 2026-08-19.)** It slept
 > past the one observed failure at +13 minutes and re-read. The reasoning was that no shorter check
@@ -80,9 +81,10 @@ docker logs qt-changelog 2>&1 | tail -40 | grep -E "Changelog - (Init|Import)"
 ## Expected output
 
 - `/data/quotinatorchangelog.db` exists.
-- `[Changelog - Import] refreshed 126 entries across 3 language(s)` appears, and so does
+- `[Changelog - Import] refreshed N entries across 3 language(s)` appears, and so does
   `[Changelog - Read] served N entries from the database` — the positive statement that the database
-  itself answered. The two counts match.
+  itself answered. **The two counts match each other**; the value itself is data. The three languages
+  are asserted, because that is the shipped set rather than a content count.
 - No `falling back to the JSON-backed changelog service` line appears at any point.
 - `/about` returns `200` and renders changelog entries. **There is deliberately no REST endpoint here**
   — changelog content is surfaced only on the About page (`Components/Pages/About.razor`), so that is

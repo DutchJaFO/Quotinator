@@ -352,6 +352,10 @@
     <File Path="docs/automated-testing/import-and-staged-actions/04-discard.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/05-reverse-and-resurrection.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/06-bodyless-request-validation.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/07-stagedirection-soundcue-modify.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/08-person-modify-and-lowercase-id-reversal.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/09-character-source-many-to-many-identity.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/10-source-date-from-resolving-quote.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
