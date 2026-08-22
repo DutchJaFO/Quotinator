@@ -308,6 +308,9 @@
     <File Path="docs/milestones/notification-system/330-file-metadata-sidecar-and-record-plan.md" />
     <File Path="docs/milestones/notification-system/331-conditional-source-requests-plan.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/">
+    <File Path="docs/automated-testing/README.md" />
+  </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
   </Folder>

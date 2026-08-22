@@ -14,7 +14,7 @@ namespace Quotinator.Api.Tests.Solution;
 /// or a file referenced in the solution no longer exists on disk.
 /// </remarks>
 [TestClass]
-public class RepositoryStructureTests
+public partial class RepositoryStructureTests
 {
     private static readonly string RepoRoot = FindRepoRoot();
     private static readonly string SlnxPath = Path.Combine(RepoRoot, "Quotinator.slnx");
@@ -150,6 +150,85 @@ public class RepositoryStructureTests
             "Markdown files exist under docs/ but are missing from Quotinator.slnx, so they are "
             + $"invisible in Solution Explorer:\n{string.Join("\n", failures)}");
     }
+
+    /// <summary>
+    /// Every test document under docs/automated-testing/ must be reachable from the suite's own index,
+    /// so a document cannot exist without appearing in the list a T2 pass works from.
+    /// </summary>
+    /// <remarks>
+    /// The emptiness assertion is load-bearing, not defensive. "Every document is linked" is vacuously
+    /// true over zero documents, so without it this test would pass green on a missing or empty folder —
+    /// the exact state it exists to catch. See #339.
+    /// </remarks>
+    [TestMethod]
+    public void EveryAutomatedTestingDocument_IsLinkedFromTheIndex()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        string index = File.ReadAllText(Path.Combine(AutomatedTestingDir, "README.md"));
+        List<string> documents = FindAutomatedTestingDocuments();
+
+        Assert.IsNotEmpty(documents,
+            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
+
+        List<string> failures = [.. documents.Where(d => !index.Contains(d, StringComparison.Ordinal)).Order()];
+
+        Assert.IsEmpty(failures,
+            "Test documents exist but are not linked from the suite index, so a T2 pass working from "
+            + $"that index would silently skip them:\n{string.Join("\n", failures)}");
+    }
+
+    /// <summary>
+    /// Every document the suite index links to must exist, so the list a T2 pass works from can never
+    /// point at a test that was renamed or removed.
+    /// </summary>
+    [TestMethod]
+    public void EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        string index = File.ReadAllText(Path.Combine(AutomatedTestingDir, "README.md"));
+
+        List<string> linked =
+        [
+            .. MarkdownLinkTarget().Matches(index)
+                .Select(m => m.Groups["target"].Value)
+                .Where(t => t.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                .Where(t => !t.StartsWith("..", StringComparison.Ordinal))
+                .Distinct()
+        ];
+
+        List<string> failures =
+        [
+            .. linked.Where(t => !File.Exists(Path.Combine(AutomatedTestingDir, t.Replace('/', Path.DirectorySeparatorChar))))
+                .Order()
+        ];
+
+        Assert.IsEmpty(failures,
+            "The suite index links to documents that do not exist on disk:\n"
+            + string.Join("\n", failures));
+    }
+
+    private const string AutomatedTestingRelativePath = "docs/automated-testing";
+
+    private static readonly string AutomatedTestingDir =
+        Path.Combine(RepoRoot, "docs", "automated-testing");
+
+    /// <summary>
+    /// Test documents live in category subfolders; the index itself sits at the folder root and is not
+    /// one of them.
+    /// </summary>
+    private static List<string> FindAutomatedTestingDocuments() =>
+    [
+        .. Directory.GetDirectories(AutomatedTestingDir)
+            .SelectMany(d => Directory.GetFiles(d, "*.md", SearchOption.AllDirectories))
+            .Select(f => Path.GetRelativePath(AutomatedTestingDir, f).Replace('\\', '/'))
+    ];
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\]\((?<target>[^)]+)\)")]
+    private static partial System.Text.RegularExpressions.Regex MarkdownLinkTarget();
 
     /// <summary>data/changelog/changelog.en.json must exist on disk as the English source file.</summary>
     [TestMethod]

@@ -1,0 +1,162 @@
+# Automated Testing — the T2 suite
+
+These are the project's automated integration tests: everything that needs a real container, a real
+SQLite file, a real volume, or the real bundled dataset to mean anything. Unit tests cover what can be
+proven in-process; a test earns a place here by exercising something they cannot reach.
+
+Run against a locally built Docker image. See [`docs/release-verification.md`](../release-verification.md)
+for the tier definitions and [`CLAUDE.md`](../../CLAUDE.md)'s Pre-Push Checklist for when a pass is
+required.
+
+---
+
+## When to run what
+
+Three scopes, and they are not interchangeable.
+
+| Scope | What runs |
+|---|---|
+| **End of an issue (T2)** | The designated smoke set below, plus whatever tests are relevant to that issue. Not everything |
+| **End of a milestone** | Every test here. No exceptions |
+| **Release** | Every test here — a release follows a milestone close |
+
+An issue's "relevant tests" are the ones covering what it touched. Deciding that is the issue's own
+job, recorded in its plan doc; the smoke set is the floor underneath it, never a substitute for it.
+
+---
+
+## The designated smoke set
+
+Nine tests. The question this set answers is *does this container fundamentally work* — a test is in
+it because its failure would invalidate most other results, not because it is important in its own
+right.
+
+| Test | Category |
+|---|---|
+| Baseline — health/version/random/search | `api-surface/` |
+| Pagination contract | `api-surface/` |
+| Import and staged-action review workflow | `import-and-staged-actions/` |
+| Fresh seed produces zero pending actions | `import-and-staged-actions/` |
+| Per-file, per-entity-type import/seed report | `import-and-staged-actions/` |
+| Reset is a full wipe with no reseed | `database-lifecycle/` |
+| Startup wait page during database initialisation | `startup-and-degradation/` |
+| Startup notification system | `notifications-and-changelog/` |
+| Changelog is served from its own on-disk database | `notifications-and-changelog/` |
+
+Every test document states its own membership in its `Smoke` field. This table is the index of that
+field, not a second source of truth — if the two disagree, the document is right and this table needs
+fixing.
+
+---
+
+## Rules every test here follows
+
+**A test must reproduce its condition reliably. An intermittent result is not a result.** If a test
+passes or fails depending on something it does not pin, it is not testing what it claims to. This is
+what the `Determinism` field exists for: name every variable the outcome depends on, and pin it.
+
+Two measured cases are why this is a rule rather than advice. #326 found that WAL sidecar state — not
+a pending migration — decides whether a read-only mount degrades, so a test that does not pin how the
+seeding container was stopped passes or fails by luck. The source-download path has produced both
+outright failures and ~300 ms successes minutes apart. A condition that cannot be pinned is reported
+as such, not left in the suite as a coin flip.
+
+**Never assert a specific migration number or schema version.** Not `Data v2 → v11`, not "migration 8
+does X". Migration counts change whenever any milestone adds one, and they are consolidated before a
+release, so a hardcoded number goes stale on its own and gets "fixed" by editing the number rather
+than by anyone checking what actually happened. Assert the *behaviour*: that a `migration applied:`
+line appears, that no SQLite error accompanies it, that the resulting state is healthy, that content
+is present and correct.
+
+**Never assert a total count of notifications.** The same failure mode, and it has already produced
+two wrong expectations. How many notifications exist depends on which producers exist and what the
+bundled changelog flags for the running version, both of which move every milestone. Assert instead
+that the notification a **known cause** produces is present — a successful import, a failed import, an
+upgrade with notification-flagged highlights, a schema-version overshoot. The subject is the *cause*,
+not the notification row as an object. Where a scenario genuinely is about counting, count occurrences
+of that specific notification, never the total.
+
+**The application must never crash.** The worst acceptable outcome of any startup problem is a
+degraded UX plus an OpenAPI surface that still allows recovery. A test that provokes a startup problem
+is therefore testing a *feature* — the degradation path — not merely reproducing a historical
+incident. An unhandled exception, a container that exits, or a page returning 500 is a failure of that
+feature regardless of what caused it.
+
+**Refer to a test by what it verifies, never by its number.** Numbers are an index within a category
+and shift when one is inserted. Cross-references between tests are links, not prose pointing at a
+number.
+
+**This list only grows.** When a pass surfaces a new bug or edge case, add its verification here in
+the same commit that fixes it.
+
+---
+
+## Test outcomes feed the Knowledgebase
+
+A test creates a specific circumstance on purpose and shows what it produces. That is exactly what a
+Knowledgebase entry needs — with the cause established by construction rather than inferred from a log
+line, and the remedy already exercised rather than reasoned about.
+
+The `Observed effect` field is what captures it. #333 sweeps these documents alongside its sweep of
+the application's own messages, and writes entries from what they record. No entry is written here.
+
+---
+
+## Where things live
+
+Test documents sit in a category subfolder, numbered per category with a stable slug —
+`api-surface/02-pagination-contract.md`. Numbering restarts in each folder, so a new test appends to
+its own category and disturbs nothing else.
+
+Fixture files, seed data, and expected-output samples a test needs go in a subfolder beside its
+document. Executable scripts go to `scripts/testing/`, per
+[ADR 010](../architecture-decisions/010-repository-is-csharp-only.md) — never inline in the document,
+never beside it.
+
+---
+
+## Document template
+
+Every test document follows this shape.
+
+```markdown
+# <What this verifies>
+
+**Smoke:** yes | no
+**Traces to:** #NNN[, #NNN]
+
+## Preconditions
+
+The exact state the setup must reach before any assertion below means anything, and how that state is
+confirmed — not inferred from the recipe having been followed.
+
+## Determinism
+
+Every variable the outcome depends on, and how each is pinned.
+
+## Steps
+
+The commands, in order.
+
+## Expected output
+
+What each command must produce for a pass.
+
+## Observed effect
+
+What this circumstance actually produces: the log lines, health response, UI state and messages an
+operator would see. Distinct from Expected output, which states only what must be true for a pass.
+
+## Cleanup
+
+How to return the machine to a clean state.
+```
+
+**`Preconditions` and `Determinism` are the two fields that exist because of a specific failure.** Two
+sections of the file this folder replaces carried identical setup and asserted opposite outcomes — one
+that the app stayed healthy, one that it degraded — and neither confirmed it had reached its own
+premise. The one asserting degradation could never have passed. It went unnoticed because each section
+described its setup in prose, in a single file nobody read end to end.
+
+A test whose `Preconditions` cannot be confirmed, or whose `Determinism` cannot be pinned, is a finding
+about the test. Report it rather than writing the document anyway.

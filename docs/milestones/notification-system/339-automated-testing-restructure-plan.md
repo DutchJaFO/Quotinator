@@ -1,6 +1,6 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** Planning
+**Status:** In progress (step 6)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -30,42 +30,113 @@ than settled while moving files.
 
 ### 1. Settle the category split and the numbering scheme
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-22
 
-The issue proposes six categories and maps all 44 current sections onto them. Confirm the split
-against the actual section contents rather than the Contents list alone — a section's title does not
-always match what it exercises.
+Six categories, confirmed against each section's actual content rather than its title:
 
-Decide numbering in the same pass: per-category (`01`, `02`, … restarting in each folder) or global
-(`01`–`44` across the whole tree). Either satisfies the issue; the choice has to be recorded because
-it determines every filename. `smoke-tests.md`'s existing rule — refer to a test by what it verifies,
-never by its number — carries over unchanged, and each filename carries a stable slug after the
-number so a renumber never orphans a reference.
+| Category | Current sections | Count |
+|---|---|---|
+| `api-surface/` | 1, 13, 28, 34 | 4 |
+| `import-and-staged-actions/` | 2–11, 19–27 | 19 |
+| `identity-and-casing/` | 12, 14–18 | 6 |
+| `startup-and-degradation/` | 29, 35, 36, 37, 38 | 5 |
+| `database-lifecycle/` | 30, 31, 32 | 3 |
+| `notifications-and-changelog/` | 33, 39–44 | 7 |
+
+**One correction against the issue's proposal.** It placed section 12 in `import-and-staged-actions/`
+with sections 2–11. Reading it, "Canonicalize explicit ids at capture" is an id-canonicalization test
+that happens to be exercised through import — the same subject as 14–18. It moves to
+`identity-and-casing/`. Nothing else changed.
+
+`import-and-staged-actions/` holds 19 documents, which is large. Left as one folder deliberately:
+the candidates for splitting it (staging workflow, entity Modify/decidability, conflict rules,
+reporting) are stages of one workflow, and a split on size alone would invent a boundary the content
+does not have.
+
+**Numbering is per-category**, two digits plus a stable slug — `api-surface/02-pagination-contract.md`.
+Global 01–44 numbering was rejected: inserting a test would renumber every document after it across
+the whole tree, which is the fragility the refer-to-a-test-by-name rule already exists to avoid. Per
+category, a new test appends to its own folder and disturbs nothing.
 
 ### 2. Propose the smoke-set designation for all 44 tests
 
-**Status:** ⬜ Not started — **approval gate**
+**Status:** ✅ Done — approved 2026-08-22
 
-Mark every test in or out of the designated smoke set, and put the full proposal here for the
-developer to approve before any document is written. Which tests constitute a smoke pass is a policy
-call, not an implementation detail: the set is what every issue's T2 pass runs from then on.
+The question the set answers: *does this container fundamentally work?* A test earns `Smoke: yes` by
+covering a path whose failure would invalidate most other results, not by being important in its own
+right. Everything else is regression coverage for a specific issue and runs at milestone close.
 
-Nothing in steps 6 or 7 can be finished before this is answered — the `Smoke` field is part of the
-template, and the index lists the set.
+**Proposed `Smoke: yes` — 9 of 44:**
+
+| Section | Why it is in the set |
+|---|---|
+| 1. Baseline | Health, version, random, search. If this fails nothing else is worth running |
+| 2. Import and staged-action review workflow | The core import path end to end |
+| 13. Pagination contract | One contract shared by three endpoints; a break here is broad |
+| 22. Fresh seed produces zero pending actions | The clean-import guarantee — a container that seeds dirty invalidates most import results |
+| 27. Per-file import/seed report | The reporting surface every seed operation returns |
+| 32. Reset is a full wipe with no reseed | Reset is destructive and the documented recovery route |
+| 33. Startup notification system | The mechanism this whole milestone builds on |
+| 36. Startup wait page | Proves Kestrel serves during initialisation rather than appearing dead |
+| 44. Changelog served from its own on-disk database | #309's regression was silent and permanent once triggered |
+
+**Proposed `Smoke: no` — the other 35.** Chiefly: the entity-specific Modify/decidability tests
+(8–11, 20), the identity-and-casing set (12, 14–18), conflict-rule staleness and overrides (23–26),
+feature-specific lifecycle tests (30, 31), config wiring (28), spec checks (34), the expensive
+failure-path container gymnastics (29, 35, 37, 38), and the version-specific notification migration
+paths (39–43).
+
+**The judgement calls worth challenging:** 29 (degraded startup and Reset recovery) is arguably core
+never-crash behaviour, but it is an expensive multi-container scenario and #327 is about to rewrite
+that area — it can be promoted afterwards. 34 (operationId renames) is cheap and would catch a
+breaking API change, but it is narrow.
 
 ### 3. Propose the functional/test-only classification of `scripts/`
 
-**Status:** ⬜ Not started — **approval gate**
+**Status:** ✅ Done — approved 2026-08-22
 
-Classify every existing script under `scripts/` as functional or test-only, and put the full list
-here for approval before anything moves. `scripts/sqlite-storage-probe.csx` is a known test-only
-instance — written for #326's measurement, supporting a startup-and-degradation test. The rest are
-not assumed either way; `changelog.csx` and its siblings are load-bearing for the release workflow
-and a wrong move breaks it silently.
+Classified by reading each script's own header, not by name.
+
+**Test-only — move to `scripts/testing/`:**
+
+| Script | Evidence |
+|---|---|
+| `sqlite-storage-probe.csx` | Its header: written for #326, "kept because the degraded and read-only scenarios in `docs/smoke-tests.md` need a way to establish what the storage does" |
+| `execute-sql.csx` | Its header: "Exists specifically to break/repair a database file on the host side during manual verification (e.g. `docs/smoke-tests.md`'s #29 …)" |
+
+**Functional — stays put:**
+
+| Path | Why |
+|---|---|
+| `changelog.csx` | The release workflow and Pre-Push Checklist both invoke it |
+| `hooks/` | `commit-msg` and `post-commit` enforce the draft-then-commit rule |
+
+**Removed — `changelog-import.csx`, `changelog-upgrade.csx`, `scripts/changelog-reference/`**
+(developer decision, 2026-08-22). The standard applied: a verification tool is kept only if tests
+actually exercise it, otherwise it is removed — an unverified verifier proves nothing.
+
+These three exist solely for a round-trip fidelity check documented in `scripts/README.md`. That
+check has been broken since #309 moved the changelog source to `data/changelog/` while its step 2
+still diffs against `src/Quotinator.Api/resources/changelog.json`, and the README additionally
+attributes the output to `changelog-build.csx`, which does not exist. Nothing automated invokes any of
+them, and CI installs no `dotnet-script`, so wiring them up would mean adding a build dependency to
+test tooling whose only purpose is testing other tooling. Git history keeps them.
+
+`scripts/README.md`'s changelog-import, changelog-upgrade and "Integration test" sections go with
+them, and its stale `src/Quotinator.Api/resources/changelog.json` references are corrected in the same
+commit.
+
+**`scripts/cache/`** holds the two bundled source JSONs and is documented nowhere. Left in place,
+unclassified — it is not a script, and nothing established what writes or reads it.
+
+**Finding, raised separately: `changelog.csx` has no test either.** It produces `CHANGELOG.md` and
+both add-on changelogs, and the only thing that ever stood behind it was the manual procedure being
+deleted here. `ChangelogSchemaTests` validates the JSON source, not the generator's output. Filed as
+#340 (milestone v1.9.0) rather than absorbed here — see the Verification checklist's row 16.
 
 ### 4. Define the test-document template
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-22
 
 Write the template every test document follows, with the fields the issue names: what feature it
 verifies, `Smoke`, traces-to, preconditions, determinism, observed effect, commands, expected output,
@@ -79,12 +150,21 @@ setup and assert opposite outcomes precisely because neither confirmed it reache
 
 ### 5. Write the two guard tests and confirm them red
 
-**Status:** ⬜ Not started
+**Status:** 🟡 Written 2026-08-22 — one red as intended, one cannot be red yet
 
-`RepositoryStructureTests.EveryAutomatedTestingDocument_IsLinkedFromTheIndex` and
-`...EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument`, added to the class that already
-owns `DocsMarkdownFiles_OnDisk_AreAllInSlnx`. Both must be red before step 6 creates anything — with
-no folder and no index, they fail for the right reason.
+Both added to `RepositoryStructureTests`, the class that already owns
+`DocsMarkdownFiles_OnDisk_AreAllInSlnx`.
+
+**`EveryAutomatedTestingDocument_IsLinkedFromTheIndex` — red**, failing on `Expected collection to
+not be empty`. Its emptiness assertion is load-bearing rather than defensive: *every document is
+linked* is vacuously true over zero documents, so without it the test would pass green on a missing
+or empty folder — precisely the state it exists to catch.
+
+**`EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument` — green, vacuously.** With no
+documents linked yet there are no links to resolve. Its failure condition — an index link pointing at
+a file that does not exist — cannot be constructed before step 6, so it is not red now and saying it
+is would be false. It gets its real red-green at step 14: break one index link deliberately, confirm
+the test fails, restore it. Until that is done this row stays 🟡, not ✅.
 
 `.slnx` coverage is deliberately not rebuilt: `DocsMarkdownFiles_OnDisk_AreAllInSlnx` already covers
 every Markdown file under `docs/` and picks the new folder up for free.
@@ -189,6 +269,10 @@ templates so a live-only issue has a Definition of done it can honestly tick.
 One flat top-level `<Folder>` element per category path — `.slnx` does not support nested folders.
 Then confirm both guard tests from step 5 are green, and the full suite shows no regression.
 
+**Step 5's second guard gets its real red-green here.** It passed vacuously when written, having no
+links to resolve. Once the index links every document, break one link deliberately, confirm the test
+fails, and restore it — otherwise nothing has ever demonstrated it can fail.
+
 ---
 
 ## Verification checklist
@@ -210,3 +294,4 @@ Then confirm both guard tests from step 5 are green, and the full suite shows no
 | 13 | ❌ | Guard tests: every document is linked from the index, and every index link resolves | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_IsLinkedFromTheIndex`, `...EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument` — both red before step 6 |
 | 14 | ❌ | Test outcomes are recorded as Knowledgebase material, and #333 sweeps the test documents | Live | #333 requirement 6 states the sweep (done 2026-08-22); the index states the relationship |
 | 15 | ❌ | A live-only issue has a Definition of done it can honestly tick | Live | `docs/workflow/issues.md` no longer requires a placeholder Expected-tests row for live-only verification |
+| 16 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |
