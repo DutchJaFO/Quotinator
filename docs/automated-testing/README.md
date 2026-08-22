@@ -149,6 +149,16 @@ never beside it.
 | 03 | [The Unicode-aware search flag reaches the running app](api-surface/03-unicode-aware-search-toggle.md) | no |
 | 04 | [Endpoint names and summaries follow the standard](api-surface/04-endpoint-naming-and-operation-ids.md) | no |
 
+### `identity-and-casing/`
+
+| # | Test | Smoke |
+|---|---|---|
+| 01 | [A file-authored explicit id is canonicalized at capture](identity-and-casing/01-canonicalize-explicit-ids-at-capture.md) | no |
+| 02 | [A quote resolves by id in either casing](identity-and-casing/02-quote-id-case-insensitive-lookup.md) | no |
+| 03 | [A conversation line in the wrong casing does not violate the foreign key](identity-and-casing/03-conversation-line-quote-id-fk-safety.md) | no |
+| 04 | [String-typed id fields render canonically over HTTP](identity-and-casing/04-read-time-presentation-of-string-typed-ids.md) | no |
+| 05 | [Generic-repository endpoints return correct data and lowercase ids](identity-and-casing/05-generic-repository-select-list-wrapping.md) | no |
+
 ---
 
 ## Document template

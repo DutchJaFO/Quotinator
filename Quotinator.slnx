@@ -317,6 +317,13 @@
     <File Path="docs/automated-testing/api-surface/03-unicode-aware-search-toggle.md" />
     <File Path="docs/automated-testing/api-surface/04-endpoint-naming-and-operation-ids.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/identity-and-casing/">
+    <File Path="docs/automated-testing/identity-and-casing/01-canonicalize-explicit-ids-at-capture.md" />
+    <File Path="docs/automated-testing/identity-and-casing/02-quote-id-case-insensitive-lookup.md" />
+    <File Path="docs/automated-testing/identity-and-casing/03-conversation-line-quote-id-fk-safety.md" />
+    <File Path="docs/automated-testing/identity-and-casing/04-read-time-presentation-of-string-typed-ids.md" />
+    <File Path="docs/automated-testing/identity-and-casing/05-generic-repository-select-list-wrapping.md" />
+  </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
   </Folder>
