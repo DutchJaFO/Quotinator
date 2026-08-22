@@ -102,7 +102,6 @@
     <File Path="docs/sql-safety.md" />
     <File Path="docs/logging.md" />
     <File Path="docs/release-verification.md" />
-    <File Path="docs/smoke-tests.md" />
     <File Path="docs/testing-policy.md" />
     <File Path="docs/troubleshooting.md" />
     <File Path="docs/vocabulary.md" />
@@ -394,22 +393,11 @@
   <Folder Name="/scripts/">
     <File Path="scripts/README.md" />
     <File Path="scripts/changelog.csx" />
-    <File Path="scripts/sqlite-storage-probe.csx" />
-    <File Path="scripts/changelog-import.csx" />
-    <File Path="scripts/changelog-upgrade.csx" />
-    <File Path="scripts/execute-sql.csx" />
     <File Path="scripts/SOURCES.md" />
   </Folder>
-  <Folder Name="/scripts/changelog-reference/">
-    <File Path="scripts/changelog-reference/CHANGELOG.md" />
-    <File Path="scripts/changelog-reference/addon-CHANGELOG.md" />
-    <File Path="scripts/changelog-reference/changelog-root.json" />
-    <File Path="scripts/changelog-reference/changelog-highlights.json" />
-    <File Path="scripts/changelog-reference/changelog-ha-addon.json" />
-    <File Path="scripts/changelog-reference/changelog-from-reference.json" />
-    <File Path="scripts/changelog-reference/addon-changelog-from-reference.json" />
-    <File Path="scripts/changelog-reference/addon-changelog-highlights.json" />
-    <File Path="scripts/changelog-reference/target-changelog.json" />
+  <Folder Name="/scripts/testing/">
+    <File Path="scripts/testing/execute-sql.csx" />
+    <File Path="scripts/testing/sqlite-storage-probe.csx" />
   </Folder>
   <Folder Name="/scripts/hooks/">
     <File Path="scripts/hooks/README.md" />

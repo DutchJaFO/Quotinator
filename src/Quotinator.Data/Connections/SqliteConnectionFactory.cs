@@ -57,7 +57,9 @@ public sealed class SqliteConnectionFactory(string dbPath, bool useMemoryTempSto
             // Docker Desktop test happens to (found live: the identical migration succeeded in a local
             // Docker repro without this fix, confirming this is environment-specific, not a code defect
             // in the migration SQL itself; a faithful reproduction was later achieved locally under a
-            // restricted-write container — see docs/smoke-tests.md Section 37). `temp_store = MEMORY`
+            // restricted-write container — see
+            // docs/automated-testing/startup-and-degradation/04-migration-replay-under-restricted-write.md).
+            // `temp_store = MEMORY`
             // sidesteps the whole fallback chain by never writing temp data to disk at all.
             using var pragmaCommand = connection.CreateCommand();
             pragmaCommand.CommandText = "PRAGMA temp_store=MEMORY;";

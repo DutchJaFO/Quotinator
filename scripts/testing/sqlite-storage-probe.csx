@@ -9,10 +9,11 @@ using Microsoft.Data.Sqlite;
 
 // Probes how SQLite behaves when the storage underneath it is constrained: an unwritable directory,
 // a read-only file, a database path that is not a file at all. Written for #326, kept because the
-// degraded and read-only scenarios in docs/smoke-tests.md need a way to establish what the storage
-// layer actually does before asserting what the application does on top of it.
+// degraded and read-only scenarios in docs/automated-testing/startup-and-degradation/ need a way to
+// establish what the storage layer actually does before asserting what the application does on top
+// of it.
 //
-// Run:  dotnet script scripts/sqlite-storage-probe.csx
+// Run:  dotnet script scripts/testing/sqlite-storage-probe.csx
 //
 // Every case is self-contained: it builds its own database under a temp root, constrains it, probes,
 // and restores permissions in a finally block so nothing is left locked. Windows constrains via an

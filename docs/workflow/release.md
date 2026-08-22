@@ -144,7 +144,7 @@ dotnet test  --configuration Release --verbosity normal   # all pass
 docker build -f docker/Dockerfile -t quotinator:local .  # must succeed
 ```
 
-Smoke-test the local image (**T2 gate — mandatory whenever any code was changed**). The only reason to skip this is a release that touches only content files (changelog, documentation) with zero code changes. Run the full, living smoke test suite in [`docs/smoke-tests.md`](../smoke-tests.md) (referenced from CLAUDE.md's Pre-Push Checklist → step 6) against `docker run --rm -p 8080:8080 quotinator:local` — that document is the single authoritative list and is not duplicated here, so update it, not this file, when a new scenario needs covering.
+Smoke-test the local image (**T2 gate — mandatory whenever any code was changed**). The only reason to skip this is a release that touches only content files (changelog, documentation) with zero code changes. Run **every** test in [`docs/automated-testing/`](../automated-testing/README.md) (referenced from CLAUDE.md's Pre-Push Checklist → step 6) against `docker run --rm -p 8080:8080 quotinator:local` — a release follows a milestone close, so the release scope is the whole suite, not the smoke set. That suite is the single authoritative list and is not duplicated here, so update it, not this file, when a new scenario needs covering.
 
 Also confirm **T1** — start the app in Visual Studio and verify it starts without error and affected pages render correctly, for any change that touches `.razor` files, Blazor services, or middleware.
 

@@ -47,19 +47,28 @@ specific migration/reset path is exercised) on top of the baseline, not instead 
 **When required:** Always — every issue runs T2, not only when one of the triggers below applies. That
 was tried once (#196, "T2 not required — no route/schema/startup change") and was wrong on two counts: it
 missed that the change touched `Program.cs`, hitting a trigger below anyway, and it's simply not how this
-project verifies releases regardless of trigger-matching. The trigger list still matters for what to
-additionally exercise beyond the baseline smoke tests in `docs/smoke-tests.md`: any
-change that touches the Dockerfile, publish output, `Program.cs` startup, port or SSL configuration,
-`Directory.Build.props`; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`,
-migration SQL, or schema/table-wipe logic (reseed, reset, backup) needs a targeted check on top of the
-baseline, not instead of it.
+project verifies releases regardless of trigger-matching.
 
-**Gate:** `docker build` succeeds; every command in [`docs/smoke-tests.md`](smoke-tests.md)
-returns expected output. That document (referenced from CLAUDE.md's Pre-Push Checklist → step 6) is
-the single authoritative, living smoke test suite — it is not duplicated here, so the two never drift
-apart. It already covers health/version/random/search plus the full import/staged-action review
-workflow (list, decide, undo, apply, discard, the `batchId`-mode alias, and case-insensitive query
-filters); update it — not this file — whenever a new scenario needs covering.
+**What "runs T2" means is scoped, and the scopes are defined in
+[`docs/automated-testing/`](automated-testing/README.md), not here:**
+
+| Scope | What runs |
+|---|---|
+| End of an issue | The designated smoke set, plus whatever tests are relevant to that issue |
+| End of a milestone | Every test. No exceptions |
+| Release | Every test — a release follows a milestone close |
+
+The trigger list still matters for what an issue counts as *relevant to it*: any change touching the
+Dockerfile, publish output, `Program.cs` startup, port or SSL configuration, `Directory.Build.props`;
+**or** any change to `DatabaseInitializer`/`QuotinatorDatabaseInitializer`, migration SQL, or
+schema/table-wipe logic (reseed, reset, backup) needs a targeted check **on top of** the smoke set,
+never instead of it.
+
+**Gate:** `docker build` succeeds, and every test in the applicable scope returns its expected output.
+[`docs/automated-testing/`](automated-testing/README.md) is the single authoritative, living suite —
+one document per test, with an index carrying the smoke set, the run scopes, and the rules a test is
+held to. It is not duplicated here, so the two never drift apart; update it, not this file, whenever a
+new scenario needs covering.
 
 When the change touches schema/reset logic, also exercise the affected admin endpoint(s) directly (e.g. `POST /api/v1/admin/database/reset`) against the running container and confirm the expected before/after state.
 

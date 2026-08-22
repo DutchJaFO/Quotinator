@@ -1,6 +1,6 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 9)
+**Status:** In progress (step 14)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -258,7 +258,16 @@ renumber nor a split. Every cross-reference becomes an explicit link to a named 
 
 ### 9. Move test-only scripts, and revise ADR 010 and CLAUDE.md
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-22
+
+`execute-sql.csx` and `sqlite-storage-probe.csx` moved to `scripts/testing/` via `git mv`, so history
+follows them. `changelog-import.csx`, `changelog-upgrade.csx` and `scripts/changelog-reference/`
+removed per step 3's approved classification.
+
+ADR 010 revised in place with two clauses: a test-support script lives in `scripts/testing/`, and a
+script kept only for verification is kept only if something verifies with it. `CLAUDE.md`'s Developer
+Context bullet and `scripts/README.md` match; the README's four obsolete sections went with the
+scripts they documented, and its stale `src/Quotinator.Api/resources/changelog.json` path is gone.
 
 Move the scripts step 3 classified as test-only into `scripts/testing/`. Add the subfolder rule to
 [ADR 010](../../architecture-decisions/010-repository-is-csharp-only.md)'s Decision section, revised
@@ -270,7 +279,20 @@ supporting a test is visibly separated from one the application or its workflows
 
 ### 10. Remove `docs/smoke-tests.md` and update every reference to it
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-22
+
+A survey found more than a `docs/*.md` grep had: four references in code and scripts, and 38 in
+historical plan docs. All now point somewhere real.
+
+`release-verification.md`'s T2 tier needed a rewrite rather than a path swap — its "When required" and
+"Gate" text described one all-or-nothing file, which the three run scopes replace. `CLAUDE.md`
+(Pre-Push Checklist step 6, plus a new Key Files row), `ci-cd.md` and `workflow/release.md` follow.
+Two source comments citing tests by number — `SqliteConnectionFactory.cs` and `ChangelogReaderTests.cs`
+— now name the document instead.
+
+**A `grep` for `smoke-tests.md` still returns hits, and that is correct.** The archival pointers wrap
+onto a second line, so a line-scoped grep shows the old name without the adjacent replacement. Verified
+per file by comparing reference counts instead.
 
 Five live reference sites, all updated in the same commit as the removal:
 
@@ -405,3 +427,4 @@ resolve — see that step.
 | 17 | ❌ | Every document is audited against the index's rules, and each one's compliance is recorded | Live | Step 14's per-document checklist completed; documents needing new test content are recorded as findings rather than silently left non-compliant |
 | 18 | ❌ | No predicted count survives in an Expected output section | Live | Every count is non-zero, a relationship derived in the same run, or explicitly labelled an observation |
 | 19 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |
+| 20 | ❌ | No reference to `docs/smoke-tests.md` resolves to nothing | Live | Every remaining mention names where the suite went. **Not** a bare `grep` for absence — archival plan docs keep the old name deliberately, with the pointer alongside; compare per-file reference counts instead |

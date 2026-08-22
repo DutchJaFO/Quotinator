@@ -80,7 +80,7 @@ Quotes come from **films, television, books, and famous people**. All quotes are
 - UI framework: **Blazor Server**
 - Deployment: **Docker** (linux/amd64 + linux/arm64)
 - The developer works professionally with C# and Blazor — keep patterns familiar and idiomatic
-- **This repository is C#-only** ([ADR 010](docs/architecture-decisions/010-repository-is-csharp-only.md)). Any script worth keeping is a `dotnet-script` `.csx` file under `scripts/` (see `scripts/changelog.csx`) or a proper C# project under `tools/` — never Python, Perl, Node.js, or a Unix text-processing one-liner (`sed`, `awk`, etc.), including ad hoc during a development session. Direct invocation of already-installed CLI tools (`git`, `dotnet`, `docker`, `gh`) via the shell is unaffected — the rule governs what gets *written*, not which shell runs an existing command.
+- **This repository is C#-only** ([ADR 010](docs/architecture-decisions/010-repository-is-csharp-only.md)). Any script worth keeping is a `dotnet-script` `.csx` file under `scripts/` (see `scripts/changelog.csx`) or a proper C# project under `tools/` — never Python, Perl, Node.js, or a Unix text-processing one-liner (`sed`, `awk`, etc.), including ad hoc during a development session. **A script that exists to support a test goes in `scripts/testing/`** (see `scripts/testing/execute-sql.csx`), so it is visible at a glance which scripts the application and its workflows actually depend on. Direct invocation of already-installed CLI tools (`git`, `dotnet`, `docker`, `gh`) via the shell is unaffected — the rule governs what gets *written*, not which shell runs an existing command.
 
 ---
 
@@ -1051,6 +1051,7 @@ This does not license ignoring warnings. It sets the order: establish impact fir
 | `docs/database-conventions.md` | Database do's and don'ts — RecordBase, enum/CHECK constraints, migrations, SQL safety, Data/Engine boundaries, DB testing conventions |
 | `docs/data-access.md` | Repository/join-query usage patterns (how to use the infrastructure `database-conventions.md` governs) |
 | `docs/testing-policy.md` | Testing standards — test project pairing, CVE folder rule, parallel execution |
+| `docs/automated-testing/` | The T2 suite — one document per test, plus an index carrying the smoke set, the run scopes, and the rules every test is held to |
 | `docs/workflow/process.md` | Milestone workflow — starting, executing, closing, living and maintenance milestones |
 | `docs/workflow/source-verification.md` | Procedure, source priority order, and escalation rules for verifying a title/date/attribution claim before a data correction |
 | `docs/workflow/checklist.md` | Issue filing, session-start, issue-closing, and milestone-close checklists |
@@ -1199,11 +1200,15 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    ```
    If you do not have Docker available, note this explicitly and let the reviewer know CI is the first Docker gate.
 6. **Smoke-test the image** — required whenever a T2 verification pass is performed (see
-   `docs/release-verification.md`'s T2 gate), not just for Dockerfile changes. Run the full checklist
-   in [`docs/smoke-tests.md`](docs/smoke-tests.md) — the single authoritative T2 smoke-test suite,
-   kept in its own document since it has grown too large to stay inline here. **It is a living
-   checklist**: whenever a T2 pass surfaces a new bug or edge case, add its verification command
-   there in the same commit that fixes it — the list only grows, never shrinks.
+   `docs/release-verification.md`'s T2 gate), not just for Dockerfile changes.
+   [`docs/automated-testing/`](docs/automated-testing/README.md) is the single authoritative, living
+   suite — one document per test, with an index carrying the designated smoke set, the run scopes and
+   the rules every test is held to.
+
+   **What runs depends on the scope**, defined in that index: at the end of an issue, the smoke set
+   plus whatever tests are relevant to that issue; at the end of a milestone and at release, every
+   test with no exceptions. **It is a living suite**: whenever a pass surfaces a new bug or edge case,
+   add its verification there in the same commit that fixes it — the list only grows, never shrinks.
 
 > The CI pipeline runs `dotnet publish` and asserts `data/sources/` is present and non-empty in the output, but it does **not** build the Docker image. The release workflow builds the image on tag push — by that point a failure blocks the release. Always do step 5 locally before tagging.
 

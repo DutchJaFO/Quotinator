@@ -41,6 +41,15 @@ Concretely:
   precedent) or, if it grows beyond a single-file script, a proper C# console project under `tools/`
   (matching `tools/Quotinator.Tools.DbInspector`'s precedent — dev-only, never shipped, never
   referenced by `src/`).
+- **A script that exists to support a test lives in `scripts/testing/`.** The language rule is
+  unchanged — it is still a `.csx` under `scripts/` — but a script written to provoke, measure or
+  inspect something for a test is separated from one the application or its workflows depend on, so
+  it is visible at a glance which scripts are load-bearing. `scripts/changelog.csx` drives the release
+  workflow; `scripts/testing/execute-sql.csx` exists only to break a database so a test can observe
+  what happens next. Those are different things and the folder says so.
+- **A script kept only for verification is kept only if something verifies with it.** A tool nothing
+  exercises proves nothing, and an unverified verifier is worse than none — it invites confidence it
+  has not earned. Remove it; git history keeps it.
 - **Direct invocation of already-installed CLI tools is not "a script" and is unaffected by this
   policy.** Running `git`, `dotnet build`/`test`/`publish`, `docker build`/`run`, or `gh` via
   PowerShell or the Bash tool is normal command execution, not tooling logic — the policy governs

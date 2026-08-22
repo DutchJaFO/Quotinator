@@ -167,10 +167,11 @@ Build and run the image the same way the release workflow does:
 docker build -f docker/Dockerfile -t quotinator:local .
 docker run --rm -d -p 8080:8080 --name quotinator-test quotinator:local
 ```
-Then run every command in [`docs/smoke-tests.md`](smoke-tests.md) (referenced from CLAUDE.md's
-Pre-Push Checklist → step 6) against it. That document is the single authoritative, living smoke
-test suite — it is not duplicated here so the two never drift apart; update it, not this file,
-whenever a new scenario needs covering.
+Then run the applicable scope from [`docs/automated-testing/`](automated-testing/README.md)
+(referenced from CLAUDE.md's Pre-Push Checklist → step 6) against it — the smoke set plus this issue's
+own relevant tests, or every test at a milestone close or release. That suite is the single
+authoritative, living one — it is not duplicated here so the two never drift apart; update it, not
+this file, whenever a new scenario needs covering.
 ```bash
 docker stop quotinator-test
 ```
