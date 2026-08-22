@@ -1,6 +1,7 @@
 # A quote resolves by id in either casing, and always renders its id canonically
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #210
 
 ## Preconditions

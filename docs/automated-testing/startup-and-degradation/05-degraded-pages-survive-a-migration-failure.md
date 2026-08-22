@@ -1,6 +1,7 @@
 # Degraded-state pages survive a genuine migration failure
 
 **Smoke:** no
+**Environment:** Upgraded + Constrained
 **Traces to:** #293
 
 > **This test cannot pass as written, and #327 is rewriting it.** It is carried into the new structure

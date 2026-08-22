@@ -1,6 +1,7 @@
 # Notification metadata, provenance, and the released-database migration path
 
 **Smoke:** no
+**Environment:** Upgraded
 **Traces to:** #312
 
 ## Preconditions

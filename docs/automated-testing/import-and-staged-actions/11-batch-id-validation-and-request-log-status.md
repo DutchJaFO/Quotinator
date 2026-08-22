@@ -1,6 +1,7 @@
 # A missing `batchId` is rejected with the right message, and the log reports the real status
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #19
 
 ## Preconditions

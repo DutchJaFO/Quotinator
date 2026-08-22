@@ -1,6 +1,7 @@
 # Upgrading a v1.8.3 database enriches its notification rather than duplicating it
 
 **Smoke:** no
+**Environment:** Upgraded
 **Traces to:** #312
 
 ## Preconditions

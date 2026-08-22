@@ -1,6 +1,7 @@
 # The legacy notification gains provenance, and only a real v1.8.3 database gets a 1.8.3 row
 
 **Smoke:** no
+**Environment:** Upgraded
 **Traces to:** #312
 
 ## Preconditions

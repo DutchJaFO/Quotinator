@@ -220,6 +220,141 @@ the same commit that fixes it.
 
 ---
 
+## Environment profiles
+
+**A test declares the environment it needs and establishes it. It never inherits one.**
+
+This section exists because of a measured failure. The single file this folder replaces opened with a
+*Baseline* section that started the container, published the port, set the admin key and let the
+first boot seed — once, for every section after it. Read top to bottom that worked. Split into one
+document per test it did not: 21 of 43 documents were left driving `localhost:8080` with nothing to
+answer them, most sending an admin key nothing set.
+
+A named profile a test *invokes* is not the same thing as a predecessor a test *follows*. It is the
+first of the two honest resolutions above — guarantee the precondition — written once instead of
+forty-three times.
+
+### The three profiles
+
+| Profile | What it establishes |
+|---|---|
+| **Fresh** | New volume, first boot, bundled seed, nothing else |
+| **Constrained** | Fresh, then one deliberate defect — read-only root, dropped table, no writable path |
+| **Upgraded** | A prior image ran against this volume first, then the current build |
+
+**Content is a separate axis and stays the test's own responsibility.** A test needing a populated
+database is Fresh plus an import step it already owns — not a fourth profile. Shared *setup* is what
+these profiles provide; shared *content* is what the independence rule forbids, and the distinction is
+the whole reason this is safe.
+
+**Constrained is a layer, not a third base.** It is always applied *on top of* a base — usually Fresh,
+sometimes Upgraded, when the defect is only reachable in a database that an older build wrote. A
+document whose environment is both writes both, base first:
+
+```markdown
+**Environment:** Upgraded + Constrained
+```
+
+#### Fresh
+
+```bash
+docker rm -f qt-env 2>/dev/null; docker volume rm qt-env 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-env -p 8080:8080 -v qt-env:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=false \
+  quotinator:<base tag>
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Every profile pins `Quotinator__AutoPurgeBundledImportActions` explicitly, and Fresh pins it
+`false`.** Left unset, the bundled batches' `Import_Action` rows are purged straight after a
+successful seed — so a test concluding anything from an empty action list cannot tell its own result
+apart from the purge. Three documents currently rest on exactly that. Retaining the rows makes "none
+are pending" an observation instead of an artefact.
+
+**`--name` is mandatory**, on this and on every `docker run` in the suite. Without it, every later
+`docker cp` and `docker logs` is written against a `<container>` placeholder no reader can resolve.
+
+**Never `docker run` in the foreground ahead of later steps.** `docker run --rm` without `-d` holds the
+terminal, and every command after it in the block is unreachable — the previous suite's own baseline
+had this defect, which is part of why nothing after it could run.
+
+#### Constrained
+
+Fresh, then exactly one deliberate defect, named in `Determinism`. Two kinds, and they cost different
+amounts:
+
+- **A flag** — `--read-only`, an unwritable mount, a removed env var. Free and exactly reproducible;
+  nothing to snapshot.
+- **A state** — a dropped table, a corrupted file, a rolled-back version counter. Worth capturing as a
+  database backup, because reconstructing it by hand is where irreproducibility creeps in.
+
+#### Upgraded
+
+Run the prior image against a fresh volume, let it finish its own first boot, stop it, then run the
+current build against the same volume. Which prior image depends on what the test is about: the
+milestone base image for "does this milestone's schema change upgrade cleanly", a published tag for
+"does the upgrade our users will actually perform work".
+
+The prior boot must be waited on by **the state the test is about**, never by a duration. A fixed wait
+here has already let a defect through: a 45-second check read zero notifications and looked like proof
+none were written, when seeding simply had not finished.
+
+### Snapshot and restore
+
+A group of tests sharing a profile should not pay for a rebuild and a reseed each. Capture the
+environment once, restore it between tests.
+
+**Image.** Tag the milestone's base image and save it once:
+
+```bash
+docker tag quotinator:local quotinator:m<N>-base
+docker save -o .claude/temp/test-environments/quotinator-m<N>-base.tar quotinator:m<N>-base
+```
+
+Tests run against the pinned tag. A test that must rebuild — proving a bundled file ships inside the
+image, for instance — builds its own throwaway tag and never overwrites the base. This is not
+hypothetical tidiness: one document edits a bundled rule file, rebuilds `quotinator:local`, and never
+rebuilds after reverting, leaving three sibling tests running a mutated image.
+
+**Database.** Captured from a **stopped** container, with the `-wal` and `-shm` sidecars, or via
+SQLite's own `VACUUM INTO`. A copy taken from a running container can be torn mid-write, and a torn
+copy fails as "no rows" — indistinguishable from the assertion it was meant to check.
+
+**Restore is unconditional between tests**, never "if the test dirtied something". The moment it is
+conditional, inherited state is back with a better name.
+
+**Ordering within a group is allowed. Ordering across groups is not**, and every group must be able to
+start cold. Otherwise "run the Fresh group" quietly becomes the new Baseline section.
+
+Backups live in `.claude/temp/test-environments/` — already gitignored, and deleted once the milestone
+is published. Anything longer than a couple of commands becomes a `scripts/testing/` entry per
+[ADR 010](../architecture-decisions/010-repository-is-csharp-only.md) rather than growing inside a
+document.
+
+### The milestone base image is also the migration fixture
+
+Capture it at milestone start, and the upgrade tests stop depending on a published tag existing: the
+base image *is* the version this milestone upgrades from, by definition. That also removes the staleness
+— a hardcoded `ghcr.io/dutchjafo/quotinator:1.8.3` only ever tests one upgrade, and stops being the
+interesting one at the next release.
+
+**State the condition when the snapshot is taken.** It is the users' upgrade path only if the milestone
+branched from the released tag. That is normally true here, and it is what makes the base image
+legitimate rather than merely convenient.
+
+### Not adopted: reset-and-reseed as a cheaper restore
+
+`POST /api/v1/admin/database/reset` followed by `POST /api/v1/admin/database/reseed` would avoid a
+container restart entirely. It is not used yet, for a reason worth recording rather than rediscovering:
+since #156 Reset is a full wipe that deliberately does **not** reseed, and whether the pair reproduces
+a fresh first boot is unverified. Quote content should reproduce from deterministic ids, but audit
+rows, notification rows, the two schema-version counters and `Import_Action` rows plausibly do not.
+Prove that equivalence before the suite rests on it.
+
+---
+
 ## Test outcomes feed the Knowledgebase
 
 A test creates a specific circumstance on purpose and shows what it produces. That is exactly what a
@@ -393,12 +528,17 @@ Every test document follows this shape.
 # <What this verifies>
 
 **Smoke:** yes | no
+**Environment:** Fresh | Constrained | Upgraded
 **Traces to:** #NNN[, #NNN]
 
 ## Preconditions
 
 The exact state the setup must reach before any assertion below means anything, and how that state is
 confirmed — not inferred from the recipe having been followed.
+
+The named profile covers the environment. This field states only what is true *beyond* it — the
+content this test imports for itself, the defect it introduces, the prior version it upgrades from.
+A document that needs nothing beyond its profile says so.
 
 ## Determinism
 

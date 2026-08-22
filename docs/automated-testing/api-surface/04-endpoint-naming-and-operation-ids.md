@@ -1,6 +1,7 @@
 # Endpoint names and summaries follow the standard, including the breaking operationId renames
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #279
 
 ## Preconditions

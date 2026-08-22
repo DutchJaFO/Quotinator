@@ -1,6 +1,7 @@
 # A conversation line referencing a quote in the wrong casing does not violate the foreign key
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #210
 
 ## Preconditions

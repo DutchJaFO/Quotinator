@@ -1,6 +1,7 @@
 # Discarding a staged batch marks every action discarded and applies nothing
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #154
 
 ## Preconditions

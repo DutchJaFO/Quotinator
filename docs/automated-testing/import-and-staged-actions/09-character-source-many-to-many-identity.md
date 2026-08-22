@@ -1,6 +1,7 @@
 # A Character's Source links are per-Source, and survive the many-to-many mechanism change
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #179
 
 ## Preconditions

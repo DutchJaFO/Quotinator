@@ -1,6 +1,7 @@
 # String-typed id fields render canonically over a real HTTP round trip
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #210
 
 ## Preconditions

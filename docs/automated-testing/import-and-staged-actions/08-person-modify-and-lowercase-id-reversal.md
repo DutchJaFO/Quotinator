@@ -1,6 +1,7 @@
 # A Person can be Modified, blocks overwrites when Complete, and reverses by a mixed-case id
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #173
 
 ## Preconditions

@@ -1,6 +1,7 @@
 # A Source discovered from a quote carries that quote's date
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #191
 
 ## Preconditions

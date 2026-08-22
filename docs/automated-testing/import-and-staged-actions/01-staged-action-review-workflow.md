@@ -1,6 +1,7 @@
 # The staged review → decide → apply workflow, end to end
 
 **Smoke:** yes
+**Environment:** Fresh
 **Traces to:** #45, #149, #152, #154
 
 ## Preconditions

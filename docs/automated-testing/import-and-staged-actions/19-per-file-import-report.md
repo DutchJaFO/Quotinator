@@ -1,6 +1,7 @@
 # Every seed and import surface reports per-file, per-entity-type counts
 
 **Smoke:** yes
+**Environment:** Fresh
 **Traces to:** #221
 
 ## Preconditions

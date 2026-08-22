@@ -1,6 +1,7 @@
 # Migration replay survives an environment where only the data directory is writable
 
 **Smoke:** no
+**Environment:** Upgraded + Constrained
 **Traces to:** #294
 
 ## Preconditions

@@ -1,6 +1,7 @@
 # `POST /import?batchId=` applies an already-staged batch without re-uploading
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #154
 
 ## Preconditions

@@ -1,6 +1,7 @@
 # Upgrading from an intermediate schema version, not just the last release
 
 **Smoke:** no
+**Environment:** Upgraded
 **Traces to:** #312
 
 ## Preconditions

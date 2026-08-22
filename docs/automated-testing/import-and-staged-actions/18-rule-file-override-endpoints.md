@@ -1,6 +1,7 @@
 # Rule-file override endpoints, and the alias-candidate suggestion endpoint
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #153
 
 ## Preconditions

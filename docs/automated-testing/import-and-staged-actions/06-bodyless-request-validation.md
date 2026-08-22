@@ -1,6 +1,7 @@
 # A bodyless import request is rejected with an actionable message, not a bare 400
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #154
 
 ## Preconditions

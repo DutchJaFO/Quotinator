@@ -1,6 +1,7 @@
 # Every generic-repository-backed endpoint returns correct data and lowercase ids
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #210
 
 ## Preconditions

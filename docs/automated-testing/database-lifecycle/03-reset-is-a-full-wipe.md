@@ -1,6 +1,7 @@
 # Reset wipes the entire database and does not reseed
 
 **Smoke:** yes
+**Environment:** Fresh
 **Traces to:** #156
 
 ## Preconditions

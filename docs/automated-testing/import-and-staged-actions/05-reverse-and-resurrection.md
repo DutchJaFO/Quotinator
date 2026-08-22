@@ -1,6 +1,7 @@
 # Reversing an applied batch undoes it, and re-importing resurrects the rows
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #59
 
 ## Preconditions

@@ -1,6 +1,7 @@
 # Bulk-deciding a staged batch via file export and re-import, in both wire formats
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #163
 
 ## Preconditions

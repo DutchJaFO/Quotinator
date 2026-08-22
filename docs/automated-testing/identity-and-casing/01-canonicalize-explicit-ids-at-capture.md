@@ -1,6 +1,7 @@
 # A file-authored explicit id is canonicalized at capture, and its joins survive
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #209
 
 ## Preconditions

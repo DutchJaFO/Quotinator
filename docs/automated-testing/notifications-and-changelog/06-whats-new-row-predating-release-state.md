@@ -1,6 +1,7 @@
 # A what's-new row written before the release state existed is backfilled, not re-announced
 
 **Smoke:** no
+**Environment:** Fresh + Constrained
 **Traces to:** #312
 
 ## Preconditions

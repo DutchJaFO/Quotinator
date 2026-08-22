@@ -1,6 +1,7 @@
 # Audit export, date-range discovery, and conflict-resolution data auto-purge
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #249
 
 ## Preconditions

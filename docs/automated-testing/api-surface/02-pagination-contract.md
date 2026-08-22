@@ -1,6 +1,7 @@
 # The pagination contract holds live on every paginated endpoint
 
 **Smoke:** yes
+**Environment:** Fresh
 **Traces to:** #195
 
 ## Preconditions

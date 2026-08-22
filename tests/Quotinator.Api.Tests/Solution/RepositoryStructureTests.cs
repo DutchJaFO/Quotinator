@@ -248,6 +248,69 @@ public partial class RepositoryStructureTests
             "Test documents link to files that do not exist:\n" + string.Join("\n", failures.Order()));
     }
 
+    /// <summary>
+    /// Every test document must name one of the environment profiles the suite index defines, so it
+    /// establishes its own environment instead of inheriting whatever a previous test left running.
+    /// </summary>
+    /// <remarks>
+    /// The profile list is read from the index rather than hardcoded here: a profile is a profile
+    /// because it has its own section, so a document naming something the index never defined fails,
+    /// and so does a document naming nothing at all. See #339, where splitting a single-file suite into
+    /// one document per test silently dropped the Baseline section that had started the container for
+    /// all of them — 21 of 43 documents were left driving a port nothing published.
+    /// </remarks>
+    [TestMethod]
+    public void EveryAutomatedTestingDocument_NamesAKnownEnvironmentProfile()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        string index = File.ReadAllText(Path.Combine(AutomatedTestingDir, "README.md"));
+
+        List<string> profiles =
+        [
+            .. EnvironmentProfileHeading().Matches(index)
+                .Select(m => m.Groups["name"].Value.Trim())
+                .Distinct()
+        ];
+
+        Assert.IsNotEmpty(profiles,
+            "The suite index defines no environment profiles, so no document can name one.");
+
+        List<string> documents = FindAutomatedTestingDocuments();
+
+        Assert.IsNotEmpty(documents,
+            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
+
+        List<string> failures = [];
+
+        foreach (string document in documents)
+        {
+            string path = Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar));
+            System.Text.RegularExpressions.Match declared =
+                EnvironmentProfileDeclaration().Match(File.ReadAllText(path));
+
+            if (!declared.Success)
+            {
+                failures.Add($"{document} — no **Environment:** field");
+                continue;
+            }
+
+            // Constrained is a layer applied on top of a base, so a document may name more than one.
+            foreach (string named in declared.Groups["name"].Value.Split('+', StringSplitOptions.TrimEntries
+                | StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!profiles.Contains(named, StringComparer.OrdinalIgnoreCase))
+                    failures.Add($"{document} — '{named}' is not a profile the index defines");
+            }
+        }
+
+        Assert.IsEmpty(failures,
+            "Test documents must name an environment profile the index defines, otherwise they inherit "
+            + $"whatever a previous test left behind:\n{string.Join("\n", failures.Order())}\n\n"
+            + $"Profiles defined by the index: {string.Join(", ", profiles)}");
+    }
+
     private const string AutomatedTestingRelativePath = "docs/automated-testing";
 
     private static readonly string AutomatedTestingDir =
@@ -266,6 +329,20 @@ public partial class RepositoryStructureTests
 
     [System.Text.RegularExpressions.GeneratedRegex(@"\]\((?<target>[^)]+)\)")]
     private static partial System.Text.RegularExpressions.Regex MarkdownLinkTarget();
+
+    /// <summary>
+    /// A profile is defined by having its own section in the index, so the guard cannot drift from the
+    /// documentation the way a hardcoded list would.
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^####\s+(?<name>.+?)\s*$",
+        System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex EnvironmentProfileHeading();
+
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^\*\*Environment:\*\*\s*(?<name>.+?)\s*$",
+        System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex EnvironmentProfileDeclaration();
 
     /// <summary>data/changelog/changelog.en.json must exist on disk as the English source file.</summary>
     [TestMethod]

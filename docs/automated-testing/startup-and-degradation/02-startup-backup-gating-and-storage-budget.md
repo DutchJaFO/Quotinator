@@ -1,6 +1,7 @@
 # Startup backs up only when there is real work, and respects the storage budget
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #277
 
 ## Preconditions

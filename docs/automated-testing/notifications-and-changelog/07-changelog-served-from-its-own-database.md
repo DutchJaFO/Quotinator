@@ -1,6 +1,7 @@
 # The changelog is served from its own on-disk database, not the JSON fallback
 
 **Smoke:** yes
+**Environment:** Fresh
 **Traces to:** #309
 
 ## Preconditions

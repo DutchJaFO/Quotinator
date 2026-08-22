@@ -1,6 +1,7 @@
 # The Unicode-aware search flag reaches the running app and changes query behaviour
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #222
 
 ## Preconditions

@@ -1,6 +1,7 @@
 # A fresh seed resolves every bundled file with nothing left pending
 
 **Smoke:** yes
+**Environment:** Fresh
 **Traces to:** #181
 
 ## Preconditions

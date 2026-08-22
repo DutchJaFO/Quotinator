@@ -1,6 +1,7 @@
 # StageDirection and SoundCue can be Modified, and a Complete row blocks overwrites
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #171, #172
 
 ## Preconditions

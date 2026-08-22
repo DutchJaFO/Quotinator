@@ -1,6 +1,7 @@
 # Captured source files are recorded with provenance and reconstruct byte-for-byte
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #251, #252
 
 ## Preconditions

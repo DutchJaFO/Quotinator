@@ -1,6 +1,7 @@
 # A rule whose recorded snapshot no longer matches reality stages Stale, not Decided
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #153
 
 ## Preconditions

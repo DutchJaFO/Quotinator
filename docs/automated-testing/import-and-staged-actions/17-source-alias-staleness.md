@@ -1,6 +1,7 @@
 # An alias is stale only on a genuine rename, never on first creation
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #153
 
 ## Preconditions

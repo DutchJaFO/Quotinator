@@ -1,6 +1,7 @@
 # Character Modify through the widened schema, explicit ids on Add, and case-insensitive Source matching
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #175
 
 ## Preconditions

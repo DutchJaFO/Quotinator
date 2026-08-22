@@ -1,6 +1,7 @@
 # Seeding takes a backup, a broken schema degrades rather than crashes, and Reset recovers
 
 **Smoke:** no
+**Environment:** Fresh + Constrained
 **Traces to:** #254
 
 ## Preconditions

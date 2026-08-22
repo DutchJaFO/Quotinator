@@ -1,6 +1,7 @@
 # Baseline — health, version, random and search respond correctly
 
 **Smoke:** yes
+**Environment:** Fresh
 **Traces to:** —
 
 ## Preconditions

@@ -1,6 +1,7 @@
 # Notifications list, dismiss, render, and drive their action
 
 **Smoke:** yes
+**Environment:** Fresh
 **Traces to:** #278
 
 ## Preconditions

@@ -1,6 +1,7 @@
 # The rule lookup reads the file's live content, not a cached decision
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #181
 
 ## Preconditions

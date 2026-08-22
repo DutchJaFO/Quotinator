@@ -1,6 +1,7 @@
 # Kestrel serves a wait page during initialisation instead of appearing dead
 
 **Smoke:** yes
+**Environment:** Fresh
 **Traces to:** #280
 
 ## Preconditions

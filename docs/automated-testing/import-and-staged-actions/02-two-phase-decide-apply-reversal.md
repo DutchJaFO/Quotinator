@@ -1,6 +1,7 @@
 # A batch applied through the staged flow can be reversed
 
 **Smoke:** no
+**Environment:** Fresh
 **Traces to:** #177
 
 ## Preconditions
