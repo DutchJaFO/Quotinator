@@ -356,6 +356,15 @@
     <File Path="docs/automated-testing/import-and-staged-actions/08-person-modify-and-lowercase-id-reversal.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/09-character-source-many-to-many-identity.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/10-source-date-from-resolving-quote.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/11-batch-id-validation-and-request-log-status.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/12-character-modify-and-explicit-id-on-add.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/13-bulk-decide-via-file-export-import.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/15-rule-file-live-read-proof.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/16-conflict-rule-staleness.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/17-source-alias-staleness.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/18-rule-file-override-endpoints.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/19-per-file-import-report.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

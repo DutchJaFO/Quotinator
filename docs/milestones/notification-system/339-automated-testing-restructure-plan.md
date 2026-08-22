@@ -1,6 +1,6 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 8)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -199,7 +199,20 @@ every Markdown file under `docs/` and picks the new folder up for free.
 
 ### 6. Create the folder and move all 44 sections into it
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-22
+
+43 documents across six categories. 44 minus one: "Systemic id-case guard" had no commands and no
+assertions — its own text said it was unit-tier coverage listed only for explanation — so it is folded
+into the quote-id document it already named as its own coverage, rather than becoming a test that can
+never be run.
+
+Nine are marked `Smoke: yes`, matching step 2's approved set exactly.
+
+**The move was not mechanical, and that was the point.** Filling `Preconditions` and `Determinism`
+turned prose into findings repeatedly: a hidden ordering dependency in the pagination test, an id-case
+claim that was true of the SQL and false of the endpoints (#341), a "known open gap" that had been
+fixed weeks earlier and was still telling readers to expect the failure, and eleven predicted counts
+the suite could not legitimately know.
 
 Content moves verbatim except where the template requires restructuring. No test is dropped, merged,
 or rewritten — that boundary is what keeps this issue reviewable, and what leaves #327's and #328's
@@ -210,7 +223,16 @@ its document.
 
 ### 7. Write the index
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-22
+
+Beyond the sections the issue named, three rules were added during the move because the move surfaced
+the need for them (developer direction):
+
+- **Wait for a condition, never a duration** — three poll forms, plus the elapsed-time exception.
+- **We only observe facts** — zero import failures as the invariant, non-zero where content must
+  exist, relationships that survive a dataset change, and stable fixtures as a narrow exception.
+- **Cover both the happy and unhappy flow** — a failure must be reproducible or its consequences
+  cannot be recorded, and the minimum expected consequence is a stable application.
 
 `docs/automated-testing/README.md` carries: the "Rules every section here follows" block from the
 current file, the living-checklist rule, the complete list of every test document, the designated
@@ -255,7 +277,7 @@ it.
 
 ### 11. State the reliability rule
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-22, in the index
 
 A test must reproduce its condition reliably; an intermittent result is not a result. Goes in the
 index as a rule every test is held to, and is what the template's Determinism field serves.

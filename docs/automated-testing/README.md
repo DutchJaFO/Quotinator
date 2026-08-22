@@ -99,6 +99,23 @@ upgrade with notification-flagged highlights, a schema-version overshoot. The su
 not the notification row as an object. Where a scenario genuinely is about counting, count occurrences
 of that specific notification, never the total.
 
+**Cover both the happy flow and the unhappy flow.** A test that only proves the good path proves half
+a feature. What an operation does when its input is wrong, its precondition is absent, or its
+dependency is unavailable is behaviour the application ships, and it is where the defects that reach
+users actually live — a bare `400` where a `422` with a reason belongs, a write that silently matches
+nothing, a page that 500s instead of degrading.
+
+**A failure must be reproducible, or its consequences cannot be recorded.** This is why the unhappy
+flow needs the same `Preconditions` and `Determinism` discipline as the happy one, and often more: an
+error state reached by luck tells you nothing about what the application does in it. Pin how the
+failure is provoked, then write down what it actually produces.
+
+**The minimum expected consequence of any failure is a stable application.** Whatever else a wrong
+input or a broken dependency causes, the process stays up, the surfaces stay reachable, and the
+operator is told something they can act on. A test's unhappy flow states that outcome explicitly rather
+than stopping at the error code — see the never-crash rule below, which is the same requirement stated
+from the other side.
+
 **The application must never crash.** The worst acceptable outcome of any startup problem is a
 degraded UX plus an OpenAPI surface that still allows recovery. A test that provokes a startup problem
 is therefore testing a *feature* — the degradation path — not merely reproducing a historical
@@ -219,8 +236,6 @@ never beside it.
 
 ### `import-and-staged-actions/`
 
-Being moved — sections 8–11 and 19–27 of the previous suite are not here yet.
-
 | # | Test | Smoke |
 |---|---|---|
 | 01 | [The staged review → decide → apply workflow](import-and-staged-actions/01-staged-action-review-workflow.md) | yes |
@@ -233,6 +248,15 @@ Being moved — sections 8–11 and 19–27 of the previous suite are not here y
 | 08 | [Person Modify, Complete blocking, and mixed-case id reversal](import-and-staged-actions/08-person-modify-and-lowercase-id-reversal.md) | no |
 | 09 | [Character↔Source links stay per-Source](import-and-staged-actions/09-character-source-many-to-many-identity.md) | no |
 | 10 | [A Source discovered from a quote carries that quote's date](import-and-staged-actions/10-source-date-from-resolving-quote.md) | no |
+| 11 | [A missing `batchId` is rejected, and the log reports the real status](import-and-staged-actions/11-batch-id-validation-and-request-log-status.md) | no |
+| 12 | [Character Modify, explicit ids on Add, case-insensitive Source matching](import-and-staged-actions/12-character-modify-and-explicit-id-on-add.md) | no |
+| 13 | [Bulk-deciding a batch via file export and re-import](import-and-staged-actions/13-bulk-decide-via-file-export-import.md) | no |
+| 14 | [A fresh seed resolves every bundled file with nothing left pending](import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md) | yes |
+| 15 | [The rule lookup reads the file's live content](import-and-staged-actions/15-rule-file-live-read-proof.md) | no |
+| 16 | [A stale conflict rule stages Stale, not Decided](import-and-staged-actions/16-conflict-rule-staleness.md) | no |
+| 17 | [An alias is stale only on a genuine rename](import-and-staged-actions/17-source-alias-staleness.md) | no |
+| 18 | [Rule-file override endpoints and alias candidates](import-and-staged-actions/18-rule-file-override-endpoints.md) | no |
+| 19 | [Every seed and import surface reports per-file counts](import-and-staged-actions/19-per-file-import-report.md) | yes |
 
 ---
 
@@ -257,11 +281,12 @@ Every variable the outcome depends on, and how each is pinned.
 
 ## Steps
 
-The commands, in order.
+The commands, in order — the happy flow and the unhappy flow, not one of them.
 
 ## Expected output
 
-What each command must produce for a pass.
+What each command must produce for a pass, including what the unhappy flow produces and how the
+application behaves while producing it.
 
 ## Observed effect
 
