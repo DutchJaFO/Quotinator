@@ -166,6 +166,10 @@ Releases follow a two-stage model. See `docs/release-verification.md` for tier d
 - [ ] If the milestone added any migrations: full incremental migration path verified against a
       database matching the *last published release's* schema, not the accumulated dev database —
       see [ADR 009](../architecture-decisions/009-verify-migrations-against-last-released-schema.md)
+- [ ] If the milestone added any migrations: consolidate the accumulated set before release, the way
+      #155 and #289 each consolidated their predecessors. What accumulated is read from
+      `DatabaseInitializer.DataOwnedMigrations` and the consumer's own list against the last
+      published release — never from a list maintained by hand
 - [ ] **T4 — Docker image freshness**: `docker build --no-cache --pull -f docker/Dockerfile -t quotinator:local .`
       then `docker scout cves quotinator:local`; compare against `docs/security/README.md`'s "Docker
       base image (OS packages)" table and update it (at minimum the "Last scanned" date) in the same

@@ -196,11 +196,6 @@ step, the other reuses it.
 | 22 | **#306** | Independent bug; can slot in anywhere |
 | 23 | **#308** | Per-type layout across both surfaces. Last, because it cannot settle those layouts before the producers that need them exist |
 
-**Migration consolidation, at the end of the milestone.** #81, #312, #319 and #304 each add Data-owned
-migrations, and #312 deliberately does not optimise migration count. Per the developer's direction
-(2026-08-15), the accumulated migrations are consolidated into a smaller set before release, the same way
-#155 and #289 each consolidated their own predecessors.
-
 ---
 
 ## PR merge plan
