@@ -82,6 +82,29 @@ is therefore testing a *feature* — the degradation path — not merely reprodu
 incident. An unhandled exception, a container that exits, or a page returning 500 is a failure of that
 feature regardless of what caused it.
 
+**Wait for a condition, never for a duration.** A fixed `sleep` encodes a guess about how long a
+machine takes, and it is wrong in both directions: too short and the test fails on a slower machine
+for a reason that has nothing to do with what it verifies; too long and every run pays for the worst
+case. Poll for the state the test actually depends on.
+
+Two canonical waits, because tests do not all wait for the same thing:
+
+```bash
+# Wait until the app is healthy — the normal case.
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+```
+
+```bash
+# Wait until the app is listening, whatever it answers — for degraded scenarios, where
+# /health returning 503 IS the expected outcome and the first form would loop forever.
+until curl -s -o /dev/null http://localhost:8080/api/v1/health; do sleep 1; done
+```
+
+A wait that is genuinely for elapsed time — a TTL expiring, a refresh interval passing, confirming a
+container *stayed* dead rather than became ready — is not a readiness wait and keeps its `sleep`. It
+must say so in `Determinism`, naming what the duration is measuring. An unexplained `sleep` is a
+guess, and the rule above applies to it.
+
 **Refer to a test by what it verifies, never by its number.** Numbers are an index within a category
 and shift when one is inserted. Cross-references between tests are links, not prose pointing at a
 number.
@@ -112,6 +135,19 @@ Fixture files, seed data, and expected-output samples a test needs go in a subfo
 document. Executable scripts go to `scripts/testing/`, per
 [ADR 010](../architecture-decisions/010-repository-is-csharp-only.md) — never inline in the document,
 never beside it.
+
+---
+
+## The tests
+
+### `api-surface/`
+
+| # | Test | Smoke |
+|---|---|---|
+| 01 | [Baseline — health, version, random and search](api-surface/01-baseline.md) | yes |
+| 02 | [The pagination contract holds live on every paginated endpoint](api-surface/02-pagination-contract.md) | yes |
+| 03 | [The Unicode-aware search flag reaches the running app](api-surface/03-unicode-aware-search-toggle.md) | no |
+| 04 | [Endpoint names and summaries follow the standard](api-surface/04-endpoint-naming-and-operation-ids.md) | no |
 
 ---
 

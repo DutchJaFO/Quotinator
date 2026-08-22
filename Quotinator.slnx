@@ -311,6 +311,12 @@
   <Folder Name="/docs/automated-testing/">
     <File Path="docs/automated-testing/README.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/api-surface/">
+    <File Path="docs/automated-testing/api-surface/01-baseline.md" />
+    <File Path="docs/automated-testing/api-surface/02-pagination-contract.md" />
+    <File Path="docs/automated-testing/api-surface/03-unicode-aware-search-toggle.md" />
+    <File Path="docs/automated-testing/api-surface/04-endpoint-naming-and-operation-ids.md" />
+  </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
   </Folder>

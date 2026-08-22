@@ -26,6 +26,32 @@ than settled while moving files.
 
 ---
 
+## Scope change — fixed waits become readiness polls (2026-08-22)
+
+**Added by developer decision during step 6.** The issue's boundary says content moves verbatim and no
+test's assertions change. This extends it: a test's *wait* is not an assertion, and the suite carries
+34 fixed `sleep` calls across 11 distinct values from 1 to 70 seconds, with no readiness-poll pattern
+anywhere.
+
+Shipping requirement 11's reliability rule alongside 34 violations of it would make the rule
+decorative. Fixing them during the move is also far cheaper than a second pass over 44 documents
+later.
+
+**Not a blanket replacement — the waits are not all waiting for the same thing**, and conflating them
+would break tests:
+
+1. **Waiting for healthy** — the normal case, becomes a poll on `/health` returning 200.
+2. **Waiting for listening** — degraded scenarios, where `/health` returning 503 *is* the expected
+   outcome. A poll on 200 would loop forever here, so it polls for any answer at all.
+3. **Genuinely waiting for elapsed time** — a TTL expiring, a refresh interval passing, confirming a
+   container *stayed* dead rather than became ready. These keep their `sleep` and justify the duration
+   in `Determinism`.
+
+Case 3 means this is per-test judgement, not a mechanical sweep. Both poll forms are documented in the
+suite index.
+
+---
+
 ## Steps
 
 ### 1. Settle the category split and the numbering scheme
@@ -150,7 +176,7 @@ setup and assert opposite outcomes precisely because neither confirmed it reache
 
 ### 5. Write the two guard tests and confirm them red
 
-**Status:** 🟡 Written 2026-08-22 — one red as intended, one cannot be red yet
+**Status:** ✅ Done — 2026-08-22
 
 Both added to `RepositoryStructureTests`, the class that already owns
 `DocsMarkdownFiles_OnDisk_AreAllInSlnx`.
@@ -160,11 +186,13 @@ not be empty`. Its emptiness assertion is load-bearing rather than defensive: *e
 linked* is vacuously true over zero documents, so without it the test would pass green on a missing
 or empty folder — precisely the state it exists to catch.
 
-**`EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument` — green, vacuously.** With no
-documents linked yet there are no links to resolve. Its failure condition — an index link pointing at
-a file that does not exist — cannot be constructed before step 6, so it is not red now and saying it
-is would be false. It gets its real red-green at step 14: break one index link deliberately, confirm
-the test fails, restore it. Until that is done this row stays 🟡, not ✅.
+**`EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument` — green, vacuously when written.**
+With no documents linked there were no links to resolve, so its failure condition could not be
+constructed and claiming it started red would have been false.
+
+**Closed 2026-08-22, once `api-surface/` was linked**: one index link was repointed at
+`api-surface/03-does-not-exist.md`, the test was confirmed to fail, and the link was restored. It can
+fail, and it fails for the right reason.
 
 `.slnx` coverage is deliberately not rebuilt: `DocsMarkdownFiles_OnDisk_AreAllInSlnx` already covers
 every Markdown file under `docs/` and picks the new folder up for free.
@@ -269,9 +297,8 @@ templates so a live-only issue has a Definition of done it can honestly tick.
 One flat top-level `<Folder>` element per category path — `.slnx` does not support nested folders.
 Then confirm both guard tests from step 5 are green, and the full suite shows no regression.
 
-**Step 5's second guard gets its real red-green here.** It passed vacuously when written, having no
-links to resolve. Once the index links every document, break one link deliberately, confirm the test
-fails, and restore it — otherwise nothing has ever demonstrated it can fail.
+Step 5's second guard already had its real red-green, taken as soon as `api-surface/` gave it links to
+resolve — see that step.
 
 ---
 
@@ -294,4 +321,5 @@ fails, and restore it — otherwise nothing has ever demonstrated it can fail.
 | 13 | ❌ | Guard tests: every document is linked from the index, and every index link resolves | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_IsLinkedFromTheIndex`, `...EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument` — both red before step 6 |
 | 14 | ❌ | Test outcomes are recorded as Knowledgebase material, and #333 sweeps the test documents | Live | #333 requirement 6 states the sweep (done 2026-08-22); the index states the relationship |
 | 15 | ❌ | A live-only issue has a Definition of done it can honestly tick | Live | `docs/workflow/issues.md` no longer requires a placeholder Expected-tests row for live-only verification |
-| 16 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |
+| 16 | ❌ | Every fixed wait is a readiness poll, or a duration justified in `Determinism` | Live | `grep -rn "sleep " docs/automated-testing/` returns only waits whose own document explains what the duration measures |
+| 17 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |
