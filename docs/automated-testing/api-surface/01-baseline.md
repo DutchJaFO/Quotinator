@@ -6,23 +6,20 @@
 
 ## Preconditions
 
-A container built from the current working tree (`quotinator:local`), started fresh with no
-pre-existing volume, and allowed to finish seeding before any request is made.
-
-Nothing else in this suite is worth running if this fails, which is why it is first.
+Nothing beyond the Fresh profile. This test *is* the profile working — which is why it is first, and
+why nothing else in the suite is worth running if it fails.
 
 ## Determinism
 
-- **Image**: `quotinator:local`, built from the working tree — never a published tag.
-- **No volume**: a fresh container each run, so the bundled dataset is exactly what shipped in the
-  image.
-- **Seeding complete**: `/health` returning healthy is the gate; querying before that races the
-  startup wait page.
+Every variable this test depends on is one the Fresh profile pins: the image built from the working
+tree rather than a published tag, no pre-existing volume, and a readiness poll gating the first
+request. Querying before that gate races the startup wait page.
 
 ## Steps
 
+Run the **Fresh** profile, then:
+
 ```bash
-docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
 curl -s http://localhost:8080/api/v1/health
 curl -s http://localhost:8080/api/v1/version
 curl -s http://localhost:8080/api/v1/quotes/random
@@ -57,4 +54,5 @@ while serving these requests — its log lines and their shape — has not been 
 
 ## Cleanup
 
-`docker run --rm` removes the container on exit. No volume is created.
+None. This test only reads, so the profile's container and volume are left as they are for whatever
+runs next.

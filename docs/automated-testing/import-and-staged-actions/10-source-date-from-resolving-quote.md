@@ -55,10 +55,12 @@ curl -s "http://localhost:8080/api/v1/quotes/search?q=Airplane&field=source"
 **The actual code path, against a fresh seed:**
 
 ```bash
-docker stop -t 15 <container>
-docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-191.db
-docker cp <container>:/app/data/quotinatordata.db-wal .claude/temp/inspect-191.db-wal
-docker cp <container>:/app/data/quotinatordata.db-shm .claude/temp/inspect-191.db-shm
+docker stop -t 15 qt-env
+docker cp qt-env:/data/quotinatordata.db .claude/temp/inspect-191.db
+docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/inspect-191.db-wal
+docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/inspect-191.db-shm
+docker start qt-env
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
   --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Quotinator_Source WHERE IsDeleted = 0"
 ```

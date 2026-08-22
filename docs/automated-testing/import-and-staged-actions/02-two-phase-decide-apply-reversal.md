@@ -14,6 +14,9 @@ Re-import the curated file under `review` as in
 [`01-staged-action-review-workflow.md`](01-staged-action-review-workflow.md) and decide every pending
 action until none remain, then run the steps below.
 
+**No command — the setup import and the per-action `decide` calls are not reproduced here, only
+referenced, so this document cannot be run on its own as written.**
+
 ## Determinism
 
 - **Every pending action must be decided before `apply`.** With any left undecided, `apply` returns
@@ -51,4 +54,5 @@ added elsewhere.
 
 ## Cleanup
 
-None.
+The staged batch and its actions remain, applied and then reversed — restore the Fresh profile before
+the next test.

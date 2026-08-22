@@ -9,8 +9,10 @@
 `GET` / `POST /generate` / `DELETE` under `/api/v1/import/rules/conflict`, plus the read-only
 `GET /api/v1/import/rules/alias`.
 
-A fresh container has no registered override for any bundled rule file, so the effective content is the
-bundled copy at first. The generate step needs a real batch with a decided field to generate from.
+Beyond the Fresh profile: nothing. No override is registered for any bundled rule file at the start, so
+the effective content is the bundled copy — the first `GET` below confirms that rather than assuming
+it. The generate step needs a real batch with a decided field to generate from, and this test stages
+and decides one itself.
 
 ## Determinism
 
@@ -47,14 +49,17 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/rules/conflict/generate?fileName=quotinator-curated-conflict-rules.json&origin=Bundled&batchId=<batchId>"
 ```
 
-Re-run the first `GET` from this test, then remove the override:
+Re-run the first `GET` from this test, then remove the override — and repeat the `DELETE`:
 
 ```bash
+curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
+curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
 curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
 ```
 
-Repeat the `DELETE`. Finally, the alias-candidate suggestion endpoint — read-only, no key needed:
+Finally, the alias-candidate suggestion endpoint — read-only, no key needed:
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/alias?fileName=quotinator-curated-source-aliases.json&origin=Bundled"
@@ -92,4 +97,8 @@ part of a test run.**
 
 ## Cleanup
 
-The `DELETE` above removes the override. Confirm it returned `204` before moving on.
+The `DELETE` above removes the override. Confirm the first of the two returned `204` before moving on.
+
+That is not everything this test leaves behind: the `review` import stages a batch against the curated
+file and one of its actions is decided but never applied. Restore the Fresh profile before the next
+test.

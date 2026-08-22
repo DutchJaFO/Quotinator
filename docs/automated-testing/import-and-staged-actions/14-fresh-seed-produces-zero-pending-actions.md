@@ -17,7 +17,7 @@ first place.
 **A `ConflictResolutionRule` alone cannot do that**: it only ever corrects what a Quote's own field
 *displays*, never which Source row it links to.
 
-A fresh container with a stock image — no volume, no prior state.
+Nothing beyond the Fresh profile. The seed this test inspects is the profile's own first boot.
 
 ## Determinism
 
@@ -32,8 +32,6 @@ A fresh container with a stock image — no volume, no prior state.
 ## Steps
 
 ```bash
-docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s http://localhost:8080/api/v1/version
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?status=pending"
 ```
@@ -41,9 +39,9 @@ curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?statu
 **Cross-check for duplicate Sources:**
 
 ```bash
-docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db
-docker cp <container>:/app/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
-docker cp <container>:/app/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
+docker cp qt-env:/data/quotinatordata.db .claude/temp/inspect-181.db
+docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
+docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
   --sql "SELECT Title, Type, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
 ```

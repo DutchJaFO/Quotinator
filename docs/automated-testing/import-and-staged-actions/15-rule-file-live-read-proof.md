@@ -6,10 +6,18 @@
 
 ## Preconditions
 
-**Both container runs need `-e Quotinator__AutoPurgeBundledImportActions=false`** (confirmed live
-2026-08-08, #249). Without it, every bundled batch's `Import_Action` rows — including the one whose
-`MergedFields` this test queries — are purged immediately after a successful seed, and the row is
-already gone by the time you inspect it.
+**This test runs its own two containers rather than the profile's**, because it edits a bundled rule
+file and rebuilds the image between them — a rebuilt image is exactly what the profile's prebuilt
+container cannot supply. Everything else about each run is Fresh: same admin key, same first-boot seed.
+
+**One deliberate departure from the profile: `Quotinator__AutoPurgeBundledImportActions=false`, on both
+runs** (confirmed live 2026-08-08, #249). Fresh pins the application's own default, `true`, and under
+that default every bundled batch's `Import_Action` rows — including the one whose `MergedFields` this
+test queries — are purged immediately after a successful seed, so the row is already gone by the time
+you inspect it.
+
+Both of this test's containers publish `8080`, so the profile's `qt-env` must not be running while they
+are — `docker rm -f qt-env` first, and re-establish the profile afterwards.
 
 **This test mutates a bundled rule file temporarily.** Both edits must be reverted before committing;
 they exist to prove the mechanism, not to change data.
@@ -31,19 +39,30 @@ from `nikhilnamal17-conflict-rules.json` (`entityId: 088603c0-…`), then:
 
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
-docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> \
+docker rm -f qt-rule-removed 2>/dev/null
+docker run -d --name qt-rule-removed -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> \
   -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending"
 ```
 
-**Restore the rule, change its `resolution` from `Keep` to `Replace`, rebuild and reseed**, then check
-the audit trail:
+**Restore the rule and change its `resolution` from `Keep` to `Replace`**, then rebuild and run a
+second container against the rebuilt image — the first must be removed to free the port:
 
 ```bash
-docker cp <container>:/app/data/quotinatordata.db .claude/temp/inspect-181.db
-docker cp <container>:/app/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
-docker cp <container>:/app/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
+docker rm -f qt-rule-removed
+docker build -f docker/Dockerfile -t quotinator:local .
+docker run -d --name qt-rule-replace -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+```
+
+Then check the audit trail:
+
+```bash
+docker cp qt-rule-replace:/app/data/quotinatordata.db .claude/temp/inspect-181.db
+docker cp qt-rule-replace:/app/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
+docker cp qt-rule-replace:/app/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
   --sql "SELECT MergedFields FROM Import_Action WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
 ```
@@ -72,8 +91,17 @@ that did not.
 ## Cleanup
 
 ```bash
+docker rm -f qt-rule-replace
 rm -f .claude/temp/inspect-181.db .claude/temp/inspect-181.db-wal .claude/temp/inspect-181.db-shm
 ```
 
 **Revert both rule-file edits.** Confirm `nikhilnamal17-conflict-rules.json` matches `git status` clean
 before committing anything.
+
+**Then rebuild the image, and only then move on.** The last build above baked the mutated `Replace`
+rule into `quotinator:local`, and reverting the file on the host does not touch the image. Every
+sibling test running that tag would otherwise be running a rule file that does not exist in the repo:
+
+```bash
+docker build -f docker/Dockerfile -t quotinator:local .
+```

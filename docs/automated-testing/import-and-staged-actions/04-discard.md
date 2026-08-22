@@ -46,4 +46,5 @@ Not yet established as a captured record.
 
 ## Cleanup
 
-None.
+The staged batch and its now-`Discarded` actions remain — restore the Fresh profile before the next
+test.

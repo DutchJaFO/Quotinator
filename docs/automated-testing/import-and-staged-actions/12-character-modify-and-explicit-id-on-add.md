@@ -17,7 +17,10 @@ The widened schema adds `sourceTitle`/`sourceType`, required unconditionally and
 own shape, so a no-id entry resolves through ADR 013's Type-anchored, Series-scoped matching algorithm
 rather than a bare Name lookup.
 
-`Airplane!` must already exist as a Source from seeding.
+Beyond the Fresh profile: **`Airplane!` must already exist as a Source**, which the bundled seed
+supplies. Every fixture below resolves against it, so confirm it is present before running them —
+`curl -s "http://localhost:8080/api/v1/masterdata/sources?pageSize=0"`, the same call the last step
+uses.
 
 ## Determinism
 
@@ -75,7 +78,13 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/i
 curl -s "http://localhost:8080/api/v1/masterdata/characters/<id>"
 ```
 
-Then re-attempt another Modify against the same id under `review`.
+Then re-attempt another Modify against the same id under `review` — the same file, re-imported:
+
+```bash
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-modify.json" \
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+curl -s "http://localhost:8080/api/v1/import/actions?status=blocked"
+```
 
 **Explicit id honoured on Add — the T2-only fix:**
 
@@ -132,3 +141,7 @@ observation for the explicit-id half — the import reported success in the fail
 ```bash
 rm -f .claude/temp/smoke-175-*.json
 ```
+
+Removing the fixtures does not undo what they imported. The quotes and Characters each file added, the
+renamed Character, and the staged batches behind them all remain in the database. Restore the Fresh
+profile before the next test.

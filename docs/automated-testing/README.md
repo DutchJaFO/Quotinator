@@ -258,20 +258,36 @@ document whose environment is both writes both, base first:
 #### Fresh
 
 ```bash
+docker build -f docker/Dockerfile -t quotinator:local .
 docker rm -f qt-env 2>/dev/null; docker volume rm qt-env 2>/dev/null
 MSYS_NO_PATHCONV=1 docker run -d --name qt-env -p 8080:8080 -v qt-env:/data \
   -e Quotinator__DataDir=/data \
   -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=false \
-  quotinator:<base tag>
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 ```
 
-**Every profile pins `Quotinator__AutoPurgeBundledImportActions` explicitly, and Fresh pins it
-`false`.** Left unset, the bundled batches' `Import_Action` rows are purged straight after a
-successful seed — so a test concluding anything from an empty action list cannot tell its own result
-apart from the purge. Three documents currently rest on exactly that. Retaining the rows makes "none
-are pending" an observation instead of an artefact.
+**Fresh always builds from the working tree, never a published tag** — that is the point of running it
+at all, and a published tag would test something already shipped. The milestone base image is the
+*prior* side of Upgraded, not a substitute for this build.
+
+**The database lives at `/data/quotinatordata.db` inside the container**, because the profile sets
+`Quotinator__DataDir=/data` and mounts the volume there — matching how the Home Assistant add-on runs,
+and giving snapshot/restore a volume to work with. A `docker cp` must target `/data/`, not
+`/app/data/`, which holds only the image's bundled source files. Copy the `-wal` and `-shm` sidecars
+alongside it, from a stopped container.
+
+**Every profile pins `Quotinator__AutoPurgeBundledImportActions` explicitly, and Fresh pins it to the
+application's own default, `true`.** Pinned rather than left unset, because it is the variable three
+documents silently depend on: with purging on, the bundled batches' `Import_Action` rows are removed
+straight after a successful seed, so a test concluding anything from an empty action list cannot tell
+its own result apart from the purge.
+
+**A test needing those rows to survive declares `false` as its own delta** — it does not get it from
+the profile. A profile's job is to be what a user actually runs; a test needing something else says so
+where a reader can see it. `database-lifecycle/02` already works this way, running one container on the
+default and a second on `false` precisely to compare them.
 
 **`--name` is mandatory**, on this and on every `docker run` in the suite. Without it, every later
 `docker cp` and `docker logs` is written against a `<container>` placeholder no reader can resolve.
@@ -279,6 +295,25 @@ are pending" an observation instead of an artefact.
 **Never `docker run` in the foreground ahead of later steps.** `docker run --rm` without `-d` holds the
 terminal, and every command after it in the block is unreachable — the previous suite's own baseline
 had this defect, which is part of why nothing after it could run.
+
+#### Invoking a profile
+
+Naming the profile in the `Environment:` field *is* the invocation. A document does not paste the block
+above; it runs it, then starts at its own first step, working against `qt-env` on `localhost:8080`.
+That is what keeps one canonical setup instead of forty-three copies drifting apart.
+
+**A document needing more than the profile states the difference in `Preconditions`, as a delta** — an
+extra environment variable, a second container, a base image other than the default. Two rules follow:
+
+- **State only the difference.** "A running container with an admin key" is the profile's job, and
+  repeating it is how a document ends up looking self-sufficient while establishing nothing.
+- **A required environment variable is confirmed, not assumed.** A document requiring, say,
+  `Quotinator__LogRequests=true` and then reading the log for request lines has no way to tell "the
+  behaviour is broken" from "the variable was never set" — absence looks identical either way. Assert
+  something positive that proves the setting took effect before relying on it.
+
+A document that runs several containers — an upgrade, a with-and-without comparison — names each one
+after itself rather than reusing `qt-env`, and says which is which.
 
 #### Constrained
 

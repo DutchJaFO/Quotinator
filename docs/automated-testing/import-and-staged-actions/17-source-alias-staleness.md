@@ -13,7 +13,9 @@ exists **under a different current title** — a genuine rename since the alias 
 The distinction that matters: guiding the *first-ever* creation of a Source under its correct name is
 the alias doing its normal job, not staleness.
 
-Both a fresh seed and a reseed are checked, because they exercise different paths.
+Beyond the Fresh profile: both a fresh seed and a reseed are checked, because they exercise different
+paths. The fresh seed is the profile's own first boot; this test issues the reseed itself, in the steps
+below.
 
 ## Determinism
 
@@ -27,11 +29,17 @@ has *not* yet been created.
 
 ## Steps
 
+**After the fresh seed**, before anything else runs:
+
 ```bash
-docker build -f docker/Dockerfile -t quotinator:local .
-docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s http://localhost:8080/api/v1/version
+curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
+curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
+```
+
+**Then reseed and repeat**, which is the second of the two paths:
+
+```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
@@ -59,4 +67,5 @@ tests alone.**
 
 ## Cleanup
 
-None beyond stopping the container.
+No files are written, but the reseed leaves the profile's database re-planned against every bundled
+file. Restore the Fresh profile before the next test.

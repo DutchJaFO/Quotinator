@@ -6,7 +6,7 @@
 
 ## Preconditions
 
-A running container with an admin key. No file, no `Content-Type`, no `batchId` — the absence *is* the
+Nothing beyond the Fresh profile. No file, no `Content-Type`, no `batchId` — the absence *is* the
 input.
 
 ## Determinism

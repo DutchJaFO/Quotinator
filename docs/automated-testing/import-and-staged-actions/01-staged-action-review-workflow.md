@@ -6,8 +6,9 @@
 
 ## Preconditions
 
-A running container with an admin key and a seeded database — the curated file is re-imported against
-already-seeded data, which is what makes its quotes genuine duplicates.
+Nothing beyond the Fresh profile. What matters about the profile's own first-boot seed here is that the
+curated file is re-imported against already-seeded data, which is what makes its quotes genuine
+duplicates.
 
 `/api/v1/import/actions/*` (#154's unified staging engine) is the live mechanism: every import and seed
 run stages through it.

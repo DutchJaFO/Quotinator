@@ -6,8 +6,9 @@
 
 ## Preconditions
 
-This replaces the old flat `duplicates` count everywhere a seed or import operation reports back. All
-four surfaces are confirmed on a fresh container: seed preview, reseed, import, and the startup log.
+Nothing beyond the Fresh profile. This replaces the old flat `duplicates` count everywhere a seed or
+import operation reports back, and every surface it checks — seed preview, reseed, reset, import,
+import preview and the startup log — is reachable on the profile's own container.
 
 ## Determinism
 
@@ -29,7 +30,11 @@ curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/database/seed/
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
 ```
 
-Repeat against `POST /admin/database/reset`.
+Repeat against `POST /admin/database/reset`:
+
+```bash
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reset"
+```
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
@@ -39,10 +44,18 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import"
 ```
 
-Re-run the same call via `POST /api/v1/import/preview`.
+Re-run the same call via `POST /api/v1/import/preview`:
 
 ```bash
-docker logs <container> 2>&1 | grep "\[Database - Stats\]"
+curl -s -X POST -H "X-Api-Key: <your admin key>" \
+  -F "file=@data/sources/quotinator-curated.json" \
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
+  -w "\n%{http_code}\n" \
+  "http://localhost:8080/api/v1/import/preview"
+```
+
+```bash
+docker logs qt-env 2>&1 | grep "\[Database - Stats\]"
 ```
 
 ## Expected output
@@ -74,4 +87,10 @@ asserted above.
 
 ## Cleanup
 
-None.
+**The Fresh profile must be re-established after this test, not merely after the group it sits in.**
+`POST /admin/database/reset` above wipes the database and — since #156 — deliberately does not reseed.
+The curated import that follows it repopulates that one file and nothing else, so the container ends
+this test holding neither the bundled seed nor the audit, notification and `Import_Action` rows the
+first boot wrote. This test is in the smoke set, and the smoke tests that follow it read seeded data,
+so leaving the container in that state fails them for a reason that has nothing to do with what they
+verify.

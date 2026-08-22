@@ -49,7 +49,7 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
 ```
 
 Confirm via DbInspector:
-`SELECT Id, Text, CompletenessStatus FROM Quotinator_StageDirection WHERE Id = 'f0000002-...'`
+`SELECT Id, Text, CompletenessStatus FROM Quotinator_StageDirection WHERE Id = 'f0000002-0000-4000-8000-000000000002'`
 
 Then re-import the same ids with a changed `text` under
 `{"duplicateResolution":{"default":"review"}}`, decide each with
@@ -58,6 +58,9 @@ Then re-import the same ids with a changed `text` under
 `POST /import/actions/apply?batchId=…`.
 
 Then re-import the same ids **again** with another changed `text` under `review`.
+
+**No command — the changed-text fixtures are not defined, and neither is how the action `id`s and
+`batchId` for the `decide`/`apply` calls are obtained.**
 
 **Second fixture — a fresh pair, for the reversal half:**
 
@@ -75,6 +78,9 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
 
 Then single-shot re-import a changed `text` for both ids under `newest-wins`, confirm the write via
 DbInspector, and `POST /import/actions/reverse?batchId=…` — `preview=true` first, then for real.
+
+**No command — the changed-text fixture for this half is not defined either, and the `batchId` the
+reversal uses is never captured from the import above.**
 
 ## Expected output
 

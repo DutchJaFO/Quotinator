@@ -10,10 +10,11 @@ A `ConflictResolutionRule` records an `existingRecord`/`incomingRecord` snapshot
 match the current staging run's real field values, the rule is never silently reapplied — the action
 stages `Stale`.
 
-**A reseed is required; the initial boot cannot exercise this.** A brand-new database only ever stages
-`Add` actions, because nothing exists yet to conflict with. `POST /admin/database/reseed` re-plans
-every bundled file against the now-populated database and genuinely exercises the `Modify`/rule path —
-the same thing a real redeployment against an already-seeded volume does.
+Beyond the Fresh profile: **a reseed is required; the profile's own first boot cannot exercise this.**
+A brand-new database only ever stages `Add` actions, because nothing exists yet to conflict with.
+`POST /admin/database/reseed` re-plans every bundled file against the now-populated database and
+genuinely exercises the `Modify`/rule path — the same thing a real redeployment against an
+already-seeded volume does. This test issues that reseed itself, in the steps below.
 
 ## Determinism
 
@@ -22,15 +23,12 @@ a container still working through its multi-file seed reads a partially-seeded, 
 Poll `/api/v1/version` until the counts stop changing rather than checking immediately.
 
 **The shipped rule file is already corrected**, so a run against current `main` returns an empty list.
-To see the "before" state, `git stash` or check out the pre-fix rule file — do not treat the empty
-result as a failure.
+To see the "before" state, `git stash` or check out the pre-fix rule file and rebuild the image — do
+not treat the empty result as a failure.
 
 ## Steps
 
 ```bash
-docker build -f docker/Dockerfile -t quotinator:local .
-docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s http://localhost:8080/api/v1/version
 curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
@@ -54,4 +52,5 @@ the rule's recorded assumption and reality, caught by the mechanism rather than 
 
 ## Cleanup
 
-None beyond stopping the container.
+No files are written, but the reseed leaves the profile's database re-planned against every bundled
+file. Restore the Fresh profile before the next test.

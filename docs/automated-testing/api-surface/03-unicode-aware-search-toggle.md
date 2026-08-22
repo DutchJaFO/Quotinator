@@ -28,10 +28,17 @@ failed import produces the same empty result as a correctly-unmatched search.
 
 ## Steps
 
-**Flag off (default) — a fresh container without the env var:**
+**Flag off (default) — the profile's own environment, under this test's own container name:**
 
 ```bash
-docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+docker build -f docker/Dockerfile -t quotinator:local .
+docker rm -f qt-unicode-off 2>/dev/null; docker volume rm qt-unicode-off 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-unicode-off -p 8080:8080 -v qt-unicode-off:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=false \
+  quotinator:local
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 cat > .claude/temp/smoke-222.json <<'EOF'
 {
   "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"I will always have Café de Flore.","originalLanguage":"en","source":"Café de Flore","date":"1990","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]
@@ -41,11 +48,18 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-22
 curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
 ```
 
-**Flag on — stop that container, start a fresh one with the env var set:**
+**Flag on — the same environment plus the one variable under test:**
 
 ```bash
-docker stop <container>
-docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__UnicodeAwareSearch=true quotinator:local
+docker rm -f qt-unicode-off
+docker rm -f qt-unicode-on 2>/dev/null; docker volume rm qt-unicode-on 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-unicode-on -p 8080:8080 -v qt-unicode-on:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=false \
+  -e Quotinator__UnicodeAwareSearch=true \
+  quotinator:local
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
 curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
 ```
@@ -68,5 +82,11 @@ serving each half has not been captured.
 
 ## Cleanup
 
-`docker run --rm` removes each container on exit. Delete the fixture:
-`rm .claude/temp/smoke-222.json`.
+```bash
+docker rm -f qt-unicode-on
+docker volume rm qt-unicode-off qt-unicode-on
+rm .claude/temp/smoke-222.json
+```
+
+This test runs its own two containers rather than the profile's, so nothing it created is cleared by
+restoring the profile — it must remove them itself.

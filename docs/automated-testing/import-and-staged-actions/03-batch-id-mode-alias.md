@@ -6,8 +6,7 @@
 
 ## Preconditions
 
-A running container with an admin key. The batch is staged by a preview call first — nothing else is
-required.
+Nothing beyond the Fresh profile — the batch is staged by the preview call in Steps.
 
 ## Determinism
 
@@ -44,4 +43,4 @@ Not yet established as a captured record.
 
 ## Cleanup
 
-None.
+The previewed batch and its actions remain, applied — restore the Fresh profile before the next test.

@@ -6,12 +6,10 @@
 
 ## Preconditions
 
-A running container with an admin key.
-
-**Request logging must be genuinely on.** `Quotinator__LogRequests=true` **and**
-`Quotinator__LogLevel=debug` — request logging is Debug-only across every category (#244), so
-`LogRequests=true` alone registers the middleware without raising the level, and the log assertion
-below would silently have nothing to read.
+Beyond the Fresh profile: **request logging must be genuinely on**, which Fresh does not set.
+`Quotinator__LogRequests=true` **and** `Quotinator__LogLevel=debug` — request logging is Debug-only
+across every category (#244), so `LogRequests=true` alone registers the middleware without raising the
+level, and the log assertion below would silently have nothing to read.
 
 ## Determinism
 
@@ -27,8 +25,17 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse"
 ```
 
-Then read the container log for each of those requests, and re-run a normal `apply` with a real
-`batchId` — see [`01-staged-action-review-workflow.md`](01-staged-action-review-workflow.md).
+Then read the container log for each of those requests:
+
+```bash
+docker logs qt-env
+```
+
+Finally re-run a normal `apply` with a real `batchId` — see
+[`01-staged-action-review-workflow.md`](01-staged-action-review-workflow.md).
+
+**No command — this document never stages a batch, so there is no `batchId` to apply.** Writing the
+call out would mean inventing both the staging import and the id it returns.
 
 ## Expected output
 
@@ -60,4 +67,6 @@ by it.
 
 ## Cleanup
 
-None.
+No files are written, but the closing happy-path `apply` applies a real batch against the profile's
+database, and the container carries the extra logging variables this test required. Restore the Fresh
+profile before the next test rather than reusing this container.

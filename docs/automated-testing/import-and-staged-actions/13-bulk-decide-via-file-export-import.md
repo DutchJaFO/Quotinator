@@ -10,8 +10,9 @@
 Modify actions into rows; `POST /import/actions/bulk-decide` reads an edited version of that export
 back and applies each row's decision.
 
-A staged batch with pending Quote Modify actions is needed — the `review` import below produces one and
-must return `202`.
+Beyond the Fresh profile: a staged batch with pending Quote Modify actions is needed. This test stages
+its own — the `review` import below produces one and must return `202`, which is what confirms the
+precondition rather than assuming it.
 
 ## Determinism
 
@@ -70,6 +71,10 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
 
 **Malformed-row resilience** — edit one row's `Decision` to an invalid value, leave the rest untouched:
 
+**No command — `/tmp/export-with-one-bad-row.csv` is not created anywhere in this document.** Which
+row to edit, and what invalid value to write into its `Decision` column, are not stated either; writing
+the edit out would mean inventing both.
+
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   -F "batchId=<new batchId>" -F "file=@/tmp/export-with-one-bad-row.csv" -F "format=csv" \
@@ -119,3 +124,7 @@ this newer endpoint. Fixed by switching to `HttpRequest request` and checking `b
 ```bash
 rm -f /tmp/export.json /tmp/export.csv /tmp/export-with-one-bad-row.csv
 ```
+
+Removing the exports does not undo what they decided. Two staged batches remain — the first applied,
+the second decided but not applied — along with the curated file's re-imported rows. Restore the Fresh
+profile before the next test.

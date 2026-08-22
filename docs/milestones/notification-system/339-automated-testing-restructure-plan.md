@@ -571,9 +571,15 @@ populated database are Fresh plus a step they already own, not a fourth profile.
 the index's "anything a test needs, it establishes itself" intact rather than quietly reintroducing a
 shared seeded state.
 
-**Every profile pins `Quotinator__AutoPurgeBundledImportActions` explicitly.** It is the unpinned
-variable underneath three of the cannot-fail documents; pinning it in the profile removes that class
-in one edit rather than nineteen.
+**Every profile pins `Quotinator__AutoPurgeBundledImportActions` explicitly** — Fresh to the
+application's own default, `true`. It is the unpinned variable underneath three of the cannot-fail
+documents, and pinning it makes which behaviour is in play readable rather than assumed.
+
+**Pinned to the default, not to the value that would be convenient.** Setting Fresh to `false` would
+have made those three documents' empty-list assertions meaningful, and was the first choice here — but
+it would also have made the profile unrepresentative of what a user runs, which is a worse trade. A
+test needing the rows retained declares `false` as its own delta; `database-lifecycle/02` already does
+exactly that.
 
 **Snapshot and restore, so a group runs without paying for a rebuild per test** (developer direction,
 2026-08-22):

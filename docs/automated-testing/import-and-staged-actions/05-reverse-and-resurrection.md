@@ -71,6 +71,10 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/actions/reverse?batchId=<an older batchId>"
 ```
 
+**No command — how the older `batchId` is obtained is not stated. There is no `GET /import-batches`
+listing endpoint (see Determinism), so it has to come from `GET /api/v1/admin/audit` or DbInspector,
+and neither query is given here.**
+
 ## Expected output
 
 - `preview=true` returns `200` **without changing anything**; the real call also returns `200`.
@@ -89,4 +93,5 @@ observation, since no action status changes to signal the reversal.
 
 ## Cleanup
 
-None.
+The applied, reversed and re-imported batches and their actions remain, along with the resurrected
+curated rows — restore the Fresh profile before the next test.

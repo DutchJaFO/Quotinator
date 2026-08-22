@@ -53,11 +53,14 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
 ```
 
 Confirm via DbInspector:
-`SELECT Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM Quotinator_Person WHERE Id = 'f0000005-...'`
+`SELECT Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM Quotinator_Person WHERE Id = 'f0000005-0000-4000-8000-000000000005'`
 
 Then re-import the same id with a changed `dateOfBirth` under `review`, decide with
 `{"personDateOfBirth":{"choice":"replace"},"markCompletenessAs":"Complete"}`, apply, and re-import once
 more with another changed `dateOfBirth` under `review`.
+
+**No command — the two changed-`dateOfBirth` fixtures are not defined, and neither is how the action
+`id` and `batchId` for the `decide`/`apply` calls are obtained.**
 
 **Second fixture — a fresh Person with an uppercase id:**
 
@@ -81,7 +84,15 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
 
-Confirm via DbInspector, then re-import the exact same fixture one more time.
+Confirm via DbInspector:
+`SELECT Id, IsDeleted FROM Quotinator_Person WHERE Id = 'f0000007-0000-4000-8000-000000000007'`
+
+Then re-import the exact same fixture one more time:
+
+```bash
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-addonly.json" \
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+```
 
 ## Expected output
 
@@ -90,7 +101,7 @@ Confirm via DbInspector, then re-import the exact same fixture one more time.
 - After deciding and applying: the corrected `DateOfBirth` and `CompletenessStatus: Complete`.
 - The third import stages **`Blocked`, not `Pending`**, and the on-disk value is unchanged.
 - Both reversal calls return `200`, and
-  `SELECT Id, IsDeleted FROM Quotinator_Person WHERE Id = 'f0000007-…'` shows `IsDeleted` genuinely
+  `SELECT Id, IsDeleted FROM Quotinator_Person WHERE Id = 'f0000007-0000-4000-8000-000000000007'` shows `IsDeleted` genuinely
   flipped to `1`.
 - The final re-import stages as a **fresh `Add`, not `Modify`** — `Modify` would mean the reversal
   silently no-op'd and the row was never truly gone — and `IsDeleted` is back to `0` afterwards.
