@@ -100,6 +100,11 @@ until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 until curl -s -o /dev/null http://localhost:8080/api/v1/health; do sleep 1; done
 ```
 
+```bash
+# Wait on the log — for a container with no published port, where neither HTTP form is available.
+until docker logs <name> 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
+```
+
 A wait that is genuinely for elapsed time — a TTL expiring, a refresh interval passing, confirming a
 container *stayed* dead rather than became ready — is not a readiness wait and keeps its `sleep`. It
 must say so in `Determinism`, naming what the duration is measuring. An unexplained `sleep` is a
@@ -176,6 +181,18 @@ never beside it.
 | 03 | [Kestrel serves a wait page during initialisation](startup-and-degradation/03-startup-wait-page.md) | yes |
 | 04 | [Migration replay under restricted write](startup-and-degradation/04-migration-replay-under-restricted-write.md) | no |
 | 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) — **cannot pass; #327 is rewriting it** | no |
+
+### `notifications-and-changelog/`
+
+| # | Test | Smoke |
+|---|---|---|
+| 01 | [Notifications list, dismiss, render, and drive their action](notifications-and-changelog/01-notification-system.md) | yes |
+| 02 | [Notification metadata, provenance, and the released-database migration path](notifications-and-changelog/02-notification-metadata-and-provenance.md) | no |
+| 03 | [Upgrading from an intermediate schema version](notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md) | no |
+| 04 | [Upgrading enriches the legacy notification rather than duplicating it](notifications-and-changelog/04-upgrade-does-not-duplicate-the-legacy-notification.md) | no |
+| 05 | [The legacy notification gains provenance](notifications-and-changelog/05-legacy-notification-provenance.md) | no |
+| 06 | [A what's-new row predating release state is backfilled](notifications-and-changelog/06-whats-new-row-predating-release-state.md) | no |
+| 07 | [The changelog is served from its own on-disk database](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | yes |
 
 ---
 

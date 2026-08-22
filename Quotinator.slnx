@@ -336,6 +336,15 @@
     <File Path="docs/automated-testing/startup-and-degradation/04-migration-replay-under-restricted-write.md" />
     <File Path="docs/automated-testing/startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/notifications-and-changelog/">
+    <File Path="docs/automated-testing/notifications-and-changelog/01-notification-system.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/02-notification-metadata-and-provenance.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/04-upgrade-does-not-duplicate-the-legacy-notification.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/05-legacy-notification-provenance.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/06-whats-new-row-predating-release-state.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/07-changelog-served-from-its-own-database.md" />
+  </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
   </Folder>
