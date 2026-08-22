@@ -311,6 +311,54 @@ public partial class RepositoryStructureTests
             + $"Profiles defined by the index: {string.Join(", ", profiles)}");
     }
 
+    /// <summary>
+    /// The suite index's smoke-set table must name exactly the documents whose own Smoke field says
+    /// yes, so the set a smoke pass runs cannot drift from what the documents claim.
+    /// </summary>
+    /// <remarks>
+    /// The index previously listed the set by title only, which no guard could check — and it said so,
+    /// carrying a note that the two could disagree. Linking each row makes the claim verifiable. See
+    /// #339.
+    /// </remarks>
+    [TestMethod]
+    public void SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        string index = File.ReadAllText(Path.Combine(AutomatedTestingDir, "README.md"));
+
+        System.Text.RegularExpressions.Match section = SmokeSetSection().Match(index);
+
+        Assert.IsTrue(section.Success,
+            "The suite index has no '## The designated smoke set' section.");
+
+        List<string> listed =
+        [
+            .. MarkdownLinkTarget().Matches(section.Value)
+                .Select(m => m.Groups["target"].Value)
+                .Where(t => t.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+                .Distinct()
+                .Order()
+        ];
+
+        List<string> marked =
+        [
+            .. FindAutomatedTestingDocuments()
+                .Where(d => File.ReadAllText(
+                        Path.Combine(AutomatedTestingDir, d.Replace('/', Path.DirectorySeparatorChar)))
+                    .Contains("**Smoke:** yes", StringComparison.Ordinal))
+                .Order()
+        ];
+
+        Assert.IsNotEmpty(marked, "No document is marked '**Smoke:** yes'.");
+
+        CollectionAssert.AreEqual(marked, listed,
+            "The index's smoke-set table and the documents' own Smoke fields disagree. The documents "
+            + $"are authoritative.\nMarked in documents:\n{string.Join("\n", marked)}\n\n"
+            + $"Linked from the index's smoke set:\n{string.Join("\n", listed)}");
+    }
+
     private const string AutomatedTestingRelativePath = "docs/automated-testing";
 
     private static readonly string AutomatedTestingDir =
@@ -343,6 +391,15 @@ public partial class RepositoryStructureTests
         @"^\*\*Environment:\*\*\s*(?<name>.+?)\s*$",
         System.Text.RegularExpressions.RegexOptions.Multiline)]
     private static partial System.Text.RegularExpressions.Regex EnvironmentProfileDeclaration();
+
+    /// <summary>
+    /// The smoke-set section, from its own heading up to the next top-level heading.
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^## The designated smoke set$.*?(?=^## )",
+        System.Text.RegularExpressions.RegexOptions.Multiline
+        | System.Text.RegularExpressions.RegexOptions.Singleline)]
+    private static partial System.Text.RegularExpressions.Regex SmokeSetSection();
 
     /// <summary>data/changelog/changelog.en.json must exist on disk as the English source file.</summary>
     [TestMethod]

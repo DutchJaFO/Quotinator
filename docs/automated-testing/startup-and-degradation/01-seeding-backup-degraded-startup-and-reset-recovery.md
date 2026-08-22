@@ -6,8 +6,11 @@
 
 ## Preconditions
 
-A **bind-mounted** data directory, so the host can manipulate the SQLite file directly. A named volume
-will not do — the whole test turns on breaking the schema from outside the container.
+**Beyond the profile.** The data directory is a **bind mount** instead of the profile's named volume,
+so the host can manipulate the SQLite file directly — the whole test turns on breaking the schema from
+outside the container. It runs its own container (`smoke254`, started three times against that one
+directory) rather than `qt-env`, and the Constrained defect is a `DROP TABLE Quotinator_Quote` applied
+by the host while the container is stopped.
 
 `Quotinator.Tools.DbInspector` cannot be used here: it opens read-only (`Mode=ReadOnly`, see its
 `README.md`) and cannot run the `DROP TABLE` this needs. `scripts/execute-sql.csx` is the writable
@@ -19,6 +22,12 @@ reached its own end state:
 1. a fresh baseline seed (no backup expected)
 2. an ordinary restart (backup expected)
 3. a deliberately broken schema (degraded, backup taken, restore attempted)
+
+**The mount type is what differs from
+[`02-startup-backup-gating-and-storage-budget.md`](02-startup-backup-gating-and-storage-budget.md)**,
+which asserts a healthy restart takes *no* backup where this one asserts it takes one. That test runs
+on a named volume; this one on a bind mount. Both assertions are left exactly as they stand — the
+discrepancy is tracked separately, not resolved here.
 
 ## Determinism
 
@@ -41,6 +50,8 @@ reached its own end state:
 **Fresh container, bind-mounted data directory, normal seed:**
 
 ```bash
+docker rm -f smoke254 2>/dev/null
+rm -rf .claude/temp/smoke-254-data
 mkdir -p .claude/temp/smoke-254-data
 MSYS_NO_PATHCONV=1 docker run -d --name smoke254 -p 8080:8080 \
   -v "C:/repos/Quotinator/.claude/temp/smoke-254-data:/data" \
@@ -151,6 +162,11 @@ what the assertions are made against.
 ## Cleanup
 
 ```bash
-docker rm -f smoke254
+docker rm -f smoke254 2>/dev/null
 rm -rf .claude/temp/smoke-254-data
 ```
+
+This test runs its own bind-mounted container rather than the profile's, and creates no named volume,
+so restoring the profile clears nothing it made — the two commands above are the whole cleanup. The
+database it leaves behind is a wiped, post-Reset one; any later test needing content re-establishes its
+own profile.

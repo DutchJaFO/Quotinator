@@ -6,7 +6,9 @@
 
 ## Preconditions
 
-A running container with an admin key, and the bundled curated file available to import.
+Beyond the Fresh profile: the import below uploads `data/sources/quotinator-curated.json` from the
+repository itself, so the commands run from the repository root — the file comes from the working tree,
+not from inside the container.
 
 `batchId`, `entityId`, `existingBatchId` and `recordId` are `string`-typed, not `Guid`-typed, so unlike
 `id` fields they get no automatic lowercase rendering from `System.Text.Json`'s `Guid` serialization
@@ -32,6 +34,8 @@ this test, and it is why the unit-tier test is the primary evidence here.
 
 ## Steps
 
+Run the **Fresh** profile, then:
+
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
@@ -56,6 +60,6 @@ distinction matters more than the raw result.
 
 ## Cleanup
 
-> **Outstanding.** This currently leaves its imported actions staged, on the assumption that another
-> test will page through them. That is a dependency on execution order, which the index forbids.
-> Recorded as a finding for #339's audit.
+The `review` import leaves a staged batch and its pending actions behind. Restore the Fresh profile
+before the next test — do **not** leave them for a successor to page through, which is the
+execution-order dependency the index forbids.

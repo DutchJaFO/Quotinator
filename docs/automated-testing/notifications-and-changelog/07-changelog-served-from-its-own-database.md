@@ -6,7 +6,9 @@
 
 ## Preconditions
 
-A container with a mapped data directory, so the database file can be inspected on disk.
+**Beyond the profile.** One container of this test's own (`qt-changelog`), on a bind-mounted directory
+rather than the profile's named volume, so the host can see the database files directly. It is restarted
+once, in place.
 
 The changelog database is a file beside the main database. What this verifies is that **file-backed
 storage is what ships and what serves reads** — a feature, checkable immediately.
@@ -42,8 +44,12 @@ neither is predicted**, since the changelog grows with every release.
 ## Steps
 
 ```bash
+docker rm -f qt-changelog 2>/dev/null
+rm -rf /tmp/qt-changelog
+mkdir -p /tmp/qt-changelog/data
 MSYS_NO_PATHCONV=1 docker run -d --name qt-changelog -p 8080:8080 \
   -v /tmp/qt-changelog/data:/data \
+  -e Quotinator__DataDir=/data \
   -e Quotinator__AdminApiKey=<your admin key> quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 ```

@@ -6,7 +6,8 @@
 
 ## Preconditions
 
-A running container with an admin key.
+Nothing beyond the Fresh profile — the quote under test is supplied by this test's own fixture, not by
+the seed.
 
 `Quotes.Id` canonicalizes to lowercase, the same convention every other entity uses
 (`EntityIdentity.StableId`, `GuidExtensions.ToCanonicalId`) — this project's single settled id format
@@ -23,6 +24,8 @@ the one fully-unmitigated gap of this kind found across the whole codebase.
   proves canonicalization, the uppercase call proves the case-insensitive read.
 
 ## Steps
+
+Run the **Fresh** profile, then:
 
 ```bash
 cat > .claude/temp/smoke-210.json <<'EOF'
@@ -75,3 +78,6 @@ endpoint (`Sql.Notifications.UpdateDismissById`, a *write* by id). Closing that 
 ## Cleanup
 
 `rm .claude/temp/smoke-210.json`
+
+The imported quote and its Source remain in the database — restore the Fresh profile before the next
+test.

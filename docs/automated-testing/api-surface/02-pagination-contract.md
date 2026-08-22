@@ -12,15 +12,22 @@ holds live on all three rather than at the stub level.
 **`/admin/audit` and `/import/actions` must have rows before the assertions below mean anything** — two
 of them invert on an empty table, see Determinism.
 
-**Needing content is a legitimate precondition; inheriting it from an earlier test is not.** This
-document currently does the latter — it assumes rows are already there.
+The container half of that is the Fresh profile's job. The rows are not: the profile's own first boot
+is what would populate both tables — the bundled seed writes `Audit_Entry` rows, and stages
+`Import_Action` rows per bundled batch.
 
-> **Unresolved: which resolution this test uses.** Either it creates the rows itself as a setup step
-> and then runs anywhere in any order, or it declares that a broken import path blocks it and says so
-> plainly. The second is a real possibility here: these rows come from the application's own import,
-> so an import defect takes this test down with it even though the pagination contract may be
-> perfectly intact — which is the case for a prepared resource. Recorded for #339's audit; see the
-> index's *Depending on content is not the same as depending on another test*.
+> **Unresolved: the `Import_Action` half.** Fresh pins `Quotinator__AutoPurgeBundledImportActions` to
+> the application's own default, `true`, which removes the bundled batches' `Import_Action` rows
+> immediately after a successful seed. Under the profile as written, this test's `/import/actions`
+> assertions therefore run against an empty table and invert — exactly the false failure Determinism
+> describes, and indistinguishable from a genuine pagination defect.
+>
+> There are two honest resolutions and this document picks neither: declare
+> `Quotinator__AutoPurgeBundledImportActions=false` as its own delta, or state plainly that its
+> `/import/actions` assertions cannot be relied on and confine the contract check to `/quotes` and
+> `/admin/audit`. Flagged, not silently chosen. See the index's *Depending on content is not the same
+> as depending on another test*, and `database-lifecycle/02`, which already runs one container on the
+> default and a second on `false` precisely to tell the two apart.
 
 ## Determinism
 
@@ -33,6 +40,8 @@ document currently does the latter — it assumes rows are already there.
 - Admin key present for the `/admin/audit` calls.
 
 ## Steps
+
+Run the **Fresh** profile, then:
 
 ```bash
 curl -s "http://localhost:8080/api/v1/quotes?pageSize=0"

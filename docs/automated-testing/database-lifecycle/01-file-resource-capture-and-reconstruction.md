@@ -6,8 +6,8 @@
 
 ## Preconditions
 
-A container started fresh and allowed to seed normally — the capture happens during startup, so a
-container that has not finished seeding has nothing to inspect.
+Nothing beyond the Fresh profile — the capture happens during startup, so what this test inspects *is*
+the profile's own first boot, and a container that has not finished seeding has nothing to inspect.
 
 `Quotinator.Tools.DbInspector` (read-only) is used for the provenance checks that need a raw SQL join.
 
@@ -18,27 +18,24 @@ container that has not finished seeding has nothing to inspect.
 - **Copy the `-wal` and `-shm` sidecars alongside the `.db` file.** SQLite does not auto-checkpoint
   recent writes back into the main file until the WAL grows past its threshold, so copying the `.db`
   alone can read a database that is missing everything this test just wrote.
-- **Fresh container, no volume.** The `origin=system` count and the `prunedCount: 0` result both
+- **Fresh container, first boot only.** The `origin=system` count and the `prunedCount: 0` result both
   depend on exactly one startup having happened. A reused volume gives a second captured version per
-  file and breaks both.
-- Port `18099` is used rather than 8080 so this can run alongside another container.
+  file and breaks both — which is why the profile recreates its volume rather than reusing one.
 
 ## Steps
 
-**Start and let it seed:**
+**Run the Fresh profile, and confirm it finished seeding:**
 
 ```bash
-docker run -d --name smoke251 -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
-until curl -sf http://localhost:18099/api/v1/health > /dev/null; do sleep 1; done
-docker logs smoke251 2>&1 | tail -5
+docker logs qt-env 2>&1 | tail -5
 ```
 
 **Confirm all bundled files were captured with correct provenance:**
 
 ```bash
-MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/quotinatordata.db .claude/temp/smoke251.db
-MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/quotinatordata.db-wal .claude/temp/smoke251.db-wal
-MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/quotinatordata.db-shm .claude/temp/smoke251.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db .claude/temp/smoke251.db
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/smoke251.db-wal
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/smoke251.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db \
   --sql "SELECT Id, FileName, Origin, HomeDirectoryKey, LineEnding, EndsWithTrailingNewline, Converter, ConverterOptions FROM Import_FileResource WHERE IsDeleted = 0 ORDER BY FileName"
 ```
@@ -54,48 +51,48 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
 **List endpoint, filterable by `origin`:**
 
 ```bash
-curl -s "http://localhost:18099/api/v1/import/file-resources"
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/file-resources?origin=bogus"
-curl -s "http://localhost:18099/api/v1/import/file-resources?origin=system"
+curl -s "http://localhost:8080/api/v1/import/file-resources"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:8080/api/v1/import/file-resources?origin=bogus"
+curl -s "http://localhost:8080/api/v1/import/file-resources?origin=system"
 ```
 
 **Detail endpoint** — substitute the `manifest.json` id from the provenance check:
 
 ```bash
-curl -s "http://localhost:18099/api/v1/import/file-resources/<manifest-id>"
+curl -s "http://localhost:8080/api/v1/import/file-resources/<manifest-id>"
 ```
 
 **Batches list/detail** — every batch id from the detail above must exist here:
 
 ```bash
-curl -s "http://localhost:18099/api/v1/import/batches?type=seed"
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/batches?status=bogus"
-curl -s "http://localhost:18099/api/v1/import/batches/<one-of-the-linkedBatchIds-above>"
+curl -s "http://localhost:8080/api/v1/import/batches?type=seed"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:8080/api/v1/import/batches?status=bogus"
+curl -s "http://localhost:8080/api/v1/import/batches/<one-of-the-linkedBatchIds-above>"
 ```
 
 **Byte-exact reconstruction:**
 
 ```bash
-curl -s "http://localhost:18099/api/v1/import/file-resources/<id>/download" -o .claude/temp/downloaded.json
-MSYS_NO_PATHCONV=1 docker cp smoke251:/app/data/sources/quotinator-curated.json .claude/temp/original.json
+curl -s "http://localhost:8080/api/v1/import/file-resources/<id>/download" -o .claude/temp/downloaded.json
+MSYS_NO_PATHCONV=1 docker cp qt-env:/app/data/sources/quotinator-curated.json .claude/temp/original.json
 diff .claude/temp/downloaded.json .claude/temp/original.json && echo IDENTICAL
 ```
 
 **`lineEnding` override** — confirmed via hex dump, not word count:
 
 ```bash
-curl -s "http://localhost:18099/api/v1/import/file-resources/<id>/download?lineEnding=crlf" -o .claude/temp/crlf.json
+curl -s "http://localhost:8080/api/v1/import/file-resources/<id>/download?lineEnding=crlf" -o .claude/temp/crlf.json
 xxd .claude/temp/crlf.json | head -3
 ```
 
 **Error cases and prune auth/validation:**
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/file-resources/00000000-0000-0000-0000-000000000000/download"
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/import/file-resources/<id>/download?lineEnding=bogus"
-curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:18099/api/v1/import/file-resources/prune"
-curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18099/api/v1/import/file-resources/prune?keepPerFile=abc"
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18099/api/v1/import/file-resources/prune"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:8080/api/v1/import/file-resources/00000000-0000-0000-0000-000000000000/download"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:8080/api/v1/import/file-resources/<id>/download?lineEnding=bogus"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:8080/api/v1/import/file-resources/prune"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/file-resources/prune?keepPerFile=abc"
+curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/file-resources/prune"
 ```
 
 ## Expected output
@@ -142,8 +139,10 @@ state and are asserted above. What the container logs during capture has not bee
 
 ## Cleanup
 
+The prune call at the end is a write, so the profile must be restored before the next test even though
+everything else here only reads.
+
 ```bash
-docker rm -f smoke251
 rm -f .claude/temp/smoke251.db .claude/temp/smoke251.db-wal .claude/temp/smoke251.db-shm \
       .claude/temp/downloaded.json .claude/temp/original.json .claude/temp/crlf.json
 ```

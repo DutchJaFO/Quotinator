@@ -6,15 +6,20 @@
 
 ## Preconditions
 
+**Beyond the profile.** One container of this test's own (`qws`, on a bind-mounted directory rather
+than the profile's named volume, so the file can be edited from a helper container while the app is
+stopped), plus a one-shot `--rm alpine` running `sqlite3` to do the editing. The Constrained defect is
+**a state, not a flag**: a what's-new row injected in the pre-backfill shape, and the schema counter
+rolled back one step so the backfill replays over it.
+
 `WhatsNewMetadataDto.ReleaseState` is a required property, so a row written by an earlier build cannot
 be deserialized, cannot be identified, and would re-announce itself. A migration backfills it from the
 convention that wrote those rows: a `version` key present meant a tagged release, absent meant the
 unreleased section.
 
 **Only databases carrying rows from an unreleased build are affected, so the state has to be
-constructed** — a current database will never contain one naturally. The construction is: stand up a
-fully-migrated database, insert the old shape, then roll the schema counter back one step so the
-backfill re-applies on the next start.
+constructed** — a current database will never contain one naturally. That is why the defect is
+constructed rather than provoked with a mount flag.
 
 ## Determinism
 
@@ -74,6 +79,9 @@ checks the injected row would pass either way.
 ## Cleanup
 
 ```bash
-docker rm -f qws
+docker rm -f qws 2>/dev/null
 rm -rf /tmp/qws
 ```
+
+The container and the bind-mounted directory are this test's own — it creates no named volume, and
+restoring the profile clears nothing it made.

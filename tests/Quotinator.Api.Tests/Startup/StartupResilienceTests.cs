@@ -18,7 +18,7 @@ namespace Quotinator.Api.Tests.Startup;
 /// the real tracker and the real SQLite error code — the thing that actually failed live.
 /// </para>
 /// <para>
-/// The sabotage techniques are the ones <c>scripts/sqlite-storage-probe.csx</c> measured (2026-08-20):
+/// The sabotage techniques are the ones <c>scripts/testing/sqlite-storage-probe.csx</c> measured (2026-08-20):
 /// a <em>directory</em> at the database path makes SQLite fail to open with <c>SQLITE_CANTOPEN</c> at the
 /// same throw site as the live container, and a <em>file</em> named <c>keys</c> makes
 /// <c>Directory.CreateDirectory</c> throw. Both are deterministic and behave identically on Windows and

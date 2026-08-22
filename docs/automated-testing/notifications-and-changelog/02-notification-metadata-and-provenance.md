@@ -6,8 +6,13 @@
 
 ## Preconditions
 
-**The migration path is exercised against a database created by the last published release, never an
-accumulated dev database.** This is the test's ADR 009 check as much as its own.
+**Beyond the profile.** The Upgraded prior image is the **published
+`ghcr.io/dutchjafo/quotinator:1.8.3` tag** — the migration path must be exercised against a database
+created by the last published release, never an accumulated dev database, which is this test's ADR 009
+check as much as its own. Two app containers of this test's own share one bind-mounted directory:
+`q183` (the released image, **no published port**) and `q312` (the current build, publishing 8080).
+A third kind of container appears repeatedly — a one-shot `--rm alpine` with `sqlite3` installed, used
+only to read the file.
 
 Every command here was run for real; the expected values below are observed output, not predictions.
 
@@ -16,6 +21,12 @@ VM, while `dotnet run` executes on Windows where `/tmp` is a different directory
 `DbInspector` call against that path finds an empty or non-existent file and reports nothing, **which
 reads exactly like a passing check**. Every query below therefore runs in the same container filesystem
 the app wrote to.
+
+**The current build's own version overlaps 1.8.3 here.** The version-history expectation below reads
+`Quotinator.Api | 1.8.3 | 1 | 1` as the only row, while
+[`05-legacy-notification-provenance.md`](05-legacy-notification-provenance.md) requires the current
+build to report something *other* than 1.8.3 for its own scenario to mean anything. Both are left
+exactly as they stand — the discrepancy is tracked separately, not resolved here.
 
 ## Determinism
 
@@ -36,6 +47,8 @@ the app wrote to.
 
 ```bash
 docker pull ghcr.io/dutchjafo/quotinator:1.8.3
+docker rm -f q183 q312 2>/dev/null
+rm -rf /tmp/q312
 mkdir -p /tmp/q312/data
 MSYS_NO_PATHCONV=1 docker run -d --name q183 -e Quotinator__DataDir=/data \
   -v /tmp/q312/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
@@ -76,6 +89,11 @@ curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"tota
 
 To confirm the text path is genuinely dead: insert a row whose `Body` mentions `GetAllImportBatches`
 but whose `Metadata` is `NULL`, restart, and re-count.
+
+**No command — that row is described but never created.** The `INSERT` would need a column set and
+values for `Type`, `Title` and `MetadataKind` that nothing in this document states, so it is flagged
+rather than guessed. The `totalCount` **must increase** expectation below has no setup until it is
+written.
 
 ### Every payload states its release
 
@@ -151,6 +169,10 @@ found by reading them rather than by any assertion.
 ## Cleanup
 
 ```bash
-docker rm -f q312
+docker rm -f q183 q312 2>/dev/null
 rm -rf /tmp/q312
 ```
+
+`q183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing
+behind. Both containers and the bind-mounted directory are this test's own — it creates no named
+volume, and restoring the profile clears nothing it made.

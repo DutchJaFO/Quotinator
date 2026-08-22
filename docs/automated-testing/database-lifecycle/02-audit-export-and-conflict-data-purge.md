@@ -6,13 +6,20 @@
 
 ## Preconditions
 
-A container started fresh and allowed to seed normally — the audit activity this test reads is
-produced by seeding itself.
+**Beyond the profile.** This test runs **four containers of its own** rather than `qt-env`, because
+each needs a different configuration and a configuration is fixed at start — a restart cannot supply
+it. Everything else about each run is Fresh: same image, same first-boot seed, same readiness poll. The
+audit activity it reads is produced by that seeding, so nothing needs importing first.
+
+They publish `18099:8099` rather than `8080`, which means this test can run while the profile's own
+container is up rather than having to displace it.
+
+**One is a deliberate departure from the profile's settings:** `smoke249noautopurge` sets
+`Quotinator__AutoPurgeBundledImportActions=false`, where Fresh pins the application default `true`.
+Comparing the two is the point of the test, which is why both appear explicitly rather than one being
+left to a default.
 
 `Quotinator.Tools.DbInspector` (read-only) is used for the raw-table checks.
-
-Four of the runs below need a **different container configuration**, not a restart of the same one.
-They are listed as separate starts for that reason, not out of caution.
 
 ## Determinism
 
@@ -31,7 +38,10 @@ They are listed as separate starts for that reason, not out of caution.
 **Defaults, both auto-purge settings on:**
 
 ```bash
-docker run -d --name smoke249 -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+docker rm -f smoke249 2>/dev/null; docker volume rm smoke249-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name smoke249 -p 18099:8099 -v smoke249-data:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true quotinator:local
 until curl -sf http://localhost:18099/api/v1/health > /dev/null; do sleep 1; done
 docker logs smoke249 2>&1 | tail -5
 ```
@@ -52,21 +62,29 @@ cat .claude/temp/audit-export.json | head -c 300
 **Row-count cap — a separate container, because the cap is configuration:**
 
 ```bash
-docker rm -f smoke249
-docker run -d --name smoke249cap -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__AdminAuditExportMaxRows=1 quotinator:local
+docker rm -f smoke249; docker volume rm smoke249-data
+docker rm -f smoke249cap 2>/dev/null; docker volume rm smoke249cap-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name smoke249cap -p 18099:8099 -v smoke249cap-data:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AdminAuditExportMaxRows=1 quotinator:local
 until curl -sf http://localhost:18099/api/v1/health > /dev/null; do sleep 1; done
 curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18099/api/v1/admin/audit/export"
-docker rm -f smoke249cap
+docker rm -f smoke249cap; docker volume rm smoke249cap-data
 ```
 
 **Auto-purge on by default:**
 
 ```bash
-docker run -d --name smoke249 -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+MSYS_NO_PATHCONV=1 docker run -d --name smoke249 -p 18099:8099 -v smoke249-data:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true quotinator:local
 until curl -sf http://localhost:18099/api/v1/health > /dev/null; do sleep 1; done
-MSYS_NO_PATHCONV=1 docker cp smoke249:/app/data/quotinatordata.db .claude/temp/smoke249.db
-MSYS_NO_PATHCONV=1 docker cp smoke249:/app/data/quotinatordata.db-wal .claude/temp/smoke249.db-wal
-MSYS_NO_PATHCONV=1 docker cp smoke249:/app/data/quotinatordata.db-shm .claude/temp/smoke249.db-shm
+docker stop -t 15 smoke249
+MSYS_NO_PATHCONV=1 docker cp smoke249:/data/quotinatordata.db .claude/temp/smoke249.db
+MSYS_NO_PATHCONV=1 docker cp smoke249:/data/quotinatordata.db-wal .claude/temp/smoke249.db-wal
+MSYS_NO_PATHCONV=1 docker cp smoke249:/data/quotinatordata.db-shm .claude/temp/smoke249.db-shm
+docker start smoke249
+until curl -sf http://localhost:18099/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db \
   --sql "SELECT COUNT(*) AS RemainingActions FROM Import_Action"
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db \
@@ -76,16 +94,25 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
 **Auto-purge disabled — fresh container, no prior data:**
 
 ```bash
-docker rm -f smoke249
-docker run -d --name smoke249noautopurge -p 18099:8099 -e Quotinator__AdminApiKey=<your admin key> -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
+docker stop smoke249
+docker rm -f smoke249noautopurge 2>/dev/null; docker volume rm smoke249noautopurge-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name smoke249noautopurge -p 18099:8099 -v smoke249noautopurge-data:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
 until curl -sf http://localhost:18099/api/v1/health > /dev/null; do sleep 1; done
-MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/app/data/quotinatordata.db .claude/temp/smoke249b.db
-MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/app/data/quotinatordata.db-wal .claude/temp/smoke249b.db-wal
-MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/app/data/quotinatordata.db-shm .claude/temp/smoke249b.db-shm
+docker stop -t 15 smoke249noautopurge
+MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/data/quotinatordata.db .claude/temp/smoke249b.db
+MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/data/quotinatordata.db-wal .claude/temp/smoke249b.db-wal
+MSYS_NO_PATHCONV=1 docker cp smoke249noautopurge:/data/quotinatordata.db-shm .claude/temp/smoke249b.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249b.db \
   --sql "SELECT COUNT(*) AS RemainingActions FROM Import_Action"
-docker rm -f smoke249noautopurge
+docker rm -f smoke249noautopurge; docker volume rm smoke249noautopurge-data
+docker start smoke249
+until curl -sf http://localhost:18099/api/v1/health > /dev/null; do sleep 1; done
 ```
+
+**`smoke249` is stopped rather than removed here**, because the `purgeOnSuccess` step below runs
+against it and needs the same database this check just read.
 
 **`purgeOnSuccess` on a live import** — using `smoke249` from the auto-purge check, still running:
 
@@ -153,8 +180,12 @@ tables as one combined concern everywhere else.
 ## Cleanup
 
 ```bash
-docker rm -f smoke249
+docker rm -f smoke249 smoke249cap smoke249noautopurge 2>/dev/null
+docker volume rm smoke249-data smoke249cap-data smoke249noautopurge-data 2>/dev/null
 rm -f .claude/temp/smoke249.db .claude/temp/smoke249.db-wal .claude/temp/smoke249.db-shm \
       .claude/temp/smoke249b.db .claude/temp/smoke249b.db-wal .claude/temp/smoke249b.db-shm \
       .claude/temp/audit-export.json
 ```
+
+All four containers and their volumes are this test's own, so restoring the profile clears nothing it
+made — and equally, this test never touches `qt-env`.

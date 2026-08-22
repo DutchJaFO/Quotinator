@@ -6,12 +6,19 @@
 
 ## Preconditions
 
+**Beyond the profile.** The Upgraded prior image is the **published
+`ghcr.io/dutchjafo/quotinator:1.8.3` tag** — the row this test is about is one that release actually
+shipped, so no other prior image reaches the state. Two app containers of this test's own share one
+bind-mounted directory, both publishing 8080 in turn: `qA` (the released image) and `qB` (the current
+build).
+
 #312 moved a notification's identity out of message text into structured metadata. A row written before
 that has no metadata, cannot be identified, and would be announced a second time. A migration backfills
 v1.8.3's one shipped notification so the upgrade recognises it; this proves that.
 
-**The v1.8.3 container must have actually written its announcement before the upgrade starts.** It
-writes the #279 announcement *after* first-boot seeding of ~800 quotes.
+**The v1.8.3 container must have actually written its announcement before the upgrade starts** — that
+is the precondition this test confirms rather than assumes. It writes the #279 announcement *after*
+first-boot seeding of ~800 quotes.
 
 ## Determinism
 
@@ -39,6 +46,9 @@ direction it exists to catch. Found during #339's audit, 2026-08-22. Use
 **Seed a genuine v1.8.3 database and wait for its announcement to exist:**
 
 ```bash
+docker rm -f qA qB 2>/dev/null
+rm -rf /tmp/qdup
+mkdir -p /tmp/qdup/data
 MSYS_NO_PATHCONV=1 docker run -d --name qA -e Quotinator__DataDir=/data \
   -v /tmp/qdup/data:/data -p 8080:8080 ghcr.io/dutchjafo/quotinator:1.8.3
 until [ "$(curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" \
@@ -80,6 +90,10 @@ observation — it is the only thing distinguishing "enriched in place" from "re
 ## Cleanup
 
 ```bash
-docker rm -f qB
+docker rm -f qA qB 2>/dev/null
 rm -rf /tmp/qdup
 ```
+
+`qA` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing
+behind. Both containers and the bind-mounted directory are this test's own — it creates no named
+volume, and restoring the profile clears nothing it made.

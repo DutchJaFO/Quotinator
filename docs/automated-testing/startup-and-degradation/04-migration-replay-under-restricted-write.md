@@ -6,11 +6,17 @@
 
 ## Preconditions
 
-**A seeded database from a real historical release**, not a fresh one. An earlier attempt at this test
-used a fresh baseline database — empty tables, pure `INSERT`s — and passed identically whether the fix
-was present or not, because a fresh insert has nothing to conflict with and never exercises the
-statement-journal code path at all. The real incident happened during **migration replay against an
-already-populated database**, so this test must start from one.
+**Beyond the profile.** The Upgraded prior image is the **published `ghcr.io/dutchjafo/quotinator:1.8.2`
+tag**, not the milestone base image — this test is about the upgrade a real user performs from a real
+historical release. It runs its own container and volume (`smoke294` / `smoke294-data`, the name reused
+across the two runs) rather than `qt-env`, and the Constrained defect is `--read-only` on the root
+filesystem with `/data` left writable.
+
+The prior release matters for a specific reason: an earlier attempt at this test used a fresh baseline
+database — empty tables, pure `INSERT`s — and passed identically whether the fix was present or not,
+because a fresh insert has nothing to conflict with and never exercises the statement-journal code path
+at all. The real incident happened during **migration replay against an already-populated database**, so
+this test must start from one.
 
 **The seeding run must have completed cleanly before proceeding** — a partially-seeded volume produces
 a misleading result. The fact to establish is not a dataset size but that seeding finished with zero
@@ -106,6 +112,10 @@ before committing anything.
 ## Cleanup
 
 ```bash
-docker rm -f smoke294
+docker rm -f smoke294 2>/dev/null
 docker volume rm smoke294-data smoke294-data-clone 2>/dev/null
 ```
+
+The container and both volumes are this test's own, so restoring the profile clears nothing it made.
+If the gut-check section above was run, confirm `useMemoryTempStore: true` has been restored in
+`Program.cs` and the throwaway image rebuilt from it.

@@ -6,6 +6,12 @@
 
 ## Preconditions
 
+**Beyond the profile.** The Upgraded prior state is not an image at all but a **hand-built
+intermediate**: the published `ghcr.io/dutchjafo/quotinator:1.8.3` tag creates the released baseline,
+then one migration is applied by hand on top of it. Three containers of this test's own share one
+bind-mounted directory — `q183` (the released image, **no published port**), a one-shot `--rm alpine`
+running `sqlite3` to promote the schema, and `qv4` (the current build, publishing 8080).
+
 **This exists because upgrading from the last release alone missed a startup-killing bug.** The
 released-database path starts from v1.8.3, where `System_AppVersion` does not exist at all — so a
 pre-migration read of it hits the missing-table path and returns null. A database at data **v4 or v5**
@@ -43,6 +49,9 @@ step 2's writes either — **do not "fix" the tool to allow writes.**
 
 ```bash
 # 1. released baseline — the schema version the last published image creates
+docker rm -f q183 qv4 2>/dev/null
+rm -rf /tmp/qv4
+mkdir -p /tmp/qv4/data
 MSYS_NO_PATHCONV=1 docker run -d --name q183 -e Quotinator__DataDir=/data \
   -v /tmp/qv4/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
 until docker logs q183 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
@@ -95,6 +104,10 @@ died.
 ## Cleanup
 
 ```bash
-docker rm -f qv4
+docker rm -f q183 qv4 2>/dev/null
 rm -rf /tmp/qv4
 ```
+
+`q183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing
+behind. Both containers and the bind-mounted directory are this test's own — it creates no named
+volume, and restoring the profile clears nothing it made.

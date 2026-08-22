@@ -6,8 +6,12 @@
 
 ## Preconditions
 
-A container seeded normally, with a non-empty audit trail — the audit rows are what prove the wipe is
-total rather than selective, so a container whose seeding produced none makes half this test vacuous.
+Nothing beyond the Fresh profile — its own first-boot seed is what produces the audit rows this test
+reads, and those rows are what prove the wipe is total rather than selective. A container whose seeding
+produced none would make half this test vacuous, which is why the non-zero check below runs before the
+Reset rather than after.
+
+**This test destroys the profile's database.** That is its subject, not a side effect — see Cleanup.
 
 Reset drops the *entire* database — there is no `System_`/`Import_`/`Audit_` protected-table concept —
 and rebuilds via the baseline path, reversing #141's preserve-on-reset behaviour.
@@ -29,11 +33,9 @@ and rebuilds via the baseline path, reversing #141's preserve-on-reset behaviour
 
 **Seed, record the starting state, Reset:**
 
+Run the **Fresh** profile, then:
+
 ```bash
-docker rm -f smoke156
-MSYS_NO_PATHCONV=1 docker run -d --name smoke156 -p 8080:8080 \
-  -e Quotinator__AdminApiKey=<your admin key> quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
 curl -s "http://localhost:8080/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
@@ -52,12 +54,25 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/admin/database/reset?preserveSchemaVersion=true"
 ```
 
-Then, via `Quotinator.Tools.DbInspector`:
+Then read both counters. The container is stopped for the copy, and the `-wal`/`-shm` sidecars come
+with it — a copy taken mid-write can be missing exactly what was just written, and reads as a wrong
+count rather than as an error:
 
-```sql
-SELECT COUNT(*) FROM System_SchemaVersion;
-SELECT COUNT(*) FROM System_ConsumerSchemaVersion;
+```bash
+docker stop -t 15 qt-env
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db .claude/temp/smoke156.db
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/smoke156.db-wal
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/smoke156.db-shm
+docker start qt-env
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156.db \
+  --sql "SELECT COUNT(*) AS DataVersions FROM System_SchemaVersion"
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156.db \
+  --sql "SELECT COUNT(*) AS ConsumerVersions FROM System_ConsumerSchemaVersion"
 ```
+
+**Both counts must be read before the `preserveSchemaVersion=true` call as well as after** — the
+assertion is that they are unchanged, which cannot be evaluated from the after-value alone.
 
 ## Expected output
 
@@ -85,5 +100,9 @@ nothing observable changes in a running container for that part.
 ## Cleanup
 
 ```bash
-docker rm -f smoke156
+rm -f .claude/temp/smoke156.db .claude/temp/smoke156.db-wal .claude/temp/smoke156.db-shm
 ```
+
+**The profile must be restored before anything else runs.** This test leaves the database wiped — that
+is what it verifies — and since #156 Reset does not reseed, nothing repopulates it. A later test
+reading seeded content would otherwise find an empty database and report a failure that belongs here.

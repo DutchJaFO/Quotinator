@@ -6,8 +6,13 @@
 
 ## Preconditions
 
-A running container with a populated database — every endpoint below must have rows, or a `200` with
-empty `items` would pass while proving nothing.
+Nothing beyond the Fresh profile — its first-boot seed of the bundled files is what populates every
+entity below, the curated file's Conversations, StageDirections and SoundCues included.
+
+**This test can therefore be blocked.** That content arrives through the application's own import
+path, so a defect there takes this test down with it even though the generic-repository queries may be
+perfectly intact. That is the second of the index's two honest resolutions, not the first — a skipped
+run here reads as a known consequence of a broken import, not an unexplained gap.
 
 `RepositorySql.cs`'s generic queries (`SelectById`, `SelectByIds`, `SelectDeleted`,
 `SelectByForeignKey`, `SelectJunctionRow`, `SelectPage`) build an explicit column list via a
@@ -24,6 +29,8 @@ hand-written `Sql.cs` queries do. This confirms the `SELECT *` removal did not b
   many-to-many link.
 
 ## Steps
+
+Run the **Fresh** profile, then:
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources?pageSize=2"
@@ -58,4 +65,5 @@ container emits while serving them.
 
 ## Cleanup
 
-None — this test only reads.
+None. This test only reads, so the profile's container and volume are left as they are for whatever
+runs next.

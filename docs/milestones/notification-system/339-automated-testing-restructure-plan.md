@@ -1,6 +1,6 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 15)
+**Status:** In progress (all steps done; row 18 of the verification checklist outstanding)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -551,7 +551,7 @@ every one complete regardless of cost.
 
 ### 15. Define the environment profiles and the snapshot/restore procedure
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-23, in the index
 
 The audit's consolidated finding is that the split removed the environment. This step replaces it with
 something better than §1 was: a small set of named profiles, each stated once in the index and
@@ -612,7 +612,7 @@ before the suite rests on it.
 
 ### 16. Give every document its environment
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-23. All 43 declare a profile and establish it; guard green.
 
 Every document names its profile and runs it. The 21 that start no container stop assuming one; the
 rest are checked for the same class rather than trusted.
@@ -622,7 +622,7 @@ link guards, and it is what prevents the next document from being written the wa
 
 ### 17. Fix the defects that stop a document from being run at all
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-23
 
 Scoped deliberately: **what the restructure broke, or what blocks a document from executing.** These
 are cheap and mechanical.
@@ -642,7 +642,7 @@ that #339 leaves every document runnable and no worse than the file it replaced,
 
 ### 18. Register every new document in `Quotinator.slnx` and confirm the guards green
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-23. 44 of 44 registered; all four guards green; full suite green.
 
 One flat top-level `<Folder>` element per category path — `.slnx` does not support nested folders.
 Then confirm both guard tests from step 5 are green, and the full suite shows no regression.
@@ -656,27 +656,28 @@ resolve — see that step.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `docs/automated-testing/` exists with one kebab-case subfolder per category | Live | `ls docs/automated-testing/` lists exactly the categories agreed in step 1, all kebab-case |
-| 2 | ❌ | One numbered document per existing section; no test dropped, merged, or rewritten | Live | Document count equals the section count of the removed file; each section's commands appear in exactly one document |
-| 3 | ❌ | Every test document carries the full template, including Preconditions, Determinism and Observed effect | Live | Every file under `docs/automated-testing/*/` contains all template field headings |
-| 4 | ❌ | An index carries the rules block, the living-checklist rule, and every test document | Live | `docs/automated-testing/README.md` lists all documents; guard test in row 13 proves the list is complete |
-| 5 | ❌ | Every test is marked in or out of the designated smoke set, and the index lists the set | Live | Every document has a `Smoke:` field; the index's smoke list matches the documents marked `yes` |
-| 6 | ❌ | The index states the three run scopes as the authoritative definition | Live | Index names per-issue T2, milestone close, and release, and `release-verification.md` points at it rather than restating it |
-| 7 | ❌ | The numbering scheme is recorded; each filename carries a number and a stable slug | Live | Index states the scheme; every filename matches `NN-slug.md` |
-| 8 | ❌ | Cross-references between tests are explicit links, not prose | Live | No document refers to another by section number or by "the section above/below" |
-| 9 | ❌ | Test resources sit beside the document; test scripts sit in `scripts/testing/` | Live | `ls scripts/testing/` holds the scripts classified in step 3; no `.csx` under `docs/` |
-| 10 | ❌ | ADR 010 revised in place; `CLAUDE.md`'s Developer Context bullet matches | Live | ADR 010's Decision section states the subfolder rule; `CLAUDE.md` states it identically |
-| 11 | ❌ | The reliability rule is stated in the index and served by a Determinism field on every document | Live | Index carries the rule; row 3's field check covers the per-document half |
-| 12 | ❌ | `docs/smoke-tests.md` is removed and every reference updated in the same commit | Live | `grep -rn "smoke-tests" --include=*.md .` returns no hit outside `.claude/` |
-| 13 | ❌ | Guard tests: every document is linked from the index, and every index link resolves | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_IsLinkedFromTheIndex`, `...EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument` — both red before step 6 |
-| 14 | ❌ | Test outcomes are recorded as Knowledgebase material, and #333 sweeps the test documents | Live | #333 requirement 6 states the sweep (done 2026-08-22); the index states the relationship |
-| 15 | ❌ | A live-only issue has a Definition of done it can honestly tick | Live | `docs/workflow/issues.md` no longer requires a placeholder Expected-tests row for live-only verification |
-| 16 | ❌ | Every fixed wait is a readiness poll, or a duration justified in `Determinism` | Live | `grep -rn "sleep " docs/automated-testing/` returns only waits whose own document explains what the duration measures |
-| 17 | ❌ | The index defines the environment profiles, each pinning `AutoPurgeBundledImportActions` | Live | `docs/automated-testing/README.md` states Fresh, Constrained and Upgraded with runnable setup commands; each sets the flag explicitly |
-| 18 | ❌ | The index defines snapshot, restore, and the milestone-start base image | Live | Index states image tag + `docker save`, stopped-container DB capture with `-wal`/`-shm`, unconditional restore between tests, and deletion after the milestone publishes |
-| 19 | ❌ | Every document names a known profile and establishes it rather than assuming one | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_NamesAKnownEnvironmentProfile` — red before step 16, and no document `curl`s a port it never published |
-| 20 | ❌ | No document is blocked from executing by its own commands | Live | No `docker run` holds the terminal ahead of later steps; every `docker run` carries `--name`, so no `<container>` placeholder is unresolvable; no step is prose where a command is required |
-| 17 | ❌ | Every document is audited against the index's rules, and each one's compliance is recorded | Live | Step 14's per-document checklist completed; documents needing new test content are recorded as findings rather than silently left non-compliant |
-| 18 | ❌ | No predicted count survives in an Expected output section | Live | Every count is non-zero, a relationship derived in the same run, or explicitly labelled an observation |
+| 1 | ✅ | `docs/automated-testing/` exists with one kebab-case subfolder per category | Live | `ls -d docs/automated-testing/*/` lists the six categories agreed in step 1, all kebab-case |
+| 2 | ✅ | One numbered document per existing section; no test dropped, merged, or rewritten | Live | 43 documents from 44 sections — old §16 was an explanatory note, not a test, and is folded into `identity-and-casing/02`. The index's mapping table resolves all 44 old numbers |
+| 3 | ✅ | Every test document carries the full template, including Preconditions, Determinism and Observed effect | Live | All six template headings present in all 43 documents; checked by heading, not by eye |
+| 4 | ✅ | An index carries the rules block, the living-checklist rule, and every test document | Live | `docs/automated-testing/README.md` lists all documents; the row 13 guard proves the list is complete |
+| 5 | ✅ | Every test is marked in or out of the designated smoke set, and the index lists the set | Unit test | Every document has exactly one `Smoke:` field; row 23's guard proves the index's table and the documents agree |
+| 6 | ✅ | The index states the three run scopes as the authoritative definition | Live | Index names per-issue T2, milestone close, and release; `release-verification.md`'s T2 tier points at it rather than restating it |
+| 7 | ✅ | The numbering scheme is recorded; each filename carries a number and a stable slug | Live | Index states the scheme; every filename matches `NN-slug.md` with no exceptions |
+| 8 | ✅ | Cross-references between tests are explicit links, not prose | Live | No document refers to another by section number or by "the section above/below" |
+| 9 | ✅ | Test resources sit beside the document; test scripts sit in `scripts/testing/` | Live | `scripts/testing/` holds `execute-sql.csx` and `sqlite-storage-probe.csx`; no `.csx` anywhere under `docs/` |
+| 10 | ✅ | ADR 010 revised in place; `CLAUDE.md`'s Developer Context bullet matches | Live | ADR 010's Decision section states the subfolder rule; `CLAUDE.md` states it identically |
+| 11 | ✅ | The reliability rule is stated in the index and served by a Determinism field on every document | Live | Index carries the rule; row 3's field check covers the per-document half |
+| 12 | ✅ | `docs/smoke-tests.md` is removed and every reference updated in the same commit | Live | The file is gone. Remaining `smoke-tests.md` mentions are historical records in closed issues' plan docs, each naming the old file *and* redirecting to `docs/automated-testing/` — no live link resolves to the deleted file. The original "grep returns no hit" wording was unachievable and is corrected here |
+| 13 | ✅ | Guard tests: every document is linked from the index, and every index link resolves | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_IsLinkedFromTheIndex`, `...EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument`, `...EveryAutomatedTestingCrossReference_ResolvesToAnExistingDocument` — all red before step 6 |
+| 14 | ✅ | Test outcomes are recorded as Knowledgebase material, and #333 sweeps the test documents | Live | #333 requirement 6 states the sweep (done 2026-08-22); the index states the relationship |
+| 15 | ✅ | A live-only issue has a Definition of done it can honestly tick | Live | `docs/workflow/issues.md` no longer requires a placeholder Expected-tests row for live-only verification |
+| 16 | ✅ | Every fixed wait is a readiness poll, or a duration justified in `Determinism` | Live | One fixed `sleep` survives — `startup-and-degradation/03`, whose `Determinism` states why a poll cannot catch a transient state. Every other `sleep` is a poll interval inside an `until` loop |
+| 17 | ✅ | Every document is audited against the index's rules, and each one's compliance is recorded | Live | Step 14's audit completed over all 43 in three batches; findings recorded per batch, with work needing new test content filed rather than silently left non-compliant |
+| 18 | ❌ | No predicted count survives in an Expected output section | Live | 3 of 43 failed; 1 fixed. Two remain and are deliberately not fixed here: `import-and-staged-actions/10` asserts `Frozen` returns `2013` with no query for `Frozen` anywhere, and `19` hardcodes "all nine entity types", which goes stale exactly the way a migration number does. Both are recorded findings |
+| 19 | ✅ | The index defines the environment profiles, each pinning `AutoPurgeBundledImportActions` | Live | `README.md` states Fresh, Constrained and Upgraded with runnable setup commands; Fresh pins the flag to the application default `true`, and a test needing `false` declares it as its own delta |
+| 20 | ✅ | The index defines snapshot, restore, and the milestone-start base image | Live | Index states image tag + `docker save`, stopped-container DB capture with `-wal`/`-shm`, unconditional restore between tests, and deletion after the milestone publishes |
+| 21 | ✅ | Every document names a known profile and establishes it rather than assuming one | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_NamesAKnownEnvironmentProfile` — red against all 43 before step 16 |
+| 22 | ✅ | No document is blocked from executing by its own commands | Live | No `docker run` holds the terminal ahead of later steps; every `docker run` carries `--name`; no `<container>` placeholder survives; every `docker cp` of the database targets `/data`, the path the profile actually mounts |
+| 23 | ✅ | The index's smoke set cannot drift from the documents' own `Smoke` field | Unit test | `RepositoryStructureTests.SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` — red while the table named tests by title only, which is why each row now links its document |
 | 19 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |
 | 20 | ❌ | No reference to `docs/smoke-tests.md` resolves to nothing | Live | Every remaining mention names where the suite went. **Not** a bare `grep` for absence — archival plan docs keep the old name deliberately, with the pointer alongside; compare per-file reference counts instead |

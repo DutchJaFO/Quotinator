@@ -33,19 +33,20 @@ right.
 
 | Test | Category |
 |---|---|
-| Baseline — health/version/random/search | `api-surface/` |
-| Pagination contract | `api-surface/` |
-| Import and staged-action review workflow | `import-and-staged-actions/` |
-| Fresh seed produces zero pending actions | `import-and-staged-actions/` |
-| Per-file, per-entity-type import/seed report | `import-and-staged-actions/` |
-| Reset is a full wipe with no reseed | `database-lifecycle/` |
-| Startup wait page during database initialisation | `startup-and-degradation/` |
-| Startup notification system | `notifications-and-changelog/` |
-| Changelog is served from its own on-disk database | `notifications-and-changelog/` |
+| [Baseline — health/version/random/search](api-surface/01-baseline.md) | `api-surface/` |
+| [Pagination contract](api-surface/02-pagination-contract.md) | `api-surface/` |
+| [Import and staged-action review workflow](import-and-staged-actions/01-staged-action-review-workflow.md) | `import-and-staged-actions/` |
+| [Fresh seed produces zero pending actions](import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md) | `import-and-staged-actions/` |
+| [Per-file, per-entity-type import/seed report](import-and-staged-actions/19-per-file-import-report.md) | `import-and-staged-actions/` |
+| [Reset is a full wipe with no reseed](database-lifecycle/03-reset-is-a-full-wipe.md) | `database-lifecycle/` |
+| [Startup wait page during database initialisation](startup-and-degradation/03-startup-wait-page.md) | `startup-and-degradation/` |
+| [Startup notification system](notifications-and-changelog/01-notification-system.md) | `notifications-and-changelog/` |
+| [Changelog is served from its own on-disk database](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | `notifications-and-changelog/` |
 
 Every test document states its own membership in its `Smoke` field. This table is the index of that
 field, not a second source of truth — if the two disagree, the document is right and this table needs
-fixing.
+fixing. `RepositoryStructureTests.SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` enforces that they
+never do, which is why each row links its document rather than naming it.
 
 ---
 

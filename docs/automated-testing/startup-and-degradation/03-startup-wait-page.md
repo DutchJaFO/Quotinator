@@ -6,7 +6,10 @@
 
 ## Preconditions
 
-A **fresh volume**, so the container has real seeding work to do. Against an already-seeded volume
+**Beyond the profile.** This test starts its own container (`smoke280` / `smoke280-data`) because it
+must issue requests *during* the startup window, before the profile's readiness poll would return — the
+profile hands back an already-healthy app, which is precisely the state this test cannot observe from.
+The volume must be new for the same reason it is new in the profile: against an already-seeded volume
 startup completes almost immediately and the window this test observes does not exist.
 
 ## Determinism
@@ -32,8 +35,8 @@ The second wait is an ordinary readiness wait and polls.
 **Immediately after container start, before seeding completes:**
 
 ```bash
+docker rm -f smoke280 2>/dev/null
 docker volume rm smoke280-data 2>/dev/null
-docker rm -f smoke280
 MSYS_NO_PATHCONV=1 docker run -d --name smoke280 -p 8080:8080 -v smoke280-data:/data \
   -e Quotinator__DataDir=/data quotinator:local
 sleep 1
@@ -80,6 +83,8 @@ otherwise look like a dead server.
 ## Cleanup
 
 ```bash
-docker rm -f smoke280
+docker rm -f smoke280 2>/dev/null
 docker volume rm smoke280-data
 ```
+
+The container and volume are this test's own, so restoring the profile clears nothing it made.

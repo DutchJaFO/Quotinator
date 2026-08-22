@@ -6,12 +6,19 @@
 
 ## Preconditions
 
-A fresh container with an admin key, allowed to finish seeding — the notification a fresh container
-produces is written during startup.
+**Beyond the profile.** One container of this test's own (`smoke278` / `smoke278-data`) rather than
+`qt-env`, because the Action-button check runs a Reset that wipes the database it is started against.
+Seeding must be allowed to finish before anything is asserted — the notification a fresh container
+produces is written during startup, so an early read cannot tell "not produced" from "not yet".
 
-The Status-filter and Action-button checks need seeded rows that no producer creates on its own. Insert
-them directly into `System_Notification` via a SQLite client: one `ActionRequired` row with
+The Status-filter and Action-button checks additionally need three rows that no producer creates on its
+own, inserted directly into `System_Notification`: one `ActionRequired` row with
 `DismissTriggerKey = 'DatabaseReset'`, one already-expired row, and one already-dismissed row.
+
+**No command — the three rows are described but never created.** Writing the `INSERT` here would mean
+inventing the column set and the values for `Type`, `ExpiresAt` and `IsDismissed` that the description
+does not give, so it is flagged rather than guessed. Until it is written, the Status-filter and
+Action-button assertions below have no setup and cannot be run.
 
 ## Determinism
 
@@ -32,8 +39,9 @@ about. A count asserts something nobody intended and gets "fixed" by editing a d
 ## Steps
 
 ```bash
-docker rm -f smoke278
-MSYS_NO_PATHCONV=1 docker run -d --name smoke278 -p 8080:8080 \
+docker rm -f smoke278 2>/dev/null; docker volume rm smoke278-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name smoke278 -p 8080:8080 -v smoke278-data:/data \
+  -e Quotinator__DataDir=/data \
   -e Quotinator__AdminApiKey=<your admin key> quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/notifications"
@@ -51,7 +59,8 @@ multi-line body is exactly where one shows up.
 **Empty state** — dismiss the announcement via `POST /api/v1/notifications/{id}/dismiss`, then reload
 both pages.
 
-**Status filter and Action button** — with the seeded rows described in Preconditions in place.
+**Status filter and Action button** — with the three rows described in Preconditions in place. That
+insert has no command yet; see the flag there.
 
 ## Expected output
 
@@ -89,5 +98,10 @@ what the container logs while writing the startup notification has not been reco
 ## Cleanup
 
 ```bash
-docker rm -f smoke278
+docker rm -f smoke278 2>/dev/null
+docker volume rm smoke278-data
 ```
+
+The container and volume are this test's own, so restoring the profile clears nothing it made. If the
+Action button's **Confirm** path was exercised, the volume holds a wiped, post-Reset database — which
+is why it is removed rather than kept.

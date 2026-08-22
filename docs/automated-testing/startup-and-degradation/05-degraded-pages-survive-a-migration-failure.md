@@ -10,6 +10,13 @@
 
 ## Preconditions
 
+**Beyond the profile.** The Upgraded prior image is the **published
+`ghcr.io/dutchjafo/quotinator:1.8.2` tag**, chosen because `System_Notification` genuinely does not
+exist on a real v1.8.2 database. It runs its own container and volume (`smoke293` / `smoke293-data`,
+the name reused across the two runs) rather than `qt-env`, and the Constrained defect is intended to be
+`--read-only` on the root filesystem with `/data` left writable — which is the part that no longer
+works.
+
 **Its premise is unreachable, measured 2026-08-18.** This test forces a migration failure with
 `--read-only` on the root filesystem while `/data` stays a writable volume. #294 subsequently made
 exactly that arrangement survivable — the migration's temp files never touch disk, so restricting
@@ -104,6 +111,8 @@ degraded-skip fix together. What no longer holds is the mechanism that made the 
 ## Cleanup
 
 ```bash
-docker rm -f smoke293
+docker rm -f smoke293 2>/dev/null
 docker volume rm smoke293-data
 ```
+
+The container and volume are this test's own, so restoring the profile clears nothing it made.

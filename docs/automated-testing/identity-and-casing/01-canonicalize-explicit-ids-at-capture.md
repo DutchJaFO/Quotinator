@@ -6,8 +6,8 @@
 
 ## Preconditions
 
-A running container with an admin key, and a **clean seed** — the seed itself is part of this test, not
-just setup for the import below.
+Nothing beyond the Fresh profile — but the profile's own first boot is **under test here**, not merely
+setup for the import below, which is why the log check is the first step rather than an afterthought.
 
 The bundled curated file's own Conversations reference StageDirections and SoundCues by id. #209's fix
 would have broken those references if left incomplete, so a seed completing with no
@@ -22,6 +22,14 @@ would have broken those references if left incomplete, so a seed completing with
   passing import and a meaningless FK result.
 
 ## Steps
+
+Run the **Fresh** profile, then read its seed's own log before importing anything:
+
+```bash
+docker logs qt-env 2>&1 | grep -c "SQLite Error 19"
+```
+
+Then the import and the two lookups:
 
 ```bash
 cat > .claude/temp/smoke-209.json <<'EOF'
@@ -42,7 +50,9 @@ curl -s "http://localhost:8080/api/v1/quotes/f6000001-0000-4000-8000-00000000000
   system-wide convention.
 - The quote lookup resolves `source` to `"209 Smoke Test Film"` via the Quote→Source join, proving the
   fix did not break the join in order to make the masterdata lookup work.
-- The container's seed produced no `SQLite Error 19`.
+- The container's seed produced no `SQLite Error 19` — the `grep -c` prints `0`. Any other number is a
+  failure, and it is the first step for a reason: a non-zero count means the seed is what broke, so the
+  three assertions above would be reporting on a database that was never built correctly.
 
 ## Observed effect
 
@@ -57,3 +67,6 @@ join.
 ## Cleanup
 
 `rm .claude/temp/smoke-209.json`
+
+The import leaves its quote and its Source in the database — restore the Fresh profile before the next
+test rather than leaving a `209 Smoke Test Film` row for it to find.

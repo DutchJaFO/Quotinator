@@ -6,7 +6,7 @@
 
 ## Preconditions
 
-A running container with an admin key.
+Nothing beyond the Fresh profile — both records under test arrive in this test's own import.
 
 `Quotinator_ConversationLine` holds a real `FOREIGN KEY` to `Quotinator_Quote(Id)`. A line referencing
 a quote by an id whose casing does not match the quote's now-canonical form must still satisfy it —
@@ -24,6 +24,8 @@ the same bug class
 
 ## Steps
 
+Run the **Fresh** profile, then:
+
 ```bash
 cat > .claude/temp/smoke-210-conv.json <<'EOF'
 {
@@ -32,11 +34,14 @@ cat > .claude/temp/smoke-210-conv.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210-conv.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+docker logs qt-env 2>&1 | grep -c "SQLite Error 19"
 ```
 
 ## Expected output
 
-`200`, and specifically **not** `SQLite Error 19: FOREIGN KEY constraint failed`.
+`200`, and specifically **not** `SQLite Error 19: FOREIGN KEY constraint failed` — the `grep -c` prints
+`0`. The status code alone is not the whole assertion: the log is where the constraint failure would
+name itself.
 
 ## Observed effect
 
@@ -46,3 +51,6 @@ Not yet established as a captured record. The failure mode is known and specific
 ## Cleanup
 
 `rm .claude/temp/smoke-210-conv.json`
+
+The imported quote and conversation remain in the database — restore the Fresh profile before the next
+test.

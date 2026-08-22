@@ -39,8 +39,9 @@ from `nikhilnamal17-conflict-rules.json` (`entityId: 088603c0-…`), then:
 
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
-docker rm -f qt-rule-removed 2>/dev/null
-docker run -d --name qt-rule-removed -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> \
+docker rm -f qt-rule-removed 2>/dev/null; docker volume rm qt-rule-removed 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-rule-removed -p 8080:8080 -v qt-rule-removed:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
   -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending"
@@ -51,18 +52,22 @@ second container against the rebuilt image — the first must be removed to free
 
 ```bash
 docker rm -f qt-rule-removed
+docker volume rm qt-rule-replace 2>/dev/null
 docker build -f docker/Dockerfile -t quotinator:local .
-docker run -d --name qt-rule-replace -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> \
+MSYS_NO_PATHCONV=1 docker run -d --name qt-rule-replace -p 8080:8080 -v qt-rule-replace:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
   -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 ```
 
-Then check the audit trail:
+Then check the audit trail. **Stop the container first** — a copy taken while the app is writing can be
+torn, and a torn copy reads as "no rows", which is indistinguishable from the assertion failing:
 
 ```bash
-docker cp qt-rule-replace:/app/data/quotinatordata.db .claude/temp/inspect-181.db
-docker cp qt-rule-replace:/app/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
-docker cp qt-rule-replace:/app/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
+docker stop -t 15 qt-rule-replace
+docker cp qt-rule-replace:/data/quotinatordata.db .claude/temp/inspect-181.db
+docker cp qt-rule-replace:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
+docker cp qt-rule-replace:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
   --sql "SELECT MergedFields FROM Import_Action WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
 ```
@@ -91,7 +96,8 @@ that did not.
 ## Cleanup
 
 ```bash
-docker rm -f qt-rule-replace
+docker rm -f qt-rule-removed qt-rule-replace 2>/dev/null
+docker volume rm qt-rule-removed qt-rule-replace 2>/dev/null
 rm -f .claude/temp/inspect-181.db .claude/temp/inspect-181.db-wal .claude/temp/inspect-181.db-shm
 ```
 

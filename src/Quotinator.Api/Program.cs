@@ -909,7 +909,7 @@ catch (DatabaseBackupWriteException ex)
 }
 // #326: an unwritable data directory is a different fault with a different remedy, and the generic
 // reason below actively misdirects for it — it tells the operator to run a database Reset, which also
-// writes and therefore cannot work here. Measured by scripts/sqlite-storage-probe.csx: an unwritable
+// writes and therefore cannot work here. Measured by scripts/testing/sqlite-storage-probe.csx: an unwritable
 // directory surfaces SQLITE_CANTOPEN (14), a writable directory holding a read-only file surfaces
 // SQLITE_READONLY (8). Matched on SqliteErrorCode, never SqliteExtendedErrorCode — the extended code
 // varies by cause (526 CANTOPEN_ISDIR for a directory at the database path) while the primary code

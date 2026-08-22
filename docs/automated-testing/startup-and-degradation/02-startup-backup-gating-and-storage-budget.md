@@ -6,11 +6,20 @@
 
 ## Preconditions
 
-A named volume, reused across restarts — the whole test is about what successive startups against the
-*same* data directory do. A fresh container each time would never reach the states being checked.
+**Beyond the profile.** The volume is *reused across restarts* rather than being a one-boot
+environment — the whole test is about what successive startups against the same data directory do, and
+a fresh container each time would never reach the states being checked. It therefore runs its own
+container and volume (`smoke277` / `smoke277-data`) rather than `qt-env`, and a **second** container on
+the same volume for the final step, carrying `Quotinator__MaxBackupStorageGb=0`.
 
 The sequence matters and each step depends on the one before it: fresh baseline → healthy restart →
 Reset → restart-after-Reset → budget exceeded.
+
+**The mount type is what differs from
+[`01-seeding-backup-degraded-startup-and-reset-recovery.md`](01-seeding-backup-degraded-startup-and-reset-recovery.md)**,
+which asserts a healthy restart *does* take a backup where this one asserts it takes none. That test
+runs on a bind mount; this one on a named volume. Both assertions are left exactly as they stand — the
+discrepancy is tracked separately, not resolved here.
 
 ## Determinism
 
@@ -20,15 +29,16 @@ Reset → restart-after-Reset → budget exceeded.
 - **`docker logs --since` windows are generous** relative to the poll, so a fast startup does not push
   the lines being grepped outside the window.
 - The budget run needs its **own container with `Quotinator__MaxBackupStorageGb=0`** — the budget is
-  configuration, not runtime state, so it cannot be applied to the running container.
+  configuration, not runtime state, so it cannot be applied to the running container. It is named
+  `smoke277budget` so the two are never confused in a `docker logs` line.
 
 ## Steps
 
 **Fresh baseline install:**
 
 ```bash
+docker rm -f smoke277 2>/dev/null
 docker volume rm smoke277-data 2>/dev/null
-docker rm -f smoke277
 MSYS_NO_PATHCONV=1 docker run -d --name smoke277 -p 8080:8080 -v smoke277-data:/data \
   -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
@@ -63,13 +73,13 @@ docker exec smoke277 sh -c "ls /data/backups | wc -l"
 **Budget already exceeded — a separate container:**
 
 ```bash
-docker rm -f smoke277
-docker run -d --name smoke277 -p 8080:8080 -v smoke277-data:/data \
+docker rm -f smoke277 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name smoke277budget -p 8080:8080 -v smoke277-data:/data \
   -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest -e Quotinator__MaxBackupStorageGb=0 quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:8080/api/v1/admin/database/reset"
-docker logs smoke277 --since 60s 2>&1 | grep "LogBackupSkippedBudgetExceeded"
-docker exec smoke277 sh -c "ls /data/backups | wc -l"
+docker logs smoke277budget --since 60s 2>&1 | grep "LogBackupSkippedBudgetExceeded"
+docker exec smoke277budget sh -c "ls /data/backups | wc -l"
 ```
 
 ## Expected output
@@ -96,6 +106,8 @@ are observed state and are asserted above.
 ## Cleanup
 
 ```bash
-docker rm -f smoke277
+docker rm -f smoke277 smoke277budget 2>/dev/null
 docker volume rm smoke277-data
 ```
+
+Both containers and the volume are this test's own, so restoring the profile clears nothing it made.

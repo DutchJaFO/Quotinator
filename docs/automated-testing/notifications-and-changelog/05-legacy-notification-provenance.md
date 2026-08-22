@@ -6,6 +6,12 @@
 
 ## Preconditions
 
+**Beyond the profile.** The Upgraded prior image is the **published
+`ghcr.io/dutchjafo/quotinator:1.8.3` tag**, and the current build must be rebuilt from an edited
+`Directory.Build.props` (see below) rather than used as-is. One container name (`qprov`) is reused
+across the two runs against one bind-mounted directory, plus a one-shot `--rm alpine` running `sqlite3`
+to read the result. The whole thing is then repeated a second time with no v1.8.3 stage.
+
 The migration that backfills legacy notification metadata restored the legacy notification's identity
 but left its provenance null. A later migration fills that in and creates the `System_AppVersion` row it
 points at — **conditionally**, because a database created fresh by an unreleased build also reaches this
@@ -15,6 +21,11 @@ migration and never ran v1.8.3.
 the row the migration inserts and the row the app records for itself are the same row, and the two
 causes are indistinguishable. Temporarily set `Directory.Build.props`' `<Version>` to the next patch
 number, build the image, and **restore the file immediately afterwards**.
+
+That requirement is the direct opposite of
+[`02-notification-metadata-and-provenance.md`](02-notification-metadata-and-provenance.md), whose
+version-history expectation reads `Quotinator.Api | 1.8.3` for the current build. Both are left exactly
+as they stand — the discrepancy is tracked separately, not resolved here.
 
 ## Determinism
 
@@ -52,6 +63,12 @@ MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qprov/data:/data alpine \
 
 **Then repeat the whole thing against a fresh database** — same build, no v1.8.3 stage.
 
+**No commands — the fresh-database repeat is described but never written out.** It needs its own
+container name and its own bind-mount directory, distinct from `qprov` and `/tmp/qprov`, or it runs
+against the database the first half already upgraded and proves nothing. Naming those here would be
+inventing them, so it is flagged instead; Cleanup below cannot name what the repeat creates until it is
+written.
+
 ## Expected output
 
 Exactly two rows: `Quotinator.Api | 1.8.3 | 1`, then `Quotinator.Api | <current> | 2`.
@@ -77,8 +94,15 @@ existing is weaker evidence than the 1.8.3 row sorting first.
 ## Cleanup
 
 ```bash
-docker rm -f qprov
+docker rm -f qprov 2>/dev/null
 rm -rf /tmp/qprov
 ```
 
-Confirm `Directory.Build.props` has been restored.
+The container and the bind-mounted directory are this test's own — it creates no named volume, and
+restoring the profile clears nothing it made. Whatever container and directory the fresh-database
+repeat uses must be removed too; see the flag in Steps.
+
+**Two things this leaves behind that a profile restore does not fix.** `Directory.Build.props` must be
+confirmed restored to its real `<Version>`, and `quotinator:local` must be rebuilt from the restored
+file — every other test in the suite runs against that tag and would otherwise be testing a version
+number this test invented.
