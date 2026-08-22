@@ -28,6 +28,11 @@ until [ "$(curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" \
 Gating on that specific announcement rather than a total matters for the same reason the assertion
 does: a total changes whenever another producer is added.
 
+**Count occurrences, not matching lines.** `grep -c` counts *lines* that match, and the API returns
+single-line JSON — so a genuine duplicate would still report `1` and this test could never fail in the
+direction it exists to catch. Found during #339's audit, 2026-08-22. Use
+`grep -o … | wc -l`, which counts occurrences.
+
 ## Steps
 
 **Seed a genuine v1.8.3 database and wait for its announcement to exist:**
@@ -37,7 +42,7 @@ MSYS_NO_PATHCONV=1 docker run -d --name qA -e Quotinator__DataDir=/data \
   -v /tmp/qdup/data:/data -p 8080:8080 ghcr.io/dutchjafo/quotinator:1.8.3
 until [ "$(curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" \
   | grep -c 'Two API operation IDs were renamed')" -ge 1 ]; do sleep 2; done
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -c 'Two API operation IDs were renamed'
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o 'Two API operation IDs were renamed' | wc -l
 docker rm -f qA
 ```
 
@@ -47,7 +52,7 @@ docker rm -f qA
 MSYS_NO_PATHCONV=1 docker run -d --name qB -e Quotinator__DataDir=/data \
   -v /tmp/qdup/data:/data -p 8080:8080 quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -c 'Two API operation IDs were renamed'
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o 'Two API operation IDs were renamed' | wc -l
 ```
 
 ## Expected output

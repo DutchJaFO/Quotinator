@@ -1,6 +1,6 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (step 14)
+**Status:** In progress (step 15)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -49,6 +49,24 @@ would break tests:
 
 Case 3 means this is per-test judgement, not a mechanical sweep. Both poll forms are documented in the
 suite index.
+
+---
+
+## Scope change — the suite gets environment profiles (2026-08-22)
+
+**Added by developer decision after step 14's audit.** The audit found that 21 of 43 documents start
+no container: the previous file's §1 was a *Baseline* section supplying the container, port, admin key
+and first-boot seed once, for everything after it. Splitting one document per test removed it and put
+nothing in its place.
+
+**That has to be resolved here, not deferred.** This issue is the restructure; leaving half the suite
+unrunnable would make the result worse than the 2,205-line file it replaced, which is the one outcome
+the split cannot be allowed to produce.
+
+Steps 15–17 are the addition: named environment profiles each document invokes, a snapshot/restore
+procedure so a group of tests does not pay for a rebuild per test, and the mechanical fixes that stop a
+document executing at all. Test-quality defects that predate the split — a test that cannot fail, a
+missing unhappy flow, a document that should not be live at all — are recorded and filed, not absorbed.
 
 ---
 
@@ -353,7 +371,146 @@ closes.
 
 ### 14. Audit every document against the rules the index now states
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-08-22. All 43 audited in three batches; findings below.
+
+Run in three batches rather than one sweep, so a bad assessment is caught before it propagates.
+
+**What the audit produces is a list, not a set of edits.** Only the cheap fixes land here: a missing
+`Determinism` line, a count that should be a relationship, a wait that should be a poll. Everything
+requiring new test content — most obviously a missing unhappy flow — is recorded against the issue
+that owns the feature. Expect the "both flows" rule to fail widely: these documents were written to
+describe what the previous suite did, and the previous suite was overwhelmingly happy-path.
+
+#### Findings — batch 1 (`api-surface`, `identity-and-casing`, `database-lifecycle`; 12 documents)
+
+| Rule | Fails |
+|---|---|
+| 1 — both flows | 8 of 12 |
+| 2 — preconditions confirmed | 7 of 12 |
+| 3 — determinism | 11 of 12 |
+| 4 — no predicted counts | 1 of 12 |
+| 5 — waits are conditions | **0 of 12** |
+| 6 — could be in-process | 12 of 12 — **superseded, see batch 3** |
+
+**The category-level finding: `identity-and-casing` should not be a live category at all.** All five
+documents are in-process candidates end to end — foreign keys, repository queries and endpoint wiring
+against real SQLite, none of which needs a container, volume or network. `02` justifies itself as
+proving "route binding, 404-versus-200", which is precisely what `WebApplicationFactory` proves and
+what `StartupResilienceTests` already does for a harder case. Moving them is new work; recorded, not
+done here.
+
+**That conclusion was re-checked against the original sections and holds — but the rule 6 count above
+does not.** All five are in-process reachable *in principle*; they are also unrunnable *as written*,
+because their container came from §1. Both are true and they are independent. The count of 12 of 12
+treated the second as evidence for the first. See the consolidated finding under batch 3 for the
+measured figure.
+
+**Determinism fails for a reason the move could not have caught.** Four documents — `02-pagination-contract`
+and `identity-and-casing/01`–`03` — contain **no container start at all** and assume something correct
+is listening on `:8080`. They inherited that from a single-file suite read top to bottom, where an
+earlier section had started the container. Split into standalone documents, the assumption is exposed.
+This is the same class as the ordering dependencies already recorded, found from the other direction.
+
+**Both flows fails across all of `identity-and-casing`**, which has a second consequence per the
+index: a happy-path-only test has nothing to contribute to the Knowledgebase, so that whole category
+is currently invisible to #333.
+
+**Waits: clean.** No fixed `sleep` survives anywhere. The residual problem is inverted — four documents
+have no wait where one is required, counted under rule 2.
+
+**Fixed here:** the one predicted count, `api-surface/03`'s "returns `200` with one item", now asserts
+the fixture's own item is present rather than a total.
+
+#### Findings — batch 2 (`startup-and-degradation`, `notifications-and-changelog`; 12 documents)
+
+| Rule | Fails |
+|---|---|
+| 1 — both flows | 6 of 12 |
+| 2 — preconditions confirmed | 7 of 12 |
+| 3 — determinism | 7 of 12 |
+| 4 — no predicted counts | **0 of 12** |
+| 5 — waits are conditions | 1 of 12 (disputed, see below) |
+| 6 — could be in-process | 12 of 12 — **superseded, see batch 3** |
+
+**A test that could not fail, found and fixed.** `notifications-and-changelog/04` counted duplicate
+announcements with `grep -c`, which counts matching *lines* — and the API returns single-line JSON, so
+a genuine duplicate still reported `1`. Its stated pass condition, "still `1`, not `2`", was
+unreachable in the failing direction. This is the same class of defect as the §37/§38 contradiction
+that prompted this issue, found by the audit rather than by a run. Now `grep -o … | wc -l`.
+
+**Two documents contradict each other and cannot both be run as written.** `notifications-and-changelog/02`
+requires `quotinator:local` to report `1.8.3`; `05` requires it to report something else. Recorded, not
+resolved — resolving it means deciding which scenario owns the version pin.
+
+**Rule 5's single failure is disputed and was not changed.** The audit argued `startup-and-degradation/03`'s
+`sleep 1` should poll for `503 {"status":"starting"}`. That state is pollable but *transient*: if
+seeding finishes before the first poll the loop hangs forever, where the sleep merely fails. A poll
+waits for something to become true and stay true; it cannot catch a closed window. The document now
+says so explicitly.
+
+**Directory reset is inconsistent within one folder** — `/tmp/qprov` and `/tmp/qws` are `rm -rf`'d,
+while `/tmp/q312`, `/tmp/qv4`, `/tmp/qdup` and `/tmp/qt-changelog` are reused. A leftover directory
+silently changes what the run starts from.
+
+#### Findings — batch 3 (`import-and-staged-actions`; 19 documents)
+
+| Rule | Fails |
+|---|---|
+| 1 — both flows | 12 of 19 |
+| 2 — preconditions confirmed | **15 of 19** |
+| 3 — determinism | see below |
+| 4 — no predicted counts | 2 of 19 |
+| 5 — waits are conditions | **0 of 19** |
+| 6 — could be in-process | 14 of 19 wholly, 3 more in part |
+
+**Rule 2 is the finding.** Fifteen of nineteen start no container, and every one of them drives
+`localhost:8080`; most send an `X-Api-Key` that nothing in the document sets. Only `14`–`17` provision
+themselves.
+
+**Three documents cannot fail at all.** `16` and `17` assert only that a list is empty, with no
+positive control — a disabled staleness mechanism, a silently failed reseed, a regressed `status=`
+filter and the intended pass produce the identical observation. `03` deliberately selects `skip`
+policy "so the staged batch leaves nothing pending", which guarantees that a correct apply and a dead
+handler are indistinguishable; its stated purpose is proving that path is not dead.
+
+**Determinism, named rather than counted.** One unpinned variable —
+`Quotinator__AutoPurgeBundledImportActions` — sits under `14`, `16` and `17`, each of which concludes
+from an empty list that auto-purge produces independently of the behaviour under test. Only `15` names
+it. Separately: `09` computes a before/after delta with no before-value, `12` is non-idempotent against
+its own container (it marks a Character `Complete` permanently), and `19` runs `reset` mid-document and
+then reads a startup log written before it.
+
+**Cross-contamination through the image tag.** `15` edits a bundled rule file, rebuilds, and never
+rebuilds after reverting — so `quotinator:local` stays mutated, and `14`, `16` and `17` then run it.
+
+**Rule 4 is fully landed across all three batches** — 3 failures in 43. `10` asserts `Frozen` returns
+`2013` with no query for `Frozen` anywhere, and `19` hardcodes "all nine entity types", which goes
+stale exactly the way a migration number does.
+
+#### The consolidated finding: the split removed the environment, and nothing replaced it
+
+Across all 43 documents, **21 start no container**. The previous suite's §1 was a *Baseline* section
+that supplied the container, the published port, the admin key and the first-boot seed once, for
+everything that followed. One document per test removed it without replacing it.
+
+That single line is the whole of it:
+
+```bash
+docker run --rm -p 8080:8080 -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+```
+
+**And it does not work as written.** `--rm` without `-d` runs in the foreground, so the `curl` lines
+after it in the same block can never execute — verbatim from the original, in both `api-surface/01` and
+`03`. `api-surface/01` is the baseline the twenty-one were relying on.
+
+**Live-necessity, measured rather than assumed.** Eighteen of 43 have a genuinely live-only component:
+the published `1.8.2`/`1.8.3` images, a `--read-only` root, `docker exec ls /data/backups`, Kestrel
+binding a real socket, a file diffed from inside the image, and one case where real Kestrel handles a
+bodyless request differently than `TestServer` does. The other 25 have none. An earlier assessment in
+this step put that at 12 of 12 and then 24 of 24; it was wrong, and wrong for a specific reason worth
+recording — a document that starts no container *looks* container-free, and that appearance was counted
+as evidence it needed none. It is evidence of a broken split instead. The two are independent facts and
+were conflated.
 
 **#339 verifies the tests, it does not only relocate them** (developer direction, 2026-08-22). The move
 established the structure and the rules; this step checks each of the 43 documents against them rather
@@ -392,7 +549,92 @@ that is more than a small addition, record it as a finding for the issue that ow
 than expanding this one — the audit's job is to establish which documents are complete, not to make
 every one complete regardless of cost.
 
-### 15. Register every new document in `Quotinator.slnx` and confirm the guards green
+### 15. Define the environment profiles and the snapshot/restore procedure
+
+**Status:** ⬜ Not started
+
+The audit's consolidated finding is that the split removed the environment. This step replaces it with
+something better than §1 was: a small set of named profiles, each stated once in the index and
+*invoked* by every document that needs it. A named setup a test runs is not a dependency on another
+test — it is the index's own first honest resolution, "guarantee it".
+
+Three profiles, grouped by what must be true before step 1:
+
+| Profile | What it establishes |
+|---|---|
+| **Fresh** | New volume, first boot, bundled seed, nothing else |
+| **Constrained** | Deliberately defective — read-only root, dropped table, missing writable path |
+| **Upgraded** | A real prior published image ran first, then the current one |
+
+**Content is a separate axis and stays the test's own responsibility.** The ~26 documents needing a
+populated database are Fresh plus a step they already own, not a fourth profile. This is what keeps
+the index's "anything a test needs, it establishes itself" intact rather than quietly reintroducing a
+shared seeded state.
+
+**Every profile pins `Quotinator__AutoPurgeBundledImportActions` explicitly.** It is the unpinned
+variable underneath three of the cannot-fail documents; pinning it in the profile removes that class
+in one edit rather than nineteen.
+
+**Snapshot and restore, so a group runs without paying for a rebuild per test** (developer direction,
+2026-08-22):
+
+- **Image** — tag the milestone's base image (`quotinator:m<N>-base`) and `docker save` it once at
+  milestone start. Tests run against the pinned tag; a test that must rebuild builds its own throwaway
+  tag. This alone removes the `15`→`14`/`16`/`17` contamination, where a mutated bundled rule file
+  stays baked into `quotinator:local`.
+- **Database** — captured from a **stopped** container with the `-wal`/`-shm` sidecars, per the
+  procedure `import-and-staged-actions/10` already documents with measured evidence, or via SQLite's
+  own `VACUUM INTO`. A backup taken from a running container is the exact raciness `14` and `15`
+  currently exhibit.
+- **Restore is unconditional between tests**, never "if the test dirtied something" — the moment it is
+  conditional, inherited state is back under a better name.
+- Ordering within a group is allowed; ordering across groups is not, and every group must start cold.
+
+**The milestone-start snapshot is also the migration fixture.** The four upgrade documents currently
+hardcode `ghcr.io/dutchjafo/quotinator:1.8.3`, so they can only test an upgrade someone already
+published and they go stale on the next release. A base image captured at milestone start *is* the
+version this milestone upgrades from — provided the milestone branched from the released tag, which is
+the condition that makes the snapshot legitimate and must be stated when it is taken. Backups are
+deleted once the milestone is published.
+
+**Not adopted yet: reset-and-reseed as a cheaper restore.** `POST /api/v1/admin/database/reset`
+followed by `POST /api/v1/admin/database/reseed` would avoid a container restart, but since #156 Reset
+is a full wipe that deliberately does not reseed, and whether the pair reproduces a fresh first boot is
+unverified — quote content should reproduce from deterministic ids, but audit rows, notification rows,
+the two schema-version counters and `Import_Action` rows plausibly differ. Prove that equivalence
+before the suite rests on it.
+
+### 16. Give every document its environment
+
+**Status:** ⬜ Not started
+
+Every document names its profile and runs it. The 21 that start no container stop assuming one; the
+rest are checked for the same class rather than trusted.
+
+Guard, alongside step 5's three: **every document names a known profile.** Same shape as the existing
+link guards, and it is what prevents the next document from being written the way these were.
+
+### 17. Fix the defects that stop a document from being run at all
+
+**Status:** ⬜ Not started
+
+Scoped deliberately: **what the restructure broke, or what blocks a document from executing.** These
+are cheap and mechanical.
+
+- `docker run --rm` without `-d` in `api-surface/01` and `03` — the container holds the terminal, so
+  nothing after it runs.
+- No `--name` on any `docker run`, leaving `<container>` unresolvable in every `docker cp`/`docker logs`.
+- Steps written as prose with no command, and SQL literals elided to `'f0000002-...'`.
+- Inconsistent `/tmp` directory resets — `/tmp/qprov` and `/tmp/qws` are cleared, `/tmp/q312`,
+  `/tmp/qv4`, `/tmp/qdup` and `/tmp/qt-changelog` are reused.
+
+**Out of scope here, recorded instead.** The cannot-fail defects (`03`, `09`, `16`, `17` and the rest),
+the two live contradictions (`startup/01` vs `02` on backup-on-healthy-restart; `notif/02` vs `05` on
+the version pin), the missing unhappy flows, and re-tiering the 25 documents with no live component.
+Those are pre-existing test-quality defects, not regressions this restructure introduced — the line is
+that #339 leaves every document runnable and no worse than the file it replaced, and files the rest.
+
+### 18. Register every new document in `Quotinator.slnx` and confirm the guards green
 
 **Status:** ⬜ Not started
 
@@ -424,6 +666,10 @@ resolve — see that step.
 | 14 | ❌ | Test outcomes are recorded as Knowledgebase material, and #333 sweeps the test documents | Live | #333 requirement 6 states the sweep (done 2026-08-22); the index states the relationship |
 | 15 | ❌ | A live-only issue has a Definition of done it can honestly tick | Live | `docs/workflow/issues.md` no longer requires a placeholder Expected-tests row for live-only verification |
 | 16 | ❌ | Every fixed wait is a readiness poll, or a duration justified in `Determinism` | Live | `grep -rn "sleep " docs/automated-testing/` returns only waits whose own document explains what the duration measures |
+| 17 | ❌ | The index defines the environment profiles, each pinning `AutoPurgeBundledImportActions` | Live | `docs/automated-testing/README.md` states Fresh, Constrained and Upgraded with runnable setup commands; each sets the flag explicitly |
+| 18 | ❌ | The index defines snapshot, restore, and the milestone-start base image | Live | Index states image tag + `docker save`, stopped-container DB capture with `-wal`/`-shm`, unconditional restore between tests, and deletion after the milestone publishes |
+| 19 | ❌ | Every document names a known profile and establishes it rather than assuming one | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_NamesAKnownEnvironmentProfile` — red before step 16, and no document `curl`s a port it never published |
+| 20 | ❌ | No document is blocked from executing by its own commands | Live | No `docker run` holds the terminal ahead of later steps; every `docker run` carries `--name`, so no `<container>` placeholder is unresolvable; no step is prose where a command is required |
 | 17 | ❌ | Every document is audited against the index's rules, and each one's compliance is recorded | Live | Step 14's per-document checklist completed; documents needing new test content are recorded as findings rather than silently left non-compliant |
 | 18 | ❌ | No predicted count survives in an Expected output section | Live | Every count is non-zero, a relationship derived in the same run, or explicitly labelled an observation |
 | 19 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |

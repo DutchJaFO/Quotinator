@@ -54,8 +54,11 @@ curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
 **Flag off:** import returns `200`. The search returns an empty `items` array with a `message` — the
 fixture's `Café de Flore` is not matched, proving default behaviour is unchanged.
 
-**Flag on:** the same query against the same fixture returns `200` with one item,
-`source: "Café de Flore"`.
+**Flag on:** the same query against the same fixture returns `200` and **includes** the fixture's own
+item, `source: "Café de Flore"`.
+
+Assert its presence, not a total. The fixture is the only accented case-varying title today, but a
+bundled source acquiring one would make this two items for an entirely correct reason.
 
 ## Observed effect
 

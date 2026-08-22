@@ -11,8 +11,12 @@ startup completes almost immediately and the window this test observes does not 
 ## Determinism
 
 **This test deliberately observes a transient state, and that is why it keeps a fixed `sleep`.** The
-first set of requests must land *before* seeding completes. Polling for readiness would defeat the
-test outright — there is no condition to wait for except "not ready yet", which cannot be waited on.
+first set of requests must land *before* seeding completes.
+
+Polling for readiness would defeat the test outright. **And polling for the `starting` state itself is
+worse than the sleep, not better** — a transient state may already have passed by the first poll, so
+the loop would hang forever on a fast machine, where the sleep merely fails. A poll is the right tool
+for waiting until something *becomes* true and stays true; it cannot catch a window that has closed.
 
 The exposure is a race: on a fast enough machine seeding could finish inside the first second and the
 requests would hit a ready app. **That failure mode is loud, not silent** — the assertions require
