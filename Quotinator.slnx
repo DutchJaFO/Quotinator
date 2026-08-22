@@ -329,6 +329,13 @@
     <File Path="docs/automated-testing/database-lifecycle/02-audit-export-and-conflict-data-purge.md" />
     <File Path="docs/automated-testing/database-lifecycle/03-reset-is-a-full-wipe.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/startup-and-degradation/">
+    <File Path="docs/automated-testing/startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md" />
+    <File Path="docs/automated-testing/startup-and-degradation/02-startup-backup-gating-and-storage-budget.md" />
+    <File Path="docs/automated-testing/startup-and-degradation/03-startup-wait-page.md" />
+    <File Path="docs/automated-testing/startup-and-degradation/04-migration-replay-under-restricted-write.md" />
+    <File Path="docs/automated-testing/startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md" />
+  </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
   </Folder>

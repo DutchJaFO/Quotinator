@@ -167,6 +167,16 @@ never beside it.
 | 02 | [Audit export, date-range discovery, and conflict-data auto-purge](database-lifecycle/02-audit-export-and-conflict-data-purge.md) | no |
 | 03 | [Reset wipes the entire database and does not reseed](database-lifecycle/03-reset-is-a-full-wipe.md) | yes |
 
+### `startup-and-degradation/`
+
+| # | Test | Smoke |
+|---|---|---|
+| 01 | [Seeding backup, degraded startup, and Reset recovery](startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md) | no |
+| 02 | [Startup backs up only when there is real work](startup-and-degradation/02-startup-backup-gating-and-storage-budget.md) | no |
+| 03 | [Kestrel serves a wait page during initialisation](startup-and-degradation/03-startup-wait-page.md) | yes |
+| 04 | [Migration replay under restricted write](startup-and-degradation/04-migration-replay-under-restricted-write.md) | no |
+| 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) — **cannot pass; #327 is rewriting it** | no |
+
 ---
 
 ## Document template
