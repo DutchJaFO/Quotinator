@@ -159,6 +159,14 @@ never beside it.
 | 04 | [String-typed id fields render canonically over HTTP](identity-and-casing/04-read-time-presentation-of-string-typed-ids.md) | no |
 | 05 | [Generic-repository endpoints return correct data and lowercase ids](identity-and-casing/05-generic-repository-select-list-wrapping.md) | no |
 
+### `database-lifecycle/`
+
+| # | Test | Smoke |
+|---|---|---|
+| 01 | [Captured source files reconstruct byte-for-byte](database-lifecycle/01-file-resource-capture-and-reconstruction.md) | no |
+| 02 | [Audit export, date-range discovery, and conflict-data auto-purge](database-lifecycle/02-audit-export-and-conflict-data-purge.md) | no |
+| 03 | [Reset wipes the entire database and does not reseed](database-lifecycle/03-reset-is-a-full-wipe.md) | yes |
+
 ---
 
 ## Document template

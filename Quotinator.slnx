@@ -324,6 +324,11 @@
     <File Path="docs/automated-testing/identity-and-casing/04-read-time-presentation-of-string-typed-ids.md" />
     <File Path="docs/automated-testing/identity-and-casing/05-generic-repository-select-list-wrapping.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/database-lifecycle/">
+    <File Path="docs/automated-testing/database-lifecycle/01-file-resource-capture-and-reconstruction.md" />
+    <File Path="docs/automated-testing/database-lifecycle/02-audit-export-and-conflict-data-purge.md" />
+    <File Path="docs/automated-testing/database-lifecycle/03-reset-is-a-full-wipe.md" />
+  </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
   </Folder>
