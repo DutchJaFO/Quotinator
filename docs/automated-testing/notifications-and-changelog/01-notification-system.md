@@ -6,8 +6,8 @@
 
 ## Preconditions
 
-**Beyond the profile.** One container of this test's own (`smoke278` / `smoke278-data`) rather than
-`qt-env`, because the Action-button check runs a Reset that wipes the database it is started against.
+**Beyond the profile.** One container of this test's own (`qt-notif-01` / `qt-notif-01-data`),
+because the Action-button check runs a Reset that wipes the database it is started against.
 Seeding must be allowed to finish before anything is asserted — the notification a fresh container
 produces is written during startup, so an early read cannot tell "not produced" from "not yet".
 
@@ -38,12 +38,12 @@ about. A count asserts something nobody intended and gets "fixed" by editing a d
 ### 1. Start a container of this test's own and list its notifications
 
 ```bash
-docker rm -f smoke278 2>/dev/null; docker volume rm smoke278-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name smoke278 -p 8080:8080 -v smoke278-data:/data \
+docker rm -f qt-notif-01 2>/dev/null; docker volume rm qt-notif-01-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-01 -p 18501:8080 -v qt-notif-01-data:/data \
   -e Quotinator__DataDir=/data \
   -e Quotinator__AdminApiKey=<your admin key> quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/notifications"
+until curl -sf http://localhost:18501/api/v1/health > /dev/null; do sleep 1; done
+curl -s -w " [%{http_code}]\n" "http://localhost:18501/api/v1/notifications"
 ```
 
 **Expected:** `GET /notifications` returns `200`, and the response **contains** the announcement titled
@@ -56,7 +56,7 @@ Stop and let the container finish rather than reading the absence as a result.
 ### 2. Dismiss an unknown notification with no admin key
 
 ```bash
-curl -s -w " [%{http_code}]\n" -X POST "http://localhost:8080/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
+curl -s -w " [%{http_code}]\n" -X POST "http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
 ```
 
 **Expected:** `401`.
@@ -65,7 +65,7 @@ curl -s -w " [%{http_code}]\n" -X POST "http://localhost:8080/api/v1/notificatio
 
 ```bash
 curl -s -w " [%{http_code}]\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
+  "http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
 ```
 
 **Expected:** `404` — no notification exists with that id.
@@ -73,14 +73,14 @@ curl -s -w " [%{http_code}]\n" -X POST -H "X-Api-Key: <your admin key>" \
 ### 4. Confirm the OpenAPI spec carries the Notifications tag
 
 ```bash
-curl -s "http://localhost:8080/openapi/v1.json" | grep -o '"Notifications"' | head -1
+curl -s "http://localhost:18501/openapi/v1.json" | grep -o '"Notifications"' | head -1
 ```
 
 **Expected:** the OpenAPI spec contains the `Notifications` tag.
 
 ### 5. Render the notification pages in a browser
 
-**Blazor UI** — visit `http://localhost:8080/notifications` and `http://localhost:8080/`.
+**Blazor UI** — visit `http://localhost:18501/notifications` and `http://localhost:18501/`.
 
 **Take an actual screenshot of both.** Page text alone cannot catch a CSS or layout regression, and a
 multi-line body is exactly where one shows up.
@@ -104,16 +104,16 @@ these, so the test constructs them — against a **stopped** container, since wr
 underneath a running process is a different scenario:
 
 ```bash
-docker stop -t 15 smoke278
-MSYS_NO_PATHCONV=1 docker run --rm -v smoke278-data:/data alpine sh -c \
+docker stop -t 15 qt-notif-01
+MSYS_NO_PATHCONV=1 docker run --rm -v qt-notif-01-data:/data alpine sh -c \
   "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db \
    \"INSERT INTO System_Notification (Id, Type, Title, Body, ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DateCreated, IsDeleted) VALUES
      ('a0000278-0000-4000-8000-000000000001','ActionRequired','Smoke test action required','A #278 smoke test row needing an action.',NULL,0,NULL,'DatabaseReset','2026-01-01 00:00:00',0),
      ('a0000278-0000-4000-8000-000000000002','Information','Smoke test expired','A #278 smoke test row that has already expired.','2020-01-01 00:00:00',0,NULL,NULL,'2026-01-01 00:00:00',0),
      ('a0000278-0000-4000-8000-000000000003','Information','Smoke test dismissed','A #278 smoke test row already dismissed.',NULL,1,'2026-01-02 00:00:00',NULL,'2026-01-01 00:00:00',0);\""
-docker start smoke278
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -c "Smoke test"
+docker start qt-notif-01
+until curl -sf http://localhost:18501/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:18501/api/v1/notifications?pageSize=0" | grep -c "Smoke test"
 ```
 
 **Expected:** `sqlite3` completes with no error, and the count is `3` — all three rows are present and
@@ -152,10 +152,9 @@ what the container logs while writing the startup notification has not been reco
 ## Cleanup
 
 ```bash
-docker rm -f smoke278 2>/dev/null
-docker volume rm smoke278-data
+docker rm -f qt-notif-01 2>/dev/null
+docker volume rm qt-notif-01-data
 ```
 
-The container and volume are this test's own, so restoring the profile clears nothing it made. If the
-Action button's **Confirm** path was exercised, the volume holds a wiped, post-Reset database — which
-is why it is removed rather than kept.
+If the Action button's **Confirm** path was exercised, the volume holds a wiped, post-Reset database —
+which is why it is removed rather than kept.

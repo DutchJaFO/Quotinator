@@ -6,18 +6,15 @@
 
 ## Preconditions
 
-**This test runs its own two containers rather than the profile's**, because it edits a bundled rule
-file and rebuilds the image between them — a rebuilt image is exactly what the profile's prebuilt
-container cannot supply. Everything else about each run is Fresh: same admin key, same first-boot seed.
+**This test runs two containers**, because it edits a bundled rule file and rebuilds the image between
+them — each run must read the image as it stands at that point. Everything else about each run is
+Fresh: same admin key, same first-boot seed.
 
 **One deliberate departure from the profile: `Quotinator__AutoPurgeBundledImportActions=false`, on both
 runs** (confirmed live 2026-08-08, #249). Fresh pins the application's own default, `true`, and under
 that default every bundled batch's `Import_Action` rows — including the one whose `MergedFields` this
 test queries — are purged immediately after a successful seed, so the row is already gone by the time
 you inspect it.
-
-Both of this test's containers publish `8080`, so the profile's `qt-env` must not be running while they
-are — `docker rm -f qt-env` first, and re-establish the profile afterwards.
 
 **This test mutates a bundled rule file temporarily.** Both edits must be reverted before committing;
 they exist to prove the mechanism, not to change data.
@@ -41,12 +38,14 @@ Temporarily delete the Auntie Mame rule entirely from `nikhilnamal17-conflict-ru
 
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
-docker rm -f qt-rule-removed 2>/dev/null; docker volume rm qt-rule-removed 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-rule-removed -p 8080:8080 -v qt-rule-removed:/data \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending"
+docker rm -f qt-import-15 2>/dev/null; docker volume rm qt-import-15-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-15 -p 18615:8080 -v qt-import-15-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=false \
+  quotinator:local
+until curl -sf http://localhost:18615/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:18615/api/v1/import/actions?status=pending"
 ```
 
 **Expected:** with the rule removed, that quote's conflict stages `Pending` again, with
@@ -58,16 +57,17 @@ an earlier run.
 ### 2. Restore the rule as `Replace`, rebuild, and seed a second container
 
 Restore the rule and change its `resolution` from `Keep` to `Replace`, then rebuild and run a second
-container against the rebuilt image — the first must be removed to free the port:
+container against the rebuilt image:
 
 ```bash
-docker rm -f qt-rule-removed
-docker volume rm qt-rule-replace 2>/dev/null
+docker rm -f qt-import-15-replace 2>/dev/null; docker volume rm qt-import-15-replace-data 2>/dev/null
 docker build -f docker/Dockerfile -t quotinator:local .
-MSYS_NO_PATHCONV=1 docker run -d --name qt-rule-replace -p 8080:8080 -v qt-rule-replace:/data \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-15-replace -p 19615:8080 -v qt-import-15-replace-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=false \
+  quotinator:local
+until curl -sf http://localhost:19615/api/v1/health > /dev/null; do sleep 1; done
 ```
 
 **Expected:** the health poll returns — the second container has completed its own first-boot seed
@@ -79,10 +79,10 @@ against the rebuilt image.
 as "no rows", which is indistinguishable from the assertion failing:
 
 ```bash
-docker stop -t 15 qt-rule-replace
-docker cp qt-rule-replace:/data/quotinatordata.db .claude/temp/inspect-181.db
-docker cp qt-rule-replace:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
-docker cp qt-rule-replace:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
+docker stop -t 15 qt-import-15-replace
+docker cp qt-import-15-replace:/data/quotinatordata.db .claude/temp/inspect-181.db
+docker cp qt-import-15-replace:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
+docker cp qt-import-15-replace:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
   --sql "SELECT MergedFields FROM Import_Action WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
 ```
@@ -110,8 +110,8 @@ that did not.
 ## Cleanup
 
 ```bash
-docker rm -f qt-rule-removed qt-rule-replace 2>/dev/null
-docker volume rm qt-rule-removed qt-rule-replace 2>/dev/null
+docker rm -f qt-import-15 qt-import-15-replace
+docker volume rm qt-import-15-data qt-import-15-replace-data
 rm -f .claude/temp/inspect-181.db .claude/temp/inspect-181.db-wal .claude/temp/inspect-181.db-shm
 ```
 

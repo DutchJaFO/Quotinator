@@ -29,12 +29,27 @@ the profile's own first boot, and a container that has not finished seeding has 
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Confirm the profile finished seeding
+### 1. Create this test's own environment
 
 ```bash
-docker logs qt-env 2>&1 | grep -c "Quotinator ready"
+docker rm -f qt-db-01 2>/dev/null; docker volume rm qt-db-01-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-db-01 -p 18301:8080 -v qt-db-01-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18301/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app
+that never became healthy.
+
+### 2. Confirm the profile finished seeding
+
+```bash
+docker logs qt-db-01 2>&1 | grep -c "Quotinator ready"
 ```
 
 **Expected:** `1`. Seeding, and the file capture that happens as part of it, are complete.
@@ -45,12 +60,12 @@ finished, which is not a condition that can fail.
 **On failure:** a container still initialising has nothing to inspect, and every check below would read
 a half-built capture. Wait for seeding to finish rather than continuing.
 
-### 2. Confirm all bundled files were captured with correct provenance
+### 3. Confirm all bundled files were captured with correct provenance
 
 ```bash
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db .claude/temp/smoke251.db
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/smoke251.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/smoke251.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db .claude/temp/smoke251.db
+MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db-wal .claude/temp/smoke251.db-wal
+MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db-shm .claude/temp/smoke251.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db \
   --sql "SELECT Id, FileName, Origin, HomeDirectoryKey, LineEnding, EndsWithTrailingNewline, Converter, ConverterOptions FROM Import_FileResource WHERE IsDeleted = 0 ORDER BY FileName"
 ```
@@ -64,7 +79,7 @@ and `HomeDirectoryKey = sources`. At the time of writing that is
 options; the other three — `manifest.json` included — show `NULL` for both, having no `converter` entry
 in the manifest.
 
-### 3. Confirm `manifest.json` links to every batch it drove
+### 4. Confirm `manifest.json` links to every batch it drove
 
 Not just the two whose files were never redirected to the download cache — the #251 follow-up bug in
 `SeedBatch.SourceDirectory`:
@@ -77,127 +92,127 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
 **Expected:** `manifest.json`'s `BatchLinks` equals the number of seed batches, because it drove every
 one of them; every other row shows `1`, having driven only itself.
 
-### 4. List the captured file resources
+### 5. List the captured file resources
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/file-resources"
+curl -s "http://localhost:18301/api/v1/import/file-resources"
 ```
 
 **Expected:** each item includes `homeDirectoryKey` (`"sources"` for bundled rows) and
 `linkedBatchCount`, but **no** `linkedBatchIds` key.
 
-### 5. Reject an unknown `origin`
+### 6. Reject an unknown `origin`
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:8080/api/v1/import/file-resources?origin=bogus"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/file-resources?origin=bogus"
 ```
 
 **Expected:** `422`.
 
-### 6. Filter the list to `origin=system`
+### 7. Filter the list to `origin=system`
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/file-resources?origin=system"
+curl -s "http://localhost:18301/api/v1/import/file-resources?origin=system"
 ```
 
 **Expected:** one row per bundled source file plus the manifest, and none are `user` or `upload` origin
 on a fresh container.
 
-### 7. Fetch one file resource's detail
+### 8. Fetch one file resource's detail
 
 Substitute the `manifest.json` id from the provenance check:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/file-resources/<manifest-id>"
+curl -s "http://localhost:18301/api/v1/import/file-resources/<manifest-id>"
 ```
 
 **Expected:** `linkedBatchCount` and the length of `linkedBatchIds` both equal the `BatchLinks` figure
 the batch-links query reported.
 
-### 8. List the seed batches
+### 9. List the seed batches
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/batches?type=seed"
+curl -s "http://localhost:18301/api/v1/import/batches?type=seed"
 ```
 
 **Expected:** one seed batch per bundled file, matching the `BatchLinks` figure the batch-links query
 reported rather than a fixed number.
 
-### 9. Reject an unknown batch `status`
+### 10. Reject an unknown batch `status`
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:8080/api/v1/import/batches?status=bogus"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/batches?status=bogus"
 ```
 
 **Expected:** `422`.
 
-### 10. Fetch one of the linked batches
+### 11. Fetch one of the linked batches
 
 Every batch id from the file-resource detail must exist here:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/batches/<one-of-the-linkedBatchIds-above>"
+curl -s "http://localhost:18301/api/v1/import/batches/<one-of-the-linkedBatchIds-above>"
 ```
 
 **Expected:** `200`, proving the FileResource detail and the batches endpoint agree on what exists.
 
-### 11. Reconstruct a captured file byte-for-byte
+### 12. Reconstruct a captured file byte-for-byte
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/file-resources/<id>/download" -o .claude/temp/downloaded.json
-MSYS_NO_PATHCONV=1 docker cp qt-env:/app/data/sources/quotinator-curated.json .claude/temp/original.json
+curl -s "http://localhost:18301/api/v1/import/file-resources/<id>/download" -o .claude/temp/downloaded.json
+MSYS_NO_PATHCONV=1 docker cp qt-db-01:/app/data/sources/quotinator-curated.json .claude/temp/original.json
 diff .claude/temp/downloaded.json .claude/temp/original.json && echo IDENTICAL
 ```
 
 **Expected:** prints `IDENTICAL`. No `X-Api-Key` required; it is a read-only endpoint.
 
-### 12. Override the line ending to CRLF
+### 13. Override the line ending to CRLF
 
 Confirmed via hex dump, not word count:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/file-resources/<id>/download?lineEnding=crlf" -o .claude/temp/crlf.json
+curl -s "http://localhost:18301/api/v1/import/file-resources/<id>/download?lineEnding=crlf" -o .claude/temp/crlf.json
 xxd .claude/temp/crlf.json | head -3
 ```
 
 **Expected:** the hex dump shows `0d0a` sequences even though the file was captured as bare `LF`.
 
-### 13. Download an unknown file resource
+### 14. Download an unknown file resource
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:8080/api/v1/import/file-resources/00000000-0000-0000-0000-000000000000/download"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/file-resources/00000000-0000-0000-0000-000000000000/download"
 ```
 
 **Expected:** `404`.
 
-### 14. Download with an invalid `lineEnding`
+### 15. Download with an invalid `lineEnding`
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:8080/api/v1/import/file-resources/<id>/download?lineEnding=bogus"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/file-resources/<id>/download?lineEnding=bogus"
 ```
 
 **Expected:** `422`.
 
-### 15. Prune without an admin key
+### 16. Prune without an admin key
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:8080/api/v1/import/file-resources/prune"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:18301/api/v1/import/file-resources/prune"
 ```
 
 **Expected:** `401`.
 
-### 16. Prune with a malformed `keepPerFile`
+### 17. Prune with a malformed `keepPerFile`
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/file-resources/prune?keepPerFile=abc"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18301/api/v1/import/file-resources/prune?keepPerFile=abc"
 ```
 
 **Expected:** `422`.
 
-### 17. Prune with a valid key
+### 18. Prune with a valid key
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/file-resources/prune"
+curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18301/api/v1/import/file-resources/prune"
 ```
 
 **Expected:** `200` with `{"prunedCount":0}` — nothing to prune, since each bundled file has only one
@@ -214,10 +229,9 @@ state and are asserted above. What the container logs during capture has not bee
 
 ## Cleanup
 
-The prune call at the end is a write, so the profile must be restored before the next test even though
-everything else here only reads.
-
 ```bash
+docker rm -f qt-db-01 2>/dev/null
+docker volume rm qt-db-01-data 2>/dev/null
 rm -f .claude/temp/smoke251.db .claude/temp/smoke251.db-wal .claude/temp/smoke251.db-shm \
       .claude/temp/downloaded.json .claude/temp/original.json .claude/temp/crlf.json
 ```

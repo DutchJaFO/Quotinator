@@ -36,19 +36,19 @@ The profile's own environment, under this test's own container name:
 
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
-docker rm -f qt-unicode-off 2>/dev/null; docker volume rm qt-unicode-off 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-unicode-off -p 8080:8080 -v qt-unicode-off:/data \
+docker rm -f qt-api-03-off 2>/dev/null; docker volume rm qt-api-03-off-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-api-03-off -p 18103:8080 -v qt-api-03-off-data:/data \
   -e Quotinator__DataDir=/data \
   -e Quotinator__AdminApiKey=<your admin key> \
   -e Quotinator__AutoPurgeBundledImportActions=false \
   quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+until curl -sf http://localhost:18103/api/v1/health > /dev/null; do sleep 1; done
 cat > .claude/temp/smoke-222.json <<'EOF'
 {
   "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"I will always have Café de Flore.","originalLanguage":"en","source":"Café de Flore","date":"1990","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18103/api/v1/import"
 ```
 
 **Expected:** import returns `200`.
@@ -59,7 +59,7 @@ so its "not matched" outcome would be indistinguishable from the behaviour under
 ### 2. Search the accented title in the wrong case, flag off
 
 ```bash
-curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
+curl -s "http://localhost:18103/api/v1/quotes/search?q=CAF%C3%89&field=source"
 ```
 
 **Expected:** an empty `items` array with a `message` — the fixture's `Café de Flore` is not matched,
@@ -70,16 +70,16 @@ proving default behaviour is unchanged.
 The same environment plus the one variable under test:
 
 ```bash
-docker rm -f qt-unicode-off
-docker rm -f qt-unicode-on 2>/dev/null; docker volume rm qt-unicode-on 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-unicode-on -p 8080:8080 -v qt-unicode-on:/data \
+docker rm -f qt-api-03-off
+docker rm -f qt-api-03-on 2>/dev/null; docker volume rm qt-api-03-on-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-api-03-on -p 19103:8080 -v qt-api-03-on-data:/data \
   -e Quotinator__DataDir=/data \
   -e Quotinator__AdminApiKey=<your admin key> \
   -e Quotinator__AutoPurgeBundledImportActions=false \
   -e Quotinator__UnicodeAwareSearch=true \
   quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+until curl -sf http://localhost:19103/api/v1/health > /dev/null; do sleep 1; done
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:19103/api/v1/import"
 ```
 
 **Expected:** import returns `200`.
@@ -90,7 +90,7 @@ next step would report the flag as having no effect.
 ### 4. Repeat the same query with the flag on
 
 ```bash
-curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
+curl -s "http://localhost:19103/api/v1/quotes/search?q=CAF%C3%89&field=source"
 ```
 
 **Expected:** `200`, and the response **includes** the fixture's own item, `source: "Café de Flore"`.
@@ -103,10 +103,7 @@ serving each half has not been captured.
 ## Cleanup
 
 ```bash
-docker rm -f qt-unicode-on
-docker volume rm qt-unicode-off qt-unicode-on
+docker rm -f qt-api-03-off qt-api-03-on 2>/dev/null
+docker volume rm qt-api-03-off-data qt-api-03-on-data 2>/dev/null
 rm .claude/temp/smoke-222.json
 ```
-
-This test runs its own two containers rather than the profile's, so nothing it created is cleared by
-restoring the profile — it must remove them itself.

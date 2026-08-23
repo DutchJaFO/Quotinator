@@ -6,7 +6,7 @@
 
 ## Preconditions
 
-**Beyond the profile.** One container of this test's own (`qt-changelog`), on a bind-mounted directory
+**Beyond the profile.** One container of this test's own (`qt-notif-07`), on a bind-mounted directory
 rather than the profile's named volume, so the host can see the database files directly. It is restarted
 once, in place.
 
@@ -46,14 +46,14 @@ neither is predicted**, since the changelog grows with every release.
 ### 1. Start a container of this test's own on a bind-mounted directory
 
 ```bash
-docker rm -f qt-changelog 2>/dev/null
-rm -rf /tmp/qt-changelog
-mkdir -p /tmp/qt-changelog/data
-MSYS_NO_PATHCONV=1 docker run -d --name qt-changelog -p 8080:8080 \
-  -v /tmp/qt-changelog/data:/data \
+docker rm -f qt-notif-07 2>/dev/null
+rm -rf /tmp/qt-notif-07
+mkdir -p /tmp/qt-notif-07/data
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-07 -p 18507:8080 \
+  -v /tmp/qt-notif-07/data:/data \
   -e Quotinator__DataDir=/data \
   -e Quotinator__AdminApiKey=<your admin key> quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+until curl -sf http://localhost:18507/api/v1/health > /dev/null; do sleep 1; done
 ```
 
 **Expected:** the app reaches healthy, having initialised and imported the changelog during startup.
@@ -63,7 +63,7 @@ until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 **The file must exist alongside `quotinatordata.db`** — an in-memory database leaves nothing on disk:
 
 ```bash
-docker exec qt-changelog sh -c "ls -l /data/quotinatorchangelog.db"
+docker exec qt-notif-07 sh -c "ls -l /data/quotinatorchangelog.db"
 ```
 
 **Expected:** `/data/quotinatorchangelog.db` exists.
@@ -71,7 +71,7 @@ docker exec qt-changelog sh -c "ls -l /data/quotinatorchangelog.db"
 ### 3. Confirm the database-backed read path is in use, not the fallback
 
 ```bash
-docker logs qt-changelog 2>&1 | grep -E "Changelog - (Init|Import|Read)"
+docker logs qt-notif-07 2>&1 | grep -E "Changelog - (Init|Import|Read)"
 ```
 
 **Expected:** `[Changelog - Import] refreshed N entries across 3 language(s)` appears, and so does
@@ -84,10 +84,10 @@ No `falling back to the JSON-backed changelog service` line appears at any point
 ### 4. Confirm a real page request is served from the database
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/about
-curl -s http://localhost:8080/about | grep -oE "changelog-entry" | wc -l
-docker logs qt-changelog 2>&1 | grep -c "entries from the database"
-docker logs qt-changelog 2>&1 | grep -c "falling back to the JSON-backed changelog service"
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:18507/about
+curl -s http://localhost:18507/about | grep -oE "changelog-entry" | wc -l
+docker logs qt-notif-07 2>&1 | grep -c "entries from the database"
+docker logs qt-notif-07 2>&1 | grep -c "falling back to the JSON-backed changelog service"
 ```
 
 **Expected:** `/about` returns `200` and renders changelog entries. **There is deliberately no REST
@@ -101,10 +101,10 @@ endpoint here** — changelog content is surfaced only on the About page
 every startup, so this confirms the rebuild is idempotent rather than duplicating rows:
 
 ```bash
-docker restart qt-changelog
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-docker exec qt-changelog sh -c "ls -l /data/quotinatorchangelog.db"
-docker logs qt-changelog 2>&1 | tail -40 | grep -E "Changelog - (Init|Import)"
+docker restart qt-notif-07
+until curl -sf http://localhost:18507/api/v1/health > /dev/null; do sleep 1; done
+docker exec qt-notif-07 sh -c "ls -l /data/quotinatorchangelog.db"
+docker logs qt-notif-07 2>&1 | tail -40 | grep -E "Changelog - (Init|Import)"
 ```
 
 **Expected:** after restart, the file is still present and the import reports the same entry count — no
@@ -126,6 +126,6 @@ contents are wholly derived from JSON shipped in the image, so nothing user-auth
 ## Cleanup
 
 ```bash
-docker rm -f qt-changelog
-rm -rf /tmp/qt-changelog
+docker rm -f qt-notif-07
+rm -rf /tmp/qt-notif-07
 ```

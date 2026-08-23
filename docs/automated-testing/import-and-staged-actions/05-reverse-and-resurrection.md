@@ -30,65 +30,80 @@ precondition, not a given.
 
 ## Steps
 
-Run the **Fresh** profile first.
+### 1. Create this test's own environment
 
-### 1. Apply a batch cleanly under `newest-wins`
+```bash
+docker rm -f qt-import-05 2>/dev/null; docker volume rm qt-import-05-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-05 -p 18605:8080 -v qt-import-05-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18605/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Apply a batch cleanly under `newest-wins`
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
   -w "\n%{http_code}\n" \
-  "http://localhost:8080/api/v1/import"
+  "http://localhost:18605/api/v1/import"
 ```
 
 **Expected:** `200` with nothing left pending — a genuinely `Applied` batch. Note the returned
 `batchId`.
 
-### 2. Preview the reversal
+### 3. Preview the reversal
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
+  "http://localhost:18605/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
 ```
 
 **Expected:** `200` **without changing anything**.
 
-### 3. Reverse the batch
+### 4. Reverse the batch
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
+  "http://localhost:18605/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
 
 **Expected:** `200`.
 
-### 4. List the reversed batch's actions
+### 5. List the reversed batch's actions
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>"
+curl -s "http://localhost:18605/api/v1/import/actions?batchId=<batchId>"
 ```
 
 **Expected:** the listing still shows every action `"status":"Applied"` — see Determinism.
 
-### 5. Reverse the same batch again
+### 6. Reverse the same batch again
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
+  "http://localhost:18605/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
 
 **Expected:** `404`: already reversed, treated as absent.
 
-### 6. Re-import after reversal — the resurrection path
+### 7. Re-import after reversal — the resurrection path
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
   -w "\n%{http_code}\n" \
-  "http://localhost:8080/api/v1/import"
-curl -s "http://localhost:8080/api/v1/quotes/search?q=Airplane&field=source&pageSize=0" \
+  "http://localhost:18605/api/v1/import"
+curl -s "http://localhost:18605/api/v1/quotes/search?q=Airplane&field=source&pageSize=0" \
   | grep -o '"totalCount":[0-9]*'
 ```
 
@@ -99,18 +114,18 @@ proven live, rather than only by
 
 **On failure:** a `totalCount` of `0` is the failing case, and it is a `200` response like any other.
 
-### 7. Confirm the soft-delete flag actually flipped back
+### 8. Confirm the soft-delete flag actually flipped back
 
 This is the load-bearing observation here: no action status changes to signal a reversal, so the HTTP
 result alone never distinguished the two cases:
 
 ```bash
-docker stop -t 15 qt-env
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db .claude/temp/smoke-reverse.db
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/smoke-reverse.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/smoke-reverse.db-shm
-docker start qt-env
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+docker stop -t 15 qt-import-05
+MSYS_NO_PATHCONV=1 docker cp qt-import-05:/data/quotinatordata.db .claude/temp/smoke-reverse.db
+MSYS_NO_PATHCONV=1 docker cp qt-import-05:/data/quotinatordata.db-wal .claude/temp/smoke-reverse.db-wal
+MSYS_NO_PATHCONV=1 docker cp qt-import-05:/data/quotinatordata.db-shm .claude/temp/smoke-reverse.db-shm
+docker start qt-import-05
+until curl -sf http://localhost:18605/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-reverse.db \
   --sql "SELECT IsDeleted, COUNT(*) AS Batches FROM Import_Batch GROUP BY IsDeleted"
 ```
@@ -120,7 +135,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
 
 Without this read there is nothing in the run that observes the reversal at all.
 
-### 8. Find the oldest still-live batch
+### 9. Find the oldest still-live batch
 
 There is no `GET /import-batches` listing endpoint (see Determinism), so the older batch id comes from
 the database copy taken above — the *oldest* still-live batch, which is by definition not the most
@@ -138,11 +153,11 @@ to reverse, so LIFO has nothing to reject and a `422` would prove nothing. That 
 failure, not a result: the profile's own seed must have produced at least one batch before this test's
 import.
 
-### 9. Attempt the out-of-order reversal
+### 10. Attempt the out-of-order reversal
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<the id from that query>"
+  "http://localhost:18605/api/v1/import/actions/reverse?batchId=<the id from that query>"
 ```
 
 **Expected:** `422` — the strict LIFO stack rule: only the most recently applied batch still live may be
@@ -157,7 +172,6 @@ observation, since no action status changes to signal the reversal.
 
 ```bash
 rm -f .claude/temp/smoke-reverse.db .claude/temp/smoke-reverse.db-wal .claude/temp/smoke-reverse.db-shm
+docker rm -f qt-import-05
+docker volume rm qt-import-05-data
 ```
-
-The applied, reversed and re-imported batches and their actions remain, along with the resurrected
-curated rows — restore the Fresh profile before the next test.

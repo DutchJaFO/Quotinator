@@ -6,7 +6,7 @@
 
 ## Preconditions
 
-**Beyond the profile.** One container of this test's own (`qws`, on a bind-mounted directory rather
+**Beyond the profile.** One container of this test's own (`qt-notif-06`, on a bind-mounted directory rather
 than the profile's named volume, so the file can be edited from a helper container while the app is
 stopped), plus a one-shot `--rm alpine` running `sqlite3` to do the editing. The Constrained defect is
 **a state, not a flag**: a what's-new row injected in the pre-backfill shape, and the schema counter
@@ -43,13 +43,13 @@ go stale on its own and get "fixed" by editing a digit.
 ### 1. Create a current, fully-migrated database of this test's own
 
 ```bash
-docker rm -f qws 2>/dev/null; rm -rf /tmp/qws; mkdir -p /tmp/qws/data
+docker rm -f qt-notif-06 2>/dev/null; rm -rf /tmp/qt-notif-06; mkdir -p /tmp/qt-notif-06/data
 
 # 1. a current, fully-migrated database of this test's own
-MSYS_NO_PATHCONV=1 docker run -d --name qws -e Quotinator__DataDir=/data \
-  -v /tmp/qws/data:/data -p 8080:8080 quotinator:local
-until curl -s http://localhost:8080/api/v1/health | grep -q healthy; do sleep 5; done
-docker stop -t 15 qws
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-06 -e Quotinator__DataDir=/data \
+  -v /tmp/qt-notif-06/data:/data -p 18506:8080 quotinator:local
+until curl -s http://localhost:18506/api/v1/health | grep -q healthy; do sleep 5; done
+docker stop -t 15 qt-notif-06
 ```
 
 **Expected:** the app reports healthy — the database is fully migrated — and the container is then
@@ -62,7 +62,7 @@ rollback below would then be undoing something other than the backfill. Stop.
 
 ```bash
 # 2. inject a what's-new row in the pre-backfill shape, and undo the newest applied migration
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qws/data:/data alpine sh -c \
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-06/data:/data alpine sh -c \
   "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db \
    \"INSERT INTO System_Notification (Id, Type, Body, DateCreated, IsDismissed, IsDeleted, Title, Metadata, MetadataKind) \
      VALUES (lower(hex(randomblob(16))), 'Information', 'legacy highlights', '2026-08-16 09:00:00', 0, 0, \
@@ -80,8 +80,8 @@ replays nothing and any result it produces is meaningless. Stop.
 
 ```bash
 # 3. restart so the rolled-back migration replays over the injected row
-docker start qws
-until docker logs qws 2>&1 | grep -qE "Quotinator ready|Unhandled exception"; do sleep 1; done
+docker start qt-notif-06
+until docker logs qt-notif-06 2>&1 | grep -qE "Quotinator ready|Unhandled exception"; do sleep 1; done
 ```
 
 **Expected:**
@@ -101,9 +101,9 @@ checks the injected row would pass either way.
 ## Cleanup
 
 ```bash
-docker rm -f qws 2>/dev/null
-rm -rf /tmp/qws
+docker rm -f qt-notif-06 2>/dev/null
+rm -rf /tmp/qt-notif-06
 ```
 
-The container and the bind-mounted directory are this test's own — it creates no named volume, and
-restoring the profile clears nothing it made.
+The data directory is a bind mount rather than a named volume, so removing the directory is what
+removes its data.

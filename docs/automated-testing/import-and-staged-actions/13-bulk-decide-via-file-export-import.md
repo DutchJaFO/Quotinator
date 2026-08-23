@@ -37,48 +37,63 @@ unedited rather than hand-writing an input.
 
 ## Steps
 
-Run the **Fresh** profile first.
+### 1. Create this test's own environment
 
-### 1. Stage a batch to round-trip
+```bash
+docker rm -f qt-import-13 2>/dev/null; docker volume rm qt-import-13-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-13 -p 18613:8080 -v qt-import-13-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18613/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Stage a batch to round-trip
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:8080/api/v1/import"
+  "http://localhost:18613/api/v1/import"
 ```
 
 **Expected:** the staging import returns `202`. Note the returned `batchId` — the next step needs it.
 
-### 2. Export that batch as JSON, feed it straight back, and apply
+### 3. Export that batch as JSON, feed it straight back, and apply
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions/export?batchId=<batchId>&format=json" -o /tmp/export.json
+curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=<batchId>&format=json" -o /tmp/export.json
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   -F "batchId=<batchId>" -F "file=@/tmp/export.json" \
-  "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<batchId>"
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+  "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<batchId>"
+curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18613/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
 **Expected:** the JSON round trip returns `200` with `errors: []` and `actionsDecided` matching the
 batch's own pending-action count.
 
-### 3. Repeat the round trip via CSV
+### 4. Repeat the round trip via CSV
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:8080/api/v1/import"
-curl -s "http://localhost:8080/api/v1/import/actions/export?batchId=<new batchId>&format=csv" -o /tmp/export.csv
+  "http://localhost:18613/api/v1/import"
+curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=<new batchId>&format=csv" -o /tmp/export.csv
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   -F "batchId=<new batchId>" -F "file=@/tmp/export.csv" -F "format=csv" \
-  "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<new batchId>&format=csv"
+  "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<new batchId>&format=csv"
 ```
 
 **Expected:** the CSV round trip also returns `200` with `errors: []`.
 
-### 4. Stage a third, still-undecided batch, and confirm nothing in it is decided yet
+### 5. Stage a third, still-undecided batch, and confirm nothing in it is decided yet
 
 **Malformed-row resilience needs its own batch.** This must not reuse either batch above: both have
 already had every row decided, so "every other row is still decided" would be true before the call and
@@ -88,14 +103,14 @@ the test could not fail in the direction it exists to catch.
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:8080/api/v1/import"
+  "http://localhost:18613/api/v1/import"
 ```
 
 Note this **third** `batchId`, export it, and read its status tally:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions/export?batchId=<third batchId>&format=csv" -o /tmp/export3.csv
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=<third batchId>&format=csv" -o /tmp/export3.csv
+curl -s "http://localhost:18613/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
@@ -106,7 +121,7 @@ fail — the after-tally would look identical whether the call decided the remai
 at all, which is exactly how this check read before the third batch was introduced. Stop and stage a
 genuinely undecided batch.
 
-### 5. Bulk-decide a copy with one malformed row, and re-read the tally
+### 6. Bulk-decide a copy with one malformed row, and re-read the tally
 
 Make the bad copy first. Open `/tmp/export3.csv`, copy it to `/tmp/export3-bad.csv`, and in the copy
 change **the first data row's `Decision` cell** to `not-a-choice` — a value no decision accepts. Leave
@@ -116,8 +131,8 @@ it.
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   -F "batchId=<third batchId>" -F "file=@/tmp/export3-bad.csv" -F "format=csv" \
-  "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<third batchId>&format=csv"
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+  "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<third batchId>&format=csv"
+curl -s "http://localhost:18613/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
@@ -130,26 +145,26 @@ that one. "One bad row never aborts the rest of the file", matching the contract
 something this repository writes in shell ([ADR 010](../../architecture-decisions/010-repository-is-csharp-only.md));
 if this test is ever automated, the edit belongs in `scripts/testing/` as a `.csx`, not inline here.
 
-### 6. Reject an unknown export format
+### 7. Reject an unknown export format
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<batchId>&format=xml"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<batchId>&format=xml"
 ```
 
 **Expected:** unknown `format` returns `422`.
 
-### 7. Reject a request with no admin key
+### 8. Reject a request with no admin key
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<batchId>"
+curl -s -w "\n%{http_code}\n" -X POST -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<batchId>"
 ```
 
 **Expected:** no `X-Api-Key` returns `401`.
 
-### 8. Reject a request with no `batchId` and no body at all
+### 9. Reject a request with no `batchId` and no body at all
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/bulk-decide"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18613/api/v1/import/actions/bulk-decide"
 ```
 
 **Expected:** **`422` with `"detail":"You must provide a batchId."`**
@@ -175,8 +190,6 @@ this newer endpoint. Fixed by switching to `HttpRequest request` and checking `b
 
 ```bash
 rm -f /tmp/export.json /tmp/export.csv /tmp/export3.csv /tmp/export3-bad.csv
+docker rm -f qt-import-13
+docker volume rm qt-import-13-data
 ```
-
-Removing the exports does not undo what they decided. Three staged batches remain — the first applied,
-the second decided but not applied, the third partly decided with one row rejected — along with the
-curated file's re-imported rows. Restore the Fresh profile before the next test.

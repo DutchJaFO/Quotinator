@@ -40,9 +40,24 @@ way, so the status code alone does not distinguish blocked from staged.
 
 ## Steps
 
-Run the **Fresh** profile first.
+### 1. Create this test's own environment
 
-### 1. Import `smoke-171-172.json` — the initial add
+```bash
+docker rm -f qt-import-07 2>/dev/null; docker volume rm qt-import-07-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-07 -p 18607:8080 -v qt-import-07-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18607/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Import `smoke-171-172.json` — the initial add
 
 ```bash
 cat > .claude/temp/smoke-171-172.json <<'EOF'
@@ -53,7 +68,7 @@ cat > .claude/temp/smoke-171-172.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18607/api/v1/import"
 ```
 
 Confirm via DbInspector:
@@ -65,7 +80,7 @@ StageDirection row present.
 **On failure:** without these rows there is nothing for the re-imports below to Modify, and every later
 step would be staging fresh adds instead. Stop.
 
-### 2. Re-import `smoke-171-172-v2.json` — the same ids with a changed `text`, under `review`
+### 3. Re-import `smoke-171-172-v2.json` — the same ids with a changed `text`, under `review`
 
 ```bash
 cat > .claude/temp/smoke-171-172-v2.json <<'EOF'
@@ -76,13 +91,13 @@ cat > .claude/temp/smoke-171-172-v2.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-v2.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18607/api/v1/import"
 ```
 
 Copy that `batchId`, list its pending actions, and copy the two action `id`s:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+curl -s "http://localhost:18607/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
 ```
 
 **Expected:** `smoke-171-172-v2.json`, under `review`, stages a `Pending` `Modify` action for each, with
@@ -91,23 +106,23 @@ curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<bat
 **On failure:** an empty pending listing means the `review` policy did not take effect and nothing was
 staged, so the decide and apply below would be operating on an empty batch. Stop.
 
-### 3. Decide both actions and apply the batch
+### 4. Decide both actions and apply the batch
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
   -d '{"stageDirectionText":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
-  "http://localhost:8080/api/v1/import/actions/<stage direction action id>/decide"
+  "http://localhost:18607/api/v1/import/actions/<stage direction action id>/decide"
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
   -d '{"soundCueText":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
-  "http://localhost:8080/api/v1/import/actions/<sound cue action id>/decide"
+  "http://localhost:18607/api/v1/import/actions/<sound cue action id>/decide"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+  "http://localhost:18607/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
 **Expected:** after deciding and applying, both rows carry the corrected text and
-`CompletenessStatus: Complete` — read back by step 7.
+`CompletenessStatus: Complete` — read back by step 8.
 
-### 4. Re-import `smoke-171-172-v3.json` — a third `text`, still under `review`
+### 5. Re-import `smoke-171-172-v3.json` — a third `text`, still under `review`
 
 The `Complete` rows must block it:
 
@@ -120,20 +135,20 @@ cat > .claude/temp/smoke-171-172-v3.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-v3.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18607/api/v1/import"
 ```
 
 Copy this third `batchId`, then read what it staged:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+curl -s "http://localhost:18607/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
 **Expected:** `smoke-171-172-v3.json`'s status tally reads **`Blocked`, not `Pending`** — a `Complete`
 row can no longer be silently overwritten.
 
-### 5. Import `smoke-171-172-addonly.json` — a fresh pair, for the reversal half
+### 6. Import `smoke-171-172-addonly.json` — a fresh pair, for the reversal half
 
 ```bash
 cat > .claude/temp/smoke-171-172-addonly.json <<'EOF'
@@ -144,13 +159,13 @@ cat > .claude/temp/smoke-171-172-addonly.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-addonly.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18607/api/v1/import"
 ```
 
 **Expected:** `smoke-171-172-addonly.json` adds a fresh pair, still `NeedsReview` — never `Complete`,
 which is what makes the reversal half runnable at all.
 
-### 6. Single-shot re-import `smoke-171-172-addonly-v2.json` under `newest-wins`, then reverse it
+### 7. Single-shot re-import `smoke-171-172-addonly-v2.json` under `newest-wins`, then reverse it
 
 ```bash
 cat > .claude/temp/smoke-171-172-addonly-v2.json <<'EOF'
@@ -161,30 +176,30 @@ cat > .claude/temp/smoke-171-172-addonly-v2.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-addonly-v2.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18607/api/v1/import"
 ```
 
 Copy that `batchId` — the reversal needs it — then reverse, preview first:
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<correction batchId>&preview=true"
+  "http://localhost:18607/api/v1/import/actions/reverse?batchId=<correction batchId>&preview=true"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<correction batchId>"
+  "http://localhost:18607/api/v1/import/actions/reverse?batchId=<correction batchId>"
 ```
 
 **Expected:** `smoke-171-172-addonly-v2.json`, under `newest-wins`, applies immediately with nothing
 pending. Both reversal calls against its batch return `200`.
 
-### 7. Confirm the pre-correction text is back
+### 8. Confirm the pre-correction text is back
 
 ```bash
-docker stop -t 15 qt-env
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db .claude/temp/smoke-171-172.db
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/smoke-171-172.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/smoke-171-172.db-shm
-docker start qt-env
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+docker stop -t 15 qt-import-07
+MSYS_NO_PATHCONV=1 docker cp qt-import-07:/data/quotinatordata.db .claude/temp/smoke-171-172.db
+MSYS_NO_PATHCONV=1 docker cp qt-import-07:/data/quotinatordata.db-wal .claude/temp/smoke-171-172.db-wal
+MSYS_NO_PATHCONV=1 docker cp qt-import-07:/data/quotinatordata.db-shm .claude/temp/smoke-171-172.db-shm
+docker start qt-import-07
+until curl -sf http://localhost:18607/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-171-172.db \
   --sql "SELECT Id, Text, CompletenessStatus FROM Quotinator_StageDirection WHERE Id IN ('f0000002-0000-4000-8000-000000000002','f0000002-0000-4000-8000-000000000009')"
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-171-172.db \
@@ -204,7 +219,6 @@ Not yet established as a captured record beyond the DbInspector reads asserted a
 
 ```bash
 rm -f .claude/temp/smoke-171-172*.json .claude/temp/smoke-171-172.db*
+docker rm -f qt-import-07
+docker volume rm qt-import-07-data
 ```
-
-The imported StageDirection/SoundCue rows, the `Smoke Test Film` Source, the filler quotes and the
-staged batches all remain — restore the Fresh profile before the next test.

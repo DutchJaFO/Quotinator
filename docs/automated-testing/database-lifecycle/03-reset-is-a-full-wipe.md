@@ -11,7 +11,7 @@ reads, and those rows are what prove the wipe is total rather than selective. A 
 produced none would make half this test vacuous, which is why the non-zero check below runs before the
 Reset rather than after.
 
-**This test destroys the profile's database.** That is its subject, not a side effect — see Cleanup.
+**This test destroys the database it runs against.** That is its subject, not a side effect.
 
 Reset drops the *entire* database — there is no `System_`/`Import_`/`Audit_` protected-table concept —
 and rebuilds via the baseline path, reversing #141's preserve-on-reset behaviour.
@@ -31,13 +31,28 @@ and rebuilds via the baseline path, reversing #141's preserve-on-reset behaviour
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Record the starting state
+### 1. Create this test's own environment
 
 ```bash
-curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
-curl -s "http://localhost:8080/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
+docker rm -f qt-db-03 2>/dev/null; docker volume rm qt-db-03-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-db-03 -p 18303:8080 -v qt-db-03-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18303/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app
+that never became healthy.
+
+### 2. Record the starting state
+
+```bash
+curl -s "http://localhost:18303/api/v1/version" | grep -o '"quotes":[0-9]*'
+curl -s "http://localhost:18303/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
 ```
 
 **Expected:** `quotes` and the audit `totalCount` are both non-zero — a normal seeded install.
@@ -45,42 +60,42 @@ curl -s "http://localhost:8080/api/v1/admin/audit" | grep -o '"totalCount":[0-9]
 **On failure:** a zero here makes the whole test vacuous — asserting these become zero proves nothing
 if they were already zero. Stop; this is a seeding problem, not a Reset result.
 
-### 2. Reset the database
+### 3. Reset the database
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/admin/database/reset"
+  "http://localhost:18303/api/v1/admin/database/reset"
 ```
 
 **Expected:** `200` with every row count `0`. No reimport happens.
 
-### 3. Read the quote count after Reset
+### 4. Read the quote count after Reset
 
 ```bash
-curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+curl -s "http://localhost:18303/api/v1/version" | grep -o '"quotes":[0-9]*'
 ```
 
 **Expected:** `/version`'s `quotes` count is `0`.
 
-### 4. Read the audit count after Reset
+### 5. Read the audit count after Reset
 
 ```bash
-curl -s "http://localhost:8080/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
+curl -s "http://localhost:18303/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
 ```
 
 **Expected:** the audit `totalCount` is exactly `1` — Reset's own self-trace row. The audit trail is
 wiped along with everything else, no longer surviving Reset the way it did before #156.
 
-### 5. Confirm the empty database degrades rather than failing
+### 6. Confirm the empty database degrades rather than failing
 
 ```bash
-curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/quotes/random"
+curl -s -w " [%{http_code}]\n" "http://localhost:18303/api/v1/quotes/random"
 ```
 
 **Expected:** `200` with `{"status":"NoResults", ...}` and an empty `items` array — not `503`, and not
 real quote data.
 
-### 6. Reset again with `preserveSchemaVersion=true`
+### 7. Reset again with `preserveSchemaVersion=true`
 
 This restores pre-reset migration history for both counters — #156 made this symmetric, since Data's
 own `System_SchemaVersion` is wiped by the full drop too, where previously it was never touched.
@@ -90,24 +105,24 @@ assertion is that they are unchanged, which cannot be evaluated from the after-v
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/admin/database/reset?preserveSchemaVersion=true"
+  "http://localhost:18303/api/v1/admin/database/reset?preserveSchemaVersion=true"
 ```
 
 **Expected:** `200`.
 
-### 7. Read both schema-version counters
+### 8. Read both schema-version counters
 
 The container is stopped for the copy, and the `-wal`/`-shm` sidecars come with it — a copy taken
 mid-write can be missing exactly what was just written, and reads as a wrong count rather than as an
 error:
 
 ```bash
-docker stop -t 15 qt-env
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db .claude/temp/smoke156.db
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/smoke156.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/smoke156.db-shm
-docker start qt-env
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+docker stop -t 15 qt-db-03
+MSYS_NO_PATHCONV=1 docker cp qt-db-03:/data/quotinatordata.db .claude/temp/smoke156.db
+MSYS_NO_PATHCONV=1 docker cp qt-db-03:/data/quotinatordata.db-wal .claude/temp/smoke156.db-wal
+MSYS_NO_PATHCONV=1 docker cp qt-db-03:/data/quotinatordata.db-shm .claude/temp/smoke156.db-shm
+docker start qt-db-03
+until curl -sf http://localhost:18303/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156.db \
   --sql "SELECT COUNT(*) AS DataVersions FROM System_SchemaVersion"
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156.db \
@@ -131,9 +146,7 @@ nothing observable changes in a running container for that part.
 ## Cleanup
 
 ```bash
+docker rm -f qt-db-03 2>/dev/null
+docker volume rm qt-db-03-data 2>/dev/null
 rm -f .claude/temp/smoke156.db .claude/temp/smoke156.db-wal .claude/temp/smoke156.db-shm
 ```
-
-**The profile must be restored before anything else runs.** This test leaves the database wiped — that
-is what it verifies — and since #156 Reset does not reseed, nothing repopulates it. A later test
-reading seeded content would otherwise find an empty database and report a failure that belongs here.

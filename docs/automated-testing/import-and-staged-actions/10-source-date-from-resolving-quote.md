@@ -46,37 +46,52 @@ a date, even when the resolving quote had one.
 
 ## Steps
 
-Run the **Fresh** profile first.
+### 1. Create this test's own environment
 
-### 1. Read path — confirm the seeded date surfaces
+```bash
+docker rm -f qt-import-10 2>/dev/null; docker volume rm qt-import-10-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-10 -p 18610:8080 -v qt-import-10-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18610/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Read path — confirm the seeded date surfaces
 
 This does not re-exercise the fix:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/quotes/search?q=Airplane&field=source"
+curl -s "http://localhost:18610/api/v1/quotes/search?q=Airplane&field=source"
 ```
 
 **Expected:** items whose `date` is `"1980"`, not `null`. This Source already exists from seeding, so
 the call confirms the read path only — it does not by itself re-exercise `ResolveSourceAsync`.
 
-### 2. Count the Sources carrying a date, against a fresh seed
+### 3. Count the Sources carrying a date, against a fresh seed
 
 This is the actual code path:
 
 ```bash
-docker stop -t 15 qt-env
-docker cp qt-env:/data/quotinatordata.db .claude/temp/inspect-191.db
-docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/inspect-191.db-wal
-docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/inspect-191.db-shm
-docker start qt-env
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+docker stop -t 15 qt-import-10
+docker cp qt-import-10:/data/quotinatordata.db .claude/temp/inspect-191.db
+docker cp qt-import-10:/data/quotinatordata.db-wal .claude/temp/inspect-191.db-wal
+docker cp qt-import-10:/data/quotinatordata.db-shm .claude/temp/inspect-191.db-shm
+docker start qt-import-10
+until curl -sf http://localhost:18610/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
   --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Quotinator_Source WHERE IsDeleted = 0"
 ```
 
 **Expected:** `have_date` is non-zero and a large majority of `sources`.
 
-### 3. Cross-check `Airplane!` — a title with no `sources[]` entry
+### 4. Cross-check `Airplane!` — a title with no `sources[]` entry
 
 This is the implicit-discovery path this fixes:
 
@@ -87,7 +102,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
 
 **Expected:** `Airplane!` returns `Date = 1980` — the implicit-discovery path this fixed.
 
-### 4. Cross-check `Jurassic Park` — a title with a date-less explicit entry
+### 5. Cross-check `Jurassic Park` — a title with a date-less explicit entry
 
 This is the gap described in Preconditions:
 
@@ -99,7 +114,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
 **Expected:** `Jurassic Park` returns `Date = 1993`. It was previously documented here as expected
 `NULL`; see the note in Preconditions.
 
-### 5. Cross-check `Frozen` — the other title the fixed gap named
+### 6. Cross-check `Frozen` — the other title the fixed gap named
 
 ```bash
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
@@ -124,4 +139,6 @@ to inherit: missing upstream data rather than a defect in this path.
 
 ```bash
 rm -f .claude/temp/inspect-191.db .claude/temp/inspect-191.db-wal .claude/temp/inspect-191.db-shm
+docker rm -f qt-import-10
+docker volume rm qt-import-10-data
 ```

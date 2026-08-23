@@ -410,12 +410,86 @@ public partial class RepositoryStructureTests
 
                 if (!ExpectedResultLine().IsMatch(text[start..end]))
                     failures.Add($"{document} — step '{steps[i].Groups["title"].Value.Trim()}' has no expected result");
+
+                // Numbers must read 1..N. Inserting a step and renumbering the rest by hand is exactly
+                // where a duplicate or a gap creeps in, and a reader following the document cannot tell
+                // which of two "step 3"s the next instruction meant.
+                string expected = (i + 1).ToString();
+                string actual   = steps[i].Groups["number"].Value;
+
+                if (actual != expected)
+                    failures.Add(
+                        $"{document} — step '{steps[i].Groups["title"].Value.Trim()}' is numbered "
+                        + $"{actual} where {expected} was expected");
             }
         }
 
         Assert.IsEmpty(failures,
             "Test documents must state their steps as numbered subsections, each with its own expected "
             + $"result:\n{string.Join("\n", failures.Order())}");
+    }
+
+    /// <summary>
+    /// Every test document publishes the ports it talks to, and no two documents publish the same one,
+    /// so any pair of tests can run at the same time without reaching each other's state.
+    /// </summary>
+    /// <remarks>
+    /// A suite sharing one container is sequential by construction and needs a restore step between
+    /// every pair to stay honest — coupling wearing a cleanup label. Per-test containers remove it, and
+    /// a colliding host port would quietly put it back. See #339.
+    /// </remarks>
+    [TestMethod]
+    public void EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        List<string> documents = FindAutomatedTestingDocuments();
+
+        Assert.IsNotEmpty(documents,
+            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
+
+        Dictionary<string, string> publishedBy = [];
+        List<string> failures = [];
+
+        foreach (string document in documents)
+        {
+            string text = File.ReadAllText(
+                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
+
+            HashSet<string> published =
+            [
+                .. PublishedHostPort().Matches(text).Cast<System.Text.RegularExpressions.Match>()
+                    .Select(m => m.Groups["port"].Value)
+            ];
+
+            HashSet<string> used =
+            [
+                .. LocalhostPort().Matches(text).Cast<System.Text.RegularExpressions.Match>()
+                    .Select(m => m.Groups["port"].Value)
+            ];
+
+            foreach (string port in used.Except(published).Order())
+                failures.Add($"{document} — talks to localhost:{port} but never publishes it");
+
+            foreach (string port in published.Order())
+            {
+                // A scheme that derives a port by appending digits runs off the end of the port range
+                // without anything complaining: `docker run -p 181031:8080` just fails at runtime, and
+                // a uniqueness check alone is perfectly happy with it.
+                if (!int.TryParse(port, out int number) || number is < 1 or > 65535)
+                    failures.Add($"{document} — {port} is not a TCP port (the maximum is 65535)");
+
+                if (publishedBy.TryGetValue(port, out string? owner))
+                    failures.Add($"{document} — publishes {port}, already published by {owner}");
+                else
+                    publishedBy[port] = document;
+            }
+        }
+
+        Assert.IsEmpty(failures,
+            "Every test owns its own container and port, so any two can run concurrently:\n"
+            + string.Join("\n", failures.Order()));
     }
 
     private const string AutomatedTestingRelativePath = "docs/automated-testing";
@@ -452,7 +526,7 @@ public partial class RepositoryStructureTests
     private static partial System.Text.RegularExpressions.Regex EnvironmentProfileDeclaration();
 
     [System.Text.RegularExpressions.GeneratedRegex(
-        @"^###\s+\d+\.\s+(?<title>.+?)\s*$",
+        @"^###\s+(?<number>\d+)\.\s+(?<title>.+?)\s*$",
         System.Text.RegularExpressions.RegexOptions.Multiline)]
     private static partial System.Text.RegularExpressions.Regex NumberedStepHeading();
 
@@ -465,6 +539,14 @@ public partial class RepositoryStructureTests
         @"^\*\*Expected\b",
         System.Text.RegularExpressions.RegexOptions.Multiline)]
     private static partial System.Text.RegularExpressions.Regex ExpectedResultLine();
+
+    /// <summary>The host side of a <c>-p host:container</c> port mapping.</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"-p\s+(?<port>\d+):\d+")]
+    private static partial System.Text.RegularExpressions.Regex PublishedHostPort();
+
+    /// <summary>A port a document actually sends requests to.</summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"localhost:(?<port>\d+)")]
+    private static partial System.Text.RegularExpressions.Regex LocalhostPort();
 
     /// <summary>
     /// The smoke-set section, from its own heading up to the next top-level heading.

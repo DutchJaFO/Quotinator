@@ -72,12 +72,16 @@ Content differs by commit type:
   only when it isn't obvious from the diff itself (a bug's root cause, a design trade-off, which
   issue's requirement this satisfies). If there's nothing non-obvious to say, the title alone is a
   complete commit message — do not pad it with a body just to have one.
-- **Documentation-only commits (`docs`) are the exception — write fuller content.** Since ADR/plan-doc
-  headers no longer carry accumulated history (see above), the commit message for a `docs` commit *is*
-  that document's historical record — there is no header field or code diff to fall back on for
-  understanding what changed and why later. A `docs` commit message should describe what changed in
-  the document and why in enough detail to stand alone in `git log`, the way the ADR's own `##
-  Revision — issue #N` body section does for the document itself.
+- **Documentation-only commits (`docs`) are a partial exception — carry the reasoning, not the
+  inventory.** Since ADR/plan-doc headers no longer carry accumulated history (see above), a `docs`
+  commit message is where the *why* survives: what problem the change solves, what was wrong with what
+  it replaced, what was decided and rejected. It is not where the change is re-described.
+
+  **"Fuller" means one or two paragraphs of reasoning, not a summary of the diff** (developer
+  direction, 2026-08-23). Counts, file lists, per-document tables, renamed identifiers and before/after
+  values are all already in the commit — restating them makes the message longer without making it more
+  useful, and buries the one thing `git log` cannot reconstruct. If the reasoning fits in a sentence,
+  the message is a sentence.
 
 **Draft, review, then commit — every time, no exceptions.** Before running `git commit`, write the
 full intended commit message to `.claude/temp/commit-draft.md` **and paste that same text directly

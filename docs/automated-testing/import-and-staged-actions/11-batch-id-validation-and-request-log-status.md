@@ -28,15 +28,17 @@ level. That means its own container, since a configuration value is fixed at sta
 
 ## Steps
 
-### 1. Start this test's own container, with request logging genuinely on
+### 1. Create this test's own environment, with request logging genuinely on
 
 ```bash
-docker rm -f qt-reqlog 2>/dev/null; docker volume rm qt-reqlog 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-reqlog -p 8080:8080 -v qt-reqlog:/data \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
+docker rm -f qt-import-11 2>/dev/null; docker volume rm qt-import-11-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-11 -p 18611:8080 -v qt-import-11-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
   -e Quotinator__AutoPurgeBundledImportActions=true \
-  -e Quotinator__LogRequests=true -e Quotinator__LogLevel=debug quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+  -e Quotinator__LogRequests=true -e Quotinator__LogLevel=debug \
+  quotinator:local
+until curl -sf http://localhost:18611/api/v1/health > /dev/null; do sleep 1; done
 ```
 
 **Expected:** the health poll returns — the container is up, with both logging variables set.
@@ -46,8 +48,8 @@ until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 A request whose outcome is not in doubt, and its line must appear:
 
 ```bash
-curl -s -o /dev/null "http://localhost:8080/api/v1/health"
-docker logs qt-reqlog 2>&1 | grep -c "→ 200"
+curl -s -o /dev/null "http://localhost:18611/api/v1/health"
+docker logs qt-import-11 2>&1 | grep -c "→ 200"
 ```
 
 **Expected:** **request logging is live** — the `→ 200` count is non-zero.
@@ -58,9 +60,9 @@ concluded from the log; that is a setup failure, not a result. Stop.
 ### 3. Call all three staged-action endpoints with no `batchId`
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/discard"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18611/api/v1/import/actions/apply"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18611/api/v1/import/actions/discard"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18611/api/v1/import/actions/reverse"
 ```
 
 **Expected:** all three bodyless calls return `422` with `"detail":"You must provide a batchId."` —
@@ -69,7 +71,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 ### 4. Read the status those same calls were logged with
 
 ```bash
-docker logs qt-reqlog 2>&1 | grep "import/actions" | grep -o "→ [0-9]*" | sort | uniq -c
+docker logs qt-import-11 2>&1 | grep "import/actions" | grep -o "→ [0-9]*" | sort | uniq -c
 ```
 
 **Expected:** the `import/actions` log lines read **`→ 422` three times and `→ 200` not at all**.
@@ -82,7 +84,7 @@ Counting them is the assertion: a single missing line would otherwise be invisib
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"skip"}}' \
-  "http://localhost:8080/api/v1/import/preview"
+  "http://localhost:18611/api/v1/import/preview"
 ```
 
 **Expected:** the response carries a `batchId` — copy it for the next step.
@@ -91,7 +93,7 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+  "http://localhost:18611/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
 **Expected:** `200`, proving the fix did not simply make the endpoint return `422` unconditionally.
@@ -120,9 +122,6 @@ by it.
 ## Cleanup
 
 ```bash
-docker rm -f qt-reqlog
-docker volume rm qt-reqlog
+docker rm -f qt-import-11
+docker volume rm qt-import-11-data
 ```
-
-The container and volume are this test's own — it never touches `qt-env`, so restoring the profile
-clears nothing it made and nothing it made leaks into the profile.

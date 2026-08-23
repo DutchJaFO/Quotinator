@@ -29,17 +29,32 @@ has *not* yet been created.
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Read the pending and stale lists after the fresh seed, before anything else runs
+### 1. Create this test's own environment
 
 ```bash
-curl -s http://localhost:8080/api/v1/version
-docker logs qt-env 2>&1 | grep -c "\[Database - Seed\] .* report: "
-docker logs qt-env 2>&1 | grep "\[Database - Seed\] .* alias staleness evaluated"
-curl -s -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purge"' | wc -l
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0" | grep -o '"totalCount":[0-9]*'
-curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
+docker rm -f qt-import-17 2>/dev/null; docker volume rm qt-import-17-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-17 -p 18617:8080 -v qt-import-17-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18617/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Read the pending and stale lists after the fresh seed, before anything else runs
+
+```bash
+curl -s http://localhost:18617/api/v1/version
+docker logs qt-import-17 2>&1 | grep -c "\[Database - Seed\] .* report: "
+docker logs qt-import-17 2>&1 | grep "\[Database - Seed\] .* alias staleness evaluated"
+curl -s -H "X-Api-Key: <your admin key>" "http://localhost:18617/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purge"' | wc -l
+curl -s "http://localhost:18617/api/v1/import/actions?status=pending&pageSize=0" | grep -o '"totalCount":[0-9]*'
+curl -s "http://localhost:18617/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
 
 **Expected:** the counts have settled; the report count is non-zero, one line per bundled file, each
@@ -60,21 +75,21 @@ aliases; the `Purge` trace count matches the number of bundled batches; and both
 in the report and an empty list are both produced equally by a mechanism that ran and found none and by
 one that never ran. See the index's *When the expected situation does not occur*, cause 3.
 
-### 2. Reseed and repeat, which is the second of the two paths
+### 3. Reseed and repeat, which is the second of the two paths
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
-docker logs qt-env 2>&1 | grep -c "\[Database - Seed\] .* report: "
-docker logs qt-env 2>&1 | grep -c "\[Database - Seed\] .* alias staleness evaluated"
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0" | grep -o '"totalCount":[0-9]*'
-curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18617/api/v1/admin/database/reseed"
+docker logs qt-import-17 2>&1 | grep -c "\[Database - Seed\] .* report: "
+docker logs qt-import-17 2>&1 | grep -c "\[Database - Seed\] .* alias staleness evaluated"
+curl -s "http://localhost:18617/api/v1/import/actions?status=pending&pageSize=0" | grep -o '"totalCount":[0-9]*'
+curl -s "http://localhost:18617/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
 
-**Expected:** the reseed returns `200`; both counts have **increased** over step 1's readings, since the
+**Expected:** the reseed returns `200`; both counts have **increased** over step 2's readings, since the
 reseed plans every bundled file again; and both `status=pending` and `status=stale` report
 `totalCount: 0`.
 
-**Comparing against step 1 rather than asserting a number** is what makes this the second path rather
+**Comparing against step 2 rather than asserting a number** is what makes this the second path rather
 than a repeat of the first: the reseed's own lines are indistinguishable from first-boot lines except
 by there being more of them.
 
@@ -83,7 +98,7 @@ being legitimately created for the first time. None has actually been renamed aw
 is the correct result here, and why the log line rather than the zero is what proves the mechanism
 looked.
 
-**On failure:** as in step 1 — an unobservable evaluation makes both readings meaningless, and the
+**On failure:** as in step 2 — an unobservable evaluation makes both readings meaningless, and the
 reseed's own status code is what separates "nothing was stale" from "the reseed never ran".
 
 ## Observed effect
@@ -101,5 +116,7 @@ tests alone.**
 
 ## Cleanup
 
-No files are written, but the reseed leaves the profile's database re-planned against every bundled
-file. Restore the Fresh profile before the next test.
+```bash
+docker rm -f qt-import-17
+docker volume rm qt-import-17-data
+```

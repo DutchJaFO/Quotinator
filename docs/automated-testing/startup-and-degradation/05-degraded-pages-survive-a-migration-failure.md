@@ -8,8 +8,8 @@
 
 **Beyond the profile.** The Upgraded prior image is the **published
 `ghcr.io/dutchjafo/quotinator:1.8.2` tag**, chosen because `System_Notification` genuinely does not
-exist on a real v1.8.2 database. It runs its own container and volume (`smoke293` / `smoke293-data`,
-the name reused across the two runs) rather than `qt-env`, and the Constrained defect is intended to be
+exist on a real v1.8.2 database. It runs its own container and volume (`qt-startup-05` / `qt-startup-05-data`,
+the name reused across the two runs), and the Constrained defect is intended to be
 `--read-only` on the root filesystem with `/data` left writable — which is the part that no longer
 works.
 
@@ -50,14 +50,14 @@ Not established, and that is the defect. The original intended, but never pinned
 ### 1. Seed a real, unmodified v1.8.2 database
 
 ```bash
-docker rm -f smoke293 2>/dev/null
-docker volume rm smoke293-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name smoke293 -p 8080:8080 \
-  -v smoke293-data:/data -e Quotinator__DataDir=/data \
+docker rm -f qt-startup-05 2>/dev/null
+docker volume rm qt-startup-05-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-05 -p 18405:8080 \
+  -v qt-startup-05-data:/data -e Quotinator__DataDir=/data \
   ghcr.io/dutchjafo/quotinator:1.8.2
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
-docker stop -t 15 smoke293 && docker rm smoke293
+until curl -sf http://localhost:18405/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:18405/api/v1/version" | grep -o '"quotes":[0-9]*'
+docker stop -t 15 qt-startup-05 && docker rm qt-startup-05
 ```
 
 **Expected:** `quotes` is non-zero and the seed reports zero failures.
@@ -68,12 +68,12 @@ rather than proceeding.
 ### 2. Start the current build with a read-only root filesystem and read health
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run -d --name smoke293 -p 8080:8080 \
+MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-05 -p 18405:8080 \
   --read-only \
-  -v smoke293-data:/data -e Quotinator__DataDir=/data \
+  -v qt-startup-05-data:/data -e Quotinator__DataDir=/data \
   quotinator:local
-until curl -s -o /dev/null http://localhost:8080/api/v1/health; do sleep 1; done
-curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
+until curl -s -o /dev/null http://localhost:18405/api/v1/health; do sleep 1; done
+curl -s -w " [%{http_code}]\n" http://localhost:18405/api/v1/health
 ```
 
 **Expected:** `/health` returns
@@ -86,10 +86,10 @@ against a container that never degraded.
 ### 3. Read the degraded pages and the notifications API
 
 ```bash
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/"
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/stats"
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/notifications"
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/notifications"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18405/"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18405/stats"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18405/notifications"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18405/api/v1/notifications"
 ```
 
 **Expected:** `/`, `/stats` and
@@ -101,8 +101,8 @@ covers, and expected rather than a regression.
 
 ### 4. Visit the three Blazor pages in a real browser
 
-Visit `http://localhost:8080/`, `http://localhost:8080/stats` and
-`http://localhost:8080/notifications` in a real browser.
+Visit `http://localhost:18405/`, `http://localhost:18405/stats` and
+`http://localhost:18405/notifications` in a real browser.
 
 **Expected:**
 
@@ -132,8 +132,6 @@ degraded-skip fix together. What no longer holds is the mechanism that made the 
 ## Cleanup
 
 ```bash
-docker rm -f smoke293 2>/dev/null
-docker volume rm smoke293-data
+docker rm -f qt-startup-05 2>/dev/null
+docker volume rm qt-startup-05-data
 ```
-
-The container and volume are this test's own, so restoring the profile clears nothing it made.

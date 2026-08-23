@@ -77,6 +77,33 @@ missing unhappy flow, a document that should not be live at all — are recorded
 
 ---
 
+## Scope change — every test owns its container, so any two can run together (2026-08-23)
+
+**Added by developer decision.** The environment profiles as first built shared one container, `qt-env`,
+across most documents. That was wrong, and the tell was already in the suite: sixteen documents ended
+with "restore the Fresh profile before the next test" — a restore step between every pair, which is
+coupling wearing a cleanup label.
+
+**Each test creates and destroys its own container and volume.** A profile is a *recipe* a test
+instantiates under its own name, not an instance it borrows. The only genuinely shared step is building
+the image, because it is the same image for every test.
+
+**The consequence is that any two tests can run at the same time.** No machine will have the resources
+for all forty-three at once, but nothing in the design prevents it — and running several concurrently is
+what makes an end-of-issue T2 pass quick rather than a serial slog. That only holds while no two tests
+can reach each other's state, which is why per-test containers are a necessity rather than a preference.
+
+**Host ports are derived from where the document lives** — `18` + category ordinal + test number — so
+they cannot collide and no allocation table has to be maintained. A guard enforces both halves: a
+document publishes every port it talks to, and no two documents publish the same one.
+
+**What this deletes:** every "restore the profile" instruction, and every sentence describing what a
+test leaves behind *for another test*. What survives is what a test must undo outside its own container
+— a mutated bundled rule file, a rebuilt image, `Directory.Build.props` — because those are genuinely
+shared.
+
+---
+
 ## Steps
 
 ### 1. Settle the category split and the numbering scheme
@@ -722,7 +749,8 @@ resolve — see that step.
 | 21 | ✅ | Every document names a known profile and establishes it rather than assuming one | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_NamesAKnownEnvironmentProfile` — red against all 43 before step 16 |
 | 22 | ✅ | No document is blocked from executing by its own commands | Live | No `docker run` holds the terminal ahead of later steps; every `docker run` carries `--name`; no `<container>` placeholder survives; every `docker cp` of the database targets `/data`, the path the profile actually mounts |
 | 23 | ✅ | The index's smoke set cannot drift from the documents' own `Smoke` field | Unit test | `RepositoryStructureTests.SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` — red while the table named tests by title only, which is why each row now links its document |
-| 24 | ✅ | Every step carries its own expected result, so a failure stops the run at the step that caused it | Unit test | `RepositoryStructureTests.EveryAutomatedTestingStep_CarriesItsOwnExpectedResult` — red against all 43 before the conversion. Checks per step, not by total: a document where one step carries three expectations and another none would balance out under a count |
-| 25 | ❌ | Every document can distinguish the feature working from the feature broken | Live | 13 repaired by adding the observation that was missing. **`16` and `17` cannot, and are therefore failing tests that block release.** Of the ways an empty stale list can arise, all but one are now ruled out by observations that already exist: the per-file `report:` lines prove the reseed re-planned, and the `Purge` audit traces prove whether rows were removed. The one that remains is whether the staleness *evaluation* ran at all — `stale=0` is produced identically by *compared the rules, none drifted* and by *never compared anything*. Clearing it means emitting that evaluation, filed as [#347](https://github.com/DutchJaFO/Quotinator/issues/347); a fixture forcing the mechanism to fire would be working around the gap rather than closing it. The row's original wording — "repaired, *or* its limit is stated" — was wrong: stating a limitation explains a failing test, it does not resolve one |
-| 19 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |
-| 20 | ❌ | No reference to `docs/smoke-tests.md` resolves to nothing | Live | Every remaining mention names where the suite went. **Not** a bare `grep` for absence — archival plan docs keep the old name deliberately, with the pointer alongside; compare per-file reference counts instead |
+| 24 | ✅ | Every test creates and destroys its own container and volume, so any two can run concurrently | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother` — red while documents shared `qt-env` on `8080`. Checks three things: a document publishes every port it talks to, no two publish the same one, and every port is a real one. That last check exists because the first port scheme derived a second container's port by appending a digit, producing `181031` — above the 65535 maximum, so `docker run` would simply have failed, and a uniqueness check alone was perfectly happy with it. 43 documents, 51 distinct ports, no `qt-env` and no "restore the profile" anywhere |
+| 25 | ✅ | Every step carries its own expected result, so a failure stops the run at the step that caused it | Unit test | `RepositoryStructureTests.EveryAutomatedTestingStep_CarriesItsOwnExpectedResult` — red against all 43 before the conversion. Checks per step, not by total: a document where one step carries three expectations and another none would balance out under a count |
+| 26 | ❌ | Every document can distinguish the feature working from the feature broken | Live | 13 repaired by adding the observation that was missing. **`16` and `17` cannot, and are therefore failing tests that block release.** Of the ways an empty stale list can arise, all but one are now ruled out by observations that already exist: the per-file `report:` lines prove the reseed re-planned, and the `Purge` audit traces prove whether rows were removed. The one that remains is whether the staleness *evaluation* ran at all — `stale=0` is produced identically by *compared the rules, none drifted* and by *never compared anything*. Clearing it means emitting that evaluation, filed as [#347](https://github.com/DutchJaFO/Quotinator/issues/347); a fixture forcing the mechanism to fire would be working around the gap rather than closing it. The row's original wording — "repaired, *or* its limit is stated" — was wrong: stating a limitation explains a failing test, it does not resolve one |
+| 27 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |
+| 28 | ❌ | No reference to `docs/smoke-tests.md` resolves to nothing | Live | Every remaining mention names where the suite went. **Not** a bare `grep` for absence — archival plan docs keep the old name deliberately, with the pointer alongside; compare per-file reference counts instead |

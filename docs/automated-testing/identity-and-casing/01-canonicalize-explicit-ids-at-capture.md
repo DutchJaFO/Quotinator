@@ -23,12 +23,27 @@ would have broken those references if left incomplete, so a seed completing with
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Read the seed's own log before importing anything
+### 1. Create this test's own environment
 
 ```bash
-docker logs qt-env 2>&1 | grep -c "SQLite Error 19"
+docker rm -f qt-id-01 2>/dev/null; docker volume rm qt-id-01-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-id-01 -p 18201:8080 -v qt-id-01-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18201/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app
+that never became healthy.
+
+### 2. Read the seed's own log before importing anything
+
+```bash
+docker logs qt-id-01 2>&1 | grep -c "SQLite Error 19"
 ```
 
 **Expected:** `0` — the container's seed produced no `SQLite Error 19`.
@@ -37,7 +52,7 @@ docker logs qt-env 2>&1 | grep -c "SQLite Error 19"
 means the seed is what broke, so the assertions below would be reporting on a database that was never
 built correctly. Stop.
 
-### 2. Import a fixture whose quote and Source both carry file-authored explicit ids
+### 3. Import a fixture whose quote and Source both carry file-authored explicit ids
 
 ```bash
 cat > .claude/temp/smoke-209.json <<'EOF'
@@ -46,23 +61,23 @@ cat > .claude/temp/smoke-209.json <<'EOF'
   "sources": [{"id":"f6000002-0000-4000-8000-000000000002","title":"209 Smoke Test Film","type":"movie"}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-209.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-209.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18201/api/v1/import"
 ```
 
 **Expected:** the import returns `200`.
 
-### 3. Look the Source up by the id the file authored
+### 4. Look the Source up by the id the file authored
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources/f6000002-0000-4000-8000-000000000002"
+curl -s -w "\n%{http_code}\n" "http://localhost:18201/api/v1/masterdata/sources/f6000002-0000-4000-8000-000000000002"
 ```
 
 **Expected:** `200`, with `id` shown canonicalized — lowercase, per ADR 012's system-wide convention.
 
-### 4. Fetch the quote and confirm its Source join still resolves
+### 5. Fetch the quote and confirm its Source join still resolves
 
 ```bash
-curl -s "http://localhost:8080/api/v1/quotes/f6000001-0000-4000-8000-000000000001"
+curl -s "http://localhost:18201/api/v1/quotes/f6000001-0000-4000-8000-000000000001"
 ```
 
 **Expected:** the quote lookup resolves `source` to `"209 Smoke Test Film"` via the Quote→Source join,
@@ -80,7 +95,8 @@ join.
 
 ## Cleanup
 
-`rm .claude/temp/smoke-209.json`
-
-The import leaves its quote and its Source in the database — restore the Fresh profile before the next
-test rather than leaving a `209 Smoke Test Film` row for it to find.
+```bash
+docker rm -f qt-id-01 2>/dev/null
+docker volume rm qt-id-01-data 2>/dev/null
+rm .claude/temp/smoke-209.json
+```

@@ -24,25 +24,40 @@ A staged batch with pending actions — the preview call below produces one unde
 
 ## Steps
 
-Run the **Fresh** profile first.
+### 1. Create this test's own environment
 
-### 1. Stage a batch by previewing the curated file under `review`
+```bash
+docker rm -f qt-import-04 2>/dev/null; docker volume rm qt-import-04-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-04 -p 18604:8080 -v qt-import-04-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18604/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Stage a batch by previewing the curated file under `review`
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:8080/api/v1/import/preview"
+  "http://localhost:18604/api/v1/import/preview"
 ```
 
 **Expected:** the response carries a `batchId` — the readings below are scoped to it.
 
-### 2. Record what the batch staged and what the domain holds, before discarding
+### 3. Record what the batch staged and what the domain holds, before discarding
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
+curl -s "http://localhost:18604/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
-curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+curl -s "http://localhost:18604/api/v1/version" | grep -o '"quotes":[0-9]*'
 ```
 
 **Expected:** the action count is non-zero, and the quote count is recorded for comparison.
@@ -50,21 +65,21 @@ curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
 **On failure:** a zero action count means nothing was staged, and every assertion below is then
 satisfied vacuously. Stop — this is a staging problem, not a discard result.
 
-### 3. Discard the batch
+### 4. Discard the batch
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/discard?batchId=<batchId>"
+  "http://localhost:18604/api/v1/import/actions/discard?batchId=<batchId>"
 ```
 
 **Expected:** `204`.
 
-### 4. Read both again
+### 5. Read both again
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
+curl -s "http://localhost:18604/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
-curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+curl -s "http://localhost:18604/api/v1/version" | grep -o '"quotes":[0-9]*'
 ```
 
 **Expected:** the same non-zero action count as before, every one of them now reading `Discarded`, and
@@ -76,5 +91,7 @@ Not yet established as a captured record.
 
 ## Cleanup
 
-The staged batch and its now-`Discarded` actions remain — restore the Fresh profile before the next
-test.
+```bash
+docker rm -f qt-import-04
+docker volume rm qt-import-04-data
+```

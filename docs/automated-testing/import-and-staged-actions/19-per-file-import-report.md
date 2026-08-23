@@ -8,7 +8,7 @@
 
 Nothing beyond the Fresh profile. This replaces the old flat `duplicates` count everywhere a seed or
 import operation reports back, and every surface it checks — seed preview, reseed, reset, import,
-import preview and the startup log — is reachable on the profile's own container.
+import preview and the startup log — is reachable on a Fresh container.
 
 ## Determinism
 
@@ -26,70 +26,85 @@ import preview and the startup log — is reachable on the profile's own contain
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Read the seed preview
+### 1. Create this test's own environment
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/database/seed/preview"
+docker rm -f qt-import-19 2>/dev/null; docker volume rm qt-import-19-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-19 -p 18619:8080 -v qt-import-19-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18619/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Read the seed preview
+
+```bash
+curl -s -w "\n%{http_code}\n" "http://localhost:18619/api/v1/admin/database/seed/preview"
 ```
 
 **Expected:** `200` with a top-level `reports` array. One entry per configured source file, each with a
 `fileName` and an `entityTypes` object keyed by entity type (`Quote`, `Source`, …), each carrying
 `new`/`modified`/`blocked`/`discarded`/`pending`/`stale` counts.
 
-### 2. Reseed
+### 3. Reseed
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18619/api/v1/admin/database/reseed"
 ```
 
 **Expected:** `200`, with a row count present for each of
 `quotes`, `sources`, `characters`, `people`, `series`, `universes`, `stageDirections`, `soundCues` and
 `conversations`, plus `reports` in the same per-file shape.
 
-### 3. Repeat against `POST /admin/database/reset`
+### 4. Repeat against `POST /admin/database/reset`
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reset"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18619/api/v1/admin/database/reset"
 ```
 
 **Expected:** the same shape, but every count `0` and `reports` reflecting no activity. Reset no longer
 reimports bundled or user content after rebuilding the schema (#156), so there is nothing to report.
 
-### 4. Import a single file
+### 5. Import a single file
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
   -w "\n%{http_code}\n" \
-  "http://localhost:8080/api/v1/import"
+  "http://localhost:18619/api/v1/import"
 ```
 
 **Expected:** `200` with a top-level `report` (singular — one file, not an array) alongside the existing
 `summary`/`conflicts`/`errors` fields, shaped like one entry from `reports`.
 
-### 5. Re-run the same call via `POST /api/v1/import/preview`
+### 6. Re-run the same call via `POST /api/v1/import/preview`
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
   -w "\n%{http_code}\n" \
-  "http://localhost:8080/api/v1/import/preview"
+  "http://localhost:18619/api/v1/import/preview"
 ```
 
 **Expected:** the same `report` shape, because the report reflects the actual staged actions regardless
 of whether the batch was applied.
 
-### 6. Confirm the removed fields are actually absent
+### 7. Confirm the removed fields are actually absent
 
 On the seed-preview response specifically — an absence read by eye off a large JSON body is satisfied by
 default, so it is counted instead:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/admin/database/seed/preview" \
+curl -s "http://localhost:18619/api/v1/admin/database/seed/preview" \
   | grep -o 'totalQuotes\|uniqueQuotes\|crossFileDuplicates' | wc -l
 ```
 
@@ -97,13 +112,13 @@ curl -s "http://localhost:8080/api/v1/admin/database/seed/preview" \
 `crossFileDuplicates` are gone; reading their absence off the body by eye cannot fail, because nothing
 is being compared.
 
-### 7. Confirm the startup line exists before reading it
+### 8. Confirm the startup line exists before reading it
 
 `grep`'s own exit status is what distinguishes "the line is absent" from "the line is present and
 wrong", and a bare `grep` in a pipeline discards it:
 
 ```bash
-docker logs qt-env 2>&1 | grep -q "\[Database - Stats\]" && echo PRESENT || echo MISSING
+docker logs qt-import-19 2>&1 | grep -q "\[Database - Stats\]" && echo PRESENT || echo MISSING
 ```
 
 **Expected:** `PRESENT`, before anything is read off the line.
@@ -112,10 +127,10 @@ docker logs qt-env 2>&1 | grep -q "\[Database - Stats\]" && echo PRESENT || echo
 emitted. A plain `grep` prints nothing and exits `1`, and that silence is indistinguishable from a pass,
 so stop here rather than reading the next step's empty output as a result.
 
-### 8. Read the startup line's counts
+### 9. Read the startup line's counts
 
 ```bash
-docker logs qt-env 2>&1 | grep "\[Database - Stats\]"
+docker logs qt-import-19 2>&1 | grep "\[Database - Stats\]"
 ```
 
 **Expected:** `[Database - Stats]` names every entity type above, not just the original four.
@@ -127,10 +142,7 @@ asserted above.
 
 ## Cleanup
 
-**The Fresh profile must be re-established after this test, not merely after the group it sits in.**
-`POST /admin/database/reset` above wipes the database and — since #156 — deliberately does not reseed.
-The curated import that follows it repopulates that one file and nothing else, so the container ends
-this test holding neither the bundled seed nor the audit, notification and `Import_Action` rows the
-first boot wrote. This test is in the smoke set, and the smoke tests that follow it read seeded data,
-so leaving the container in that state fails them for a reason that has nothing to do with what they
-verify.
+```bash
+docker rm -f qt-import-19
+docker volume rm qt-import-19-data
+```

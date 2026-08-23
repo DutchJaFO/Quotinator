@@ -34,15 +34,30 @@ this test, and it is why the unit-tier test is the primary evidence here.
 
 ## Steps
 
-Run the **Fresh** profile first.
+### 1. Create this test's own environment
 
-### 1. Import the curated file under the `review` policy
+```bash
+docker rm -f qt-id-04 2>/dev/null; docker volume rm qt-id-04-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-id-04 -p 18204:8080 -v qt-id-04-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18204/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app
+that never became healthy.
+
+### 2. Import the curated file under the `review` policy
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:8080/api/v1/import"
+  "http://localhost:18204/api/v1/import"
 ```
 
 **Expected:** the import response's own `batchId`, and every `quoteId` under `pendingActionIds`, are
@@ -51,19 +66,19 @@ lowercase.
 **On failure:** a response carrying no `pendingActionIds` means the `review` policy staged nothing, so
 the read below would page an empty list and report lowercase ids it never saw. Stop.
 
-### 2. Read a pending staged action
+### 3. Read a pending staged action
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=1"
+curl -s "http://localhost:18204/api/v1/import/actions?status=pending&pageSize=1"
 ```
 
 **Expected:** the `/import/actions` response's `batchId`, `entityId` and `existingBatchId` are all
 lowercase.
 
-### 3. Read an audit entry
+### 4. Read an audit entry
 
 ```bash
-curl -s "http://localhost:8080/api/v1/admin/audit?pageSize=1" -H "X-Api-Key: <your admin key>"
+curl -s "http://localhost:18204/api/v1/admin/audit?pageSize=1" -H "X-Api-Key: <your admin key>"
 ```
 
 **Expected:** the `/admin/audit` response's `recordId` is lowercase.
@@ -75,6 +90,7 @@ distinction matters more than the raw result.
 
 ## Cleanup
 
-The `review` import leaves a staged batch and its pending actions behind. Restore the Fresh profile
-before the next test — do **not** leave them for a successor to page through, which is the
-execution-order dependency the index forbids.
+```bash
+docker rm -f qt-id-04 2>/dev/null
+docker volume rm qt-id-04-data 2>/dev/null
+```

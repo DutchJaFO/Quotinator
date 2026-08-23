@@ -17,12 +17,27 @@ request. Querying before that gate races the startup wait page.
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Check health
+### 1. Create this test's own environment
 
 ```bash
-curl -s -w "\n%{http_code}\n" http://localhost:8080/api/v1/health
+docker rm -f qt-api-01 2>/dev/null; docker volume rm qt-api-01-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-api-01 -p 18101:8080 -v qt-api-01-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18101/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app
+that never became healthy.
+
+### 2. Check health
+
+```bash
+curl -s -w "\n%{http_code}\n" http://localhost:18101/api/v1/health
 ```
 
 **Expected:** `200` with `{"status":"healthy"}` — not `503 {"status":"starting"}` and not
@@ -31,10 +46,10 @@ curl -s -w "\n%{http_code}\n" http://localhost:8080/api/v1/health
 **On failure:** stop. Every later step reads the same container, so a degraded or still-initialising
 app makes all of them meaningless rather than failing them individually.
 
-### 2. Check the reported version
+### 3. Check the reported version
 
 ```bash
-curl -s http://localhost:8080/api/v1/version
+curl -s http://localhost:18101/api/v1/version
 ```
 
 **Expected:** the expected version number.
@@ -44,53 +59,53 @@ while `/health` still returns healthy** — so a healthy container is not by its
 context was complete. Stop and rebuild from a complete context; every later result is being read off
 an image that is not the one under test.
 
-### 3. Fetch a random quote
+### 4. Fetch a random quote
 
 ```bash
-curl -s -w "\n%{http_code}\n" http://localhost:8080/api/v1/quotes/random | grep -c '"quote":'
+curl -s -w "\n%{http_code}\n" http://localhost:18101/api/v1/quotes/random | grep -c '"quote":'
 ```
 
 **Expected:** `1` — a quote body came back. The endpoint returns `200` with `{"status":"NoResults"}`
 and an empty `items` array against an empty database, so the status code alone does not establish that
 the seeded content is readable.
 
-### 4. Search the default full-text path
+### 5. Search the default full-text path
 
 ```bash
-curl -s "http://localhost:8080/api/v1/quotes/search?q=love"
+curl -s "http://localhost:18101/api/v1/quotes/search?q=love"
 ```
 
 **Expected:** `love` returns results.
 
-### 5. Search scoped to `source`
+### 6. Search scoped to `source`
 
 ```bash
-curl -s "http://localhost:8080/api/v1/quotes/search?q=Casablanca&field=source"
+curl -s "http://localhost:18101/api/v1/quotes/search?q=Casablanca&field=source"
 ```
 
 **Expected:** `Casablanca` returns results.
 
-### 6. Search scoped to `author`
+### 7. Search scoped to `author`
 
 ```bash
-curl -s "http://localhost:8080/api/v1/quotes/search?q=Churchill&field=author"
+curl -s "http://localhost:18101/api/v1/quotes/search?q=Churchill&field=author"
 ```
 
 **Expected:** `Churchill` returns the curated Winston Churchill quote.
 
-### 7. Search scoped to `character`
+### 8. Search scoped to `character`
 
 ```bash
-curl -s "http://localhost:8080/api/v1/quotes/search?q=Rick&field=character"
+curl -s "http://localhost:18101/api/v1/quotes/search?q=Rick&field=character"
 ```
 
 **Expected:** may return an empty `items` array with a `message`, because no bundled data currently
 matches. That is expected behaviour, not a failure.
 
-### 8. Search filtered to `type=person`
+### 9. Search filtered to `type=person`
 
 ```bash
-curl -s "http://localhost:8080/api/v1/quotes/search?q=love&type=person"
+curl -s "http://localhost:18101/api/v1/quotes/search?q=love&type=person"
 ```
 
 **Expected:** may return an empty `items` array with a `message`, because no bundled data currently
@@ -104,5 +119,7 @@ while serving these requests — its log lines and their shape — has not been 
 
 ## Cleanup
 
-None. This test only reads, so the profile's container and volume are left as they are for whatever
-runs next.
+```bash
+docker rm -f qt-api-01 2>/dev/null
+docker volume rm qt-api-01-data 2>/dev/null
+```

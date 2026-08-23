@@ -29,41 +29,56 @@ Nothing beyond the Fresh profile — the batch is staged by the preview call in 
 
 ## Steps
 
-Run the **Fresh** profile first.
+### 1. Create this test's own environment
 
-### 1. Stage a batch by previewing the curated file under `skip`
+```bash
+docker rm -f qt-import-03 2>/dev/null; docker volume rm qt-import-03-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-03 -p 18603:8080 -v qt-import-03-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18603/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Stage a batch by previewing the curated file under `skip`
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"skip"}}' \
-  "http://localhost:8080/api/v1/import/preview"
+  "http://localhost:18603/api/v1/import/preview"
 ```
 
 **Expected:** the response carries a `batchId` — the readings below are scoped to it.
 
-### 2. Record the staged state before applying
+### 3. Record the staged state before applying
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
+curl -s "http://localhost:18603/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
 **Expected:** the batch's actions are staged and none is `Applied`.
 
-### 3. Apply by `batchId`
+### 4. Apply by `batchId`
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import?batchId=<batchId>"
+  "http://localhost:18603/api/v1/import?batchId=<batchId>"
 ```
 
 **Expected:** `200`.
 
-### 4. Read the same listing again
+### 5. Read the same listing again
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
+curl -s "http://localhost:18603/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
@@ -76,4 +91,7 @@ Not yet established as a captured record.
 
 ## Cleanup
 
-The previewed batch and its actions remain, applied — restore the Fresh profile before the next test.
+```bash
+docker rm -f qt-import-03
+docker volume rm qt-import-03-data
+```

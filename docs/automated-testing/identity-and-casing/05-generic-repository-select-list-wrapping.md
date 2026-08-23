@@ -30,35 +30,50 @@ hand-written `Sql.cs` queries do. This confirms the `SELECT *` removal did not b
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Page every generic-repository-backed list endpoint
+### 1. Create this test's own environment
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/characters?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/people?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/series?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/universes?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/conversations?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/stagedirections?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/soundcues?pageSize=2"
+docker rm -f qt-id-05 2>/dev/null; docker volume rm qt-id-05-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-id-05 -p 18205:8080 -v qt-id-05-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18205/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app
+that never became healthy.
+
+### 2. Page every generic-repository-backed list endpoint
+
+```bash
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/sources?pageSize=2"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/characters?pageSize=2"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/people?pageSize=2"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/series?pageSize=2"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/universes?pageSize=2"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/conversations?pageSize=2"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/stagedirections?pageSize=2"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/soundcues?pageSize=2"
 ```
 
 **Expected:** every list call returns `200` with populated `items` and lowercase `id` fields.
 
 **On failure:** a `200` carrying an empty `items` is not a pass — it asserts nothing about column
 wrapping, and points at the seed rather than at the queries under test (see Preconditions: this test
-can be blocked by a broken import). Stop; step 2 has no id to take.
+can be blocked by a broken import). Stop; step 3 has no id to take.
 
-### 2. Fetch one Source by id in both casings
+### 3. Fetch one Source by id in both casings
 
 Take one of the returned ids and fetch it both ways, confirming `GetByIdAsync`'s case-insensitive
 lookup survived the rewrite:
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources/<id-as-returned>"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources/<same-id-uppercased>"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/sources/<id-as-returned>"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/sources/<same-id-uppercased>"
 ```
 
 **Expected:** both `GET .../sources/{id}` calls return `200` with the same record, and its `id` renders
@@ -71,5 +86,7 @@ container emits while serving them.
 
 ## Cleanup
 
-None. This test only reads, so the profile's container and volume are left as they are for whatever
-runs next.
+```bash
+docker rm -f qt-id-05 2>/dev/null
+docker volume rm qt-id-05-data 2>/dev/null
+```

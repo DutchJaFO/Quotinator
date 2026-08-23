@@ -36,33 +36,48 @@ run stages through it.
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Confirm the staging endpoint is reachable
+### 1. Create this test's own environment
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions"
+docker rm -f qt-import-01 2>/dev/null; docker volume rm qt-import-01-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-01 -p 18601:8080 -v qt-import-01-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18601/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Confirm the staging endpoint is reachable
+
+```bash
+curl -s -w "\n%{http_code}\n" "http://localhost:18601/api/v1/import/actions"
 ```
 
 **Expected:** `200` — the staging endpoint is reachable with no setup.
 
-### 2. Confirm the legacy conflicts machinery is gone
+### 3. Confirm the legacy conflicts machinery is gone
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/conflicts"
+curl -s -w "\n%{http_code}\n" "http://localhost:18601/api/v1/import/conflicts"
 ```
 
 **Expected:** `404`. It was removed entirely in #154 Phase B; anything else means the legacy
 manual-review machinery has regressed back in.
 
-### 3. Import the curated file under forced `review`
+### 4. Import the curated file under forced `review`
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   -w "\n%{http_code}\n" \
-  "http://localhost:8080/api/v1/import"
+  "http://localhost:18601/api/v1/import"
 ```
 
 **Expected:** `202`, **not** `200` — the re-imported quotes are genuine duplicates left `Pending` under
@@ -71,50 +86,50 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
 **On failure:** a `200` here means the policy did not take effect and nothing was staged, so the rest of
 this document would be testing an empty batch. Stop.
 
-### 4. List this batch's pending actions
+### 5. List this batch's pending actions
 
 Copy the response's `batchId`, then list **only this batch's** pending actions and copy one action `id`:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+curl -s "http://localhost:18601/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
 ```
 
 **Expected:** exactly the action(s) the import just created.
 
-### 5. Decide that action, and confirm it moved
+### 6. Decide that action, and confirm it moved
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
-  "http://localhost:8080/api/v1/import/actions/<id>/decide"
-curl -s "http://localhost:8080/api/v1/import/actions?status=Decided&batchId=<batchId>&pageSize=0"
+  "http://localhost:18601/api/v1/import/actions/<id>/decide"
+curl -s "http://localhost:18601/api/v1/import/actions?status=Decided&batchId=<batchId>&pageSize=0"
 ```
 
 **Expected:** after `decide`, `status=Decided` shows it.
 
-### 6. Undo the decision
+### 7. Undo the decision
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/<id>/undo"
+curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18601/api/v1/import/actions/<id>/undo"
 ```
 
 **Expected:** the action is back under `status=Pending`.
 
-### 7. Decide it again
+### 8. Decide it again
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
-  "http://localhost:8080/api/v1/import/actions/<id>/decide"
+  "http://localhost:18601/api/v1/import/actions/<id>/decide"
 ```
 
 **Expected:** it is ready to apply.
 
-### 8. Apply the batch, with the `batchId` lowercased
+### 9. Apply the batch, with the `batchId` lowercased
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/apply?batchId=<lowercase the batchId here too>"
+  "http://localhost:18601/api/v1/import/actions/apply?batchId=<lowercase the batchId here too>"
 ```
 
 **Expected:** `200`.
@@ -123,10 +138,10 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
 array listing those still undecided. That is the batch-apply-atomicity contract working as designed, not
 a bug. Decide each remaining id the same way and re-run `apply` until it returns `200`.
 
-### 9. Read the batch's final status tally
+### 10. Read the batch's final status tally
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
+curl -s "http://localhost:18601/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
@@ -138,8 +153,7 @@ Not yet established as a captured record beyond the status transitions asserted 
 
 ## Cleanup
 
-> **Outstanding.** This currently leaves its applied batch in place, and other documents have been
-> written assuming it. That is a dependency on execution order, which the index forbids: each test
-> establishes what it needs. Either this test cleans up after itself and the others gain their own
-> setup, or it runs against its own container and volume. Recorded as a finding for #339's audit —
-> resolving it means writing new setup steps, not moving existing ones.
+```bash
+docker rm -f qt-import-01
+docker volume rm qt-import-01-data
+```

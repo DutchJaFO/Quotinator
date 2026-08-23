@@ -8,8 +8,8 @@
 
 **Beyond the profile.** The data directory is a **bind mount** instead of the profile's named volume,
 so the host can manipulate the SQLite file directly — the whole test turns on breaking the schema from
-outside the container. It runs its own container (`smoke254`, started three times against that one
-directory) rather than `qt-env`, and the Constrained defect is a `DROP TABLE Quotinator_Quote` applied
+outside the container. It runs its own container (`qt-startup-01`, started three times against that one
+directory), and the Constrained defect is a `DROP TABLE Quotinator_Quote` applied
 by the host while the container is stopped.
 
 `Quotinator.Tools.DbInspector` cannot be used here: it opens read-only (`Mode=ReadOnly`, see its
@@ -50,15 +50,15 @@ discrepancy is tracked separately, not resolved here.
 ### 1. Seed a fresh container against a bind-mounted data directory
 
 ```bash
-docker rm -f smoke254 2>/dev/null
-rm -rf .claude/temp/smoke-254-data
-mkdir -p .claude/temp/smoke-254-data
-MSYS_NO_PATHCONV=1 docker run -d --name smoke254 -p 8080:8080 \
-  -v "C:/repos/Quotinator/.claude/temp/smoke-254-data:/data" \
+docker rm -f qt-startup-01 2>/dev/null
+rm -rf .claude/temp/qt-startup-01-data
+mkdir -p .claude/temp/qt-startup-01-data
+MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-01 -p 18401:8080 \
+  -v "C:/repos/Quotinator/.claude/temp/qt-startup-01-data:/data" \
   -e Quotinator__DataDir=/data quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-docker logs smoke254 2>&1 | grep "\[Database - Init\]"
-ls .claude/temp/smoke-254-data/backups/ 2>/dev/null
+until curl -sf http://localhost:18401/api/v1/health > /dev/null; do sleep 1; done
+docker logs qt-startup-01 2>&1 | grep "\[Database - Init\]"
+ls .claude/temp/qt-startup-01-data/backups/ 2>/dev/null
 ```
 
 **Expected:** the init log shows `schema created at baseline` (fresh database, baseline path), and
@@ -71,10 +71,10 @@ below reads and writes that directory, and against the wrong one they report non
 ### 2. Restart unchanged — an ordinary restart takes a backup too
 
 ```bash
-docker restart smoke254
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-docker logs smoke254 2>&1 | grep "\[Database - Init\]" | tail -3
-ls .claude/temp/smoke-254-data/backups/*.db 2>/dev/null | wc -l
+docker restart qt-startup-01
+until curl -sf http://localhost:18401/api/v1/health > /dev/null; do sleep 1; done
+docker logs qt-startup-01 2>&1 | grep "\[Database - Init\]" | tail -3
+ls .claude/temp/qt-startup-01-data/backups/*.db 2>/dev/null | wc -l
 ```
 
 **Expected:** `schema is up to date`, and the backup count is now `1`. This is a deliberately chosen
@@ -88,20 +88,20 @@ first baseline run is skipped, which the seeding step confirmed.
 Start with an admin key this time — the Reset call below needs it:
 
 ```bash
-docker rm -f smoke254
-MSYS_NO_PATHCONV=1 docker run -d --name smoke254 -p 8080:8080 \
-  -v "C:/repos/Quotinator/.claude/temp/smoke-254-data:/data" \
+docker rm -f qt-startup-01
+MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-01 -p 18401:8080 \
+  -v "C:/repos/Quotinator/.claude/temp/qt-startup-01-data:/data" \
   -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-docker stop smoke254
+until curl -sf http://localhost:18401/api/v1/health > /dev/null; do sleep 1; done
+docker stop qt-startup-01
 dotnet script scripts/execute-sql.csx -- \
-  --db .claude/temp/smoke-254-data/quotinatordata.db \
+  --db .claude/temp/qt-startup-01-data/quotinatordata.db \
   --sql "PRAGMA foreign_keys=OFF; DROP TABLE Quotinator_Quote;"
-docker start smoke254
-until curl -s -o /dev/null http://localhost:8080/api/v1/health; do sleep 1; done
-docker logs smoke254 2>&1 | tail -20
-ls .claude/temp/smoke-254-data/backups/*.db 2>/dev/null | wc -l
-docker ps -a --filter name=smoke254 --format "{{.Status}}"
+docker start qt-startup-01
+until curl -s -o /dev/null http://localhost:18401/api/v1/health; do sleep 1; done
+docker logs qt-startup-01 2>&1 | tail -20
+ls .claude/temp/qt-startup-01-data/backups/*.db 2>/dev/null | wc -l
+docker ps -a --filter name=qt-startup-01 --format "{{.Status}}"
 ```
 
 **Expected:** the log shows, in order: `[Database - Backup] backup complete`;
@@ -122,8 +122,8 @@ steps below. Stop and record the exit rather than running them against nothing.
 ### 4. Confirm the degraded surface
 
 ```bash
-curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
-curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
+curl -s -w " [%{http_code}]\n" http://localhost:18401/api/v1/health
+curl -s -w " [%{http_code}]\n" http://localhost:18401/api/v1/quotes/random
 ```
 
 **Expected:** `/health` returns `503` with `{"status":"unhealthy","reason":"..."}`, not a bare `200`.
@@ -140,7 +140,7 @@ entirely rather than blocking the route and only letting an authenticated call t
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  http://localhost:8080/api/v1/admin/database/reset -o /dev/null
+  http://localhost:18401/api/v1/admin/database/reset -o /dev/null
 ```
 
 **Expected:** `200` with a row-count summary of **all zeros**. It performs its own independent schema
@@ -150,8 +150,8 @@ afterwards (#156).
 ### 7. Confirm the app recovers without a restart
 
 ```bash
-curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
-curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
+curl -s -w " [%{http_code}]\n" http://localhost:18401/api/v1/health
+curl -s -w " [%{http_code}]\n" http://localhost:18401/api/v1/quotes/random
 ```
 
 **Expected:** `/health` returns `200` with `{"status":"healthy"}`, proving
@@ -181,11 +181,9 @@ what the assertions are made against.
 ## Cleanup
 
 ```bash
-docker rm -f smoke254 2>/dev/null
-rm -rf .claude/temp/smoke-254-data
+docker rm -f qt-startup-01 2>/dev/null
+rm -rf .claude/temp/qt-startup-01-data
 ```
 
-This test runs its own bind-mounted container rather than the profile's, and creates no named volume,
-so restoring the profile clears nothing it made — the two commands above are the whole cleanup. The
-database it leaves behind is a wiped, post-Reset one; any later test needing content re-establishes its
-own profile.
+This test's data directory is a bind mount rather than a named volume, so removing the directory is
+what removes its data.

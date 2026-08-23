@@ -19,7 +19,7 @@ rather than a bare Name lookup.
 
 Beyond the Fresh profile: **`Airplane!` must already exist as a Source**, which the bundled seed
 supplies. Every fixture below resolves against it, so confirm it is present before running them —
-`curl -s "http://localhost:8080/api/v1/masterdata/sources?pageSize=0"`, the same call the last step
+`curl -s "http://localhost:18612/api/v1/masterdata/sources?pageSize=0"`, the same call the last step
 uses.
 
 ## Determinism
@@ -31,9 +31,10 @@ uses.
   failure is visible in the output.
 - **The Character chosen for the Modify half must not already be `Complete`.** The sequence is Modify →
   `Pending`, decide with `markCompletenessAs: "Complete"`, then Modify again → `Blocked`. Running this
-  document twice against the same database picks a Character the previous run already marked
-  `Complete`, so the first Modify stages `Blocked` instead of `Pending` and the failure looks like a
-  defect in the guard rather than in the setup. Restore the Fresh profile first.
+  document against a database it had already run against would pick a Character the previous run marked
+  `Complete`, so the first Modify would stage `Blocked` instead of `Pending` and the failure would look
+  like a defect in the guard rather than in the setup. Creating the container and volume fresh in step 1
+  is what makes that impossible.
 
 **The explicit-id-on-Add half exists because a unit-test-only pass could not have caught the bug.** An
 explicit `characters[]` id matching nothing was being silently discarded in favour of a freshly-computed
@@ -51,9 +52,24 @@ surfaces it.
 
 ## Steps
 
-Run the **Fresh** profile first.
+### 1. Create this test's own environment
 
-### 1. Add a Character via natural key, with no id
+```bash
+docker rm -f qt-import-12 2>/dev/null; docker volume rm qt-import-12-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-12 -p 18612:8080 -v qt-import-12-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18612/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Add a Character via natural key, with no id
 
 ```bash
 cat > .claude/temp/smoke-175-add.json <<'EOF'
@@ -63,8 +79,8 @@ cat > .claude/temp/smoke-175-add.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-add.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
-curl -s "http://localhost:8080/api/v1/masterdata/characters?pageSize=0" \
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
+curl -s "http://localhost:18612/api/v1/masterdata/characters?pageSize=0" \
   | grep -c "Smoke Test New Character"
 ```
 
@@ -72,7 +88,7 @@ curl -s "http://localhost:8080/api/v1/masterdata/characters?pageSize=0" \
 linked to the existing `Airplane!` Source, with no id supplied, resolved via ADR 013's algorithm finding
 no candidate, then a genuine Add.
 
-### 2. Correct an existing Character by id, under `review`
+### 3. Correct an existing Character by id, under `review`
 
 ```bash
 cat > .claude/temp/smoke-175-modify.json <<'EOF'
@@ -82,51 +98,51 @@ cat > .claude/temp/smoke-175-modify.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-modify.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
 ```
 
 **Expected:** `202`. Copy the `batchId` from that response — the next step needs it.
 
-### 3. List **only this batch's** pending actions
+### 4. List **only this batch's** pending actions
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+curl -s "http://localhost:18612/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
 ```
 
 **Expected:** one pending id, and `ambiguousFields` is `["name"]` **only**.
 
-### 4. Decide the ambiguous field, apply the batch, and read the Character back
+### 5. Decide the ambiguous field, apply the batch, and read the Character back
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
   -d '{"characterName":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
-  "http://localhost:8080/api/v1/import/actions/<id>/decide"
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
-curl -s "http://localhost:8080/api/v1/masterdata/characters/<id>"
+  "http://localhost:18612/api/v1/import/actions/<id>/decide"
+curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18612/api/v1/import/actions/apply?batchId=<batchId>"
+curl -s "http://localhost:18612/api/v1/masterdata/characters/<id>"
 ```
 
 **Expected:** after deciding and applying, `name` reads "Renamed Via Smoke Test" and
 `completenessStatus` is `Complete`.
 
-### 5. Re-attempt the same Modify against the now-`Complete` Character
+### 6. Re-attempt the same Modify against the now-`Complete` Character
 
 The same file, re-imported under `review`:
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-modify.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
 ```
 
 Copy this second import's own `batchId`, then:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?status=blocked&batchId=<second batchId>&pageSize=0"
+curl -s "http://localhost:18612/api/v1/import/actions?status=blocked&batchId=<second batchId>&pageSize=0"
 ```
 
 **Expected:** a further Modify under `review` stages **`Blocked`, not `Pending`**, and the on-disk name
 is unchanged — the same guarantee Source, Person, StageDirection and SoundCue already have.
 
-### 6. Add a Character carrying an explicit uppercase id — the T2-only fix
+### 7. Add a Character carrying an explicit uppercase id — the T2-only fix
 
 ```bash
 cat > .claude/temp/smoke-175-explicit-add.json <<'EOF'
@@ -136,15 +152,15 @@ cat > .claude/temp/smoke-175-explicit-add.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-explicit-add.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/characters/f5111175-0000-4000-8000-000000000175"
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
+curl -s -w "\n%{http_code}\n" "http://localhost:18612/api/v1/masterdata/characters/f5111175-0000-4000-8000-000000000175"
 ```
 
 **Expected:** the explicit-id Add succeeds, and the lowercase masterdata lookup returns `200`. The
 returned `id` is the lowercase-canonicalized form of the file's own id — **never an unrelated
 `EntityIdentity`-derived one**.
 
-### 7. Match an existing Source through a differently-cased title
+### 8. Match an existing Source through a differently-cased title
 
 ```bash
 cat > .claude/temp/smoke-175-source-casing.json <<'EOF'
@@ -154,8 +170,8 @@ cat > .claude/temp/smoke-175-source-casing.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-source-casing.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
-curl -s "http://localhost:8080/api/v1/masterdata/sources?pageSize=0"
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
+curl -s "http://localhost:18612/api/v1/masterdata/sources?pageSize=0"
 ```
 
 **Expected:** despite `AIRPLANE!` appearing in both the quote's `source` and the character's
@@ -171,8 +187,6 @@ observation for the explicit-id half — the import reported success in the fail
 
 ```bash
 rm -f .claude/temp/smoke-175-*.json
+docker rm -f qt-import-12
+docker volume rm qt-import-12-data
 ```
-
-Removing the fixtures does not undo what they imported. The quotes and Characters each file added, the
-renamed Character, and the staged batches behind them all remain in the database. Restore the Fresh
-profile before the next test.

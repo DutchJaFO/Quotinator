@@ -41,34 +41,49 @@ is what would populate both tables — the bundled seed writes `Audit_Entry` row
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Request every row with `pageSize=0`
+### 1. Create this test's own environment
 
 ```bash
-curl -s "http://localhost:8080/api/v1/quotes?pageSize=0"
-curl -s "http://localhost:8080/api/v1/admin/audit?pageSize=0" -H "X-Api-Key: <your admin key>"
-curl -s "http://localhost:8080/api/v1/import/actions?pageSize=0"
+docker rm -f qt-api-02 2>/dev/null; docker volume rm qt-api-02-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-api-02 -p 18102:8080 -v qt-api-02-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18102/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app
+that never became healthy.
+
+### 2. Request every row with `pageSize=0`
+
+```bash
+curl -s "http://localhost:18102/api/v1/quotes?pageSize=0"
+curl -s "http://localhost:18102/api/v1/admin/audit?pageSize=0" -H "X-Api-Key: <your admin key>"
+curl -s "http://localhost:18102/api/v1/import/actions?pageSize=0"
 ```
 
 **Expected:** on all three, `items` contains every row (not zero), and `pageSize` in the response
 equals `totalCount`. That is the effective-size contract, not the literal `0` requested.
 
-### 2. Request a page size above the maximum
+### 3. Request a page size above the maximum
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes?pageSize=501"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/audit?pageSize=501" -H "X-Api-Key: <your admin key>"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?pageSize=501"
+curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/quotes?pageSize=501"
+curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/admin/audit?pageSize=501" -H "X-Api-Key: <your admin key>"
+curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/import/actions?pageSize=501"
 ```
 
 **Expected:** all three return `422`. Above 500 is rejected, never silently clamped.
 
-### 3. Omit `pageSize` and read the applied default
+### 4. Omit `pageSize` and read the applied default
 
 ```bash
-curl -s "http://localhost:8080/api/v1/admin/audit" -H "X-Api-Key: <your admin key>"
-curl -s "http://localhost:8080/api/v1/import/actions"
+curl -s "http://localhost:18102/api/v1/admin/audit" -H "X-Api-Key: <your admin key>"
+curl -s "http://localhost:18102/api/v1/import/actions"
 ```
 
 **Expected:** both responses report `20`, not the endpoints' old default of `50`.
@@ -77,12 +92,12 @@ curl -s "http://localhost:8080/api/v1/import/actions"
 default-through rather than by application, per Determinism. Confirm both tables have rows before
 recording this either way.
 
-### 4. Request a page beyond the last
+### 5. Request a page beyond the last
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes?pageSize=500&page=99"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/audit?pageSize=1&page=999999" -H "X-Api-Key: <your admin key>"
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?pageSize=1&page=999999"
+curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/quotes?pageSize=500&page=99"
+curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/admin/audit?pageSize=1&page=999999" -H "X-Api-Key: <your admin key>"
+curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/import/actions?pageSize=1&page=999999"
 ```
 
 **Expected:** all three return `422`.
@@ -111,4 +126,7 @@ deterministically in every `dotnet test` instead of requiring a live container.
 
 ## Cleanup
 
-None — this test only reads.
+```bash
+docker rm -f qt-api-02 2>/dev/null
+docker volume rm qt-api-02-data 2>/dev/null
+```

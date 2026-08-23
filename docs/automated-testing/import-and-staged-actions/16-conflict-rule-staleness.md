@@ -28,25 +28,40 @@ not treat the empty result as a failure.
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Wait for the bundled seed to finish
+### 1. Create this test's own environment
 
 ```bash
-curl -s http://localhost:8080/api/v1/version
+docker rm -f qt-import-16 2>/dev/null; docker volume rm qt-import-16-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-16 -p 18616:8080 -v qt-import-16-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18616/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Wait for the bundled seed to finish
+
+```bash
+curl -s http://localhost:18616/api/v1/version
 ```
 
 **Expected:** the counts have stopped changing — the container is no longer working through its
 multi-file seed.
 
-### 2. Reseed, then list the stale actions
+### 3. Reseed, then list the stale actions
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
-docker logs qt-env 2>&1 | grep -c "\[Database - Seed\] .* report: "
-docker logs qt-env 2>&1 | grep "\[Database - Seed\] .* rule staleness evaluated"
-curl -s -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purge"' | wc -l
-curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18616/api/v1/admin/database/reseed"
+docker logs qt-import-16 2>&1 | grep -c "\[Database - Seed\] .* report: "
+docker logs qt-import-16 2>&1 | grep "\[Database - Seed\] .* rule staleness evaluated"
+curl -s -H "X-Api-Key: <your admin key>" "http://localhost:18616/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purge"' | wc -l
+curl -s "http://localhost:18616/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
 
 **Expected:** the reseed returns `200`; the per-file report count is non-zero, one line per bundled
@@ -84,5 +99,7 @@ the rule's recorded assumption and reality, caught by the mechanism rather than 
 
 ## Cleanup
 
-No files are written, but the reseed leaves the profile's database re-planned against every bundled
-file. Restore the Fresh profile before the next test.
+```bash
+docker rm -f qt-import-16
+docker volume rm qt-import-16-data
+```

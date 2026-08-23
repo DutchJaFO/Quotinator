@@ -8,7 +8,7 @@
 
 **Beyond the profile.** The Upgraded prior image is the **published
 `ghcr.io/dutchjafo/quotinator:1.8.3` tag**, and the current build must be rebuilt from an edited
-`Directory.Build.props` (see below) rather than used as-is. One container name (`qprov`) is reused
+`Directory.Build.props` (see below) rather than used as-is. One container name (`qt-notif-05-upgraded`) is reused
 across the two runs against one bind-mounted directory, plus a one-shot `--rm alpine` running `sqlite3`
 to read the result. The whole thing is then repeated a second time with no v1.8.3 stage.
 
@@ -41,12 +41,12 @@ as they stand — the discrepancy is tracked separately, not resolved here.
 ### 1. Seed a v1.8.3 database and wait for its announcement
 
 ```bash
-docker rm -f qprov 2>/dev/null; rm -rf /tmp/qprov; mkdir -p /tmp/qprov/data
-MSYS_NO_PATHCONV=1 docker run -d --name qprov -e Quotinator__DataDir=/data \
-  -v /tmp/qprov/data:/data -p 8080:8080 ghcr.io/dutchjafo/quotinator:1.8.3
-until [ "$(curl -s 'http://localhost:8080/api/v1/notifications?pageSize=0' \
+docker rm -f qt-notif-05-upgraded 2>/dev/null; rm -rf /tmp/qt-notif-05-upgraded; mkdir -p /tmp/qt-notif-05-upgraded/data
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-05-upgraded -e Quotinator__DataDir=/data \
+  -v /tmp/qt-notif-05-upgraded/data:/data -p 18505:8080 ghcr.io/dutchjafo/quotinator:1.8.3
+until [ "$(curl -s 'http://localhost:18505/api/v1/notifications?pageSize=0' \
   | grep -c 'Two API operation IDs were renamed')" = "1" ]; do sleep 5; done
-docker rm -f qprov
+docker rm -f qt-notif-05-upgraded
 ```
 
 **Expected:** the poll terminates — v1.8.3's announcement exists, so seeding has finished and the
@@ -59,9 +59,9 @@ Stop.
 ### 2. Upgrade to the current build against the same database
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run -d --name qprov -e Quotinator__DataDir=/data \
-  -v /tmp/qprov/data:/data -p 8080:8080 quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-05-upgraded -e Quotinator__DataDir=/data \
+  -v /tmp/qt-notif-05-upgraded/data:/data -p 18505:8080 quotinator:local
+until curl -sf http://localhost:18505/api/v1/health > /dev/null; do sleep 1; done
 ```
 
 **Expected:** the current build starts against the upgraded database and reports healthy.
@@ -69,7 +69,7 @@ until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 ### 3. Read the version history
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qprov/data:/data alpine \
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-05-upgraded/data:/data alpine \
   sh -c "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
     'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
 ```
@@ -87,20 +87,20 @@ not who is running now.
 ### 4. Repeat the whole thing against a fresh database
 
 Same build, no v1.8.3 stage. It needs its **own container name and its own directory**, distinct from
-`qprov` and `/tmp/qprov` — run against the database the first half already upgraded, it would find the
+`qt-notif-05-upgraded` and `/tmp/qt-notif-05-upgraded` — run against the database the first half already upgraded, it would find the
 1.8.3 row that half created and prove nothing:
 
 ```bash
-docker rm -f qprov-fresh 2>/dev/null; rm -rf /tmp/qprov-fresh; mkdir -p /tmp/qprov-fresh/data
-MSYS_NO_PATHCONV=1 docker run -d --name qprov-fresh -e Quotinator__DataDir=/data \
-  -v /tmp/qprov-fresh/data:/data -p 8080:8080 quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qprov-fresh/data:/data alpine \
+docker rm -f qt-notif-05-fresh 2>/dev/null; rm -rf /tmp/qt-notif-05-fresh; mkdir -p /tmp/qt-notif-05-fresh/data
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-05-fresh -e Quotinator__DataDir=/data \
+  -v /tmp/qt-notif-05-fresh/data:/data -p 19505:8080 quotinator:local
+until curl -sf http://localhost:19505/api/v1/health > /dev/null; do sleep 1; done
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-05-fresh/data:/data alpine \
   sh -c "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
     'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
 ```
 
-**The first container must be removed before this one starts** — both publish 8080.
+**The first container must be removed before this one starts.**
 
 **Expected:** exactly one row, the current build's own version, and **no 1.8.3 row at all**.
 
@@ -120,12 +120,12 @@ existing is weaker evidence than the 1.8.3 row sorting first.
 ## Cleanup
 
 ```bash
-docker rm -f qprov qprov-fresh 2>/dev/null
-rm -rf /tmp/qprov /tmp/qprov-fresh
+docker rm -f qt-notif-05-upgraded qt-notif-05-fresh 2>/dev/null
+rm -rf /tmp/qt-notif-05-upgraded /tmp/qt-notif-05-fresh
 ```
 
-Both containers and both bind-mounted directories are this test's own — it creates no named volume, and
-restoring the profile clears nothing it made.
+Both data directories are bind mounts rather than named volumes, so removing the directories is what
+removes their data.
 
 **Two things this leaves behind that a profile restore does not fix.** `Directory.Build.props` must be
 confirmed restored to its real `<Version>`, and `quotinator:local` must be rebuilt from the restored

@@ -407,16 +407,64 @@ document whose environment is both writes both, base first:
 
 #### Fresh
 
+**A profile is a recipe, not a shared instance.** Each test creates its own container and its own
+volume, named after itself, and destroys both when it is done. `<name>` below is this test's own name
+and `<port>` its own published port — substitute them, do not run the block verbatim:
+
 ```bash
-docker build -f docker/Dockerfile -t quotinator:local .
-docker rm -f qt-env 2>/dev/null; docker volume rm qt-env 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-env -p 8080:8080 -v qt-env:/data \
+docker rm -f <name> 2>/dev/null; docker volume rm <name>-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name <name> -p <port>:8080 -v <name>-data:/data \
   -e Quotinator__DataDir=/data \
   -e Quotinator__AdminApiKey=<your admin key> \
   -e Quotinator__AutoPurgeBundledImportActions=true \
   quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+until curl -sf http://localhost:<port>/api/v1/health > /dev/null; do sleep 1; done
 ```
+
+**Building the image is the one genuinely shared step**, because it is the same image for every test
+and rebuilding it per test would be absurd:
+
+```bash
+docker build -f docker/Dockerfile -t quotinator:local .
+```
+
+**Owning its own container is what makes a test independent, and it is not optional.** A suite sharing
+one container is sequential by construction: every test inherits whatever the last one left, and the
+only way to keep that honest is a restore step between each pair — which is coupling wearing a cleanup
+label. With per-test containers there is nothing to restore, because there is nothing shared.
+
+**In principle every test could then run at the same time.** In practice the machine will not have the
+resources for all of them at once, but nothing in the suite's design prevents it — and running several
+at a time is what makes an end-of-issue T2 pass quick rather than a serial slog. That is only true
+while no two tests can reach each other's state, which is why the rule is a necessity rather than a
+preference.
+
+**A test's own port is derived from where the document lives**, so two tests can never collide and no
+central allocation table has to be maintained:
+
+```
+18 <category ordinal> <test number>
+```
+
+| Category | Ports |
+|---|---|
+| `api-surface/` | `1810x` |
+| `identity-and-casing/` | `1820x` |
+| `database-lifecycle/` | `1830x` |
+| `startup-and-degradation/` | `1840x` |
+| `notifications-and-changelog/` | `1850x` |
+| `import-and-staged-actions/` | `186xx` |
+
+So `api-surface/02` publishes `18102:8080` and `import-and-staged-actions/14` publishes `18614:8080`.
+
+**A document needing more than one container raises the leading `18` to `19`, then `20`** — never
+appends a digit. `api-surface/03` runs two containers on `18103` and `19103`; `database-lifecycle/02`
+runs three, on `18302`, `19302` and `20302`. Appending would produce a six-digit number, and **the
+maximum TCP port is 65535**, so `181031` is not a port at all — `docker run -p 181031:8080` simply
+fails. The highest number this scheme can reach is `20619`.
+
+**The container port stays `8080`** — only the host side varies. A document mapping the ingress port
+instead says so and why, as `database-lifecycle/02` does with `8099`.
 
 **Fresh always builds from the working tree, never a published tag** — that is the point of running it
 at all, and a published tag would test something already shipped. The milestone base image is the
@@ -448,9 +496,15 @@ had this defect, which is part of why nothing after it could run.
 
 #### Invoking a profile
 
-Naming the profile in the `Environment:` field *is* the invocation. A document does not paste the block
-above; it runs it, then starts at its own first step, working against `qt-env` on `localhost:8080`.
-That is what keeps one canonical setup instead of forty-three copies drifting apart.
+The `Environment:` field names which recipe a test uses; the test's own first step instantiates it,
+with its own container name, volume and port written out. That is deliberately not a link back to this
+section: a document has to be runnable on its own, and a step saying "go and read the index" is not a
+command.
+
+**What this section prevents is drift in the *shape*, not duplication of the lines.** Every Fresh
+container mounts a volume at `/data`, sets `DataDir`, pins the auto-purge default, runs detached with
+`--name`, and waits on a readiness poll. A document departing from any of that says why, in
+`Preconditions`, as a delta.
 
 **A document needing more than the profile states the difference in `Preconditions`, as a delta** — an
 extra environment variable, a second container, a base image other than the default. Two rules follow:
@@ -462,8 +516,13 @@ extra environment variable, a second container, a base image other than the defa
   behaviour is broken" from "the variable was never set" — absence looks identical either way. Assert
   something positive that proves the setting took effect before relying on it.
 
-A document that runs several containers — an upgrade, a with-and-without comparison — names each one
-after itself rather than reusing `qt-env`, and says which is which.
+A document that runs several containers — an upgrade, a with-and-without comparison — names each after
+itself and says which is which.
+
+**Cleanup is the other half of owning your environment.** A test removes its own container and its own
+volume, always. There is no "restore the profile for the next test", because no next test is looking at
+it — that instruction only made sense while one container was shared, and it is the coupling this rule
+removes.
 
 #### Constrained
 

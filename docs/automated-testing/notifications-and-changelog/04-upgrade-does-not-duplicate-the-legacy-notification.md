@@ -9,8 +9,8 @@
 **Beyond the profile.** The Upgraded prior image is the **published
 `ghcr.io/dutchjafo/quotinator:1.8.3` tag** — the row this test is about is one that release actually
 shipped, so no other prior image reaches the state. Two app containers of this test's own share one
-bind-mounted directory, both publishing 8080 in turn: `qA` (the released image) and `qB` (the current
-build).
+bind-mounted directory, each on its own port: `qt-notif-04-183` (the released image, publishing
+`18504`) and `qt-notif-04-current` (the current build, publishing `19504`).
 
 #312 moved a notification's identity out of message text into structured metadata. A row written before
 that has no metadata, cannot be identified, and would be announced a second time. A migration backfills
@@ -29,7 +29,7 @@ not finished. Upgrading at that point would have tested nothing at all, silently
 So the wait polls for **the row this scenario is about**, not for a duration and not for a total:
 
 ```bash
-until [ "$(curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" \
+until [ "$(curl -s "http://localhost:18504/api/v1/notifications?pageSize=0" \
   | grep -c 'Two API operation IDs were renamed')" -ge 1 ]; do sleep 2; done
 ```
 
@@ -50,15 +50,15 @@ digit, and hide a real duplicate the next time one occurs.
 ### 1. Seed a genuine v1.8.3 database and wait for its announcement to exist
 
 ```bash
-docker rm -f qA qB 2>/dev/null
-rm -rf /tmp/qdup
-mkdir -p /tmp/qdup/data
-MSYS_NO_PATHCONV=1 docker run -d --name qA -e Quotinator__DataDir=/data \
-  -v /tmp/qdup/data:/data -p 8080:8080 ghcr.io/dutchjafo/quotinator:1.8.3
-until [ "$(curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" \
+docker rm -f qt-notif-04-183 qt-notif-04-current 2>/dev/null
+rm -rf /tmp/qt-notif-04
+mkdir -p /tmp/qt-notif-04/data
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-04-183 -e Quotinator__DataDir=/data \
+  -v /tmp/qt-notif-04/data:/data -p 18504:8080 ghcr.io/dutchjafo/quotinator:1.8.3
+until [ "$(curl -s "http://localhost:18504/api/v1/notifications?pageSize=0" \
   | grep -c 'Two API operation IDs were renamed')" -ge 1 ]; do sleep 2; done
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o 'Two API operation IDs were renamed' | wc -l
-docker rm -f qA
+curl -s "http://localhost:18504/api/v1/notifications?pageSize=0" | grep -o 'Two API operation IDs were renamed' | wc -l
+docker rm -f qt-notif-04-183
 ```
 
 **Expected:** `1`. The v1.8.3 announcement is present, so seeding has finished.
@@ -70,10 +70,10 @@ nothing at all, silently (see Determinism). Stop.
 ### 2. Upgrade to the current build against the same data
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run -d --name qB -e Quotinator__DataDir=/data \
-  -v /tmp/qdup/data:/data -p 8080:8080 quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o 'Two API operation IDs were renamed' | wc -l
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-04-current -e Quotinator__DataDir=/data \
+  -v /tmp/qt-notif-04/data:/data -p 19504:8080 quotinator:local
+until curl -sf http://localhost:19504/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:19504/api/v1/notifications?pageSize=0" | grep -o 'Two API operation IDs were renamed' | wc -l
 ```
 
 **Expected:** still **`1`**, not `2`. The upgrade enriched the existing announcement rather than writing
@@ -92,10 +92,10 @@ observation — it is the only thing distinguishing "enriched in place" from "re
 ## Cleanup
 
 ```bash
-docker rm -f qA qB 2>/dev/null
-rm -rf /tmp/qdup
+docker rm -f qt-notif-04-183 qt-notif-04-current 2>/dev/null
+rm -rf /tmp/qt-notif-04
 ```
 
-`qA` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing
-behind. Both containers and the bind-mounted directory are this test's own — it creates no named
-volume, and restoring the profile clears nothing it made.
+`qt-notif-04-183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing
+behind. The data directory is a bind mount rather than a named volume, so removing the directory is
+what removes its data.

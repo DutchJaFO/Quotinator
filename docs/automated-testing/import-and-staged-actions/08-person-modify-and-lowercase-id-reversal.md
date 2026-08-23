@@ -44,9 +44,24 @@ way.
 
 ## Steps
 
-Run the **Fresh** profile first.
+### 1. Create this test's own environment
 
-### 1. Import `smoke-173.json` — the initial add
+```bash
+docker rm -f qt-import-08 2>/dev/null; docker volume rm qt-import-08-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-08 -p 18608:8080 -v qt-import-08-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18608/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Import `smoke-173.json` — the initial add
 
 ```bash
 cat > .claude/temp/smoke-173.json <<'EOF'
@@ -56,7 +71,7 @@ cat > .claude/temp/smoke-173.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18608/api/v1/import"
 ```
 
 Confirm via DbInspector:
@@ -67,7 +82,7 @@ Confirm via DbInspector:
 **On failure:** without this row there is nothing for the re-imports below to Modify, and every later
 step would be staging a fresh add instead. Stop.
 
-### 2. Re-import `smoke-173-v2.json` — the same id with a changed `dateOfBirth`, under `review`
+### 3. Re-import `smoke-173-v2.json` — the same id with a changed `dateOfBirth`, under `review`
 
 ```bash
 cat > .claude/temp/smoke-173-v2.json <<'EOF'
@@ -77,13 +92,13 @@ cat > .claude/temp/smoke-173-v2.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-v2.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18608/api/v1/import"
 ```
 
 Copy that `batchId`, list its pending action, and copy the action `id`:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+curl -s "http://localhost:18608/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
 ```
 
 **Expected:** `smoke-173-v2.json`, under `review`, stages a `Pending` `Modify` with
@@ -92,20 +107,20 @@ curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<bat
 **On failure:** an empty pending listing means the `review` policy did not take effect and nothing was
 staged, so the decide and apply below would be operating on an empty batch. Stop.
 
-### 3. Decide the action and apply the batch
+### 4. Decide the action and apply the batch
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
   -d '{"personDateOfBirth":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
-  "http://localhost:8080/api/v1/import/actions/<action id>/decide"
+  "http://localhost:18608/api/v1/import/actions/<action id>/decide"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+  "http://localhost:18608/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
 **Expected:** after deciding and applying, `DateOfBirth` reads `1951-02-02` and `CompletenessStatus` is
 `Complete`.
 
-### 4. Import `smoke-173-v3.json` — a third `dateOfBirth`, and read what it staged
+### 5. Import `smoke-173-v3.json` — a third `dateOfBirth`, and read what it staged
 
 The `Complete` row must block it:
 
@@ -117,20 +132,20 @@ cat > .claude/temp/smoke-173-v3.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-v3.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18608/api/v1/import"
 ```
 
 Copy this third `batchId`, then read what it staged:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+curl -s "http://localhost:18608/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
 **Expected:** `smoke-173-v3.json`'s status tally reads **`Blocked`, not `Pending`**, and `DateOfBirth`
 stays `1951-02-02` — `1952-03-03` never lands.
 
-### 5. Import `smoke-173-addonly.json` — a fresh Person with an uppercase id
+### 6. Import `smoke-173-addonly.json` — a fresh Person with an uppercase id
 
 ```bash
 cat > .claude/temp/smoke-173-addonly.json <<'EOF'
@@ -140,42 +155,42 @@ cat > .claude/temp/smoke-173-addonly.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-addonly.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18608/api/v1/import"
 ```
 
 **Expected:** the response carries a `batchId` — the reversal below is scoped to it.
 
-### 6. Reverse the add-only batch, preview first
+### 7. Reverse the add-only batch, preview first
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
+  "http://localhost:18608/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
+  "http://localhost:18608/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
 
 **Expected:** both reversal calls return `200`.
 
-### 7. Confirm the soft-delete flag flipped
+### 8. Confirm the soft-delete flag flipped
 
 Confirm via DbInspector:
 `SELECT Id, IsDeleted FROM Quotinator_Person WHERE Id = 'f0000007-0000-4000-8000-000000000007'`
 
 **Expected:** `IsDeleted` genuinely flipped to `1`.
 
-### 8. Re-import `smoke-173-addonly.json` unchanged, and read what it staged
+### 9. Re-import `smoke-173-addonly.json` unchanged, and read what it staged
 
 This is the single distinction the test exists to draw, and nothing else in the run observes it:
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-addonly.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18608/api/v1/import"
 ```
 
 Copy that import's own `batchId`, then:
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions?batchId=<final batchId>&pageSize=0" \
+curl -s "http://localhost:18608/api/v1/import/actions?batchId=<final batchId>&pageSize=0" \
   | grep -o '"actionType":"[A-Za-z]*"' | sort | uniq -c
 ```
 
@@ -194,7 +209,6 @@ endpoint reported success in the failing case too, so the HTTP result alone neve
 
 ```bash
 rm -f .claude/temp/smoke-173*.json
+docker rm -f qt-import-08
+docker volume rm qt-import-08-data
 ```
-
-Two Person rows (one `Complete`), the filler quotes, the `Smoke Test Film` Source and the staged
-batches remain — restore the Fresh profile before the next test.

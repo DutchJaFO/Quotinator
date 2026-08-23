@@ -6,7 +6,7 @@
 
 ## Preconditions
 
-**Beyond the profile.** This test starts its own container (`smoke280` / `smoke280-data`) because it
+**Beyond the profile.** This test starts its own container (`qt-startup-03` / `qt-startup-03-data`) because it
 must issue requests *during* the startup window, before the profile's readiness poll would return — the
 profile hands back an already-healthy app, which is precisely the state this test cannot observe from.
 The volume must be new for the same reason it is new in the profile: against an already-seeded volume
@@ -35,14 +35,14 @@ The second wait is an ordinary readiness wait and polls.
 ### 1. Request the three surfaces during initialisation, before seeding completes
 
 ```bash
-docker rm -f smoke280 2>/dev/null
-docker volume rm smoke280-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name smoke280 -p 8080:8080 -v smoke280-data:/data \
+docker rm -f qt-startup-03 2>/dev/null
+docker volume rm qt-startup-03-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-03 -p 18403:8080 -v qt-startup-03-data:/data \
   -e Quotinator__DataDir=/data quotinator:local
 sleep 1
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/health"
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/version"
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18403/api/v1/health"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18403/api/v1/version"
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18403/"
 ```
 
 **Expected:**
@@ -60,9 +60,9 @@ re-run; do not lengthen the sleep.
 ### 2. Re-read health and version after seeding completes
 
 ```bash
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/health"
-curl -s "http://localhost:8080/api/v1/version"
+until curl -sf http://localhost:18403/api/v1/health > /dev/null; do sleep 1; done
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18403/api/v1/health"
+curl -s "http://localhost:18403/api/v1/version"
 ```
 
 **Expected:**
@@ -73,7 +73,7 @@ curl -s "http://localhost:8080/api/v1/version"
 ### 3. Confirm Kestrel bound before the app's own banner
 
 ```bash
-docker logs smoke280 2>&1 | grep "Now listening on\|Server] listening on\|Quotinator ready"
+docker logs qt-startup-03 2>&1 | grep "Now listening on\|Server] listening on\|Quotinator ready"
 ```
 
 **Expected:** **log ordering is itself an assertion.** `Microsoft.Hosting.Lifetime`'s own
@@ -90,8 +90,6 @@ otherwise look like a dead server.
 ## Cleanup
 
 ```bash
-docker rm -f smoke280 2>/dev/null
-docker volume rm smoke280-data
+docker rm -f qt-startup-03 2>/dev/null
+docker volume rm qt-startup-03-data
 ```
-
-The container and volume are this test's own, so restoring the profile clears nothing it made.

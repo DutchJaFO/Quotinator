@@ -9,7 +9,7 @@
 **Beyond the profile.** The volume is *reused across restarts* rather than being a one-boot
 environment — the whole test is about what successive startups against the same data directory do, and
 a fresh container each time would never reach the states being checked. It therefore runs its own
-container and volume (`smoke277` / `smoke277-data`) rather than `qt-env`, and a **second** container on
+container and volume (`qt-startup-02` / `qt-startup-02-data`), and a **second** container on
 the same volume for the final step, carrying `Quotinator__MaxBackupStorageGb=0`.
 
 The sequence matters and each step depends on the one before it: fresh baseline → healthy restart →
@@ -30,19 +30,19 @@ discrepancy is tracked separately, not resolved here.
   the lines being grepped outside the window.
 - The budget run needs its **own container with `Quotinator__MaxBackupStorageGb=0`** — the budget is
   configuration, not runtime state, so it cannot be applied to the running container. It is named
-  `smoke277budget` so the two are never confused in a `docker logs` line.
+  `qt-startup-02-budget` so the two are never confused in a `docker logs` line.
 
 ## Steps
 
 ### 1. Install a fresh baseline
 
 ```bash
-docker rm -f smoke277 2>/dev/null
-docker volume rm smoke277-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name smoke277 -p 8080:8080 -v smoke277-data:/data \
+docker rm -f qt-startup-02 2>/dev/null
+docker volume rm qt-startup-02-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-02 -p 18402:8080 -v qt-startup-02-data:/data \
   -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-docker logs smoke277 2>&1 | grep "Database - Backup"
+until curl -sf http://localhost:18402/api/v1/health > /dev/null; do sleep 1; done
+docker logs qt-startup-02 2>&1 | grep "Database - Backup"
 ```
 
 **Expected:** no `[Database - Backup]` lines at all. Nothing exists to lose.
@@ -54,10 +54,10 @@ different sequence. Stop and remove the volume before re-running.
 ### 2. Restart while healthy
 
 ```bash
-docker restart smoke277
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-docker logs smoke277 --since 60s 2>&1 | grep "Database - Backup\|schema is up to date"
-docker exec smoke277 sh -c "ls /data/backups 2>&1 || echo 'no backups dir — correct'"
+docker restart qt-startup-02
+until curl -sf http://localhost:18402/api/v1/health > /dev/null; do sleep 1; done
+docker logs qt-startup-02 --since 60s 2>&1 | grep "Database - Backup\|schema is up to date"
+docker exec qt-startup-02 sh -c "ls /data/backups 2>&1 || echo 'no backups dir — correct'"
 ```
 
 **Expected:** `schema is up to date` and **no** `[Database - Backup]` line. `/data/backups` should not
@@ -66,8 +66,8 @@ even exist yet.
 ### 3. Reset the database
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:8080/api/v1/admin/database/reset"
-docker exec smoke277 sh -c "ls /data/backups | wc -l"
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18402/api/v1/admin/database/reset"
+docker exec qt-startup-02 sh -c "ls /data/backups | wc -l"
 ```
 
 **Expected:** exactly one backup. Reset backs up unconditionally, being the highest-risk operation.
@@ -75,10 +75,10 @@ docker exec smoke277 sh -c "ls /data/backups | wc -l"
 ### 4. Restart immediately after the Reset
 
 ```bash
-docker restart smoke277
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-docker logs smoke277 --since 60s 2>&1 | grep "Database - Backup"
-docker exec smoke277 sh -c "ls /data/backups | wc -l"
+docker restart qt-startup-02
+until curl -sf http://localhost:18402/api/v1/health > /dev/null; do sleep 1; done
+docker logs qt-startup-02 --since 60s 2>&1 | grep "Database - Backup"
+docker exec qt-startup-02 sh -c "ls /data/backups | wc -l"
 ```
 
 **Expected:** takes a backup too, bringing the count to `2`. Content-seed has real work to do again
@@ -88,13 +88,13 @@ docker exec smoke277 sh -c "ls /data/backups | wc -l"
 ### 5. Reset again with the backup budget already exceeded
 
 ```bash
-docker rm -f smoke277 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name smoke277budget -p 8080:8080 -v smoke277-data:/data \
+docker rm -f qt-startup-02 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-02-budget -p 19402:8080 -v qt-startup-02-data:/data \
   -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest -e Quotinator__MaxBackupStorageGb=0 quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:8080/api/v1/admin/database/reset"
-docker logs smoke277budget --since 60s 2>&1 | grep "LogBackupSkippedBudgetExceeded"
-docker exec smoke277budget sh -c "ls /data/backups | wc -l"
+until curl -sf http://localhost:19402/api/v1/health > /dev/null; do sleep 1; done
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:19402/api/v1/admin/database/reset"
+docker logs qt-startup-02-budget --since 60s 2>&1 | grep "LogBackupSkippedBudgetExceeded"
+docker exec qt-startup-02-budget sh -c "ls /data/backups | wc -l"
 ```
 
 **Expected:** Reset still succeeds (`200`, database rebuilt). The backup is skipped with a warning log,
@@ -108,8 +108,6 @@ are observed state and are asserted above.
 ## Cleanup
 
 ```bash
-docker rm -f smoke277 smoke277budget 2>/dev/null
-docker volume rm smoke277-data
+docker rm -f qt-startup-02 qt-startup-02-budget 2>/dev/null
+docker volume rm qt-startup-02-data
 ```
-
-Both containers and the volume are this test's own, so restoring the profile clears nothing it made.

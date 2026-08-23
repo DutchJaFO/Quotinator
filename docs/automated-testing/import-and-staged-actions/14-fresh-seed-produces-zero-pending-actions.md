@@ -33,21 +33,36 @@ Nothing beyond the Fresh profile. The seed this test inspects is the profile's o
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Read what the first boot seeded
+### 1. Create this test's own environment
 
 ```bash
-curl -s http://localhost:8080/api/v1/version
+docker rm -f qt-import-14 2>/dev/null; docker volume rm qt-import-14-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-14 -p 18614:8080 -v qt-import-14-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18614/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Read what the first boot seeded
+
+```bash
+curl -s http://localhost:18614/api/v1/version
 ```
 
 **Expected:** `/version` reports a non-zero quote count and non-zero counts for every bundled entity
 type.
 
-### 2. Confirm nothing is left staged awaiting review
+### 3. Confirm nothing is left staged awaiting review
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?status=pending"
+curl -s -w "\n%{http_code}\n" "http://localhost:18614/api/v1/import/actions?status=pending"
 ```
 
 **Expected:** `200` with an **empty** `items` array. No file is left staged awaiting review.
@@ -56,12 +71,12 @@ curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?statu
 `"<file>" left staged awaiting review — batch "<id>", N action(s) pending a decision`. Inspect via
 `GET /import/actions?batchId=<id>` to see which entity or field lacks a rule or alias.
 
-### 3. Cross-check for duplicate Sources
+### 4. Cross-check for duplicate Sources
 
 ```bash
-docker cp qt-env:/data/quotinatordata.db .claude/temp/inspect-181.db
-docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
-docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
+docker cp qt-import-14:/data/quotinatordata.db .claude/temp/inspect-181.db
+docker cp qt-import-14:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
+docker cp qt-import-14:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
   --sql "SELECT Title, Type, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
 ```
@@ -78,4 +93,6 @@ both of which are the observation this test exists for.
 
 ```bash
 rm -f .claude/temp/inspect-181.db .claude/temp/inspect-181.db-wal .claude/temp/inspect-181.db-shm
+docker rm -f qt-import-14
+docker volume rm qt-import-14-data
 ```

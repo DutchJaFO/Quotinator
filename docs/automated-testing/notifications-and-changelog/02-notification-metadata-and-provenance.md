@@ -10,7 +10,8 @@
 `ghcr.io/dutchjafo/quotinator:1.8.3` tag** — the migration path must be exercised against a database
 created by the last published release, never an accumulated dev database, which is this test's ADR 009
 check as much as its own. Two app containers of this test's own share one bind-mounted directory:
-`q183` (the released image, **no published port**) and `q312` (the current build, publishing 8080).
+`qt-notif-02-183` (the released image, **no published port**) and `qt-notif-02-current` (the current build,
+publishing `18502`).
 A third kind of container appears repeatedly — a one-shot `--rm alpine` with `sqlite3` installed, used
 only to read the file.
 
@@ -31,7 +32,7 @@ exactly as they stand — the discrepancy is tracked separately, not resolved he
 ## Determinism
 
 - **The v1.8.3 container publishes no port**, so neither HTTP poll applies — it waits on its own log
-  instead. The current build publishes 8080 and polls health.
+  instead. The current build publishes `18502` and polls health.
 - **Do not assert how many migrations ran or which versions were involved.** Those numbers move every
   milestone and are consolidated before release. What is verified is that replay from a genuinely
   released database completes.
@@ -54,14 +55,14 @@ notification.**
 
 ```bash
 docker pull ghcr.io/dutchjafo/quotinator:1.8.3
-docker rm -f q183 q312 2>/dev/null
-rm -rf /tmp/q312
-mkdir -p /tmp/q312/data
-MSYS_NO_PATHCONV=1 docker run -d --name q183 -e Quotinator__DataDir=/data \
-  -v /tmp/q312/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
-until docker logs q183 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
-docker logs q183 2>&1 | grep baseline
-docker rm -f q183
+docker rm -f qt-notif-02-183 qt-notif-02-current 2>/dev/null
+rm -rf /tmp/qt-notif-02
+mkdir -p /tmp/qt-notif-02/data
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-02-183 -e Quotinator__DataDir=/data \
+  -v /tmp/qt-notif-02/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
+until docker logs qt-notif-02-183 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
+docker logs qt-notif-02-183 2>&1 | grep baseline
+docker rm -f qt-notif-02-183
 ```
 
 **Expected:** v1.8.3 reports `schema created at baseline`, the released schema this upgrade starts from.
@@ -73,10 +74,10 @@ file, which looks exactly like a passing check. Stop.
 ### 2. Start the current build against that database
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run -d --name q312 -e Quotinator__DataDir=/data \
-  -v /tmp/q312/data:/data -p 8080:8080 quotinator:local
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-docker logs q312 2>&1 | grep -E "pending|schema updated"
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-02-current -e Quotinator__DataDir=/data \
+  -v /tmp/qt-notif-02/data:/data -p 18502:8080 quotinator:local
+until curl -sf http://localhost:18502/api/v1/health > /dev/null; do sleep 1; done
+docker logs qt-notif-02-current 2>&1 | grep -E "pending|schema updated"
 ```
 
 **Expected:** the current build reports `applying … pending "Data" migration(s)` followed by
@@ -85,7 +86,7 @@ docker logs q312 2>&1 | grep -E "pending|schema updated"
 ### 3. Read the stored payload and its provenance
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-02/data:/data alpine sh -c \
   "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
    'SELECT n.Title, n.MetadataKind, n.Metadata, v.Application || \" \" || v.Version AS WrittenBy FROM System_Notification n LEFT JOIN System_AppVersion v ON v.Id = n.AppVersionId;'"
 ```
@@ -105,13 +106,13 @@ being written null or dangling.
 ### 4. Read the append-only version history
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-02/data:/data alpine sh -c \
   "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
    'SELECT Application, Version, SequenceNumber, COUNT(*) OVER () AS TotalRows FROM System_AppVersion;'"
 ```
 
 **Expected:** exactly one row: `Quotinator.Api | 1.8.3 | 1 | 1`. `Application` and `Version` are
-separate columns, never one concatenated value. After `docker restart q312`, still exactly one row:
+separate columns, never one concatenated value. After `docker restart qt-notif-02-current`, still exactly one row:
 recording the same application+version twice appends nothing, or every restart would grow the table.
 
 `SequenceNumber` is the explicit recording order. It exists because `DateCreated` is second-resolution
@@ -122,14 +123,14 @@ last".
 ### 5. Confirm dedupe is structural, not textual
 
 ```bash
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
-docker restart q312
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+curl -s "http://localhost:18502/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+docker restart qt-notif-02-current
+until curl -sf http://localhost:18502/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:18502/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
 
 **Expected:** `totalCount` is identical before and after the restart. A producer runs on every startup;
-the history is what stops it writing twice. **And no repeat on a second start** — `docker restart q312`
+the history is what stops it writing twice. **And no repeat on a second start** — `docker restart qt-notif-02-current`
 must not log `applying … pending` again.
 
 ### 6. Confirm the old text-matching path is genuinely dead
@@ -140,17 +141,17 @@ the shape being tested, so giving it a kind would defeat the point. Written agai
 container:
 
 ```bash
-docker stop -t 15 q312
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
+docker stop -t 15 qt-notif-02-current
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-02/data:/data alpine sh -c \
   "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db \
    \"INSERT INTO System_Notification (Id, Type, Title, Body, Metadata, MetadataKind, ExpiresAt, IsDismissed, DateCreated, IsDeleted) VALUES
      ('a0000312-0000-4000-8000-000000000001','Information','Legacy text-matched row','Two API operation IDs were renamed, including GetAllImportBatches.',NULL,NULL,NULL,0,'2026-01-01 00:00:00',0);\""
-docker start q312
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
-docker restart q312
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+docker start qt-notif-02-current
+until curl -sf http://localhost:18502/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:18502/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+docker restart qt-notif-02-current
+until curl -sf http://localhost:18502/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:18502/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
 
 **Expected:** `totalCount` **increases** across this restart — the opposite of step 5. The announcement
@@ -166,7 +167,7 @@ regression this step exists to catch, not a setup problem.
 ### 7. Confirm every payload states its release
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-02/data:/data alpine sh -c \
   "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
    'SELECT Title, MetadataKind, Metadata FROM System_Notification;'"
 ```
@@ -195,10 +196,10 @@ found by reading them rather than by any assertion.
 ## Cleanup
 
 ```bash
-docker rm -f q183 q312 2>/dev/null
-rm -rf /tmp/q312
+docker rm -f qt-notif-02-183 qt-notif-02-current 2>/dev/null
+rm -rf /tmp/qt-notif-02
 ```
 
-`q183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing
-behind. Both containers and the bind-mounted directory are this test's own — it creates no named
-volume, and restoring the profile clears nothing it made.
+`qt-notif-02-183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing
+behind. The data directory is a bind mount rather than a named volume, so removing the directory is
+what removes its data.

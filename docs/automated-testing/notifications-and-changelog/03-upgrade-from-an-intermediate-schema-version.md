@@ -9,8 +9,8 @@
 **Beyond the profile.** The Upgraded prior state is not an image at all but a **hand-built
 intermediate**: the published `ghcr.io/dutchjafo/quotinator:1.8.3` tag creates the released baseline,
 then one migration is applied by hand on top of it. Three containers of this test's own share one
-bind-mounted directory — `q183` (the released image, **no published port**), a one-shot `--rm alpine`
-running `sqlite3` to promote the schema, and `qv4` (the current build, publishing 8080).
+bind-mounted directory — `qt-notif-03-183` (the released image, **no published port**), a one-shot `--rm alpine`
+running `sqlite3` to promote the schema, and `qt-notif-03-current` (the current build, publishing `18503`).
 
 **This exists because upgrading from the last release alone missed a startup-killing bug.** The
 released-database path starts from v1.8.3, where `System_AppVersion` does not exist at all — so a
@@ -52,17 +52,17 @@ step 2's writes either — **do not "fix" the tool to allow writes.**
 
 ```bash
 # 1. released baseline — the schema version the last published image creates
-docker rm -f q183 qv4 2>/dev/null
-rm -rf /tmp/qv4
-mkdir -p /tmp/qv4/data
-MSYS_NO_PATHCONV=1 docker run -d --name q183 -e Quotinator__DataDir=/data \
-  -v /tmp/qv4/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
-until docker logs q183 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
-docker rm -f q183
+docker rm -f qt-notif-03-183 qt-notif-03-current 2>/dev/null
+rm -rf /tmp/qt-notif-03
+mkdir -p /tmp/qt-notif-03/data
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-03-183 -e Quotinator__DataDir=/data \
+  -v /tmp/qt-notif-03/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
+until docker logs qt-notif-03-183 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
+docker rm -f qt-notif-03-183
 ```
 
 **Expected:** the released image reaches `Quotinator ready`, leaving a v1.8.3 database in
-`/tmp/qv4/data`.
+`/tmp/qt-notif-03/data`.
 
 **On failure:** if it never reaches `Quotinator ready`, there is no released baseline to promote — the
 hand-applied SQL below would run against an empty or absent file and the current build would then be
@@ -73,7 +73,7 @@ starting from a state nobody constructed. Stop.
 ```bash
 # 2. hand-apply the migration that first creates System_AppVersion — one step past the baseline —
 #    plus a row the later column-adding migration must not destroy
-cat > /tmp/qv4/data/promote.sql <<'SQL'
+cat > /tmp/qt-notif-03/data/promote.sql <<'SQL'
 CREATE TABLE IF NOT EXISTS System_AppVersion (
     Id TEXT NOT NULL PRIMARY KEY, Version TEXT NOT NULL, DateCreated TEXT NOT NULL,
     DateModified TEXT, DateDeleted TEXT, IsDeleted INTEGER NOT NULL DEFAULT 0);
@@ -81,9 +81,9 @@ INSERT INTO System_AppVersion (Id, Version, DateCreated)
 VALUES (lower(hex(randomblob(16))), '1.8.4', '2026-08-15 20:00:00');
 INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (4, '2026-08-15 20:00:00');
 SQL
-docker run --rm -v /tmp/qv4/data:/data alpine \
+docker run --rm -v /tmp/qt-notif-03/data:/data alpine \
   sh -c "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db < /data/promote.sql"
-rm /tmp/qv4/data/promote.sql
+rm /tmp/qt-notif-03/data/promote.sql
 ```
 
 **Expected:** `sqlite3` completes with no error, leaving the database at the intermediate state — the
@@ -98,10 +98,10 @@ covers, not this one. Stop.
 
 ```bash
 # 3. current build against that state
-MSYS_NO_PATHCONV=1 docker run -d --name qv4 -e Quotinator__DataDir=/data \
-  -v /tmp/qv4/data:/data -p 8080:8080 quotinator:local
-until docker logs qv4 2>&1 | grep -qE "Quotinator ready|Unhandled exception"; do sleep 1; done
-docker logs qv4 2>&1 | grep -E "no such column|Unhandled|pending|schema updated|Quotinator ready"
+MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-03-current -e Quotinator__DataDir=/data \
+  -v /tmp/qt-notif-03/data:/data -p 18503:8080 quotinator:local
+until docker logs qt-notif-03-current 2>&1 | grep -qE "Quotinator ready|Unhandled exception"; do sleep 1; done
+docker logs qt-notif-03-current 2>&1 | grep -E "no such column|Unhandled|pending|schema updated|Quotinator ready"
 ```
 
 **Expected:** logs `applying … pending "Data" migration(s)`, then `schema updated`, and reaches
@@ -118,7 +118,7 @@ the build investigating. Stop.
 ### 4. Read the version history
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qv4/data:/data alpine sh -c \
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-03/data:/data alpine sh -c \
   "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
    'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
 ```
@@ -136,10 +136,10 @@ died.
 ## Cleanup
 
 ```bash
-docker rm -f q183 qv4 2>/dev/null
-rm -rf /tmp/qv4
+docker rm -f qt-notif-03-183 qt-notif-03-current 2>/dev/null
+rm -rf /tmp/qt-notif-03
 ```
 
-`q183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing
-behind. Both containers and the bind-mounted directory are this test's own — it creates no named
-volume, and restoring the profile clears nothing it made.
+`qt-notif-03-183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing
+behind. The data directory is a bind mount rather than a named volume, so removing the directory is
+what removes its data.

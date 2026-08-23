@@ -23,12 +23,27 @@ and decides one itself.
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Confirm no override is active, and capture the bundled file's rules for comparison
+### 1. Create this test's own environment
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled" \
+docker rm -f qt-import-18 2>/dev/null; docker volume rm qt-import-18-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-import-18 -p 18618:8080 -v qt-import-18-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18618/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app that
+never became healthy.
+
+### 2. Confirm no override is active, and capture the bundled file's rules for comparison
+
+```bash
+curl -s -w "\n%{http_code}\n" "http://localhost:18618/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled" \
   -o /tmp/rules-before.json
 grep -o '"isOverrideActive":[a-z]*' /tmp/rules-before.json
 grep -o '"entityId":"[^"]*"' /tmp/rules-before.json | sort > /tmp/rule-ids-before.txt
@@ -43,35 +58,35 @@ file already had" cannot be evaluated against a single after-reading — a `gene
 bundled rules and returned only its own would need the reader to have memorised the earlier output to
 notice.
 
-### 2. Stage a batch to generate from
+### 3. Stage a batch to generate from
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:8080/api/v1/import"
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=1"
+  "http://localhost:18618/api/v1/import"
+curl -s "http://localhost:18618/api/v1/import/actions?status=pending&pageSize=1"
 ```
 
 **Expected:** at least one pending action is listed. Copy its `id` and the response's own `batchId` —
 the next step needs both.
 
-### 3. Decide one action, and generate the rule-file override from it
+### 4. Decide one action, and generate the rule-file override from it
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
-  "http://localhost:8080/api/v1/import/actions/<id>/decide"
+  "http://localhost:18618/api/v1/import/actions/<id>/decide"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/rules/conflict/generate?fileName=quotinator-curated-conflict-rules.json&origin=Bundled&batchId=<batchId>"
+  "http://localhost:18618/api/v1/import/rules/conflict/generate?fileName=quotinator-curated-conflict-rules.json&origin=Bundled&batchId=<batchId>"
 ```
 
 **Expected:** `generate` returns `200` with `isOverrideActive: true` and `rulesAdded` at least `1`.
 
-### 4. Re-read the effective rules, and compare them against the before-capture
+### 5. Re-read the effective rules, and compare them against the before-capture
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled" \
+curl -s -w "\n%{http_code}\n" "http://localhost:18618/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled" \
   -o /tmp/rules-after.json
 grep -o '"isOverrideActive":[a-z]*' /tmp/rules-after.json
 grep -o '"entityId":"[^"]*"' /tmp/rules-after.json | sort > /tmp/rule-ids-after.txt
@@ -83,21 +98,21 @@ reads, and **`comm -23` prints nothing.** Every rule id present before is still 
 the merge-preserves-existing-rules guarantee `EffectiveRuleFileResolver` exists for, and the only form
 in which it can actually fail. Any id printed is a bundled rule the merge dropped.
 
-### 5. Remove the override, and repeat the `DELETE`
+### 6. Remove the override, and repeat the `DELETE`
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
+  "http://localhost:18618/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
 curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
+  "http://localhost:18618/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
 ```
 
 **Expected:** `DELETE` returns `204`; a repeat `DELETE` returns `404`.
 
-### 6. Call the alias-candidate suggestion endpoint — read-only, no key needed
+### 7. Call the alias-candidate suggestion endpoint — read-only, no key needed
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/alias?fileName=quotinator-curated-source-aliases.json&origin=Bundled"
+curl -s -w "\n%{http_code}\n" "http://localhost:18618/api/v1/import/rules/alias?fileName=quotinator-curated-source-aliases.json&origin=Bundled"
 ```
 
 **Expected:** `200` with a well-formed `candidates` array.
@@ -133,10 +148,8 @@ part of a test run.**
 
 ```bash
 rm -f /tmp/rules-before.json /tmp/rules-after.json /tmp/rule-ids-before.txt /tmp/rule-ids-after.txt
+docker rm -f qt-import-18
+docker volume rm qt-import-18-data
 ```
 
 The `DELETE` above removes the override. Confirm the first of the two returned `204` before moving on.
-
-That is not everything this test leaves behind: the `review` import stages a batch against the curated
-file and one of its actions is decided but never applied. Restore the Fresh profile before the next
-test.

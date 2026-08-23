@@ -8,8 +8,8 @@
 
 **Beyond the profile.** The Upgraded prior image is the **published `ghcr.io/dutchjafo/quotinator:1.8.2`
 tag**, not the milestone base image — this test is about the upgrade a real user performs from a real
-historical release. It runs its own container and volume (`smoke294` / `smoke294-data`, the name reused
-across the two runs) rather than `qt-env`, and the Constrained defect is `--read-only` on the root
+historical release. It runs its own container and volume (`qt-startup-04` / `qt-startup-04-data`, the name reused
+across the two runs), and the Constrained defect is `--read-only` on the root
 filesystem with `/data` left writable.
 
 The prior release matters for a specific reason: an earlier attempt at this test used a fresh baseline
@@ -51,14 +51,14 @@ AppArmor kernel support to test the real mechanism directly (confirmed live:
 ### 1. Seed a populated database from the predecessor release
 
 ```bash
-docker rm -f smoke294 2>/dev/null
-docker volume rm smoke294-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name smoke294 -p 8080:8080 \
-  -v smoke294-data:/data -e Quotinator__DataDir=/data \
+docker rm -f qt-startup-04 2>/dev/null
+docker volume rm qt-startup-04-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-04 -p 18404:8080 \
+  -v qt-startup-04-data:/data -e Quotinator__DataDir=/data \
   ghcr.io/dutchjafo/quotinator:1.8.2
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
-docker stop -t 15 smoke294 && docker rm smoke294
+until curl -sf http://localhost:18404/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:18404/api/v1/version" | grep -o '"quotes":[0-9]*'
+docker stop -t 15 qt-startup-04 && docker rm qt-startup-04
 ```
 
 **Expected:** a non-zero `quotes` count, and a seed reporting zero failures — nothing `Pending`,
@@ -71,14 +71,14 @@ environment. Stop and re-seed rather than continuing.
 ### 2. Upgrade to the current build under the restricted environment
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run -d --name smoke294 -p 8080:8080 \
+MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-04 -p 18404:8080 \
   --read-only \
-  -v smoke294-data:/data -e Quotinator__DataDir=/data \
+  -v qt-startup-04-data:/data -e Quotinator__DataDir=/data \
   quotinator:local
-until curl -s -o /dev/null http://localhost:8080/api/v1/health; do sleep 1; done
-curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/health"
-curl -s "http://localhost:8080/api/v1/version"
-docker logs smoke294 2>&1 | grep "migration applied\|SqliteException\|SQLite Error"
+until curl -s -o /dev/null http://localhost:18404/api/v1/health; do sleep 1; done
+curl -s -w " [%{http_code}]\n" "http://localhost:18404/api/v1/health"
+curl -s "http://localhost:18404/api/v1/version"
+docker logs qt-startup-04 2>&1 | grep "migration applied\|SqliteException\|SQLite Error"
 ```
 
 **Expected:** `/health` returns `200 {"status":"healthy"}`. `/version` shows the **same** quote count as
@@ -107,7 +107,7 @@ In `Program.cs`, temporarily change `useMemoryTempStore: true` to `false` at `Sq
 DI registration site, rebuild, and repeat the upgrade against a **fresh clone** of the seeded volume:
 
 ```bash
-docker run --rm -v smoke294-data:/from -v smoke294-data-clone:/to alpine sh -c "cp -a /from/. /to/"
+docker run --rm -v qt-startup-04-data:/from -v qt-startup-04-data-clone:/to alpine sh -c "cp -a /from/. /to/"
 ```
 
 It must reproduce a genuine failure somewhere in `ApplyMigrationPhaseAsync`. Revert the flag to `true`
@@ -116,10 +116,9 @@ before committing anything.
 ## Cleanup
 
 ```bash
-docker rm -f smoke294 2>/dev/null
-docker volume rm smoke294-data smoke294-data-clone 2>/dev/null
+docker rm -f qt-startup-04 2>/dev/null
+docker volume rm qt-startup-04-data qt-startup-04-data-clone 2>/dev/null
 ```
 
-The container and both volumes are this test's own, so restoring the profile clears nothing it made.
 If the gut-check section above was run, confirm `useMemoryTempStore: true` has been restored in
 `Program.cs` and the throwaway image rebuilt from it.

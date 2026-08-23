@@ -24,20 +24,35 @@ the same bug class
 
 ## Steps
 
-Run the **Fresh** profile first.
-
-### 1. Establish the log's starting state
+### 1. Create this test's own environment
 
 ```bash
-docker logs qt-env 2>&1 | grep -c "SQLite Error 19"
+docker rm -f qt-id-03 2>/dev/null; docker volume rm qt-id-03-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-id-03 -p 18203:8080 -v qt-id-03-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18203/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app
+that never became healthy.
+
+### 2. Establish the log's starting state
+
+```bash
+docker logs qt-id-03 2>&1 | grep -c "SQLite Error 19"
 ```
 
 **Expected:** `0`. The profile's own seed produced no foreign-key violation.
 
-**On failure:** a non-zero count here means the seed itself is failing, and step 3's reading would be
+**On failure:** a non-zero count here means the seed itself is failing, and step 4's reading would be
 measuring that rather than this test's import. Stop — this is a profile problem, not a result.
 
-### 2. Import a conversation line whose `quoteId` casing does not match its quote
+### 3. Import a conversation line whose `quoteId` casing does not match its quote
 
 ```bash
 cat > .claude/temp/smoke-210-conv.json <<'EOF'
@@ -46,23 +61,23 @@ cat > .claude/temp/smoke-210-conv.json <<'EOF'
   "conversations": [{"id":"f0000210-0000-4000-8000-000000000212","description":"A #210 smoke test conversation.","lines":[{"order":1,"type":"quote","quoteId":"F0000210-0000-4000-8000-000000000211"}]}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210-conv.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210-conv.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18203/api/v1/import"
 ```
 
 **Expected:** `200`.
 
-**On failure:** stop. A non-`200` here is the bug this test exists to catch, and step 3 names it.
+**On failure:** stop. A non-`200` here is the bug this test exists to catch, and step 4 names it.
 
-### 3. Confirm no foreign-key violation was logged
+### 4. Confirm no foreign-key violation was logged
 
 ```bash
-docker logs qt-env 2>&1 | grep -c "SQLite Error 19"
+docker logs qt-id-03 2>&1 | grep -c "SQLite Error 19"
 ```
 
-**Expected:** still `0` — unchanged from step 1.
+**Expected:** still `0` — unchanged from step 2.
 
 The status code alone is not the whole assertion: the log is where
-`SQLite Error 19: FOREIGN KEY constraint failed` would name itself, and comparing against step 1 is what
+`SQLite Error 19: FOREIGN KEY constraint failed` would name itself, and comparing against step 2 is what
 makes this specific to the import rather than to whatever the container did before it.
 
 ## Observed effect
@@ -72,7 +87,8 @@ Not yet established as a captured record. The failure mode is known and specific
 
 ## Cleanup
 
-`rm .claude/temp/smoke-210-conv.json`
-
-The imported quote and conversation remain in the database — restore the Fresh profile before the next
-test.
+```bash
+docker rm -f qt-id-03 2>/dev/null
+docker volume rm qt-id-03-data 2>/dev/null
+rm .claude/temp/smoke-210-conv.json
+```

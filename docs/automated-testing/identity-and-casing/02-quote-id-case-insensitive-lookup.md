@@ -25,15 +25,30 @@ the one fully-unmitigated gap of this kind found across the whole codebase.
 
 ## Steps
 
-Run the **Fresh** profile first.
+### 1. Create this test's own environment
 
-### 1. Import a fixture whose explicit id is uppercase
+```bash
+docker rm -f qt-id-02 2>/dev/null; docker volume rm qt-id-02-data 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-id-02 -p 18202:8080 -v qt-id-02-data:/data \
+  -e Quotinator__DataDir=/data \
+  -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  quotinator:local
+until curl -sf http://localhost:18202/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Expected:** the app reports healthy — the bundled seed has finished.
+
+**On failure:** every step below reads this container. Stop rather than running them against an app
+that never became healthy.
+
+### 2. Import a fixture whose explicit id is uppercase
 
 ```bash
 cat > .claude/temp/smoke-210.json <<'EOF'
 {"quotes": [{"id":"F0000210-0000-4000-8000-000000000210","quote":"A #210 smoke test quote with an uppercase explicit id.","originalLanguage":"en","source":"Smoke Test Film 210","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18202/api/v1/import"
 ```
 
 **Expected:** import returns `200`.
@@ -41,19 +56,19 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-21
 **On failure:** stop. Neither lookup below can distinguish "the read is case-sensitive" from "the quote
 was never stored".
 
-### 2. Fetch the quote by the lowercase form of its id
+### 3. Fetch the quote by the lowercase form of its id
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes/f0000210-0000-4000-8000-000000000210"
+curl -s -w "\n%{http_code}\n" "http://localhost:18202/api/v1/quotes/f0000210-0000-4000-8000-000000000210"
 ```
 
 **Expected:** `200` with the quote, and the response's own `id` field is the canonical **lowercase**
 form (`f0000210-…`) regardless of the uppercase casing the file supplied.
 
-### 3. Fetch the same quote by the file's own uppercase casing
+### 4. Fetch the same quote by the file's own uppercase casing
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes/F0000210-0000-4000-8000-000000000210"
+curl -s -w "\n%{http_code}\n" "http://localhost:18202/api/v1/quotes/F0000210-0000-4000-8000-000000000210"
 ```
 
 **Expected:** `200` with the same quote, its `id` again rendered in the canonical lowercase form.
@@ -93,7 +108,8 @@ endpoint (`Sql.Notifications.UpdateDismissById`, a *write* by id). Closing that 
 
 ## Cleanup
 
-`rm .claude/temp/smoke-210.json`
-
-The imported quote and its Source remain in the database — restore the Fresh profile before the next
-test.
+```bash
+docker rm -f qt-id-02 2>/dev/null
+docker volume rm qt-id-02-data 2>/dev/null
+rm .claude/temp/smoke-210.json
+```
