@@ -634,11 +634,33 @@ are cheap and mechanical.
 - Inconsistent `/tmp` directory resets — `/tmp/qprov` and `/tmp/qws` are cleared, `/tmp/q312`,
   `/tmp/qv4`, `/tmp/qdup` and `/tmp/qt-changelog` are reused.
 
-**Out of scope here, recorded instead.** The cannot-fail defects (`03`, `09`, `16`, `17` and the rest),
-the two live contradictions (`startup/01` vs `02` on backup-on-healthy-restart; `notif/02` vs `05` on
-the version pin), the missing unhappy flows, and re-tiering the 25 documents with no live component.
-Those are pre-existing test-quality defects, not regressions this restructure introduced — the line is
-that #339 leaves every document runnable and no worse than the file it replaced, and files the rest.
+### Scope, settled (developer direction, 2026-08-23)
+
+**Every test in this suite must add value and actually test the defect it claims to test.** That is
+this issue's bar, not "runnable and no worse than the file it replaced" — an earlier line drawn here
+and since overtaken. A document that cannot fail is not coverage, and moving it into a tidier folder
+does not make it coverage. So the cannot-fail defects are fixed here rather than filed.
+
+What that pulls in:
+
+- **Every document that cannot fail**, by the three mechanisms step 14 found — an absence asserted with
+  no positive control, a state change asserted with no read-back, and a comparison with only one side
+  measured.
+- **Both live contradictions** — `startup/01` vs `02` on backup-on-healthy-restart, `notif/02` vs `05`
+  on the version pin. Two documents asserting opposite outcomes means at least one is wrong, and
+  neither is coverage until that is settled.
+- **The two surviving predicted counts** (verification row 18).
+
+**A dedicated issue is only for coverage that does not exist at all** (developer direction,
+2026-08-23) — not for repairing a test that exists but does not work. One thing meets that bar here:
+**`User`-origin coverage and origin parity.** Content reaches the database by three routes with
+separately-configured behaviour, and this suite exercises two of them; the `{dataDir}/imports/` folder
+has never been touched. That is a test nobody has written, so it is filed rather than fixed.
+
+**Open, not decided: re-tiering the 25 documents with no live component.** By the rule above it is not
+a candidate for its own issue — the behaviour *is* tested today, just live — but converting them means
+writing new C# in another test project rather than repairing a document here. Raised for a decision
+rather than settled in either direction.
 
 ### 18. Register every new document in `Quotinator.slnx` and confirm the guards green
 

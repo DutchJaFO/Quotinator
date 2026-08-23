@@ -10,12 +10,7 @@ A batch applied entirely through the staged review → decide → apply flow —
 `POST /import/actions/apply` directly, **not** `POST /import`'s own single-shot path. The distinction is
 the whole subject: only the staged path exhibited the defect.
 
-Re-import the curated file under `review` as in
-[`01-staged-action-review-workflow.md`](01-staged-action-review-workflow.md) and decide every pending
-action until none remain, then run the steps below.
-
-**No command — the setup import and the per-action `decide` calls are not reproduced here, only
-referenced, so this document cannot be run on its own as written.**
+The steps below stage that batch themselves rather than borrowing one, so this document runs alone.
 
 ## Determinism
 
@@ -26,6 +21,39 @@ referenced, so this document cannot be run on its own as written.**
   single-shot path exercises a different code route and would not have shown the original bug.
 
 ## Steps
+
+**Stage a batch under `review`:**
+
+```bash
+curl -s -X POST -H "X-Api-Key: <your admin key>" \
+  -F "file=@data/sources/quotinator-curated.json" \
+  -F 'settings={"duplicateResolution":{"default":"review"}}' \
+  -w "\n%{http_code}\n" \
+  "http://localhost:8080/api/v1/import"
+```
+
+Copy the `batchId`, then list this batch's pending actions:
+
+```bash
+curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0" \
+  | grep -o '"id":"[^"]*"'
+```
+
+**Decide every one of them** — repeat for each `id` listed, then confirm none is left:
+
+```bash
+curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+  -d '{"quoteText":{"choice":"keep"}}' \
+  "http://localhost:8080/api/v1/import/actions/<id>/decide"
+curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0" \
+  | grep -o '"totalCount":[0-9]*'
+```
+
+**That count must read `0` before going on.** With any action still pending, `apply` returns `422` by
+design and the reversal below is never reached — so a genuine failure would be indistinguishable from
+an incomplete setup, which is the trap this confirmation exists to close.
+
+**Apply through the staged path, then reverse:**
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
@@ -40,6 +68,14 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
 
 `apply` returns `200`. **Both `reverse` calls — preview and real — also return `200`**, never the `422`
 this issue reported.
+
+That `422` is what makes this test able to fail: the defect was `Import_Batch.Status` never being set
+to `Applied` by the staged path, and `reverse` rejecting the batch as a result. A regression shows up
+directly as the status code, so no separate read-back is needed here.
+
+**`preview=true` returning `200` is not a claim that it changed nothing** — nothing in this run reads
+state before and after the preview. It is asserted only as "the preview route answers"; if the
+no-side-effect guarantee ever needs proving, that is a read-back this document does not currently have.
 
 ## Observed effect
 

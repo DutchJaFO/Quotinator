@@ -55,12 +55,49 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
 Confirm via DbInspector:
 `SELECT Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM Quotinator_Person WHERE Id = 'f0000005-0000-4000-8000-000000000005'`
 
-Then re-import the same id with a changed `dateOfBirth` under `review`, decide with
-`{"personDateOfBirth":{"choice":"replace"},"markCompletenessAs":"Complete"}`, apply, and re-import once
-more with another changed `dateOfBirth` under `review`.
+**Re-import the same id with a changed `dateOfBirth`, under `review`:**
 
-**No command — the two changed-`dateOfBirth` fixtures are not defined, and neither is how the action
-`id` and `batchId` for the `decide`/`apply` calls are obtained.**
+```bash
+cat > .claude/temp/smoke-173-v2.json <<'EOF'
+{
+  "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"A #173 smoke test filler quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":"Smoke Test Person","type":"movie","genres":[],"translations":{}}],
+  "people": [{"id":"f0000005-0000-4000-8000-000000000005","name":"Smoke Test Person","dateOfBirth":"1951-02-02","dateOfDeath":null}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-v2.json" \
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+```
+
+Copy that `batchId`, list its pending action, copy the action `id`, then decide and apply:
+
+```bash
+curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+  -d '{"personDateOfBirth":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
+  "http://localhost:8080/api/v1/import/actions/<action id>/decide"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+```
+
+**Now a third import with yet another `dateOfBirth` — the `Complete` row must block it:**
+
+```bash
+cat > .claude/temp/smoke-173-v3.json <<'EOF'
+{
+  "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"A #173 smoke test filler quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":"Smoke Test Person","type":"movie","genres":[],"translations":{}}],
+  "people": [{"id":"f0000005-0000-4000-8000-000000000005","name":"Smoke Test Person","dateOfBirth":"1952-03-03","dateOfDeath":null}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-v3.json" \
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+```
+
+Copy this third `batchId`, then read what it staged:
+
+```bash
+curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+  | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
+```
 
 **Second fixture — a fresh Person with an uppercase id:**
 
@@ -87,24 +124,39 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
 Confirm via DbInspector:
 `SELECT Id, IsDeleted FROM Quotinator_Person WHERE Id = 'f0000007-0000-4000-8000-000000000007'`
 
-Then re-import the exact same fixture one more time:
+Then re-import the exact same fixture one more time, and **read what it staged** — this is the single
+distinction the test exists to draw, and nothing else in the run observes it:
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-addonly.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
 ```
 
+Copy that import's own `batchId`, then:
+
+```bash
+curl -s "http://localhost:8080/api/v1/import/actions?batchId=<final batchId>&pageSize=0" \
+  | grep -o '"actionType":"[A-Za-z]*"' | sort | uniq -c
+```
+
 ## Expected output
 
-- The first import returns `200` with the Person added.
-- The `review` re-import stages a `Pending` `Modify` action with `ambiguousFields: ["dateOfBirth"]`.
-- After deciding and applying: the corrected `DateOfBirth` and `CompletenessStatus: Complete`.
-- The third import stages **`Blocked`, not `Pending`**, and the on-disk value is unchanged.
+Each bullet names its fixture — four imports run here and they differ only by which file they upload.
+
+- **`smoke-173.json`** returns `200` with the Person added, `DateOfBirth` `1950-01-01`.
+- **`smoke-173-v2.json`**, under `review`, stages a `Pending` `Modify` with
+  `ambiguousFields: ["dateOfBirth"]`. After deciding and applying, `DateOfBirth` reads `1951-02-02` and
+  `CompletenessStatus` is `Complete`.
+- **`smoke-173-v3.json`**'s status tally reads **`Blocked`, not `Pending`**, and `DateOfBirth` stays
+  `1951-02-02` — `1952-03-03` never lands. Reading the tally is the assertion; the import returns a
+  success code either way.
 - Both reversal calls return `200`, and
   `SELECT Id, IsDeleted FROM Quotinator_Person WHERE Id = 'f0000007-0000-4000-8000-000000000007'` shows `IsDeleted` genuinely
   flipped to `1`.
-- The final re-import stages as a **fresh `Add`, not `Modify`** — `Modify` would mean the reversal
-  silently no-op'd and the row was never truly gone — and `IsDeleted` is back to `0` afterwards.
+- The final re-import's action tally shows **`Add`, not `Modify`**, for the Person. `Modify` would mean
+  the reversal silently no-op'd and the row was never truly gone — the endpoint reported success in that
+  failing case too, so this tally is the only thing that separates them.
+- `IsDeleted` is back to `0` afterwards.
 
 ## Observed effect
 
@@ -114,5 +166,8 @@ endpoint reported success in the failing case too, so the HTTP result alone neve
 ## Cleanup
 
 ```bash
-rm -f .claude/temp/smoke-173.json .claude/temp/smoke-173-addonly.json
+rm -f .claude/temp/smoke-173*.json
 ```
+
+Two Person rows (one `Complete`), the filler quotes, the `Smoke Test Film` Source and the staged
+batches remain — restore the Fresh profile before the next test.

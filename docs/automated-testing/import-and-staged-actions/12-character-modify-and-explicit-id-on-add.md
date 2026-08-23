@@ -24,6 +24,17 @@ uses.
 
 ## Determinism
 
+- **Every listing is scoped to this test's own `batchId` and read with `pageSize=0`.** Unscoped, the
+  default page is 20 and any staged action left by an earlier run satisfies a `status=pending` or
+  `status=blocked` check without this test having produced it — and the masterdata list holds hundreds
+  of characters, so "includes X" read off page one is satisfied by X being on page twelve. Neither
+  failure is visible in the output.
+- **The Character chosen for the Modify half must not already be `Complete`.** The sequence is Modify →
+  `Pending`, decide with `markCompletenessAs: "Complete"`, then Modify again → `Blocked`. Running this
+  document twice against the same database picks a Character the previous run already marked
+  `Complete`, so the first Modify stages `Blocked` instead of `Pending` and the failure looks like a
+  defect in the guard rather than in the setup. Restore the Fresh profile first.
+
 **The explicit-id-on-Add half exists because a unit-test-only pass could not have caught the bug.** An
 explicit `characters[]` id matching nothing was being silently discarded in favour of a freshly-computed
 `EntityIdentity`-derived id — unlike `PlanSourcesAsync`'s established `canonicalId ?? EntityIdentity.SourceId(...)`
@@ -51,7 +62,8 @@ cat > .claude/temp/smoke-175-add.json <<'EOF'
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-add.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
-curl -s "http://localhost:8080/api/v1/masterdata/characters"
+curl -s "http://localhost:8080/api/v1/masterdata/characters?pageSize=0" \
+  | grep -c "Smoke Test New Character"
 ```
 
 **Correct an existing Character by id, under `review`:**
@@ -65,7 +77,12 @@ cat > .claude/temp/smoke-175-modify.json <<'EOF'
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-modify.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending"
+```
+
+Copy the `batchId` from that response, then list **only this batch's** pending actions:
+
+```bash
+curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
 ```
 
 Decide and apply:
@@ -83,7 +100,12 @@ Then re-attempt another Modify against the same id under `review` — the same f
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-modify.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
-curl -s "http://localhost:8080/api/v1/import/actions?status=blocked"
+```
+
+Copy this second import's own `batchId`, then:
+
+```bash
+curl -s "http://localhost:8080/api/v1/import/actions?status=blocked&batchId=<second batchId>&pageSize=0"
 ```
 
 **Explicit id honoured on Add — the T2-only fix:**
@@ -116,8 +138,8 @@ curl -s "http://localhost:8080/api/v1/masterdata/sources?pageSize=0"
 
 ## Expected output
 
-- The Add returns `200`, and `masterdata/characters` includes "Smoke Test New Character" linked to the
-  existing `Airplane!` Source — no id supplied, resolved via ADR 013's algorithm finding no candidate,
+- The Add returns `200`, and the `grep -c` for "Smoke Test New Character" reports `1` — linked to the
+  existing `Airplane!` Source, with no id supplied, resolved via ADR 013's algorithm finding no candidate,
   then a genuine Add.
 - The Modify returns `202` with one pending id, and `ambiguousFields` is `["name"]` **only**.
 - After deciding and applying, `name` reads "Renamed Via Smoke Test" and `completenessStatus` is

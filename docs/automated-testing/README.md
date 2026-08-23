@@ -277,6 +277,14 @@ guess, and the rule above applies to it.
 and shift when one is inserted. Cross-references between tests are links, not prose pointing at a
 number.
 
+**The same applies inside a document.** An `Expected output` bullet names the endpoint or the command it
+describes — never "the first call", "the second one", or "the call above". A `Steps` section is several
+code blocks holding many `curl` invocations, so a positional reference makes the reader count them to
+find out what is being claimed, and reads as a contradiction the moment neighbouring bullets state
+different status codes for different endpoints. Found exactly that way: `200`, `404` and `202` listed
+in consecutive bullets, correct for three separate endpoints, and unreadable as anything but a conflict
+until each was named.
+
 **This list only grows.** When a pass surfaces a new bug or edge case, add its verification here in
 the same commit that fixes it.
 
@@ -643,22 +651,52 @@ Every variable the outcome depends on, and how each is pinned.
 
 ## Steps
 
-The commands, in order — the happy flow and the unhappy flow, not one of them.
+### 1. <what this step does>
 
-## Expected output
+```bash
+<the command>
+```
 
-What each command must produce for a pass, including what the unhappy flow produces and how the
-application behaves while producing it.
+**Expected:** <what a pass looks like, precisely enough to check>.
+**On failure:** <what a wrong result here means, and stop — do not run step 2>.
+
+### 2. <the next step>
+
+…and so on, the happy flow and the unhappy flow, not one of them.
 
 ## Observed effect
 
 What this circumstance actually produces: the log lines, health response, UI state and messages an
-operator would see. Distinct from Expected output, which states only what must be true for a pass.
+operator would see. Distinct from the per-step expectations, which state only what must be true for a
+pass.
 
 ## Cleanup
 
 How to return the machine to a clean state.
 ```
+
+**Each step carries its own expected result, and a failed step stops the run** (developer direction,
+2026-08-23). A single `Expected output` section at the end has three faults this shape removes:
+
+- **Feedback arrives too late.** A run that went wrong at step 2 is discovered at step 9, after seven
+  more commands have written state on top of the failure — and the operator now has to work out which
+  observations are still meaningful.
+- **It invites finishing a test that has already failed.** Naming the consequence at the step is what
+  makes stopping the obvious action rather than a judgement call.
+- **It forces positional references.** With expectations pooled at the end, they get written as "the
+  first call", "the second one" — and the reader has to count `curl` invocations across several code
+  blocks to find out what is being claimed. Found live: `200`, `404` and `202` in consecutive bullets,
+  each correct for a different endpoint, unreadable as anything but a contradiction. An expectation
+  written beside its command cannot have this problem.
+
+**`On failure:` is not required on every step** — only where a wrong result means something a reader
+would otherwise misread: a precondition that did not take effect, a setup that silently did nothing, an
+error that looks like the assertion it was meant to test.
+
+**Cross-cutting commentary about an expectation's shape belongs in `Determinism`, not beside a step.**
+"Never assert a total here", "this count moves with the dataset", "assert the relationship rather than
+the figure" — these explain what the outcome depends on, which is exactly what `Determinism` is for.
+Keep the per-step expectation to what a pass looks like.
 
 **`Preconditions` and `Determinism` are the two fields that exist because of a specific failure.** Two
 sections of the file this folder replaces carried identical setup and asserted opposite outcomes — one

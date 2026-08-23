@@ -31,7 +31,7 @@ run stages through it.
 **Confirm the endpoint is reachable, and that the legacy machinery is gone:**
 
 ```bash
-curl -s "http://localhost:8080/api/v1/import/actions"
+curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions"
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/conflicts"
 ```
 
@@ -43,10 +43,13 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   -w "\n%{http_code}\n" \
   "http://localhost:8080/api/v1/import"
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending"
 ```
 
-Copy one pending action's `id` and its `batchId`.
+Copy the response's `batchId`, then list **only this batch's** pending actions and copy one action `id`:
+
+```bash
+curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+```
 
 **Decide, undo, decide again, then apply:**
 
@@ -54,30 +57,40 @@ Copy one pending action's `id` and its `batchId`.
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
   "http://localhost:8080/api/v1/import/actions/<id>/decide"
-curl -s "http://localhost:8080/api/v1/import/actions?status=Decided"
+curl -s "http://localhost:8080/api/v1/import/actions?status=Decided&batchId=<batchId>&pageSize=0"
 curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/<id>/undo"
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
   "http://localhost:8080/api/v1/import/actions/<id>/decide"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/actions/apply?batchId=<lowercase the batchId here too>"
+curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
+  | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
 ## Expected output
 
-- The first call returns `200` with an empty or existing `items` list — the endpoint is reachable with
-  no setup.
-- **`/import/conflicts` must return `404`.** It was removed entirely in #154 Phase B; anything else
+Three different endpoints are called here and each has its own expected status — read them by endpoint,
+not by position:
+
+- **`GET /import/actions`** returns `200` — the staging endpoint is reachable with no setup. Its `items`
+  may be empty or populated; that is not the assertion, the status code is.
+- **`GET /import/conflicts`** returns `404`. It was removed entirely in #154 Phase B; anything else
   means the legacy manual-review machinery has regressed back in.
-- The import returns **`202`, not `200`** — the re-imported quotes are genuine duplicates left
-  `Pending` under `review`.
-- `status=pending` shows exactly the action(s) just created.
+- **`POST /import`** returns `202`, **not** `200` — the re-imported quotes are genuine duplicates left
+  `Pending` under `review`. A `200` here means the policy did not take effect and nothing was staged,
+  so the rest of this document would be testing an empty batch.
+- `status=pending` scoped to this batch shows exactly the action(s) it just created — scoping matters,
+  because an unscoped listing is satisfied by anything an earlier run left pending.
 - After `decide`, `status=Decided` shows it. After `undo`, it is back under `status=Pending`. After
   deciding again, it is ready to apply.
 - **If more than one action is pending, `apply` returns `422`** with a `pendingActionIds` array listing
   those still undecided. That is the batch-apply-atomicity contract working as designed, not a bug.
-  Decide each remaining id the same way and re-run `apply` until it returns `200` and the quote's field
-  reflects the decision.
+  Decide each remaining id the same way and re-run `apply` until it returns `200`.
+- **After a successful apply, every action in the batch reads `Applied`.** That status tally is the
+  assertion, not the quote's own field: the decision used here is `{"quoteText":{"choice":"keep"}}`, so
+  a correct apply leaves the quote exactly as it was and the domain row cannot distinguish success from
+  an apply that wrote nothing at all. `ImportActionStatus.Applied` means the write landed.
 
 ## Observed effect
 

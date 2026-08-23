@@ -61,28 +61,58 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
   -w "\n%{http_code}\n" \
   "http://localhost:8080/api/v1/import"
-curl -s "http://localhost:8080/api/v1/quotes/search?q=Airplane&field=source"
+curl -s "http://localhost:8080/api/v1/quotes/search?q=Airplane&field=source&pageSize=0" \
+  | grep -o '"totalCount":[0-9]*'
 ```
 
-**Attempt an out-of-order reversal:**
+**Count the search result, do not read it.** `/quotes/search` returns `200` with an empty `items` array
+and a `message` as ordinary behaviour when nothing matches, so an eyeballed response cannot tell a
+successful resurrection from a reversal that deleted the rows for good — which is the failure this step
+exists to catch.
+
+**Confirm the soft-delete flag actually flipped back**, which is the load-bearing observation here: no
+action status changes to signal a reversal, so the HTTP result alone never distinguished the two cases:
+
+```bash
+docker stop -t 15 qt-env
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db .claude/temp/smoke-reverse.db
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/smoke-reverse.db-wal
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/smoke-reverse.db-shm
+docker start qt-env
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-reverse.db \
+  --sql "SELECT IsDeleted, COUNT(*) AS Batches FROM Import_Batch GROUP BY IsDeleted"
+```
+
+**Attempt an out-of-order reversal.** There is no `GET /import-batches` listing endpoint (see
+Determinism), so the older batch id comes from the database copy taken above — the *oldest* still-live
+batch, which is by definition not the most recently applied one:
+
+```bash
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-reverse.db \
+  --sql "SELECT Id, DateCreated FROM Import_Batch WHERE IsDeleted = 0 ORDER BY DateCreated ASC LIMIT 1"
+```
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<an older batchId>"
+  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<the id from that query>"
 ```
 
-**No command — how the older `batchId` is obtained is not stated. There is no `GET /import-batches`
-listing endpoint (see Determinism), so it has to come from `GET /api/v1/admin/audit` or DbInspector,
-and neither query is given here.**
+**If that query returns only one row, this step cannot run** — there is no *older* batch to reverse, so
+LIFO has nothing to reject and a `422` would prove nothing. That is a precondition failure, not a
+result: the profile's own seed must have produced at least one batch before this test's import.
 
 ## Expected output
 
 - `preview=true` returns `200` **without changing anything**; the real call also returns `200`.
 - The actions listing still shows every action `"status":"Applied"` — see Determinism.
 - Reversing the same batch again returns `404`: already reversed, treated as absent.
-- The re-import succeeds (`200`/`202`, **never a silent no-op**) and the curated quotes are reachable
-  again via the search. This is the resurrection fix proven live, rather than only by
-  `ApplyResolvedActionAsync_ReAddAfterSoftDelete_ResurrectsSoftDeletedRow`.
+- The re-import succeeds (`200`/`202`, **never a silent no-op**) and the search's `totalCount` is
+  **non-zero** — the curated quotes are reachable again. This is the resurrection fix proven live,
+  rather than only by `ApplyResolvedActionAsync_ReAddAfterSoftDelete_ResurrectsSoftDeletedRow`. A
+  `totalCount` of `0` is the failing case, and it is a `200` response like any other.
+- The reversed batch appears under `IsDeleted = 1`, and at least one batch remains under `IsDeleted = 0`.
+  Without this read there is nothing in the run that observes the reversal at all.
 - The out-of-order reversal returns `422` — the strict LIFO stack rule: only the most recently applied
   batch still live may be reversed, regardless of whether it shares any entities with the older one.
 
@@ -92,6 +122,10 @@ Not yet established as a captured record. The `IsDeleted=1` state on `Import_Bat
 observation, since no action status changes to signal the reversal.
 
 ## Cleanup
+
+```bash
+rm -f .claude/temp/smoke-reverse.db .claude/temp/smoke-reverse.db-wal .claude/temp/smoke-reverse.db-shm
+```
 
 The applied, reversed and re-imported batches and their actions remain, along with the resurrected
 curated rows — restore the Fresh profile before the next test.

@@ -9,40 +9,80 @@
 Beyond the Fresh profile: **request logging must be genuinely on**, which Fresh does not set.
 `Quotinator__LogRequests=true` **and** `Quotinator__LogLevel=debug` — request logging is Debug-only
 across every category (#244), so `LogRequests=true` alone registers the middleware without raising the
-level, and the log assertion below would silently have nothing to read.
+level. That means its own container, since a configuration value is fixed at start.
 
 ## Determinism
 
 - **Both halves must be checked.** The status code and the *logged* status code were wrong
   independently, and a test asserting only the response would have passed while the log still lied.
 - The happy path is re-run afterwards, so a fix that returns `422` unconditionally cannot pass.
+- **Request logging is confirmed working before anything is concluded from the log.** This is the
+  difference between a test that can fail and one that cannot: with the two variables unset — the
+  default, and the state of any container started from the plain profile — `docker logs` contains no
+  `→` lines at all, so "no `→ 200` present" is satisfied by logging never having run. The first step
+  therefore makes a request whose logged outcome is known and asserts that its line *appears*. Only
+  then does the absence of a wrong line mean anything.
+- **The batch for the happy path is staged by this document**, via a preview of the bundled curated
+  file — the same way `03-batch-id-mode-alias.md` obtains one. Borrowing a batch from another test
+  would make this unrunnable alone.
 
 ## Steps
+
+**Its own container, with request logging genuinely on:**
+
+```bash
+docker rm -f qt-reqlog 2>/dev/null; docker volume rm qt-reqlog 2>/dev/null
+MSYS_NO_PATHCONV=1 docker run -d --name qt-reqlog -p 8080:8080 -v qt-reqlog:/data \
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
+  -e Quotinator__AutoPurgeBundledImportActions=true \
+  -e Quotinator__LogRequests=true -e Quotinator__LogLevel=debug quotinator:local
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+```
+
+**Prove request logging is actually emitting, before reading anything from the log.** A request whose
+outcome is not in doubt, and its line must appear:
+
+```bash
+curl -s -o /dev/null "http://localhost:8080/api/v1/health"
+docker logs qt-reqlog 2>&1 | grep -c "→ 200"
+```
+
+**The three bodyless calls:**
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/discard"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse"
+docker logs qt-reqlog 2>&1 | grep "import/actions" | grep -o "→ [0-9]*" | sort | uniq -c
 ```
 
-Then read the container log for each of those requests:
+**The happy path, against a batch this document stages itself:**
 
 ```bash
-docker logs qt-env
+curl -s -X POST -H "X-Api-Key: <your admin key>" \
+  -F "file=@data/sources/quotinator-curated.json" \
+  -F 'settings={"duplicateResolution":{"default":"skip"}}' \
+  "http://localhost:8080/api/v1/import/preview"
 ```
 
-Finally re-run a normal `apply` with a real `batchId` — see
-[`01-staged-action-review-workflow.md`](01-staged-action-review-workflow.md).
+Copy the `batchId`, then:
 
-**No command — this document never stages a batch, so there is no `batchId` to apply.** Writing the
-call out would mean inventing both the staging import and the id it returns.
+```bash
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+```
 
 ## Expected output
 
-- All three return `422` with `"detail":"You must provide a batchId."` — **never** the generic
-  "Numeric parameters..." message.
-- `docker logs` shows `→ 422` for each, **not** `→ 200`.
-- The normal `apply` with a real `batchId` still returns `200`.
+- **Request logging is live** — the `→ 200` count is non-zero. If it is `0`, the two logging variables
+  did not take effect and nothing below can be concluded from the log; that is a setup failure, not a
+  result.
+- All three bodyless calls return `422` with `"detail":"You must provide a batchId."` — **never** the
+  generic "Numeric parameters..." message.
+- The `import/actions` log lines read **`→ 422` three times and `→ 200` not at all**. Counting them is
+  the assertion: a single missing line would otherwise be invisible.
+- The `apply` with a real `batchId` returns `200`, proving the fix did not simply make the endpoint
+  return `422` unconditionally.
 
 ## Observed effect
 
@@ -67,6 +107,10 @@ by it.
 
 ## Cleanup
 
-No files are written, but the closing happy-path `apply` applies a real batch against the profile's
-database, and the container carries the extra logging variables this test required. Restore the Fresh
-profile before the next test rather than reusing this container.
+```bash
+docker rm -f qt-reqlog
+docker volume rm qt-reqlog
+```
+
+The container and volume are this test's own — it never touches `qt-env`, so restoring the profile
+clears nothing it made and nothing it made leaks into the profile.

@@ -51,16 +51,60 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
 Confirm via DbInspector:
 `SELECT Id, Text, CompletenessStatus FROM Quotinator_StageDirection WHERE Id = 'f0000002-0000-4000-8000-000000000002'`
 
-Then re-import the same ids with a changed `text` under
-`{"duplicateResolution":{"default":"review"}}`, decide each with
-`{"stageDirectionText":{"choice":"replace"},"markCompletenessAs":"Complete"}` /
-`{"soundCueText":{"choice":"replace"},"markCompletenessAs":"Complete"}`, and
-`POST /import/actions/apply?batchId=…`.
+**Re-import the same ids with a changed `text`, under `review`:**
 
-Then re-import the same ids **again** with another changed `text` under `review`.
+```bash
+cat > .claude/temp/smoke-171-172-v2.json <<'EOF'
+{
+  "quotes": [{"id":"f0000001-0000-4000-8000-000000000001","quote":"Smoke test filler quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+  "stageDirections": [{"id":"f0000002-0000-4000-8000-000000000002","text":"A shot rings out, twice.","imageUrl":null,"translations":{}}],
+  "soundCues": [{"id":"f0000003-0000-4000-8000-000000000003","text":"Distant thunder, rolling.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-v2.json" \
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+```
 
-**No command — the changed-text fixtures are not defined, and neither is how the action `id`s and
-`batchId` for the `decide`/`apply` calls are obtained.**
+Copy that `batchId`, list its pending actions, and copy the two action `id`s:
+
+```bash
+curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+```
+
+Decide each, then apply:
+
+```bash
+curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+  -d '{"stageDirectionText":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
+  "http://localhost:8080/api/v1/import/actions/<stage direction action id>/decide"
+curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+  -d '{"soundCueText":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
+  "http://localhost:8080/api/v1/import/actions/<sound cue action id>/decide"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
+```
+
+**Now re-import a third time with yet another `text`, still under `review` — the Complete row must
+block it:**
+
+```bash
+cat > .claude/temp/smoke-171-172-v3.json <<'EOF'
+{
+  "quotes": [{"id":"f0000001-0000-4000-8000-000000000001","quote":"Smoke test filler quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+  "stageDirections": [{"id":"f0000002-0000-4000-8000-000000000002","text":"A shot rings out, three times.","imageUrl":null,"translations":{}}],
+  "soundCues": [{"id":"f0000003-0000-4000-8000-000000000003","text":"Distant thunder, fading.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-v3.json" \
+  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+```
+
+Copy this third `batchId`, then read what it staged:
+
+```bash
+curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+  | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
+```
 
 **Second fixture — a fresh pair, for the reversal half:**
 
@@ -76,22 +120,63 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
 ```
 
-Then single-shot re-import a changed `text` for both ids under `newest-wins`, confirm the write via
-DbInspector, and `POST /import/actions/reverse?batchId=…` — `preview=true` first, then for real.
+Then single-shot re-import a changed `text` for both ids under `newest-wins`:
 
-**No command — the changed-text fixture for this half is not defined either, and the `batchId` the
-reversal uses is never captured from the import above.**
+```bash
+cat > .claude/temp/smoke-171-172-addonly-v2.json <<'EOF'
+{
+  "quotes": [{"id":"f0000001-0000-4000-8000-000000000009","quote":"A #171/#172 add-only smoke test quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+  "stageDirections": [{"id":"f0000002-0000-4000-8000-000000000009","text":"Corrected text after correction.","imageUrl":null,"translations":{}}],
+  "soundCues": [{"id":"f0000003-0000-4000-8000-000000000009","text":"Corrected sound after correction.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-addonly-v2.json" \
+  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+```
+
+Copy that `batchId` — the reversal needs it — then reverse, preview first:
+
+```bash
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<correction batchId>&preview=true"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  "http://localhost:8080/api/v1/import/actions/reverse?batchId=<correction batchId>"
+```
+
+Confirm the pre-correction text is back:
+
+```bash
+docker stop -t 15 qt-env
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db .claude/temp/smoke-171-172.db
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-wal .claude/temp/smoke-171-172.db-wal
+MSYS_NO_PATHCONV=1 docker cp qt-env:/data/quotinatordata.db-shm .claude/temp/smoke-171-172.db-shm
+docker start qt-env
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-171-172.db \
+  --sql "SELECT Id, Text, CompletenessStatus FROM Quotinator_StageDirection WHERE Id IN ('f0000002-0000-4000-8000-000000000002','f0000002-0000-4000-8000-000000000009')"
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-171-172.db \
+  --sql "SELECT Id, Text, CompletenessStatus FROM Quotinator_SoundCue WHERE Id IN ('f0000003-0000-4000-8000-000000000003','f0000003-0000-4000-8000-000000000009')"
+```
 
 ## Expected output
 
-- The first import returns `200` with both rows added.
-- The `review` re-import stages a `Pending` `Modify` action for each, with `ambiguousFields: ["text"]`.
-- After deciding and applying: the corrected text and `CompletenessStatus: Complete`.
-- The third import stages **`Blocked`, not `Pending`**, and the on-disk text is unchanged — a
-  `Complete` row can no longer be silently overwritten.
-- The second fixture adds both rows fresh, still `NeedsReview`.
-- Its `newest-wins` re-import applies immediately with nothing pending.
-- Both reversal calls return `200`, and DbInspector confirms the pre-correction text is restored.
+Each bullet names the fixture it describes, because five imports run here and they differ only by which
+file they upload.
+
+- **`smoke-171-172.json`** returns `200` with both rows added.
+- **`smoke-171-172-v2.json`**, under `review`, stages a `Pending` `Modify` action for each, with
+  `ambiguousFields: ["text"]`. After deciding and applying, both carry the corrected text and
+  `CompletenessStatus: Complete`.
+- **`smoke-171-172-v3.json`**'s status tally reads **`Blocked`, not `Pending`** — a `Complete` row can
+  no longer be silently overwritten. Reading the tally is the assertion; the import returns a success
+  code either way, so the status code alone does not distinguish blocked from staged.
+- **`smoke-171-172-addonly.json`** adds a fresh pair, still `NeedsReview` — never `Complete`, which is
+  what makes the reversal half runnable at all.
+- **`smoke-171-172-addonly-v2.json`**, under `newest-wins`, applies immediately with nothing pending.
+  Both reversal calls against its batch return `200`.
+- The closing DbInspector reads show the **`…000002`/`…000003` pair** still carrying `v2`'s corrected
+  text with `CompletenessStatus: Complete` — `v3`'s text never landed — and the **`…000009` pair** back
+  at `Original text before correction.` / `Original sound before correction.`, the reversal undone.
 
 ## Observed effect
 
@@ -100,5 +185,8 @@ Not yet established as a captured record beyond the DbInspector reads asserted a
 ## Cleanup
 
 ```bash
-rm -f .claude/temp/smoke-171-172.json .claude/temp/smoke-171-172-addonly.json
+rm -f .claude/temp/smoke-171-172*.json .claude/temp/smoke-171-172.db*
 ```
+
+The imported StageDirection/SoundCue rows, the `Smoke Test Film` Source, the filler quotes and the
+staged batches all remain — restore the Fresh profile before the next test.

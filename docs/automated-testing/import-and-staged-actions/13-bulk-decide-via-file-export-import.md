@@ -69,17 +69,41 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<new batchId>&format=csv"
 ```
 
-**Malformed-row resilience** — edit one row's `Decision` to an invalid value, leave the rest untouched:
+**Malformed-row resilience — against a third, still-undecided batch.** This must not reuse either batch
+above: both have already had every row decided, so "every other row is still decided" would be true
+before the call and the test could not fail in the direction it exists to catch.
 
-**No command — `/tmp/export-with-one-bad-row.csv` is not created anywhere in this document.** Which
-row to edit, and what invalid value to write into its `Decision` column, are not stated either; writing
-the edit out would mean inventing both.
+```bash
+curl -s -X POST -H "X-Api-Key: <your admin key>" \
+  -F "file=@data/sources/quotinator-curated.json" \
+  -F 'settings={"duplicateResolution":{"default":"review"}}' \
+  "http://localhost:8080/api/v1/import"
+```
+
+Note this **third** `batchId`, export it, and confirm nothing in it is decided yet:
+
+```bash
+curl -s "http://localhost:8080/api/v1/import/actions/export?batchId=<third batchId>&format=csv" -o /tmp/export3.csv
+curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+  | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
+```
+
+Now make the bad copy. Open `/tmp/export3.csv`, copy it to `/tmp/export3-bad.csv`, and in the copy
+change **the first data row's `Decision` cell** to `not-a-choice` — a value no decision accepts. Leave
+the header and every other row exactly as exported. Note that row's `actionId`; the response must name
+it.
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  -F "batchId=<new batchId>" -F "file=@/tmp/export-with-one-bad-row.csv" -F "format=csv" \
-  "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<new batchId>&format=csv"
+  -F "batchId=<third batchId>" -F "file=@/tmp/export3-bad.csv" -F "format=csv" \
+  "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<third batchId>&format=csv"
+curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+  | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
+
+**The edit is described rather than scripted deliberately.** A one-line text transformation is not
+something this repository writes in shell ([ADR 010](../../architecture-decisions/010-repository-is-csharp-only.md));
+if this test is ever automated, the edit belongs in `scripts/testing/` as a `.csx`, not inline here.
 
 **Unknown format, missing key, and no body at all:**
 
@@ -95,10 +119,15 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 - The JSON round trip returns `200` with `errors: []` and `actionsDecided` matching the batch's own
   pending-action count.
 - The CSV round trip also returns `200` with `errors: []`.
-- The malformed row returns **`200`, never `422` for the whole request**, with exactly one entry in
-  `errors[]` naming the bad row's `actionId`, and every other row's action still decided. "One bad row
-  never aborts the rest of the file", matching the contract
+- **Malformed row** — before the call, the third batch's status tally shows its actions **undecided**.
+  The call returns **`200`, never `422` for the whole request**, with exactly one entry in `errors[]`
+  naming the edited row's `actionId`. After it, the tally shows every action decided **except** that
+  one. "One bad row never aborts the rest of the file", matching the contract
   [`06-bodyless-request-validation.md`](06-bodyless-request-validation.md) covers for `POST /import`.
+
+  **The before-tally is the load-bearing half.** Run against a batch that was already fully decided, the
+  after-tally looks identical whether the call decided the remaining rows or did nothing at all — which
+  is exactly how this check read before the third batch was introduced.
 - Unknown `format` returns `422`; no `X-Api-Key` returns `401`.
 - **No `batchId` and no body returns `422` with `"detail":"You must provide a batchId."`**
 
@@ -122,9 +151,9 @@ this newer endpoint. Fixed by switching to `HttpRequest request` and checking `b
 ## Cleanup
 
 ```bash
-rm -f /tmp/export.json /tmp/export.csv /tmp/export-with-one-bad-row.csv
+rm -f /tmp/export.json /tmp/export.csv /tmp/export3.csv /tmp/export3-bad.csv
 ```
 
-Removing the exports does not undo what they decided. Two staged batches remain — the first applied,
-the second decided but not applied — along with the curated file's re-imported rows. Restore the Fresh
-profile before the next test.
+Removing the exports does not undo what they decided. Three staged batches remain — the first applied,
+the second decided but not applied, the third partly decided with one row rejected — along with the
+curated file's re-imported rows. Restore the Fresh profile before the next test.

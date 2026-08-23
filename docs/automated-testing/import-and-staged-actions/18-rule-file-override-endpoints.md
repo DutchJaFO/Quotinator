@@ -23,11 +23,20 @@ and decides one itself.
 
 ## Steps
 
-**Confirm no override is active:**
+**Confirm no override is active, and capture the bundled file's rules for comparison:**
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
+curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled" \
+  -o /tmp/rules-before.json
+grep -o '"isOverrideActive":[a-z]*' /tmp/rules-before.json
+grep -o '"entityId":"[^"]*"' /tmp/rules-before.json | sort > /tmp/rule-ids-before.txt
+wc -l < /tmp/rule-ids-before.txt
 ```
+
+**The before-capture is what makes the merge assertion real.** "Still containing every rule the bundled
+file already had" cannot be evaluated against a single after-reading — a `generate` that discarded the
+bundled rules and returned only its own would need the reader to have memorised the earlier output to
+notice.
 
 **Stage a batch and decide one action to generate from:**
 
@@ -52,7 +61,11 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
 Re-run the first `GET` from this test, then remove the override — and repeat the `DELETE`:
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
+curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled" \
+  -o /tmp/rules-after.json
+grep -o '"isOverrideActive":[a-z]*' /tmp/rules-after.json
+grep -o '"entityId":"[^"]*"' /tmp/rules-after.json | sort > /tmp/rule-ids-after.txt
+comm -23 /tmp/rule-ids-before.txt /tmp/rule-ids-after.txt
 curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
 curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
@@ -67,16 +80,25 @@ curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/alias?f
 
 ## Expected output
 
-- The first `GET` returns `200` with `isOverrideActive: false` and the bundled file's own rules.
-- `generate` returns `200` with `isOverrideActive: true`, `rulesAdded` at least `1`, and a `rules`
-  array **still containing every rule the bundled file already had** — the merge-preserves-existing-rules
-  guarantee `EffectiveRuleFileResolver` exists for.
-- The repeated `GET` now returns `isOverrideActive: true`, proving the override took effect for reads.
+- The first `GET` returns `200` with `isOverrideActive:false`, and a non-zero rule count written to
+  `/tmp/rule-ids-before.txt`. Zero rules there would make the merge assertion vacuous.
+- `generate` returns `200` with `isOverrideActive: true` and `rulesAdded` at least `1`.
+- The repeated `GET` returns `isOverrideActive:true`, proving the override took effect for reads.
+- **`comm -23` prints nothing.** Every rule id present before is still present after — that is the
+  merge-preserves-existing-rules guarantee `EffectiveRuleFileResolver` exists for, and the only form in
+  which it can actually fail. Any id printed is a bundled rule the merge dropped.
 - `DELETE` returns `204`; a repeat `DELETE` returns `404`.
 - The alias endpoint returns `200` with a well-formed `candidates` array.
 
 **What the alias check verifies is structural**: `200` with a well-formed array, confirming the endpoint
 runs cleanly end to end against the full live `Quotinator_Source` table. **Not a candidate count.**
+
+**Stated plainly, because it limits what this proves:** current `main` correctly returns an *empty*
+`candidates` array for this query, so the assertion reduces to "the route responds and the field
+parses". An implementation with candidate detection removed entirely would pass it. The route is
+covered here; the feature is not, and giving it real coverage needs a Source that genuinely has been
+renamed — which is the same defective-input problem the index's *A test that needs a defective input
+must own that input* section describes.
 
 ## Observed effect
 
@@ -96,6 +118,10 @@ confirmed one should be filed as a data-quality follow-up per
 part of a test run.**
 
 ## Cleanup
+
+```bash
+rm -f /tmp/rules-before.json /tmp/rules-after.json /tmp/rule-ids-before.txt /tmp/rule-ids-after.txt
+```
 
 The `DELETE` above removes the override. Confirm the first of the two returned `204` before moving on.
 
