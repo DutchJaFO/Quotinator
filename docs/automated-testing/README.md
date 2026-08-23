@@ -353,6 +353,9 @@ container *stayed* dead rather than became ready — is not a readiness wait and
 must say so in `Determinism`, naming what the duration is measuring. An unexplained `sleep` is a
 guess, and the rule above applies to it.
 
+**This list only grows.** When a pass surfaces a new bug or edge case, add its verification here in
+the same commit that fixes it.
+
 **Refer to a test by what it verifies, never by its number.** Numbers are an index within a category
 and shift when one is inserted. Cross-references between tests are links, not prose pointing at a
 number.
@@ -365,8 +368,27 @@ different status codes for different endpoints. Found exactly that way: `200`, `
 in consecutive bullets, correct for three separate endpoints, and unreadable as anything but a conflict
 until each was named.
 
-**This list only grows.** When a pass surfaces a new bug or edge case, add its verification here in
-the same commit that fixes it.
+### Every test must be able to run unattended
+
+**This folder is `automated-testing`, and a step that stops for a person is a defect in the test, not a
+property of what it verifies** (developer direction, 2026-08-23). A run that needs someone watching
+cannot be scheduled, cannot be repeated cheaply, and cannot be trusted to have been done the same way
+twice.
+
+Three shapes currently break this, and each has an answer:
+
+- **"Visit this page and look at it."** Browser-driven checks are automatable — a driver can load the
+  page, read the rendered DOM and capture the screenshot. `api-surface/04`'s Scalar spot-check,
+  `notifications-and-changelog/01`'s rendered pages and Action-button flow, and
+  `startup-and-degradation/05`'s three Blazor pages are all this shape.
+- **"Read the response and see that X is there."** An assertion a human evaluates is one nothing
+  records. Count it, `grep` it, diff it — as `19` already does for its removed fields, precisely because
+  reading an absence by eye cannot fail.
+- **"Take a screenshot."** Worth keeping as evidence, but the *assertion* alongside it has to be
+  machine-checkable, or the screenshot is the only record and nothing compares it to anything.
+
+**A step that genuinely cannot be automated is a finding, not an exemption** — say what blocks it, in
+the document, so it reads as known rather than as an oversight.
 
 ---
 
