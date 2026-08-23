@@ -149,7 +149,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
          staleness rule is #330's reconciliation rule). Reports into #329's statistics but does not
          depend on it; a 304 still needs the connection #329 makes reliable, so neither reduces the
          other's problem. Introduces SourceRefreshOutcome.Unchanged, which #324 may choose to surface
-#339 ─── (none) — restructures the T2 suite into docs/automated-testing/ and defines the run scopes.
+#339 ─── #347 — restructures the T2 suite into docs/automated-testing/ and defines the run scopes.
          Blocks #327 and #328, which author their documents into that structure rather than into the
          monolith it removes. Revises ADR 010 in place (test-only scripts move to scripts/testing/)
          and resolves the live-only Definition-of-done gap in issues.md that #328 hits
@@ -180,7 +180,7 @@ step, the other reuses it.
 | 6 | **#83** ✅ | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
 | 7 | **#309** ✅ | Done. T1 confirmed live (2026-08-19) surfaced four further defects — all fixed and verified; see steps 14–18 in its plan doc. T2 green the same day |
 | 8 | **#326** ✅ | Done, `Waiting for release`. All 12 verification rows green including T1 and a T2 controlled pair. It also corrected its own premise, which #327 inherits: sidecar state decides whether a read-only mount degrades, **not** a pending migration |
-| 9 | **#339** | Restructures the T2 suite into `docs/automated-testing/` and defines the three run scopes. Placed ahead of #327 and #328 so both author into the new structure rather than editing a monolith that is then split around them. Scope grew after its audit: it now also defines the environment profiles every document declares, which #327 and #328 must author against |
+| 9 | **#339** | Restructures the T2 suite into `docs/automated-testing/` and defines the three run scopes. Placed ahead of #327 and #328 so both author into the new structure rather than editing a monolith that is then split around them. Scope grew twice after its audit: the environment profiles every document declares, then the requirement that every test can actually fail. Blocked on #347 for its last verification row |
 | 10 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. #326 is done, so it is unblocked. Must pin the WAL sidecar state explicitly — its named scenario does not reproduce reliably otherwise, and #326's plan doc carries the measurement |
 | 11 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above |
 | 12 | **#329** | Retry and parallelism for source downloads. After the smoke-test issues, which close a verification gap; before #324, which consumes its statistics |

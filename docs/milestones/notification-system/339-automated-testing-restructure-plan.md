@@ -1,9 +1,9 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (all steps done; row 25 fails — two tests cannot confirm their own behaviour, and that blocks release until the application makes it observable)
+**Status:** In progress (all steps done; row 25 blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) — two tests cannot confirm their own behaviour until the staleness evaluation is observable)
 **GitHub issue:** #339
-**Tiers required:** T1, T2
-**Depends on:** none
+**Tiers required:** none — see *Tiers* below
+**Depends on:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347) for verification row 25
 
 ---
 
@@ -13,12 +13,19 @@
 issue splits it into `docs/automated-testing/`, one document per test inside a category subfolder,
 behind a common template — and defines the three run scopes the suite has never had.
 
-No test's assertions change here. #327 fixes the two whose content is wrong and #328 adds new
-coverage; both author into this structure once it exists, which is why this lands before them.
+It lands before #327 and #328, which both author into this structure once it exists.
 
-**Tiers.** N/A: the change is documentation, one revised ADR, a script relocation under `scripts/`,
-and two guard tests. Nothing under `src/` is touched, so neither T1 nor T2 has anything to exercise
-that the guard tests and the milestone-close full run do not already cover.
+**Assertions did change here, contrary to what this section said when it was written.** The original
+boundary was "content moves verbatim, no test's assertions change". Three developer decisions widened
+it in turn — readiness polls, environment profiles, and finally the requirement that every test add
+value and actually test the defect it claims to. See the Scope change sections below; each records what
+moved the line and why. What remains true is that #327 still owns rewriting
+`startup-and-degradation/05`, whose premise is unreachable.
+
+**Tiers.** None. The change is documentation, one revised ADR, a script relocation under `scripts/`,
+and five guard tests. Nothing under `src/` is touched, so neither T1 nor T2 has anything to exercise
+that the guard tests and the milestone-close full run do not already cover. The header previously said
+`T1, T2` while this paragraph said N/A — a contradiction present from the first draft.
 
 **Two decisions need approval before execution, not during it** — steps 2 and 3. Both are policy
 calls that the rest of the work depends on, and both are recorded in this plan for sign-off rather
@@ -716,6 +723,6 @@ resolve — see that step.
 | 22 | ✅ | No document is blocked from executing by its own commands | Live | No `docker run` holds the terminal ahead of later steps; every `docker run` carries `--name`; no `<container>` placeholder survives; every `docker cp` of the database targets `/data`, the path the profile actually mounts |
 | 23 | ✅ | The index's smoke set cannot drift from the documents' own `Smoke` field | Unit test | `RepositoryStructureTests.SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` — red while the table named tests by title only, which is why each row now links its document |
 | 24 | ✅ | Every step carries its own expected result, so a failure stops the run at the step that caused it | Unit test | `RepositoryStructureTests.EveryAutomatedTestingStep_CarriesItsOwnExpectedResult` — red against all 43 before the conversion. Checks per step, not by total: a document where one step carries three expectations and another none would balance out under a count |
-| 25 | ❌ | Every document can distinguish the feature working from the feature broken | Live | 13 repaired by adding the observation that was missing. **`16` and `17` cannot, and are therefore failing tests that block release.** Of the ways an empty stale list can arise, all but one are now ruled out by observations that already exist: the per-file `report:` lines prove the reseed re-planned, and the `Purge` audit traces prove whether rows were removed. The one that remains is whether the staleness *evaluation* ran at all — `stale=0` is produced identically by *compared the rules, none drifted* and by *never compared anything*. Clearing it means emitting that evaluation; a fixture forcing the mechanism to fire would be working around the gap rather than closing it. The row's original wording — "repaired, *or* its limit is stated" — was wrong: stating a limitation explains a failing test, it does not resolve one |
+| 25 | ❌ | Every document can distinguish the feature working from the feature broken | Live | 13 repaired by adding the observation that was missing. **`16` and `17` cannot, and are therefore failing tests that block release.** Of the ways an empty stale list can arise, all but one are now ruled out by observations that already exist: the per-file `report:` lines prove the reseed re-planned, and the `Purge` audit traces prove whether rows were removed. The one that remains is whether the staleness *evaluation* ran at all — `stale=0` is produced identically by *compared the rules, none drifted* and by *never compared anything*. Clearing it means emitting that evaluation, filed as [#347](https://github.com/DutchJaFO/Quotinator/issues/347); a fixture forcing the mechanism to fire would be working around the gap rather than closing it. The row's original wording — "repaired, *or* its limit is stated" — was wrong: stating a limitation explains a failing test, it does not resolve one |
 | 19 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |
 | 20 | ❌ | No reference to `docs/smoke-tests.md` resolves to nothing | Live | Every remaining mention names where the suite went. **Not** a bare `grep` for absence — archival plan docs keep the old name deliberately, with the pointer alongside; compare per-file reference counts instead |
