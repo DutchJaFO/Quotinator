@@ -86,18 +86,31 @@ not who is running now.
 
 ### 4. Repeat the whole thing against a fresh database
 
-**Then repeat the whole thing against a fresh database** — same build, no v1.8.3 stage.
+Same build, no v1.8.3 stage. It needs its **own container name and its own directory**, distinct from
+`qprov` and `/tmp/qprov` — run against the database the first half already upgraded, it would find the
+1.8.3 row that half created and prove nothing:
 
-**No commands — the fresh-database repeat is described but never written out.** It needs its own
-container name and its own bind-mount directory, distinct from `qprov` and `/tmp/qprov`, or it runs
-against the database the first half already upgraded and proves nothing. Naming those here would be
-inventing them, so it is flagged instead; Cleanup below cannot name what the repeat creates until it is
-written.
+```bash
+docker rm -f qprov-fresh 2>/dev/null; rm -rf /tmp/qprov-fresh; mkdir -p /tmp/qprov-fresh/data
+MSYS_NO_PATHCONV=1 docker run -d --name qprov-fresh -e Quotinator__DataDir=/data \
+  -v /tmp/qprov-fresh/data:/data -p 8080:8080 quotinator:local
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qprov-fresh/data:/data alpine \
+  sh -c "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
+    'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
+```
 
-**Expected:** on a fresh database the same build produces exactly one row — its own version — and no
-1.8.3 row at all. That guarantee is structural rather than guarded in SQL: an empty database takes the
-one-step baseline path and never replays migrations. Worth confirming rather than assuming, which is
-why it is a step here.
+**The first container must be removed before this one starts** — both publish 8080.
+
+**Expected:** exactly one row, the current build's own version, and **no 1.8.3 row at all**.
+
+That guarantee is structural rather than guarded in SQL: an empty database takes the one-step baseline
+path and never replays migrations, so the conditional insert never runs. Worth confirming rather than
+assuming, which is why it is a step here.
+
+**On failure:** a 1.8.3 row on a database that never ran 1.8.3 means the insert is unconditional — the
+exact defect this half exists to catch, and invisible from the upgrade path alone, which produces that
+row legitimately.
 
 ## Observed effect
 
@@ -107,13 +120,12 @@ existing is weaker evidence than the 1.8.3 row sorting first.
 ## Cleanup
 
 ```bash
-docker rm -f qprov 2>/dev/null
-rm -rf /tmp/qprov
+docker rm -f qprov qprov-fresh 2>/dev/null
+rm -rf /tmp/qprov /tmp/qprov-fresh
 ```
 
-The container and the bind-mounted directory are this test's own — it creates no named volume, and
-restoring the profile clears nothing it made. Whatever container and directory the fresh-database
-repeat uses must be removed too; see the flag in Steps.
+Both containers and both bind-mounted directories are this test's own — it creates no named volume, and
+restoring the profile clears nothing it made.
 
 **Two things this leaves behind that a profile restore does not fix.** `Directory.Build.props` must be
 confirmed restored to its real `<Version>`, and `quotinator:local` must be rebuilt from the restored

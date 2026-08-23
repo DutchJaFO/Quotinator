@@ -132,20 +132,38 @@ curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"tota
 the history is what stops it writing twice. **And no repeat on a second start** — `docker restart q312`
 must not log `applying … pending` again.
 
-To confirm the text path is genuinely dead: insert a row whose `Body` mentions `GetAllImportBatches`
-but whose `Metadata` is `NULL`, restart, and re-count.
+### 6. Confirm the old text-matching path is genuinely dead
 
-**No command — that row is described but never created.** The `INSERT` would need a column set and
-values for `Type`, `Title` and `MetadataKind` that nothing in this document states, so it is flagged
-rather than guessed. The `totalCount` **must increase** expectation below has no setup until it is
-written.
+A row whose `Body` mentions `GetAllImportBatches` but whose `Metadata` is `NULL` is what the pre-#312
+suppression would have matched on. `MetadataKind` is left `NULL` too — a row with no metadata is exactly
+the shape being tested, so giving it a kind would defeat the point. Written against a **stopped**
+container:
 
-**Expected, with a `Body`-mentions-but-`Metadata`-null row inserted:** `totalCount` must **increase**
-after a restart — the announcement is written again, because a body match no longer suppresses
-anything. #278 embedded a key in the message text and matched it with `Contains`, which could not
-distinguish `WhatsNew:v1.9.1` from `WhatsNew:v1.9.10`.
+```bash
+docker stop -t 15 q312
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
+  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db \
+   \"INSERT INTO System_Notification (Id, Type, Title, Body, Metadata, MetadataKind, ExpiresAt, IsDismissed, DateCreated, IsDeleted) VALUES
+     ('a0000312-0000-4000-8000-000000000001','Information','Legacy text-matched row','Two API operation IDs were renamed, including GetAllImportBatches.',NULL,NULL,NULL,0,'2026-01-01 00:00:00',0);\""
+docker start q312
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+docker restart q312
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+```
 
-### 6. Confirm every payload states its release
+**Expected:** `totalCount` **increases** across this restart — the opposite of step 5. The announcement
+is written again, because a body match no longer suppresses anything.
+
+That is the whole point of the change: #278 embedded a key in the message text and matched it with
+`Contains`, which could not distinguish `WhatsNew:v1.9.1` from `WhatsNew:v1.9.10`. Structured metadata
+replaced it, so a row carrying only the old text is no longer recognised as a duplicate.
+
+**On failure:** if `totalCount` stays the same, text matching is still live somewhere — which is the
+regression this step exists to catch, not a setup problem.
+
+### 7. Confirm every payload states its release
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \

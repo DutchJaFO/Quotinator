@@ -12,13 +12,10 @@ Seeding must be allowed to finish before anything is asserted — the notificati
 produces is written during startup, so an early read cannot tell "not produced" from "not yet".
 
 The Status-filter and Action-button checks additionally need three rows that no producer creates on its
-own, inserted directly into `System_Notification`: one `ActionRequired` row with
-`DismissTriggerKey = 'DatabaseReset'`, one already-expired row, and one already-dismissed row.
-
-**No command — the three rows are described but never created.** Writing the `INSERT` here would mean
-inventing the column set and the values for `Type`, `ExpiresAt` and `IsDismissed` that the description
-does not give, so it is flagged rather than guessed. Until it is written, the Status-filter and
-Action-button assertions below have no setup and cannot be run.
+own — one `ActionRequired` row with `DismissTriggerKey = 'DatabaseReset'`, one already-expired row, and
+one already-dismissed row. Step 7 constructs them directly in `System_Notification`; this is the index's
+first case for a constructed fixture, a state the application cannot be driven into through its own
+surfaces.
 
 ## Determinism
 
@@ -99,10 +96,39 @@ both pages.
 **Expected:** after dismissing, `NotificationSummary` renders cleanly with zero rows, rather than an
 empty heading with nothing under it.
 
-### 7. Check the status column, the status filter, and the Action button
+### 7. Insert the three rows no producer creates
 
-**Status filter and Action button** — with the three rows described in Preconditions in place. That
-insert has no command yet; see the flag there.
+The Status-column, filter and Action-button checks need one `ActionRequired` row carrying a dismiss
+trigger, one already-expired row and one already-dismissed row. Nothing in the application produces
+these, so the test constructs them — against a **stopped** container, since writing to a SQLite file
+underneath a running process is a different scenario:
+
+```bash
+docker stop -t 15 smoke278
+MSYS_NO_PATHCONV=1 docker run --rm -v smoke278-data:/data alpine sh -c \
+  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db \
+   \"INSERT INTO System_Notification (Id, Type, Title, Body, ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DateCreated, IsDeleted) VALUES
+     ('a0000278-0000-4000-8000-000000000001','ActionRequired','Smoke test action required','A #278 smoke test row needing an action.',NULL,0,NULL,'DatabaseReset','2026-01-01 00:00:00',0),
+     ('a0000278-0000-4000-8000-000000000002','Information','Smoke test expired','A #278 smoke test row that has already expired.','2020-01-01 00:00:00',0,NULL,NULL,'2026-01-01 00:00:00',0),
+     ('a0000278-0000-4000-8000-000000000003','Information','Smoke test dismissed','A #278 smoke test row already dismissed.',NULL,1,'2026-01-02 00:00:00',NULL,'2026-01-01 00:00:00',0);\""
+docker start smoke278
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -c "Smoke test"
+```
+
+**Expected:** `sqlite3` completes with no error, and the count is `3` — all three rows are present and
+readable through the API.
+
+**On failure:** a `sqlite3` error means the rows were never created, and every assertion in step 8 then
+reads an unchanged page. That is a setup failure, not a result — stop.
+
+A CHECK-constraint rejection here is worth reading rather than working around: `Type` and
+`DismissTriggerKey` are constrained to their enum's current members, so a failure means the enum moved
+and this fixture needs updating with it.
+
+### 8. Check the status column, the status filter, and the Action button
+
+With the three rows from step 7 in place.
 
 **Expected — status column:** reads `Active`/`Expired`/`Dismissed` correctly. An undismissed row past
 its `ExpiresAt` shows `Expired`, never `Active`.
