@@ -91,6 +91,14 @@ All three have been found here, which is why it is written down:
   identically by *compared the rules, none drifted* and by *never compared anything*. A count of zero
   is not evidence that something looked.
 
+**Before concluding that something is unobservable, check all three channels.** This application
+exposes what it did through **logs**, through the **audit trail** (`Audit_Entry` / `GET /admin/audit`),
+and through **API responses**. Searching the log-message definitions alone and finding nothing is not
+evidence that a decision is invisible — found twice in a row during #339: staleness counts turned out to
+be rendered inside an existing report line rather than a message of their own, and the auto-purge turned
+out to write an `Audit_Entry` with `Operation = Purge` rather than log anything. Both were called
+unobservable on a keyword search that only covered logging.
+
 **A test cannot distinguish causes the application does not expose.** Where the answer is cause 3 and
 the missing observation is the application's own, the fix belongs in the application — normal logging
 should not be swallowing a decision an operator would want to know about. A test may raise the log

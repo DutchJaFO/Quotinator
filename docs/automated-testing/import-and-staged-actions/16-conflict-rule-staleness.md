@@ -45,24 +45,32 @@ multi-file seed.
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
 docker logs qt-env 2>&1 | grep -c "\[Database - Seed\] .* report: "
 docker logs qt-env 2>&1 | grep "\[Database - Seed\] .* rule staleness evaluated"
+curl -s -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purge"' | wc -l
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
 
 **Expected:** the reseed returns `200`; the per-file report count is non-zero, one line per bundled
 file, each rendering `stale=0`; a line states that rule staleness was **evaluated** and over how many
-rules; and `status=stale` reports `totalCount: 0` consistent with both.
+rules; the `Purge` trace count matches the number of bundled batches; and `status=stale` reports
+`totalCount: 0`.
 
-**All four are required together, and they establish different things.** The report lines prove the
-reseed actually re-planned every bundled file — without them, an empty stale list means only that
-nothing ran. The evaluation line is what separates *"compared the shipped rules, none had drifted"*
-from *"never compared anything"*: `stale=0` in the report is produced identically by both, so it cannot
-carry that weight on its own.
+**Each reading rules out a different way of producing that empty list**, which is why an empty list on
+its own establishes nothing:
 
-**On failure:** no report lines at all means the reseed did not re-plan — a setup failure, not a
-staleness result; stop. A missing evaluation line means the evaluation is unobservable, and neither the
-report's `stale=0` nor the empty list can establish whether the mechanism ran. That is the
-application's gap rather than this document's — see the index's *When the expected situation does not
-occur*, cause 3.
+| Reading | Rules out |
+|---|---|
+| Report lines present, one per file | The reseed never re-planned anything |
+| `Purge` traces present | The action rows existed and were removed, leaving an empty list behind |
+| Evaluation line present | The mechanism never compared the rules at all |
+
+**`stale=0` in the report cannot carry the last one.** It is produced identically by *compared the
+shipped rules, none had drifted* and by *never compared anything* — a count of zero is not evidence
+that something looked.
+
+**On failure:** no report lines means the reseed did not re-plan — a setup failure, not a staleness
+result; stop. A missing evaluation line means the mechanism's own execution is unobservable, so neither
+the report nor the empty list can establish whether it ran. That is the application's gap rather than
+this document's — see the index's *When the expected situation does not occur*, cause 3.
 
 ## Observed effect
 
