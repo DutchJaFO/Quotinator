@@ -39,12 +39,13 @@ curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
 ```
 
-**Expected:** the counts have settled, the log states that source-alias staleness was evaluated and how
-many aliases it considered, and both `status=pending` and `status=stale` return `totalCount: 0`
-consistent with that.
+**Expected:** the counts have settled; the first boot's own `[Database - Seed] … report:` lines are
+present, one per bundled file, each rendering `stale=0`; a line states that source-alias staleness was
+**evaluated** and over how many aliases; and both `status=pending` and `status=stale` report
+`totalCount: 0`.
 
-**On failure:** if no such log line exists, the evaluation is unobservable and this step establishes
-nothing either way — an empty list is produced equally by a mechanism that ran and found none and by
+**On failure:** a missing evaluation line makes this step inconclusive rather than passing — `stale=0`
+in the report and an empty list are both produced equally by a mechanism that ran and found none and by
 one that never ran. See the index's *When the expected situation does not occur*, cause 3.
 
 ### 2. Reseed and repeat, which is the second of the two paths
@@ -55,8 +56,8 @@ curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
 ```
 
-**Expected:** the reseed returns `200`, the log again states that alias staleness was evaluated, and
-both `status=pending` and `status=stale` return `totalCount: 0`.
+**Expected:** the reseed returns `200`, a fresh set of `report:` lines appears for it, the evaluation
+line appears again, and both `status=pending` and `status=stale` report `totalCount: 0`.
 
 Every real bundled alias's canonical Source either already exists under its exact recorded title, or is
 being legitimately created for the first time. None has actually been renamed away — which is why zero

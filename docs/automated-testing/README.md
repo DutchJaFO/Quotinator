@@ -85,10 +85,11 @@ All three have been found here, which is why it is written down:
   feature was fine and the expectation was right; the observation could not distinguish them.
 - **Cause 3, nothing observed at all** — four commands across the suite had no stated expectation of any
   kind, and two of those asked a human to read a log tail and judge whether it "looked finished".
-- **Cause 3, the application is silent** — `16` and `17` conclude from an empty list, and the
-  application logs nothing when it stages a `Stale` action or when it purges the rows that would have
-  shown one. Working and broken produce identical output, so no test written against that surface can
-  tell them apart.
+- **Cause 3, the observation exists but cannot carry the weight** — `16` and `17` conclude from an
+  empty list. The seed *does* log a per-file report rendering `stale=0`, so "the reseed ran" is
+  observable; what is not is whether the staleness evaluation itself ran, since `stale=0` is produced
+  identically by *compared the rules, none drifted* and by *never compared anything*. A count of zero
+  is not evidence that something looked.
 
 **A test cannot distinguish causes the application does not expose.** Where the answer is cause 3 and
 the missing observation is the application's own, the fix belongs in the application — normal logging

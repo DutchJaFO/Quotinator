@@ -42,23 +42,27 @@ multi-file seed.
 ### 2. Reseed, then list the stale actions
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
-curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
+docker logs qt-env 2>&1 | grep -c "\[Database - Seed\] .* report: "
+docker logs qt-env 2>&1 | grep "\[Database - Seed\] .* rule staleness evaluated"
+curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
 
-**Expected:** the reseed returns `200`, the log states that rule staleness was evaluated and how many
-rules it considered, and `status=stale` returns an empty list consistent with that — the evaluation ran
-against the shipped rules and found none stale.
+**Expected:** the reseed returns `200`; the per-file report count is non-zero, one line per bundled
+file, each rendering `stale=0`; a line states that rule staleness was **evaluated** and over how many
+rules; and `status=stale` reports `totalCount: 0` consistent with both.
 
-**All three are required together.** An empty list on its own does not distinguish "evaluated, nothing
-stale" from "never evaluated": a mechanism that never fires, a reseed that silently did nothing, a
-regressed `status=` filter and purged `Import_Action` rows all produce that same empty list. The log
-line is what makes the empty list mean something.
+**All four are required together, and they establish different things.** The report lines prove the
+reseed actually re-planned every bundled file — without them, an empty stale list means only that
+nothing ran. The evaluation line is what separates *"compared the shipped rules, none had drifted"*
+from *"never compared anything"*: `stale=0` in the report is produced identically by both, so it cannot
+carry that weight on its own.
 
-**On failure:** if no such log line exists, the evaluation is unobservable and this step cannot
-establish its behaviour either way. That is the application's gap, not this document's — see the
-index's *When the expected situation does not occur*, cause 3. Fix the observability before treating
-the empty list as either a pass or a defect.
+**On failure:** no report lines at all means the reseed did not re-plan — a setup failure, not a
+staleness result; stop. A missing evaluation line means the evaluation is unobservable, and neither the
+report's `stale=0` nor the empty list can establish whether the mechanism ran. That is the
+application's gap rather than this document's — see the index's *When the expected situation does not
+occur*, cause 3.
 
 ## Observed effect
 
