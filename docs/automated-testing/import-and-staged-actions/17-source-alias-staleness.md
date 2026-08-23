@@ -35,14 +35,26 @@ Run the **Fresh** profile first.
 
 ```bash
 curl -s http://localhost:8080/api/v1/version
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
-curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
+docker logs qt-env 2>&1 | grep -c "\[Database - Seed\] .* report: "
+docker logs qt-env 2>&1 | grep "\[Database - Seed\] .* alias staleness evaluated"
+curl -s -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purge"' | wc -l
+curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0" | grep -o '"totalCount":[0-9]*'
+curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
 
-**Expected:** the counts have settled; the first boot's own `[Database - Seed] … report:` lines are
-present, one per bundled file, each rendering `stale=0`; a line states that source-alias staleness was
-**evaluated** and over how many aliases; and both `status=pending` and `status=stale` report
-`totalCount: 0`.
+**Expected:** the counts have settled; the report count is non-zero, one line per bundled file, each
+rendering `stale=0`; a line states that source-alias staleness was **evaluated** and over how many
+aliases; the `Purge` trace count matches the number of bundled batches; and both `status=pending` and
+`status=stale` report `totalCount: 0`.
+
+**Each reading rules out a different way of producing those empty lists**, the same way
+[`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md) sets out for conflict rules:
+
+| Reading | Rules out |
+|---|---|
+| Report lines present, one per file | The seed never planned anything |
+| `Purge` traces present | The action rows existed and were removed, leaving empty lists behind |
+| Evaluation line present | The mechanism never compared the aliases at all |
 
 **On failure:** a missing evaluation line makes this step inconclusive rather than passing — `stale=0`
 in the report and an empty list are both produced equally by a mechanism that ran and found none and by
@@ -51,13 +63,20 @@ one that never ran. See the index's *When the expected situation does not occur*
 ### 2. Reseed and repeat, which is the second of the two paths
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
-curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
-curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
+docker logs qt-env 2>&1 | grep -c "\[Database - Seed\] .* report: "
+docker logs qt-env 2>&1 | grep -c "\[Database - Seed\] .* alias staleness evaluated"
+curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0" | grep -o '"totalCount":[0-9]*'
+curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
 
-**Expected:** the reseed returns `200`, a fresh set of `report:` lines appears for it, the evaluation
-line appears again, and both `status=pending` and `status=stale` report `totalCount: 0`.
+**Expected:** the reseed returns `200`; both counts have **increased** over step 1's readings, since the
+reseed plans every bundled file again; and both `status=pending` and `status=stale` report
+`totalCount: 0`.
+
+**Comparing against step 1 rather than asserting a number** is what makes this the second path rather
+than a repeat of the first: the reseed's own lines are indistinguishable from first-boot lines except
+by there being more of them.
 
 Every real bundled alias's canonical Source either already exists under its exact recorded title, or is
 being legitimately created for the first time. None has actually been renamed away — which is why zero
