@@ -33,13 +33,7 @@ hand-written `Sql.cs` queries do. This confirms the `SELECT *` removal did not b
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-id-05 2>/dev/null; docker volume rm qt-id-05-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-id-05 -p 18205:8080 -v qt-id-05-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18205/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-id-05 --port 18205
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -87,6 +81,5 @@ container emits while serving them.
 ## Cleanup
 
 ```bash
-docker rm -f qt-id-05 2>/dev/null
-docker volume rm qt-id-05-data 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-id-05
 ```

@@ -28,13 +28,7 @@ page, not the spec. The profile's readiness poll is what gates that.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-api-04 2>/dev/null; docker volume rm qt-api-04-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-api-04 -p 18104:8080 -v qt-api-04-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18104/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-api-04 --port 18104
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -103,7 +97,6 @@ what the container emits while serving these requests has not been captured.
 ## Cleanup
 
 ```bash
-docker rm -f qt-api-04 2>/dev/null
-docker volume rm qt-api-04-data 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-04
 rm /tmp/spec279.json
 ```

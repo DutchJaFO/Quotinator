@@ -55,13 +55,7 @@ surfaces it.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-12 2>/dev/null; docker volume rm qt-import-12-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-12 -p 18612:8080 -v qt-import-12-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18612/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-12 --port 18612
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -78,7 +72,7 @@ cat > .claude/temp/smoke-175-add.json <<'EOF'
   "characters": [{"name":"Smoke Test New Character","sourceTitle":"Airplane!","sourceType":"movie"}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-add.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-add.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
 curl -s "http://localhost:18612/api/v1/masterdata/characters?pageSize=0" \
   | grep -c "Smoke Test New Character"
@@ -97,7 +91,7 @@ cat > .claude/temp/smoke-175-modify.json <<'EOF'
   "characters": [{"id":"<an existing Character id from the query above>","name":"Renamed Via Smoke Test","sourceTitle":"Airplane!","sourceType":"movie"}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-modify.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-modify.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
 ```
 
@@ -114,10 +108,10 @@ curl -s "http://localhost:18612/api/v1/import/actions?status=pending&batchId=<ba
 ### 5. Decide the ambiguous field, apply the batch, and read the Character back
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"characterName":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
   "http://localhost:18612/api/v1/import/actions/<id>/decide"
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18612/api/v1/import/actions/apply?batchId=<batchId>"
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18612/api/v1/import/actions/apply?batchId=<batchId>"
 curl -s "http://localhost:18612/api/v1/masterdata/characters/<id>"
 ```
 
@@ -129,7 +123,7 @@ curl -s "http://localhost:18612/api/v1/masterdata/characters/<id>"
 The same file, re-imported under `review`:
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-modify.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-modify.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
 ```
 
@@ -151,7 +145,7 @@ cat > .claude/temp/smoke-175-explicit-add.json <<'EOF'
   "characters": [{"id":"F5111175-0000-4000-8000-000000000175","name":"Explicit Id Character","sourceTitle":"Airplane!","sourceType":"movie"}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-explicit-add.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-explicit-add.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
 curl -s -w "\n%{http_code}\n" "http://localhost:18612/api/v1/masterdata/characters/f5111175-0000-4000-8000-000000000175"
 ```
@@ -169,7 +163,7 @@ cat > .claude/temp/smoke-175-source-casing.json <<'EOF'
   "characters": [{"name":"Case Insensitive Source Character","sourceTitle":"AIRPLANE!","sourceType":"movie"}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-source-casing.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-source-casing.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
 curl -s "http://localhost:18612/api/v1/masterdata/sources?pageSize=0"
 ```
@@ -187,6 +181,5 @@ observation for the explicit-id half — the import reported success in the fail
 
 ```bash
 rm -f .claude/temp/smoke-175-*.json
-docker rm -f qt-import-12
-docker volume rm qt-import-12-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-12
 ```

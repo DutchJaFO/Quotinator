@@ -33,13 +33,7 @@ precondition, not a given.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-05 2>/dev/null; docker volume rm qt-import-05-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-05 -p 18605:8080 -v qt-import-05-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18605/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-05 --port 18605
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -50,7 +44,7 @@ never became healthy.
 ### 2. Apply a batch cleanly under `newest-wins`
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
   -w "\n%{http_code}\n" \
@@ -63,7 +57,7 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
 ### 3. Preview the reversal
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18605/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
 ```
 
@@ -72,7 +66,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
 ### 4. Reverse the batch
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18605/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
 
@@ -89,7 +83,7 @@ curl -s "http://localhost:18605/api/v1/import/actions?batchId=<batchId>"
 ### 6. Reverse the same batch again
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18605/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
 
@@ -98,7 +92,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
 ### 7. Re-import after reversal — the resurrection path
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
   -w "\n%{http_code}\n" \
@@ -156,7 +150,7 @@ import.
 ### 10. Attempt the out-of-order reversal
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18605/api/v1/import/actions/reverse?batchId=<the id from that query>"
 ```
 
@@ -172,6 +166,5 @@ observation, since no action status changes to signal the reversal.
 
 ```bash
 rm -f .claude/temp/smoke-reverse.db .claude/temp/smoke-reverse.db-wal .claude/temp/smoke-reverse.db-shm
-docker rm -f qt-import-05
-docker volume rm qt-import-05-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-05
 ```

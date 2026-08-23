@@ -34,13 +34,7 @@ and rebuilds via the baseline path, reversing #141's preserve-on-reset behaviour
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-db-03 2>/dev/null; docker volume rm qt-db-03-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-db-03 -p 18303:8080 -v qt-db-03-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18303/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-db-03 --port 18303
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -63,7 +57,7 @@ if they were already zero. Stop; this is a seeding problem, not a Reset result.
 ### 3. Reset the database
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18303/api/v1/admin/database/reset"
 ```
 
@@ -104,7 +98,7 @@ own `System_SchemaVersion` is wiped by the full drop too, where previously it wa
 assertion is that they are unchanged, which cannot be evaluated from the after-value alone.
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18303/api/v1/admin/database/reset?preserveSchemaVersion=true"
 ```
 
@@ -146,7 +140,6 @@ nothing observable changes in a running container for that part.
 ## Cleanup
 
 ```bash
-docker rm -f qt-db-03 2>/dev/null
-docker volume rm qt-db-03-data 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-03
 rm -f .claude/temp/smoke156.db .claude/temp/smoke156.db-wal .claude/temp/smoke156.db-shm
 ```

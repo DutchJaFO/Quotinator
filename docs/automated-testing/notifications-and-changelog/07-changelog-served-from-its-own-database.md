@@ -46,14 +46,8 @@ neither is predicted**, since the changelog grows with every release.
 ### 1. Start a container of this test's own on a bind-mounted directory
 
 ```bash
-docker rm -f qt-notif-07 2>/dev/null
-rm -rf /tmp/qt-notif-07
-mkdir -p /tmp/qt-notif-07/data
-MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-07 -p 18507:8080 \
-  -v /tmp/qt-notif-07/data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> quotinator:local
-until curl -sf http://localhost:18507/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-07 --port 18507 \
+  --bind /tmp/qt-notif-07/data
 ```
 
 **Expected:** the app reaches healthy, having initialised and imported the changelog during startup.
@@ -126,6 +120,6 @@ contents are wholly derived from JSON shipped in the image, so nothing user-auth
 ## Cleanup
 
 ```bash
-docker rm -f qt-notif-07
-rm -rf /tmp/qt-notif-07
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-07 \
+  --bind /tmp/qt-notif-07/data
 ```

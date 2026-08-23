@@ -40,13 +40,7 @@ unedited rather than hand-writing an input.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-13 2>/dev/null; docker volume rm qt-import-13-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-13 -p 18613:8080 -v qt-import-13-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18613/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-13 --port 18613
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -57,7 +51,7 @@ never became healthy.
 ### 2. Stage a batch to round-trip
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   "http://localhost:18613/api/v1/import"
@@ -69,10 +63,10 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
 
 ```bash
 curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=<batchId>&format=json" -o /tmp/export.json
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   -F "batchId=<batchId>" -F "file=@/tmp/export.json" \
   "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<batchId>"
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18613/api/v1/import/actions/apply?batchId=<batchId>"
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18613/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
 **Expected:** the JSON round trip returns `200` with `errors: []` and `actionsDecided` matching the
@@ -81,12 +75,12 @@ batch's own pending-action count.
 ### 4. Repeat the round trip via CSV
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   "http://localhost:18613/api/v1/import"
 curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=<new batchId>&format=csv" -o /tmp/export.csv
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   -F "batchId=<new batchId>" -F "file=@/tmp/export.csv" -F "format=csv" \
   "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<new batchId>&format=csv"
 ```
@@ -100,7 +94,7 @@ already had every row decided, so "every other row is still decided" would be tr
 the test could not fail in the direction it exists to catch.
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   "http://localhost:18613/api/v1/import"
@@ -129,7 +123,7 @@ the header and every other row exactly as exported. Note that row's `actionId`; 
 it.
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   -F "batchId=<third batchId>" -F "file=@/tmp/export3-bad.csv" -F "format=csv" \
   "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<third batchId>&format=csv"
 curl -s "http://localhost:18613/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
@@ -148,7 +142,7 @@ if this test is ever automated, the edit belongs in `scripts/testing/` as a `.cs
 ### 7. Reject an unknown export format
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<batchId>&format=xml"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<batchId>&format=xml"
 ```
 
 **Expected:** unknown `format` returns `422`.
@@ -164,7 +158,7 @@ curl -s -w "\n%{http_code}\n" -X POST -F "batchId=<batchId>" -F "file=@/tmp/expo
 ### 9. Reject a request with no `batchId` and no body at all
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18613/api/v1/import/actions/bulk-decide"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18613/api/v1/import/actions/bulk-decide"
 ```
 
 **Expected:** **`422` with `"detail":"You must provide a batchId."`**
@@ -190,6 +184,5 @@ this newer endpoint. Fixed by switching to `HttpRequest request` and checking `b
 
 ```bash
 rm -f /tmp/export.json /tmp/export.csv /tmp/export3.csv /tmp/export3-bad.csv
-docker rm -f qt-import-13
-docker volume rm qt-import-13-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-13
 ```

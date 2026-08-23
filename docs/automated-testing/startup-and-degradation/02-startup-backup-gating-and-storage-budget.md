@@ -37,11 +37,7 @@ discrepancy is tracked separately, not resolved here.
 ### 1. Install a fresh baseline
 
 ```bash
-docker rm -f qt-startup-02 2>/dev/null
-docker volume rm qt-startup-02-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-02 -p 18402:8080 -v qt-startup-02-data:/data \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest quotinator:local
-until curl -sf http://localhost:18402/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-02 --port 18402
 docker logs qt-startup-02 2>&1 | grep "Database - Backup"
 ```
 
@@ -108,6 +104,6 @@ are observed state and are asserted above.
 ## Cleanup
 
 ```bash
-docker rm -f qt-startup-02 qt-startup-02-budget 2>/dev/null
-docker volume rm qt-startup-02-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-02-budget
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-02
 ```

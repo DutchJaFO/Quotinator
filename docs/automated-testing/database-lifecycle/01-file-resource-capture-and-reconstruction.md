@@ -32,13 +32,7 @@ the profile's own first boot, and a container that has not finished seeding has 
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-db-01 2>/dev/null; docker volume rm qt-db-01-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-db-01 -p 18301:8080 -v qt-db-01-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18301/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-db-01 --port 18301
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -204,7 +198,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:18301/api/v1/
 ### 17. Prune with a malformed `keepPerFile`
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18301/api/v1/import/file-resources/prune?keepPerFile=abc"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18301/api/v1/import/file-resources/prune?keepPerFile=abc"
 ```
 
 **Expected:** `422`.
@@ -212,7 +206,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>
 ### 18. Prune with a valid key
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18301/api/v1/import/file-resources/prune"
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18301/api/v1/import/file-resources/prune"
 ```
 
 **Expected:** `200` with `{"prunedCount":0}` — nothing to prune, since each bundled file has only one
@@ -230,8 +224,7 @@ state and are asserted above. What the container logs during capture has not bee
 ## Cleanup
 
 ```bash
-docker rm -f qt-db-01 2>/dev/null
-docker volume rm qt-db-01-data 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-01
 rm -f .claude/temp/smoke251.db .claude/temp/smoke251.db-wal .claude/temp/smoke251.db-shm \
       .claude/temp/downloaded.json .claude/temp/original.json .claude/temp/crlf.json
 ```

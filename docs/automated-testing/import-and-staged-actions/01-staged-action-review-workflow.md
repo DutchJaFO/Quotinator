@@ -39,13 +39,7 @@ run stages through it.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-01 2>/dev/null; docker volume rm qt-import-01-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-01 -p 18601:8080 -v qt-import-01-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18601/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-01 --port 18601
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -73,7 +67,7 @@ manual-review machinery has regressed back in.
 ### 4. Import the curated file under forced `review`
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   -w "\n%{http_code}\n" \
@@ -99,7 +93,7 @@ curl -s "http://localhost:18601/api/v1/import/actions?status=pending&batchId=<ba
 ### 6. Decide that action, and confirm it moved
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
   "http://localhost:18601/api/v1/import/actions/<id>/decide"
 curl -s "http://localhost:18601/api/v1/import/actions?status=Decided&batchId=<batchId>&pageSize=0"
@@ -110,7 +104,7 @@ curl -s "http://localhost:18601/api/v1/import/actions?status=Decided&batchId=<ba
 ### 7. Undo the decision
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18601/api/v1/import/actions/<id>/undo"
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18601/api/v1/import/actions/<id>/undo"
 ```
 
 **Expected:** the action is back under `status=Pending`.
@@ -118,7 +112,7 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18601/api/v1/
 ### 8. Decide it again
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
   "http://localhost:18601/api/v1/import/actions/<id>/decide"
 ```
@@ -128,7 +122,7 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/j
 ### 9. Apply the batch, with the `batchId` lowercased
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18601/api/v1/import/actions/apply?batchId=<lowercase the batchId here too>"
 ```
 
@@ -154,6 +148,5 @@ Not yet established as a captured record beyond the status transitions asserted 
 ## Cleanup
 
 ```bash
-docker rm -f qt-import-01
-docker volume rm qt-import-01-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-01
 ```

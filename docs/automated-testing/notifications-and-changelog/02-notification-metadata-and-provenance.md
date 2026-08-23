@@ -55,14 +55,11 @@ notification.**
 
 ```bash
 docker pull ghcr.io/dutchjafo/quotinator:1.8.3
-docker rm -f qt-notif-02-183 qt-notif-02-current 2>/dev/null
-rm -rf /tmp/qt-notif-02
-mkdir -p /tmp/qt-notif-02/data
-MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-02-183 -e Quotinator__DataDir=/data \
-  -v /tmp/qt-notif-02/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-02-183 \
+  --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind /tmp/qt-notif-02/data --no-wait
 until docker logs qt-notif-02-183 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
 docker logs qt-notif-02-183 2>&1 | grep baseline
-docker rm -f qt-notif-02-183
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-02-183
 ```
 
 **Expected:** v1.8.3 reports `schema created at baseline`, the released schema this upgrade starts from.
@@ -196,8 +193,9 @@ found by reading them rather than by any assertion.
 ## Cleanup
 
 ```bash
-docker rm -f qt-notif-02-183 qt-notif-02-current 2>/dev/null
-rm -rf /tmp/qt-notif-02
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-02-183
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-02-current \
+  --bind /tmp/qt-notif-02/data
 ```
 
 `qt-notif-02-183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing

@@ -32,13 +32,7 @@ has *not* yet been created.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-17 2>/dev/null; docker volume rm qt-import-17-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-17 -p 18617:8080 -v qt-import-17-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18617/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-17 --port 18617
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -52,7 +46,7 @@ never became healthy.
 curl -s http://localhost:18617/api/v1/version
 docker logs qt-import-17 2>&1 | grep -c "\[Database - Seed\] .* report: "
 docker logs qt-import-17 2>&1 | grep "\[Database - Seed\] .* alias staleness evaluated"
-curl -s -H "X-Api-Key: <your admin key>" "http://localhost:18617/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purge"' | wc -l
+curl -s -H "X-Api-Key: smoketest" "http://localhost:18617/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purge"' | wc -l
 curl -s "http://localhost:18617/api/v1/import/actions?status=pending&pageSize=0" | grep -o '"totalCount":[0-9]*'
 curl -s "http://localhost:18617/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
@@ -78,7 +72,7 @@ one that never ran. See the index's *When the expected situation does not occur*
 ### 3. Reseed and repeat, which is the second of the two paths
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18617/api/v1/admin/database/reseed"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18617/api/v1/admin/database/reseed"
 docker logs qt-import-17 2>&1 | grep -c "\[Database - Seed\] .* report: "
 docker logs qt-import-17 2>&1 | grep -c "\[Database - Seed\] .* alias staleness evaluated"
 curl -s "http://localhost:18617/api/v1/import/actions?status=pending&pageSize=0" | grep -o '"totalCount":[0-9]*'
@@ -117,6 +111,5 @@ tests alone.**
 ## Cleanup
 
 ```bash
-docker rm -f qt-import-17
-docker volume rm qt-import-17-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-17
 ```

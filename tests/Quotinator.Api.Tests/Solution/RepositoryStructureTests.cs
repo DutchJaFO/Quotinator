@@ -540,8 +540,12 @@ public partial class RepositoryStructureTests
         System.Text.RegularExpressions.RegexOptions.Multiline)]
     private static partial System.Text.RegularExpressions.Regex ExpectedResultLine();
 
-    /// <summary>The host side of a <c>-p host:container</c> port mapping.</summary>
-    [System.Text.RegularExpressions.GeneratedRegex(@"-p\s+(?<port>\d+):\d+")]
+    /// <summary>
+    /// A host port a document claims: either <c>--port N</c> passed to the environment script, or the
+    /// host side of a raw <c>-p host:container</c> mapping for the few containers the script does not
+    /// own.
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"--port\s+(?<port>\d+)|-p\s+(?<port>\d+):\d+")]
     private static partial System.Text.RegularExpressions.Regex PublishedHostPort();
 
     /// <summary>A port a document actually sends requests to.</summary>

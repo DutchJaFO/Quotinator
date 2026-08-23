@@ -38,11 +38,7 @@ about. A count asserts something nobody intended and gets "fixed" by editing a d
 ### 1. Start a container of this test's own and list its notifications
 
 ```bash
-docker rm -f qt-notif-01 2>/dev/null; docker volume rm qt-notif-01-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-01 -p 18501:8080 -v qt-notif-01-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> quotinator:local
-until curl -sf http://localhost:18501/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-01 --port 18501
 curl -s -w " [%{http_code}]\n" "http://localhost:18501/api/v1/notifications"
 ```
 
@@ -64,7 +60,7 @@ curl -s -w " [%{http_code}]\n" -X POST "http://localhost:18501/api/v1/notificati
 ### 3. Dismiss the same all-zero id with the correct key
 
 ```bash
-curl -s -w " [%{http_code}]\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w " [%{http_code}]\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
 ```
 
@@ -152,8 +148,7 @@ what the container logs while writing the startup notification has not been reco
 ## Cleanup
 
 ```bash
-docker rm -f qt-notif-01 2>/dev/null
-docker volume rm qt-notif-01-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-01
 ```
 
 If the Action button's **Confirm** path was exercised, the volume holds a wiped, post-Reset database —

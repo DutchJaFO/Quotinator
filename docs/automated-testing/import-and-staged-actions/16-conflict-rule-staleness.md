@@ -31,13 +31,7 @@ not treat the empty result as a failure.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-16 2>/dev/null; docker volume rm qt-import-16-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-16 -p 18616:8080 -v qt-import-16-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18616/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-16 --port 18616
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -57,10 +51,10 @@ multi-file seed.
 ### 3. Reseed, then list the stale actions
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18616/api/v1/admin/database/reseed"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18616/api/v1/admin/database/reseed"
 docker logs qt-import-16 2>&1 | grep -c "\[Database - Seed\] .* report: "
 docker logs qt-import-16 2>&1 | grep "\[Database - Seed\] .* rule staleness evaluated"
-curl -s -H "X-Api-Key: <your admin key>" "http://localhost:18616/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purge"' | wc -l
+curl -s -H "X-Api-Key: smoketest" "http://localhost:18616/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purge"' | wc -l
 curl -s "http://localhost:18616/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
 ```
 
@@ -100,6 +94,5 @@ the rule's recorded assumption and reality, caught by the mechanism rather than 
 ## Cleanup
 
 ```bash
-docker rm -f qt-import-16
-docker volume rm qt-import-16-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-16
 ```

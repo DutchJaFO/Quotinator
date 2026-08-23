@@ -31,14 +31,8 @@ level. That means its own container, since a configuration value is fixed at sta
 ### 1. Create this test's own environment, with request logging genuinely on
 
 ```bash
-docker rm -f qt-import-11 2>/dev/null; docker volume rm qt-import-11-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-11 -p 18611:8080 -v qt-import-11-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  -e Quotinator__LogRequests=true -e Quotinator__LogLevel=debug \
-  quotinator:local
-until curl -sf http://localhost:18611/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-11 --port 18611 \
+  --env Quotinator__LogRequests=true --env Quotinator__LogLevel=debug
 ```
 
 **Expected:** the health poll returns — the container is up, with both logging variables set.
@@ -60,9 +54,9 @@ concluded from the log; that is a setup failure, not a result. Stop.
 ### 3. Call all three staged-action endpoints with no `batchId`
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18611/api/v1/import/actions/apply"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18611/api/v1/import/actions/discard"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18611/api/v1/import/actions/reverse"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18611/api/v1/import/actions/apply"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18611/api/v1/import/actions/discard"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18611/api/v1/import/actions/reverse"
 ```
 
 **Expected:** all three bodyless calls return `422` with `"detail":"You must provide a batchId."` —
@@ -81,7 +75,7 @@ Counting them is the assertion: a single missing line would otherwise be invisib
 ### 5. Stage a batch for the happy path, this document's own
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"skip"}}' \
   "http://localhost:18611/api/v1/import/preview"
@@ -92,7 +86,7 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
 ### 6. Apply that batch with a real `batchId`
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18611/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
@@ -122,6 +116,5 @@ by it.
 ## Cleanup
 
 ```bash
-docker rm -f qt-import-11
-docker volume rm qt-import-11-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-11
 ```

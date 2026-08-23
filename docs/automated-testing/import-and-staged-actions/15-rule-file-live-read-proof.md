@@ -38,13 +38,8 @@ Temporarily delete the Auntie Mame rule entirely from `nikhilnamal17-conflict-ru
 
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
-docker rm -f qt-import-15 2>/dev/null; docker volume rm qt-import-15-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-15 -p 18615:8080 -v qt-import-15-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=false \
-  quotinator:local
-until curl -sf http://localhost:18615/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-15 --port 18615 \
+  --env Quotinator__AutoPurgeBundledImportActions=false
 curl -s "http://localhost:18615/api/v1/import/actions?status=pending"
 ```
 
@@ -60,14 +55,9 @@ Restore the rule and change its `resolution` from `Keep` to `Replace`, then rebu
 container against the rebuilt image:
 
 ```bash
-docker rm -f qt-import-15-replace 2>/dev/null; docker volume rm qt-import-15-replace-data 2>/dev/null
 docker build -f docker/Dockerfile -t quotinator:local .
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-15-replace -p 19615:8080 -v qt-import-15-replace-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=false \
-  quotinator:local
-until curl -sf http://localhost:19615/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-15-replace --port 19615 \
+  --env Quotinator__AutoPurgeBundledImportActions=false
 ```
 
 **Expected:** the health poll returns — the second container has completed its own first-boot seed
@@ -110,8 +100,8 @@ that did not.
 ## Cleanup
 
 ```bash
-docker rm -f qt-import-15 qt-import-15-replace
-docker volume rm qt-import-15-data qt-import-15-replace-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-15
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-15-replace
 rm -f .claude/temp/inspect-181.db .claude/temp/inspect-181.db-wal .claude/temp/inspect-181.db-shm
 ```
 

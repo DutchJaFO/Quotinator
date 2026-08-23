@@ -34,13 +34,7 @@ same Character *name* under a *different* Source still creates a separate row.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-09 2>/dev/null; docker volume rm qt-import-09-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-09 -p 18609:8080 -v qt-import-09-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18609/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-09 --port 18609
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -74,7 +68,7 @@ Stop.
 cat > .claude/temp/smoke-179.json <<'EOF'
 {"quotes": [{"id":"a0000001-0000-4000-8000-000000000001","quote":"A #179 smoke test line.","originalLanguage":"en","source":"Airplane!","date":"1980","character":"Striker (Smoke Test)","author":null,"type":"movie","genres":[],"translations":{}}]}
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-179.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-179.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18609/api/v1/import"
 ```
 
@@ -104,7 +98,7 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
 cat > .claude/temp/smoke-179b.json <<'EOF'
 {"quotes": [{"id":"a0000002-0000-4000-8000-000000000002","quote":"A second #179 smoke test line, same character, different source.","originalLanguage":"en","source":"Monty Python and the Holy Grail","date":"1975","character":"Striker (Smoke Test)","author":null,"type":"movie","genres":[],"translations":{}}]}
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-179b.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-179b.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18609/api/v1/import"
 ```
 
@@ -136,6 +130,5 @@ Not yet established as a captured record beyond the DbInspector reads.
 ```bash
 rm -f .claude/temp/smoke-179.json .claude/temp/smoke-179b.json \
       .claude/temp/smoke179.db* .claude/temp/smoke179-after.db* .claude/temp/smoke179-second.db*
-docker rm -f qt-import-09
-docker volume rm qt-import-09-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-09
 ```

@@ -51,12 +51,8 @@ AppArmor kernel support to test the real mechanism directly (confirmed live:
 ### 1. Seed a populated database from the predecessor release
 
 ```bash
-docker rm -f qt-startup-04 2>/dev/null
-docker volume rm qt-startup-04-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-04 -p 18404:8080 \
-  -v qt-startup-04-data:/data -e Quotinator__DataDir=/data \
-  ghcr.io/dutchjafo/quotinator:1.8.2
-until curl -sf http://localhost:18404/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-04 --port 18404 \
+  --image ghcr.io/dutchjafo/quotinator:1.8.2
 curl -s "http://localhost:18404/api/v1/version" | grep -o '"quotes":[0-9]*'
 docker stop -t 15 qt-startup-04 && docker rm qt-startup-04
 ```
@@ -116,8 +112,8 @@ before committing anything.
 ## Cleanup
 
 ```bash
-docker rm -f qt-startup-04 2>/dev/null
-docker volume rm qt-startup-04-data qt-startup-04-data-clone 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-04
+docker volume rm qt-startup-04-data-clone 2>/dev/null
 ```
 
 If the gut-check section above was run, confirm `useMemoryTempStore: true` has been restored in

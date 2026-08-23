@@ -52,13 +52,10 @@ step 2's writes either — **do not "fix" the tool to allow writes.**
 
 ```bash
 # 1. released baseline — the schema version the last published image creates
-docker rm -f qt-notif-03-183 qt-notif-03-current 2>/dev/null
-rm -rf /tmp/qt-notif-03
-mkdir -p /tmp/qt-notif-03/data
-MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-03-183 -e Quotinator__DataDir=/data \
-  -v /tmp/qt-notif-03/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-03-183 \
+  --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind /tmp/qt-notif-03/data --no-wait
 until docker logs qt-notif-03-183 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
-docker rm -f qt-notif-03-183
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-03-183
 ```
 
 **Expected:** the released image reaches `Quotinator ready`, leaving a v1.8.3 database in
@@ -136,8 +133,9 @@ died.
 ## Cleanup
 
 ```bash
-docker rm -f qt-notif-03-183 qt-notif-03-current 2>/dev/null
-rm -rf /tmp/qt-notif-03
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-03-183
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-03-current \
+  --bind /tmp/qt-notif-03/data
 ```
 
 `qt-notif-03-183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing

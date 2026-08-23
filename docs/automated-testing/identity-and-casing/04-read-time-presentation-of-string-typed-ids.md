@@ -37,13 +37,7 @@ this test, and it is why the unit-tier test is the primary evidence here.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-id-04 2>/dev/null; docker volume rm qt-id-04-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-id-04 -p 18204:8080 -v qt-id-04-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18204/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-id-04 --port 18204
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -54,7 +48,7 @@ that never became healthy.
 ### 2. Import the curated file under the `review` policy
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   "http://localhost:18204/api/v1/import"
@@ -78,7 +72,7 @@ lowercase.
 ### 4. Read an audit entry
 
 ```bash
-curl -s "http://localhost:18204/api/v1/admin/audit?pageSize=1" -H "X-Api-Key: <your admin key>"
+curl -s "http://localhost:18204/api/v1/admin/audit?pageSize=1" -H "X-Api-Key: smoketest"
 ```
 
 **Expected:** the `/admin/audit` response's `recordId` is lowercase.
@@ -91,6 +85,5 @@ distinction matters more than the raw result.
 ## Cleanup
 
 ```bash
-docker rm -f qt-id-04 2>/dev/null
-docker volume rm qt-id-04-data 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-id-04
 ```

@@ -29,13 +29,7 @@ import preview and the startup log — is reachable on a Fresh container.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-19 2>/dev/null; docker volume rm qt-import-19-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-19 -p 18619:8080 -v qt-import-19-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18619/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-19 --port 18619
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -56,7 +50,7 @@ curl -s -w "\n%{http_code}\n" "http://localhost:18619/api/v1/admin/database/seed
 ### 3. Reseed
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18619/api/v1/admin/database/reseed"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18619/api/v1/admin/database/reseed"
 ```
 
 **Expected:** `200`, with a row count present for each of
@@ -66,7 +60,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://l
 ### 4. Repeat against `POST /admin/database/reset`
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:18619/api/v1/admin/database/reset"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18619/api/v1/admin/database/reset"
 ```
 
 **Expected:** the same shape, but every count `0` and `reports` reflecting no activity. Reset no longer
@@ -75,7 +69,7 @@ reimports bundled or user content after rebuilding the schema (#156), so there i
 ### 5. Import a single file
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
   -w "\n%{http_code}\n" \
@@ -88,7 +82,7 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
 ### 6. Re-run the same call via `POST /api/v1/import/preview`
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
   -w "\n%{http_code}\n" \
@@ -143,6 +137,5 @@ asserted above.
 ## Cleanup
 
 ```bash
-docker rm -f qt-import-19
-docker volume rm qt-import-19-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-19
 ```

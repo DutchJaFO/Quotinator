@@ -39,11 +39,7 @@ left to a default.
 ### 1. Start the default container, both auto-purge settings on
 
 ```bash
-docker rm -f qt-db-02-default 2>/dev/null; docker volume rm qt-db-02-default-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-db-02-default -p 18302:8080 -v qt-db-02-default-data:/data \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true quotinator:local
-until curl -sf http://localhost:18302/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-default --port 18302
 docker logs qt-db-02-default 2>&1 | grep -c "Quotinator ready"
 ```
 
@@ -79,14 +75,11 @@ cat .claude/temp/audit-export.json | head -c 300
 A separate container, because the cap is configuration:
 
 ```bash
-docker rm -f qt-db-02-default; docker volume rm qt-db-02-default-data
-docker rm -f qt-db-02-cap 2>/dev/null; docker volume rm qt-db-02-cap-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-db-02-cap -p 19302:8080 -v qt-db-02-cap-data:/data \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AdminAuditExportMaxRows=1 quotinator:local
-until curl -sf http://localhost:19302/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-default
+dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-cap --port 19302 \
+  --env Quotinator__AdminAuditExportMaxRows=1
 curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:19302/api/v1/admin/audit/export"
-docker rm -f qt-db-02-cap; docker volume rm qt-db-02-cap-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-cap
 ```
 
 **Expected:** `422`, never a silently truncated file. A fresh seed produces far more than one combined
@@ -95,10 +88,7 @@ row.
 ### 5. Capture the auto-purge-on database and count the remaining actions
 
 ```bash
-MSYS_NO_PATHCONV=1 docker run -d --name qt-db-02-default -p 18302:8080 -v qt-db-02-default-data:/data \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true quotinator:local
-until curl -sf http://localhost:18302/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-default --port 18302
 docker stop -t 15 qt-db-02-default
 MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249.db
 MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db-wal .claude/temp/smoke249.db-wal
@@ -131,18 +121,15 @@ A fresh container, no prior data:
 
 ```bash
 docker stop qt-db-02-default
-docker rm -f qt-db-02-noautopurge 2>/dev/null; docker volume rm qt-db-02-noautopurge-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-db-02-noautopurge -p 20302:8080 -v qt-db-02-noautopurge-data:/data \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=false quotinator:local
-until curl -sf http://localhost:20302/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-noautopurge --port 20302 \
+  --env Quotinator__AutoPurgeBundledImportActions=false
 docker stop -t 15 qt-db-02-noautopurge
 MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db .claude/temp/smoke249b.db
 MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db-wal .claude/temp/smoke249b.db-wal
 MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db-shm .claude/temp/smoke249b.db-shm
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249b.db \
   --sql "SELECT COUNT(*) AS RemainingActions FROM Import_Action"
-docker rm -f qt-db-02-noautopurge; docker volume rm qt-db-02-noautopurge-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-noautopurge
 docker start qt-db-02-default
 until curl -sf http://localhost:18302/api/v1/health > /dev/null; do sleep 1; done
 ```
@@ -158,7 +145,7 @@ against it and needs the same database this check just read.
 Using `qt-db-02-default` from the auto-purge check, still running:
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@data/sources/quotinator-curated.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@data/sources/quotinator-curated.json" \
   "http://localhost:18302/api/v1/import?purgeOnSuccess=true"
 ```
 
@@ -170,7 +157,7 @@ already-seeded data, no pending decisions).
 Note the response's `batchId`, then:
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18302/api/v1/import/actions/reverse?batchId=<batchId-from-above>"
 ```
 
@@ -180,7 +167,7 @@ has nothing to reverse.
 ### 10. Clear the audit trail unscoped
 
 ```bash
-curl -s -X DELETE -H "X-Api-Key: <your admin key>" "http://localhost:18302/api/v1/admin/audit"
+curl -s -X DELETE -H "X-Api-Key: smoketest" "http://localhost:18302/api/v1/admin/audit"
 ```
 
 **Expected:** `204`.
@@ -213,8 +200,9 @@ tables as one combined concern everywhere else.
 ## Cleanup
 
 ```bash
-docker rm -f qt-db-02-default qt-db-02-cap qt-db-02-noautopurge 2>/dev/null
-docker volume rm qt-db-02-default-data qt-db-02-cap-data qt-db-02-noautopurge-data 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-default
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-cap
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-noautopurge
 rm -f .claude/temp/smoke249.db .claude/temp/smoke249.db-wal .claude/temp/smoke249.db-shm \
       .claude/temp/smoke249b.db .claude/temp/smoke249b.db-wal .claude/temp/smoke249b.db-shm \
       .claude/temp/audit-export.json

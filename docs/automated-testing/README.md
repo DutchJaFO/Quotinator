@@ -408,18 +408,48 @@ document whose environment is both writes both, base first:
 #### Fresh
 
 **A profile is a recipe, not a shared instance.** Each test creates its own container and its own
-volume, named after itself, and destroys both when it is done. `<name>` below is this test's own name
-and `<port>` its own published port — substitute them, do not run the block verbatim:
+volume, named after itself, and destroys both when it is done — two lines, with its own name and port:
 
 ```bash
-docker rm -f <name> 2>/dev/null; docker volume rm <name>-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name <name> -p <port>:8080 -v <name>-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:<port>/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name <name> --port <port>
 ```
+
+```bash
+dotnet script scripts/testing/test-env.csx -- destroy --name <name>
+```
+
+**The recipe lives in the script, not in forty-three copies of it.** Spelled out per document, changing
+how a test environment is built — one more environment variable, a different readiness condition —
+would mean editing every document that has one. The script is the single place that changes, and it
+**echoes every `docker` command before running it**, so a reader following a document still sees
+exactly what executed without opening it.
+
+Options exist for the cases that genuinely differ, and a document passes only what makes it different:
+
+| Option | For |
+|---|---|
+| `--env K=V` | An extra setting, repeatable — `--env Quotinator__LogRequests=true` |
+| `--image <ref>` | A prior published release, for an Upgraded test |
+| `--bind <dir>` | A directory instead of a named volume, where something outside the container must read or edit the database file |
+| `--wait-listening` | A degraded scenario where `503` is the expected outcome, so waiting for healthy would hang |
+| `--no-wait` | A container that should not be waited on before the next step |
+
+**`--port` itself is optional.** A container nothing connects to over HTTP — one waited on by its own
+log line — publishes none, and omitting the flag is how a document says so. Requiring one would force
+it to invent a number it never uses, which then contradicts its own `Determinism`.
+
+**`create` always starts from a clean volume.** A step that must run against data an earlier step
+produced — a second startup, an upgrade against a seeded directory — stays a raw `docker run` and says
+why. The script owns creating and destroying an environment, not re-entering one.
+
+**The admin key is `smoketest`**, set by the script. Documents use it literally rather than carrying a
+`<your admin key>` placeholder for a reader to resolve.
+
+**A bind directory is the document's to create and remove, not the script's.** `--bind` is passed to
+`docker` verbatim, because a POSIX path like `/tmp/x` resolves inside the Docker VM while a relative one
+resolves on the host, and only the document knows which it means. Resolving it here would bind a
+different filesystem — and the test would then read an empty database, which looks exactly like a
+passing check.
 
 **Building the image is the one genuinely shared step**, because it is the same image for every test
 and rebuilding it per test would be absurd:

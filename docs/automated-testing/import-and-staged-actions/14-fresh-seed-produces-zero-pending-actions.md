@@ -36,13 +36,7 @@ Nothing beyond the Fresh profile. The seed this test inspects is the profile's o
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-14 2>/dev/null; docker volume rm qt-import-14-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-14 -p 18614:8080 -v qt-import-14-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18614/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-14 --port 18614
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -93,6 +87,5 @@ both of which are the observation this test exists for.
 
 ```bash
 rm -f .claude/temp/inspect-181.db .claude/temp/inspect-181.db-wal .claude/temp/inspect-181.db-shm
-docker rm -f qt-import-14
-docker volume rm qt-import-14-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-14
 ```

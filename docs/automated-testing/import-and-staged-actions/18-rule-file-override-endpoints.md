@@ -26,13 +26,7 @@ and decides one itself.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-18 2>/dev/null; docker volume rm qt-import-18-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-18 -p 18618:8080 -v qt-import-18-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18618/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-18 --port 18618
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -61,7 +55,7 @@ notice.
 ### 3. Stage a batch to generate from
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   "http://localhost:18618/api/v1/import"
@@ -74,10 +68,10 @@ the next step needs both.
 ### 4. Decide one action, and generate the rule-file override from it
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
   "http://localhost:18618/api/v1/import/actions/<id>/decide"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18618/api/v1/import/rules/conflict/generate?fileName=quotinator-curated-conflict-rules.json&origin=Bundled&batchId=<batchId>"
 ```
 
@@ -101,9 +95,9 @@ in which it can actually fail. Any id printed is a bundled rule the merge droppe
 ### 6. Remove the override, and repeat the `DELETE`
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: smoketest" \
   "http://localhost:18618/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
-curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: smoketest" \
   "http://localhost:18618/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
 ```
 
@@ -148,8 +142,7 @@ part of a test run.**
 
 ```bash
 rm -f /tmp/rules-before.json /tmp/rules-after.json /tmp/rule-ids-before.txt /tmp/rule-ids-after.txt
-docker rm -f qt-import-18
-docker volume rm qt-import-18-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-18
 ```
 
 The `DELETE` above removes the override. Confirm the first of the two returned `204` before moving on.

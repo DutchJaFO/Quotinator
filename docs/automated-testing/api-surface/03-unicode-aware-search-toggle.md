@@ -36,19 +36,14 @@ The profile's own environment, under this test's own container name:
 
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
-docker rm -f qt-api-03-off 2>/dev/null; docker volume rm qt-api-03-off-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-api-03-off -p 18103:8080 -v qt-api-03-off-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=false \
-  quotinator:local
-until curl -sf http://localhost:18103/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-api-03-off --port 18103 \
+  --env Quotinator__AutoPurgeBundledImportActions=false
 cat > .claude/temp/smoke-222.json <<'EOF'
 {
   "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"I will always have Café de Flore.","originalLanguage":"en","source":"Café de Flore","date":"1990","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18103/api/v1/import"
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18103/api/v1/import"
 ```
 
 **Expected:** import returns `200`.
@@ -70,16 +65,11 @@ proving default behaviour is unchanged.
 The same environment plus the one variable under test:
 
 ```bash
-docker rm -f qt-api-03-off
-docker rm -f qt-api-03-on 2>/dev/null; docker volume rm qt-api-03-on-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-api-03-on -p 19103:8080 -v qt-api-03-on-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=false \
-  -e Quotinator__UnicodeAwareSearch=true \
-  quotinator:local
-until curl -sf http://localhost:19103/api/v1/health > /dev/null; do sleep 1; done
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:19103/api/v1/import"
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-03-off
+dotnet script scripts/testing/test-env.csx -- create --name qt-api-03-on --port 19103 \
+  --env Quotinator__AutoPurgeBundledImportActions=false \
+  --env Quotinator__UnicodeAwareSearch=true
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:19103/api/v1/import"
 ```
 
 **Expected:** import returns `200`.
@@ -103,7 +93,7 @@ serving each half has not been captured.
 ## Cleanup
 
 ```bash
-docker rm -f qt-api-03-off qt-api-03-on 2>/dev/null
-docker volume rm qt-api-03-off-data qt-api-03-on-data 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-03-off
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-03-on
 rm .claude/temp/smoke-222.json
 ```

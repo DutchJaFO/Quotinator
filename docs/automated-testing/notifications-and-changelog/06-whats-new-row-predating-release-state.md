@@ -43,12 +43,9 @@ go stale on its own and get "fixed" by editing a digit.
 ### 1. Create a current, fully-migrated database of this test's own
 
 ```bash
-docker rm -f qt-notif-06 2>/dev/null; rm -rf /tmp/qt-notif-06; mkdir -p /tmp/qt-notif-06/data
-
 # 1. a current, fully-migrated database of this test's own
-MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-06 -e Quotinator__DataDir=/data \
-  -v /tmp/qt-notif-06/data:/data -p 18506:8080 quotinator:local
-until curl -s http://localhost:18506/api/v1/health | grep -q healthy; do sleep 5; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-06 --port 18506 \
+  --bind /tmp/qt-notif-06/data
 docker stop -t 15 qt-notif-06
 ```
 
@@ -101,8 +98,8 @@ checks the injected row would pass either way.
 ## Cleanup
 
 ```bash
-docker rm -f qt-notif-06 2>/dev/null
-rm -rf /tmp/qt-notif-06
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-06 \
+  --bind /tmp/qt-notif-06/data
 ```
 
 The data directory is a bind mount rather than a named volume, so removing the directory is what

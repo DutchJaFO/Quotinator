@@ -43,13 +43,7 @@ way, so the status code alone does not distinguish blocked from staged.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-07 2>/dev/null; docker volume rm qt-import-07-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-07 -p 18607:8080 -v qt-import-07-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18607/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-07 --port 18607
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -67,7 +61,7 @@ cat > .claude/temp/smoke-171-172.json <<'EOF'
   "soundCues": [{"id":"f0000003-0000-4000-8000-000000000003","text":"Distant thunder.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18607/api/v1/import"
 ```
 
@@ -90,7 +84,7 @@ cat > .claude/temp/smoke-171-172-v2.json <<'EOF'
   "soundCues": [{"id":"f0000003-0000-4000-8000-000000000003","text":"Distant thunder, rolling.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-v2.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172-v2.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18607/api/v1/import"
 ```
 
@@ -109,13 +103,13 @@ staged, so the decide and apply below would be operating on an empty batch. Stop
 ### 4. Decide both actions and apply the batch
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"stageDirectionText":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
   "http://localhost:18607/api/v1/import/actions/<stage direction action id>/decide"
-curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"soundCueText":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
   "http://localhost:18607/api/v1/import/actions/<sound cue action id>/decide"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18607/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
@@ -134,7 +128,7 @@ cat > .claude/temp/smoke-171-172-v3.json <<'EOF'
   "soundCues": [{"id":"f0000003-0000-4000-8000-000000000003","text":"Distant thunder, fading.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-v3.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172-v3.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18607/api/v1/import"
 ```
 
@@ -158,7 +152,7 @@ cat > .claude/temp/smoke-171-172-addonly.json <<'EOF'
   "soundCues": [{"id":"f0000003-0000-4000-8000-000000000009","text":"Original sound before correction.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-addonly.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172-addonly.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18607/api/v1/import"
 ```
 
@@ -175,16 +169,16 @@ cat > .claude/temp/smoke-171-172-addonly-v2.json <<'EOF'
   "soundCues": [{"id":"f0000003-0000-4000-8000-000000000009","text":"Corrected sound after correction.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-171-172-addonly-v2.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172-addonly-v2.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18607/api/v1/import"
 ```
 
 Copy that `batchId` — the reversal needs it — then reverse, preview first:
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18607/api/v1/import/actions/reverse?batchId=<correction batchId>&preview=true"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18607/api/v1/import/actions/reverse?batchId=<correction batchId>"
 ```
 
@@ -219,6 +213,5 @@ Not yet established as a captured record beyond the DbInspector reads asserted a
 
 ```bash
 rm -f .claude/temp/smoke-171-172*.json .claude/temp/smoke-171-172.db*
-docker rm -f qt-import-07
-docker volume rm qt-import-07-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-07
 ```

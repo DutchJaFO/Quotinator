@@ -35,10 +35,7 @@ The second wait is an ordinary readiness wait and polls.
 ### 1. Request the three surfaces during initialisation, before seeding completes
 
 ```bash
-docker rm -f qt-startup-03 2>/dev/null
-docker volume rm qt-startup-03-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-03 -p 18403:8080 -v qt-startup-03-data:/data \
-  -e Quotinator__DataDir=/data quotinator:local
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-03 --port 18403 --no-wait
 sleep 1
 curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18403/api/v1/health"
 curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18403/api/v1/version"
@@ -90,6 +87,5 @@ otherwise look like a dead server.
 ## Cleanup
 
 ```bash
-docker rm -f qt-startup-03 2>/dev/null
-docker volume rm qt-startup-03-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-03
 ```

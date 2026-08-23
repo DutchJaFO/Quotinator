@@ -50,12 +50,8 @@ Not established, and that is the defect. The original intended, but never pinned
 ### 1. Seed a real, unmodified v1.8.2 database
 
 ```bash
-docker rm -f qt-startup-05 2>/dev/null
-docker volume rm qt-startup-05-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-05 -p 18405:8080 \
-  -v qt-startup-05-data:/data -e Quotinator__DataDir=/data \
-  ghcr.io/dutchjafo/quotinator:1.8.2
-until curl -sf http://localhost:18405/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-05 --port 18405 \
+  --image ghcr.io/dutchjafo/quotinator:1.8.2
 curl -s "http://localhost:18405/api/v1/version" | grep -o '"quotes":[0-9]*'
 docker stop -t 15 qt-startup-05 && docker rm qt-startup-05
 ```
@@ -132,6 +128,5 @@ degraded-skip fix together. What no longer holds is the mechanism that made the 
 ## Cleanup
 
 ```bash
-docker rm -f qt-startup-05 2>/dev/null
-docker volume rm qt-startup-05-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-05
 ```

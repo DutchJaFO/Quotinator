@@ -41,12 +41,11 @@ as they stand — the discrepancy is tracked separately, not resolved here.
 ### 1. Seed a v1.8.3 database and wait for its announcement
 
 ```bash
-docker rm -f qt-notif-05-upgraded 2>/dev/null; rm -rf /tmp/qt-notif-05-upgraded; mkdir -p /tmp/qt-notif-05-upgraded/data
-MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-05-upgraded -e Quotinator__DataDir=/data \
-  -v /tmp/qt-notif-05-upgraded/data:/data -p 18505:8080 ghcr.io/dutchjafo/quotinator:1.8.3
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-05-upgraded --port 18505 \
+  --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind /tmp/qt-notif-05-upgraded/data
 until [ "$(curl -s 'http://localhost:18505/api/v1/notifications?pageSize=0' \
   | grep -c 'Two API operation IDs were renamed')" = "1" ]; do sleep 5; done
-docker rm -f qt-notif-05-upgraded
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-upgraded
 ```
 
 **Expected:** the poll terminates — v1.8.3's announcement exists, so seeding has finished and the
@@ -91,10 +90,8 @@ Same build, no v1.8.3 stage. It needs its **own container name and its own direc
 1.8.3 row that half created and prove nothing:
 
 ```bash
-docker rm -f qt-notif-05-fresh 2>/dev/null; rm -rf /tmp/qt-notif-05-fresh; mkdir -p /tmp/qt-notif-05-fresh/data
-MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-05-fresh -e Quotinator__DataDir=/data \
-  -v /tmp/qt-notif-05-fresh/data:/data -p 19505:8080 quotinator:local
-until curl -sf http://localhost:19505/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-05-fresh --port 19505 \
+  --bind /tmp/qt-notif-05-fresh/data
 MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-05-fresh/data:/data alpine \
   sh -c "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
     'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
@@ -120,8 +117,10 @@ existing is weaker evidence than the 1.8.3 row sorting first.
 ## Cleanup
 
 ```bash
-docker rm -f qt-notif-05-upgraded qt-notif-05-fresh 2>/dev/null
-rm -rf /tmp/qt-notif-05-upgraded /tmp/qt-notif-05-fresh
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-upgraded \
+  --bind /tmp/qt-notif-05-upgraded/data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-fresh \
+  --bind /tmp/qt-notif-05-fresh/data
 ```
 
 Both data directories are bind mounts rather than named volumes, so removing the directories is what

@@ -49,13 +49,7 @@ a date, even when the resolving quote had one.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-10 2>/dev/null; docker volume rm qt-import-10-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-10 -p 18610:8080 -v qt-import-10-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18610/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-10 --port 18610
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -139,6 +133,5 @@ to inherit: missing upstream data rather than a defect in this path.
 
 ```bash
 rm -f .claude/temp/inspect-191.db .claude/temp/inspect-191.db-wal .claude/temp/inspect-191.db-shm
-docker rm -f qt-import-10
-docker volume rm qt-import-10-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-10
 ```

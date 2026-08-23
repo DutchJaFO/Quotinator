@@ -50,15 +50,12 @@ digit, and hide a real duplicate the next time one occurs.
 ### 1. Seed a genuine v1.8.3 database and wait for its announcement to exist
 
 ```bash
-docker rm -f qt-notif-04-183 qt-notif-04-current 2>/dev/null
-rm -rf /tmp/qt-notif-04
-mkdir -p /tmp/qt-notif-04/data
-MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-04-183 -e Quotinator__DataDir=/data \
-  -v /tmp/qt-notif-04/data:/data -p 18504:8080 ghcr.io/dutchjafo/quotinator:1.8.3
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-04-183 --port 18504 \
+  --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind /tmp/qt-notif-04/data
 until [ "$(curl -s "http://localhost:18504/api/v1/notifications?pageSize=0" \
   | grep -c 'Two API operation IDs were renamed')" -ge 1 ]; do sleep 2; done
 curl -s "http://localhost:18504/api/v1/notifications?pageSize=0" | grep -o 'Two API operation IDs were renamed' | wc -l
-docker rm -f qt-notif-04-183
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-04-183
 ```
 
 **Expected:** `1`. The v1.8.3 announcement is present, so seeding has finished.
@@ -92,8 +89,9 @@ observation — it is the only thing distinguishing "enriched in place" from "re
 ## Cleanup
 
 ```bash
-docker rm -f qt-notif-04-183 qt-notif-04-current 2>/dev/null
-rm -rf /tmp/qt-notif-04
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-04-183
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-04-current \
+  --bind /tmp/qt-notif-04/data
 ```
 
 `qt-notif-04-183` is already removed mid-run; it is named again here so a run abandoned partway leaves nothing

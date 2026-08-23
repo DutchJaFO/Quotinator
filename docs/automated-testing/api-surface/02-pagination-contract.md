@@ -44,13 +44,7 @@ is what would populate both tables — the bundled seed writes `Audit_Entry` row
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-api-02 2>/dev/null; docker volume rm qt-api-02-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-api-02 -p 18102:8080 -v qt-api-02-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18102/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-api-02 --port 18102
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -62,7 +56,7 @@ that never became healthy.
 
 ```bash
 curl -s "http://localhost:18102/api/v1/quotes?pageSize=0"
-curl -s "http://localhost:18102/api/v1/admin/audit?pageSize=0" -H "X-Api-Key: <your admin key>"
+curl -s "http://localhost:18102/api/v1/admin/audit?pageSize=0" -H "X-Api-Key: smoketest"
 curl -s "http://localhost:18102/api/v1/import/actions?pageSize=0"
 ```
 
@@ -73,7 +67,7 @@ equals `totalCount`. That is the effective-size contract, not the literal `0` re
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/quotes?pageSize=501"
-curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/admin/audit?pageSize=501" -H "X-Api-Key: <your admin key>"
+curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/admin/audit?pageSize=501" -H "X-Api-Key: smoketest"
 curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/import/actions?pageSize=501"
 ```
 
@@ -82,7 +76,7 @@ curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/import/actions?page
 ### 4. Omit `pageSize` and read the applied default
 
 ```bash
-curl -s "http://localhost:18102/api/v1/admin/audit" -H "X-Api-Key: <your admin key>"
+curl -s "http://localhost:18102/api/v1/admin/audit" -H "X-Api-Key: smoketest"
 curl -s "http://localhost:18102/api/v1/import/actions"
 ```
 
@@ -96,7 +90,7 @@ recording this either way.
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/quotes?pageSize=500&page=99"
-curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/admin/audit?pageSize=1&page=999999" -H "X-Api-Key: <your admin key>"
+curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/admin/audit?pageSize=1&page=999999" -H "X-Api-Key: smoketest"
 curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/import/actions?pageSize=1&page=999999"
 ```
 
@@ -127,6 +121,5 @@ deterministically in every `dotnet test` instead of requiring a live container.
 ## Cleanup
 
 ```bash
-docker rm -f qt-api-02 2>/dev/null
-docker volume rm qt-api-02-data 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-02
 ```

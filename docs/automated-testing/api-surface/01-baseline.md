@@ -20,13 +20,7 @@ request. Querying before that gate races the startup wait page.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-api-01 2>/dev/null; docker volume rm qt-api-01-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-api-01 -p 18101:8080 -v qt-api-01-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18101/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-api-01 --port 18101
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -120,6 +114,5 @@ while serving these requests — its log lines and their shape — has not been 
 ## Cleanup
 
 ```bash
-docker rm -f qt-api-01 2>/dev/null
-docker volume rm qt-api-01-data 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-01
 ```

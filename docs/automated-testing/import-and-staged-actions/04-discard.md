@@ -27,13 +27,7 @@ A staged batch with pending actions — the preview call below produces one unde
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-04 2>/dev/null; docker volume rm qt-import-04-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-04 -p 18604:8080 -v qt-import-04-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18604/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-04 --port 18604
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -44,7 +38,7 @@ never became healthy.
 ### 2. Stage a batch by previewing the curated file under `review`
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   "http://localhost:18604/api/v1/import/preview"
@@ -68,7 +62,7 @@ satisfied vacuously. Stop — this is a staging problem, not a discard result.
 ### 4. Discard the batch
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18604/api/v1/import/actions/discard?batchId=<batchId>"
 ```
 
@@ -92,6 +86,5 @@ Not yet established as a captured record.
 ## Cleanup
 
 ```bash
-docker rm -f qt-import-04
-docker volume rm qt-import-04-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-04
 ```

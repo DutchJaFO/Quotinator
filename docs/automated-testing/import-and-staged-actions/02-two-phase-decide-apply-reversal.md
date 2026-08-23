@@ -32,13 +32,7 @@ The steps below stage that batch themselves rather than borrowing one, so this d
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-02 2>/dev/null; docker volume rm qt-import-02-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-02 -p 18602:8080 -v qt-import-02-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18602/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-02 --port 18602
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -49,7 +43,7 @@ never became healthy.
 ### 2. Stage a batch under `review`
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   -w "\n%{http_code}\n" \
@@ -72,7 +66,7 @@ curl -s "http://localhost:18602/api/v1/import/actions?status=pending&batchId=<ba
 Repeat the `decide` call for each `id` listed:
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
   "http://localhost:18602/api/v1/import/actions/<id>/decide"
 curl -s "http://localhost:18602/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0" \
@@ -88,7 +82,7 @@ trap this confirmation exists to close. Stop and decide the remainder.
 ### 5. Apply through the staged path
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18602/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
@@ -97,7 +91,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
 ### 6. Preview the reversal
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18602/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
 ```
 
@@ -106,7 +100,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
 ### 7. Reverse the batch
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18602/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
 
@@ -126,6 +120,5 @@ added elsewhere.
 ## Cleanup
 
 ```bash
-docker rm -f qt-import-02
-docker volume rm qt-import-02-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-02
 ```

@@ -28,13 +28,7 @@ the one fully-unmitigated gap of this kind found across the whole codebase.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-id-02 2>/dev/null; docker volume rm qt-id-02-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-id-02 -p 18202:8080 -v qt-id-02-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18202/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-id-02 --port 18202
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -48,7 +42,7 @@ that never became healthy.
 cat > .claude/temp/smoke-210.json <<'EOF'
 {"quotes": [{"id":"F0000210-0000-4000-8000-000000000210","quote":"A #210 smoke test quote with an uppercase explicit id.","originalLanguage":"en","source":"Smoke Test Film 210","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18202/api/v1/import"
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-210.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18202/api/v1/import"
 ```
 
 **Expected:** import returns `200`.
@@ -109,7 +103,6 @@ endpoint (`Sql.Notifications.UpdateDismissById`, a *write* by id). Closing that 
 ## Cleanup
 
 ```bash
-docker rm -f qt-id-02 2>/dev/null
-docker volume rm qt-id-02-data 2>/dev/null
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-id-02
 rm .claude/temp/smoke-210.json
 ```

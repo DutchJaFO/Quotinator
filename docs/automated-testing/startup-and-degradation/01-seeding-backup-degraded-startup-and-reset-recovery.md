@@ -50,13 +50,8 @@ discrepancy is tracked separately, not resolved here.
 ### 1. Seed a fresh container against a bind-mounted data directory
 
 ```bash
-docker rm -f qt-startup-01 2>/dev/null
-rm -rf .claude/temp/qt-startup-01-data
-mkdir -p .claude/temp/qt-startup-01-data
-MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-01 -p 18401:8080 \
-  -v "C:/repos/Quotinator/.claude/temp/qt-startup-01-data:/data" \
-  -e Quotinator__DataDir=/data quotinator:local
-until curl -sf http://localhost:18401/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-01 --port 18401 \
+  --bind .claude/temp/qt-startup-01-data
 docker logs qt-startup-01 2>&1 | grep "\[Database - Init\]"
 ls .claude/temp/qt-startup-01-data/backups/ 2>/dev/null
 ```
@@ -85,13 +80,14 @@ first baseline run is skipped, which the seeding step confirmed.
 
 ### 3. Break the schema on the host side, then restart
 
-Start with an admin key this time — the Reset call below needs it:
+This start is a raw `docker run` rather than a `create`, because it must mount the directory the
+earlier steps already seeded — `create` always starts from a clean one:
 
 ```bash
 docker rm -f qt-startup-01
 MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-01 -p 18401:8080 \
   -v "C:/repos/Quotinator/.claude/temp/qt-startup-01-data:/data" \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=<your admin key> quotinator:local
+  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest quotinator:local
 until curl -sf http://localhost:18401/api/v1/health > /dev/null; do sleep 1; done
 docker stop qt-startup-01
 dotnet script scripts/execute-sql.csx -- \
@@ -139,7 +135,7 @@ entirely rather than blocking the route and only letting an authenticated call t
 ### 6. Reset the database while degraded
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   http://localhost:18401/api/v1/admin/database/reset -o /dev/null
 ```
 
@@ -181,8 +177,8 @@ what the assertions are made against.
 ## Cleanup
 
 ```bash
-docker rm -f qt-startup-01 2>/dev/null
-rm -rf .claude/temp/qt-startup-01-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-01 \
+  --bind .claude/temp/qt-startup-01-data
 ```
 
 This test's data directory is a bind mount rather than a named volume, so removing the directory is

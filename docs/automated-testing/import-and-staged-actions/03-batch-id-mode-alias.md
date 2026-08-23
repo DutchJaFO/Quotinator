@@ -32,13 +32,7 @@ Nothing beyond the Fresh profile — the batch is staged by the preview call in 
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-03 2>/dev/null; docker volume rm qt-import-03-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-03 -p 18603:8080 -v qt-import-03-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18603/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-03 --port 18603
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -49,7 +43,7 @@ never became healthy.
 ### 2. Stage a batch by previewing the curated file under `skip`
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"skip"}}' \
   "http://localhost:18603/api/v1/import/preview"
@@ -69,7 +63,7 @@ curl -s "http://localhost:18603/api/v1/import/actions?batchId=<batchId>&pageSize
 ### 4. Apply by `batchId`
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18603/api/v1/import?batchId=<batchId>"
 ```
 
@@ -92,6 +86,5 @@ Not yet established as a captured record.
 ## Cleanup
 
 ```bash
-docker rm -f qt-import-03
-docker volume rm qt-import-03-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-03
 ```

@@ -47,13 +47,7 @@ way.
 ### 1. Create this test's own environment
 
 ```bash
-docker rm -f qt-import-08 2>/dev/null; docker volume rm qt-import-08-data 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-import-08 -p 18608:8080 -v qt-import-08-data:/data \
-  -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=<your admin key> \
-  -e Quotinator__AutoPurgeBundledImportActions=true \
-  quotinator:local
-until curl -sf http://localhost:18608/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-08 --port 18608
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -70,7 +64,7 @@ cat > .claude/temp/smoke-173.json <<'EOF'
   "people": [{"id":"f0000005-0000-4000-8000-000000000005","name":"Smoke Test Person","dateOfBirth":"1950-01-01","dateOfDeath":null}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-173.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18608/api/v1/import"
 ```
 
@@ -91,7 +85,7 @@ cat > .claude/temp/smoke-173-v2.json <<'EOF'
   "people": [{"id":"f0000005-0000-4000-8000-000000000005","name":"Smoke Test Person","dateOfBirth":"1951-02-02","dateOfDeath":null}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-v2.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-173-v2.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18608/api/v1/import"
 ```
 
@@ -110,10 +104,10 @@ staged, so the decide and apply below would be operating on an empty batch. Stop
 ### 4. Decide the action and apply the batch
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"personDateOfBirth":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
   "http://localhost:18608/api/v1/import/actions/<action id>/decide"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18608/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
@@ -131,7 +125,7 @@ cat > .claude/temp/smoke-173-v3.json <<'EOF'
   "people": [{"id":"f0000005-0000-4000-8000-000000000005","name":"Smoke Test Person","dateOfBirth":"1952-03-03","dateOfDeath":null}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-v3.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-173-v3.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18608/api/v1/import"
 ```
 
@@ -154,7 +148,7 @@ cat > .claude/temp/smoke-173-addonly.json <<'EOF'
   "people": [{"id":"F0000007-0000-4000-8000-000000000007","name":"Smoke Test Person AddOnly","dateOfBirth":"1985-05-05","dateOfDeath":null}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-addonly.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-173-addonly.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18608/api/v1/import"
 ```
 
@@ -163,9 +157,9 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
 ### 7. Reverse the add-only batch, preview first
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18608/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18608/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
 
@@ -183,7 +177,7 @@ Confirm via DbInspector:
 This is the single distinction the test exists to draw, and nothing else in the run observes it:
 
 ```bash
-curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-addonly.json" \
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-173-addonly.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18608/api/v1/import"
 ```
 
@@ -209,6 +203,5 @@ endpoint reported success in the failing case too, so the HTTP result alone neve
 
 ```bash
 rm -f .claude/temp/smoke-173*.json
-docker rm -f qt-import-08
-docker volume rm qt-import-08-data
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-08
 ```
