@@ -492,9 +492,23 @@ a genuine duplicate still reported `1`. Its stated pass condition, "still `1`, n
 unreachable in the failing direction. This is the same class of defect as the §37/§38 contradiction
 that prompted this issue, found by the audit rather than by a run. Now `grep -o … | wc -l`.
 
-**Two documents contradict each other and cannot both be run as written.** `notifications-and-changelog/02`
-requires `quotinator:local` to report `1.8.3`; `05` requires it to report something else. Recorded, not
-resolved — resolving it means deciding which scenario owns the version pin.
+**Two apparent contradictions, neither of which was one** (resolved 2026-08-23, after the developer
+asked why both sides would have to be wrong).
+
+`notifications-and-changelog/02` and `05` disagree about whether the current build reports `1.8.3` —
+because `05` temporarily edits `Directory.Build.props` and `02` does not. Two setups, both correct. What
+`02` does carry is a real fragility: its "exactly one row" holds only while the current version equals
+the last release, and turns into a false failure the moment `Directory.Build.props` moves.
+
+`startup-and-degradation/01` and `02` disagree about whether a healthy restart takes a backup — and here
+exactly one was wrong. #277 gated backups on each action's own real-work signal; `01` went on describing
+the behaviour from before it, and argued that behaviour was "a deliberately chosen tradeoff, not a bug"
+while #277's own background names it as the defect being fixed. `01`'s justification even described the
+missing gate #277 supplied.
+
+**The mount-type explanation recorded here earlier was invented, not found.** Bind mount versus named
+volume has nothing to do with backup gating; it was a plausible-sounding difference offered as a
+possible discriminator, and it propagated into both documents before anyone checked it.
 
 **Rule 5's single failure is disputed and was not changed.** The audit argued `startup-and-degradation/03`'s
 `sleep 1` should poll for `503 {"status":"starting"}`. That state is pollable but *transient*: if

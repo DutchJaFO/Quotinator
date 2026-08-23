@@ -22,10 +22,12 @@ the row the migration inserts and the row the app records for itself are the sam
 causes are indistinguishable. Temporarily set `Directory.Build.props`' `<Version>` to the next patch
 number, build the image, and **restore the file immediately afterwards**.
 
-That requirement is the direct opposite of
-[`02-notification-metadata-and-provenance.md`](02-notification-metadata-and-provenance.md), whose
-version-history expectation reads `Quotinator.Api | 1.8.3` for the current build. Both are left exactly
-as they stand — the discrepancy is tracked separately, not resolved here.
+That edit is what separates this test from
+[`02-notification-metadata-and-provenance.md`](02-notification-metadata-and-provenance.md), which runs
+the build unmodified and therefore correctly sees one row. The two are not in conflict: 02 proves replay
+from a released database completes, and needs the versions equal for that; this one proves the 1.8.3 row
+is inserted *conditionally*, and needs them different, because with both equal the row the migration
+writes and the row the app records for itself are indistinguishable.
 
 ## Determinism
 

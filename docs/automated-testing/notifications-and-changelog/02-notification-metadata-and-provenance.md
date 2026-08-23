@@ -27,11 +27,19 @@ the same filesystem the app wrote to.
 An earlier version of this note said the path "resolves inside the Docker VM". The conclusion was right
 and the mechanism was not; it is a host directory, just not the one .NET picks.
 
-**The current build's own version overlaps 1.8.3 here.** The version-history expectation below reads
-`Quotinator.Api | 1.8.3 | 1 | 1` as the only row, while
-[`05-legacy-notification-provenance.md`](05-legacy-notification-provenance.md) requires the current
-build to report something *other* than 1.8.3 for its own scenario to mean anything. Both are left
-exactly as they stand — the discrepancy is tracked separately, not resolved here.
+**This test runs the build exactly as it stands, and that is what makes one row the right answer.**
+`Directory.Build.props` reads `1.8.3`, so upgrading a v1.8.3 database with the current build records no
+new version — the app is the same version that wrote the row already there.
+
+[`05-legacy-notification-provenance.md`](05-legacy-notification-provenance.md) requires the two to
+*differ* and temporarily edits `Directory.Build.props` to make them. That is a different setup, not a
+contradiction with this one: 05 needs two rows to tell which migration wrote which, and this test needs
+the unmodified build to prove replay from a genuinely released database completes.
+
+**What this expectation does depend on is the version not having moved.** The moment
+`Directory.Build.props` passes `1.8.3`, the correct answer here becomes two rows, and "exactly one row"
+starts failing for a reason that has nothing to do with metadata or provenance. Read it as *the current
+build adds no row of its own*, and compare against `Directory.Build.props` rather than against `1.8.3`.
 
 ## Determinism
 

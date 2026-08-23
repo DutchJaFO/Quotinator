@@ -15,11 +15,11 @@ the same volume for the final step, carrying `Quotinator__MaxBackupStorageGb=0`.
 The sequence matters and each step depends on the one before it: fresh baseline → healthy restart →
 Reset → restart-after-Reset → budget exceeded.
 
-**The mount type is what differs from
-[`01-seeding-backup-degraded-startup-and-reset-recovery.md`](01-seeding-backup-degraded-startup-and-reset-recovery.md)**,
-which asserts a healthy restart *does* take a backup where this one asserts it takes none. That test
-runs on a bind mount; this one on a named volume. Both assertions are left exactly as they stand — the
-discrepancy is tracked separately, not resolved here.
+**A backup protects a specific risky action, not a startup.** One is taken before a migration and
+before a reseed, so that a partial failure still leaves a working database and a user can recover —
+which is why Reset is what the app offers after a failed migration. A startup with no migration pending
+and nothing to seed puts nothing at risk. That is #277's gating, and it is why the counts below read
+`0, 0, 1, 2, 2` rather than incrementing on every start.
 
 ## Determinism
 

@@ -23,11 +23,12 @@ reached its own end state:
 2. an ordinary restart (backup expected)
 3. a deliberately broken schema (degraded, backup taken, restore attempted)
 
-**The mount type is what differs from
-[`02-startup-backup-gating-and-storage-budget.md`](02-startup-backup-gating-and-storage-budget.md)**,
-which asserts a healthy restart takes *no* backup where this one asserts it takes one. That test runs
-on a named volume; this one on a bind mount. Both assertions are left exactly as they stand — the
-discrepancy is tracked separately, not resolved here.
+**This document asserted the opposite of
+[`02-startup-backup-gating-and-storage-budget.md`](02-startup-backup-gating-and-storage-budget.md)
+until 2026-08-23** — that an ordinary restart *does* take a backup, and that this was a deliberate
+tradeoff rather than a defect. It was neither a contradiction nor a difference of setup: #277 gated
+backups on each action's own real-work signal, and this document went on describing the behaviour from
+before that. Its own justification named the missing gate that #277 supplied.
 
 ## Determinism
 
@@ -42,8 +43,11 @@ discrepancy is tracked separately, not resolved here.
 - **The container must be stopped before the host writes to the database file**, and started again
   afterwards. Editing a SQLite file underneath a running process is a different test with a different
   outcome.
-- **The backup count is compared before and after**, not asserted as an absolute — every non-baseline
-  startup adds one.
+- **The backup count is compared before and after**, not asserted as an absolute.
+- **A backup protects a specific risky action, not a startup.** One is taken before a migration, so a
+  partial failure still leaves a working database, and before a reseed, for the same reason. They exist
+  so a user can recover — which is why Reset is what the app offers after a failed migration. A startup
+  with no migration pending and nothing to seed puts nothing at risk, so it takes none.
 
 ## Steps
 
@@ -63,7 +67,7 @@ ls .claude/temp/qt-startup-01-data/backups/ 2>/dev/null
 bind mount did not take effect — see the `MSYS_NO_PATHCONV` note in Determinism. Stop: every step
 below reads and writes that directory, and against the wrong one they report nonsense.
 
-### 2. Restart unchanged — an ordinary restart takes a backup too
+### 2. Restart unchanged — nothing is at risk, so nothing is backed up
 
 ```bash
 docker restart qt-startup-01
@@ -72,11 +76,8 @@ docker logs qt-startup-01 2>&1 | grep "\[Database - Init\]" | tail -3
 ls .claude/temp/qt-startup-01-data/backups/*.db 2>/dev/null | wc -l
 ```
 
-**Expected:** `schema is up to date`, and the backup count is now `1`. This is a deliberately chosen
-tradeoff, not a bug: every non-baseline startup backs up before seeding, because seeding has no
-cheaper "is there real work to do" signal to gate on the way migrations do. A version-count check
-alone is exactly what missed the schema/version mismatch this fix exists to protect against. Only the
-first baseline run is skipped, which the seeding step confirmed.
+**Expected:** `schema is up to date`, and the backup count is still `0`. No migration is pending and
+the content already exists, so neither risky action runs and there is nothing to protect against.
 
 ### 3. Break the schema on the host side, then restart
 
@@ -107,9 +108,12 @@ docker ps -a --filter name=qt-startup-01 --format "{{.Status}}"
 `SqliteException: ... no such table: Quotinator_Quote` attached as the log event's exception — **not**
 a bare .NET unhandled-exception runtime dump.
 
-At least one new backup `.db` exists (one per `CreateBackup` call; its `-shm`/`-wal` sidecars are not
-separate backups). `docker ps -a` shows the container as `Up …`, **not** `Exited` — the app degrades,
-it does not crash.
+The backup count reads `1` — the first backup this test has produced, because step 2 correctly took
+none. This is the case a backup exists for: seeding was about to run against a database it could not
+repair, and the backup is what let it restore rather than leave a broken one behind. One file per
+`CreateBackup` call; its `-shm`/`-wal` sidecars are not separate backups.
+
+`docker ps -a` shows the container as `Up …`, **not** `Exited` — the app degrades, it does not crash.
 
 **On failure:** an `Exited` container means the app crashed instead of degrading, which is the defect
 this test exists to catch — and there is then no server left to answer the degraded-surface and Reset
