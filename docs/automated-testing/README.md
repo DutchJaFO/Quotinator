@@ -155,8 +155,15 @@ divergence as a bug is as wrong as no parity test at all.
 
 **Current state, recorded rather than assumed: `User` has no coverage anywhere in this suite.** Every
 document reaches the database through `Upload` or through the bundled seed. The `{dataDir}/imports/`
-folder — a real, documented, separately-configured path — has never been exercised here. That is new
-test content, not a gap this restructure can close by moving something.
+folder — a real, documented, separately-configured path — has never been exercised here. Tracked as
+[#346](https://github.com/DutchJaFO/Quotinator/issues/346); it is new test content, not a gap this
+restructure could close by moving something.
+
+**The id-casing guarantees are the sharpest instance.** Every `identity-and-casing/` document proves
+capture-time canonicalization and either-casing lookup by `POST /import` — one origin of three. When
+adding a test that turns on an id's or a natural key's casing, ask which origin it establishes the
+behaviour for, and say so in the document rather than letting a single-origin result read as a
+system-wide guarantee.
 
 **Never assert a total count of notifications.** The same failure mode, and it has already produced
 two wrong expectations. How many notifications exist depends on which producers exist and what the

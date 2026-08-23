@@ -653,9 +653,23 @@ What that pulls in:
 
 **A dedicated issue is only for coverage that does not exist at all** (developer direction,
 2026-08-23) — not for repairing a test that exists but does not work. One thing meets that bar here:
-**`User`-origin coverage and origin parity.** Content reaches the database by three routes with
-separately-configured behaviour, and this suite exercises two of them; the `{dataDir}/imports/` folder
-has never been touched. That is a test nobody has written, so it is filed rather than fixed.
+**`User`-origin coverage and origin parity**, filed as
+[#346](https://github.com/DutchJaFO/Quotinator/issues/346). Content reaches the database by three routes
+with separately-configured behaviour, and this suite exercises two of them; the `{dataDir}/imports/`
+folder has never been touched. That is a test nobody has written, so it is filed rather than fixed.
+
+**The id-casing guarantees are the sharpest part of that gap** (developer direction, 2026-08-23). All
+five `identity-and-casing/` documents establish capture-time canonicalization and either-casing lookup
+by `POST /import`, which is `Upload`. Nothing asserts either for a `User` file, and `System` exercises
+it only incidentally with whatever casing the bundled files happen to carry.
+
+The class this leaves half-covered is the one `CLAUDE.md`'s case-insensitive-by-default rule exists
+for: a value that can arrive in two casings — an id, an enum, a Name or Title natural key — compared
+without both sides being folded, so a lookup silently matches nothing. That rule records finding it
+piecemeal across a query filter, a route parameter, a file-authored explicit id, and several
+natural-key lookups, each fixed on its own before it was recognised as one recurring class. That is
+the reason to cover it at every origin rather than one: the failure mode is a silent no-match, which
+looks the same as "no such row".
 
 **Open, not decided: re-tiering the 25 documents with no live component.** By the rule above it is not
 a candidate for its own issue — the behaviour *is* tested today, just live — but converting them means
