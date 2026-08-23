@@ -62,6 +62,70 @@ seeding container was stopped passes or fails by luck. The source-download path 
 outright failures and ~300 ms successes minutes apart. A condition that cannot be pinned is reported
 as such, not left in the suite as a coin flip.
 
+**When the expected situation does not occur, there are three causes — decide which before changing
+anything** (developer direction, 2026-08-23):
+
+1. **The feature is broken.** Fix the code.
+2. **The expectation was wrong.** Fix the test.
+3. **It could not be observed at all.** Add the observability — a log line, a notification, a
+   read-back — and only then decide between 1 and 2.
+
+**The instinct is to assume cause 2, and that is what turns causes 1 and 3 into a passing test.** An
+expectation edited to match whatever happened is no longer an expectation; the number gets adjusted,
+the assertion gets loosened, and the suite reports coverage it stopped providing. Every "fixed by
+editing the digit" warning elsewhere in this file is a specific instance of this general mistake.
+
+All three have been found here, which is why it is written down:
+
+- **Cause 2** — `import-and-staged-actions/10` told the reader to expect `NULL` dates for two films for
+  three weeks after the underlying gap was fixed. The expectation was stale and nothing re-checked it,
+  because it was prose rather than a command.
+- **Cause 3, instrument broken** — `notifications-and-changelog/04` counted duplicate announcements with
+  `grep -c`, which counts *lines*, against single-line JSON. A genuine duplicate still reported `1`. The
+  feature was fine and the expectation was right; the observation could not distinguish them.
+- **Cause 3, nothing observed at all** — four commands across the suite had no stated expectation of any
+  kind, and two of those asked a human to read a log tail and judge whether it "looked finished".
+- **Cause 3, the application is silent** — `16` and `17` conclude from an empty list, and the
+  application logs nothing when it stages a `Stale` action or when it purges the rows that would have
+  shown one. Working and broken produce identical output, so no test written against that surface can
+  tell them apart.
+
+**A test cannot distinguish causes the application does not expose.** Where the answer is cause 3 and
+the missing observation is the application's own, the fix belongs in the application — normal logging
+should not be swallowing a decision an operator would want to know about. A test may raise the log
+level to see it (`Quotinator__LogLevel=debug`, as
+[`11-batch-id-validation-and-request-log-status.md`](import-and-staged-actions/11-batch-id-validation-and-request-log-status.md)
+does), but raising the level cannot conjure a line nobody writes.
+
+### A test that cannot be confirmed has failed
+
+**If a run cannot confirm the behaviour, the test's result is FAIL — not pass, and not "a known
+limitation"** (developer direction, 2026-08-23). A test whose observation cannot distinguish working
+from broken has not established anything, and recording that as anything other than a failure hands
+back confidence the run did not earn.
+
+**A failing test blocks the release.** It is cleared by fixing the problem or by fixing the
+observability of the feature under test — never by restating the limitation more clearly, and never by
+weakening the expectation until whatever happened counts as a pass.
+
+**The order matters when the observation is the thing missing.** If a test says that doing X must
+produce a `Stale` response somewhere, and that response genuinely should exist, and nothing can see it,
+then the first work is making it visible — not building a fixture that forces the feature to fire, and
+not softening the assertion. Only once the behaviour is observable can a run tell the three causes
+apart, and only then does a green result mean anything.
+
+**A document never records its own verdict.** A test states what is verified, how, and what a pass
+looks like — instructions, not status. "This test currently fails" belongs to a run, not to the
+specification, and writing it into the document creates exactly the staleness this suite keeps finding:
+a status line is true on the day it is written and silently wrong afterwards, and nothing re-checks it.
+The plan doc or the issue is where a known-failing state is tracked.
+
+**So a document with a missing observation states the observation it needs, and the run fails.** Where
+the application does not yet emit what a step must read, the step says what it must read anyway. That is
+an ordinary expectation; the run fails against it until the application provides it, which is the
+correct signal and the one that cannot go stale. Do not soften it to what is currently observable, and
+do not annotate it with the fact that it fails — execute it and see.
+
 **Never assert a specific migration number or schema version.** Not `Data v2 → v11`, not "migration 8
 does X". Migration counts change whenever any milestone adds one, and they are consolidated before a
 release, so a hardcoded number goes stale on its own and gets "fixed" by editing the number rather
@@ -533,7 +597,7 @@ never beside it.
 | 02 | [Startup backs up only when there is real work](startup-and-degradation/02-startup-backup-gating-and-storage-budget.md) | no |
 | 03 | [Kestrel serves a wait page during initialisation](startup-and-degradation/03-startup-wait-page.md) | yes |
 | 04 | [Migration replay under restricted write](startup-and-degradation/04-migration-replay-under-restricted-write.md) | no |
-| 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) — **cannot pass; #327 is rewriting it** | no |
+| 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | no |
 
 ### `notifications-and-changelog/`
 

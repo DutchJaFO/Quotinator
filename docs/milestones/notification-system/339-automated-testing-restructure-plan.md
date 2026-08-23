@@ -1,6 +1,6 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (all steps done; every verification row green — `User`-origin coverage still to be filed)
+**Status:** In progress (all steps done; row 25 fails — two tests cannot confirm their own behaviour, and that blocks release until the application makes it observable)
 **GitHub issue:** #339
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -716,6 +716,6 @@ resolve — see that step.
 | 22 | ✅ | No document is blocked from executing by its own commands | Live | No `docker run` holds the terminal ahead of later steps; every `docker run` carries `--name`; no `<container>` placeholder survives; every `docker cp` of the database targets `/data`, the path the profile actually mounts |
 | 23 | ✅ | The index's smoke set cannot drift from the documents' own `Smoke` field | Unit test | `RepositoryStructureTests.SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` — red while the table named tests by title only, which is why each row now links its document |
 | 24 | ✅ | Every step carries its own expected result, so a failure stops the run at the step that caused it | Unit test | `RepositoryStructureTests.EveryAutomatedTestingStep_CarriesItsOwnExpectedResult` — red against all 43 before the conversion. Checks per step, not by total: a document where one step carries three expectations and another none would balance out under a count |
-| 25 | ✅ | Every document that cannot fail is repaired, or its limit is stated where a reader will see it | Live | 13 repaired by adding the observation that was missing. `16` and `17` cannot be repaired without a defective input the shipped data no longer supplies, so each now states that plainly at the step it concerns, rather than leaving a passing run to imply coverage |
+| 25 | ❌ | Every document can distinguish the feature working from the feature broken | Live | 13 repaired by adding the observation that was missing. **`16` and `17` cannot, and are therefore failing tests that block release** — the application logs nothing when it stages a `Stale` action, so no test written against that surface can tell a working mechanism from a dead one. Clearing them means making the behaviour visible, not constructing a fixture to force it to fire. The row's original wording — "repaired, *or* its limit is stated" — was wrong: stating a limitation explains a failing test, it does not resolve one |
 | 19 | ❌ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` gone; `scripts/README.md` carries no reference to them and no stale `resources/changelog.json` path; #340 covers testing `changelog.csx` |
 | 20 | ❌ | No reference to `docs/smoke-tests.md` resolves to nothing | Live | Every remaining mention names where the suite went. **Not** a bare `grep` for absence — archival plan docs keep the old name deliberately, with the pointer alongside; compare per-file reference counts instead |

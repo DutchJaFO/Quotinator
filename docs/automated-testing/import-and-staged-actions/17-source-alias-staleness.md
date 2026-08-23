@@ -39,8 +39,13 @@ curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
 ```
 
-**Expected:** the counts have settled, and the fresh-seed `status=pending` and `status=stale` checks
-both return `totalCount: 0`.
+**Expected:** the counts have settled, the log states that source-alias staleness was evaluated and how
+many aliases it considered, and both `status=pending` and `status=stale` return `totalCount: 0`
+consistent with that.
+
+**On failure:** if no such log line exists, the evaluation is unobservable and this step establishes
+nothing either way — an empty list is produced equally by a mechanism that ran and found none and by
+one that never ran. See the index's *When the expected situation does not occur*, cause 3.
 
 ### 2. Reseed and repeat, which is the second of the two paths
 
@@ -50,25 +55,16 @@ curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
 ```
 
-**Expected:** the post-reseed `status=pending` and `status=stale` checks also return `totalCount: 0`.
+**Expected:** the reseed returns `200`, the log again states that alias staleness was evaluated, and
+both `status=pending` and `status=stale` return `totalCount: 0`.
 
 Every real bundled alias's canonical Source either already exists under its exact recorded title, or is
-being legitimately created for the first time. None has actually been renamed away.
+being legitimately created for the first time. None has actually been renamed away — which is why zero
+is the correct result here, and why the log line rather than the zero is what proves the mechanism
+looked.
 
-> **This test cannot currently fail, and that is a known limitation rather than a clean pass.** Both of
-> its assertions are that a list is empty. A staleness mechanism that never fires, a reseed that
-> silently did nothing, a regressed `status=` filter, and purged `Import_Action` rows all produce that
-> same empty list — indistinguishable from the intended result.
->
-> **Nothing in the run ever produces a stale alias**, so there is no positive control proving the
-> mechanism is alive. Closing this needs a genuine rename — a Source that exists under a title an alias
-> no longer points at — constructed by the test itself. The index's *A test that needs a defective input
-> must own that input* section describes why the shipped aliases cannot supply it: they were corrected,
-> and a test whose failing input was production data stops being able to fail the moment that data is
-> fixed.
->
-> The same limitation applies to
-> [`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md), for the same reason.
+**On failure:** as in step 1 — an unobservable evaluation makes both readings meaningless, and the
+reseed's own status code is what separates "nothing was stale" from "the reseed never ran".
 
 ## Observed effect
 

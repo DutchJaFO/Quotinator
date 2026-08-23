@@ -46,12 +46,19 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/a
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
 ```
 
-**Expected:** against current `main`, `status=stale` returns an empty list — the drift has been fixed.
+**Expected:** the reseed returns `200`, the log states that rule staleness was evaluated and how many
+rules it considered, and `status=stale` returns an empty list consistent with that — the evaluation ran
+against the shipped rules and found none stale.
 
-With the apostrophe mismatch reintroduced, `status=stale` returns the Zootopia entity. **That is the
-only way this step produces a non-empty result** — the shipped rule file is already corrected, so a run
-against current `main` returns an empty list. To see the "before" state, `git stash` or check out the
-pre-fix rule file and rebuild the image — do not treat the empty result as a failure.
+**All three are required together.** An empty list on its own does not distinguish "evaluated, nothing
+stale" from "never evaluated": a mechanism that never fires, a reseed that silently did nothing, a
+regressed `status=` filter and purged `Import_Action` rows all produce that same empty list. The log
+line is what makes the empty list mean something.
+
+**On failure:** if no such log line exists, the evaluation is unobservable and this step cannot
+establish its behaviour either way. That is the application's gap, not this document's — see the
+index's *When the expected situation does not occur*, cause 3. Fix the observability before treating
+the empty list as either a pass or a defect.
 
 ## Observed effect
 

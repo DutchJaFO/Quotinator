@@ -4,10 +4,6 @@
 **Environment:** Upgraded + Constrained
 **Traces to:** #293
 
-> **This test cannot pass as written, and #327 is rewriting it.** It is carried into the new structure
-> unchanged rather than silently dropped — see Preconditions for why it can never reach its own
-> premise. Do not run it expecting a result; do not "fix" it by editing the expected status code.
-
 ## Preconditions
 
 **Beyond the profile.** The Upgraded prior image is the **published
@@ -35,6 +31,12 @@ against it.
 **#327 replaces this** with scenarios that provoke a real failure: a `:ro` volume mount with pinned WAL
 sidecar state, a corrupt database file, and a schema version ahead of the application. #326 measured
 that sidecar state — not a pending migration — is what decides whether a read-only mount degrades.
+
+**The expectations below are stated as they stand, and the run fails against them.** That is the
+correct signal while the technique no longer reaches the failure state: it is a real failure, not a
+formality, and it clears when #327 gives the test a setup that provokes one. Do not soften the expected
+status code to match what the container currently does — that would convert a failing test into a
+passing one without changing anything the test is for.
 
 ## Determinism
 
@@ -74,7 +76,7 @@ until curl -s -o /dev/null http://localhost:8080/api/v1/health; do sleep 1; done
 curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
 ```
 
-**Expected — as originally written, and unreachable, see Preconditions:** `/health` returns
+**Expected:** `/health` returns
 `503 {"status":"unhealthy",...}`, confirming the test reached the failure state.
 
 **On failure:** `200` healthy is what this setup actually measures today (see Observed effect). That is
@@ -90,7 +92,7 @@ curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/notifications"
 curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/notifications"
 ```
 
-**Expected — as originally written, and unreachable, see Preconditions:** `/`, `/stats` and
+**Expected:** `/`, `/stats` and
 `/notifications` all return `200` — never `500`, never a raw exception page.
 `GET /api/v1/notifications` correctly returns `503`; API traffic stays gated while degraded, which is
 the design
@@ -102,7 +104,7 @@ covers, and expected rather than a regression.
 Visit `http://localhost:8080/`, `http://localhost:8080/stats` and
 `http://localhost:8080/notifications` in a real browser.
 
-**Expected — as originally written, and unreachable, see Preconditions:** the intended content was:
+**Expected:**
 
 - `/` renders `StartupErrorModal` (*Quotinator started with a problem*) with the real failure reason
   and all-zero stats, not a raw stack trace
