@@ -37,9 +37,16 @@ point of the test.
 
 The first fixture's id is deliberately lowercase, as a file-authored explicit id always is.
 
+**Each step names its fixture** — four imports run here and they differ only by which file they upload.
+
+**Reading the `smoke-173-v3.json` tally is the assertion**; the import returns a success code either
+way.
+
 ## Steps
 
-**First fixture — Modify, decide, then confirm Complete blocks:**
+Run the **Fresh** profile first.
+
+### 1. Import `smoke-173.json` — the initial add
 
 ```bash
 cat > .claude/temp/smoke-173.json <<'EOF'
@@ -55,7 +62,12 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
 Confirm via DbInspector:
 `SELECT Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM Quotinator_Person WHERE Id = 'f0000005-0000-4000-8000-000000000005'`
 
-**Re-import the same id with a changed `dateOfBirth`, under `review`:**
+**Expected:** `smoke-173.json` returns `200` with the Person added, `DateOfBirth` `1950-01-01`.
+
+**On failure:** without this row there is nothing for the re-imports below to Modify, and every later
+step would be staging a fresh add instead. Stop.
+
+### 2. Re-import `smoke-173-v2.json` — the same id with a changed `dateOfBirth`, under `review`
 
 ```bash
 cat > .claude/temp/smoke-173-v2.json <<'EOF'
@@ -68,10 +80,21 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
 ```
 
-Copy that `batchId`, list its pending action, copy the action `id`, then decide and apply:
+Copy that `batchId`, list its pending action, and copy the action `id`:
 
 ```bash
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+```
+
+**Expected:** `smoke-173-v2.json`, under `review`, stages a `Pending` `Modify` with
+`ambiguousFields: ["dateOfBirth"]`.
+
+**On failure:** an empty pending listing means the `review` policy did not take effect and nothing was
+staged, so the decide and apply below would be operating on an empty batch. Stop.
+
+### 3. Decide the action and apply the batch
+
+```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
   -d '{"personDateOfBirth":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
   "http://localhost:8080/api/v1/import/actions/<action id>/decide"
@@ -79,7 +102,12 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
-**Now a third import with yet another `dateOfBirth` — the `Complete` row must block it:**
+**Expected:** after deciding and applying, `DateOfBirth` reads `1951-02-02` and `CompletenessStatus` is
+`Complete`.
+
+### 4. Import `smoke-173-v3.json` — a third `dateOfBirth`, and read what it staged
+
+The `Complete` row must block it:
 
 ```bash
 cat > .claude/temp/smoke-173-v3.json <<'EOF'
@@ -99,7 +127,10 @@ curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pag
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
-**Second fixture — a fresh Person with an uppercase id:**
+**Expected:** `smoke-173-v3.json`'s status tally reads **`Blocked`, not `Pending`**, and `DateOfBirth`
+stays `1951-02-02` — `1952-03-03` never lands.
+
+### 5. Import `smoke-173-addonly.json` — a fresh Person with an uppercase id
 
 ```bash
 cat > .claude/temp/smoke-173-addonly.json <<'EOF'
@@ -112,7 +143,9 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
 ```
 
-Copy the returned `batchId`, then:
+**Expected:** the response carries a `batchId` — the reversal below is scoped to it.
+
+### 6. Reverse the add-only batch, preview first
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
@@ -121,11 +154,18 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/actions/reverse?batchId=<batchId>"
 ```
 
+**Expected:** both reversal calls return `200`.
+
+### 7. Confirm the soft-delete flag flipped
+
 Confirm via DbInspector:
 `SELECT Id, IsDeleted FROM Quotinator_Person WHERE Id = 'f0000007-0000-4000-8000-000000000007'`
 
-Then re-import the exact same fixture one more time, and **read what it staged** — this is the single
-distinction the test exists to draw, and nothing else in the run observes it:
+**Expected:** `IsDeleted` genuinely flipped to `1`.
+
+### 8. Re-import `smoke-173-addonly.json` unchanged, and read what it staged
+
+This is the single distinction the test exists to draw, and nothing else in the run observes it:
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-173-addonly.json" \
@@ -139,24 +179,11 @@ curl -s "http://localhost:8080/api/v1/import/actions?batchId=<final batchId>&pag
   | grep -o '"actionType":"[A-Za-z]*"' | sort | uniq -c
 ```
 
-## Expected output
+**Expected:** the final re-import's action tally shows **`Add`, not `Modify`**, for the Person, and
+`IsDeleted` is back to `0` afterwards.
 
-Each bullet names its fixture — four imports run here and they differ only by which file they upload.
-
-- **`smoke-173.json`** returns `200` with the Person added, `DateOfBirth` `1950-01-01`.
-- **`smoke-173-v2.json`**, under `review`, stages a `Pending` `Modify` with
-  `ambiguousFields: ["dateOfBirth"]`. After deciding and applying, `DateOfBirth` reads `1951-02-02` and
-  `CompletenessStatus` is `Complete`.
-- **`smoke-173-v3.json`**'s status tally reads **`Blocked`, not `Pending`**, and `DateOfBirth` stays
-  `1951-02-02` — `1952-03-03` never lands. Reading the tally is the assertion; the import returns a
-  success code either way.
-- Both reversal calls return `200`, and
-  `SELECT Id, IsDeleted FROM Quotinator_Person WHERE Id = 'f0000007-0000-4000-8000-000000000007'` shows `IsDeleted` genuinely
-  flipped to `1`.
-- The final re-import's action tally shows **`Add`, not `Modify`**, for the Person. `Modify` would mean
-  the reversal silently no-op'd and the row was never truly gone — the endpoint reported success in that
-  failing case too, so this tally is the only thing that separates them.
-- `IsDeleted` is back to `0` afterwards.
+**On failure:** `Modify` would mean the reversal silently no-op'd and the row was never truly gone — the
+endpoint reported success in that failing case too, so this tally is the only thing that separates them.
 
 ## Observed effect
 

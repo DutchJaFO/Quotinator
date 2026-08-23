@@ -17,24 +17,47 @@ import preview and the startup log — is reachable on the profile's own contain
 - **The removed fields matter as much as the added ones.** `totalQuotes`, `uniqueQuotes` and
   `crossFileDuplicates` must be absent — a response still carrying them means the old shape survived
   somewhere.
-- **All nine entity types must appear**, not the original four. That number is a property of the
-  domain model rather than of the dataset, so it is a legitimate assertion.
+- **Every entity type must appear, named — not counted.** The set is
+  `quotes`/`sources`/`characters`/`people`/`series`/`universes`/`stageDirections`/`soundCues`/`conversations`,
+  and it replaced an original four. Assert the names, never the number: a count is a property of the
+  domain model rather than the dataset, but it still goes stale the moment a tenth type ships — and it
+  goes stale the same way a migration number does, reading as a failure that gets "fixed" by editing
+  the digit. A missing name is visible as a missing name; a new type simply is not in the list yet.
 
 ## Steps
+
+Run the **Fresh** profile first.
+
+### 1. Read the seed preview
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/database/seed/preview"
 ```
 
+**Expected:** `200` with a top-level `reports` array. One entry per configured source file, each with a
+`fileName` and an `entityTypes` object keyed by entity type (`Quote`, `Source`, …), each carrying
+`new`/`modified`/`blocked`/`discarded`/`pending`/`stale` counts.
+
+### 2. Reseed
+
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
 ```
 
-Repeat against `POST /admin/database/reset`:
+**Expected:** `200`, with a row count present for each of
+`quotes`, `sources`, `characters`, `people`, `series`, `universes`, `stageDirections`, `soundCues` and
+`conversations`, plus `reports` in the same per-file shape.
+
+### 3. Repeat against `POST /admin/database/reset`
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reset"
 ```
+
+**Expected:** the same shape, but every count `0` and `reports` reflecting no activity. Reset no longer
+reimports bundled or user content after rebuilding the schema (#156), so there is nothing to report.
+
+### 4. Import a single file
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
@@ -44,7 +67,10 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import"
 ```
 
-Re-run the same call via `POST /api/v1/import/preview`:
+**Expected:** `200` with a top-level `report` (singular — one file, not an array) alongside the existing
+`summary`/`conflicts`/`errors` fields, shaped like one entry from `reports`.
+
+### 5. Re-run the same call via `POST /api/v1/import/preview`
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
@@ -54,50 +80,45 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/preview"
 ```
 
-**Confirm the removed fields are actually absent**, on the seed-preview response specifically — an
-absence read by eye off a large JSON body is satisfied by default, so it is counted instead:
+**Expected:** the same `report` shape, because the report reflects the actual staged actions regardless
+of whether the batch was applied.
+
+### 6. Confirm the removed fields are actually absent
+
+On the seed-preview response specifically — an absence read by eye off a large JSON body is satisfied by
+default, so it is counted instead:
 
 ```bash
 curl -s "http://localhost:8080/api/v1/admin/database/seed/preview" \
   | grep -o 'totalQuotes\|uniqueQuotes\|crossFileDuplicates' | wc -l
 ```
 
-**Confirm the startup line exists before reading it.** `grep`'s own exit status is what distinguishes
-"the line is absent" from "the line is present and wrong", and a bare `grep` in a pipeline discards it:
-
-```bash
-docker logs qt-env 2>&1 | grep -q "\[Database - Stats\]" && echo PRESENT || echo MISSING
-docker logs qt-env 2>&1 | grep "\[Database - Stats\]"
-```
-
-## Expected output
-
-**Removed fields** — the count is `0`. This is the assertion that `totalQuotes`, `uniqueQuotes` and
+**Expected:** the count is `0`. This is the assertion that `totalQuotes`, `uniqueQuotes` and
 `crossFileDuplicates` are gone; reading their absence off the body by eye cannot fail, because nothing
 is being compared.
 
-**Startup log** — `PRESENT`, before anything is read off the line. If the line is missing entirely —
-wrong container, rotated log, never emitted — a plain `grep` prints nothing and exits `1`, and that
-silence is indistinguishable from a pass.
+### 7. Confirm the startup line exists before reading it
 
-**Seed preview** — `200` with a top-level `reports` array. One entry per configured source file, each
-with a `fileName` and an `entityTypes` object keyed by entity type (`Quote`, `Source`, …), each carrying
-`new`/`modified`/`blocked`/`discarded`/`pending`/`stale` counts.
+`grep`'s own exit status is what distinguishes "the line is absent" from "the line is present and
+wrong", and a bare `grep` in a pipeline discards it:
 
-**Reseed** — `200` with all nine entity-type row counts —
-`quotes`/`sources`/`characters`/`people`/`series`/`universes`/`stageDirections`/`soundCues`/`conversations`
-— plus `reports` in the same per-file shape.
+```bash
+docker logs qt-env 2>&1 | grep -q "\[Database - Stats\]" && echo PRESENT || echo MISSING
+```
 
-**Reset** — the same shape, but every count `0` and `reports` reflecting no activity. Reset no longer
-reimports bundled or user content after rebuilding the schema (#156), so there is nothing to report.
+**Expected:** `PRESENT`, before anything is read off the line.
 
-**Import** — `200` with a top-level `report` (singular — one file, not an array) alongside the existing
-`summary`/`conflicts`/`errors` fields, shaped like one entry from `reports`.
+**On failure:** `MISSING` means the line is absent entirely — wrong container, rotated log, never
+emitted. A plain `grep` prints nothing and exits `1`, and that silence is indistinguishable from a pass,
+so stop here rather than reading the next step's empty output as a result.
 
-**Import preview** — the same `report` shape, because the report reflects the actual staged actions
-regardless of whether the batch was applied.
+### 8. Read the startup line's counts
 
-**Startup log** — `[Database - Stats]` shows all nine counts, not just the original four.
+```bash
+docker logs qt-env 2>&1 | grep "\[Database - Stats\]"
+```
+
+**Expected:** `[Database - Stats]` names every entity type above, not just the original four.
 
 ## Observed effect
 

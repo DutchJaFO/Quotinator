@@ -17,34 +17,84 @@ request. Querying before that gate races the startup wait page.
 
 ## Steps
 
-Run the **Fresh** profile, then:
+Run the **Fresh** profile first.
+
+### 1. Check health
 
 ```bash
-curl -s http://localhost:8080/api/v1/health
+curl -s -w "\n%{http_code}\n" http://localhost:8080/api/v1/health
+```
+
+**Expected:** `200` with `{"status":"healthy"}` — not `503 {"status":"starting"}` and not
+`{"status":"unhealthy"}`.
+
+**On failure:** stop. Every later step reads the same container, so a degraded or still-initialising
+app makes all of them meaningless rather than failing them individually.
+
+### 2. Check the reported version
+
+```bash
 curl -s http://localhost:8080/api/v1/version
-curl -s http://localhost:8080/api/v1/quotes/random
+```
+
+**Expected:** the expected version number.
+
+**On failure:** **a missing `Directory.Build.props` in the build context silently produces `1.0.0`
+while `/health` still returns healthy** — so a healthy container is not by itself evidence the build
+context was complete. Stop and rebuild from a complete context; every later result is being read off
+an image that is not the one under test.
+
+### 3. Fetch a random quote
+
+```bash
+curl -s -w "\n%{http_code}\n" http://localhost:8080/api/v1/quotes/random | grep -c '"quote":'
+```
+
+**Expected:** `1` — a quote body came back. The endpoint returns `200` with `{"status":"NoResults"}`
+and an empty `items` array against an empty database, so the status code alone does not establish that
+the seeded content is readable.
+
+### 4. Search the default full-text path
+
+```bash
 curl -s "http://localhost:8080/api/v1/quotes/search?q=love"
+```
+
+**Expected:** `love` returns results.
+
+### 5. Search scoped to `source`
+
+```bash
 curl -s "http://localhost:8080/api/v1/quotes/search?q=Casablanca&field=source"
+```
+
+**Expected:** `Casablanca` returns results.
+
+### 6. Search scoped to `author`
+
+```bash
 curl -s "http://localhost:8080/api/v1/quotes/search?q=Churchill&field=author"
+```
+
+**Expected:** `Churchill` returns the curated Winston Churchill quote.
+
+### 7. Search scoped to `character`
+
+```bash
 curl -s "http://localhost:8080/api/v1/quotes/search?q=Rick&field=character"
+```
+
+**Expected:** may return an empty `items` array with a `message`, because no bundled data currently
+matches. That is expected behaviour, not a failure.
+
+### 8. Search filtered to `type=person`
+
+```bash
 curl -s "http://localhost:8080/api/v1/quotes/search?q=love&type=person"
 ```
 
-## Expected output
-
-`/version` must return the expected version number. **A missing `Directory.Build.props` in the build
-context silently produces `1.0.0` while `/health` still returns healthy** — so a healthy container is
-not by itself evidence the build context was complete.
-
-The search queries cover three paths:
-
-- default full-text — `love` returns results
-- `field=source` — `Casablanca` returns results
-- `field=author` — `Churchill` returns the curated Winston Churchill quote
-
-`field=character` (`Rick`) and `type=person&q=love` may return an empty `items` array with a
-`message`, because no bundled data currently matches either. That is expected behaviour, not a
-failure.
+**Expected:** may return an empty `items` array with a `message`, because no bundled data currently
+matches. That is expected behaviour, not a failure.
 
 ## Observed effect
 

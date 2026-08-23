@@ -33,6 +33,10 @@ failures: `quotes` is non-zero, and the seed's own report shows nothing `Pending
 - **The seeded volume is consumed by the first run.** It upgrades the schema in place, so a second
   attempt against the same volume no longer exercises the migration at all. Clone it first if
   re-running.
+- **Never assert specific migration version numbers.** What matters is that replay *completed* under the
+  restricted environment, not which versions were involved — the counts move whenever a milestone adds a
+  migration, so a hardcoded `Data vN → vM` goes stale on its own and gets "fixed" by editing a number
+  rather than by anyone checking what happened.
 
 **Known limitation, stated up front.** The real gap #294 theorizes — `/tmp/** rw` granting write but
 not *lock* — has no Docker-mount equivalent. File locking is an LSM-level concept (AppArmor/SELinux),
@@ -44,7 +48,7 @@ AppArmor kernel support to test the real mechanism directly (confirmed live:
 
 ## Steps
 
-**Seed from the predecessor release:**
+### 1. Seed a populated database from the predecessor release
 
 ```bash
 docker rm -f smoke294 2>/dev/null
@@ -57,7 +61,14 @@ curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
 docker stop -t 15 smoke294 && docker rm smoke294
 ```
 
-**Upgrade under the restricted environment:**
+**Expected:** a non-zero `quotes` count, and a seed reporting zero failures — nothing `Pending`,
+`Blocked` or `Stale`. Record the count; the upgrade step compares against it.
+
+**On failure:** a zero or partial count means the volume is only partially seeded, and the upgrade
+below has nothing meaningful to replay against — a pass would then say nothing about the restricted
+environment. Stop and re-seed rather than continuing.
+
+### 2. Upgrade to the current build under the restricted environment
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run -d --name smoke294 -p 8080:8080 \
@@ -70,19 +81,12 @@ curl -s "http://localhost:8080/api/v1/version"
 docker logs smoke294 2>&1 | grep "migration applied\|SqliteException\|SQLite Error"
 ```
 
-## Expected output
-
-`/health` returns `200 {"status":"healthy"}`. `/version` shows the **same** quote count as the seeding
-run recorded above, and every other bundled count non-zero — migration replay must not lose content,
-which is a relationship between the two runs rather than a number either of them should predict. The
-logs show a `migration applied:` line and **no**
-`SqliteException`/`SQLite Error` line — the fix means the migration's temp files never touch disk at
-all, so restricting every other writable path does not matter.
-
-**Never assert specific migration version numbers.** What matters is that replay *completed* under the
-restricted environment, not which versions were involved — the counts move whenever a milestone adds a
-migration, so a hardcoded `Data vN → vM` goes stale on its own and gets "fixed" by editing a number
-rather than by anyone checking what happened.
+**Expected:** `/health` returns `200 {"status":"healthy"}`. `/version` shows the **same** quote count as
+the seeding run recorded, and every other bundled count non-zero — migration replay must not lose
+content, which is a relationship between the two runs rather than a number either of them should
+predict. The logs show a `migration applied:` line and **no** `SqliteException`/`SQLite Error` line —
+the fix means the migration's temp files never touch disk at all, so restricting every other writable
+path does not matter.
 
 ## Observed effect
 

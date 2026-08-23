@@ -18,22 +18,26 @@ evidence about the TestServer, not about the application.
 
 ## Steps
 
+Run the **Fresh** profile first.
+
+### 1. Post an import request with no body at all
+
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import"
 ```
+
+**Expected:** `422` with a `detail` field — "you must provide either a file… or a batchId", paraphrased
+per locale. **Not** a bare `400` with no `detail` at all.
+
+### 2. Post a bodyless request naming an unknown `batchId`
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import?batchId=00000000-0000-0000-0000-000000000000"
 ```
 
-## Expected output
-
-**The bodyless call returns `422` with a `detail` field** — "you must provide either a file… or a
-batchId", paraphrased per locale. **Not** a bare `400` with no `detail` at all.
-
-**The `batchId` call returns `404`** (unknown batch) even with zero body and no `Content-Type`, proving
-`batchId` mode never attempts to read the request body.
+**Expected:** `404` (unknown batch) even with zero body and no `Content-Type`, proving `batchId` mode
+never attempts to read the request body.
 
 ## Observed effect
 

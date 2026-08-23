@@ -41,7 +41,9 @@ is what would populate both tables — the bundled seed writes `Audit_Entry` row
 
 ## Steps
 
-Run the **Fresh** profile, then:
+Run the **Fresh** profile first.
+
+### 1. Request every row with `pageSize=0`
 
 ```bash
 curl -s "http://localhost:8080/api/v1/quotes?pageSize=0"
@@ -49,16 +51,33 @@ curl -s "http://localhost:8080/api/v1/admin/audit?pageSize=0" -H "X-Api-Key: <yo
 curl -s "http://localhost:8080/api/v1/import/actions?pageSize=0"
 ```
 
+**Expected:** on all three, `items` contains every row (not zero), and `pageSize` in the response
+equals `totalCount`. That is the effective-size contract, not the literal `0` requested.
+
+### 2. Request a page size above the maximum
+
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes?pageSize=501"
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/audit?pageSize=501" -H "X-Api-Key: <your admin key>"
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?pageSize=501"
 ```
 
+**Expected:** all three return `422`. Above 500 is rejected, never silently clamped.
+
+### 3. Omit `pageSize` and read the applied default
+
 ```bash
 curl -s "http://localhost:8080/api/v1/admin/audit" -H "X-Api-Key: <your admin key>"
 curl -s "http://localhost:8080/api/v1/import/actions"
 ```
+
+**Expected:** both responses report `20`, not the endpoints' old default of `50`.
+
+**On failure:** a `20` read off an empty table proves nothing — it is the default arriving by
+default-through rather than by application, per Determinism. Confirm both tables have rows before
+recording this either way.
+
+### 4. Request a page beyond the last
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes?pageSize=500&page=99"
@@ -66,16 +85,11 @@ curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/admin/audit?pageSize
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?pageSize=1&page=999999"
 ```
 
-## Expected output
+**Expected:** all three return `422`.
 
-**`pageSize=0`** — on all three, `items` contains every row (not zero), and `pageSize` in the response
-equals `totalCount`. That is the effective-size contract, not the literal `0` requested.
-
-**`pageSize=501`** — all three return `422`. Above 500 is rejected, never silently clamped.
-
-**`pageSize` omitted** — both responses report `20`, not the endpoints' old default of `50`.
-
-**Page beyond the last** — all three return `422`.
+**On failure:** a `200` here inverts on an empty table rather than indicating a pagination defect —
+page 1 of nothing is not beyond the last page. Confirm the table has rows before reading this as a
+failure of the contract.
 
 ## Observed effect
 

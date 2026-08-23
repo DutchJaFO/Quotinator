@@ -30,8 +30,11 @@ same Character *name* under a *different* Source still creates a separate row.
 
 ## Steps
 
-**Record the baseline link count first.** The assertion below is a delta, and a delta cannot be
-evaluated from its after-value alone:
+Run the **Fresh** profile first.
+
+### 1. Record the baseline link count
+
+The assertion below is a delta, and a delta cannot be evaluated from its after-value alone:
 
 ```bash
 docker stop -t 15 qt-env
@@ -44,6 +47,13 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
   --sql "SELECT COUNT(*) AS LinksBefore FROM Quotinator_CharacterSource WHERE IsDeleted = 0"
 ```
 
+**Expected:** a `LinksBefore` figure — the value the delta below is measured against.
+
+**On failure:** without this reading there is no delta to evaluate and step 3's assertion cannot fail.
+Stop.
+
+### 2. Import `smoke-179.json` — a new Character on the existing `Airplane!` Source
+
 ```bash
 cat > .claude/temp/smoke-179.json <<'EOF'
 {"quotes": [{"id":"a0000001-0000-4000-8000-000000000001","quote":"A #179 smoke test line.","originalLanguage":"en","source":"Airplane!","date":"1980","character":"Striker (Smoke Test)","author":null,"type":"movie","genres":[],"translations":{}}]}
@@ -52,7 +62,9 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
 ```
 
-Re-read the database and compare against the baseline:
+**Expected:** `200`.
+
+### 3. Re-read the database and compare against the baseline
 
 ```bash
 docker stop -t 15 qt-env
@@ -67,7 +79,10 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
   --sql "SELECT c.Name, s.Title FROM Quotinator_Character c JOIN Quotinator_CharacterSource cs ON cs.CharacterId = c.Id AND cs.IsDeleted = 0 JOIN Quotinator_Source s ON s.Id = cs.SourceId AND s.IsDeleted = 0 WHERE c.Name = 'Striker (Smoke Test)' AND c.IsDeleted = 0"
 ```
 
-**Same character name, different Source:**
+**Expected:** `Quotinator_CharacterSource` increased by exactly 1, and the join shows one row linking to
+`Airplane!`.
+
+### 4. Import `smoke-179b.json` — the same character name, different Source
 
 ```bash
 cat > .claude/temp/smoke-179b.json <<'EOF'
@@ -76,6 +91,10 @@ EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-179b.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
 ```
+
+**Expected:** `200`.
+
+### 5. Count the Character rows carrying that name
 
 ```bash
 docker stop -t 15 qt-env
@@ -88,14 +107,9 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
   --sql "SELECT COUNT(*) AS Characters FROM Quotinator_Character WHERE Name = 'Striker (Smoke Test)' AND IsDeleted = 0"
 ```
 
-## Expected output
-
-- Both imports return `200`.
-- `Quotinator_CharacterSource` increased by exactly 1 after the first, and the join shows one row
-  linking to `Airplane!`.
-- After the second, `Quotinator_Character WHERE Name = 'Striker (Smoke Test)'` counts **2** — a second,
-  separate Character row, each linked to its own Source. Per-Source matching genuinely survived the
-  mechanism change rather than being silently reused across Sources.
+**Expected:** `Quotinator_Character WHERE Name = 'Striker (Smoke Test)'` counts **2** — a second,
+separate Character row, each linked to its own Source. Per-Source matching genuinely survived the
+mechanism change rather than being silently reused across Sources.
 
 ## Observed effect
 

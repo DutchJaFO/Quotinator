@@ -23,13 +23,21 @@ would have broken those references if left incomplete, so a seed completing with
 
 ## Steps
 
-Run the **Fresh** profile, then read its seed's own log before importing anything:
+Run the **Fresh** profile first.
+
+### 1. Read the seed's own log before importing anything
 
 ```bash
 docker logs qt-env 2>&1 | grep -c "SQLite Error 19"
 ```
 
-Then the import and the two lookups:
+**Expected:** `0` — the container's seed produced no `SQLite Error 19`.
+
+**On failure:** any other number is a failure, and it is the first step for a reason: a non-zero count
+means the seed is what broke, so the assertions below would be reporting on a database that was never
+built correctly. Stop.
+
+### 2. Import a fixture whose quote and Source both carry file-authored explicit ids
 
 ```bash
 cat > .claude/temp/smoke-209.json <<'EOF'
@@ -39,20 +47,26 @@ cat > .claude/temp/smoke-209.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-209.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+```
+
+**Expected:** the import returns `200`.
+
+### 3. Look the Source up by the id the file authored
+
+```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources/f6000002-0000-4000-8000-000000000002"
+```
+
+**Expected:** `200`, with `id` shown canonicalized — lowercase, per ADR 012's system-wide convention.
+
+### 4. Fetch the quote and confirm its Source join still resolves
+
+```bash
 curl -s "http://localhost:8080/api/v1/quotes/f6000001-0000-4000-8000-000000000001"
 ```
 
-## Expected output
-
-- The import returns `200`.
-- The masterdata lookup returns `200`, with `id` shown canonicalized — lowercase, per ADR 012's
-  system-wide convention.
-- The quote lookup resolves `source` to `"209 Smoke Test Film"` via the Quote→Source join, proving the
-  fix did not break the join in order to make the masterdata lookup work.
-- The container's seed produced no `SQLite Error 19` — the `grep -c` prints `0`. Any other number is a
-  failure, and it is the first step for a reason: a non-zero count means the seed is what broke, so the
-  three assertions above would be reporting on a database that was never built correctly.
+**Expected:** the quote lookup resolves `source` to `"209 Smoke Test Film"` via the Quote→Source join,
+proving the fix did not break the join in order to make the masterdata lookup work.
 
 ## Observed effect
 

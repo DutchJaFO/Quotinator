@@ -38,7 +38,7 @@ as they stand — the discrepancy is tracked separately, not resolved here.
 
 ## Steps
 
-**Seed a v1.8.3 database, then upgrade it:**
+### 1. Seed a v1.8.3 database and wait for its announcement
 
 ```bash
 docker rm -f qprov 2>/dev/null; rm -rf /tmp/qprov; mkdir -p /tmp/qprov/data
@@ -47,13 +47,26 @@ MSYS_NO_PATHCONV=1 docker run -d --name qprov -e Quotinator__DataDir=/data \
 until [ "$(curl -s 'http://localhost:8080/api/v1/notifications?pageSize=0' \
   | grep -c 'Two API operation IDs were renamed')" = "1" ]; do sleep 5; done
 docker rm -f qprov
+```
 
+**Expected:** the poll terminates — v1.8.3's announcement exists, so seeding has finished and the
+database is in the state the upgrade is about.
+
+**On failure:** a poll that never terminates means seeding did not complete and the announcement was
+never written. Upgrading a database in that state proves nothing about provenance (see Determinism).
+Stop.
+
+### 2. Upgrade to the current build against the same database
+
+```bash
 MSYS_NO_PATHCONV=1 docker run -d --name qprov -e Quotinator__DataDir=/data \
   -v /tmp/qprov/data:/data -p 8080:8080 quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 ```
 
-**Read the version history:**
+**Expected:** the current build starts against the upgraded database and reports healthy.
+
+### 3. Read the version history
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qprov/data:/data alpine \
@@ -61,17 +74,7 @@ MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qprov/data:/data alpine \
     'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
 ```
 
-**Then repeat the whole thing against a fresh database** — same build, no v1.8.3 stage.
-
-**No commands — the fresh-database repeat is described but never written out.** It needs its own
-container name and its own bind-mount directory, distinct from `qprov` and `/tmp/qprov`, or it runs
-against the database the first half already upgraded and proves nothing. Naming those here would be
-inventing them, so it is flagged instead; Cleanup below cannot name what the repeat creates until it is
-written.
-
-## Expected output
-
-Exactly two rows: `Quotinator.Api | 1.8.3 | 1`, then `Quotinator.Api | <current> | 2`.
+**Expected:** exactly two rows: `Quotinator.Api | 1.8.3 | 1`, then `Quotinator.Api | <current> | 2`.
 
 **The 1.8.3 row must sort first.** It predates every row this table can hold, and if it sorted last then
 "the version that ran last" would answer 1.8.3 — and #81's catch-up would replay releases already
@@ -81,10 +84,20 @@ Joining the notifications back to that table attributes the v1.8.3-era announcem
 anything written during this startup to the **current** version. Provenance records who wrote a row,
 not who is running now.
 
-**On a fresh database** the same build produces exactly one row — its own version — and no 1.8.3 row at
-all. That guarantee is structural rather than guarded in SQL: an empty database takes the one-step
-baseline path and never replays migrations. Worth confirming rather than assuming, which is why it is a
-step here.
+### 4. Repeat the whole thing against a fresh database
+
+**Then repeat the whole thing against a fresh database** — same build, no v1.8.3 stage.
+
+**No commands — the fresh-database repeat is described but never written out.** It needs its own
+container name and its own bind-mount directory, distinct from `qprov` and `/tmp/qprov`, or it runs
+against the database the first half already upgraded and proves nothing. Naming those here would be
+inventing them, so it is flagged instead; Cleanup below cannot name what the repeat creates until it is
+written.
+
+**Expected:** on a fresh database the same build produces exactly one row — its own version — and no
+1.8.3 row at all. That guarantee is structural rather than guarded in SQL: an empty database takes the
+one-step baseline path and never replays migrations. Worth confirming rather than assuming, which is
+why it is a step here.
 
 ## Observed effect
 

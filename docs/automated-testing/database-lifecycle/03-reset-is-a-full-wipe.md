@@ -31,32 +31,75 @@ and rebuilds via the baseline path, reversing #141's preserve-on-reset behaviour
 
 ## Steps
 
-**Seed, record the starting state, Reset:**
+Run the **Fresh** profile first.
 
-Run the **Fresh** profile, then:
+### 1. Record the starting state
 
 ```bash
 curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
 curl -s "http://localhost:8080/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
+```
+
+**Expected:** `quotes` and the audit `totalCount` are both non-zero — a normal seeded install.
+
+**On failure:** a zero here makes the whole test vacuous — asserting these become zero proves nothing
+if they were already zero. Stop; this is a seeding problem, not a Reset result.
+
+### 2. Reset the database
+
+```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/admin/database/reset"
+```
+
+**Expected:** `200` with every row count `0`. No reimport happens.
+
+### 3. Read the quote count after Reset
+
+```bash
 curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
+```
+
+**Expected:** `/version`'s `quotes` count is `0`.
+
+### 4. Read the audit count after Reset
+
+```bash
 curl -s "http://localhost:8080/api/v1/admin/audit" | grep -o '"totalCount":[0-9]*'
+```
+
+**Expected:** the audit `totalCount` is exactly `1` — Reset's own self-trace row. The audit trail is
+wiped along with everything else, no longer surviving Reset the way it did before #156.
+
+### 5. Confirm the empty database degrades rather than failing
+
+```bash
 curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/quotes/random"
 ```
 
-**`preserveSchemaVersion=true` restores pre-reset migration history for both counters** — #156 made
-this symmetric, since Data's own `System_SchemaVersion` is wiped by the full drop too, where
-previously it was never touched:
+**Expected:** `200` with `{"status":"NoResults", ...}` and an empty `items` array — not `503`, and not
+real quote data.
+
+### 6. Reset again with `preserveSchemaVersion=true`
+
+This restores pre-reset migration history for both counters — #156 made this symmetric, since Data's
+own `System_SchemaVersion` is wiped by the full drop too, where previously it was never touched.
+
+**Both counts must be read before the `preserveSchemaVersion=true` call as well as after** — the
+assertion is that they are unchanged, which cannot be evaluated from the after-value alone.
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/admin/database/reset?preserveSchemaVersion=true"
 ```
 
-Then read both counters. The container is stopped for the copy, and the `-wal`/`-shm` sidecars come
-with it — a copy taken mid-write can be missing exactly what was just written, and reads as a wrong
-count rather than as an error:
+**Expected:** `200`.
+
+### 7. Read both schema-version counters
+
+The container is stopped for the copy, and the `-wal`/`-shm` sidecars come with it — a copy taken
+mid-write can be missing exactly what was just written, and reads as a wrong count rather than as an
+error:
 
 ```bash
 docker stop -t 15 qt-env
@@ -71,20 +114,8 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
   --sql "SELECT COUNT(*) AS ConsumerVersions FROM System_ConsumerSchemaVersion"
 ```
 
-**Both counts must be read before the `preserveSchemaVersion=true` call as well as after** — the
-assertion is that they are unchanged, which cannot be evaluated from the after-value alone.
-
-## Expected output
-
-- Before Reset: `quotes` and the audit `totalCount` are both non-zero — a normal seeded install.
-- The Reset call returns `200` with every row count `0`. No reimport happens.
-- After Reset: `/version`'s `quotes` count is `0`. The audit trail is wiped along with everything
-  else, no longer surviving Reset the way it did before #156.
-- The audit `totalCount` is exactly `1` — Reset's own self-trace row.
-- `/quotes/random` returns `200` with `{"status":"NoResults", ...}` and an empty `items` array — not
-  `503`, and not real quote data.
-- `preserveSchemaVersion=true` returns `200`, and both counters report the same row count as before
-  the call — their granular per-version history, not collapsed to a single baseline row.
+**Expected:** both counters report the same row count as before the `preserveSchemaVersion=true` call —
+their granular per-version history, not collapsed to a single baseline row.
 
 ## Observed effect
 

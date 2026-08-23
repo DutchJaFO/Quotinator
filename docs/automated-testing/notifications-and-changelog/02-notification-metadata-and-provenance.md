@@ -39,11 +39,18 @@ exactly as they stand — the discrepancy is tracked separately, not resolved he
   wording changes, so a pasted expected value goes stale the first time anyone edits it. Read the row
   and confirm the fields are present and self-consistent.
 - The dedupe check compares `totalCount` **before and after a restart** rather than against a fixed
-  number — see Expected output for why that does not breach the no-counts rule.
+  number — see the note below for why that does not breach the no-counts rule.
+
+**Why comparing a total is legitimate here.** This is the one place a *total* is the right thing to
+read, and it does not breach the no-counts rule: nothing here expects a particular number, only that
+the number does not change across a restart. Comparing the total rather than one notification is
+deliberately stronger — it catches *any* producer duplicating itself, including one added after this
+was written. **Do not replace it with a specific expected count, and do not narrow it to a single
+notification.**
 
 ## Steps
 
-### Migration path from a genuine v1.8.3 database
+### 1. Seed a genuine v1.8.3 database
 
 ```bash
 docker pull ghcr.io/dutchjafo/quotinator:1.8.3
@@ -55,14 +62,27 @@ MSYS_NO_PATHCONV=1 docker run -d --name q183 -e Quotinator__DataDir=/data \
 until docker logs q183 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
 docker logs q183 2>&1 | grep baseline
 docker rm -f q183
+```
 
+**Expected:** v1.8.3 reports `schema created at baseline`, the released schema this upgrade starts from.
+
+**On failure:** no baseline line, or a container that never reaches `Quotinator ready`, means the
+released database was never created — everything below would then be read from an empty or partial
+file, which looks exactly like a passing check. Stop.
+
+### 2. Start the current build against that database
+
+```bash
 MSYS_NO_PATHCONV=1 docker run -d --name q312 -e Quotinator__DataDir=/data \
   -v /tmp/q312/data:/data -p 8080:8080 quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 docker logs q312 2>&1 | grep -E "pending|schema updated"
 ```
 
-### Stored payload and provenance
+**Expected:** the current build reports `applying … pending "Data" migration(s)` followed by
+`schema updated`, and reaches `Quotinator ready`. **No exception.**
+
+### 3. Read the stored payload and its provenance
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
@@ -70,47 +90,7 @@ MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
    'SELECT n.Title, n.MetadataKind, n.Metadata, v.Application || \" \" || v.Version AS WrittenBy FROM System_Notification n LEFT JOIN System_AppVersion v ON v.Id = n.AppVersionId;'"
 ```
 
-### Append-only version history
-
-```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
-  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
-   'SELECT Application, Version, SequenceNumber, COUNT(*) OVER () AS TotalRows FROM System_AppVersion;'"
-```
-
-### Dedupe is structural, not textual
-
-```bash
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
-docker restart q312
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
-```
-
-To confirm the text path is genuinely dead: insert a row whose `Body` mentions `GetAllImportBatches`
-but whose `Metadata` is `NULL`, restart, and re-count.
-
-**No command — that row is described but never created.** The `INSERT` would need a column set and
-values for `Type`, `Title` and `MetadataKind` that nothing in this document states, so it is flagged
-rather than guessed. The `totalCount` **must increase** expectation below has no setup until it is
-written.
-
-### Every payload states its release
-
-```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
-  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
-   'SELECT Title, MetadataKind, Metadata FROM System_Notification;'"
-```
-
-## Expected output
-
-**Migration path** — v1.8.3 reports `schema created at baseline`, the released schema this upgrade
-starts from. The current build reports `applying … pending "Data" migration(s)` followed by
-`schema updated`, and reaches `Quotinator ready`. **No exception, and no repeat on a second start** —
-`docker restart q312` must not log `applying … pending` again.
-
-**Payload and provenance** — `MetadataKind` is `Announcement`, and `Metadata` is exactly
+**Expected:** `MetadataKind` is `Announcement`, and `Metadata` is exactly
 `{"announcement":"GetAllImportBatches"}`.
 
 **`Metadata` must not contain a `Kind` property.** Found live during #312's own T2 pass: payloads
@@ -122,8 +102,16 @@ unit test caught this** — round-tripping succeeded either way. Only reading th
 `WrittenBy` resolves to `Quotinator.Api 1.8.3` — the `AppVersionId` FK actually joins, rather than
 being written null or dangling.
 
-**Version history** — exactly one row: `Quotinator.Api | 1.8.3 | 1 | 1`. `Application` and `Version`
-are separate columns, never one concatenated value. After `docker restart q312`, still exactly one row:
+### 4. Read the append-only version history
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
+  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
+   'SELECT Application, Version, SequenceNumber, COUNT(*) OVER () AS TotalRows FROM System_AppVersion;'"
+```
+
+**Expected:** exactly one row: `Quotinator.Api | 1.8.3 | 1 | 1`. `Application` and `Version` are
+separate columns, never one concatenated value. After `docker restart q312`, still exactly one row:
 recording the same application+version twice appends nothing, or every restart would grow the table.
 
 `SequenceNumber` is the explicit recording order. It exists because `DateCreated` is second-resolution
@@ -131,23 +119,43 @@ and cannot separate rows written within the same second, and because SQLite's im
 reusable once a table's highest row is removed — neither is a trustworthy answer to "which version ran
 last".
 
-**Dedupe** — `totalCount` is identical before and after the restart. A producer runs on every startup;
-the history is what stops it writing twice.
+### 5. Confirm dedupe is structural, not textual
 
-This is the one place a *total* is the right thing to read, and it does not breach the no-counts rule:
-nothing here expects a particular number, only that the number does not change across a restart.
-Comparing the total rather than one notification is deliberately stronger — it catches *any* producer
-duplicating itself, including one added after this was written. **Do not replace it with a specific
-expected count, and do not narrow it to a single notification.**
+```bash
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+docker restart q312
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o '"totalCount":[0-9]*'
+```
 
-With a `Body`-mentions-but-`Metadata`-null row inserted, `totalCount` must **increase** after a restart:
-the announcement is written again, because a body match no longer suppresses anything. #278 embedded a
-key in the message text and matched it with `Contains`, which could not distinguish `WhatsNew:v1.9.1`
-from `WhatsNew:v1.9.10`.
+**Expected:** `totalCount` is identical before and after the restart. A producer runs on every startup;
+the history is what stops it writing twice. **And no repeat on a second start** — `docker restart q312`
+must not log `applying … pending` again.
 
-**Release state** — the #279 announcement's payload carries its `announcement` key plus `releaseState`,
-the `version` the announcement is *about* (v1.8.3 shipped the renames — not the version running now,
-which the row's own `AppVersionId` records), and a `contentHash`. Confirm those are present and
+To confirm the text path is genuinely dead: insert a row whose `Body` mentions `GetAllImportBatches`
+but whose `Metadata` is `NULL`, restart, and re-count.
+
+**No command — that row is described but never created.** The `INSERT` would need a column set and
+values for `Type`, `Title` and `MetadataKind` that nothing in this document states, so it is flagged
+rather than guessed. The `totalCount` **must increase** expectation below has no setup until it is
+written.
+
+**Expected, with a `Body`-mentions-but-`Metadata`-null row inserted:** `totalCount` must **increase**
+after a restart — the announcement is written again, because a body match no longer suppresses
+anything. #278 embedded a key in the message text and matched it with `Contains`, which could not
+distinguish `WhatsNew:v1.9.1` from `WhatsNew:v1.9.10`.
+
+### 6. Confirm every payload states its release
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/q312/data:/data alpine sh -c \
+  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
+   'SELECT Title, MetadataKind, Metadata FROM System_Notification;'"
+```
+
+**Expected:** the #279 announcement's payload carries its `announcement` key plus `releaseState`, the
+`version` the announcement is *about* (v1.8.3 shipped the renames — not the version running now, which
+the row's own `AppVersionId` records), and a `contentHash`. Confirm those are present and
 self-consistent rather than matching a transcribed literal.
 
 No payload may contain a null-valued property. An unset value is omitted, so a reader never has to

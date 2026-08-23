@@ -39,6 +39,7 @@ this scenario needs it.
 - The released container publishes no port and waits on its own log.
 - The current build's wait terminates on **either** outcome — ready or unhandled exception — so a
   genuine crash fails the test rather than hanging it.
+- **As elsewhere, assert that replay completed — never the migration count or the version numbers.**
 
 **Read from a container, not the host.** `-v /tmp/…:/data` resolves inside the Docker VM while
 `dotnet run` executes on Windows against a different `/tmp`, so a host-side query silently finds
@@ -46,6 +47,8 @@ nothing. `Quotinator.Tools.DbInspector` is additionally `Mode=ReadOnly` by desig
 step 2's writes either — **do not "fix" the tool to allow writes.**
 
 ## Steps
+
+### 1. Create the released baseline
 
 ```bash
 # 1. released baseline — the schema version the last published image creates
@@ -56,7 +59,18 @@ MSYS_NO_PATHCONV=1 docker run -d --name q183 -e Quotinator__DataDir=/data \
   -v /tmp/qv4/data:/data ghcr.io/dutchjafo/quotinator:1.8.3
 until docker logs q183 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
 docker rm -f q183
+```
 
+**Expected:** the released image reaches `Quotinator ready`, leaving a v1.8.3 database in
+`/tmp/qv4/data`.
+
+**On failure:** if it never reaches `Quotinator ready`, there is no released baseline to promote — the
+hand-applied SQL below would run against an empty or absent file and the current build would then be
+starting from a state nobody constructed. Stop.
+
+### 2. Hand-apply the migration that first creates `System_AppVersion`
+
+```bash
 # 2. hand-apply the migration that first creates System_AppVersion — one step past the baseline —
 #    plus a row the later column-adding migration must not destroy
 cat > /tmp/qv4/data/promote.sql <<'SQL'
@@ -70,7 +84,19 @@ SQL
 docker run --rm -v /tmp/qv4/data:/data alpine \
   sh -c "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db < /data/promote.sql"
 rm /tmp/qv4/data/promote.sql
+```
 
+**Expected:** `sqlite3` completes with no error, leaving the database at the intermediate state — the
+table present, the pre-existing `1.8.4` row written, and the schema counter promoted.
+
+**On failure:** a `sqlite3` error means the intermediate state was never built, and the current build
+would then be upgrading the plain released baseline instead — which is the path
+[`02-notification-metadata-and-provenance.md`](02-notification-metadata-and-provenance.md) already
+covers, not this one. Stop.
+
+### 3. Start the current build against that intermediate state
+
+```bash
 # 3. current build against that state
 MSYS_NO_PATHCONV=1 docker run -d --name qv4 -e Quotinator__DataDir=/data \
   -v /tmp/qv4/data:/data -p 8080:8080 quotinator:local
@@ -78,22 +104,28 @@ until docker logs qv4 2>&1 | grep -qE "Quotinator ready|Unhandled exception"; do
 docker logs qv4 2>&1 | grep -E "no such column|Unhandled|pending|schema updated|Quotinator ready"
 ```
 
+**Expected:** logs `applying … pending "Data" migration(s)`, then `schema updated`, and reaches
+`Quotinator ready`.
+
+**Must not log `no such column` or `Unhandled exception`.** Before the fix this terminated the process
+during startup, *after* the changelog database had already initialised — so a partial, healthy-looking
+log prefix is not evidence of a successful start. Check for `Quotinator ready` explicitly.
+
+**On failure:** no pending migrations at all, or a "table already exists" error, means the hand-built
+state no longer sits where this scenario needs it (see Determinism) — the numbers need re-deriving, not
+the build investigating. Stop.
+
+### 4. Read the version history
+
 ```bash
 MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qv4/data:/data alpine sh -c \
   "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
    'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
 ```
 
-## Expected output
-
-- Logs `applying … pending "Data" migration(s)`, then `schema updated`, and reaches `Quotinator ready`.
-  As elsewhere, assert that replay completed — never the migration count or the version numbers.
-- **Must not log `no such column` or `Unhandled exception`.** Before the fix this terminated the process
-  during startup, *after* the changelog database had already initialised — so a partial, healthy-looking
-  log prefix is not evidence of a successful start. Check for `Quotinator ready` explicitly.
-- Exactly two rows: `NULL | 1.8.4 | 1` then `Quotinator.Api | <current> | 2`. The pre-existing row
-  survives with its `Application` still `NULL`, and the current version is **appended** rather than
-  replacing it.
+**Expected:** exactly two rows: `NULL | 1.8.4 | 1` then `Quotinator.Api | <current> | 2`. The
+pre-existing row survives with its `Application` still `NULL`, and the current version is **appended**
+rather than replacing it.
 
 ## Observed effect
 

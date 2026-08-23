@@ -28,15 +28,35 @@ Nothing beyond the Fresh profile. The seed this test inspects is the profile's o
   copy can silently omit committed data.
 - The duplicate-Source query groups on `LOWER(Title)`, so a case-only difference counts as a duplicate.
   That is the point — the alias mechanism exists to prevent exactly that.
+- **The values `/version` reports are data, not an expectation** — what matters is that seeding produced
+  content.
 
 ## Steps
 
+Run the **Fresh** profile first.
+
+### 1. Read what the first boot seeded
+
 ```bash
 curl -s http://localhost:8080/api/v1/version
+```
+
+**Expected:** `/version` reports a non-zero quote count and non-zero counts for every bundled entity
+type.
+
+### 2. Confirm nothing is left staged awaiting review
+
+```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/actions?status=pending"
 ```
 
-**Cross-check for duplicate Sources:**
+**Expected:** `200` with an **empty** `items` array. No file is left staged awaiting review.
+
+**On failure:** if anything is left pending, `docker logs` shows
+`"<file>" left staged awaiting review — batch "<id>", N action(s) pending a decision`. Inspect via
+`GET /import/actions?batchId=<id>` to see which entity or field lacks a rule or alias.
+
+### 3. Cross-check for duplicate Sources
 
 ```bash
 docker cp qt-env:/data/quotinatordata.db .claude/temp/inspect-181.db
@@ -46,18 +66,8 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
   --sql "SELECT Title, Type, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
 ```
 
-## Expected output
-
-- `/version` reports a non-zero quote count and non-zero counts for every bundled entity type. **The
-  values are data, not an expectation** — what matters is that seeding produced content.
-- `/import/actions?status=pending` returns `200` with an **empty** `items` array. No file is left staged
-  awaiting review.
-- The duplicate query returns **no rows**. Any row is a genuine duplicate Source that slipped through
-  both the rule and alias mechanisms.
-
-**If anything is left pending**, `docker logs` shows
-`"<file>" left staged awaiting review — batch "<id>", N action(s) pending a decision`. Inspect via
-`GET /import/actions?batchId=<id>` to see which entity or field lacks a rule or alias.
+**Expected:** the duplicate query returns **no rows**. Any row is a genuine duplicate Source that
+slipped through both the rule and alias mechanisms.
 
 ## Observed effect
 

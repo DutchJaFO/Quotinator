@@ -43,6 +43,8 @@ neither is predicted**, since the changelog grows with every release.
 
 ## Steps
 
+### 1. Start a container of this test's own on a bind-mounted directory
+
 ```bash
 docker rm -f qt-changelog 2>/dev/null
 rm -rf /tmp/qt-changelog
@@ -54,19 +56,32 @@ MSYS_NO_PATHCONV=1 docker run -d --name qt-changelog -p 8080:8080 \
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 ```
 
+**Expected:** the app reaches healthy, having initialised and imported the changelog during startup.
+
+### 2. Confirm the changelog file exists alongside `quotinatordata.db`
+
 **The file must exist alongside `quotinatordata.db`** — an in-memory database leaves nothing on disk:
 
 ```bash
 docker exec qt-changelog sh -c "ls -l /data/quotinatorchangelog.db"
 ```
 
-**Confirm the database-backed read path is in use, not the fallback:**
+**Expected:** `/data/quotinatorchangelog.db` exists.
+
+### 3. Confirm the database-backed read path is in use, not the fallback
 
 ```bash
 docker logs qt-changelog 2>&1 | grep -E "Changelog - (Init|Import|Read)"
 ```
 
-**Confirm a real page request is served from the database:**
+**Expected:** `[Changelog - Import] refreshed N entries across 3 language(s)` appears, and so does
+`[Changelog - Read] served N entries from the database` — the positive statement that the database
+itself answered. **The two counts match each other**; the value itself is data. The three languages
+are asserted, because that is the shipped set rather than a content count.
+
+No `falling back to the JSON-backed changelog service` line appears at any point.
+
+### 4. Confirm a real page request is served from the database
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/about
@@ -74,6 +89,13 @@ curl -s http://localhost:8080/about | grep -oE "changelog-entry" | wc -l
 docker logs qt-changelog 2>&1 | grep -c "entries from the database"
 docker logs qt-changelog 2>&1 | grep -c "falling back to the JSON-backed changelog service"
 ```
+
+**Expected:** `/about` returns `200` and renders changelog entries. **There is deliberately no REST
+endpoint here** — changelog content is surfaced only on the About page
+(`Components/Pages/About.razor`), so that is what must be read. The `entries from the database` count
+**increased** as a result of that request; the fallback count is `0`.
+
+### 5. Confirm the file survives a restart with its content intact
 
 **The file must survive a restart with its content intact** — it is rebuilt from the bundled JSON at
 every startup, so this confirms the rebuild is idempotent rather than duplicating rows:
@@ -85,20 +107,8 @@ docker exec qt-changelog sh -c "ls -l /data/quotinatorchangelog.db"
 docker logs qt-changelog 2>&1 | tail -40 | grep -E "Changelog - (Init|Import)"
 ```
 
-## Expected output
-
-- `/data/quotinatorchangelog.db` exists.
-- `[Changelog - Import] refreshed N entries across 3 language(s)` appears, and so does
-  `[Changelog - Read] served N entries from the database` — the positive statement that the database
-  itself answered. **The two counts match each other**; the value itself is data. The three languages
-  are asserted, because that is the shipped set rather than a content count.
-- No `falling back to the JSON-backed changelog service` line appears at any point.
-- `/about` returns `200` and renders changelog entries. **There is deliberately no REST endpoint here**
-  — changelog content is surfaced only on the About page (`Components/Pages/About.razor`), so that is
-  what must be read.
-- The `entries from the database` count **increased** as a result of that request; the fallback count is
-  `0`.
-- After restart, the file is still present and the import reports the same entry count — no duplication.
+**Expected:** after restart, the file is still present and the import reports the same entry count — no
+duplication.
 
 ## Observed effect
 

@@ -35,8 +35,12 @@ go stale on its own and get "fixed" by editing a digit.
   after migrations are consolidated.
 - The container is **stopped** before the injection and started afterwards; writing to the database file
   underneath a running process is a different scenario.
+- **Do not assert which version replayed** — deleting `MAX(Version)` rolls back whichever migration is
+  newest, so this stays correct after consolidation.
 
 ## Steps
+
+### 1. Create a current, fully-migrated database of this test's own
 
 ```bash
 docker rm -f qws 2>/dev/null; rm -rf /tmp/qws; mkdir -p /tmp/qws/data
@@ -46,7 +50,17 @@ MSYS_NO_PATHCONV=1 docker run -d --name qws -e Quotinator__DataDir=/data \
   -v /tmp/qws/data:/data -p 8080:8080 quotinator:local
 until curl -s http://localhost:8080/api/v1/health | grep -q healthy; do sleep 5; done
 docker stop -t 15 qws
+```
 
+**Expected:** the app reports healthy — the database is fully migrated — and the container is then
+stopped, so the injection below writes to a file no process holds open.
+
+**On failure:** if the app never reports healthy, the database is not at the current schema, and the
+rollback below would then be undoing something other than the backfill. Stop.
+
+### 2. Inject a what's-new row in the pre-backfill shape and undo the newest applied migration
+
+```bash
 # 2. inject a what's-new row in the pre-backfill shape, and undo the newest applied migration
 MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qws/data:/data alpine sh -c \
   "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db \
@@ -54,17 +68,25 @@ MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qws/data:/data alpine sh -c \
      VALUES (lower(hex(randomblob(16))), 'Information', 'legacy highlights', '2026-08-16 09:00:00', 0, 0, \
              'What''s new in v1.8.4', '{\\\"version\\\":\\\"1.8.4\\\"}', 'WhatsNew'); \
      DELETE FROM System_SchemaVersion WHERE Version = (SELECT MAX(Version) FROM System_SchemaVersion);\""
+```
 
+**Expected:** `sqlite3` completes with no error — the pre-backfill row is present and the newest
+schema-version row is gone.
+
+**On failure:** a `sqlite3` error means the constructed state was never reached, so the restart below
+replays nothing and any result it produces is meaningless. Stop.
+
+### 3. Restart so the rolled-back migration replays over the injected row
+
+```bash
 # 3. restart so the rolled-back migration replays over the injected row
 docker start qws
 until docker logs qws 2>&1 | grep -qE "Quotinator ready|Unhandled exception"; do sleep 1; done
 ```
 
-## Expected output
+**Expected:**
 
-- Logs `applying … pending "Data" migration(s)` and reaches `Quotinator ready`. **Do not assert which
-  version replayed** — deleting `MAX(Version)` rolls back whichever migration is newest, so this stays
-  correct after consolidation.
+- Logs `applying … pending "Data" migration(s)` and reaches `Quotinator ready`.
 - The injected row's `Metadata` becomes `{"version":"1.8.4","releaseState":"Released"}` — a `version`
   key present meant a tagged release under the convention that wrote those rows.
 - A row that already states its own release state is **unchanged**. `json_insert` only adds a key that

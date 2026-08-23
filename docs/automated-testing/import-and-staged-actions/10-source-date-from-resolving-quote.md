@@ -46,13 +46,22 @@ a date, even when the resolving quote had one.
 
 ## Steps
 
-**Read path — confirms the seeded date surfaces, but does not re-exercise the fix:**
+Run the **Fresh** profile first.
+
+### 1. Read path — confirm the seeded date surfaces
+
+This does not re-exercise the fix:
 
 ```bash
 curl -s "http://localhost:8080/api/v1/quotes/search?q=Airplane&field=source"
 ```
 
-**The actual code path, against a fresh seed:**
+**Expected:** items whose `date` is `"1980"`, not `null`. This Source already exists from seeding, so
+the call confirms the read path only — it does not by itself re-exercise `ResolveSourceAsync`.
+
+### 2. Count the Sources carrying a date, against a fresh seed
+
+This is the actual code path:
 
 ```bash
 docker stop -t 15 qt-env
@@ -65,29 +74,44 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
   --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Quotinator_Source WHERE IsDeleted = 0"
 ```
 
-**Cross-check a title with no `sources[]` entry — the implicit-discovery path this fixes:**
+**Expected:** `have_date` is non-zero and a large majority of `sources`.
+
+### 3. Cross-check `Airplane!` — a title with no `sources[]` entry
+
+This is the implicit-discovery path this fixes:
 
 ```bash
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
   --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Airplane!' AND IsDeleted = 0"
 ```
 
-**Cross-check a title with a date-less explicit entry — the gap above:**
+**Expected:** `Airplane!` returns `Date = 1980` — the implicit-discovery path this fixed.
+
+### 4. Cross-check `Jurassic Park` — a title with a date-less explicit entry
+
+This is the gap described in Preconditions:
 
 ```bash
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
   --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Jurassic Park' AND IsDeleted = 0"
 ```
 
-## Expected output
+**Expected:** `Jurassic Park` returns `Date = 1993`. It was previously documented here as expected
+`NULL`; see the note in Preconditions.
 
-- The search returns items whose `date` is `"1980"`, not `null`. This Source already exists from
-  seeding, so the call confirms the read path only — it does not by itself re-exercise
-  `ResolveSourceAsync`.
-- `have_date` is non-zero and a large majority of `sources`.
-- `Airplane!` returns `Date = 1980` — the implicit-discovery path this fixed.
-- `Jurassic Park` returns `Date = 1993`, and `Frozen` returns `2013`. Both were previously documented
-  here as expected `NULL`; see the note above.
+### 5. Cross-check `Frozen` — the other title the fixed gap named
+
+```bash
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
+  --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Frozen' AND IsDeleted = 0"
+```
+
+**Expected:** `Frozen` returns `Date = 2013`.
+
+This step exists because the expectation did not, until 2026-08-23: the document asserted `Frozen`'s
+date with no query for `Frozen` anywhere in it. That is the same fault its own Preconditions note
+describes — an expectation written as prose is not verified by anything — reproduced one paragraph
+below the warning about it.
 
 ## Observed effect
 

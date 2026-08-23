@@ -28,17 +28,30 @@ not treat the empty result as a failure.
 
 ## Steps
 
+Run the **Fresh** profile first.
+
+### 1. Wait for the bundled seed to finish
+
 ```bash
 curl -s http://localhost:8080/api/v1/version
+```
+
+**Expected:** the counts have stopped changing — the container is no longer working through its
+multi-file seed.
+
+### 2. Reseed, then list the stale actions
+
+```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
 ```
 
-## Expected output
+**Expected:** against current `main`, `status=stale` returns an empty list — the drift has been fixed.
 
-Against current `main`, `status=stale` returns an empty list — the drift has been fixed.
-
-With the apostrophe mismatch reintroduced, `status=stale` returns the Zootopia entity.
+With the apostrophe mismatch reintroduced, `status=stale` returns the Zootopia entity. **That is the
+only way this step produces a non-empty result** — the shipped rule file is already corrected, so a run
+against current `main` returns an empty list. To see the "before" state, `git stash` or check out the
+pre-fix rule file and rebuild the image — do not treat the empty result as a failure.
 
 ## Observed effect
 

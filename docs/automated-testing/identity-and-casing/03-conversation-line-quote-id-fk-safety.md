@@ -24,7 +24,20 @@ the same bug class
 
 ## Steps
 
-Run the **Fresh** profile, then:
+Run the **Fresh** profile first.
+
+### 1. Establish the log's starting state
+
+```bash
+docker logs qt-env 2>&1 | grep -c "SQLite Error 19"
+```
+
+**Expected:** `0`. The profile's own seed produced no foreign-key violation.
+
+**On failure:** a non-zero count here means the seed itself is failing, and step 3's reading would be
+measuring that rather than this test's import. Stop — this is a profile problem, not a result.
+
+### 2. Import a conversation line whose `quoteId` casing does not match its quote
 
 ```bash
 cat > .claude/temp/smoke-210-conv.json <<'EOF'
@@ -34,14 +47,23 @@ cat > .claude/temp/smoke-210-conv.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210-conv.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+```
+
+**Expected:** `200`.
+
+**On failure:** stop. A non-`200` here is the bug this test exists to catch, and step 3 names it.
+
+### 3. Confirm no foreign-key violation was logged
+
+```bash
 docker logs qt-env 2>&1 | grep -c "SQLite Error 19"
 ```
 
-## Expected output
+**Expected:** still `0` — unchanged from step 1.
 
-`200`, and specifically **not** `SQLite Error 19: FOREIGN KEY constraint failed` — the `grep -c` prints
-`0`. The status code alone is not the whole assertion: the log is where the constraint failure would
-name itself.
+The status code alone is not the whole assertion: the log is where
+`SQLite Error 19: FOREIGN KEY constraint failed` would name itself, and comparing against step 1 is what
+makes this specific to the import rather than to whatever the container did before it.
 
 ## Observed effect
 

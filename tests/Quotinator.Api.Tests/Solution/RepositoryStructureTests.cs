@@ -353,10 +353,69 @@ public partial class RepositoryStructureTests
 
         Assert.IsNotEmpty(marked, "No document is marked '**Smoke:** yes'.");
 
-        CollectionAssert.AreEqual(marked, listed,
+        Assert.AreSequenceEqual(marked, listed,
             "The index's smoke-set table and the documents' own Smoke fields disagree. The documents "
             + $"are authoritative.\nMarked in documents:\n{string.Join("\n", marked)}\n\n"
             + $"Linked from the index's smoke set:\n{string.Join("\n", listed)}");
+    }
+
+    /// <summary>
+    /// Every test document states its steps as numbered subsections, each carrying its own expected
+    /// result, so a failure is caught at the step that produced it rather than after the whole run.
+    /// </summary>
+    /// <remarks>
+    /// Replaces a single trailing "Expected output" section, which reported a failure many commands too
+    /// late and forced positional references — "the first call" — that a reader could only resolve by
+    /// counting commands across several code blocks. See #339.
+    /// </remarks>
+    [TestMethod]
+    public void EveryAutomatedTestingStep_CarriesItsOwnExpectedResult()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        List<string> documents = FindAutomatedTestingDocuments();
+
+        Assert.IsNotEmpty(documents,
+            $"No test documents found in {AutomatedTestingRelativePath} category folders.");
+
+        List<string> failures = [];
+
+        foreach (string document in documents)
+        {
+            string text = File.ReadAllText(
+                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
+
+            if (text.Contains("\n## Expected output", StringComparison.Ordinal))
+            {
+                failures.Add($"{document} — still has a trailing '## Expected output' section");
+                continue;
+            }
+
+            List<System.Text.RegularExpressions.Match> steps =
+                [.. NumberedStepHeading().Matches(text).Cast<System.Text.RegularExpressions.Match>()];
+
+            if (steps.Count == 0)
+            {
+                failures.Add($"{document} — no numbered '### N. …' steps");
+                continue;
+            }
+
+            // Checked per step rather than by counting: a document where one step carries three
+            // expectations and another carries none would balance out under a total.
+            for (int i = 0; i < steps.Count; i++)
+            {
+                int start = steps[i].Index;
+                int end   = i + 1 < steps.Count ? steps[i + 1].Index : text.Length;
+
+                if (!ExpectedResultLine().IsMatch(text[start..end]))
+                    failures.Add($"{document} — step '{steps[i].Groups["title"].Value.Trim()}' has no expected result");
+            }
+        }
+
+        Assert.IsEmpty(failures,
+            "Test documents must state their steps as numbered subsections, each with its own expected "
+            + $"result:\n{string.Join("\n", failures.Order())}");
     }
 
     private const string AutomatedTestingRelativePath = "docs/automated-testing";
@@ -391,6 +450,21 @@ public partial class RepositoryStructureTests
         @"^\*\*Environment:\*\*\s*(?<name>.+?)\s*$",
         System.Text.RegularExpressions.RegexOptions.Multiline)]
     private static partial System.Text.RegularExpressions.Regex EnvironmentProfileDeclaration();
+
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^###\s+\d+\.\s+(?<title>.+?)\s*$",
+        System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex NumberedStepHeading();
+
+    /// <summary>
+    /// Matches the plain <c>**Expected:**</c> and the qualified <c>**Expected — …:**</c> form, which a
+    /// step uses when it carries more than one expectation or when the expectation needs labelling —
+    /// for instance as an original that is known to be unreachable.
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^\*\*Expected\b",
+        System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex ExpectedResultLine();
 
     /// <summary>
     /// The smoke-set section, from its own heading up to the next top-level heading.

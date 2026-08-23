@@ -34,8 +34,10 @@ they exist to prove the mechanism, not to change data.
 
 ## Steps
 
-**Remove the rule and confirm the conflict returns.** Temporarily delete the Auntie Mame rule entirely
-from `nikhilnamal17-conflict-rules.json` (`entityId: 088603c0-…`), then:
+### 1. Remove the rule and confirm the conflict returns
+
+Temporarily delete the Auntie Mame rule entirely from `nikhilnamal17-conflict-rules.json`
+(`entityId: 088603c0-…`), then:
 
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
@@ -47,8 +49,16 @@ until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending"
 ```
 
-**Restore the rule and change its `resolution` from `Keep` to `Replace`**, then rebuild and run a
-second container against the rebuilt image — the first must be removed to free the port:
+**Expected:** with the rule removed, that quote's conflict stages `Pending` again, with
+`ambiguousFields: ["date"]`.
+
+That proves the mechanism consults the file's content on every seed rather than a cached decision from
+an earlier run.
+
+### 2. Restore the rule as `Replace`, rebuild, and seed a second container
+
+Restore the rule and change its `resolution` from `Keep` to `Replace`, then rebuild and run a second
+container against the rebuilt image — the first must be removed to free the port:
 
 ```bash
 docker rm -f qt-rule-removed
@@ -60,8 +70,13 @@ MSYS_NO_PATHCONV=1 docker run -d --name qt-rule-replace -p 8080:8080 -v qt-rule-
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 ```
 
-Then check the audit trail. **Stop the container first** — a copy taken while the app is writing can be
-torn, and a torn copy reads as "no rows", which is indistinguishable from the assertion failing:
+**Expected:** the health poll returns — the second container has completed its own first-boot seed
+against the rebuilt image.
+
+### 3. Read the recorded merge decision from the audit trail
+
+**Stop the container first** — a copy taken while the app is writing can be torn, and a torn copy reads
+as "no rows", which is indistinguishable from the assertion failing:
 
 ```bash
 docker stop -t 15 qt-rule-replace
@@ -72,14 +87,13 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
   --sql "SELECT MergedFields FROM Import_Action WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
 ```
 
-## Expected output
+**Expected:** with `resolution` changed to `Replace`, the row for the batch matching NikhilNamal17's own
+rule file shows `"date":"2005"` — the incoming value, Replace won — changed from `"date":"1958"` under
+the original `Keep`.
 
-- With the rule removed, that quote's conflict stages `Pending` again, with `ambiguousFields: ["date"]`.
-  That proves the mechanism consults the file's content on every seed rather than a cached decision from
-  an earlier run.
-- With `resolution` changed to `Replace`, the row for the batch matching NikhilNamal17's own rule file
-  shows `"date":"2005"` — the incoming value, Replace won — changed from `"date":"1958"` under the
-  original `Keep`.
+**On failure:** no rows at all is not a failed assertion — it is the auto-purge flag not having taken
+effect. `Quotinator__AutoPurgeBundledImportActions=false` is required on both runs, and without it this
+row is purged straight after the seed. Stop and re-run the container with the flag set.
 
 **`GET /quotes/{id}` will not show the change**, and that is correct rather than a failure. `date` is
 Source-derived, read via JOIN from `Quotinator_Source.Date`, and the Source was already fixed at the

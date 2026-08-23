@@ -37,7 +37,9 @@ unedited rather than hand-writing an input.
 
 ## Steps
 
-**Stage a batch and round-trip it as JSON:**
+Run the **Fresh** profile first.
+
+### 1. Stage a batch to round-trip
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
@@ -46,7 +48,9 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import"
 ```
 
-Note the returned `batchId`, then:
+**Expected:** the staging import returns `202`. Note the returned `batchId` — the next step needs it.
+
+### 2. Export that batch as JSON, feed it straight back, and apply
 
 ```bash
 curl -s "http://localhost:8080/api/v1/import/actions/export?batchId=<batchId>&format=json" -o /tmp/export.json
@@ -56,7 +60,10 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
 curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
-**Repeat via CSV:**
+**Expected:** the JSON round trip returns `200` with `errors: []` and `actionsDecided` matching the
+batch's own pending-action count.
+
+### 3. Repeat the round trip via CSV
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
@@ -69,9 +76,13 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<new batchId>&format=csv"
 ```
 
-**Malformed-row resilience — against a third, still-undecided batch.** This must not reuse either batch
-above: both have already had every row decided, so "every other row is still decided" would be true
-before the call and the test could not fail in the direction it exists to catch.
+**Expected:** the CSV round trip also returns `200` with `errors: []`.
+
+### 4. Stage a third, still-undecided batch, and confirm nothing in it is decided yet
+
+**Malformed-row resilience needs its own batch.** This must not reuse either batch above: both have
+already had every row decided, so "every other row is still decided" would be true before the call and
+the test could not fail in the direction it exists to catch.
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
@@ -80,7 +91,7 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import"
 ```
 
-Note this **third** `batchId`, export it, and confirm nothing in it is decided yet:
+Note this **third** `batchId`, export it, and read its status tally:
 
 ```bash
 curl -s "http://localhost:8080/api/v1/import/actions/export?batchId=<third batchId>&format=csv" -o /tmp/export3.csv
@@ -88,7 +99,16 @@ curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pag
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
-Now make the bad copy. Open `/tmp/export3.csv`, copy it to `/tmp/export3-bad.csv`, and in the copy
+**Expected:** the third batch's status tally shows its actions **undecided**.
+
+**On failure:** a tally showing this batch already decided means the malformed-row check below cannot
+fail — the after-tally would look identical whether the call decided the remaining rows or did nothing
+at all, which is exactly how this check read before the third batch was introduced. Stop and stage a
+genuinely undecided batch.
+
+### 5. Bulk-decide a copy with one malformed row, and re-read the tally
+
+Make the bad copy first. Open `/tmp/export3.csv`, copy it to `/tmp/export3-bad.csv`, and in the copy
 change **the first data row's `Decision` cell** to `not-a-choice` — a value no decision accepts. Leave
 the header and every other row exactly as exported. Note that row's `actionId`; the response must name
 it.
@@ -101,35 +121,38 @@ curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pag
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
+**Expected:** the call returns **`200`, never `422` for the whole request**, with exactly one entry in
+`errors[]` naming the edited row's `actionId`. After it, the tally shows every action decided **except**
+that one. "One bad row never aborts the rest of the file", matching the contract
+[`06-bodyless-request-validation.md`](06-bodyless-request-validation.md) covers for `POST /import`.
+
 **The edit is described rather than scripted deliberately.** A one-line text transformation is not
 something this repository writes in shell ([ADR 010](../../architecture-decisions/010-repository-is-csharp-only.md));
 if this test is ever automated, the edit belongs in `scripts/testing/` as a `.csx`, not inline here.
 
-**Unknown format, missing key, and no body at all:**
+### 6. Reject an unknown export format
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<batchId>&format=xml"
+```
+
+**Expected:** unknown `format` returns `422`.
+
+### 7. Reject a request with no admin key
+
+```bash
 curl -s -w "\n%{http_code}\n" -X POST -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:8080/api/v1/import/actions/bulk-decide?batchId=<batchId>"
+```
+
+**Expected:** no `X-Api-Key` returns `401`.
+
+### 8. Reject a request with no `batchId` and no body at all
+
+```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/bulk-decide"
 ```
 
-## Expected output
-
-- The staging import returns `202`.
-- The JSON round trip returns `200` with `errors: []` and `actionsDecided` matching the batch's own
-  pending-action count.
-- The CSV round trip also returns `200` with `errors: []`.
-- **Malformed row** — before the call, the third batch's status tally shows its actions **undecided**.
-  The call returns **`200`, never `422` for the whole request**, with exactly one entry in `errors[]`
-  naming the edited row's `actionId`. After it, the tally shows every action decided **except** that
-  one. "One bad row never aborts the rest of the file", matching the contract
-  [`06-bodyless-request-validation.md`](06-bodyless-request-validation.md) covers for `POST /import`.
-
-  **The before-tally is the load-bearing half.** Run against a batch that was already fully decided, the
-  after-tally looks identical whether the call decided the remaining rows or did nothing at all — which
-  is exactly how this check read before the third batch was introduced.
-- Unknown `format` returns `422`; no `X-Api-Key` returns `401`.
-- **No `batchId` and no body returns `422` with `"detail":"You must provide a batchId."`**
+**Expected:** **`422` with `"detail":"You must provide a batchId."`**
 
 ## Observed effect
 

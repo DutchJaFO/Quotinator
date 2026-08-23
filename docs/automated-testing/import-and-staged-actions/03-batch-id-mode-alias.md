@@ -20,8 +20,18 @@ Nothing beyond the Fresh profile — the batch is staged by the preview call in 
   parses `batchId` and returns `200` without applying anything — which is precisely the regression this
   test names. `ImportActionStatus.Applied` means "this action's write landed on the consumer's own
   tables", so the transition to it is the observable that a dead code path cannot fake.
+- **That transition is the assertion, not the status code.** `batchId` mode is a genuine alias for
+  `POST /import/actions/apply` only if the actions it names actually moved; a route that returned `200`
+  and did nothing leaves them exactly as the first reading found them.
+- **`pageSize=0` is required on both readings.** The default page is 20 and the curated file stages more
+  than that, so a default-paged listing would compare two truncated samples and could agree while the
+  batch was only partly applied.
 
 ## Steps
+
+Run the **Fresh** profile first.
+
+### 1. Stage a batch by previewing the curated file under `skip`
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
@@ -30,36 +40,35 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/preview"
 ```
 
-Copy the `batchId` from the response, then record the staged state **before** applying:
+**Expected:** the response carries a `batchId` — the readings below are scoped to it.
+
+### 2. Record the staged state before applying
 
 ```bash
 curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
-Apply by `batchId`, then read the same listing again:
+**Expected:** the batch's actions are staged and none is `Applied`.
+
+### 3. Apply by `batchId`
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import?batchId=<batchId>"
+```
+
+**Expected:** `200`.
+
+### 4. Read the same listing again
+
+```bash
 curl -s "http://localhost:8080/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
-## Expected output
-
-The apply call returns `200`.
-
-**Before** — the batch's actions are staged and none is `Applied`. **After** — every one of them reads
-`Applied`, and the total number of actions is unchanged between the two readings.
-
-That transition is the assertion, not the status code. `batchId` mode is a genuine alias for
-`POST /import/actions/apply` only if the actions it names actually moved; a route that returned `200`
-and did nothing leaves them exactly as the first reading found them.
-
-**`pageSize=0` is required on both readings.** The default page is 20 and the curated file stages more
-than that, so a default-paged listing would compare two truncated samples and could agree while the
-batch was only partly applied.
+**Expected:** every one of them reads `Applied`, and the total number of actions is unchanged between
+the two readings.
 
 ## Observed effect
 

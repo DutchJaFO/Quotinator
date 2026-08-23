@@ -34,7 +34,7 @@ discrepancy is tracked separately, not resolved here.
 
 ## Steps
 
-**Fresh baseline install:**
+### 1. Install a fresh baseline
 
 ```bash
 docker rm -f smoke277 2>/dev/null
@@ -45,7 +45,13 @@ until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 docker logs smoke277 2>&1 | grep "Database - Backup"
 ```
 
-**Healthy restart:**
+**Expected:** no `[Database - Backup]` lines at all. Nothing exists to lose.
+
+**On failure:** a backup line here means the volume was not new, so the run is not a baseline at all —
+and the cumulative counts every later step asserts (`0`, `0`, `1`, `2`, `2`) are then measuring a
+different sequence. Stop and remove the volume before re-running.
+
+### 2. Restart while healthy
 
 ```bash
 docker restart smoke277
@@ -54,14 +60,19 @@ docker logs smoke277 --since 60s 2>&1 | grep "Database - Backup\|schema is up to
 docker exec smoke277 sh -c "ls /data/backups 2>&1 || echo 'no backups dir — correct'"
 ```
 
-**Reset:**
+**Expected:** `schema is up to date` and **no** `[Database - Backup]` line. `/data/backups` should not
+even exist yet.
+
+### 3. Reset the database
 
 ```bash
 curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:8080/api/v1/admin/database/reset"
 docker exec smoke277 sh -c "ls /data/backups | wc -l"
 ```
 
-**Restart immediately after the Reset:**
+**Expected:** exactly one backup. Reset backs up unconditionally, being the highest-risk operation.
+
+### 4. Restart immediately after the Reset
 
 ```bash
 docker restart smoke277
@@ -70,7 +81,11 @@ docker logs smoke277 --since 60s 2>&1 | grep "Database - Backup"
 docker exec smoke277 sh -c "ls /data/backups | wc -l"
 ```
 
-**Budget already exceeded — a separate container:**
+**Expected:** takes a backup too, bringing the count to `2`. Content-seed has real work to do again
+(Quotes are empty) even though the schema itself needed no migration. **This is the exact case a
+`MigrationApplied`-based gate was found to miss**, and the reason the gate is not based on it.
+
+### 5. Reset again with the backup budget already exceeded
 
 ```bash
 docker rm -f smoke277 2>/dev/null
@@ -82,21 +97,8 @@ docker logs smoke277budget --since 60s 2>&1 | grep "LogBackupSkippedBudgetExceed
 docker exec smoke277budget sh -c "ls /data/backups | wc -l"
 ```
 
-## Expected output
-
-**Fresh baseline** — no `[Database - Backup]` lines at all. Nothing exists to lose.
-
-**Healthy restart** — `schema is up to date` and **no** `[Database - Backup]` line. `/data/backups`
-should not even exist yet.
-
-**Reset** — exactly one backup. Reset backs up unconditionally, being the highest-risk operation.
-
-**Restart after Reset** — takes a backup too, bringing the count to `2`. Content-seed has real work to
-do again (Quotes are empty) even though the schema itself needed no migration. **This is the exact case
-a `MigrationApplied`-based gate was found to miss**, and the reason the gate is not based on it.
-
-**Budget exceeded** — Reset still succeeds (`200`, database rebuilt). The backup is skipped with a
-warning log, not an exception, and the count stays at `2`.
+**Expected:** Reset still succeeds (`200`, database rebuilt). The backup is skipped with a warning log,
+not an exception, and the count stays at `2`.
 
 ## Observed effect
 

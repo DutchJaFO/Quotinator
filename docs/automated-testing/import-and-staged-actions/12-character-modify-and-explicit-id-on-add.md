@@ -51,7 +51,9 @@ surfaces it.
 
 ## Steps
 
-**Add via natural key, no id:**
+Run the **Fresh** profile first.
+
+### 1. Add a Character via natural key, with no id
 
 ```bash
 cat > .claude/temp/smoke-175-add.json <<'EOF'
@@ -66,7 +68,11 @@ curl -s "http://localhost:8080/api/v1/masterdata/characters?pageSize=0" \
   | grep -c "Smoke Test New Character"
 ```
 
-**Correct an existing Character by id, under `review`:**
+**Expected:** the Add returns `200`, and the `grep -c` for "Smoke Test New Character" reports `1` —
+linked to the existing `Airplane!` Source, with no id supplied, resolved via ADR 013's algorithm finding
+no candidate, then a genuine Add.
+
+### 2. Correct an existing Character by id, under `review`
 
 ```bash
 cat > .claude/temp/smoke-175-modify.json <<'EOF'
@@ -79,13 +85,17 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
 ```
 
-Copy the `batchId` from that response, then list **only this batch's** pending actions:
+**Expected:** `202`. Copy the `batchId` from that response — the next step needs it.
+
+### 3. List **only this batch's** pending actions
 
 ```bash
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
 ```
 
-Decide and apply:
+**Expected:** one pending id, and `ambiguousFields` is `["name"]` **only**.
+
+### 4. Decide the ambiguous field, apply the batch, and read the Character back
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
@@ -95,7 +105,12 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/i
 curl -s "http://localhost:8080/api/v1/masterdata/characters/<id>"
 ```
 
-Then re-attempt another Modify against the same id under `review` — the same file, re-imported:
+**Expected:** after deciding and applying, `name` reads "Renamed Via Smoke Test" and
+`completenessStatus` is `Complete`.
+
+### 5. Re-attempt the same Modify against the now-`Complete` Character
+
+The same file, re-imported under `review`:
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-175-modify.json" \
@@ -108,7 +123,10 @@ Copy this second import's own `batchId`, then:
 curl -s "http://localhost:8080/api/v1/import/actions?status=blocked&batchId=<second batchId>&pageSize=0"
 ```
 
-**Explicit id honoured on Add — the T2-only fix:**
+**Expected:** a further Modify under `review` stages **`Blocked`, not `Pending`**, and the on-disk name
+is unchanged — the same guarantee Source, Person, StageDirection and SoundCue already have.
+
+### 6. Add a Character carrying an explicit uppercase id — the T2-only fix
 
 ```bash
 cat > .claude/temp/smoke-175-explicit-add.json <<'EOF'
@@ -122,7 +140,11 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/characters/f5111175-0000-4000-8000-000000000175"
 ```
 
-**Case-insensitive Source natural-key matching:**
+**Expected:** the explicit-id Add succeeds, and the lowercase masterdata lookup returns `200`. The
+returned `id` is the lowercase-canonicalized form of the file's own id — **never an unrelated
+`EntityIdentity`-derived one**.
+
+### 7. Match an existing Source through a differently-cased title
 
 ```bash
 cat > .claude/temp/smoke-175-source-casing.json <<'EOF'
@@ -136,22 +158,9 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
 curl -s "http://localhost:8080/api/v1/masterdata/sources?pageSize=0"
 ```
 
-## Expected output
-
-- The Add returns `200`, and the `grep -c` for "Smoke Test New Character" reports `1` — linked to the
-  existing `Airplane!` Source, with no id supplied, resolved via ADR 013's algorithm finding no candidate,
-  then a genuine Add.
-- The Modify returns `202` with one pending id, and `ambiguousFields` is `["name"]` **only**.
-- After deciding and applying, `name` reads "Renamed Via Smoke Test" and `completenessStatus` is
-  `Complete`.
-- A further Modify under `review` stages **`Blocked`, not `Pending`**, and the on-disk name is
-  unchanged — the same guarantee Source, Person, StageDirection and SoundCue already have.
-- The explicit-id Add succeeds, and the lowercase masterdata lookup returns `200`. The returned `id` is
-  the lowercase-canonicalized form of the file's own id — **never an unrelated `EntityIdentity`-derived
-  one**.
-- Despite `AIRPLANE!` appearing in both the quote's `source` and the character's `sourceTitle`, the
-  Sources list still contains exactly one `"title":"Airplane!"` row — the entry resolved to the
-  pre-existing Source rather than creating a case-sensitive duplicate.
+**Expected:** despite `AIRPLANE!` appearing in both the quote's `source` and the character's
+`sourceTitle`, the Sources list still contains exactly one `"title":"Airplane!"` row — the entry
+resolved to the pre-existing Source rather than creating a case-sensitive duplicate.
 
 ## Observed effect
 

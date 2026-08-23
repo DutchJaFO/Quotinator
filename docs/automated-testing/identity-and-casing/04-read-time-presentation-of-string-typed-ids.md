@@ -34,24 +34,39 @@ this test, and it is why the unit-tier test is the primary evidence here.
 
 ## Steps
 
-Run the **Fresh** profile, then:
+Run the **Fresh** profile first.
+
+### 1. Import the curated file under the `review` policy
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
   "http://localhost:8080/api/v1/import"
+```
+
+**Expected:** the import response's own `batchId`, and every `quoteId` under `pendingActionIds`, are
+lowercase.
+
+**On failure:** a response carrying no `pendingActionIds` means the `review` policy staged nothing, so
+the read below would page an empty list and report lowercase ids it never saw. Stop.
+
+### 2. Read a pending staged action
+
+```bash
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=1"
+```
+
+**Expected:** the `/import/actions` response's `batchId`, `entityId` and `existingBatchId` are all
+lowercase.
+
+### 3. Read an audit entry
+
+```bash
 curl -s "http://localhost:8080/api/v1/admin/audit?pageSize=1" -H "X-Api-Key: <your admin key>"
 ```
 
-## Expected output
-
-All of the following are lowercase:
-
-- the import response's own `batchId`, and every `quoteId` under `pendingActionIds`
-- the `/import/actions` response's `batchId`, `entityId` and `existingBatchId`
-- the `/admin/audit` response's `recordId`
+**Expected:** the `/admin/audit` response's `recordId` is lowercase.
 
 ## Observed effect
 

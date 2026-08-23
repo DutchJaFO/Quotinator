@@ -25,25 +25,41 @@ the one fully-unmitigated gap of this kind found across the whole codebase.
 
 ## Steps
 
-Run the **Fresh** profile, then:
+Run the **Fresh** profile first.
+
+### 1. Import a fixture whose explicit id is uppercase
 
 ```bash
 cat > .claude/temp/smoke-210.json <<'EOF'
 {"quotes": [{"id":"F0000210-0000-4000-8000-000000000210","quote":"A #210 smoke test quote with an uppercase explicit id.","originalLanguage":"en","source":"Smoke Test Film 210","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-210.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import"
+```
+
+**Expected:** import returns `200`.
+
+**On failure:** stop. Neither lookup below can distinguish "the read is case-sensitive" from "the quote
+was never stored".
+
+### 2. Fetch the quote by the lowercase form of its id
+
+```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes/f0000210-0000-4000-8000-000000000210"
+```
+
+**Expected:** `200` with the quote, and the response's own `id` field is the canonical **lowercase**
+form (`f0000210-…`) regardless of the uppercase casing the file supplied.
+
+### 3. Fetch the same quote by the file's own uppercase casing
+
+```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/quotes/F0000210-0000-4000-8000-000000000210"
 ```
 
-## Expected output
+**Expected:** `200` with the same quote, its `id` again rendered in the canonical lowercase form.
 
-Import returns `200`. Both `GET` calls — the lowercase URL casing and the file's own original uppercase
-casing — return `200` with the same quote.
-
-The response's own `id` field is the canonical **lowercase** form (`f0000210-…`) regardless of the
-uppercase casing the file supplied. That proves capture-time canonicalization and the case-insensitive
-read together; either alone would leave the other unverified.
+Taken with the lowercase call, that proves capture-time canonicalization and the case-insensitive read
+together; either alone would leave the other unverified.
 
 ## Observed effect
 

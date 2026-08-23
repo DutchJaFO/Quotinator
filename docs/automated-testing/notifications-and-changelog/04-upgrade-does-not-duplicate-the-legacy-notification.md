@@ -41,9 +41,13 @@ single-line JSON — so a genuine duplicate would still report `1` and this test
 direction it exists to catch. Found during #339's audit, 2026-08-22. Use
 `grep -o … | wc -l`, which counts occurrences.
 
+**Count only this announcement, never the total.** The running version may legitimately add its own
+notifications; a total would then read `2` for an entirely correct reason, get "fixed" by editing the
+digit, and hide a real duplicate the next time one occurs.
+
 ## Steps
 
-**Seed a genuine v1.8.3 database and wait for its announcement to exist:**
+### 1. Seed a genuine v1.8.3 database and wait for its announcement to exist
 
 ```bash
 docker rm -f qA qB 2>/dev/null
@@ -57,7 +61,13 @@ curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o 'Two A
 docker rm -f qA
 ```
 
-**Upgrade to the current build against the same data:**
+**Expected:** `1`. The v1.8.3 announcement is present, so seeding has finished.
+
+**On failure:** anything other than `1` here means the v1.8.3 database is not in the state this test
+upgrades from — seeding had not finished writing the announcement. Upgrading at that point tests
+nothing at all, silently (see Determinism). Stop.
+
+### 2. Upgrade to the current build against the same data
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run -d --name qB -e Quotinator__DataDir=/data \
@@ -66,16 +76,8 @@ until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s "http://localhost:8080/api/v1/notifications?pageSize=0" | grep -o 'Two API operation IDs were renamed' | wc -l
 ```
 
-## Expected output
-
-**Before the upgrade** — `1`. The v1.8.3 announcement is present, so seeding has finished.
-
-**After the upgrade** — still **`1`**, not `2`. The upgrade enriched the existing announcement rather
-than writing a second copy.
-
-**Count only this announcement, never the total.** The running version may legitimately add its own
-notifications; a total would then read `2` for an entirely correct reason, get "fixed" by editing the
-digit, and hide a real duplicate the next time one occurs.
+**Expected:** still **`1`**, not `2`. The upgrade enriched the existing announcement rather than writing
+a second copy.
 
 That one row must carry the backfilled `title` and `metadataKind: announcement`, **and still hold
 v1.8.3's original `expiresAt`** — the old always-on 30-day expiry. That retained expiry is what proves

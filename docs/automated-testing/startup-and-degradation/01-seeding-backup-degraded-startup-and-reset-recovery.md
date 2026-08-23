@@ -47,7 +47,7 @@ discrepancy is tracked separately, not resolved here.
 
 ## Steps
 
-**Fresh container, bind-mounted data directory, normal seed:**
+### 1. Seed a fresh container against a bind-mounted data directory
 
 ```bash
 docker rm -f smoke254 2>/dev/null
@@ -61,7 +61,14 @@ docker logs smoke254 2>&1 | grep "\[Database - Init\]"
 ls .claude/temp/smoke-254-data/backups/ 2>/dev/null
 ```
 
-**Restart unchanged — an ordinary restart takes a backup too:**
+**Expected:** the init log shows `schema created at baseline` (fresh database, baseline path), and
+`backups/` does not exist or is empty. A baseline run has nothing to lose, so no backup is taken.
+
+**On failure:** an empty host directory, or an init log that never mentions the baseline, means the
+bind mount did not take effect — see the `MSYS_NO_PATHCONV` note in Determinism. Stop: every step
+below reads and writes that directory, and against the wrong one they report nonsense.
+
+### 2. Restart unchanged — an ordinary restart takes a backup too
 
 ```bash
 docker restart smoke254
@@ -70,8 +77,15 @@ docker logs smoke254 2>&1 | grep "\[Database - Init\]" | tail -3
 ls .claude/temp/smoke-254-data/backups/*.db 2>/dev/null | wc -l
 ```
 
-**Break the schema on the host side, then restart.** Start with an admin key this time — the Reset
-call below needs it:
+**Expected:** `schema is up to date`, and the backup count is now `1`. This is a deliberately chosen
+tradeoff, not a bug: every non-baseline startup backs up before seeding, because seeding has no
+cheaper "is there real work to do" signal to gate on the way migrations do. A version-count check
+alone is exactly what missed the schema/version mismatch this fix exists to protect against. Only the
+first baseline run is skipped, which the seeding step confirmed.
+
+### 3. Break the schema on the host side, then restart
+
+Start with an admin key this time — the Reset call below needs it:
 
 ```bash
 docker rm -f smoke254
@@ -90,31 +104,7 @@ ls .claude/temp/smoke-254-data/backups/*.db 2>/dev/null | wc -l
 docker ps -a --filter name=smoke254 --format "{{.Status}}"
 ```
 
-**Confirm the degraded surface, then Reset and confirm it recovers:**
-
-```bash
-curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
-curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
-  http://localhost:8080/api/v1/admin/database/reset -o /dev/null
-curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
-curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
-```
-
-Also call Reset with a wrong or missing `X-Api-Key` while still degraded.
-
-## Expected output
-
-**Fresh seed** — the init log shows `schema created at baseline` (fresh database, baseline path), and
-`backups/` does not exist or is empty. A baseline run has nothing to lose, so no backup is taken.
-
-**Restart** — `schema is up to date`, and the backup count is now `1`. This is a deliberately chosen
-tradeoff, not a bug: every non-baseline startup backs up before seeding, because seeding has no
-cheaper "is there real work to do" signal to gate on the way migrations do. A version-count check
-alone is exactly what missed the schema/version mismatch this fix exists to protect against. Only the
-first baseline run is skipped, which the previous step confirmed.
-
-**Broken schema** — the log shows, in order: `[Database - Backup] backup complete`;
+**Expected:** the log shows, in order: `[Database - Backup] backup complete`;
 `[Database - Init] seeding failed — restoring pre-seed backup, database left unchanged...` (ERR);
 `[Database - Init] pre-seed backup restored.` (INF); then
 `[Server] Database initialisation failed...` (CRIT/FTL) with the underlying
@@ -125,17 +115,46 @@ At least one new backup `.db` exists (one per `CreateBackup` call; its `-shm`/`-
 separate backups). `docker ps -a` shows the container as `Up …`, **not** `Exited` — the app degrades,
 it does not crash.
 
-**Degraded surface** — `/health` returns `503` with `{"status":"unhealthy","reason":"..."}`, not a bare
-`200`. `/quotes/random` returns `503` with `{"status":"unavailable","reason":"..."}`, never a raw
-exception. A Reset with a wrong or missing key returns `401`, not `503`, confirming the health gate
-exempts `/api/v1/admin/*` from the 503 gate entirely rather than blocking the route and only letting an
-authenticated call through.
+**On failure:** an `Exited` container means the app crashed instead of degrading, which is the defect
+this test exists to catch — and there is then no server left to answer the degraded-surface and Reset
+steps below. Stop and record the exit rather than running them against nothing.
 
-**Reset** — returns `200` with a row-count summary of **all zeros**. It performs its own independent
-schema rebuild, unaffected by the degraded state, and no longer reimports bundled or user quote content
+### 4. Confirm the degraded surface
+
+```bash
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
+```
+
+**Expected:** `/health` returns `503` with `{"status":"unhealthy","reason":"..."}`, not a bare `200`.
+`/quotes/random` returns `503` with `{"status":"unavailable","reason":"..."}`, never a raw exception.
+
+### 5. Call Reset with a wrong or missing key while still degraded
+
+Call Reset with a wrong or missing `X-Api-Key` while still degraded.
+
+**Expected:** `401`, not `503`, confirming the health gate exempts `/api/v1/admin/*` from the 503 gate
+entirely rather than blocking the route and only letting an authenticated call through.
+
+### 6. Reset the database while degraded
+
+```bash
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
+  http://localhost:8080/api/v1/admin/database/reset -o /dev/null
+```
+
+**Expected:** `200` with a row-count summary of **all zeros**. It performs its own independent schema
+rebuild, unaffected by the degraded state, and no longer reimports bundled or user quote content
 afterwards (#156).
 
-**Recovery** — `/health` returns `200` with `{"status":"healthy"}`, proving
+### 7. Confirm the app recovers without a restart
+
+```bash
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/quotes/random
+```
+
+**Expected:** `/health` returns `200` with `{"status":"healthy"}`, proving
 `DatabaseHealthState.MarkHealthy()` clears the degraded state rather than requiring a process restart.
 `/quotes/random` returns `200` with `{"status":"NoResults", ...}` and an empty `items` array — not
 `503`, and not real quote data, because the database is genuinely empty after a Reset.

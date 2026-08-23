@@ -29,7 +29,9 @@ has *not* yet been created.
 
 ## Steps
 
-**After the fresh seed**, before anything else runs:
+Run the **Fresh** profile first.
+
+### 1. Read the pending and stale lists after the fresh seed, before anything else runs
 
 ```bash
 curl -s http://localhost:8080/api/v1/version
@@ -37,7 +39,10 @@ curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
 ```
 
-**Then reseed and repeat**, which is the second of the two paths:
+**Expected:** the counts have settled, and the fresh-seed `status=pending` and `status=stale` checks
+both return `totalCount: 0`.
+
+### 2. Reseed and repeat, which is the second of the two paths
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/admin/database/reseed"
@@ -45,12 +50,25 @@ curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=0"
 curl -s "http://localhost:8080/api/v1/import/actions?status=stale&pageSize=0"
 ```
 
-## Expected output
-
-Both the fresh-seed and post-reseed `status=pending` and `status=stale` checks return `totalCount: 0`.
+**Expected:** the post-reseed `status=pending` and `status=stale` checks also return `totalCount: 0`.
 
 Every real bundled alias's canonical Source either already exists under its exact recorded title, or is
 being legitimately created for the first time. None has actually been renamed away.
+
+> **This test cannot currently fail, and that is a known limitation rather than a clean pass.** Both of
+> its assertions are that a list is empty. A staleness mechanism that never fires, a reseed that
+> silently did nothing, a regressed `status=` filter, and purged `Import_Action` rows all produce that
+> same empty list — indistinguishable from the intended result.
+>
+> **Nothing in the run ever produces a stale alias**, so there is no positive control proving the
+> mechanism is alive. Closing this needs a genuine rename — a Source that exists under a title an alias
+> no longer points at — constructed by the test itself. The index's *A test that needs a defective input
+> must own that input* section describes why the shipped aliases cannot supply it: they were corrected,
+> and a test whose failing input was production data stops being able to fail the moment that data is
+> fixed.
+>
+> The same limitation applies to
+> [`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md), for the same reason.
 
 ## Observed effect
 

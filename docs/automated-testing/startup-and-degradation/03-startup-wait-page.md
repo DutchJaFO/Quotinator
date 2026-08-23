@@ -32,7 +32,7 @@ The second wait is an ordinary readiness wait and polls.
 
 ## Steps
 
-**Immediately after container start, before seeding completes:**
+### 1. Request the three surfaces during initialisation, before seeding completes
 
 ```bash
 docker rm -f smoke280 2>/dev/null
@@ -45,18 +45,7 @@ curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/version"
 curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/"
 ```
 
-**After seeding completes:**
-
-```bash
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/health"
-curl -s "http://localhost:8080/api/v1/version"
-docker logs smoke280 2>&1 | grep "Now listening on\|Server] listening on\|Quotinator ready"
-```
-
-## Expected output
-
-**During initialisation:**
+**Expected:**
 
 - `/health` returns `503 {"status":"starting"}`
 - `/version` returns `200 {"status":"starting","version":"..."}` — with no environment or database
@@ -64,15 +53,33 @@ docker logs smoke280 2>&1 | grep "Now listening on\|Server] listening on\|Quotin
 - `/` returns `200` with a self-contained HTML wait page: auto-refresh meta tag, localized heading and
   body, no external assets. Never a hang, never a raw error.
 
-**After seeding:**
+**On failure:** a healthy `200 {"status":"healthy"}` here means seeding finished before the requests
+landed — the window was missed rather than the wait page being broken (see Determinism). Stop and
+re-run; do not lengthen the sleep.
+
+### 2. Re-read health and version after seeding completes
+
+```bash
+until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/health"
+curl -s "http://localhost:8080/api/v1/version"
+```
+
+**Expected:**
 
 - `/health` returns `200 {"status":"healthy"}`
 - `/version` returns `200 {"status":"ready", ..., "database": {...}}` with real counts
 
-**Log ordering is itself an assertion.** `Microsoft.Hosting.Lifetime`'s own `Now listening on` — Kestrel
-actually bound — must appear **before** the app's own `[Server] listening on` / `Quotinator ready`
-banner. That ordering is what proves Kestrel accepted connections for the whole wait-page window rather
-than only after it.
+### 3. Confirm Kestrel bound before the app's own banner
+
+```bash
+docker logs smoke280 2>&1 | grep "Now listening on\|Server] listening on\|Quotinator ready"
+```
+
+**Expected:** **log ordering is itself an assertion.** `Microsoft.Hosting.Lifetime`'s own
+`Now listening on` — Kestrel actually bound — must appear **before** the app's own
+`[Server] listening on` / `Quotinator ready` banner. That ordering is what proves Kestrel accepted
+connections for the whole wait-page window rather than only after it.
 
 ## Observed effect
 

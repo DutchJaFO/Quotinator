@@ -23,7 +23,9 @@ and decides one itself.
 
 ## Steps
 
-**Confirm no override is active, and capture the bundled file's rules for comparison:**
+Run the **Fresh** profile first.
+
+### 1. Confirm no override is active, and capture the bundled file's rules for comparison
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled" \
@@ -33,12 +35,15 @@ grep -o '"entityId":"[^"]*"' /tmp/rules-before.json | sort > /tmp/rule-ids-befor
 wc -l < /tmp/rule-ids-before.txt
 ```
 
+**Expected:** `200` with `isOverrideActive:false`, and a non-zero rule count written to
+`/tmp/rule-ids-before.txt`. Zero rules there would make the merge assertion vacuous.
+
 **The before-capture is what makes the merge assertion real.** "Still containing every rule the bundled
 file already had" cannot be evaluated against a single after-reading — a `generate` that discarded the
 bundled rules and returned only its own would need the reader to have memorised the earlier output to
 notice.
 
-**Stage a batch and decide one action to generate from:**
+### 2. Stage a batch to generate from
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
@@ -48,7 +53,10 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending&pageSize=1"
 ```
 
-Copy one pending action's `id` and the response's own `batchId`, then:
+**Expected:** at least one pending action is listed. Copy its `id` and the response's own `batchId` —
+the next step needs both.
+
+### 3. Decide one action, and generate the rule-file override from it
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
@@ -58,7 +66,9 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/rules/conflict/generate?fileName=quotinator-curated-conflict-rules.json&origin=Bundled&batchId=<batchId>"
 ```
 
-Re-run the first `GET` from this test, then remove the override — and repeat the `DELETE`:
+**Expected:** `generate` returns `200` with `isOverrideActive: true` and `rulesAdded` at least `1`.
+
+### 4. Re-read the effective rules, and compare them against the before-capture
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled" \
@@ -66,29 +76,31 @@ curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/conflic
 grep -o '"isOverrideActive":[a-z]*' /tmp/rules-after.json
 grep -o '"entityId":"[^"]*"' /tmp/rules-after.json | sort > /tmp/rule-ids-after.txt
 comm -23 /tmp/rule-ids-before.txt /tmp/rule-ids-after.txt
+```
+
+**Expected:** the repeated `GET` returns `isOverrideActive:true`, proving the override took effect for
+reads, and **`comm -23` prints nothing.** Every rule id present before is still present after — that is
+the merge-preserves-existing-rules guarantee `EffectiveRuleFileResolver` exists for, and the only form
+in which it can actually fail. Any id printed is a bundled rule the merge dropped.
+
+### 5. Remove the override, and repeat the `DELETE`
+
+```bash
 curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
 curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
 ```
 
-Finally, the alias-candidate suggestion endpoint — read-only, no key needed:
+**Expected:** `DELETE` returns `204`; a repeat `DELETE` returns `404`.
+
+### 6. Call the alias-candidate suggestion endpoint — read-only, no key needed
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/import/rules/alias?fileName=quotinator-curated-source-aliases.json&origin=Bundled"
 ```
 
-## Expected output
-
-- The first `GET` returns `200` with `isOverrideActive:false`, and a non-zero rule count written to
-  `/tmp/rule-ids-before.txt`. Zero rules there would make the merge assertion vacuous.
-- `generate` returns `200` with `isOverrideActive: true` and `rulesAdded` at least `1`.
-- The repeated `GET` returns `isOverrideActive:true`, proving the override took effect for reads.
-- **`comm -23` prints nothing.** Every rule id present before is still present after — that is the
-  merge-preserves-existing-rules guarantee `EffectiveRuleFileResolver` exists for, and the only form in
-  which it can actually fail. Any id printed is a bundled rule the merge dropped.
-- `DELETE` returns `204`; a repeat `DELETE` returns `404`.
-- The alias endpoint returns `200` with a well-formed `candidates` array.
+**Expected:** `200` with a well-formed `candidates` array.
 
 **What the alias check verifies is structural**: `200` with a well-formed array, confirming the endpoint
 runs cleanly end to end against the full live `Quotinator_Source` table. **Not a candidate count.**

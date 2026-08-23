@@ -45,6 +45,8 @@ Not established, and that is the defect. The original intended, but never pinned
 
 ## Steps
 
+### 1. Seed a real, unmodified v1.8.2 database
+
 ```bash
 docker rm -f smoke293 2>/dev/null
 docker volume rm smoke293-data 2>/dev/null
@@ -56,8 +58,12 @@ curl -s "http://localhost:8080/api/v1/version" | grep -o '"quotes":[0-9]*'
 docker stop -t 15 smoke293 && docker rm smoke293
 ```
 
-Seeds a real, unmodified v1.8.2 database. `quotes` must be non-zero and the seed must report zero
-failures before proceeding — a partially-seeded volume would make everything below meaningless.
+**Expected:** `quotes` is non-zero and the seed reports zero failures.
+
+**On failure:** a partially-seeded volume would make everything below meaningless. Stop and re-seed
+rather than proceeding.
+
+### 2. Start the current build with a read-only root filesystem and read health
 
 ```bash
 MSYS_NO_PATHCONV=1 docker run -d --name smoke293 -p 8080:8080 \
@@ -65,25 +71,38 @@ MSYS_NO_PATHCONV=1 docker run -d --name smoke293 -p 8080:8080 \
   -v smoke293-data:/data -e Quotinator__DataDir=/data \
   quotinator:local
 until curl -s -o /dev/null http://localhost:8080/api/v1/health; do sleep 1; done
-curl -s -w " [%{http_code}]\n" "http://localhost:8080/api/v1/health"
+curl -s -w " [%{http_code}]\n" http://localhost:8080/api/v1/health
+```
+
+**Expected — as originally written, and unreachable, see Preconditions:** `/health` returns
+`503 {"status":"unhealthy",...}`, confirming the test reached the failure state.
+
+**On failure:** `200` healthy is what this setup actually measures today (see Observed effect). That is
+the known, tracked contradiction, not a new result — stop rather than running the degraded-page steps
+against a container that never degraded.
+
+### 3. Read the degraded pages and the notifications API
+
+```bash
 curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/"
 curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/stats"
 curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/notifications"
 curl -s -w "\nHTTP %{http_code}\n" "http://localhost:8080/api/v1/notifications"
 ```
 
-## Expected output
-
-**As originally written — and unreachable, see Preconditions:**
-
-`/health` returns `503 {"status":"unhealthy",...}`, confirming the test reached the failure state.
-`/`, `/stats` and `/notifications` all return `200` — never `500`, never a raw exception page.
+**Expected — as originally written, and unreachable, see Preconditions:** `/`, `/stats` and
+`/notifications` all return `200` — never `500`, never a raw exception page.
 `GET /api/v1/notifications` correctly returns `503`; API traffic stays gated while degraded, which is
 the design
 [`01-seeding-backup-degraded-startup-and-reset-recovery.md`](01-seeding-backup-degraded-startup-and-reset-recovery.md)
 covers, and expected rather than a regression.
 
-Visiting the three Blazor pages in a real browser, the intended content was:
+### 4. Visit the three Blazor pages in a real browser
+
+Visit `http://localhost:8080/`, `http://localhost:8080/stats` and
+`http://localhost:8080/notifications` in a real browser.
+
+**Expected — as originally written, and unreachable, see Preconditions:** the intended content was:
 
 - `/` renders `StartupErrorModal` (*Quotinator started with a problem*) with the real failure reason
   and all-zero stats, not a raw stack trace

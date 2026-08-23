@@ -28,7 +28,7 @@ level. That means its own container, since a configuration value is fixed at sta
 
 ## Steps
 
-**Its own container, with request logging genuinely on:**
+### 1. Start this test's own container, with request logging genuinely on
 
 ```bash
 docker rm -f qt-reqlog 2>/dev/null; docker volume rm qt-reqlog 2>/dev/null
@@ -39,24 +39,44 @@ MSYS_NO_PATHCONV=1 docker run -d --name qt-reqlog -p 8080:8080 -v qt-reqlog:/dat
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 ```
 
-**Prove request logging is actually emitting, before reading anything from the log.** A request whose
-outcome is not in doubt, and its line must appear:
+**Expected:** the health poll returns — the container is up, with both logging variables set.
+
+### 2. Prove request logging is actually emitting, before reading anything from the log
+
+A request whose outcome is not in doubt, and its line must appear:
 
 ```bash
 curl -s -o /dev/null "http://localhost:8080/api/v1/health"
 docker logs qt-reqlog 2>&1 | grep -c "→ 200"
 ```
 
-**The three bodyless calls:**
+**Expected:** **request logging is live** — the `→ 200` count is non-zero.
+
+**On failure:** if it is `0`, the two logging variables did not take effect and nothing below can be
+concluded from the log; that is a setup failure, not a result. Stop.
+
+### 3. Call all three staged-action endpoints with no `batchId`
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/apply"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/discard"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" "http://localhost:8080/api/v1/import/actions/reverse"
+```
+
+**Expected:** all three bodyless calls return `422` with `"detail":"You must provide a batchId."` —
+**never** the generic "Numeric parameters..." message.
+
+### 4. Read the status those same calls were logged with
+
+```bash
 docker logs qt-reqlog 2>&1 | grep "import/actions" | grep -o "→ [0-9]*" | sort | uniq -c
 ```
 
-**The happy path, against a batch this document stages itself:**
+**Expected:** the `import/actions` log lines read **`→ 422` three times and `→ 200` not at all**.
+
+Counting them is the assertion: a single missing line would otherwise be invisible.
+
+### 5. Stage a batch for the happy path, this document's own
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" \
@@ -65,24 +85,16 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/preview"
 ```
 
-Copy the `batchId`, then:
+**Expected:** the response carries a `batchId` — copy it for the next step.
+
+### 6. Apply that batch with a real `batchId`
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
-## Expected output
-
-- **Request logging is live** — the `→ 200` count is non-zero. If it is `0`, the two logging variables
-  did not take effect and nothing below can be concluded from the log; that is a setup failure, not a
-  result.
-- All three bodyless calls return `422` with `"detail":"You must provide a batchId."` — **never** the
-  generic "Numeric parameters..." message.
-- The `import/actions` log lines read **`→ 422` three times and `→ 200` not at all**. Counting them is
-  the assertion: a single missing line would otherwise be invisible.
-- The `apply` with a real `batchId` returns `200`, proving the fix did not simply make the endpoint
-  return `422` unconditionally.
+**Expected:** `200`, proving the fix did not simply make the endpoint return `422` unconditionally.
 
 ## Observed effect
 

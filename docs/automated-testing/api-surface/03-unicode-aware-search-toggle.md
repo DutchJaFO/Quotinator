@@ -25,10 +25,14 @@ failed import produces the same empty result as a correctly-unmatched search.
   what makes this a with-and-without comparison rather than two unrelated observations.
 - The query is percent-encoded (`CAF%C3%89`) — sending the raw accented character depends on shell
   and terminal encoding.
+- **Assert the fixture's presence, not a total.** The fixture is the only accented case-varying title
+  today, but a bundled source acquiring one would make this two items for an entirely correct reason.
 
 ## Steps
 
-**Flag off (default) — the profile's own environment, under this test's own container name:**
+### 1. Import the fixture into a container with the flag off (default)
+
+The profile's own environment, under this test's own container name:
 
 ```bash
 docker build -f docker/Dockerfile -t quotinator:local .
@@ -45,10 +49,25 @@ cat > .claude/temp/smoke-222.json <<'EOF'
 }
 EOF
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+```
+
+**Expected:** import returns `200`.
+
+**On failure:** stop. A failed import produces the same empty result the next step reads as a pass,
+so its "not matched" outcome would be indistinguishable from the behaviour under test.
+
+### 2. Search the accented title in the wrong case, flag off
+
+```bash
 curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
 ```
 
-**Flag on — the same environment plus the one variable under test:**
+**Expected:** an empty `items` array with a `message` — the fixture's `Café de Flore` is not matched,
+proving default behaviour is unchanged.
+
+### 3. Import the same fixture into a second container with the flag on
+
+The same environment plus the one variable under test:
 
 ```bash
 docker rm -f qt-unicode-off
@@ -61,19 +80,20 @@ MSYS_NO_PATHCONV=1 docker run -d --name qt-unicode-on -p 8080:8080 -v qt-unicode
   quotinator:local
 until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
 curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-222.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
+```
+
+**Expected:** import returns `200`.
+
+**On failure:** stop, for the same reason as step 1 — an unimported fixture cannot be matched, and the
+next step would report the flag as having no effect.
+
+### 4. Repeat the same query with the flag on
+
+```bash
 curl -s "http://localhost:8080/api/v1/quotes/search?q=CAF%C3%89&field=source"
 ```
 
-## Expected output
-
-**Flag off:** import returns `200`. The search returns an empty `items` array with a `message` — the
-fixture's `Café de Flore` is not matched, proving default behaviour is unchanged.
-
-**Flag on:** the same query against the same fixture returns `200` and **includes** the fixture's own
-item, `source: "Café de Flore"`.
-
-Assert its presence, not a total. The fixture is the only accented case-varying title today, but a
-bundled source acquiring one would make this two items for an entirely correct reason.
+**Expected:** `200`, and the response **includes** the fixture's own item, `source: "Café de Flore"`.
 
 ## Observed effect
 

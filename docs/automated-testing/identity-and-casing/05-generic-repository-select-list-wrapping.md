@@ -30,7 +30,9 @@ hand-written `Sql.cs` queries do. This confirms the `SELECT *` removal did not b
 
 ## Steps
 
-Run the **Fresh** profile, then:
+Run the **Fresh** profile first.
+
+### 1. Page every generic-repository-backed list endpoint
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources?pageSize=2"
@@ -43,20 +45,24 @@ curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/stagedire
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/soundcues?pageSize=2"
 ```
 
-Then confirm `GetByIdAsync`'s case-insensitive lookup survived the rewrite — take one of the returned
-ids and fetch it both ways:
+**Expected:** every list call returns `200` with populated `items` and lowercase `id` fields.
+
+**On failure:** a `200` carrying an empty `items` is not a pass — it asserts nothing about column
+wrapping, and points at the seed rather than at the queries under test (see Preconditions: this test
+can be blocked by a broken import). Stop; step 2 has no id to take.
+
+### 2. Fetch one Source by id in both casings
+
+Take one of the returned ids and fetch it both ways, confirming `GetByIdAsync`'s case-insensitive
+lookup survived the rewrite:
 
 ```bash
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources/<id-as-returned>"
 curl -s -w "\n%{http_code}\n" "http://localhost:8080/api/v1/masterdata/sources/<same-id-uppercased>"
 ```
 
-## Expected output
-
-Every list call returns `200` with populated `items` and lowercase `id` fields.
-
-Both `GET .../sources/{id}` calls return `200` with the same record, and its `id` renders lowercase
-regardless of the casing requested.
+**Expected:** both `GET .../sources/{id}` calls return `200` with the same record, and its `id` renders
+lowercase regardless of the casing requested.
 
 ## Observed effect
 

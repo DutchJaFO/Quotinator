@@ -32,9 +32,17 @@ The direct-apply path (`newest-wins`, nothing pending) sets `Import_Batch.Status
 two-phase decide→apply path used in the first half does **not** — a known pre-existing gap, see
 #171/#172's plan docs.
 
+**Each step names the fixture it uses**, because five imports run here and they differ only by which
+file they upload.
+
+**Reading the `smoke-171-172-v3.json` tally is the assertion**; the import returns a success code either
+way, so the status code alone does not distinguish blocked from staged.
+
 ## Steps
 
-**First fixture — Modify, decide, then confirm a Complete row blocks:**
+Run the **Fresh** profile first.
+
+### 1. Import `smoke-171-172.json` — the initial add
 
 ```bash
 cat > .claude/temp/smoke-171-172.json <<'EOF'
@@ -51,7 +59,13 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
 Confirm via DbInspector:
 `SELECT Id, Text, CompletenessStatus FROM Quotinator_StageDirection WHERE Id = 'f0000002-0000-4000-8000-000000000002'`
 
-**Re-import the same ids with a changed `text`, under `review`:**
+**Expected:** `smoke-171-172.json` returns `200` with both rows added — the DbInspector read shows the
+StageDirection row present.
+
+**On failure:** without these rows there is nothing for the re-imports below to Modify, and every later
+step would be staging fresh adds instead. Stop.
+
+### 2. Re-import `smoke-171-172-v2.json` — the same ids with a changed `text`, under `review`
 
 ```bash
 cat > .claude/temp/smoke-171-172-v2.json <<'EOF'
@@ -71,7 +85,13 @@ Copy that `batchId`, list its pending actions, and copy the two action `id`s:
 curl -s "http://localhost:8080/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
 ```
 
-Decide each, then apply:
+**Expected:** `smoke-171-172-v2.json`, under `review`, stages a `Pending` `Modify` action for each, with
+`ambiguousFields: ["text"]`.
+
+**On failure:** an empty pending listing means the `review` policy did not take effect and nothing was
+staged, so the decide and apply below would be operating on an empty batch. Stop.
+
+### 3. Decide both actions and apply the batch
 
 ```bash
 curl -s -X POST -H "X-Api-Key: <your admin key>" -H "Content-Type: application/json" \
@@ -84,8 +104,12 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/actions/apply?batchId=<batchId>"
 ```
 
-**Now re-import a third time with yet another `text`, still under `review` — the Complete row must
-block it:**
+**Expected:** after deciding and applying, both rows carry the corrected text and
+`CompletenessStatus: Complete` — read back by step 7.
+
+### 4. Re-import `smoke-171-172-v3.json` — a third `text`, still under `review`
+
+The `Complete` rows must block it:
 
 ```bash
 cat > .claude/temp/smoke-171-172-v3.json <<'EOF'
@@ -106,7 +130,10 @@ curl -s "http://localhost:8080/api/v1/import/actions?batchId=<third batchId>&pag
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
-**Second fixture — a fresh pair, for the reversal half:**
+**Expected:** `smoke-171-172-v3.json`'s status tally reads **`Blocked`, not `Pending`** — a `Complete`
+row can no longer be silently overwritten.
+
+### 5. Import `smoke-171-172-addonly.json` — a fresh pair, for the reversal half
 
 ```bash
 cat > .claude/temp/smoke-171-172-addonly.json <<'EOF'
@@ -120,7 +147,10 @@ curl -s -X POST -H "X-Api-Key: <your admin key>" -F "file=@.claude/temp/smoke-17
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:8080/api/v1/import"
 ```
 
-Then single-shot re-import a changed `text` for both ids under `newest-wins`:
+**Expected:** `smoke-171-172-addonly.json` adds a fresh pair, still `NeedsReview` — never `Complete`,
+which is what makes the reversal half runnable at all.
+
+### 6. Single-shot re-import `smoke-171-172-addonly-v2.json` under `newest-wins`, then reverse it
 
 ```bash
 cat > .claude/temp/smoke-171-172-addonly-v2.json <<'EOF'
@@ -143,7 +173,10 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: <your admin key>" \
   "http://localhost:8080/api/v1/import/actions/reverse?batchId=<correction batchId>"
 ```
 
-Confirm the pre-correction text is back:
+**Expected:** `smoke-171-172-addonly-v2.json`, under `newest-wins`, applies immediately with nothing
+pending. Both reversal calls against its batch return `200`.
+
+### 7. Confirm the pre-correction text is back
 
 ```bash
 docker stop -t 15 qt-env
@@ -158,25 +191,10 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
   --sql "SELECT Id, Text, CompletenessStatus FROM Quotinator_SoundCue WHERE Id IN ('f0000003-0000-4000-8000-000000000003','f0000003-0000-4000-8000-000000000009')"
 ```
 
-## Expected output
-
-Each bullet names the fixture it describes, because five imports run here and they differ only by which
-file they upload.
-
-- **`smoke-171-172.json`** returns `200` with both rows added.
-- **`smoke-171-172-v2.json`**, under `review`, stages a `Pending` `Modify` action for each, with
-  `ambiguousFields: ["text"]`. After deciding and applying, both carry the corrected text and
-  `CompletenessStatus: Complete`.
-- **`smoke-171-172-v3.json`**'s status tally reads **`Blocked`, not `Pending`** — a `Complete` row can
-  no longer be silently overwritten. Reading the tally is the assertion; the import returns a success
-  code either way, so the status code alone does not distinguish blocked from staged.
-- **`smoke-171-172-addonly.json`** adds a fresh pair, still `NeedsReview` — never `Complete`, which is
-  what makes the reversal half runnable at all.
-- **`smoke-171-172-addonly-v2.json`**, under `newest-wins`, applies immediately with nothing pending.
-  Both reversal calls against its batch return `200`.
-- The closing DbInspector reads show the **`…000002`/`…000003` pair** still carrying `v2`'s corrected
-  text with `CompletenessStatus: Complete` — `v3`'s text never landed — and the **`…000009` pair** back
-  at `Original text before correction.` / `Original sound before correction.`, the reversal undone.
+**Expected:** the closing DbInspector reads show the **`…000002`/`…000003` pair** still carrying `v2`'s
+corrected text with `CompletenessStatus: Complete` — `v3`'s text never landed — and the **`…000009`
+pair** back at `Original text before correction.` / `Original sound before correction.`, the reversal
+undone.
 
 ## Observed effect
 
