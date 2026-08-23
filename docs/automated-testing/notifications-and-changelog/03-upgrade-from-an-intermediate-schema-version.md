@@ -41,10 +41,12 @@ this scenario needs it.
   genuine crash fails the test rather than hanging it.
 - **As elsewhere, assert that replay completed — never the migration count or the version numbers.**
 
-**Read from a container, not the host.** `-v /tmp/…:/data` resolves inside the Docker VM while
-`dotnet run` executes on Windows against a different `/tmp`, so a host-side query silently finds
-nothing. `Quotinator.Tools.DbInspector` is additionally `Mode=ReadOnly` by design and cannot perform
-step 2's writes either — **do not "fix" the tool to allow writes.**
+**Read from a container, not from a .NET tool on the host.** Measured 2026-08-23: bash and `docker -v`
+both resolve `/tmp/x` to `%TEMP%\x`, while .NET's `Path.GetFullPath` roots it at the current drive and
+yields `C:\tmp\x`, which does not exist — so a host-side query silently finds nothing. It is a host
+directory, not one inside a VM; .NET simply picks a different one.
+`Quotinator.Tools.DbInspector` is additionally `Mode=ReadOnly` by design and cannot perform step 2's
+writes either — **do not "fix" the tool to allow writes.**
 
 ## Steps
 

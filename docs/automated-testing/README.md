@@ -445,11 +445,20 @@ why. The script owns creating and destroying an environment, not re-entering one
 **The admin key is `smoketest`**, set by the script. Documents use it literally rather than carrying a
 `<your admin key>` placeholder for a reader to resolve.
 
-**A bind directory is the document's to create and remove, not the script's.** `--bind` is passed to
-`docker` verbatim, because a POSIX path like `/tmp/x` resolves inside the Docker VM while a relative one
-resolves on the host, and only the document knows which it means. Resolving it here would bind a
-different filesystem — and the test would then read an empty database, which looks exactly like a
-passing check.
+**A bind directory is the document's to create and remove, and `--bind` is passed to `docker`
+verbatim.** Three things resolve `/tmp/x` differently, measured on Docker Desktop for Windows
+2026-08-23:
+
+| Resolver | `/tmp/x` becomes |
+|---|---|
+| Git Bash | `C:\Users\<user>\AppData\Local\Temp\x` |
+| Docker Desktop `-v` | the same |
+| .NET `Path.GetFullPath` | `C:\tmp\x` — a different directory, which does not exist |
+
+So bash and `docker` agree, and a **.NET** tool does not. Resolving the path inside this script would
+bind `C:\tmp\x`, and the test would then read an empty database — which looks exactly like a passing
+check. That is also why a host-side `DbInspector` call cannot read a bind-mounted database by its
+`/tmp/…` path: it is not that the path lives inside a VM, it is that .NET roots it at the current drive.
 
 **Building the image is the one genuinely shared step**, because it is the same image for every test
 and rebuilding it per test would be absurd:

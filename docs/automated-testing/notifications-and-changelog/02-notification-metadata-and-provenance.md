@@ -17,11 +17,15 @@ only to read the file.
 
 Every command here was run for real; the expected values below are observed output, not predictions.
 
-**Read the database from a container, not from the host.** `-v /tmp/…:/data` resolves inside the Docker
-VM, while `dotnet run` executes on Windows where `/tmp` is a different directory entirely — a host-side
-`DbInspector` call against that path finds an empty or non-existent file and reports nothing, **which
-reads exactly like a passing check**. Every query below therefore runs in the same container filesystem
-the app wrote to.
+**Read the database from a container, not from a .NET tool on the host.** Measured 2026-08-23 on Docker
+Desktop for Windows: bash and `docker -v` both resolve `/tmp/x` to `%TEMP%\x`, while .NET's
+`Path.GetFullPath` roots it at the current drive and yields `C:\tmp\x` — a different directory that does
+not exist. A host-side `DbInspector` call against that path therefore finds nothing and reports nothing,
+**which reads exactly like a passing check**. Every query below runs inside a container instead, against
+the same filesystem the app wrote to.
+
+An earlier version of this note said the path "resolves inside the Docker VM". The conclusion was right
+and the mechanism was not; it is a host directory, just not the one .NET picks.
 
 **The current build's own version overlaps 1.8.3 here.** The version-history expectation below reads
 `Quotinator.Api | 1.8.3 | 1 | 1` as the only row, while
