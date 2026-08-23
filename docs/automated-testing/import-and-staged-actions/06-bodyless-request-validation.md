@@ -50,7 +50,26 @@ never attempts to read the request body.
 
 ## Observed effect
 
-Not yet established as a captured record.
+Captured 2026-08-23, running this document verbatim.
+
+A bodyless `POST /import` returns an RFC 4918 problem document:
+
+```json
+{"type":"https://tools.ietf.org/html/rfc4918#section-11.2","title":"Unprocessable Entity","status":422,
+ "detail":"You must provide either a file to import or a batchId to apply an already-staged batch.",
+ "traceId":"..."}
+```
+
+Naming an unknown `batchId` returns an RFC 9110 one:
+
+```json
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.5","title":"Not Found","status":404,
+ "detail":"No import batch exists with that id.","traceId":"..."}
+```
+
+**The `detail` text is what an operator actually sees**, and it is specific to the missing input rather
+than generic — which is the whole point of the `422`-over-`400` distinction this test exists for. Both
+carry a `traceId`, so a report of either can be tied back to its request in the log.
 
 **If this regresses to a bare `400`**, `POST /import`'s handler is binding `IFormFile`/`[FromForm]`
 parameters automatically again instead of reading `HttpRequest` manually — see `ImportEndpoints.cs`'s
