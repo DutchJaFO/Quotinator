@@ -35,6 +35,11 @@ writes and the row the app records for itself are indistinguishable.
   cannot be skipped without silently invalidating the result.
 - **The seeding wait polls for the announcement**, not a duration: v1.8.3 writes it after seeding ~800
   quotes, so a fixed wait can see zero and read as proof that nothing was written.
+- **That poll matches the announcement's *body*, and counts occurrences.** v1.8.3 has no `title` field
+  in its API response, so a gate on the title never becomes true and the loop hangs rather than fails —
+  measured during #339's full run against
+  [`04`](04-upgrade-does-not-duplicate-the-legacy-notification.md), which carried the same gate.
+  `grep -c` is wrong here for the separate reason that the response is single-line JSON.
 - This scenario uses **its own database**, not one shared with a sibling test — the row counts below
   are exact and any prior state breaks them.
 
@@ -46,7 +51,7 @@ writes and the row the app records for itself are indistinguishable.
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-05-upgraded --port 18505 \
   --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind /tmp/qt-notif-05-upgraded/data
 until [ "$(curl -s 'http://localhost:18505/api/v1/notifications?pageSize=0' \
-  | grep -c 'Two API operation IDs were renamed')" = "1" ]; do sleep 5; done
+  | grep -o 'Two REST API operation IDs were renamed' | wc -l)" -ge 1 ]; do sleep 5; done
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-upgraded
 ```
 

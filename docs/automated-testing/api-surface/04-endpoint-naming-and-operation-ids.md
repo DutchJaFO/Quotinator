@@ -36,58 +36,98 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-api-04 --port 181
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
 
-### 2. Fetch the published spec and check the two renamed operationIds
+### 2. Fetch the published spec and confirm it is a real document
 
 ```bash
 curl -s "http://localhost:18104/openapi/v1.json" > /tmp/spec279.json
-grep -o '"operationId":"GetAllImportBatches"' /tmp/spec279.json
-grep -o '"operationId":"GetAllFileResources"' /tmp/spec279.json
+wc -c < /tmp/spec279.json
 ```
 
-**Expected:** the spec contains `operationId: GetAllImportBatches` and
-`operationId: GetAllFileResources` — the two breaking renames.
+**Expected:** a non-zero byte count — around 176,000 at the time of writing, but the assertion is
+"not empty", not the figure.
 
-**On failure:** two silent greps can equally mean an empty or missing `/tmp/spec279.json`, which is
-what a fetch during initialisation produces. Confirm the file has content before recording this as a
-missing rename, and stop — every check below reads the same file.
+**On failure:** an empty or missing file is what a fetch during initialisation produces, and every
+check below reads it. A zero here would make each of them report an absence that is really a missing
+document. Stop.
 
-### 3. Confirm the old operationIds are gone from the whole spec
+### 3. Count all four operationIds in one pass — the two new, and the two they replaced
 
 ```bash
-grep -o '"operationId":"GetImportBatches"\|"operationId":"GetFileResources"' /tmp/spec279.json
+for id in GetAllImportBatches GetAllFileResources GetImportBatches GetFileResources; do
+  printf '%s %s\n' "$id" \
+    "$(grep -oE "\"operationId\":[[:space:]]*\"$id\"" /tmp/spec279.json | wc -l)"
+done
 ```
 
-**Expected:** the spec does **not** contain `GetImportBatches` or `GetFileResources` anywhere.
+**Expected:** `GetAllImportBatches 1`, `GetAllFileResources 1`, `GetImportBatches 0`,
+`GetFileResources 0`.
 
-### 4. Check the List-endpoint summaries
+**The two `1`s are the positive control for the two `0`s**, and that is why all four are counted by
+one construction rather than in separate commands. A pattern that cannot match anything reports `0`
+for a removed name just as confidently as a genuinely removed name does, and only a name the same
+pattern *does* find separates them. Found exactly that way during #339's full run: every pattern here
+was written `"operationId":"X"` against a spec that is pretty-printed `"operationId": "X"`, so the
+removal half had been passing on a pattern that could never match — see the index's *A removed or
+added feature needs its own proof*.
+
+`[[:space:]]*` rather than a literal space, so a change in how the spec is formatted cannot silently
+re-break this the same way.
+
+**On failure:** all four reading `0` means the pattern or the file is wrong, not that the renames
+are missing. Check step 2's byte count first.
+
+### 4. Count the List-endpoint summaries, required and forbidden together
 
 ```bash
-grep -o '"summary":"List [a-z ]*"' /tmp/spec279.json | sort -u
+for s in "List people" "List quotes" "List series"; do
+  printf '%s %s\n' "$s" "$(grep -oE "\"summary\":[[:space:]]*\"$s\"" /tmp/spec279.json | wc -l)"
+done
+for s in "All people \(paginated\)" "All quotes \(paginated\)" "List Series"; do
+  printf '%s %s\n' "$s" "$(grep -oE "\"summary\":[[:space:]]*\"$s\"" /tmp/spec279.json | wc -l)"
+done
 ```
 
-**Expected:** every List-endpoint `summary` reads `"List x"`, lowercase plural noun. `"List people"`,
-`"List quotes"` and `"List series"` must appear; `"All people (paginated)"`,
-`"All quotes (paginated)"` and `"List Series"` (capitalised) must not.
+**Expected:** the first three each report `1`; the last three each report `0`. Every List-endpoint
+`summary` reads `"List x"` with a lowercase plural noun, and none of the pre-standard forms survives.
+
+The first loop is the second loop's positive control, for the same reason as step 3. The parentheses
+are escaped because these patterns are extended regular expressions.
 
 ### 5. Fetch a quote by id and read its log tag
 
 ```bash
-curl -s "http://localhost:18104/api/v1/quotes/random" | grep -o '"id":"[a-f0-9-]*"' | head -1
-# use that id:
-curl -s "http://localhost:18104/api/v1/quotes/<id>" > /dev/null
-docker logs qt-api-04 2>&1 | grep "GetQuoteById\|Api - GetById"
+id=$(curl -s "http://localhost:18104/api/v1/quotes/random" \
+     | grep -oE '"id":[[:space:]]*"[a-f0-9-]+"' | head -1 | cut -d'"' -f4)
+curl -s "http://localhost:18104/api/v1/quotes/$id" > /dev/null
+docker logs qt-api-04 2>&1 | grep -oE "\[Api - GetQuoteById\]|\[Api - GetById\]" | sort | uniq -c
 ```
 
-**Expected:** the log line reads `[Api - GetQuoteById]`, not the old, already-mismatched
-`[Api - GetById]`.
+**Expected:** one or more `[Api - GetQuoteById]`, and **no** `[Api - GetById]` — the old,
+already-mismatched tag.
 
-### 6. Spot-check the GetById summaries in the Scalar UI
+Both tags are counted together for the same reason step 3 counts all four operationIds: the absence of
+the old one means nothing unless the same command is shown finding the new one. The id is extracted
+into a variable rather than left as a `<id>` placeholder, so the step runs unattended.
 
-Visit `http://localhost:18104/scalar/v1` and spot-check a few GetById operations (Character, Quote,
-Import batch, Captured import file).
+### 6. Count the GetById summaries, capitalised against lowercase
 
-**Expected:** every GetById summary reads `"X by ID"` with a capitalised `ID` — no `"...by id"`
-remaining.
+```bash
+grep -oE '"summary":[[:space:]]*"[A-Za-z ]+ by ID"' /tmp/spec279.json | wc -l
+grep -oE '"summary":[[:space:]]*"[A-Za-z ]+ by id"' /tmp/spec279.json | wc -l
+```
+
+**Expected:** the first count is non-zero — 11 at the time of writing, but the assertion is that
+GetById summaries exist and are found — and the second is exactly `0`. Every GetById summary reads
+`"X by ID"` with a capitalised `ID`.
+
+**This is asserted against the published spec rather than the rendered Scalar page**, and the change
+is deliberate. Scalar renders these strings straight from the spec, so a spec-level count tests the
+same claim while running unattended; the previous step asked a person to open a browser and eyeball
+"a few" operations, which is neither repeatable nor able to fail on the ones they did not look at.
+
+The rendered page was confirmed once, during #339's full run: `/scalar/v1` was loaded in a browser,
+all 13 operation groups expanded, and the DOM read — 11 `X by ID` summaries, 0 lowercase. That
+establishes Scalar does not transform the text. Nothing here needs to re-establish it every run.
 
 ## Observed effect
 

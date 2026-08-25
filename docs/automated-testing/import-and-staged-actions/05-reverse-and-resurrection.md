@@ -26,7 +26,8 @@ precondition, not a given.
 - **Count the search result, do not read it.** `/quotes/search` returns `200` with an empty `items`
   array and a `message` as ordinary behaviour when nothing matches, so an eyeballed response cannot tell
   a successful resurrection from a reversal that deleted the rows for good — which is the failure the
-  re-import step exists to catch.
+  re-import step exists to catch. **Count `totalMatching`**, the field that endpoint actually returns;
+  `totalCount` belongs to the paginated list endpoints and matches nothing here.
 
 ## Steps
 
@@ -98,15 +99,23 @@ curl -s -X POST -H "X-Api-Key: smoketest" \
   -w "\n%{http_code}\n" \
   "http://localhost:18605/api/v1/import"
 curl -s "http://localhost:18605/api/v1/quotes/search?q=Airplane&field=source&pageSize=0" \
-  | grep -o '"totalCount":[0-9]*'
+  | grep -o '"totalMatching":[0-9]*'
 ```
 
 **Expected:** the re-import succeeds (`200`/`202`, **never a silent no-op**) and the search's
-`totalCount` is **non-zero** — the curated quotes are reachable again. This is the resurrection fix
+`totalMatching` is **non-zero** — the curated quotes are reachable again. This is the resurrection fix
 proven live, rather than only by
 `ApplyResolvedActionAsync_ReAddAfterSoftDelete_ResurrectsSoftDeletedRow`.
 
-**On failure:** a `totalCount` of `0` is the failing case, and it is a `200` response like any other.
+**The field is `totalMatching`, not `totalCount`.** `/quotes/search` returns its own shape, and this
+step read `totalCount` until #339's full run — a field that endpoint never emits, so the grep was
+always empty and "non-zero" could never be satisfied. The resurrection check silently asserted nothing
+for as long as it was written that way. See the index's *A count is evidence only if the instrument
+counts the right thing*.
+
+**On failure:** a `totalMatching` of `0` is the failing case, and it is a `200` response like any
+other. An *empty* reading is different again — that is the grep matching nothing, so check the field
+name before concluding anything about the rows.
 
 ### 8. Confirm the soft-delete flag actually flipped back
 

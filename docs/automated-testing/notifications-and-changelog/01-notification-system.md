@@ -109,11 +109,17 @@ MSYS_NO_PATHCONV=1 docker run --rm -v qt-notif-01-data:/data alpine sh -c \
      ('a0000278-0000-4000-8000-000000000003','Information','Smoke test dismissed','A #278 smoke test row already dismissed.',NULL,1,'2026-01-02 00:00:00',NULL,'2026-01-01 00:00:00',0);\""
 docker start qt-notif-01
 until curl -sf http://localhost:18501/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:18501/api/v1/notifications?pageSize=0" | grep -c "Smoke test"
+curl -s "http://localhost:18501/api/v1/notifications?pageSize=0" | grep -o "Smoke test" | wc -l
 ```
 
 **Expected:** `sqlite3` completes with no error, and the count is `3` — all three rows are present and
 readable through the API.
+
+**`grep -o … | wc -l`, never `grep -c`.** The response is single-line JSON, so `grep -c` counts the one
+matching *line* and reports `1` however many rows exist — this step required `3` from a `grep -c` until
+#339's full run, and therefore failed on a correct setup every time. It is the second document in the
+suite to have carried this exact bug; see the index's *A count is evidence only if the instrument
+counts the right thing*.
 
 **On failure:** a `sqlite3` error means the rows were never created, and every assertion in step 8 then
 reads an unchanged page. That is a setup failure, not a result — stop.
