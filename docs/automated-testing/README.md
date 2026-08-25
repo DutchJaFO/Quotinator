@@ -159,6 +159,36 @@ What can be asserted are the facts the operation itself establishes:
   to every batch it drove; a count unchanged across a restart; a read reporting the same number the
   write reported. These stay true when the dataset changes, because they are derived in the same run.
 
+### A count is evidence only if the instrument counts the right thing
+
+**A number that cannot be produced is not a failing assertion — it is a broken instrument, and it
+fails or passes for reasons that have nothing to do with the application.** Every count a document
+asserts must be checked against three questions before it is trusted.
+
+**Does it count the right unit?** `grep -c` counts *matching lines*, not matches. This suite's
+responses are single-line JSON, so a `grep -c` against one returns `1` however many times the string
+occurs — and `0` only when it occurs never. `notifications-and-changelog/01` requires `3` from exactly
+this shape and therefore fails on a correct setup every run. Use `grep -o … | wc -l`, which counts
+occurrences. This is the second document in the suite to carry the bug; the first is recorded under
+*Cause 3, instrument broken* above.
+
+**Does it match what the application actually emits?** Two live cases. `import-and-staged-actions/16`
+and `17` count `"operation":"Purge"` while the audit trail records `"operation":"Purged"` — the
+trailing quote makes the pattern exclude the only value that exists, so both read `0` where 8 and 4
+traces are present. `import-and-staged-actions/05` counts `"totalCount"` in a `/quotes/search`
+response, and that endpoint returns `totalMatching`; the count is empty forever, so its resurrection
+check silently asserts nothing.
+
+**Does it match case the way the assertion needs?** `grep` is case-sensitive and PowerShell's
+`Select-String` is not. A check for a case-variant duplicate written with the wrong one matches the
+correctly-cased row and reports a duplicate that does not exist — found during #339's own run, against
+`import-and-staged-actions/12`'s `AIRPLANE!` fixture. Where casing *is* the subject, say so at the
+command and use a case-sensitive form.
+
+**And the expected number itself must be derived in the same run, never predicted.** That rule is
+stated above; these three are about the instrument rather than the expectation, and a document can get
+the expectation right while the instrument makes it unreachable.
+
 **Stable resources are the exception, not the default.** A fixture owned by a test — created from
 scratch, or captured from a real database at the moment a bug is discovered — exists only where a
 specific feature or issue **cannot be tested any other way**. Do not build one because a count looks
@@ -204,6 +234,35 @@ Three ways to own the input, best first:
 but it bakes the mutation into a shared image tag, and every sibling test running that tag is then
 running data that does not exist in the repository. Found live in `import-and-staged-actions/15`, whose
 cleanup now has to rebuild the image to undo it. Prefer option 1, which needs no rebuild at all.
+
+### A removed or added feature needs its own proof, alongside the normal behaviour
+
+**When a change removes something or adds something, the suite proves both that the change happened
+and that ordinary behaviour still holds.** Those are two different claims, and a document asserting
+only one of them reports coverage it does not have.
+
+**A negative assertion needs a positive control in the same run, using the same instrument.** "The old
+name is gone" and "my pattern never matches anything" produce identical output, and only a case where
+the same instrument *does* match separates them. `api-surface/04` is the worked example: it checks that
+two renamed `operationId`s are present and the two old ones absent, but every pattern in it misses a
+space against the pretty-printed spec. The present-check fails loudly, so it would be noticed. The
+absent-check passes silently, and would pass just as confidently with both old names still in the
+spec — which is the half a breaking rename most needs proven.
+
+`import-and-staged-actions/19` shows the honest shape of a removal check: it counts occurrences of the
+three removed field names and requires `0`. What it still lacks is the control — nothing in that run
+establishes the pattern could have matched, so a typo in it is indistinguishable from the fields being
+gone. `import-and-staged-actions/01` gets it for free, because a `404` from the withdrawn
+`/import/conflicts` route is a positive observation of an absence.
+
+**An added feature is proven by exercising it, not by the absence of a complaint.** A startup that logs
+no error is not evidence a new producer ran; assert the thing it produces.
+
+**And in both directions, the regular behaviour is still asserted.** A removal test that only proves
+the old path is gone says nothing about the path that replaced it — see
+`notifications-and-changelog/02`, where proving the old text-matching suppression is dead requires
+*also* showing that structural dedupe still suppresses a genuine duplicate. One without the other is
+half the feature.
 
 ### Import behaviour is proven at every origin, not just the convenient one
 
@@ -648,6 +707,43 @@ interesting one at the next release.
 **State the condition when the snapshot is taken.** It is the users' upgrade path only if the milestone
 branched from the released tag. That is normally true here, and it is what makes the base image
 legitimate rather than merely convenient.
+
+### Users skip versions, so one prior version is not enough
+
+**A milestone that adds or removes anything with a database dimension must leave behind a way to
+produce a database exhibiting that state, so a later milestone can still prove the upgrade from it
+works** (developer direction, 2026-08-25). Testing only *previous release to current* never exercises
+a longer migration chain, and a user upgrading an add-on that has sat untouched for three releases is
+running exactly that chain.
+
+**Those databases are rebuilt from published image tags, not stored** (developer decision,
+2026-08-25). The tag for a released version is already durable and already reproduces that version's
+database exactly, so nothing is committed and nothing has to be kept in step with the schema by hand.
+Committing fixtures was considered and rejected; for the record, a VACUUMed seeded database measures
+about 4.0 MB, and about 416 KB with domain content stripped to schema and version rows.
+
+So the Upgraded profile's prior image is chosen by what is being proven, and a document says which:
+
+- **The milestone base image** — does this milestone's own schema change upgrade cleanly.
+- **The previous published tag** — does the upgrade our users are about to perform work.
+- **An older published tag** — does the chain still work for someone who skipped releases. A document
+  covering a migration that transforms existing data needs this one, and names the versions it claims
+  to cover rather than implying all of them.
+
+**The boundary of this approach, stated now rather than discovered later.** A published tag can only
+reproduce a version that was actually released and whose image is still pullable. Two states it cannot
+reach: an unreleased intermediate — which is why
+[`notifications-and-changelog/03`](notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md)
+hand-builds its own with SQL rather than pulling anything — and a database exhibiting a feature removed
+before it ever shipped. **If a tag a test depends on ever stops being pullable, that is the trigger to
+revisit this decision, not a reason to quietly drop the test.**
+
+**Downgrade is deliberately not covered yet** (developer direction, 2026-08-25). Migrations are
+append-only, and an older build meeting a newer database is already a handled degraded state rather
+than a crash: `DatabaseInitializer` sets `SchemaVersionOvershootDetected`, logs it, and surfaces it as
+a notification. What a rollback should actually guarantee becomes a real question the first time a
+milestone removes a feature, and the process gets reviewed then, against that concrete case. Recorded
+as a decision so a later reader does not read the absence as an oversight.
 
 ### Not adopted: reset-and-reseed as a cheaper restore
 
