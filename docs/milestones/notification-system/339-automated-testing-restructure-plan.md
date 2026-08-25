@@ -1,9 +1,9 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (all steps done; row 25 blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) — two tests cannot confirm their own behaviour until the staleness evaluation is observable)
+**Status:** In progress (all steps done, including the full 43-document run on 2026-08-25; rows 27 and 28 still open — `16` and `17` cannot confirm their own behaviour until [#347](https://github.com/DutchJaFO/Quotinator/issues/347) makes the staleness evaluation observable, and a handful of documents still carry id placeholders or browser-worded steps)
 **GitHub issue:** #339
 **Tiers required:** none — see *Tiers* below
-**Depends on:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347) for verification row 25
+**Depends on:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347) for verification row 28
 
 ---
 
@@ -754,6 +754,42 @@ Then confirm both guard tests from step 5 are green, and the full suite shows no
 Step 5's second guard already had its real red-green, taken as soon as `api-surface/` gave it links to
 resolve — see that step.
 
+### 19. Run all 43 documents end to end, and repair what the run exposes
+
+**Status:** ✅ Run done — 2026-08-25. Repairs done; two rows still open, see the verification checklist.
+
+**28 passed, 15 failed, and not one failure was an application defect.** Every one was a defect in a
+test document, apart from the two blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347)
+and the one [#327](https://github.com/DutchJaFO/Quotinator/issues/327) already owns. That is the
+headline result: the restructure moved 43 documents and the application underneath them was sound.
+
+**What the run found, by class:**
+
+- **Six instruments that could not fail or could not pass.** Three greps in `api-surface/04` missed a
+  space against the pretty-printed spec, so a *removal* assertion had been passing on a pattern that
+  could never match. `16` and `17` counted `"operation":"Purge"` against an audit that records
+  `"Purged"`. `import-and-staged-actions/05` counted `totalCount` on an endpoint returning
+  `totalMatching`. `notifications-and-changelog/01` step 7 required `3` from a `grep -c` against
+  single-line JSON. Two poll gates matched a `title` v1.8.3 never returns, so they hung instead of
+  failing — one ran ten minutes before being stopped.
+- **Six assertions that were vacuous as ordered**, each confirmed correct by other means and then given
+  a form that can fail.
+- **One misdiagnosis of mine, corrected.** `notifications-and-changelog/06` was reported as an
+  application defect; it was not. Its rollback emptied the schema counter, the replay failed on an
+  existing table, and the initializer restored its backup and degraded — which imitates a broken
+  backfill exactly.
+- **A version-scheme finding**, which became its own change: while development shares the released
+  version number the running build is indistinguishable from the release it upgrades from. See
+  `docs/workflow/checklist.md`'s *Version during development*.
+
+**Three browser-driven checks were proven automatable** against a live browser — Scalar's DOM, the
+degraded Blazor pages, and the full notification flow including Run → Confirm and the resulting reset.
+That answers the question row 27 deferred to this run, without clearing the row: placeholders and
+browser-worded steps remain elsewhere.
+
+**Three index rules came out of it** — a count needs a working instrument, a removal needs a positive
+control, and one prior version is not enough because users skip releases.
+
 ---
 
 ## Verification checklist
@@ -786,7 +822,7 @@ resolve — see that step.
 | 24 | ✅ | Every test creates and destroys its own container and volume, so any two can run concurrently | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother` — red while documents shared `qt-env` on `8080`. Checks three things: a document publishes every port it talks to, no two publish the same one, and every port is a real one. That last check exists because the first port scheme derived a second container's port by appending a digit, producing `181031` — above the 65535 maximum, so `docker run` would simply have failed, and a uniqueness check alone was perfectly happy with it. 43 documents, 51 distinct ports, no `qt-env` and no "restore the profile" anywhere |
 | 25 | ✅ | The container recipe exists once, and every document invokes it rather than repeating it | Live | `scripts/testing/test-env.csx` creates and destroys a test's environment; all 43 documents call it. Verified live: named volume with a port (healthy, seeded), no port at all (publishes nothing), and a bind mount (database lands in the bound directory). Eight steps stay raw `docker` because they re-enter an environment an earlier step produced, which `create` cannot express |
 | 26 | ✅ | Every step carries its own expected result, so a failure stops the run at the step that caused it | Unit test | `RepositoryStructureTests.EveryAutomatedTestingStep_CarriesItsOwnExpectedResult` — red against all 43 before the conversion. Checks per step, not by total: a document where one step carries three expectations and another none would balance out under a count |
-| 27 | ❌ | Every test runs unattended | Live | The folder is `automated-testing`; a step that stops for a person cannot be scheduled or repeated identically. Three shapes break it today — "visit this page and look at it" (`api-surface/04`, `notifications-and-changelog/01`, `startup-and-degradation/05`), an assertion a human evaluates rather than one that is counted, and a screenshot with no machine-checkable assertion beside it. Browser-driven checks are automatable once a driver is available; assess every document against this at the full run |
-| 28 | ❌ | Every document can distinguish the feature working from the feature broken | Live | 13 repaired by adding the observation that was missing. **`16` and `17` cannot, and are therefore failing tests that block release.** Of the ways an empty stale list can arise, all but one are now ruled out by observations that already exist: the per-file `report:` lines prove the reseed re-planned, and the `Purge` audit traces prove whether rows were removed. The one that remains is whether the staleness *evaluation* ran at all — `stale=0` is produced identically by *compared the rules, none drifted* and by *never compared anything*. Clearing it means emitting that evaluation, filed as [#347](https://github.com/DutchJaFO/Quotinator/issues/347); a fixture forcing the mechanism to fire would be working around the gap rather than closing it. The row's original wording — "repaired, *or* its limit is stated" — was wrong: stating a limitation explains a failing test, it does not resolve one |
+| 27 | ❌ | Every test runs unattended | Live | **The full run happened 2026-08-25; all 43 executed.** Advanced, not cleared. Repaired: `api-surface/04` step 6 now counts `X by ID` against `X by id` in the spec instead of asking a reader to open Scalar, and its step 5 extracts the quote id instead of carrying an `<id>` placeholder; `notifications-and-changelog/04` and `05` had poll gates on a title v1.8.3 never returns, so they hung rather than failed — one ran ten minutes before being stopped; `startup-and-degradation/01` called a script path #339 itself had moved; nine documents had `docker cp` of the WAL sidecars abort a run, since a clean stop checkpoints and deletes them. **Proven automatable during the run**, against a live browser: Scalar's rendered DOM, `startup-and-degradation/05`'s three degraded Blazor pages, and `notifications-and-changelog/01`'s full notification flow including Run → Confirm and the resulting reset. **Still open:** seven documents carry `<batchId>`/`<id>` placeholders with no extraction command, `notifications-and-changelog/01` steps 5–8 still read as browser instructions rather than commands, and a screenshot needs the browser pane displayed, so an unattended run must assert on the DOM |
+| 28 | ❌ | Every document can distinguish the feature working from the feature broken | Live | **Twelve more repaired after the full run**, on top of the 13 earlier. Six instruments could not fail or could not pass: `api-surface/04`'s three greps missed a space against the pretty-printed spec, so its *removal* half had been passing on a pattern that could never match; `16` and `17` counted `"operation":"Purge"` where the audit records `"Purged"`, reading 0 against 8 and 4 real traces; `import-and-staged-actions/05` counted `totalCount` on an endpoint that returns `totalMatching`; `notifications-and-changelog/01` step 7 required 3 from a `grep -c` against single-line JSON. Six assertions were vacuous as ordered: a scoped-clear check comparing 0 with 0, a schema-version check comparing 1 with 1 under a profile where multi-row history cannot exist, an already-canonical id fixture, a merge check against the one bundled rule file shipping zero rules, and two fixtures asserting outcomes they could not produce. `notifications-and-changelog/06` was misread as an application defect and was not one — its rollback emptied the counter and the replay failed, restored its backup and degraded, which imitates a broken backfill exactly. **`16` and `17` still cannot**, and remain failing tests that block release: the staleness *evaluation* is still unobservable, filed as [#347](https://github.com/DutchJaFO/Quotinator/issues/347). Their `Purged` grep is fixed, so that is now the only gap of the two |
 | 29 | ✅ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` are gone, and [#340](https://github.com/DutchJaFO/Quotinator/issues/340) covers testing `changelog.csx`. `scripts/README.md` still names them — deliberately, in a removal note recording what went and why. This row originally asked for "no reference to them", which a removal record cannot satisfy and should not |
 | 30 | ✅ | No reference to `docs/smoke-tests.md` resolves to nothing | Live | Every remaining mention names where the suite went. **Not** a bare `grep` for absence — archival plan docs keep the old name deliberately, with the pointer alongside. Nor a same-line grep: the pointer is often on the wrapped line below, so ten mentions look unresolved until each is read |
