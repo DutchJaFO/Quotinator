@@ -1,4 +1,4 @@
-﻿# Seeding takes a backup, a broken schema degrades rather than crashes, and Reset recovers
+# Seeding takes a backup, a broken schema degrades rather than crashes, and Reset recovers
 
 **Smoke:** no
 **Environment:** Fresh + Constrained
@@ -7,7 +7,7 @@
 ## Preconditions
 
 **Beyond the profile.** The data directory is a **bind mount** instead of the profile's named volume,
-so the host can manipulate the SQLite file directly â€” the whole test turns on breaking the schema from
+so the host can manipulate the SQLite file directly — the whole test turns on breaking the schema from
 outside the container. It runs its own container (`qt-startup-01`, started three times against that one
 directory), and the Constrained defect is a `DROP TABLE Quotinator_Quote` applied
 by the host while the container is stopped.
@@ -25,7 +25,7 @@ reached its own end state:
 
 **This document asserted the opposite of
 [`02-startup-backup-gating-and-storage-budget.md`](02-startup-backup-gating-and-storage-budget.md)
-until 2026-08-23** â€” that an ordinary restart *does* take a backup, and that this was a deliberate
+until 2026-08-23** — that an ordinary restart *does* take a backup, and that this was a deliberate
 tradeoff rather than a defect. It was neither a contradiction nor a difference of setup: #277 gated
 backups on each action's own real-work signal, and this document went on describing the behaviour from
 before that. Its own justification named the missing gate that #277 supplied.
@@ -33,7 +33,7 @@ before that. Its own justification named the missing gate that #277 supplied.
 ## Determinism
 
 - **`MSYS_NO_PATHCONV=1` and an explicit Windows-style source path are required under Git Bash.**
-  Without them Git Bash's POSIX-to-Windows path conversion mangles the `-v` argument â€” confirmed live:
+  Without them Git Bash's POSIX-to-Windows path conversion mangles the `-v` argument — confirmed live:
   `$(pwd)/...:/data` silently became a bind mount to `\Program Files\Git\data`, and the container wrote
   nothing to the intended host directory at all. The test then reads an empty directory and reports
   nonsense.
@@ -46,7 +46,7 @@ before that. Its own justification named the missing gate that #277 supplied.
 - **The backup count is compared before and after**, not asserted as an absolute.
 - **A backup protects a specific risky action, not a startup.** One is taken before a migration, so a
   partial failure still leaves a working database, and before a reseed, for the same reason. They exist
-  so a user can recover â€” which is why Reset is what the app offers after a failed migration. A startup
+  so a user can recover — which is why Reset is what the app offers after a failed migration. A startup
   with no migration pending and nothing to seed puts nothing at risk, so it takes none.
 
 ## Steps
@@ -64,10 +64,10 @@ ls .claude/temp/qt-startup-01-data/backups/ 2>/dev/null
 `backups/` does not exist or is empty. A baseline run has nothing to lose, so no backup is taken.
 
 **On failure:** an empty host directory, or an init log that never mentions the baseline, means the
-bind mount did not take effect â€” see the `MSYS_NO_PATHCONV` note in Determinism. Stop: every step
+bind mount did not take effect — see the `MSYS_NO_PATHCONV` note in Determinism. Stop: every step
 below reads and writes that directory, and against the wrong one they report nonsense.
 
-### 2. Restart unchanged â€” nothing is at risk, so nothing is backed up
+### 2. Restart unchanged — nothing is at risk, so nothing is backed up
 
 ```bash
 docker restart qt-startup-01
@@ -82,7 +82,7 @@ the content already exists, so neither risky action runs and there is nothing to
 ### 3. Break the schema on the host side, then restart
 
 This start is a raw `docker run` rather than a `create`, because it must mount the directory the
-earlier steps already seeded â€” `create` always starts from a clean one:
+earlier steps already seeded — `create` always starts from a clean one:
 
 ```bash
 docker rm -f qt-startup-01
@@ -102,21 +102,21 @@ docker ps -a --filter name=qt-startup-01 --format "{{.Status}}"
 ```
 
 **Expected:** the log shows, in order: `[Database - Backup] backup complete`;
-`[Database - Init] seeding failed â€” restoring pre-seed backup, database left unchanged...` (ERR);
+`[Database - Init] seeding failed — restoring pre-seed backup, database left unchanged...` (ERR);
 `[Database - Init] pre-seed backup restored.` (INF); then
 `[Server] Database initialisation failed...` (CRIT/FTL) with the underlying
-`SqliteException: ... no such table: Quotinator_Quote` attached as the log event's exception â€” **not**
+`SqliteException: ... no such table: Quotinator_Quote` attached as the log event's exception — **not**
 a bare .NET unhandled-exception runtime dump.
 
-The backup count reads `1` â€” the first backup this test has produced, because step 2 correctly took
+The backup count reads `1` — the first backup this test has produced, because step 2 correctly took
 none. This is the case a backup exists for: seeding was about to run against a database it could not
 repair, and the backup is what let it restore rather than leave a broken one behind. One file per
 `CreateBackup` call; its `-shm`/`-wal` sidecars are not separate backups.
 
-`docker ps -a` shows the container as `Up â€¦`, **not** `Exited` â€” the app degrades, it does not crash.
+`docker ps -a` shows the container as `Up …`, **not** `Exited` — the app degrades, it does not crash.
 
 **On failure:** an `Exited` container means the app crashed instead of degrading, which is the defect
-this test exists to catch â€” and there is then no server left to answer the degraded-surface and Reset
+this test exists to catch — and there is then no server left to answer the degraded-surface and Reset
 steps below. Stop and record the exit rather than running them against nothing.
 
 ### 4. Confirm the degraded surface
@@ -156,23 +156,23 @@ curl -s -w " [%{http_code}]\n" http://localhost:18401/api/v1/quotes/random
 
 **Expected:** `/health` returns `200` with `{"status":"healthy"}`, proving
 `DatabaseHealthState.MarkHealthy()` clears the degraded state rather than requiring a process restart.
-`/quotes/random` returns `200` with `{"status":"NoResults", ...}` and an empty `items` array â€” not
+`/quotes/random` returns `200` with `{"status":"NoResults", ...}` and an empty `items` array — not
 `503`, and not real quote data, because the database is genuinely empty after a Reset.
 
 ## Observed effect
 
-Well established here, unusually â€” the ordered log sequence above *is* the observed effect, and it is
+Well established here, unusually — the ordered log sequence above *is* the observed effect, and it is
 what the assertions are made against.
 
 **The three compounding gaps this came from**, all found during #254's own T1 pass:
 
 1. Migration-version tracking detected a pending migration only by comparing recorded counts. Rewriting
-   an unreleased migration's content in place â€” same slot, same final count â€” left an already-migrated
+   an unreleased migration's content in place — same slot, same final count — left an already-migrated
    database reading as "up to date" while its on-disk schema no longer matched. Seeding then crashed
    with no exception safety net, unlike the migration phase which already had one.
 2. That uncaught exception propagated out of `Main` before Kestrel ever bound. Under IIS Express/ANCM
    it rendered a raw stack-trace page to whoever was looking at the browser. An initial fix caught it
-   and exited the process cleanly â€” which broke the *only* documented remedy, since a fully-exited
+   and exited the process cleanly — which broke the *only* documented remedy, since a fully-exited
    process has no server left to receive a Reset request.
 3. Reset while degraded genuinely repairs the schema, but `DatabaseHealthState` is in-memory and does
    not observe that on its own. A first pass left the app reporting unhealthy forever after a
@@ -187,4 +187,3 @@ dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-01 \
 
 This test's data directory is a bind mount rather than a named volume, so removing the directory is
 what removes its data.
-
