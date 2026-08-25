@@ -38,10 +38,12 @@ never became healthy.
 ### 2. Stage a batch by previewing the curated file under `review`
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" \
-  -F "file=@data/sources/quotinator-curated.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:18604/api/v1/import/preview"
+batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
+            -F "file=@data/sources/quotinator-curated.json" \
+            -F 'settings={"duplicateResolution":{"default":"review"}}' \
+            "http://localhost:18604/api/v1/import/preview" \
+          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "batchId=$batchId"
 ```
 
 **Expected:** the response carries a `batchId` — the readings below are scoped to it.
@@ -49,7 +51,7 @@ curl -s -X POST -H "X-Api-Key: smoketest" \
 ### 3. Record what the batch staged and what the domain holds, before discarding
 
 ```bash
-curl -s "http://localhost:18604/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
+curl -s "http://localhost:18604/api/v1/import/actions?batchId=$batchId&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 curl -s "http://localhost:18604/api/v1/version" | grep -o '"quotes":[0-9]*'
 ```
@@ -63,7 +65,7 @@ satisfied vacuously. Stop — this is a staging problem, not a discard result.
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18604/api/v1/import/actions/discard?batchId=<batchId>"
+  "http://localhost:18604/api/v1/import/actions/discard?batchId=$batchId"
 ```
 
 **Expected:** `204`.
@@ -71,7 +73,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
 ### 5. Read both again
 
 ```bash
-curl -s "http://localhost:18604/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
+curl -s "http://localhost:18604/api/v1/import/actions?batchId=$batchId&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 curl -s "http://localhost:18604/api/v1/version" | grep -o '"quotes":[0-9]*'
 ```

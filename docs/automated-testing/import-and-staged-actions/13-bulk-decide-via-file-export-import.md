@@ -51,22 +51,27 @@ never became healthy.
 ### 2. Stage a batch to round-trip
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" \
-  -F "file=@data/sources/quotinator-curated.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:18613/api/v1/import"
+batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
+            -F "file=@data/sources/quotinator-curated.json" \
+            -F 'settings={"duplicateResolution":{"default":"review"}}' \
+            "http://localhost:18613/api/v1/import" \
+          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+pendingCount=$(curl -s "http://localhost:18613/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+               | grep -o '"id":"[0-9a-f-]\{36\}"' | wc -l)
+echo "batchId=$batchId pendingCount=$pendingCount"
 ```
 
-**Expected:** the staging import returns `202`. Note the returned `batchId` — the next step needs it.
+**Expected:** a non-empty `batchId` and a non-zero `pendingCount` — the figure step 3 compares
+`actionsDecided` against.
 
 ### 3. Export that batch as JSON, feed it straight back, and apply
 
 ```bash
-curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=<batchId>&format=json" -o /tmp/export.json
+curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=$batchId&format=json" -o /tmp/export.json
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  -F "batchId=<batchId>" -F "file=@/tmp/export.json" \
-  "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<batchId>"
-curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18613/api/v1/import/actions/apply?batchId=<batchId>"
+  -F "batchId=$batchId" -F "file=@/tmp/export.json" \
+  "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=$batchId"
+curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18613/api/v1/import/actions/apply?batchId=$batchId"
 ```
 
 **Expected:** the JSON round trip returns `200` with `errors: []` and `actionsDecided` matching the
@@ -75,14 +80,16 @@ batch's own pending-action count.
 ### 4. Repeat the round trip via CSV
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" \
-  -F "file=@data/sources/quotinator-curated.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:18613/api/v1/import"
-curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=<new batchId>&format=csv" -o /tmp/export.csv
+csvBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
+               -F "file=@data/sources/quotinator-curated.json" \
+               -F 'settings={"duplicateResolution":{"default":"review"}}' \
+               "http://localhost:18613/api/v1/import" \
+             | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "csvBatchId=$csvBatchId"
+curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=$csvBatchId&format=csv" -o /tmp/export.csv
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  -F "batchId=<new batchId>" -F "file=@/tmp/export.csv" -F "format=csv" \
-  "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<new batchId>&format=csv"
+  -F "batchId=$csvBatchId" -F "file=@/tmp/export.csv" -F "format=csv" \
+  "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=$csvBatchId&format=csv"
 ```
 
 **Expected:** the CSV round trip also returns `200` with `errors: []`.
@@ -94,17 +101,19 @@ already had every row decided, so "every other row is still decided" would be tr
 the test could not fail in the direction it exists to catch.
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" \
-  -F "file=@data/sources/quotinator-curated.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:18613/api/v1/import"
+thirdBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
+                 -F "file=@data/sources/quotinator-curated.json" \
+                 -F 'settings={"duplicateResolution":{"default":"review"}}' \
+                 "http://localhost:18613/api/v1/import" \
+               | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "thirdBatchId=$thirdBatchId"
 ```
 
-Note this **third** `batchId`, export it, and read its status tally:
+Export it, and read its status tally:
 
 ```bash
-curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=<third batchId>&format=csv" -o /tmp/export3.csv
-curl -s "http://localhost:18613/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+curl -s "http://localhost:18613/api/v1/import/actions/export?batchId=$thirdBatchId&format=csv" -o /tmp/export3.csv
+curl -s "http://localhost:18613/api/v1/import/actions?batchId=$thirdBatchId&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
@@ -117,16 +126,29 @@ genuinely undecided batch.
 
 ### 6. Bulk-decide a copy with one malformed row, and re-read the tally
 
-Make the bad copy first. Open `/tmp/export3.csv`, copy it to `/tmp/export3-bad.csv`, and in the copy
-change **the first data row's `Decision` cell** to `not-a-choice` — a value no decision accepts. Leave
-the header and every other row exactly as exported. Note that row's `actionId` — not because the error
-names it, but so the tally afterwards can be read against the right action.
+Make the bad copy first. The header and every other row stay exactly as exported; only the first data
+row's `Decision` cell becomes `not-a-choice`, a value no decision accepts:
+
+```bash
+dotnet script scripts/testing/corrupt-csv-cell.csx -- \
+  --in /tmp/export3.csv --out /tmp/export3-bad.csv \
+  --column Decision --value not-a-choice
+```
+
+**Expected:** the script reports the replaced cell and the `actionId` on that row — needed below, so
+the tally can be read against the right action.
+
+**The edit is a script rather than a shell one-liner**, per
+[ADR 010](../../architecture-decisions/010-repository-is-csharp-only.md): this repository does not write
+text transformations in `sed`/`awk`. Until #339's full run this step described the edit in prose and
+asked the reader to make it by hand, which no unattended run can do. The script matches the column **by
+header name**, so a new column appearing in the export shifts nothing.
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  -F "batchId=<third batchId>" -F "file=@/tmp/export3-bad.csv" -F "format=csv" \
-  "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<third batchId>&format=csv"
-curl -s "http://localhost:18613/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+  -F "batchId=$thirdBatchId" -F "file=@/tmp/export3-bad.csv" -F "format=csv" \
+  "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=$thirdBatchId&format=csv"
+curl -s "http://localhost:18613/api/v1/import/actions?batchId=$thirdBatchId&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
@@ -155,7 +177,7 @@ if this test is ever automated, the edit belongs in `scripts/testing/` as a `.cs
 ### 7. Reject an unknown export format
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<batchId>&format=xml"
+curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" -F "batchId=$batchId" -F "file=@/tmp/export.json" "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=$batchId&format=xml"
 ```
 
 **Expected:** unknown `format` returns `422`.
@@ -163,7 +185,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" -F "batchId=<bat
 ### 8. Reject a request with no admin key
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -F "batchId=<batchId>" -F "file=@/tmp/export.json" "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=<batchId>"
+curl -s -w "\n%{http_code}\n" -X POST -F "batchId=$batchId" -F "file=@/tmp/export.json" "http://localhost:18613/api/v1/import/actions/bulk-decide?batchId=$batchId"
 ```
 
 **Expected:** no `X-Api-Key` returns `401`.

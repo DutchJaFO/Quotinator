@@ -30,8 +30,10 @@ about. A count asserts something nobody intended and gets "fixed" by editing a d
 - **Waits for health, not a duration.**
 - The dismiss checks use a **fixed all-zero id** that cannot exist, so the `404` is about the id being
   absent rather than about any particular row's state.
-- The empty-state check requires dismissing the announcement **first** — a fresh container is no longer
-  empty, so the genuinely-zero-rows path is otherwise never exercised.
+- The empty-state check requires dismissing **every** active row first — a fresh container is no longer
+  empty, so the genuinely-zero-rows path is otherwise never exercised. It produces more than one
+  notification now, so dismissing only the announcement leaves the page populated and the empty state
+  unreached.
 
 ## Steps
 
@@ -74,23 +76,53 @@ curl -s "http://localhost:18501/openapi/v1.json" | grep -o '"Notifications"' | h
 
 **Expected:** the OpenAPI spec contains the `Notifications` tag.
 
-### 5. Render the notification pages in a browser
+### 5. Render the notification pages, and assert on the DOM
 
-**Blazor UI** — visit `http://localhost:18501/notifications` and `http://localhost:18501/`.
+**This step needs a browser driver** — the pages are Blazor and the assertions are about what renders,
+so `curl` cannot make them. They are stated as DOM reads so a driver can run them unattended, and so
+two runs check the same thing.
 
-**Take an actual screenshot of both.** Page text alone cannot catch a CSS or layout regression, and a
-multi-line body is exactly where one shows up.
+**Expected:** every row of the table below holds, on both pages.
 
-**Expected:** `/notifications` renders the page heading and #279's announcement row, with no crash and
-no 503. `/` renders `StartupSuccessModal` with that notification in its summary section.
+| Page | Assert |
+|---|---|
+| `/notifications` | `document.title` contains `Notifications`; `tbody tr` count is non-zero; the row text contains the #279 announcement's **body** (`Two REST API operation IDs were renamed`), since the table renders the message rather than the title |
+| `/` | body text contains the startup-success wording and the same announcement; `tbody tr` is non-zero |
+| both | no stack trace in the body text — `/at [A-Za-z.]+\(/` must not match — and no `503` |
 
-### 6. Dismiss the announcement and reload both pages
+**Capture a screenshot of each as evidence**, but never as the assertion: a screenshot nothing compares
+against records what happened without being able to fail. The DOM reads above are what fail.
 
-**Empty state** — dismiss the announcement via `POST /api/v1/notifications/{id}/dismiss`, then reload
-both pages.
+**Verified this way during #339's full run**, driving a real browser: `/notifications` rendered two
+rows with the Created / Type / Message / Expires / Status / Action columns, and `/` rendered
+*Quotinator is ready … Startup completed successfully.* with both notifications and the stats block.
 
-**Expected:** after dismissing, `NotificationSummary` renders cleanly with zero rows, rather than an
-empty heading with nothing under it.
+### 6. Dismiss every active notification and re-read both pages
+
+```bash
+for id in $(curl -s "http://localhost:18501/api/v1/notifications?pageSize=0" \
+            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
+    "http://localhost:18501/api/v1/notifications/$id/dismiss"
+done
+curl -s "http://localhost:18501/api/v1/notifications?pageSize=0" | grep -o '"isDismissed":[a-z]*' | sort | uniq -c
+```
+
+**Expected:** each dismiss returns `200`, and every row then reads `"isDismissed":true`.
+
+**`GET /notifications` returns dismissed rows too** — the API's default is unfiltered, while the
+*page's* filter defaults to Active. Do not read a still-populated API response as a failed dismiss;
+read the flag.
+
+Then, with the driver again:
+
+**Expected:** `/notifications` shows `tbody tr` count `0` and the text *No notifications match this
+filter.*; `/` drops its Notifications section entirely rather than leaving an empty heading, and its
+stats block still renders.
+
+**Dismissing *every* active row is deliberate.** The empty state is only reachable with none left, and
+a fresh container now produces more than one — two when measured. Dismissing just the announcement, as
+this step said until #339's full run, leaves the what's-new row behind and the empty state untested.
 
 ### 7. Insert the three rows no producer creates
 
@@ -130,26 +162,52 @@ and this fixture needs updating with it.
 
 ### 8. Check the status column, the status filter, and the Action button
 
-With the three rows from step 7 in place.
+With the three rows from step 7 in place, on `/notifications`. **Driver step**, like step 5 — every
+assertion is a DOM read or a click, and each is stated so a driver can perform it without judgement.
 
-**Expected — status column:** reads `Active`/`Expired`/`Dismissed` correctly. An undismissed row past
-its `ExpiresAt` shows `Expired`, never `Active`.
+**Expected — status column and default filter:** reading `tbody tr`, taking each row's message cell
+and status cell —
 
-**Expected — status filter:** defaults to **Active** on page load; **All** shows every row including
-expired and dismissed; **Expired only** shows just the expired row.
+- The page loads with the **Active** filter selected: exactly the `ActionRequired` row is listed, and
+  its Action cell holds a **Run** button.
+- Click **All**: all five rows are listed, and their statuses read `Dismissed`, `Dismissed`, `Active`,
+  `Expired`, `Dismissed`. **The undismissed row past its `ExpiresAt` reads `Expired`, never `Active`**
+  — that is the computed-status assertion.
+- Click **Expired only**: exactly one row, the expired one.
 
-**Expected — Action button:** the `ActionRequired`/`DatabaseReset` row shows a **Run** button. Clicking
-it replaces it with **Confirm**/**Cancel**. **Cancel** reverts to the plain **Run** button without
-calling the reset endpoint — confirm via the quote count or `/version` staying unchanged. **Confirm**
-actually runs `POST /admin/database/reset`: the quote count drops to 0, matching
-[`database-lifecycle/03-reset-is-a-full-wipe.md`](../database-lifecycle/03-reset-is-a-full-wipe.md),
-and the row disappears afterwards because the whole `System_Notification` table is wiped by Reset like
-every other table.
+**Action button, Cancel path.** Back on **Active**, click **Run** in the ActionRequired row.
+
+- The row's buttons become **Confirm** and **Cancel**.
+- Click **Cancel**: the buttons revert to a single **Run**.
+- `curl -s http://localhost:18501/api/v1/version | grep -o '"quotes":[0-9]*'` is **unchanged** — Cancel
+  called nothing.
+
+**Action button, Confirm path.** Click **Run**, then **Confirm**.
+
+- `/version`'s `quotes` count drops to `0`, matching
+  [`database-lifecycle/03-reset-is-a-full-wipe.md`](../database-lifecycle/03-reset-is-a-full-wipe.md).
+- `curl -s "http://localhost:18501/api/v1/notifications?pageSize=0"` returns **no rows** — Reset wipes
+  `System_Notification` along with every other table.
+
+**The quote count is what makes Cancel and Confirm distinguishable.** Both leave the page looking
+similar; only the domain read separates "reverted without calling anything" from "ran the reset".
+
+**Verified this way during #339's full run**, driving a real browser: the filters behaved exactly as
+above, Cancel left `quotes` at `799`, and Confirm dropped it to `0` with `0` notification rows left.
 
 ## Observed effect
 
-Partially established. The rendered pages are the observed effect and the screenshots capture them;
-what the container logs while writing the startup notification has not been recorded.
+**Captured 2026-08-25, driving a real browser.** `/notifications` renders a table with Created / Type /
+Message / Expires / Status / Action columns and a Show filter offering Active, All and Expired only;
+the Message column carries each notification's **body**, not its title. `/` renders
+*Quotinator is ready … Startup completed successfully.* above the notification summary and the entity
+counts. After every row is dismissed, `/notifications` reads *No notifications match this filter.* and
+the modal drops its Notifications section rather than leaving an empty heading.
+
+Driving the ActionRequired row's **Run → Confirm** performed a full database reset from the UI: quotes
+`799 → 0`, and the notification table emptied with it.
+
+What the container logs while writing the startup notification has still not been recorded.
 
 ## Cleanup
 

@@ -449,6 +449,46 @@ Three shapes currently break this, and each has an answer:
 **A step that genuinely cannot be automated is a finding, not an exemption** — say what blocks it, in
 the document, so it reads as known rather than as an oversight.
 
+#### Capture ids into variables, never into `<placeholders>`
+
+A step reading `…/apply?batchId=<batchId>` cannot run: something has to read the previous response and
+paste the value in, and that something is a person. Capture it instead, in the same block that produced
+it:
+
+```bash
+batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
+            -F "file=@data/sources/quotinator-curated.json" \
+            -F 'settings={"duplicateResolution":{"default":"review"}}' \
+            "http://localhost:PORT/api/v1/import" \
+          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "batchId=$batchId"
+```
+
+```bash
+# the first pending action in that batch
+actionId=$(curl -s "http://localhost:PORT/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+           | grep -o '"id":"[0-9a-f-]\{36\}"' | head -1 | cut -d'"' -f4)
+```
+
+```bash
+# every pending action in that batch, decided in turn
+for id in $(curl -s "http://localhost:PORT/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
+  curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
+    -d '{"quoteText":{"choice":"keep"}}' \
+    "http://localhost:PORT/api/v1/import/actions/$id/decide"
+done
+```
+
+**`echo` the captured value.** An empty variable produces a request to `…?batchId=` and a confusing
+error several steps later; echoing it turns that into an immediately visible blank.
+
+**`pageSize=0` on any listing a loop reads from**, or the default page of 20 silently truncates the
+set — the curated file stages more than that.
+
+A value a document genuinely cannot derive — one a *person* chooses, such as which of several rows to
+corrupt — stays explicit, and the step says how to choose it.
+
 ---
 
 ## Environment profiles

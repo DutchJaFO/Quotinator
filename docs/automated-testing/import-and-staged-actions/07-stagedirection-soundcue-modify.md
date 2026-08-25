@@ -84,14 +84,22 @@ cat > .claude/temp/smoke-171-172-v2.json <<'EOF'
   "soundCues": [{"id":"f0000003-0000-4000-8000-000000000003","text":"Distant thunder, rolling.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172-v2.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18607/api/v1/import"
+batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172-v2.json" \
+            -F 'settings={"duplicateResolution":{"default":"review"}}' "http://localhost:18607/api/v1/import" \
+          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "batchId=$batchId"
 ```
 
-Copy that `batchId`, list its pending actions, and copy the two action `id`s:
+Capture the two action ids this batch staged:
 
 ```bash
-curl -s "http://localhost:18607/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+stageId=$(curl -s "http://localhost:18607/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+          | grep -o '"id":"[0-9a-f-]\{36\}","batchId":"[^"]*","actionType":"[A-Za-z]*","entityType":"StageDirection"' \
+          | head -1 | cut -d'"' -f4)
+soundId=$(curl -s "http://localhost:18607/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+          | grep -o '"id":"[0-9a-f-]\{36\}","batchId":"[^"]*","actionType":"[A-Za-z]*","entityType":"SoundCue"' \
+          | head -1 | cut -d'"' -f4)
+echo "stageId=$stageId soundId=$soundId"
 ```
 
 **Expected:** `smoke-171-172-v2.json`, under `review`, stages a `Pending` `Modify` action for each, with
@@ -100,21 +108,39 @@ curl -s "http://localhost:18607/api/v1/import/actions?status=pending&batchId=<ba
 **On failure:** an empty pending listing means the `review` policy did not take effect and nothing was
 staged, so the decide and apply below would be operating on an empty batch. Stop.
 
-### 4. Decide both actions and apply the batch
+### 4. Decide every action in the batch, then apply it
+
+The fixture's quote stages an action of its own, and `apply` is all-or-nothing — so the two under test
+are decided with their real choices, and anything else in the batch is decided too:
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
+curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"stageDirectionText":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
-  "http://localhost:18607/api/v1/import/actions/<stage direction action id>/decide"
-curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
+  "http://localhost:18607/api/v1/import/actions/$stageId/decide"
+curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"soundCueText":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
-  "http://localhost:18607/api/v1/import/actions/<sound cue action id>/decide"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18607/api/v1/import/actions/apply?batchId=<batchId>"
+  "http://localhost:18607/api/v1/import/actions/$soundId/decide"
+
+for id in $(curl -s "http://localhost:18607/api/v1/import/actions?status=Pending&batchId=$batchId&pageSize=0" \
+            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
+  curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
+    -d '{"quoteText":{"choice":"keep"}}' \
+    "http://localhost:18607/api/v1/import/actions/$id/decide"
+done
+
+curl -s "http://localhost:18607/api/v1/import/actions?status=Pending&batchId=$batchId&pageSize=0" \
+  | grep -o '"totalCount":[0-9]*'
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
+  "http://localhost:18607/api/v1/import/actions/apply?batchId=$batchId"
 ```
 
-**Expected:** after deciding and applying, both rows carry the corrected text and
-`CompletenessStatus: Complete` — read back by step 8.
+**Expected:** `"totalCount":0` before the apply, then `200`. Both rows then carry the corrected text
+and `CompletenessStatus: Complete` — read back by step 8.
+
+**The loop is not redundant with the two explicit decides.** A fixture needs at least one quote for
+`POST /import` to accept it, and that quote stages its own `Modify` action; leaving it undecided makes
+`apply` return `422` and the rest of the document unreachable. Measured during #339's full run, where
+the batch staged three actions and this step named two.
 
 ### 5. Re-import `smoke-171-172-v3.json` — a third `text`, still under `review`
 
@@ -128,14 +154,16 @@ cat > .claude/temp/smoke-171-172-v3.json <<'EOF'
   "soundCues": [{"id":"f0000003-0000-4000-8000-000000000003","text":"Distant thunder, fading.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172-v3.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18607/api/v1/import"
+thirdBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172-v3.json" \
+                 -F 'settings={"duplicateResolution":{"default":"review"}}' "http://localhost:18607/api/v1/import" \
+               | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "thirdBatchId=$thirdBatchId"
 ```
 
-Copy this third `batchId`, then read what it staged:
+Read what that third batch staged:
 
 ```bash
-curl -s "http://localhost:18607/api/v1/import/actions?batchId=<third batchId>&pageSize=0" \
+curl -s "http://localhost:18607/api/v1/import/actions?batchId=$thirdBatchId&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 
@@ -169,17 +197,19 @@ cat > .claude/temp/smoke-171-172-addonly-v2.json <<'EOF'
   "soundCues": [{"id":"f0000003-0000-4000-8000-000000000009","text":"Corrected sound after correction.","soundFileUrl":null,"imageUrl":null,"translations":{}}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172-addonly-v2.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18607/api/v1/import"
+correctionBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-171-172-addonly-v2.json" \
+                      -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18607/api/v1/import" \
+                    | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "correctionBatchId=$correctionBatchId"
 ```
 
-Copy that `batchId` — the reversal needs it — then reverse, preview first:
+Reverse it, preview first:
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18607/api/v1/import/actions/reverse?batchId=<correction batchId>&preview=true"
+  "http://localhost:18607/api/v1/import/actions/reverse?batchId=$correctionBatchId&preview=true"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18607/api/v1/import/actions/reverse?batchId=<correction batchId>"
+  "http://localhost:18607/api/v1/import/actions/reverse?batchId=$correctionBatchId"
 ```
 
 **Expected:** `smoke-171-172-addonly-v2.json`, under `newest-wins`, applies immediately with nothing

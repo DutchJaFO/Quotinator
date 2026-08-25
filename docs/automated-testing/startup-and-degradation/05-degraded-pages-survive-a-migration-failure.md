@@ -95,22 +95,32 @@ the design
 [`01-seeding-backup-degraded-startup-and-reset-recovery.md`](01-seeding-backup-degraded-startup-and-reset-recovery.md)
 covers, and expected rather than a regression.
 
-### 4. Visit the three Blazor pages in a real browser
+### 4. Read the three Blazor pages through a driver
 
-Visit `http://localhost:18405/`, `http://localhost:18405/stats` and
-`http://localhost:18405/notifications` in a real browser.
+**Driver step** — these are Blazor pages and the assertions are about what renders, so they are stated
+as DOM reads rather than as "look at it", and a driver performs them unattended.
 
-**Expected:**
+**Expected:** every row of the table below holds.
 
-- `/` renders `StartupErrorModal` (*Quotinator started with a problem*) with the real failure reason
-  and all-zero stats, not a raw stack trace
-- `/stats` renders the Statistics page with all-zero counts
-- `/notifications` renders `No notifications yet.` — `NotificationReader` catching the missing-table
-  exception and returning empty, which the page renders as an empty list rather than an unhandled
-  exception
+| Page | Assert |
+|---|---|
+| `/` | body text contains *started with a problem* and the real failure reason; **no** stack trace — `/at [A-Za-z.]+\(/` must not match |
+| `/stats` | `document.title` contains `Statistics`; every rendered count is `0`; no stack trace |
+| `/notifications` | body text contains *No notifications yet.*; `tbody tr` count is `0`; no stack trace |
 
-Browser console: `Failed to load resource: 503` entries are expected, from other API calls the page
-makes while degraded. Anything else — a JS exception, a Blazor circuit error — is not.
+**Console:** only `Failed to load resource: … 503` entries, from the API calls the pages make while
+degraded. **Any other console error — a JS exception, a Blazor circuit error — is a failure**, and a
+driver asserts that by filtering the console to errors and checking every one matches `503`.
+
+**All four of these were confirmed automatable during #339's full run**, against a genuinely degraded
+container reached by other means (a bind mount plus a host-side `DROP TABLE`, since this document's own
+technique no longer degrades — see Preconditions). `/`, `/stats` and `/notifications` each returned
+`200` and rendered exactly as above, with the console carrying only 503s. The step is written this way
+so that whatever setup #327 gives it, the assertions are already runnable.
+
+**One trap #327 should inherit:** a degraded container answers `/health` while still *starting*, and at
+that point `/api/v1/notifications` returns `200` rather than `503`. Wait for the settled `unhealthy`
+state, not merely for a response.
 
 ## Observed effect
 

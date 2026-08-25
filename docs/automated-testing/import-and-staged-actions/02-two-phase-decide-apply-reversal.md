@@ -43,33 +43,38 @@ never became healthy.
 ### 2. Stage a batch under `review`
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" \
-  -F "file=@data/sources/quotinator-curated.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  -w "\n%{http_code}\n" \
-  "http://localhost:18602/api/v1/import"
+batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
+            -F "file=@data/sources/quotinator-curated.json" \
+            -F 'settings={"duplicateResolution":{"default":"review"}}' \
+            "http://localhost:18602/api/v1/import" \
+          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "batchId=$batchId"
 ```
 
-**Expected:** the response carries a `batchId` — every step below is scoped to it.
+**Expected:** a non-empty `batchId` — every step below is scoped to it.
+
+**On failure:** an empty value means nothing staged, and each step below would then act on no batch at
+all while still returning plausible-looking codes. Stop.
 
 ### 3. List this batch's pending actions
 
 ```bash
-curl -s "http://localhost:18602/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0" \
-  | grep -o '"id":"[^"]*"'
+curl -s "http://localhost:18602/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+  | grep -o '"id":"[0-9a-f-]\{36\}"' | wc -l
 ```
 
-**Expected:** the action `id`s this batch staged — the set step 4 must decide in full.
+**Expected:** a non-zero count — the actions this batch staged, which step 4 must decide in full.
 
 ### 4. Decide every one of them, then confirm none is left
 
-Repeat the `decide` call for each `id` listed:
-
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
-  -d '{"quoteText":{"choice":"keep"}}' \
-  "http://localhost:18602/api/v1/import/actions/<id>/decide"
-curl -s "http://localhost:18602/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0" \
+for id in $(curl -s "http://localhost:18602/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
+  curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
+    -d '{"quoteText":{"choice":"keep"}}' \
+    "http://localhost:18602/api/v1/import/actions/$id/decide"
+done
+curl -s "http://localhost:18602/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
   | grep -o '"totalCount":[0-9]*'
 ```
 
@@ -83,7 +88,7 @@ trap this confirmation exists to close. Stop and decide the remainder.
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18602/api/v1/import/actions/apply?batchId=<batchId>"
+  "http://localhost:18602/api/v1/import/actions/apply?batchId=$batchId"
 ```
 
 **Expected:** `200`.
@@ -92,7 +97,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18602/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
+  "http://localhost:18602/api/v1/import/actions/reverse?batchId=$batchId&preview=true"
 ```
 
 **Expected:** `200`, never the `422` this issue reported.
@@ -101,7 +106,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18602/api/v1/import/actions/reverse?batchId=<batchId>"
+  "http://localhost:18602/api/v1/import/actions/reverse?batchId=$batchId"
 ```
 
 **Expected:** `200`, never the `422` this issue reported.

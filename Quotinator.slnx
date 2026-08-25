@@ -396,6 +396,7 @@
     <File Path="scripts/SOURCES.md" />
   </Folder>
   <Folder Name="/scripts/testing/">
+    <File Path="scripts/testing/corrupt-csv-cell.csx" />
     <File Path="scripts/testing/execute-sql.csx" />
     <File Path="scripts/testing/sqlite-storage-probe.csx" />
     <File Path="scripts/testing/test-env.csx" />

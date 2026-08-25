@@ -45,21 +45,23 @@ never became healthy.
 ### 2. Apply a batch cleanly under `newest-wins`
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" \
+response=$(curl -s -w "\n%{http_code}" -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' \
-  -w "\n%{http_code}\n" \
-  "http://localhost:18605/api/v1/import"
+  "http://localhost:18605/api/v1/import")
+echo "$response" | tail -1
+batchId=$(echo "$response" | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "batchId=$batchId"
 ```
 
-**Expected:** `200` with nothing left pending — a genuinely `Applied` batch. Note the returned
-`batchId`.
+**Expected:** `200` with nothing left pending — a genuinely `Applied` batch — and a non-empty
+`batchId`, which every step below is scoped to.
 
 ### 3. Preview the reversal
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18605/api/v1/import/actions/reverse?batchId=<batchId>&preview=true"
+  "http://localhost:18605/api/v1/import/actions/reverse?batchId=$batchId&preview=true"
 ```
 
 **Expected:** `200` **without changing anything**.
@@ -68,7 +70,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18605/api/v1/import/actions/reverse?batchId=<batchId>"
+  "http://localhost:18605/api/v1/import/actions/reverse?batchId=$batchId"
 ```
 
 **Expected:** `200`.
@@ -76,7 +78,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
 ### 5. List the reversed batch's actions
 
 ```bash
-curl -s "http://localhost:18605/api/v1/import/actions?batchId=<batchId>"
+curl -s "http://localhost:18605/api/v1/import/actions?batchId=$batchId"
 ```
 
 **Expected:** the listing still shows every action `"status":"Applied"` — see Determinism.
@@ -85,7 +87,7 @@ curl -s "http://localhost:18605/api/v1/import/actions?batchId=<batchId>"
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18605/api/v1/import/actions/reverse?batchId=<batchId>"
+  "http://localhost:18605/api/v1/import/actions/reverse?batchId=$batchId"
 ```
 
 **Expected:** `404`: already reversed, treated as absent.
@@ -145,11 +147,13 @@ the database copy taken above — the *oldest* still-live batch, which is by def
 recently applied one:
 
 ```bash
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-reverse.db \
-  --sql "SELECT Id, DateCreated FROM Import_Batch WHERE IsDeleted = 0 ORDER BY DateCreated ASC LIMIT 1"
+oldestBatchId=$(dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-reverse.db \
+  --sql "SELECT Id FROM Import_Batch WHERE IsDeleted = 0 ORDER BY DateCreated ASC LIMIT 1" \
+  | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+echo "oldestBatchId=$oldestBatchId"
 ```
 
-**Expected:** an id for a batch older than the one just reversed.
+**Expected:** a non-empty id, for a batch older than the one just reversed.
 
 **On failure:** **if that query returns only one row, this step cannot run** — there is no *older* batch
 to reverse, so LIFO has nothing to reject and a `422` would prove nothing. That is a precondition
@@ -160,7 +164,7 @@ import.
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18605/api/v1/import/actions/reverse?batchId=<the id from that query>"
+  "http://localhost:18605/api/v1/import/actions/reverse?batchId=$oldestBatchId"
 ```
 
 **Expected:** `422` — the strict LIFO stack rule: only the most recently applied batch still live may be

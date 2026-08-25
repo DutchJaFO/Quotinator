@@ -20,9 +20,10 @@ run stages through it.
 - **`status=pending` is deliberately lowercase**, and the `batchId` on the apply call is deliberately
   lowercased too. Both prove the case-insensitive query-filter fix (#154) is still in effect — matching
   the stored casing would pass without testing anything.
-- **The curated re-import currently produces two pending actions** (both `Airplane!` quotes), so a
-  single `decide` is not enough to apply. That count is a property of the bundled file and will move if
-  it changes; treat it as "decide every remaining id", not as an expected number.
+- **The curated re-import stages more than one action**, so a single `decide` is never enough to apply
+  — which is why step 8 loops over every pending id rather than naming a number. The count is a
+  property of the bundled file and moves when it changes: two when this was written, 13 when measured
+  during #339's full run.
 - `ambiguousFields` is populated only where fields genuinely differ — re-importing the same file
   unmodified usually means they do not.
 - **`GET /import/actions`'s `items` may be empty or populated; that is not the assertion, the status
@@ -67,75 +68,95 @@ manual-review machinery has regressed back in.
 ### 4. Import the curated file under forced `review`
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" \
+response=$(curl -s -w "\n%{http_code}" -X POST -H "X-Api-Key: smoketest" \
   -F "file=@data/sources/quotinator-curated.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  -w "\n%{http_code}\n" \
-  "http://localhost:18601/api/v1/import"
+  "http://localhost:18601/api/v1/import")
+echo "$response" | tail -1
+batchId=$(echo "$response" | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "batchId=$batchId"
 ```
 
 **Expected:** `202`, **not** `200` — the re-imported quotes are genuine duplicates left `Pending` under
-`review`.
+`review` — and a non-empty `batchId`, which every step below is scoped to.
 
 **On failure:** a `200` here means the policy did not take effect and nothing was staged, so the rest of
-this document would be testing an empty batch. Stop.
+this document would be testing an empty batch. An empty `batchId` means the same thing one step earlier.
+Stop.
 
 ### 5. List this batch's pending actions
 
-Copy the response's `batchId`, then list **only this batch's** pending actions and copy one action `id`:
+Scoped to this batch, and the first action id captured for the steps that follow:
 
 ```bash
-curl -s "http://localhost:18601/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+curl -s "http://localhost:18601/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+  | grep -o '"id":"[0-9a-f-]\{36\}"' | wc -l
+actionId=$(curl -s "http://localhost:18601/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+           | grep -o '"id":"[0-9a-f-]\{36\}"' | head -1 | cut -d'"' -f4)
+echo "actionId=$actionId"
 ```
 
-**Expected:** exactly the action(s) the import just created.
+**Expected:** a non-zero count — exactly the actions the import just created — and a non-empty
+`actionId`.
 
 ### 6. Decide that action, and confirm it moved
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
-  "http://localhost:18601/api/v1/import/actions/<id>/decide"
-curl -s "http://localhost:18601/api/v1/import/actions?status=Decided&batchId=<batchId>&pageSize=0"
+  "http://localhost:18601/api/v1/import/actions/$actionId/decide"
+curl -s "http://localhost:18601/api/v1/import/actions?status=Decided&batchId=$batchId&pageSize=0" \
+  | grep -c "$actionId"
 ```
 
-**Expected:** after `decide`, `status=Decided` shows it.
+**Expected:** the decide returns `204`, and the `Decided` listing contains that action.
 
 ### 7. Undo the decision
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18601/api/v1/import/actions/<id>/undo"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
+  "http://localhost:18601/api/v1/import/actions/$actionId/undo"
+curl -s "http://localhost:18601/api/v1/import/actions?status=Pending&batchId=$batchId&pageSize=0" \
+  | grep -c "$actionId"
 ```
 
-**Expected:** the action is back under `status=Pending`.
+**Expected:** the action is back under `status=Pending` — the listing contains it again.
 
-### 8. Decide it again
+### 8. Decide every action in the batch
+
+`apply` is all-or-nothing, so the rest have to be decided too — including any the import staged for
+other entity types:
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
-  -d '{"quoteText":{"choice":"keep"}}' \
-  "http://localhost:18601/api/v1/import/actions/<id>/decide"
+for id in $(curl -s "http://localhost:18601/api/v1/import/actions?status=Pending&batchId=$batchId&pageSize=0" \
+            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
+  curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
+    -d '{"quoteText":{"choice":"keep"}}' \
+    "http://localhost:18601/api/v1/import/actions/$id/decide"
+done
+curl -s "http://localhost:18601/api/v1/import/actions?status=Pending&batchId=$batchId&pageSize=0" \
+  | grep -o '"totalCount":[0-9]*'
 ```
 
-**Expected:** it is ready to apply.
+**Expected:** `"totalCount":0` — nothing left pending, so `apply` can succeed.
 
 ### 9. Apply the batch, with the `batchId` lowercased
 
 ```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18601/api/v1/import/actions/apply?batchId=<lowercase the batchId here too>"
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
+  "http://localhost:18601/api/v1/import/actions/apply?batchId=$(echo "$batchId" | tr 'A-Z' 'a-z')"
 ```
 
 **Expected:** `200`.
 
-**On failure:** **if more than one action is pending, `apply` returns `422`** with a `pendingActionIds`
+**On failure:** **if any action is still pending, `apply` returns `422`** with a `pendingActionIds`
 array listing those still undecided. That is the batch-apply-atomicity contract working as designed, not
-a bug. Decide each remaining id the same way and re-run `apply` until it returns `200`.
+a bug — step 8's `totalCount` is what confirms it should not happen here.
 
 ### 10. Read the batch's final status tally
 
 ```bash
-curl -s "http://localhost:18601/api/v1/import/actions?batchId=<batchId>&pageSize=0" \
+curl -s "http://localhost:18601/api/v1/import/actions?batchId=$batchId&pageSize=0" \
   | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
 ```
 

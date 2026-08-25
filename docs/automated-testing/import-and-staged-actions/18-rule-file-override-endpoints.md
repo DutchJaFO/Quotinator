@@ -66,24 +66,27 @@ notice.
 ### 3. Stage a batch to generate from
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" \
-  -F "file=@data/sources/quotinator-curated.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' \
-  "http://localhost:18618/api/v1/import"
-curl -s "http://localhost:18618/api/v1/import/actions?status=pending&pageSize=1"
+batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
+            -F "file=@data/sources/quotinator-curated.json" \
+            -F 'settings={"duplicateResolution":{"default":"review"}}' \
+            "http://localhost:18618/api/v1/import" \
+          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+actionId=$(curl -s "http://localhost:18618/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+           | grep -o '"id":"[0-9a-f-]\{36\}"' | head -1 | cut -d'"' -f4)
+echo "batchId=$batchId actionId=$actionId"
 ```
 
-**Expected:** at least one pending action is listed. Copy its `id` and the response's own `batchId` —
-the next step needs both.
+**Expected:** both values non-empty — at least one pending action was staged, and the next step needs
+both.
 
 ### 4. Decide one action, and generate the rule-file override from it
 
 ```bash
 curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
-  "http://localhost:18618/api/v1/import/actions/<id>/decide"
+  "http://localhost:18618/api/v1/import/actions/$actionId/decide"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18618/api/v1/import/rules/conflict/generate?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled&batchId=<batchId>"
+  "http://localhost:18618/api/v1/import/rules/conflict/generate?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled&batchId=$batchId"
 ```
 
 **Expected:** `generate` returns `200` with `isOverrideActive: true` and `rulesAdded` at least `1`.

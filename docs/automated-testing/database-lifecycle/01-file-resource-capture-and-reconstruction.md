@@ -117,7 +117,12 @@ on a fresh container.
 Substitute the `manifest.json` id from the provenance check:
 
 ```bash
-curl -s "http://localhost:18301/api/v1/import/file-resources/<manifest-id>"
+manifestId=$(curl -s "http://localhost:18301/api/v1/import/file-resources" \
+             | grep -o '{"id":"[0-9a-f-]\{36\}","fileName":"manifest.json"' | cut -d'"' -f4)
+curatedId=$(curl -s "http://localhost:18301/api/v1/import/file-resources" \
+            | grep -o '{"id":"[0-9a-f-]\{36\}","fileName":"quotinator-curated.json"' | cut -d'"' -f4)
+echo "manifestId=$manifestId curatedId=$curatedId"
+curl -s "http://localhost:18301/api/v1/import/file-resources/$manifestId"
 ```
 
 **Expected:** `linkedBatchCount` and the length of `linkedBatchIds` both equal the `BatchLinks` figure
@@ -145,7 +150,10 @@ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/b
 Every batch id from the file-resource detail must exist here:
 
 ```bash
-curl -s "http://localhost:18301/api/v1/import/batches/<one-of-the-linkedBatchIds-above>"
+linkedBatchId=$(curl -s "http://localhost:18301/api/v1/import/file-resources/$manifestId" \
+                | grep -o '"linkedBatchIds":\[[^]]*\]' | grep -o '[0-9a-f-]\{36\}' | head -1)
+echo "linkedBatchId=$linkedBatchId"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/batches/$linkedBatchId"
 ```
 
 **Expected:** `200`, proving the FileResource detail and the batches endpoint agree on what exists.
@@ -153,7 +161,7 @@ curl -s "http://localhost:18301/api/v1/import/batches/<one-of-the-linkedBatchIds
 ### 12. Reconstruct a captured file byte-for-byte
 
 ```bash
-curl -s "http://localhost:18301/api/v1/import/file-resources/<id>/download" -o .claude/temp/downloaded.json
+curl -s "http://localhost:18301/api/v1/import/file-resources/$curatedId/download" -o .claude/temp/downloaded.json
 MSYS_NO_PATHCONV=1 docker cp qt-db-01:/app/data/sources/quotinator-curated.json .claude/temp/original.json
 diff .claude/temp/downloaded.json .claude/temp/original.json && echo IDENTICAL
 ```
@@ -165,7 +173,7 @@ diff .claude/temp/downloaded.json .claude/temp/original.json && echo IDENTICAL
 Confirmed via hex dump, not word count:
 
 ```bash
-curl -s "http://localhost:18301/api/v1/import/file-resources/<id>/download?lineEnding=crlf" -o .claude/temp/crlf.json
+curl -s "http://localhost:18301/api/v1/import/file-resources/$curatedId/download?lineEnding=crlf" -o .claude/temp/crlf.json
 xxd .claude/temp/crlf.json | head -3
 ```
 
@@ -182,7 +190,7 @@ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/f
 ### 15. Download with an invalid `lineEnding`
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/file-resources/<id>/download?lineEnding=bogus"
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/file-resources/$curatedId/download?lineEnding=bogus"
 ```
 
 **Expected:** `422`.

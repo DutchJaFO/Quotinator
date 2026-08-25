@@ -66,8 +66,11 @@ Take one of the returned ids and fetch it both ways, confirming `GetByIdAsync`'s
 lookup survived the rewrite:
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/sources/<id-as-returned>"
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/sources/<same-id-uppercased>"
+sourceId=$(curl -s "http://localhost:18205/api/v1/masterdata/sources?pageSize=1" \
+           | grep -o '"id":"[0-9a-f-]\{36\}"' | head -1 | cut -d'"' -f4)
+echo "sourceId=$sourceId  upper=$(echo "$sourceId" | tr 'a-f' 'A-F')"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/sources/$sourceId"
+curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/sources/$(echo "$sourceId" | tr 'a-f' 'A-F')"
 ```
 
 **Expected:** both `GET .../sources/{id}` calls return `200` with the same record, and its `id` renders

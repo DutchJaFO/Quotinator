@@ -3,6 +3,7 @@
 | Script | Purpose |
 |---|---|
 | `changelog.csx` | JSON → markdown. Generates `CHANGELOG.md`, `addon/CHANGELOG.md` and `addon-beta/CHANGELOG.md` from `data/changelog/changelog.en.json` |
+| `testing/corrupt-csv-cell.csx` | Copies a CSV with exactly one named cell replaced, so a test can feed a deliberately malformed row through an endpoint. Test support only |
 | `testing/execute-sql.csx` | Runs arbitrary SQL against a Quotinator SQLite file with a writable connection — the counterpart to the read-only `Quotinator.Tools.DbInspector`. Test support only |
 | `testing/sqlite-storage-probe.csx` | Probes how SQLite behaves on constrained storage. Test support only |
 

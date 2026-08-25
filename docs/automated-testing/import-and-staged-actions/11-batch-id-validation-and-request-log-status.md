@@ -75,19 +75,21 @@ Counting them is the assertion: a single missing line would otherwise be invisib
 ### 5. Stage a batch for the happy path, this document's own
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" \
-  -F "file=@data/sources/quotinator-curated.json" \
-  -F 'settings={"duplicateResolution":{"default":"skip"}}' \
-  "http://localhost:18611/api/v1/import/preview"
+batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
+            -F "file=@data/sources/quotinator-curated.json" \
+            -F 'settings={"duplicateResolution":{"default":"skip"}}' \
+            "http://localhost:18611/api/v1/import/preview" \
+          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "batchId=$batchId"
 ```
 
-**Expected:** the response carries a `batchId` — copy it for the next step.
+**Expected:** a non-empty `batchId`, which the next step applies.
 
 ### 6. Apply that batch with a real `batchId`
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18611/api/v1/import/actions/apply?batchId=<batchId>"
+  "http://localhost:18611/api/v1/import/actions/apply?batchId=$batchId"
 ```
 
 **Expected:** `200`, proving the fix did not simply make the endpoint return `422` unconditionally.

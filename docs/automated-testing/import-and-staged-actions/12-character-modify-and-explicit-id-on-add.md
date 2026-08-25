@@ -75,7 +75,10 @@ EOF
 curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-add.json" \
   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
 curl -s "http://localhost:18612/api/v1/masterdata/characters?pageSize=0" \
-  | grep -c "Smoke Test New Character"
+  | grep -o "Smoke Test New Character" | wc -l
+characterId=$(curl -s "http://localhost:18612/api/v1/masterdata/characters?pageSize=0" \
+              | grep -o '"id":"[0-9a-f-]\{36\}","name":"Ted Striker"' | head -1 | cut -d'"' -f4)
+echo "characterId=$characterId"
 ```
 
 **Expected:** the Add returns `200`, and the `grep -c` for "Smoke Test New Character" reports `1` —
@@ -85,38 +88,60 @@ no candidate, then a genuine Add.
 ### 3. Correct an existing Character by id, under `review`
 
 ```bash
-cat > .claude/temp/smoke-175-modify.json <<'EOF'
+cat > .claude/temp/smoke-175-modify.json <<EOF
 {
   "quotes": [{"id":"a1111175-0000-4000-8000-000000000002","quote":"A #175 smoke test modify-trigger quote.","originalLanguage":"en","source":"Airplane!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
-  "characters": [{"id":"<an existing Character id from the query above>","name":"Renamed Via Smoke Test","sourceTitle":"Airplane!","sourceType":"movie"}]
+  "characters": [{"id":"$characterId","name":"Renamed Via Smoke Test","sourceTitle":"Airplane!","sourceType":"movie"}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-modify.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
+batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-modify.json" \
+            -F 'settings={"duplicateResolution":{"default":"review"}}' "http://localhost:18612/api/v1/import" \
+          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "batchId=$batchId"
 ```
 
-**Expected:** `202`. Copy the `batchId` from that response — the next step needs it.
+**Expected:** a non-empty `batchId` — the import staged under `review`.
 
 ### 4. List **only this batch's** pending actions
 
 ```bash
-curl -s "http://localhost:18612/api/v1/import/actions?status=pending&batchId=<batchId>&pageSize=0"
+curl -s "http://localhost:18612/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+  | grep -o '"ambiguousFields":\[[^]]*\]'
+actionId=$(curl -s "http://localhost:18612/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
+           | grep -o '"id":"[0-9a-f-]\{36\}","batchId":"[^"]*","actionType":"[A-Za-z]*","entityType":"Character"' \
+           | head -1 | cut -d'"' -f4)
+echo "actionId=$actionId"
 ```
 
-**Expected:** one pending id, and `ambiguousFields` is `["name"]` **only**.
+**Expected:** the Character action's `ambiguousFields` is `["name"]` **only** — `sourceId` appearing
+would mean an unchanged `SourceId` is spuriously tripping `FieldMergeResolver` — and `actionId` is
+non-empty.
 
 ### 5. Decide the ambiguous field, apply the batch, and read the Character back
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
+curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"characterName":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
-  "http://localhost:18612/api/v1/import/actions/<id>/decide"
-curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18612/api/v1/import/actions/apply?batchId=<batchId>"
-curl -s "http://localhost:18612/api/v1/masterdata/characters/<id>"
+  "http://localhost:18612/api/v1/import/actions/$actionId/decide"
+
+for id in $(curl -s "http://localhost:18612/api/v1/import/actions?status=Pending&batchId=$batchId&pageSize=0" \
+            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
+  curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
+    -d '{"quoteText":{"choice":"keep"}}' \
+    "http://localhost:18612/api/v1/import/actions/$id/decide"
+done
+
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
+  "http://localhost:18612/api/v1/import/actions/apply?batchId=$batchId"
+curl -s "http://localhost:18612/api/v1/masterdata/characters/$characterId"
 ```
 
-**Expected:** after deciding and applying, `name` reads "Renamed Via Smoke Test" and
-`completenessStatus` is `Complete`.
+**Expected:** the apply returns `200`, and the Character reads back
+`"name":"Renamed Via Smoke Test"` with `"completenessStatus":"Complete"`.
+
+**The loop decides the fixture's own quote action**, which `apply` requires and which naming only the
+Character action would leave pending — see [`07`](07-stagedirection-soundcue-modify.md) step 4 for the
+same trap.
 
 ### 6. Attempt a *different* Modify against the now-`Complete` Character
 
@@ -127,20 +152,22 @@ completeness. Measured during #339's full run, where that re-import produced `to
 step read as a failure of the guard.
 
 ```bash
-cat > .claude/temp/smoke-175-modify-again.json <<'EOF'
+cat > .claude/temp/smoke-175-modify-again.json <<EOF
 {
   "quotes": [{"id":"a1111175-0000-4000-8000-000000000003","quote":"A #175 smoke test third-name quote.","originalLanguage":"en","source":"Airplane!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
-  "characters": [{"id":"<the same existing Character id>","name":"Renamed A Third Time","sourceTitle":"Airplane!","sourceType":"movie"}]
+  "characters": [{"id":"$characterId","name":"Renamed A Third Time","sourceTitle":"Airplane!","sourceType":"movie"}]
 }
 EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-modify-again.json" \
-  -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
+blockedBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-modify-again.json" \
+                   -F 'settings={"duplicateResolution":{"default":"review"}}' "http://localhost:18612/api/v1/import" \
+                 | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "blockedBatchId=$blockedBatchId"
 ```
 
-Copy this second import's own `batchId`, then:
+Then read what it staged:
 
 ```bash
-curl -s "http://localhost:18612/api/v1/import/actions?status=blocked&batchId=<second batchId>&pageSize=0"
+curl -s "http://localhost:18612/api/v1/import/actions?status=blocked&batchId=$blockedBatchId&pageSize=0"
 ```
 
 **Expected:** the blocked listing carries the Character action — a genuinely different `name` against a
@@ -149,7 +176,7 @@ step 5, not `Renamed A Third Time`. That is the same guarantee Source, Person, S
 SoundCue already have.
 
 ```bash
-curl -s "http://localhost:18612/api/v1/masterdata/characters/<the same existing Character id>"
+curl -s "http://localhost:18612/api/v1/masterdata/characters/$characterId"
 ```
 
 **On failure:** an *empty* blocked listing is the tell that the fixture, not the guard, is wrong —

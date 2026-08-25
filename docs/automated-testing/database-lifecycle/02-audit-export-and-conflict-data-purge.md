@@ -21,9 +21,11 @@ left to a default.
 ## Determinism
 
 - **Waits for health, not a duration**, at every container start.
-- **Copy the `-wal` and `-shm` sidecars** with every `.db` copy. SQLite does not checkpoint recent
-  writes into the main file until the WAL passes its threshold, so the `.db` alone can be missing
-  exactly what was just written.
+- **Copy the `-wal` and `-shm` sidecars** with every `.db` copy, *where they exist*. SQLite does not
+  checkpoint recent writes into the main file until the WAL passes its threshold, so the `.db` alone
+  can be missing exactly what was just written. After a clean `docker stop` they are usually gone —
+  the close checkpointed and removed them — which is why each copy ends `|| true` and why their
+  absence is not a warning sign. See the index's *Snapshot and restore*.
 - **Each configuration gets a fresh container with no prior data.** The auto-purge-off run in
   particular is meaningless against a volume where the on-by-default run already purged.
 - **`PurgeTraces` equals the number of bundled seed batches** — one per batch. Derive it from the batch
@@ -145,8 +147,10 @@ against it and needs the same database this check just read.
 Using `qt-db-02-default` from the auto-purge check, still running:
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@data/sources/quotinator-curated.json" \
-  "http://localhost:18302/api/v1/import?purgeOnSuccess=true"
+purgedBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@data/sources/quotinator-curated.json" \
+                  "http://localhost:18302/api/v1/import?purgeOnSuccess=true" \
+                | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
+echo "purgedBatchId=$purgedBatchId"
 ```
 
 **Expected:** the import returns `200` (the curated file re-imports as all-Modify against
@@ -154,11 +158,9 @@ already-seeded data, no pending decisions).
 
 ### 9. Attempt to reverse that batch
 
-Note the response's `batchId`, then:
-
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18302/api/v1/import/actions/reverse?batchId=<batchId-from-above>"
+  "http://localhost:18302/api/v1/import/actions/reverse?batchId=$purgedBatchId"
 ```
 
 **Expected:** `422`: the batch's `Import_Action` rows were purged immediately, so `ReverseBatchAsync`
