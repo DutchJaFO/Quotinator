@@ -7,8 +7,7 @@
 ## Preconditions
 
 **Beyond the profile.** The Upgraded prior image is the **published
-`ghcr.io/dutchjafo/quotinator:1.8.3` tag**, and the current build must be rebuilt from an edited
-`Directory.Build.props` (see below) rather than used as-is. One container name (`qt-notif-05-upgraded`) is reused
+`ghcr.io/dutchjafo/quotinator:1.8.3` tag**. One container name (`qt-notif-05-upgraded`) is reused
 across the two runs against one bind-mounted directory, plus a one-shot `--rm alpine` running `sqlite3`
 to read the result. The whole thing is then repeated a second time with no v1.8.3 stage.
 
@@ -19,15 +18,22 @@ migration and never ran v1.8.3.
 
 **The current build must report a version other than `1.8.3`, or this proves nothing.** With both equal,
 the row the migration inserts and the row the app records for itself are the same row, and the two
-causes are indistinguishable. Temporarily set `Directory.Build.props`' `<Version>` to the next patch
-number, build the image, and **restore the file immediately afterwards**.
+causes are indistinguishable.
 
-That edit is what separates this test from
-[`02-notification-metadata-and-provenance.md`](02-notification-metadata-and-provenance.md), which runs
-the build unmodified and therefore correctly sees one row. The two are not in conflict: 02 proves replay
-from a released database completes, and needs the versions equal for that; this one proves the 1.8.3 row
-is inserted *conditionally*, and needs them different, because with both equal the row the migration
-writes and the row the app records for itself are indistinguishable.
+**That is satisfied by the ordinary development version and needs no setup.** Development carries the
+milestone's target version with an `-alpha` suffix from milestone start — see
+`docs/workflow/checklist.md`'s *Version during development* — so `quotinator:local` already reports
+something other than `1.8.3`. Run this document against it directly.
+
+**Until #339's full run this test manufactured the difference**, temporarily rewriting
+`Directory.Build.props` and rebuilding the image, then restoring both. That step is gone: the
+difference is now real, and a test that has to edit the repository to express its own assertion was
+always a signal that the version scheme was wrong rather than the test.
+
+[`02-notification-metadata-and-provenance.md`](02-notification-metadata-and-provenance.md) reads the
+same two rows from the same upgrade. The documents are not redundant — 02 proves replay from a released
+database completes and that provenance attributes each notification to whichever build wrote it, while
+this one proves the `1.8.3` row is inserted **conditionally**, which only its second half can show.
 
 ## Determinism
 
@@ -80,7 +86,9 @@ MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-05-upgraded/data:/data alpin
     'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
 ```
 
-**Expected:** exactly two rows: `Quotinator.Api | 1.8.3 | 1`, then `Quotinator.Api | <current> | 2`.
+**Expected:** exactly two rows: `Quotinator.Api | 1.8.3 | 1`, then `Quotinator.Api | <the version in
+Directory.Build.props> | 2` — measured as `1.9.0-alpha`, but compare against the file rather than a
+literal, since it moves every milestone.
 
 **The 1.8.3 row must sort first.** It predates every row this table can hold, and if it sorted last then
 "the version that ran last" would answer 1.8.3 — and #81's catch-up would replay releases already
@@ -133,7 +141,8 @@ dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-fresh \
 Both data directories are bind mounts rather than named volumes, so removing the directories is what
 removes their data.
 
-**Two things this leaves behind that a profile restore does not fix.** `Directory.Build.props` must be
-confirmed restored to its real `<Version>`, and `quotinator:local` must be rebuilt from the restored
-file — every other test in the suite runs against that tag and would otherwise be testing a version
-number this test invented.
+**This test no longer modifies the repository, so there is nothing else to restore.** It previously
+edited `Directory.Build.props` and rebuilt `quotinator:local` to manufacture a version difference,
+which left two things a profile restore could not fix — an edited file, and a shared image tag built
+from it that every sibling test then ran against. Both are gone now that the development version
+differs from the released one on its own.

@@ -122,9 +122,28 @@ MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-03/data:/data alpine sh -c \
    'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
 ```
 
-**Expected:** exactly two rows: `NULL | 1.8.4 | 1` then `Quotinator.Api | <current> | 2`. The
-pre-existing row survives with its `Application` still `NULL`, and the current version is **appended**
-rather than replacing it.
+**Expected:** three rows, in this order —
+
+| Application | Version | SequenceNumber | Written by |
+|---|---|---|---|
+| `Quotinator.Api` | `1.8.3` | `0` | the provenance migration, deliberately below the minimum |
+| *(NULL)* | `1.8.4` | `1` | the hand-built fixture, an unreleased build |
+| `Quotinator.Api` | *(Directory.Build.props)* | `2` | the running build, appended |
+
+The pre-existing `1.8.4` row survives with its `Application` still `NULL`, and the current version is
+**appended** rather than replacing it.
+
+**The `1.8.3` row at sequence `0` is correct, not a defect.** `BackfillAnnouncementProvenance` inserts
+it at `COALESCE(MIN(SequenceNumber), 2) - 1` on purpose: v1.8.3 predates `System_AppVersion` entirely,
+so every row the table can already hold was written by a later build, and appending it would make "the
+version that ran last" answer 1.8.3 on a machine that has since run newer ones. This step listed only
+two rows until #339's full run and read the third as a failure.
+
+**This expectation requires the development version to differ from `1.8.3`**, which it does from
+milestone start — see `docs/workflow/checklist.md`'s *Version during development*. While the two were
+equal, `RecordCurrentAsync` found the migration's own `Quotinator.Api | 1.8.3` row and appended
+nothing, so the running build never appeared and `SelectMostRecent` answered the `1.8.4` fixture row.
+Measured both ways: `1.8.3` produced no third row; `1.9.0-alpha` produced the table above.
 
 ## Observed effect
 
