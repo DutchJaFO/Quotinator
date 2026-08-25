@@ -1183,6 +1183,14 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
    - `Directory.Build.props` → `<Version>` (shared across all projects — **this is the only file to update**)
    - `changelog.en.json` → new version entry at the top; regenerate `CHANGELOG.md` (only — see below)
 
+   **Between milestone start and release preparation, `<Version>` deliberately does *not* match any
+   tag: it carries the milestone's target version with an `-alpha` suffix** (e.g. `1.9.0-alpha`),
+   committed on the milestone branch at milestone start and stripped during release prep. The
+   suffix-free forms above apply from the beta-tag step onward. See
+   `docs/workflow/checklist.md` → "Version during development" for why the bump cannot wait for
+   release — a build sharing the released version number is indistinguishable from the release it
+   upgrades from, which silently collapses anything keyed on application-plus-version.
+
    **`addon/config.yaml`'s `version` (final tag) / `addon-beta/config.yaml`'s `version` (beta tag), and
    the matching `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md`, do *not* go in the same PR or match the
    tag at push time.** Per [#236](docs/milestones/maintenance-milestone-v1.8.0/236-release-workflow-version-race-plan.md),

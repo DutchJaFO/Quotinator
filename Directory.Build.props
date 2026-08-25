@@ -1,7 +1,7 @@
 <Project>
 
   <PropertyGroup>
-    <Version>1.8.3</Version>
+    <Version>1.9.0-alpha</Version>
     <Product>Quotinator</Product>
     <Authors>DutchJaFO</Authors>
     <Copyright>Copyright © 2026 DutchJaFO</Copyright>

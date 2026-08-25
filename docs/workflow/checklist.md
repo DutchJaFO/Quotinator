@@ -14,6 +14,51 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 - [ ] Create per-issue plan docs for all issues (defer only if the issue is far in the dependency chain)
 - [ ] Commit the milestone folder to `main`
 - [ ] Create the feature branch: `git checkout -b feature/{slug}`
+- [ ] **Bump `Directory.Build.props`' `<Version>` to this milestone's target version with an `-alpha`
+      suffix** (e.g. `1.9.0-alpha`), and commit it **on the feature branch** — see *Version during
+      development* below
+
+### Version during development
+
+**A milestone's version is decided when the milestone starts, not when it is released.** Development
+carries the target version with an `-alpha` suffix — `1.9.0-alpha` — and release preparation drops the
+suffix.
+
+**Why the bump cannot wait for release.** While development shares the released version number, the
+running build is indistinguishable from the release it upgrades from, and anything keyed on
+application-plus-version silently collapses the two. Found live during #339's full T2 pass: on a
+v1.8.3 database, `BackfillAnnouncementProvenance` inserts its own `Quotinator.Api | 1.8.3` provenance
+row, and `AppVersionTracker.RecordCurrentAsync` — append-if-new — then finds that row already present
+and records nothing for the build that is actually running. `Sql.AppVersion.SelectMostRecent` therefore
+answers a version that is not the one running. Re-run with `1.9.0-alpha`, the same scenario appends the
+running build correctly.
+
+It also removes manufactured setup from the suite: a test needing the two versions to differ currently
+has to edit `Directory.Build.props` and rebuild the image just to express its own assertion.
+
+**The suffix is not cosmetic.** It states in-band that this build is not a release — the concrete
+worry that the official release does not exist yet. It is safe with this repository's existing version
+derivation: verified 2026-08-25, building with `Version=1.9.0-alpha` produces `AssemblyVersion`
+`1.9.0.0` and `FileVersion` `1.9.0.0` (the suffix is stripped for both), while `ProductVersion` carries
+`1.9.0-alpha`. `CLAUDE.md`'s "derived automatically as `$(Version).0`" rule is unaffected.
+
+**Commit it on the feature branch, never directly to `main`.** It reaches `main` when the milestone's
+own PR merges, exactly like every other change. Two milestone branches running in parallel each carry
+their own bump and conflict on a single line at merge, which is a signal worth having rather than a
+hazard; branches targeting the same version do not conflict at all.
+
+**Leaving it uncommitted is not an alternative.** The version would then differ per working copy: CI,
+the release workflow and every other clone would still build the old number, so a T2 pass run anywhere
+else hits the exact collision the bump exists to remove, and the suite passes locally while failing in
+CI. The edit would also sit in `git status` for the whole milestone, where any commit can sweep it in
+and any checkout can lose it.
+
+**Nothing HA-facing moves early.** `addon/config.yaml`, `addon-beta/config.yaml` and the changelog are
+untouched by this step and stay on the release sequencing [#236](https://github.com/DutchJaFO/Quotinator/issues/236)
+defines.
+
+**At release preparation, drop the suffix** — see *Milestone close* below, and `CLAUDE.md`'s "Tagging a
+release" step 8, where `<Version>` must match the tag exactly.
 
 ---
 
@@ -196,7 +241,9 @@ A beta tag is mandatory for every release. The release workflow enforces this �
 **Before the tag** (one PR, merged to `main` before pushing the tag):
 - [ ] T1 verified: app starts in VS without error; affected Razor pages render correctly
 - [ ] T2 verified: `docker build -f docker/Dockerfile -t quotinator:local .` succeeds; smoke-test commands return expected output
-- [ ] `Directory.Build.props <Version>` set to beta version
+- [ ] `Directory.Build.props <Version>` set to beta version — **this is where the development `-alpha`
+      suffix is dropped**, per *Version during development* under *Milestone start*. The version must
+      match the tag exactly from here on
 - [ ] Changelog beta entry in `changelog.en.json` (+ `nl.json`, `de.json` lockstep); `CHANGELOG.md` regenerated with `--max-releases 3`. **Do not regenerate `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` yet.**
 - [ ] Push beta tag: `git tag vX.Y.Z-beta && git push origin vX.Y.Z-beta`
 - [ ] Confirm GitHub Actions release workflow completes; pre-release created on GitHub with correct Docker image; its own "Verify image is pullable (amd64 + arm64)" step passed
