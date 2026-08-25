@@ -71,8 +71,8 @@ as "no rows", which is indistinguishable from the assertion failing:
 ```bash
 docker stop -t 15 qt-import-15-replace
 docker cp qt-import-15-replace:/data/quotinatordata.db .claude/temp/inspect-181.db
-docker cp qt-import-15-replace:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
-docker cp qt-import-15-replace:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
+docker cp qt-import-15-replace:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal || true
+docker cp qt-import-15-replace:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm || true
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
   --sql "SELECT MergedFields FROM Import_Action WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
 ```

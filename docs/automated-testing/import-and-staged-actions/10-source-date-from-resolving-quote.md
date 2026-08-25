@@ -75,8 +75,8 @@ This is the actual code path:
 ```bash
 docker stop -t 15 qt-import-10
 docker cp qt-import-10:/data/quotinatordata.db .claude/temp/inspect-191.db
-docker cp qt-import-10:/data/quotinatordata.db-wal .claude/temp/inspect-191.db-wal
-docker cp qt-import-10:/data/quotinatordata.db-shm .claude/temp/inspect-191.db-shm
+docker cp qt-import-10:/data/quotinatordata.db-wal .claude/temp/inspect-191.db-wal || true
+docker cp qt-import-10:/data/quotinatordata.db-shm .claude/temp/inspect-191.db-shm || true
 docker start qt-import-10
 until curl -sf http://localhost:18610/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \

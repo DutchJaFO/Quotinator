@@ -69,8 +69,8 @@ curl -s -w "\n%{http_code}\n" "http://localhost:18614/api/v1/import/actions?stat
 
 ```bash
 docker cp qt-import-14:/data/quotinatordata.db .claude/temp/inspect-181.db
-docker cp qt-import-14:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal
-docker cp qt-import-14:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm
+docker cp qt-import-14:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal || true
+docker cp qt-import-14:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm || true
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
   --sql "SELECT Title, Type, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
 ```

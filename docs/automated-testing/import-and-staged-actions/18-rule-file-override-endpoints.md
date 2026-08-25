@@ -37,7 +37,7 @@ never became healthy.
 ### 2. Confirm no override is active, and capture the bundled file's rules for comparison
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18618/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled" \
+curl -s -w "\n%{http_code}\n" "http://localhost:18618/api/v1/import/rules/conflict?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled" \
   -o /tmp/rules-before.json
 grep -o '"isOverrideActive":[a-z]*' /tmp/rules-before.json
 grep -o '"entityId":"[^"]*"' /tmp/rules-before.json | sort > /tmp/rule-ids-before.txt
@@ -45,7 +45,18 @@ wc -l < /tmp/rule-ids-before.txt
 ```
 
 **Expected:** `200` with `isOverrideActive:false`, and a non-zero rule count written to
-`/tmp/rule-ids-before.txt`. Zero rules there would make the merge assertion vacuous.
+`/tmp/rule-ids-before.txt` — 13 at the time of writing, but the assertion is "not zero", not the
+figure.
+
+**The file has to be one that ships with rules, which is why it is `nikhilnamal17-conflict-rules.json`.**
+This document named `quotinator-curated-conflict-rules.json` until #339's full run, and that file ships
+`"rules": []` — so the before-capture was empty and step 5's "every rule present before is still present
+after" could not fail. The document already warned that zero rules would make the assertion vacuous, and
+then named the one bundled file that has zero. Counts as shipped today: nikhilnamal17 13, vilaboim 36,
+series-universe 1, curated 0.
+
+**On failure:** a zero count means whichever file is named here has no rules, and step 5 then proves
+nothing regardless of what the merge does. Stop and pick a file that has some.
 
 **The before-capture is what makes the merge assertion real.** "Still containing every rule the bundled
 file already had" cannot be evaluated against a single after-reading — a `generate` that discarded the
@@ -72,7 +83,7 @@ curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
   -d '{"quoteText":{"choice":"keep"}}' \
   "http://localhost:18618/api/v1/import/actions/<id>/decide"
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18618/api/v1/import/rules/conflict/generate?fileName=quotinator-curated-conflict-rules.json&origin=Bundled&batchId=<batchId>"
+  "http://localhost:18618/api/v1/import/rules/conflict/generate?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled&batchId=<batchId>"
 ```
 
 **Expected:** `generate` returns `200` with `isOverrideActive: true` and `rulesAdded` at least `1`.
@@ -80,7 +91,7 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
 ### 5. Re-read the effective rules, and compare them against the before-capture
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18618/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled" \
+curl -s -w "\n%{http_code}\n" "http://localhost:18618/api/v1/import/rules/conflict?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled" \
   -o /tmp/rules-after.json
 grep -o '"isOverrideActive":[a-z]*' /tmp/rules-after.json
 grep -o '"entityId":"[^"]*"' /tmp/rules-after.json | sort > /tmp/rule-ids-after.txt
@@ -96,9 +107,9 @@ in which it can actually fail. Any id printed is a bundled rule the merge droppe
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: smoketest" \
-  "http://localhost:18618/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
+  "http://localhost:18618/api/v1/import/rules/conflict?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled"
 curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: smoketest" \
-  "http://localhost:18618/api/v1/import/rules/conflict?fileName=quotinator-curated-conflict-rules.json&origin=Bundled"
+  "http://localhost:18618/api/v1/import/rules/conflict?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled"
 ```
 
 **Expected:** `DELETE` returns `204`; a repeat `DELETE` returns `404`.

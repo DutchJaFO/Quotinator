@@ -118,12 +118,22 @@ curl -s "http://localhost:18612/api/v1/masterdata/characters/<id>"
 **Expected:** after deciding and applying, `name` reads "Renamed Via Smoke Test" and
 `completenessStatus` is `Complete`.
 
-### 6. Re-attempt the same Modify against the now-`Complete` Character
+### 6. Attempt a *different* Modify against the now-`Complete` Character
 
-The same file, re-imported under `review`:
+**A third name, not the one step 5 just applied.** Re-importing `smoke-175-modify.json` unchanged
+stages nothing at all: its `name` is now exactly what the row holds, so there is no field change for
+the guard to block, and the blocked listing comes back empty for a reason that has nothing to do with
+completeness. Measured during #339's full run, where that re-import produced `totalCount 0` and the
+step read as a failure of the guard.
 
 ```bash
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-modify.json" \
+cat > .claude/temp/smoke-175-modify-again.json <<'EOF'
+{
+  "quotes": [{"id":"a1111175-0000-4000-8000-000000000003","quote":"A #175 smoke test third-name quote.","originalLanguage":"en","source":"Airplane!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+  "characters": [{"id":"<the same existing Character id>","name":"Renamed A Third Time","sourceTitle":"Airplane!","sourceType":"movie"}]
+}
+EOF
+curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-modify-again.json" \
   -F 'settings={"duplicateResolution":{"default":"review"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
 ```
 
@@ -133,8 +143,18 @@ Copy this second import's own `batchId`, then:
 curl -s "http://localhost:18612/api/v1/import/actions?status=blocked&batchId=<second batchId>&pageSize=0"
 ```
 
-**Expected:** a further Modify under `review` stages **`Blocked`, not `Pending`**, and the on-disk name
-is unchanged — the same guarantee Source, Person, StageDirection and SoundCue already have.
+**Expected:** the blocked listing carries the Character action — a genuinely different `name` against a
+`Complete` row stages **`Blocked`, not `Pending`** — and reading the Character back shows the name from
+step 5, not `Renamed A Third Time`. That is the same guarantee Source, Person, StageDirection and
+SoundCue already have.
+
+```bash
+curl -s "http://localhost:18612/api/v1/masterdata/characters/<the same existing Character id>"
+```
+
+**On failure:** an *empty* blocked listing is the tell that the fixture, not the guard, is wrong —
+either the name in the file already matches the stored one, or nothing staged. Check the batch's full
+tally before concluding the guard regressed.
 
 ### 7. Add a Character carrying an explicit uppercase id — the T2-only fix
 

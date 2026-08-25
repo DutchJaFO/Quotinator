@@ -190,8 +190,8 @@ pending. Both reversal calls against its batch return `200`.
 ```bash
 docker stop -t 15 qt-import-07
 MSYS_NO_PATHCONV=1 docker cp qt-import-07:/data/quotinatordata.db .claude/temp/smoke-171-172.db
-MSYS_NO_PATHCONV=1 docker cp qt-import-07:/data/quotinatordata.db-wal .claude/temp/smoke-171-172.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-import-07:/data/quotinatordata.db-shm .claude/temp/smoke-171-172.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-import-07:/data/quotinatordata.db-wal .claude/temp/smoke-171-172.db-wal || true
+MSYS_NO_PATHCONV=1 docker cp qt-import-07:/data/quotinatordata.db-shm .claude/temp/smoke-171-172.db-shm || true
 docker start qt-import-07
 until curl -sf http://localhost:18607/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-171-172.db \

@@ -682,9 +682,19 @@ image, for instance — builds its own throwaway tag and never overwrites the ba
 hypothetical tidiness: one document edits a bundled rule file, rebuilds `quotinator:local`, and never
 rebuilds after reverting, leaving three sibling tests running a mutated image.
 
-**Database.** Captured from a **stopped** container, with the `-wal` and `-shm` sidecars, or via
-SQLite's own `VACUUM INTO`. A copy taken from a running container can be torn mid-write, and a torn
-copy fails as "no rows" — indistinguishable from the assertion it was meant to check.
+**Database.** Captured from a **stopped** container, with the `-wal` and `-shm` sidecars *if they are
+still there*, or via SQLite's own `VACUUM INTO`. A copy taken from a running container can be torn
+mid-write, and a torn copy fails as "no rows" — indistinguishable from the assertion it was meant to
+check.
+
+**A clean `docker stop` usually leaves no sidecars to copy, and that is the healthy case.** SQLite
+checkpoints the WAL back into the main file and removes both files when the last connection closes, so
+`docker cp …db-wal` then fails with *"Could not find the file"* — which happened on every such copy
+during #339's full run. The `.db` is complete precisely because the stop was clean. Two consequences:
+the copy must not abort an unattended run, which is why every one of them in this suite ends `|| true`;
+and **their absence is not evidence of a missing write**. Where they *do* exist — after a `docker rm
+-f`, a crash, or a copy taken while the container runs — they are load-bearing and must be copied,
+which is the case this rule was written for.
 
 **Restore is unconditional between tests**, never "if the test dirtied something". The moment it is
 conditional, inherited state is back with a better name.

@@ -125,8 +125,8 @@ result alone never distinguished the two cases:
 ```bash
 docker stop -t 15 qt-import-05
 MSYS_NO_PATHCONV=1 docker cp qt-import-05:/data/quotinatordata.db .claude/temp/smoke-reverse.db
-MSYS_NO_PATHCONV=1 docker cp qt-import-05:/data/quotinatordata.db-wal .claude/temp/smoke-reverse.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-import-05:/data/quotinatordata.db-shm .claude/temp/smoke-reverse.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-import-05:/data/quotinatordata.db-wal .claude/temp/smoke-reverse.db-wal || true
+MSYS_NO_PATHCONV=1 docker cp qt-import-05:/data/quotinatordata.db-shm .claude/temp/smoke-reverse.db-shm || true
 docker start qt-import-05
 until curl -sf http://localhost:18605/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke-reverse.db \

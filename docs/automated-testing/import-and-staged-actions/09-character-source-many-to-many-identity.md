@@ -49,8 +49,8 @@ The assertion below is a delta, and a delta cannot be evaluated from its after-v
 ```bash
 docker stop -t 15 qt-import-09
 MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db .claude/temp/smoke179.db
-MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-wal .claude/temp/smoke179.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-shm .claude/temp/smoke179.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-wal .claude/temp/smoke179.db-wal || true
+MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-shm .claude/temp/smoke179.db-shm || true
 docker start qt-import-09
 until curl -sf http://localhost:18609/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke179.db \
@@ -79,8 +79,8 @@ curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-179.json"
 ```bash
 docker stop -t 15 qt-import-09
 MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db .claude/temp/smoke179-after.db
-MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-wal .claude/temp/smoke179-after.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-shm .claude/temp/smoke179-after.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-wal .claude/temp/smoke179-after.db-wal || true
+MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-shm .claude/temp/smoke179-after.db-shm || true
 docker start qt-import-09
 until curl -sf http://localhost:18609/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke179-after.db \
@@ -109,8 +109,8 @@ curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-179b.json
 ```bash
 docker stop -t 15 qt-import-09
 MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db .claude/temp/smoke179-second.db
-MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-wal .claude/temp/smoke179-second.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-shm .claude/temp/smoke179-second.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-wal .claude/temp/smoke179-second.db-wal || true
+MSYS_NO_PATHCONV=1 docker cp qt-import-09:/data/quotinatordata.db-shm .claude/temp/smoke179-second.db-shm || true
 docker start qt-import-09
 until curl -sf http://localhost:18609/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke179-second.db \

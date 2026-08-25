@@ -119,8 +119,8 @@ genuinely undecided batch.
 
 Make the bad copy first. Open `/tmp/export3.csv`, copy it to `/tmp/export3-bad.csv`, and in the copy
 change **the first data row's `Decision` cell** to `not-a-choice` — a value no decision accepts. Leave
-the header and every other row exactly as exported. Note that row's `actionId`; the response must name
-it.
+the header and every other row exactly as exported. Note that row's `actionId` — not because the error
+names it, but so the tally afterwards can be read against the right action.
 
 ```bash
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
@@ -131,9 +131,22 @@ curl -s "http://localhost:18613/api/v1/import/actions?batchId=<third batchId>&pa
 ```
 
 **Expected:** the call returns **`200`, never `422` for the whole request**, with exactly one entry in
-`errors[]` naming the edited row's `actionId`. After it, the tally shows every action decided **except**
-that one. "One bad row never aborts the rest of the file", matching the contract
+`errors[]`, identifying the edited row and naming the rejected value — observed as
+`Row 1: 'not-a-choice' is not a recognised Decision value.` "One bad row never aborts the rest of the
+file", matching the contract
 [`06-bodyless-request-validation.md`](06-bodyless-request-validation.md) covers for `POST /import`.
+
+**Two things this step asked for until #339's full run, neither of which the export's shape allows.**
+It required the error to name the row's `actionId`; the message identifies the row by position
+instead, so assert the single error and its content rather than a field it does not carry. And it
+required the tally to show every action decided *except* that one — but **the export is one row per
+decidable field, not per action**: 104 rows for 13 actions on the curated file. Corrupting one field
+row leaves its action decided by its other rows, which is exactly what was observed, so the tally
+after this call correctly reads every action `Decided`.
+
+**What the tally does establish** is that the other 103 rows were processed rather than the file being
+rejected wholesale — compare it against step 5's all-`Pending` reading, which is why that reading is
+taken.
 
 **The edit is described rather than scripted deliberately.** A one-line text transformation is not
 something this repository writes in shell ([ADR 010](../../architecture-decisions/010-repository-is-csharp-only.md));

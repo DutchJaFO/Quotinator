@@ -58,8 +58,8 @@ a half-built capture. Wait for seeding to finish rather than continuing.
 
 ```bash
 MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db .claude/temp/smoke251.db
-MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db-wal .claude/temp/smoke251.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db-shm .claude/temp/smoke251.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db-wal .claude/temp/smoke251.db-wal || true
+MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db-shm .claude/temp/smoke251.db-shm || true
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db \
   --sql "SELECT Id, FileName, Origin, HomeDirectoryKey, LineEnding, EndsWithTrailingNewline, Converter, ConverterOptions FROM Import_FileResource WHERE IsDeleted = 0 ORDER BY FileName"
 ```

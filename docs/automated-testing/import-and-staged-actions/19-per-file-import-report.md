@@ -98,13 +98,21 @@ On the seed-preview response specifically — an absence read by eye off a large
 default, so it is counted instead:
 
 ```bash
-curl -s "http://localhost:18619/api/v1/admin/database/seed/preview" \
-  | grep -o 'totalQuotes\|uniqueQuotes\|crossFileDuplicates' | wc -l
+curl -s "http://localhost:18619/api/v1/admin/database/seed/preview" > /tmp/seed-preview.json
+grep -o 'totalQuotes\|uniqueQuotes\|crossFileDuplicates' /tmp/seed-preview.json | wc -l
+grep -o 'fileName\|entityTypes' /tmp/seed-preview.json | wc -l
 ```
 
-**Expected:** the count is `0`. This is the assertion that `totalQuotes`, `uniqueQuotes` and
-`crossFileDuplicates` are gone; reading their absence off the body by eye cannot fail, because nothing
-is being compared.
+**Expected:** the first count is `0` — `totalQuotes`, `uniqueQuotes` and `crossFileDuplicates` are gone
+— and the second is **non-zero**, since `fileName` and `entityTypes` are the fields that replaced them.
+
+**The second count is the positive control, and without it the first proves nothing.** A pattern that
+cannot match anything reports `0` for a removed field exactly as a genuinely removed field does; only
+a field the same command *does* find separates them. `api-surface/04` shipped a removal check with no
+control and passed it for weeks on patterns that could never match — see the index's *A removed or
+added feature needs its own proof, alongside the normal behaviour*.
+
+Reading the absence off the body by eye cannot fail either, which is why both are counted.
 
 ### 8. Confirm the startup line exists before reading it
 
@@ -137,5 +145,6 @@ asserted above.
 ## Cleanup
 
 ```bash
+rm -f /tmp/seed-preview.json
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-19
 ```

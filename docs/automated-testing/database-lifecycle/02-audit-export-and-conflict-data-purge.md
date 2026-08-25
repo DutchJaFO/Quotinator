@@ -91,8 +91,8 @@ row.
 dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-default --port 18302
 docker stop -t 15 qt-db-02-default
 MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249.db
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db-wal .claude/temp/smoke249.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db-shm .claude/temp/smoke249.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db-wal .claude/temp/smoke249.db-wal || true
+MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db-shm .claude/temp/smoke249.db-shm || true
 docker start qt-db-02-default
 until curl -sf http://localhost:18302/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db \
@@ -125,8 +125,8 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-noautopurge
   --env Quotinator__AutoPurgeBundledImportActions=false
 docker stop -t 15 qt-db-02-noautopurge
 MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db .claude/temp/smoke249b.db
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db-wal .claude/temp/smoke249b.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db-shm .claude/temp/smoke249b.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db-wal .claude/temp/smoke249b.db-wal || true
+MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db-shm .claude/temp/smoke249b.db-shm || true
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249b.db \
   --sql "SELECT COUNT(*) AS RemainingActions FROM Import_Action"
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-noautopurge
@@ -183,10 +183,39 @@ single, just-now timestamp — not any earlier `Audit_Change` activity, which is
 
 ### 12. Confirm a table-scoped clear leaves `Audit_Change` untouched
 
-Run `DELETE .../admin/audit?table=Quotinator_Quote` and check `SELECT COUNT(*) FROM Audit_Change` via
-DbInspector before and after.
+**Step 10's unscoped clear emptied `Audit_Change`, so this step has to put rows back first.** Import
+the curated file again to generate them, read the count, run the scoped clear, and read it again:
 
-**Expected:** the count is unchanged — a table-scoped clear leaves `Audit_Change` untouched.
+```bash
+curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" \
+  -F "file=@data/sources/quotinator-curated.json" "http://localhost:18302/api/v1/import"
+docker stop -t 15 qt-db-02-default
+MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249c.db
+docker start qt-db-02-default
+until curl -sf http://localhost:18302/api/v1/health > /dev/null; do sleep 1; done
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249c.db \
+  --sql "SELECT COUNT(*) AS ChangesBefore FROM Audit_Change"
+
+curl -s -o /dev/null -X DELETE -H "X-Api-Key: smoketest" \
+  "http://localhost:18302/api/v1/admin/audit?table=Quotinator_Quote"
+docker stop -t 15 qt-db-02-default
+MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249d.db
+docker start qt-db-02-default
+until curl -sf http://localhost:18302/api/v1/health > /dev/null; do sleep 1; done
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249d.db \
+  --sql "SELECT COUNT(*) AS ChangesAfter FROM Audit_Change"
+```
+
+**Expected:** `ChangesBefore` is **non-zero**, and `ChangesAfter` equals it. A table-scoped clear
+leaves `Audit_Change` untouched.
+
+**The non-zero before-reading is what makes this an assertion at all.** Run straight after step 10 both
+readings are `0`, and "the count is unchanged" then holds equally well when a scoped clear wrongly
+wipes the table — which is how this step read until #339's full run. Measured with 13 real change rows
+present: the scoped clear left all 13, so the behaviour is correct and only the ordering was hiding it.
+
+**On failure:** a zero `ChangesBefore` means the import produced no change rows, so the comparison
+proves nothing either way. Stop rather than recording a pass.
 
 ## Observed effect
 
@@ -205,5 +234,6 @@ dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-cap
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-noautopurge
 rm -f .claude/temp/smoke249.db .claude/temp/smoke249.db-wal .claude/temp/smoke249.db-shm \
       .claude/temp/smoke249b.db .claude/temp/smoke249b.db-wal .claude/temp/smoke249b.db-shm \
+      .claude/temp/smoke249c.db .claude/temp/smoke249d.db \
       .claude/temp/audit-export.json
 ```

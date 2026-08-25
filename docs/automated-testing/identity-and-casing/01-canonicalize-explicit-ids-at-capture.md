@@ -15,9 +15,16 @@ would have broken those references if left incomplete, so a seed completing with
 
 ## Determinism
 
-- **The fixture's ids are lowercase in the file**, and the masterdata lookup below uses that same
-  lowercase form in the URL — the exact scenario that originally returned 404. Changing either casing
-  changes what the test proves.
+- **The fixture's ids are UPPERCASE in the file and carry hex letters**, and the masterdata lookup
+  below uses the lowercase form in the URL. Both halves are load-bearing: the uppercase file value is
+  what capture-time canonicalization has to transform, and the lowercase lookup is the exact scenario
+  that originally returned 404.
+- **A fixture already in canonical form cannot fail.** Until #339's full run these ids were lowercase
+  and near-digit-only (`f6000002-0000-4000-8000-000000000002`, one hex letter in 32), so "canonicalized
+  at capture" was indistinguishable from "stored verbatim" — the test passed identically with
+  canonicalization removed. Hex letters in mixed case are what give the assertion something to
+  transform; see the index's *A count is evidence only if the instrument counts the right thing* for
+  the same failure in its counting form.
 - **The seed must have run before the import.** A container whose seeding failed would produce a
   passing import and a meaningless FK result.
 
@@ -51,8 +58,8 @@ built correctly. Stop.
 ```bash
 cat > .claude/temp/smoke-209.json <<'EOF'
 {
-  "quotes": [{"id":"f6000001-0000-4000-8000-000000000001","quote":"A #209 smoke test line.","originalLanguage":"en","source":"209 Smoke Test Film","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
-  "sources": [{"id":"f6000002-0000-4000-8000-000000000002","title":"209 Smoke Test Film","type":"movie"}]
+  "quotes": [{"id":"F6ABCDE1-0000-4000-8000-00000000ABC1","quote":"A #209 smoke test line.","originalLanguage":"en","source":"209 Smoke Test Film","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
+  "sources": [{"id":"F6ABCDE2-0000-4000-8000-00000000ABC2","title":"209 Smoke Test Film","type":"movie"}]
 }
 EOF
 curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-209.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18201/api/v1/import"
@@ -63,7 +70,7 @@ curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-209.json"
 ### 4. Look the Source up by the id the file authored
 
 ```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18201/api/v1/masterdata/sources/f6000002-0000-4000-8000-000000000002"
+curl -s -w "\n%{http_code}\n" "http://localhost:18201/api/v1/masterdata/sources/f6abcde2-0000-4000-8000-00000000abc2"
 ```
 
 **Expected:** `200`, with `id` shown canonicalized — lowercase, per ADR 012's system-wide convention.
@@ -71,7 +78,7 @@ curl -s -w "\n%{http_code}\n" "http://localhost:18201/api/v1/masterdata/sources/
 ### 5. Fetch the quote and confirm its Source join still resolves
 
 ```bash
-curl -s "http://localhost:18201/api/v1/quotes/f6000001-0000-4000-8000-000000000001"
+curl -s "http://localhost:18201/api/v1/quotes/f6abcde1-0000-4000-8000-00000000abc1"
 ```
 
 **Expected:** the quote lookup resolves `source` to `"209 Smoke Test Film"` via the Quote→Source join,

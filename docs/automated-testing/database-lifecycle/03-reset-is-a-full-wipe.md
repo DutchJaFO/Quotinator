@@ -25,9 +25,12 @@ and rebuilds via the baseline path, reversing #141's preserve-on-reset behaviour
   (`Operation: Reset`) into the freshly-rebuilt `Audit_Entry` table immediately after wiping it — the
   same pattern `DELETE /admin/audit` uses for its `Purged` trace. Expecting `0` here is the easy
   mistake and would report a false failure.
-- **The `preserveSchemaVersion` check compares row *counts* before and after**, not absolute values.
-  The point is that granular per-version history survives rather than collapsing to a single baseline
-  row; the counts themselves move whenever a migration is added.
+- **The `preserveSchemaVersion` check compares row *counts* before and after**, not absolute values;
+  the counts themselves move whenever a migration is added.
+- **Under Fresh that comparison is `1` against `1`, and cannot demonstrate preserved history.** A
+  fresh database takes the consolidated baseline path and records one collapsed row per counter, so
+  there is no granular history to preserve in the first place. Steps 7 and 8 say what they do and do
+  not establish; proving the granular half needs the Upgraded profile.
 
 ## Steps
 
@@ -98,11 +101,34 @@ own `System_SchemaVersion` is wiped by the full drop too, where previously it wa
 assertion is that they are unchanged, which cannot be evaluated from the after-value alone.
 
 ```bash
+docker stop -t 15 qt-db-03
+MSYS_NO_PATHCONV=1 docker cp qt-db-03:/data/quotinatordata.db .claude/temp/smoke156-before.db
+docker start qt-db-03
+until curl -sf http://localhost:18303/api/v1/health > /dev/null; do sleep 1; done
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156-before.db \
+  --sql "SELECT COUNT(*) AS DataVersionsBefore FROM System_SchemaVersion"
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156-before.db \
+  --sql "SELECT COUNT(*) AS ConsumerVersionsBefore FROM System_ConsumerSchemaVersion"
+
 curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
   "http://localhost:18303/api/v1/admin/database/reset?preserveSchemaVersion=true"
 ```
 
-**Expected:** `200`.
+**Expected:** `200`, and two before-counts recorded for step 8 to compare against.
+
+**On a Fresh container both before-counts are `1`, and that makes steps 7 and 8 a weaker check than
+they read as.** A database created fresh takes the one-step consolidated baseline path and records a
+single collapsed row per counter, so there is no granular per-version history for `preserveSchemaVersion`
+to preserve — `1` before and `1` after is satisfied just as well by a counter that was rebuilt from
+scratch. Measured during #339's full run, including against a never-reset Fresh container, which also
+reads `1` and `1`.
+
+**Multi-row history only exists on a database that took the incremental path**, so proving the
+granular half needs the **Upgraded** profile: seed from a published tag, let the current build replay
+its migrations, and only then Reset with `preserveSchemaVersion=true`. That is a different environment
+than this document declares and is not folded in here — what steps 7 and 8 establish under Fresh is
+that the flag returns `200` and does not *reduce* either counter. Read them that way rather than as
+proof that granular history survives.
 
 ### 8. Read both schema-version counters
 
@@ -113,8 +139,8 @@ error:
 ```bash
 docker stop -t 15 qt-db-03
 MSYS_NO_PATHCONV=1 docker cp qt-db-03:/data/quotinatordata.db .claude/temp/smoke156.db
-MSYS_NO_PATHCONV=1 docker cp qt-db-03:/data/quotinatordata.db-wal .claude/temp/smoke156.db-wal
-MSYS_NO_PATHCONV=1 docker cp qt-db-03:/data/quotinatordata.db-shm .claude/temp/smoke156.db-shm
+MSYS_NO_PATHCONV=1 docker cp qt-db-03:/data/quotinatordata.db-wal .claude/temp/smoke156.db-wal || true
+MSYS_NO_PATHCONV=1 docker cp qt-db-03:/data/quotinatordata.db-shm .claude/temp/smoke156.db-shm || true
 docker start qt-db-03
 until curl -sf http://localhost:18303/api/v1/health > /dev/null; do sleep 1; done
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke156.db \
@@ -123,8 +149,13 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smo
   --sql "SELECT COUNT(*) AS ConsumerVersions FROM System_ConsumerSchemaVersion"
 ```
 
-**Expected:** both counters report the same row count as before the `preserveSchemaVersion=true` call —
-their granular per-version history, not collapsed to a single baseline row.
+**Expected:** both counters report the same row count as the before-readings step 7 recorded, and
+neither is lower.
+
+**Under Fresh both readings are `1`, which is the collapsed baseline row rather than preserved
+history** — see step 7 for why, and for what this does and does not establish. A run wanting to prove
+granular history survives has to start from an Upgraded database, where the counters hold more than
+one row to begin with.
 
 ## Observed effect
 
@@ -141,5 +172,6 @@ nothing observable changes in a running container for that part.
 
 ```bash
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-03
-rm -f .claude/temp/smoke156.db .claude/temp/smoke156.db-wal .claude/temp/smoke156.db-shm
+rm -f .claude/temp/smoke156.db .claude/temp/smoke156.db-wal .claude/temp/smoke156.db-shm \
+      .claude/temp/smoke156-before.db
 ```

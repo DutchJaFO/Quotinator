@@ -16,18 +16,25 @@ The container half of that is the Fresh profile's job. The rows are not: the pro
 is what would populate both tables — the bundled seed writes `Audit_Entry` rows, and stages
 `Import_Action` rows per bundled batch.
 
-> **Unresolved: the `Import_Action` half.** Fresh pins `Quotinator__AutoPurgeBundledImportActions` to
-> the application's own default, `true`, which removes the bundled batches' `Import_Action` rows
-> immediately after a successful seed. Under the profile as written, this test's `/import/actions`
-> assertions therefore run against an empty table and invert — exactly the false failure Determinism
-> describes, and indistinguishable from a genuine pagination defect.
->
-> There are two honest resolutions and this document picks neither: declare
-> `Quotinator__AutoPurgeBundledImportActions=false` as its own delta, or state plainly that its
-> `/import/actions` assertions cannot be relied on and confine the contract check to `/quotes` and
-> `/admin/audit`. Flagged, not silently chosen. See the index's *Depending on content is not the same
-> as depending on another test*, and `database-lifecycle/02`, which already runs one container on the
-> default and a second on `false` precisely to tell the two apart.
+**The `Import_Action` half needs one delta beyond the profile:**
+`Quotinator__AutoPurgeBundledImportActions=false`, declared in step 1.
+
+Fresh pins that setting to the application's own default, `true`, which removes the bundled batches'
+`Import_Action` rows immediately after a successful seed. Without the delta this test's
+`/import/actions` assertions run against an empty table and invert: page 1 of nothing is not beyond
+the last page, so the `422` becomes a `200`, and the default page size arrives by defaulting-through
+rather than by being applied.
+
+**Measured both ways during #339's full run**, which is what settled it. Under the profile default,
+`pageSize=0` returned `pageSize 0` with `totalCount 0` and page-beyond-last returned `200`. With the
+delta: 1425 rows, `pageSize=0` returned `pageSize 1425` equal to `totalCount`, the default read `20`,
+and page-beyond-last returned `422`. The endpoint was correct throughout — only the table was empty.
+
+This document previously flagged the choice as unresolved and offered two ways out: declare the delta,
+or drop the `/import/actions` assertions and confine the contract check to the other two endpoints.
+The delta is chosen, because the alternative removes live coverage of one of the three endpoints whose
+shared contract is the entire subject. `database-lifecycle/02` already runs one container on the
+default and a second on `false` for the same reason.
 
 ## Determinism
 
@@ -44,13 +51,30 @@ is what would populate both tables — the bundled seed writes `Audit_Entry` row
 ### 1. Create this test's own environment
 
 ```bash
-dotnet script scripts/testing/test-env.csx -- create --name qt-api-02 --port 18102
+dotnet script scripts/testing/test-env.csx -- create --name qt-api-02 --port 18102 \
+  --env Quotinator__AutoPurgeBundledImportActions=false
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
+
+### 1b. Confirm all three tables have rows before asserting anything
+
+Two of the assertions below invert on an empty table, so this is a precondition rather than preamble:
+
+```bash
+curl -s "http://localhost:18102/api/v1/quotes?pageSize=1" | grep -o '"totalCount":[0-9]*'
+curl -s "http://localhost:18102/api/v1/admin/audit?pageSize=1" -H "X-Api-Key: smoketest" | grep -o '"totalCount":[0-9]*'
+curl -s "http://localhost:18102/api/v1/import/actions?pageSize=1" | grep -o '"totalCount":[0-9]*'
+```
+
+**Expected:** all three report a non-zero `totalCount`.
+
+**On failure:** a zero from `/import/actions` means step 1's auto-purge delta did not take effect, and
+every `/import/actions` assertion below then reports a false failure that looks exactly like a
+pagination defect. Stop and re-create the container with the delta rather than recording the result.
 
 ### 2. Request every row with `pageSize=0`
 
