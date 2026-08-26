@@ -36,8 +36,13 @@
 //                         means. Guessing wrong binds a different filesystem and the test reads an
 //                         empty database that looks exactly like a passing check.
 //   --env   <K=V>         Extra environment variable; repeatable.
-//   --read-only           Run with a read-only root filesystem, for a test whose subject is what the
-//                         application does when it cannot write.
+//   --read-only           Run with a read-only root filesystem, leaving /data writable. Since #294 the
+//                         application survives this — migration temp files never touch disk — so it is
+//                         the flag for proving that, not for provoking a failure.
+//   --read-only-data      Mount /data itself read-only. This is the one that degrades: with a genuinely
+//                         pending migration the initializer cannot write, and reports 503 with
+//                         SQLite Error 14 — the original incident's own error code. Measured
+//                         2026-08-27 in both WAL-sidecar states, so sidecar state does not decide it.
 //   --no-wait             Skip the readiness poll — for a container that publishes no port, or one
 //                         expected to degrade rather than become healthy.
 //   --wait-listening      Poll for any answer rather than a healthy one, for a degraded scenario
@@ -136,19 +141,29 @@ if (port is not null && (!int.TryParse(port, out int portNumber) || portNumber i
 
 string image = Value("--image") ?? "quotinator:local";
 
+bool fresh = command == "create";
+
+// reenter stops the old container *cleanly* first, and that is not tidiness — it decides the result.
+// `docker rm -f` is a SIGKILL, so SQLite never checkpoints and the -wal/-shm sidecars survive into the
+// next run; `docker stop -t 15` gives it time to close, and the sidecars are gone. #326 measured that
+// this sidecar state, not a pending migration, is what decides whether a read-only mount degrades —
+// so re-entering with the wrong one silently changes what the next container is even testing.
+//
+// create does not need it: it is about to discard the volume anyway.
+if (!fresh) Run($"stop -t 15 {name}", ignoreFailure: true, quiet: true);
+
 // The container always goes, on both commands: reenter is about keeping the *data*, and a container
 // still holding the database open would stop the new one from reading it.
 Run($"rm -f {name}", ignoreFailure: true, quiet: true);
 
-bool fresh = command == "create";
-
 string mount;
+string dataMode = Flag("--read-only-data") ? ":ro" : "";
 
 if (bind is not null)
 {
     // Verbatim — see the --bind note in the header. Resolving or creating this path would change
     // which filesystem it names.
-    mount = $"-v {bind}:/data";
+    mount = $"-v {bind}:/data{dataMode}";
 }
 else
 {
@@ -157,7 +172,7 @@ else
     // earlier run is the point.
     if (fresh) Run($"volume rm {volume}", ignoreFailure: true, quiet: true);
 
-    mount = $"-v {volume}:/data";
+    mount = $"-v {volume}:/data{dataMode}";
 }
 
 List<string> settings =

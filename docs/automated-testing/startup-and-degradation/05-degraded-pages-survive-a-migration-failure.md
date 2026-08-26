@@ -7,47 +7,60 @@
 ## Preconditions
 
 **Beyond the profile.** The Upgraded prior image is the **published
-`ghcr.io/dutchjafo/quotinator:1.8.2` tag**, chosen because `System_Notification` genuinely does not
-exist on a real v1.8.2 database. It runs its own container and volume (`qt-startup-05` / `qt-startup-05-data`,
-the name reused across the two runs), and the Constrained defect is intended to be
-`--read-only` on the root filesystem with `/data` left writable — which is the part that no longer
-works.
+`ghcr.io/dutchjafo/quotinator:1.8.2` tag**, chosen because it leaves a genuinely un-migrated database —
+`System_Notification` does not exist on it at all. One container name (`qt-startup-05`) is reused across
+the two runs against one named volume, and the Constrained defect is **`/data` itself mounted
+read-only** while a migration is pending.
 
-**Its premise is unreachable, measured 2026-08-18 and again 2026-08-26.** This test forces a migration
-failure with `--read-only` on the root filesystem while `/data` stays a writable volume. #294
-subsequently made exactly that arrangement survivable — the migration's temp files never touch disk, so
-restricting every other path no longer causes a failure.
+**Two conditions have to hold together, and neither is sufficient alone** (measured 2026-08-27):
 
-The setup here is byte-identical to
-[`04-migration-replay-under-restricted-write.md`](04-migration-replay-under-restricted-write.md), which
-asserts the app is **healthy** under it. Two tests cannot both be right about the same setup. The
-measured behaviour is `200` healthy, so this document's own guard — *"health must be 503, confirming
-the test actually reached the failure state"* — can never hold.
+| `/data` | Migration pending | Result |
+|---|---|---|
+| Writable, root filesystem `--read-only` | yes | `200` healthy — this is #294's fix working |
+| Read-only | no, already migrated | `200` healthy, with a `SQLite Error 8` logged |
+| **Read-only** | **yes** | **`503` unhealthy, `SQLite Error 14`** |
 
-That guard was the right instinct and it is the reason the contradiction is provable rather than
-merely suspected. What was missing is any step that *confirmed* the failure state before asserting
-against it.
-
-**#327 replaces this** with scenarios that provoke a real failure: a `:ro` volume mount with pinned WAL
-sidecar state, a corrupt database file, and a schema version ahead of the application. #326 measured
-that sidecar state — not a pending migration — is what decides whether a read-only mount degrades.
-
-**The expectations below are stated as they stand, and the run fails against them.** That is the
-correct signal while the technique no longer reaches the failure state: it is a real failure, not a
-formality, and it clears when #327 gives the test a setup that provokes one. Do not soften the expected
-status code to match what the container currently does — that would convert a failing test into a
-passing one without changing anything the test is for.
+**The third row is this test.** The initializer has real work to do and cannot write, so it degrades —
+and `SQLite Error 14: 'unable to open database file'` is *the original incident's own error code*.
 
 ## Determinism
 
-Not established, and that is the defect. The original intended, but never pinned:
+- **`--read-only-data`, not `--read-only`.** The root filesystem being unwritable is
+  [`04-migration-replay-under-restricted-write.md`](04-migration-replay-under-restricted-write.md)'s
+  subject and the application survives it by design. Using that flag here reproduces `04` and asserts
+  the opposite of it.
+- **The prior image must leave a migration pending.** Run this against a volume the current build has
+  already upgraded and it reports `200` with only a `SQLite Error 8` in the log — the write fails, but
+  there is no migration for it to fail *during*, so nothing degrades. That is why step 1 seeds from a
+  published tag and step 2 never re-runs against its own output.
+- **WAL sidecar state does not decide this.** Measured both ways — cleanly stopped so the sidecars are
+  checkpointed away, and force-killed so they survive — and both degrade. #326 found sidecar state
+  decisive for a read-only mount *without* a pending migration; that is a different question from this
+  one, and this document does not depend on it.
+- **`reenter` stops the previous container cleanly** (`docker stop -t 15`, not `rm -f`), so which of the
+  two sidecar states this runs in is pinned rather than incidental.
+- **The second start waits for *listening*, not healthy.** Degrading is the expected outcome, so waiting
+  for `200` would spend the whole timeout and then fail for the wrong reason.
 
-- a genuine migration failure — which the technique below no longer produces
-- `System_Notification` genuinely absent — true on a real v1.8.2 database, so that part held
+**What this replaced, and why the old version could never pass.** Until 2026-08-27 this test forced the
+failure with `--read-only` on the root filesystem, leaving `/data` writable — byte-identical to `04`'s
+setup, which asserts the app is **healthy** under it. Two tests cannot both be right about the same
+setup. Its own guard said *"health must be 503, confirming the test actually reached the failure
+state"*, and that guard could never hold: measured `200` on 2026-08-18 and again on 2026-08-26.
+
+The guard was the right instinct and is why the contradiction was provable rather than merely
+suspected. What was missing was a step that *confirmed* the failure state before asserting against it —
+and, as it turned out, a technique that produced one. The premise was never unreachable; the lever was
+wrong.
+
+**[#327](https://github.com/DutchJaFO/Quotinator/issues/327) proposed three replacement scenarios** — a
+`:ro` volume mount with pinned WAL sidecar state, a corrupt database file, and a schema version ahead of
+the application. This document now implements the first. The other two remain that issue's to add, and
+its scope is worth revisiting rather than assumed.
 
 ## Steps
 
-### 1. Seed a real, unmodified v1.8.2 database
+### 1. Seed a real, unmigrated v1.8.2 database
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-05 --port 18405 `
@@ -61,20 +74,26 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-startup-05 --port
 **On failure:** a partially-seeded volume would make everything below meaningless. Stop and re-seed
 rather than proceeding.
 
-### 2. Start the current build with a read-only root filesystem and read health
+### 2. Start the current build with `/data` read-only, and read health
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-05 --port 18405 `
-  --image quotinator:local --read-only --wait-listening
+  --image quotinator:local --read-only-data --wait-listening
 
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/api/v1/health" --expect 503
+$health = dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/api/v1/health" --expect 503 | ConvertFrom-Json
+"status=$($health.status)"
+
+$log = docker logs qt-startup-05 2>&1 | Out-String
+"sqliteError14=$(([regex]::Matches($log, "SQLite Error 14")).Count)"
 ```
 
-**Expected:** `503` with `status=unhealthy`, confirming the test reached the failure state.
+**Expected:** `503` with `status=unhealthy`, and `sqliteError14` non-zero — the migration genuinely
+could not write, which is the failure state every step below depends on.
 
-**On failure:** `200` healthy is what this setup actually measures today (see Observed effect), and
-`--expect 503` ends the step there. That is the known, tracked contradiction, not a new result — stop
-rather than running the degraded-page steps against a container that never degraded.
+**On failure:** a `200` means the volume was already migrated, so there was no pending migration for the
+read-only mount to fail during — re-seed from the published tag rather than re-running step 2 against
+its own output. `--expect 503` ends the step here either way, rather than letting the degraded-page
+assertions run against a container that never degraded.
 
 ### 3. Read the degraded pages and the notifications API
 
@@ -110,28 +129,30 @@ degraded. **Any other console error — a JS exception, a Blazor circuit error �
 driver asserts that by filtering the console to errors and checking every one matches `503`.
 
 **All four of these were confirmed automatable during #339's full run**, against a genuinely degraded
-container reached by other means (a bind mount plus a host-side `DROP TABLE`, since this document's own
-technique no longer degrades — see Preconditions). `/`, `/stats` and `/notifications` each returned
-`200` and rendered exactly as above, with the console carrying only 503s. The step is written this way
-so that whatever setup #327 gives it, the assertions are already runnable.
+container. `/`, `/stats` and `/notifications` each returned `200` and rendered exactly as above, with
+the console carrying only 503s.
 
-**One trap #327 should inherit:** a degraded container answers `/health` while still *starting*, and at
+**One trap to keep:** a degraded container answers `/health` while still *starting*, and at
 that point `/api/v1/notifications` returns `200` rather than `503`. Wait for the settled `unhealthy`
-state, not merely for a response.
+state, not merely for a response — which is what step 2's `--expect 503` establishes before step 3
+runs.
 
 ## Observed effect
 
-**Measured 2026-08-18 and confirmed again 2026-08-26 during the PowerShell conversion: `200` healthy.**
-The container does not degrade under this setup, so none of the degraded-page assertions above are
-exercised at all.
+**Measured 2026-08-27: `503 unhealthy`, with `SQLite Error 14: 'unable to open database file'`.**
 
-The original incident this reproduced was real — a live HA v1.8.2 → v1.8.3-beta upgrade whose migration
-failed partway through, leaving `NotificationSummary` (embedded in Home's modal) and `/notifications`
-crashing instead of showing degraded UI. `System_Notification` genuinely does not exist on a real
-v1.8.2 database (confirmed live:
-`SELECT name FROM sqlite_master WHERE type='table' AND name='System_Notification'` returns no rows),
-so the setup did once exercise `NotificationReader`'s missing-table fix and `DatabaseStatsSummary`'s
-degraded-skip fix together. What no longer holds is the mechanism that made the migration fail.
+That code matters. The original incident — a live HA v1.8.2 → v1.8.3-beta upgrade whose migration failed
+partway through, leaving `NotificationSummary` (embedded in Home's modal) and `/notifications` crashing
+instead of showing degraded UI — reported exactly `SQLite Error 14`. The `--read-only`-root technique
+this replaced could not reproduce it: that arrangement denies writes at a different syscall and produced
+`SQLite Error 10: 'disk I/O error'` when it degraded at all, which its own Observed effect recorded as
+"same class of failure, different code; an exact match is not expected". Denying `/data` reproduces the
+incident's code exactly.
+
+`System_Notification` genuinely does not exist on a real v1.8.2 database (confirmed live:
+`SELECT name FROM sqlite_master WHERE type='table' AND name='System_Notification'` returns no rows), so
+this setup exercises `NotificationReader`'s missing-table fix and `DatabaseStatsSummary`'s
+degraded-skip fix together — which is what the test is for.
 
 ## Cleanup
 
