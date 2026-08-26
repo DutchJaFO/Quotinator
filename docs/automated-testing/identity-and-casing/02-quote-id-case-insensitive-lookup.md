@@ -22,12 +22,15 @@ the one fully-unmitigated gap of this kind found across the whole codebase.
   canonicalization is only observable if the file supplies a non-canonical form.
 - **Both casings are then requested.** Testing only one proves half the behaviour — the lowercase call
   proves canonicalization, the uppercase call proves the case-insensitive read.
+- **The id comparison is `-ceq`.** `-eq` is case-insensitive in PowerShell, so with it this test would
+  report the canonical form as correct whichever casing came back — the one thing it exists to tell
+  apart.
 
 ## Steps
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-id-02 --port 18202
 ```
 
@@ -38,34 +41,46 @@ that never became healthy.
 
 ### 2. Import a fixture whose explicit id is uppercase
 
-```bash
-cat > .claude/temp/smoke-210.json <<'EOF'
+```powershell
+$fixture = "$PWD\.claude\temp\smoke-210.json"
+$json = @'
 {"quotes": [{"id":"F0000210-0000-4000-8000-000000000210","quote":"A #210 smoke test quote with an uppercase explicit id.","originalLanguage":"en","source":"Smoke Test Film 210","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
-EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-210.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18202/api/v1/import"
+'@
+[IO.File]::WriteAllText($fixture, $json, [Text.UTF8Encoding]::new($false))
+
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18202/api/v1/import" `
+  --file $fixture --duplicate-resolution newest-wins --expect 200
 ```
 
-**Expected:** import returns `200`.
+**Expected:** `200`.
 
 **On failure:** stop. Neither lookup below can distinguish "the read is case-sensitive" from "the quote
 was never stored".
 
 ### 3. Fetch the quote by the lowercase form of its id
 
-```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18202/api/v1/quotes/f0000210-0000-4000-8000-000000000210"
+```powershell
+$lower = dotnet script scripts/testing/http.csx -- `
+  --url "http://localhost:18202/api/v1/quotes/f0000210-0000-4000-8000-000000000210" `
+  --expect 200 | ConvertFrom-Json
+$lower.id -ceq 'f0000210-0000-4000-8000-000000000210'
 ```
 
-**Expected:** `200` with the quote, and the response's own `id` field is the canonical **lowercase**
-form (`f0000210-…`) regardless of the uppercase casing the file supplied.
+**Expected:** `200`, and `True` — the response's own `id` field is the canonical **lowercase** form
+regardless of the uppercase casing the file supplied.
 
 ### 4. Fetch the same quote by the file's own uppercase casing
 
-```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18202/api/v1/quotes/F0000210-0000-4000-8000-000000000210"
+```powershell
+$upper = dotnet script scripts/testing/http.csx -- `
+  --url "http://localhost:18202/api/v1/quotes/F0000210-0000-4000-8000-000000000210" `
+  --expect 200 | ConvertFrom-Json
+$upper.id -ceq 'f0000210-0000-4000-8000-000000000210'
+$upper.quote -ceq $lower.quote
 ```
 
-**Expected:** `200` with the same quote, its `id` again rendered in the canonical lowercase form.
+**Expected:** `200`, and `True` twice — the same quote comes back, and its `id` is again rendered in
+the canonical lowercase form.
 
 Taken with the lowercase call, that proves capture-time canonicalization and the case-insensitive read
 together; either alone would leave the other unverified.
@@ -102,7 +117,7 @@ endpoint (`Sql.Notifications.UpdateDismissById`, a *write* by id). Closing that 
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-id-02
-rm .claude/temp/smoke-210.json
+Remove-Item $fixture
 ```

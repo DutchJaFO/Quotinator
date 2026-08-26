@@ -42,12 +42,19 @@ The first fixture's id is deliberately lowercase, as a file-authored explicit id
 **Reading the `smoke-173-v3.json` tally is the assertion**; the import returns a success code either
 way.
 
+**The Person action is selected by its `entityType` property**, not by matching the shape of the
+serialized response — a field-order change would silently select nothing, and the decide call would
+then be made against an empty variable.
+
 ## Steps
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-import-08 --port 18608
+$key  = @{'X-Api-Key' = 'smoketest'}
+$base = "http://localhost:18608/api/v1"
+$temp = "$PWD\.claude\temp"
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -57,51 +64,51 @@ never became healthy.
 
 ### 2. Import `smoke-173.json` — the initial add
 
-```bash
-cat > .claude/temp/smoke-173.json <<'EOF'
+```powershell
+$v1 = @'
 {
   "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"A #173 smoke test filler quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":"Smoke Test Person","type":"movie","genres":[],"translations":{}}],
   "people": [{"id":"f0000005-0000-4000-8000-000000000005","name":"Smoke Test Person","dateOfBirth":"1950-01-01","dateOfDeath":null}]
 }
-EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-173.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18608/api/v1/import"
+'@
+[IO.File]::WriteAllText("$temp\smoke-173.json", $v1, [Text.UTF8Encoding]::new($false))
+
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+  --file "$temp\smoke-173.json" --duplicate-resolution newest-wins --expect 200 | Out-Null
+
+Invoke-RestMethod "$base/masterdata/people/f0000005-0000-4000-8000-000000000005" |
+  Select-Object id, name, dateOfBirth, completenessStatus
 ```
 
-Confirm via DbInspector:
-`SELECT Id, Name, DateOfBirth, DateOfDeath, CompletenessStatus FROM Quotinator_Person WHERE Id = 'f0000005-0000-4000-8000-000000000005'`
-
-**Expected:** `smoke-173.json` returns `200` with the Person added, `DateOfBirth` `1950-01-01`.
+**Expected:** `200` with the Person added, `dateOfBirth` `1950-01-01`.
 
 **On failure:** without this row there is nothing for the re-imports below to Modify, and every later
 step would be staging a fresh add instead. Stop.
 
 ### 3. Re-import `smoke-173-v2.json` — the same id with a changed `dateOfBirth`, under `review`
 
-```bash
-cat > .claude/temp/smoke-173-v2.json <<'EOF'
+```powershell
+$v2 = @'
 {
   "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"A #173 smoke test filler quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":"Smoke Test Person","type":"movie","genres":[],"translations":{}}],
   "people": [{"id":"f0000005-0000-4000-8000-000000000005","name":"Smoke Test Person","dateOfBirth":"1951-02-02","dateOfDeath":null}]
 }
-EOF
-batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-173-v2.json" \
-            -F 'settings={"duplicateResolution":{"default":"review"}}' "http://localhost:18608/api/v1/import" \
-          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "batchId=$batchId"
+'@
+[IO.File]::WriteAllText("$temp\smoke-173-v2.json", $v2, [Text.UTF8Encoding]::new($false))
+
+$batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+              --file "$temp\smoke-173-v2.json" --duplicate-resolution review --expect 202 `
+            | ConvertFrom-Json).batchId
+$batchId
+
+$staged = (Invoke-RestMethod "$base/import/actions?status=pending&batchId=$batchId&pageSize=0").items
+$staged | Select-Object entityType, actionType, ambiguousFields
+$personId = ($staged | Where-Object { $_.entityType -eq 'Person' })[0].id
+"personId=$personId"
 ```
 
-Capture the Person action this batch staged:
-
-```bash
-personId=$(curl -s "http://localhost:18608/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
-           | grep -o '"id":"[0-9a-f-]\{36\}","batchId":"[^"]*","actionType":"[A-Za-z]*","entityType":"Person"' \
-           | head -1 | cut -d'"' -f4)
-echo "personId=$personId"
-```
-
-**Expected:** `smoke-173-v2.json`, under `review`, stages a `Pending` `Modify` with
-`ambiguousFields: ["dateOfBirth"]`.
+**Expected:** a `Pending` `Modify` for the Person with `ambiguousFields` of `dateOfBirth`, and a
+non-empty `personId`.
 
 **On failure:** an empty pending listing means the `review` policy did not take effect and nothing was
 staged, so the decide and apply below would be operating on an empty batch. Stop.
@@ -111,25 +118,22 @@ staged, so the decide and apply below would be operating on an empty batch. Stop
 The fixture's quote stages an action of its own and `apply` is all-or-nothing, so everything else in
 the batch is decided too:
 
-```bash
-curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
-  -d '{"personDateOfBirth":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
-  "http://localhost:18608/api/v1/import/actions/$personId/decide"
+```powershell
+Invoke-RestMethod -Method Post -Uri "$base/import/actions/$personId/decide" -Headers $key `
+  -ContentType 'application/json' -Body '{"personDateOfBirth":{"choice":"replace"},"markCompletenessAs":"Complete"}' | Out-Null
 
-for id in $(curl -s "http://localhost:18608/api/v1/import/actions?status=Pending&batchId=$batchId&pageSize=0" \
-            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
-  curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
-    -d '{"quoteText":{"choice":"keep"}}' \
-    "http://localhost:18608/api/v1/import/actions/$id/decide"
-done
+foreach ($id in (Invoke-RestMethod "$base/import/actions?status=Pending&batchId=$batchId&pageSize=0").items.id) {
+  Invoke-RestMethod -Method Post -Uri "$base/import/actions/$id/decide" -Headers $key `
+    -ContentType 'application/json' -Body '{"quoteText":{"choice":"keep"}}' | Out-Null
+}
 
-curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18608/api/v1/import/actions/apply?batchId=$batchId"
-curl -s "http://localhost:18608/api/v1/masterdata/people/f0000005-0000-4000-8000-000000000005"
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/actions/apply?batchId=$batchId" --expect 200 --status
+Invoke-RestMethod "$base/masterdata/people/f0000005-0000-4000-8000-000000000005" |
+  Select-Object id, dateOfBirth, completenessStatus
 ```
 
-**Expected:** the apply returns `200`, and the Person reads back `"dateOfBirth":"1951-02-02"` with
-`"completenessStatus":"Complete"`.
+**Expected:** the apply returns `200`, and the Person reads back `dateOfBirth` `1951-02-02` with
+`completenessStatus` `Complete`.
 
 **The loop is why this applies at all.** `POST /import` rejects a file with no quotes, so every fixture
 here carries one and it stages its own `Modify`; leaving it undecided makes `apply` return `422` and
@@ -140,53 +144,54 @@ actions and the step named one.
 
 The `Complete` row must block it:
 
-```bash
-cat > .claude/temp/smoke-173-v3.json <<'EOF'
+```powershell
+$v3 = @'
 {
   "quotes": [{"id":"f0000004-0000-4000-8000-000000000004","quote":"A #173 smoke test filler quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":"Smoke Test Person","type":"movie","genres":[],"translations":{}}],
   "people": [{"id":"f0000005-0000-4000-8000-000000000005","name":"Smoke Test Person","dateOfBirth":"1952-03-03","dateOfDeath":null}]
 }
-EOF
-thirdBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-173-v3.json" \
-                 -F 'settings={"duplicateResolution":{"default":"review"}}' "http://localhost:18608/api/v1/import" \
-               | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "thirdBatchId=$thirdBatchId"
+'@
+[IO.File]::WriteAllText("$temp\smoke-173-v3.json", $v3, [Text.UTF8Encoding]::new($false))
+
+$thirdBatchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+                   --file "$temp\smoke-173-v3.json" --duplicate-resolution review `
+                 | ConvertFrom-Json).batchId
+
+$third = (Invoke-RestMethod "$base/import/actions?batchId=$thirdBatchId&pageSize=0").items
+$third | Group-Object status | Select-Object Count, Name
+"blockedPerson=$(@($third | Where-Object { $_.entityType -eq 'Person' -and $_.status -eq 'Blocked' }).Count)"
+(Invoke-RestMethod "$base/masterdata/people/f0000005-0000-4000-8000-000000000005").dateOfBirth
 ```
 
-Read what that third batch staged:
-
-```bash
-curl -s "http://localhost:18608/api/v1/import/actions?batchId=$thirdBatchId&pageSize=0" \
-  | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
-```
-
-**Expected:** `smoke-173-v3.json`'s status tally reads **`Blocked`, not `Pending`**, and `DateOfBirth`
-stays `1951-02-02` — `1952-03-03` never lands.
+**Expected:** `blockedPerson=1` — **`Blocked`, not `Pending`** — and `dateOfBirth` still
+`1951-02-02`: `1952-03-03` never lands.
 
 ### 6. Import `smoke-173-addonly.json` — a fresh Person with an uppercase id
 
-```bash
-cat > .claude/temp/smoke-173-addonly.json <<'EOF'
+```powershell
+$addOnly = @'
 {
   "quotes": [{"id":"f0000005-0000-4000-8000-000000000008","quote":"A #173 add-only smoke test quote.","originalLanguage":"en","source":"Smoke Test Film","date":"2026","character":null,"author":"Smoke Test Person AddOnly","type":"movie","genres":[],"translations":{}}],
   "people": [{"id":"F0000007-0000-4000-8000-000000000007","name":"Smoke Test Person AddOnly","dateOfBirth":"1985-05-05","dateOfDeath":null}]
 }
-EOF
-addonlyBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-173-addonly.json" \
-                   -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18608/api/v1/import" \
-                 | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "addonlyBatchId=$addonlyBatchId"
+'@
+[IO.File]::WriteAllText("$temp\smoke-173-addonly.json", $addOnly, [Text.UTF8Encoding]::new($false))
+
+$addonlyBatchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+                     --file "$temp\smoke-173-addonly.json" --duplicate-resolution newest-wins --expect 200 `
+                   | ConvertFrom-Json).batchId
+$addonlyBatchId
 ```
 
 **Expected:** a non-empty `addonlyBatchId` — the reversal below is scoped to it.
 
 ### 7. Reverse the add-only batch, preview first
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18608/api/v1/import/actions/reverse?batchId=$addonlyBatchId&preview=true"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18608/api/v1/import/actions/reverse?batchId=$addonlyBatchId"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "$base/import/actions/reverse?batchId=$addonlyBatchId&preview=true" --expect 200 --status
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "$base/import/actions/reverse?batchId=$addonlyBatchId" --expect 200 --status
 ```
 
 **Expected:** both reversal calls return `200`.
@@ -196,9 +201,9 @@ curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
 A soft-deleted row is invisible to every read endpoint, so the API answers this without a database
 copy — the lowercase form of the fixture's uppercase id, which is the casing under test:
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" \
-  "http://localhost:18608/api/v1/masterdata/people/f0000007-0000-4000-8000-000000000007"
+```powershell
+dotnet script scripts/testing/http.csx -- `
+  --url "$base/masterdata/people/f0000007-0000-4000-8000-000000000007" --expect 404 --status
 ```
 
 **Expected:** `404` — the row is genuinely gone from every read path, so `IsDeleted` flipped to `1`.
@@ -212,20 +217,21 @@ rather than merely hidden.
 
 This is the single distinction the test exists to draw, and nothing else in the run observes it:
 
-```bash
-finalBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-173-addonly.json" \
-                 -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' "http://localhost:18608/api/v1/import" \
-               | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "finalBatchId=$finalBatchId"
-curl -s "http://localhost:18608/api/v1/import/actions?batchId=$finalBatchId&pageSize=0" \
-  | grep -o '"actionType":"[A-Za-z]*"' | sort | uniq -c
-curl -s -o /dev/null -w "%{http_code}\n" \
-  "http://localhost:18608/api/v1/masterdata/people/f0000007-0000-4000-8000-000000000007"
+```powershell
+$finalBatchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+                   --file "$temp\smoke-173-addonly.json" --duplicate-resolution newest-wins --expect 200 `
+                 | ConvertFrom-Json).batchId
+
+$final = (Invoke-RestMethod "$base/import/actions?batchId=$finalBatchId&pageSize=0").items
+$final | Group-Object actionType | Select-Object Count, Name
+"personAdd=$(@($final | Where-Object { $_.entityType -eq 'Person' -and $_.actionType -eq 'Add' }).Count)"
+
+dotnet script scripts/testing/http.csx -- `
+  --url "$base/masterdata/people/f0000007-0000-4000-8000-000000000007" --expect 200 --status
 ```
 
-**Expected:** the final re-import's action tally shows **`Add`, not `Modify`**, and the Person now
-resolves `200` again — `IsDeleted` is back to `0`. Step 8's `404` against the same id is what makes
-that `200` mean something.
+**Expected:** `personAdd=1` — **`Add`, not `Modify`** — and the Person resolves `200` again, so
+`IsDeleted` is back to `0`. Step 8's `404` against the same id is what makes that `200` mean something.
 
 **On failure:** `Modify` would mean the reversal silently no-op'd and the row was never truly gone — the
 endpoint reported success in that failing case too, so this tally is the only thing that separates them.
@@ -237,7 +243,8 @@ endpoint reported success in the failing case too, so the HTTP result alone neve
 
 ## Cleanup
 
-```bash
-rm -f .claude/temp/smoke-173*.json
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-08
+Remove-Item "$temp\smoke-173.json", "$temp\smoke-173-v2.json", "$temp\smoke-173-v3.json", `
+            "$temp\smoke-173-addonly.json" -ErrorAction SilentlyContinue
 ```

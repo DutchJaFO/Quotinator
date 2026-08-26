@@ -24,8 +24,8 @@ left to a default.
 - **Copy the `-wal` and `-shm` sidecars** with every `.db` copy, *where they exist*. SQLite does not
   checkpoint recent writes into the main file until the WAL passes its threshold, so the `.db` alone
   can be missing exactly what was just written. After a clean `docker stop` they are usually gone —
-  the close checkpointed and removed them — which is why each copy ends `|| true` and why their
-  absence is not a warning sign. See the index's *Snapshot and restore*.
+  the close checkpointed and removed them — which is why each sidecar copy ends `2>$null` and why
+  their absence is not a warning sign. See the index's *Snapshot and restore*.
 - **Each configuration gets a fresh container with no prior data.** The auto-purge-off run in
   particular is meaningless against a volume where the on-by-default run already purged.
 - **`PurgeTraces` equals the number of bundled seed batches** — one per batch. Derive it from the batch
@@ -40,13 +40,13 @@ left to a default.
 
 ### 1. Start the default container, both auto-purge settings on
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-default --port 18302
-docker logs qt-db-02-default 2>&1 | grep -c "Quotinator ready"
+([regex]::Matches((docker logs qt-db-02-default 2>&1 | Out-String), 'Quotinator ready')).Count
 ```
 
-**Expected:** `1`. Counted rather than eyeballed — a `tail` of the log is read by a human deciding
-whether it looks finished, which is not a condition that can fail.
+**Expected:** `1`. Counted rather than eyeballed — reading the tail of a log and deciding whether it
+looks finished is not a condition that can fail.
 
 **On failure:** the audit activity every check below reads is produced by that seeding. A container
 that has not finished has nothing to export or date-range, and an empty result would read as an
@@ -54,33 +54,37 @@ endpoint defect. Stop.
 
 ### 2. Discover the audit date range
 
-```bash
-curl -s "http://localhost:18302/api/v1/admin/audit/date-range"
+```powershell
+$range = dotnet script scripts/testing/http.csx -- --url "http://localhost:18302/api/v1/admin/audit/date-range" --no-key --expect 200 | ConvertFrom-Json
+"earliest=$($range.earliestDate) latest=$($range.latestDate)"
 ```
 
 **Expected:** `200` with non-null `earliestDate`/`latestDate`, from the bundled seed's own
-`BulkInserted` entries. No `X-Api-Key` required, matching `GET /admin/audit`.
+`BulkInserted` entries. Called with `--no-key` deliberately: no `X-Api-Key` is required here, matching
+`GET /admin/audit`, and sending one would leave that untested.
 
 ### 3. Export the audit trail as a downloaded file
 
-```bash
-curl -s -D - "http://localhost:18302/api/v1/admin/audit/export" -o .claude/temp/audit-export.json | grep -i content-disposition
-cat .claude/temp/audit-export.json | head -c 300
+```powershell
+$export = Invoke-WebRequest "http://localhost:18302/api/v1/admin/audit/export" -UseBasicParsing
+$export.Headers['Content-Disposition']
+$body = $export.Content | ConvertFrom-Json
+"entries=$(@($body.entries).Count) changes=$(@($body.changes).Count)"
 ```
 
-**Expected:** headers include
-`Content-Disposition: attachment; filename="quotinator-audit-export-...json"`. The body has top-level
-`entries` and `changes` arrays, both non-empty after a fresh seed.
+**Expected:** the header reads
+`attachment; filename="quotinator-audit-export-...json"`, and both `entries` and `changes` are
+non-empty after a fresh seed.
 
 ### 4. Reject an export above the row-count cap
 
 A separate container, because the cap is configuration:
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-default
-dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-cap --port 19302 \
+dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-cap --port 19302 `
   --env Quotinator__AdminAuditExportMaxRows=1
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:19302/api/v1/admin/audit/export"
+dotnet script scripts/testing/http.csx -- --url "http://localhost:19302/api/v1/admin/audit/export" --expect 422 --status
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-cap
 ```
 
@@ -89,15 +93,16 @@ row.
 
 ### 5. Capture the auto-purge-on database and count the remaining actions
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-default --port 18302
 docker stop -t 15 qt-db-02-default
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249.db
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db-wal .claude/temp/smoke249.db-wal || true
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db-shm .claude/temp/smoke249.db-shm || true
+docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249.db
+docker cp qt-db-02-default:/data/quotinatordata.db-wal .claude/temp/smoke249.db-wal 2>$null
+docker cp qt-db-02-default:/data/quotinatordata.db-shm .claude/temp/smoke249.db-shm 2>$null
 docker start qt-db-02-default
-until curl -sf http://localhost:18302/api/v1/health > /dev/null; do sleep 1; done
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db \
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18302/api/v1/health" --wait-for 200 --status
+
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db `
   --sql "SELECT COUNT(*) AS RemainingActions FROM Import_Action"
 ```
 
@@ -109,31 +114,35 @@ or `Stale` after a bundled seed.
 
 ### 6. Count the purge traces left behind
 
-```bash
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db \
+```powershell
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249.db `
   --sql "SELECT COUNT(*) AS PurgeTraces FROM Audit_Entry WHERE TableName = 'Import_Action' AND Operation = 'Purged'"
+(Invoke-RestMethod "http://localhost:18302/api/v1/import/batches?type=seed").totalCount
 ```
 
-**Expected:** `PurgeTraces` equals the number of bundled seed batches — one per batch, even though the
-`Import_Action` rows themselves are gone.
+**Expected:** `PurgeTraces` equals the seed-batch count printed beneath it — one trace per batch, even
+though the `Import_Action` rows themselves are gone. Derived in the same run rather than written here,
+per Determinism.
 
 ### 7. Run the same seed with auto-purge disabled
 
 A fresh container, no prior data:
 
-```bash
+```powershell
 docker stop qt-db-02-default
-dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-noautopurge --port 20302 \
+dotnet script scripts/testing/test-env.csx -- create --name qt-db-02-noautopurge --port 20302 `
   --env Quotinator__AutoPurgeBundledImportActions=false
 docker stop -t 15 qt-db-02-noautopurge
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db .claude/temp/smoke249b.db
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db-wal .claude/temp/smoke249b.db-wal || true
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-noautopurge:/data/quotinatordata.db-shm .claude/temp/smoke249b.db-shm || true
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249b.db \
+docker cp qt-db-02-noautopurge:/data/quotinatordata.db .claude/temp/smoke249b.db
+docker cp qt-db-02-noautopurge:/data/quotinatordata.db-wal .claude/temp/smoke249b.db-wal 2>$null
+docker cp qt-db-02-noautopurge:/data/quotinatordata.db-shm .claude/temp/smoke249b.db-shm 2>$null
+
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249b.db `
   --sql "SELECT COUNT(*) AS RemainingActions FROM Import_Action"
+
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-noautopurge
 docker start qt-db-02-default
-until curl -sf http://localhost:18302/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18302/api/v1/health" --wait-for 200 --status
 ```
 
 **Expected:** `RemainingActions` is greater than `0`. With the bundled setting off the seeding path
@@ -146,21 +155,21 @@ against it and needs the same database this check just read.
 
 Using `qt-db-02-default` from the auto-purge check, still running:
 
-```bash
-purgedBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@data/sources/quotinator-curated.json" \
-                  "http://localhost:18302/api/v1/import?purgeOnSuccess=true" \
-                | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "purgedBatchId=$purgedBatchId"
+```powershell
+$purgedBatchId = (dotnet script scripts/testing/http.csx -- --method POST `
+                    --url "http://localhost:18302/api/v1/import?purgeOnSuccess=true" `
+                    --file data/sources/quotinator-curated.json --expect 200 | ConvertFrom-Json).batchId
+$purgedBatchId
 ```
 
-**Expected:** the import returns `200` (the curated file re-imports as all-Modify against
-already-seeded data, no pending decisions).
+**Expected:** `200` and a non-empty batch id — the curated file re-imports as all-Modify against
+already-seeded data, with no pending decisions to stage.
 
 ### 9. Attempt to reverse that batch
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18302/api/v1/import/actions/reverse?batchId=$purgedBatchId"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "http://localhost:18302/api/v1/import/actions/reverse?batchId=$purgedBatchId" --expect 422 --status
 ```
 
 **Expected:** `422`: the batch's `Import_Action` rows were purged immediately, so `ReverseBatchAsync`
@@ -168,43 +177,47 @@ has nothing to reverse.
 
 ### 10. Clear the audit trail unscoped
 
-```bash
-curl -s -X DELETE -H "X-Api-Key: smoketest" "http://localhost:18302/api/v1/admin/audit"
+```powershell
+dotnet script scripts/testing/http.csx -- --method DELETE --url "http://localhost:18302/api/v1/admin/audit" --expect 204 --status
 ```
 
 **Expected:** `204`.
 
 ### 11. Re-read the date range after the unscoped clear
 
-```bash
-curl -s "http://localhost:18302/api/v1/admin/audit/date-range"
+```powershell
+$after = Invoke-RestMethod "http://localhost:18302/api/v1/admin/audit/date-range"
+"earliest=$($after.earliestDate) latest=$($after.latestDate)"
+"secondsOld=$([int]((Get-Date).ToUniversalTime() - [datetime]$after.earliestDate).TotalSeconds)"
 ```
 
-**Expected:** `earliestDate`/`latestDate` match *only* the clear's own self-recorded `Purged` trace — a
-single, just-now timestamp — not any earlier `Audit_Change` activity, which is now also gone.
+**Expected:** `earliestDate` and `latestDate` are the same just-now timestamp — the clear's own
+self-recorded `Purged` trace, seconds old — and not the seed's much earlier activity, which is now gone
+along with the `Audit_Change` rows. The age is printed rather than the range being eyeballed, so "still
+showing the old data" fails rather than being read past.
 
 ### 12. Confirm a table-scoped clear leaves `Audit_Change` untouched
 
 **Step 10's unscoped clear emptied `Audit_Change`, so this step has to put rows back first.** Import
 the curated file again to generate them, read the count, run the scoped clear, and read it again:
 
-```bash
-curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" \
-  -F "file=@data/sources/quotinator-curated.json" "http://localhost:18302/api/v1/import"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18302/api/v1/import" `
+  --file data/sources/quotinator-curated.json --expect 200 | Out-Null
 docker stop -t 15 qt-db-02-default
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249c.db
+docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249c.db
 docker start qt-db-02-default
-until curl -sf http://localhost:18302/api/v1/health > /dev/null; do sleep 1; done
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249c.db \
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18302/api/v1/health" --wait-for 200 --status
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249c.db `
   --sql "SELECT COUNT(*) AS ChangesBefore FROM Audit_Change"
 
-curl -s -o /dev/null -X DELETE -H "X-Api-Key: smoketest" \
-  "http://localhost:18302/api/v1/admin/audit?table=Quotinator_Quote"
+dotnet script scripts/testing/http.csx -- --method DELETE `
+  --url "http://localhost:18302/api/v1/admin/audit?table=Quotinator_Quote" --expect 204 | Out-Null
 docker stop -t 15 qt-db-02-default
-MSYS_NO_PATHCONV=1 docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249d.db
+docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249d.db
 docker start qt-db-02-default
-until curl -sf http://localhost:18302/api/v1/health > /dev/null; do sleep 1; done
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249d.db \
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18302/api/v1/health" --wait-for 200 --status
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke249d.db `
   --sql "SELECT COUNT(*) AS ChangesAfter FROM Audit_Change"
 ```
 
@@ -230,12 +243,12 @@ tables as one combined concern everywhere else.
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-default
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-cap
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-noautopurge
-rm -f .claude/temp/smoke249.db .claude/temp/smoke249.db-wal .claude/temp/smoke249.db-shm \
-      .claude/temp/smoke249b.db .claude/temp/smoke249b.db-wal .claude/temp/smoke249b.db-shm \
-      .claude/temp/smoke249c.db .claude/temp/smoke249d.db \
-      .claude/temp/audit-export.json
+Remove-Item .claude/temp/smoke249.db, .claude/temp/smoke249.db-wal, .claude/temp/smoke249.db-shm, `
+            .claude/temp/smoke249b.db, .claude/temp/smoke249b.db-wal, .claude/temp/smoke249b.db-shm, `
+            .claude/temp/smoke249c.db, .claude/temp/smoke249d.db `
+            -ErrorAction SilentlyContinue
 ```

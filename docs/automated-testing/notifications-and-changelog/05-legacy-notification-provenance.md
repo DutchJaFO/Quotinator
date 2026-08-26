@@ -8,8 +8,8 @@
 
 **Beyond the profile.** The Upgraded prior image is the **published
 `ghcr.io/dutchjafo/quotinator:1.8.3` tag**. One container name (`qt-notif-05-upgraded`) is reused
-across the two runs against one bind-mounted directory, plus a one-shot `--rm alpine` running `sqlite3`
-to read the result. The whole thing is then repeated a second time with no v1.8.3 stage.
+across the two runs against one bind-mounted directory. The whole thing is then repeated a second time
+with no v1.8.3 stage.
 
 The migration that backfills legacy notification metadata restored the legacy notification's identity
 but left its provenance null. A later migration fills that in and creates the `System_AppVersion` row it
@@ -41,11 +41,15 @@ this one proves the `1.8.3` row is inserted **conditionally**, which only its se
   cannot be skipped without silently invalidating the result.
 - **The seeding wait polls for the announcement**, not a duration: v1.8.3 writes it after seeding ~800
   quotes, so a fixed wait can see zero and read as proof that nothing was written.
-- **That poll matches the announcement's *body*, and counts occurrences.** v1.8.3 has no `title` field
-  in its API response, so a gate on the title never becomes true and the loop hangs rather than fails —
-  measured during #339's full run against
+- **That poll counts the announcement's *body text* across the serialized items.** v1.8.3 has no
+  `title` field in its API response, so a gate on the title never becomes true and the loop hangs
+  rather than fails — measured during #339's full run against
   [`04`](04-upgrade-does-not-duplicate-the-legacy-notification.md), which carried the same gate.
-  `grep -c` is wrong here for the separate reason that the response is single-line JSON.
+  Counting occurrences rather than matching lines matters for the separate reason that the response is
+  single-line JSON.
+- **The database is read from the host with `DbInspector`**, against an absolute Windows bind path
+  built from `$PWD` so nothing translates it into a different directory. That replaces a throwaway
+  `alpine` container that installed `sqlite3` over the network first.
 - This scenario uses **its own database**, not one shared with a sibling test — the row counts below
   are exact and any prior state breaks them.
 
@@ -53,16 +57,24 @@ this one proves the `1.8.3` row is inserted **conditionally**, which only its se
 
 ### 1. Seed a v1.8.3 database and wait for its announcement
 
-```bash
-dotnet script scripts/testing/test-env.csx -- create --name qt-notif-05-upgraded --port 18505 \
-  --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind /tmp/qt-notif-05-upgraded/data
-until [ "$(curl -s 'http://localhost:18505/api/v1/notifications?pageSize=0' \
-  | grep -o 'Two REST API operation IDs were renamed' | wc -l)" -ge 1 ]; do sleep 5; done
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-upgraded
+```powershell
+$upgradedDir = "$PWD\.claude\temp\qt-notif-05-upgraded"
+New-Item -ItemType Directory -Force -Path $upgradedDir | Out-Null
+
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-05-upgraded --port 18505 `
+  --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind $upgradedDir
+
+function Count-Announcement($port) {
+  $items = (Invoke-RestMethod "http://localhost:$port/api/v1/notifications?pageSize=0").items
+  ([regex]::Matches(($items | ConvertTo-Json -Depth 5), 'Two REST API operation IDs were renamed')).Count
+}
+
+while ((Count-Announcement 18505) -lt 1) { Start-Sleep 5 }
+Count-Announcement 18505
 ```
 
-**Expected:** the poll terminates — v1.8.3's announcement exists, so seeding has finished and the
-database is in the state the upgrade is about.
+**Expected:** `1` — v1.8.3's announcement exists, so seeding has finished and the database is in the
+state the upgrade is about.
 
 **On failure:** a poll that never terminates means seeding did not complete and the announcement was
 never written. Upgrading a database in that state proves nothing about provenance (see Determinism).
@@ -70,25 +82,25 @@ Stop.
 
 ### 2. Upgrade to the current build against the same database
 
-```bash
-MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-05-upgraded -e Quotinator__DataDir=/data \
-  -v /tmp/qt-notif-05-upgraded/data:/data -p 18505:8080 quotinator:local
-until curl -sf http://localhost:18505/api/v1/health > /dev/null; do sleep 1; done
+```powershell
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-notif-05-upgraded --port 18505 `
+  --image quotinator:local --bind $upgradedDir
 ```
 
-**Expected:** the current build starts against the upgraded database and reports healthy.
+**Expected:** the current build starts against the upgraded database and reports healthy — which is what
+`reenter`'s own readiness poll establishes before it returns.
 
 ### 3. Read the version history
 
-```bash
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-05-upgraded/data:/data alpine \
-  sh -c "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
-    'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
+```powershell
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$upgradedDir\quotinatordata.db" `
+  --sql "SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber"
+(Select-Xml -Path Directory.Build.props -XPath '//Version').Node.InnerText
 ```
 
-**Expected:** exactly two rows: `Quotinator.Api | 1.8.3 | 1`, then `Quotinator.Api | <the version in
-Directory.Build.props> | 2` — measured as `1.9.0-alpha`, but compare against the file rather than a
-literal, since it moves every milestone.
+**Expected:** exactly two rows: `Quotinator.Api | 1.8.3 | 1`, then `Quotinator.Api | <the version
+printed beneath> | 2` — measured as `1.9.0-alpha`, and read from the file rather than written here,
+since it moves every milestone.
 
 **The 1.8.3 row must sort first.** It predates every row this table can hold, and if it sorted last then
 "the version that ran last" would answer 1.8.3 — and #81's catch-up would replay releases already
@@ -101,18 +113,22 @@ not who is running now.
 ### 4. Repeat the whole thing against a fresh database
 
 Same build, no v1.8.3 stage. It needs its **own container name and its own directory**, distinct from
-`qt-notif-05-upgraded` and `/tmp/qt-notif-05-upgraded` — run against the database the first half already upgraded, it would find the
+`qt-notif-05-upgraded` — run against the database the first half already upgraded, it would find the
 1.8.3 row that half created and prove nothing:
 
-```bash
-dotnet script scripts/testing/test-env.csx -- create --name qt-notif-05-fresh --port 19505 \
-  --bind /tmp/qt-notif-05-fresh/data
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-05-fresh/data:/data alpine \
-  sh -c "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 -header /data/quotinatordata.db \
-    'SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber;'"
+```powershell
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-upgraded --bind $upgradedDir
+
+$freshDir = "$PWD\.claude\temp\qt-notif-05-fresh"
+New-Item -ItemType Directory -Force -Path $freshDir | Out-Null
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-05-fresh --port 19505 --bind $freshDir
+
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$freshDir\quotinatordata.db" `
+  --sql "SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber"
 ```
 
-**The first container must be removed before this one starts.**
+**The first container must be removed before this one starts**, which is why the `destroy` is the first
+line of this step rather than being left to Cleanup.
 
 **Expected:** exactly one row, the current build's own version, and **no 1.8.3 row at all**.
 
@@ -131,11 +147,10 @@ existing is weaker evidence than the 1.8.3 row sorting first.
 
 ## Cleanup
 
-```bash
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-upgraded \
-  --bind /tmp/qt-notif-05-upgraded/data
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-fresh \
-  --bind /tmp/qt-notif-05-fresh/data
+```powershell
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-upgraded --bind $upgradedDir
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-fresh --bind $freshDir
+Remove-Item $upgradedDir, $freshDir -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
 Both data directories are bind mounts rather than named volumes, so removing the directories is what

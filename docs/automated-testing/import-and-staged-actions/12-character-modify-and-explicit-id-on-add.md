@@ -18,9 +18,8 @@ own shape, so a no-id entry resolves through ADR 013's Type-anchored, Series-sco
 rather than a bare Name lookup.
 
 Beyond the Fresh profile: **`Airplane!` must already exist as a Source**, which the bundled seed
-supplies. Every fixture below resolves against it, so confirm it is present before running them —
-`curl -s "http://localhost:18612/api/v1/masterdata/sources?pageSize=0"`, the same call the last step
-uses.
+supplies. Every fixture below resolves against it, so step 2 confirms it is present before anything
+depends on it.
 
 ## Determinism
 
@@ -46,7 +45,9 @@ surfaces it.
 - **The explicit id is uppercase in the file and looked up in lowercase.** Both castings are
   load-bearing; matching them removes the test's point.
 - **The Source-casing fixture uses `AIRPLANE!` in both the quote's `source` and the character's
-  `sourceTitle`.** Changing either to the stored casing tests nothing.
+  `sourceTitle`.** Changing either to the stored casing tests nothing — and step 8's comparison is
+  `-ceq`, because `-eq` is case-insensitive in PowerShell and would report a case-variant duplicate as
+  the correctly-cased row.
 - The Modify half asserts `ambiguousFields` contains **only** `name` — `sourceId` appearing would mean
   an unchanged `SourceId` is spuriously tripping `FieldMergeResolver`.
 
@@ -54,8 +55,11 @@ surfaces it.
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-import-12 --port 18612
+$key  = @{'X-Api-Key' = 'smoketest'}
+$base = "http://localhost:18612/api/v1"
+$temp = "$PWD\.claude\temp"
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -65,79 +69,86 @@ never became healthy.
 
 ### 2. Add a Character via natural key, with no id
 
-```bash
-cat > .claude/temp/smoke-175-add.json <<'EOF'
+```powershell
+"airplaneSources=$(@((Invoke-RestMethod "$base/masterdata/sources?pageSize=0").items | Where-Object { $_.title -ceq 'Airplane!' }).Count)"
+
+$add = @'
 {
   "quotes": [{"id":"a1111175-0000-4000-8000-000000000001","quote":"A #175 smoke test creation quote.","originalLanguage":"en","source":"Airplane!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
   "characters": [{"name":"Smoke Test New Character","sourceTitle":"Airplane!","sourceType":"movie"}]
 }
-EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-add.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
-curl -s "http://localhost:18612/api/v1/masterdata/characters?pageSize=0" \
-  | grep -o "Smoke Test New Character" | wc -l
-characterId=$(curl -s "http://localhost:18612/api/v1/masterdata/characters?pageSize=0" \
-              | grep -o '"id":"[0-9a-f-]\{36\}","name":"Ted Striker"' | head -1 | cut -d'"' -f4)
-echo "characterId=$characterId"
+'@
+[IO.File]::WriteAllText("$temp\smoke-175-add.json", $add, [Text.UTF8Encoding]::new($false))
+
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+  --file "$temp\smoke-175-add.json" --duplicate-resolution newest-wins --expect 200 --status
+
+$characters = (Invoke-RestMethod "$base/masterdata/characters?pageSize=0").items
+"created=$(@($characters | Where-Object { $_.name -ceq 'Smoke Test New Character' }).Count)"
+$characterId = ($characters | Where-Object { $_.name -ceq 'Ted Striker' })[0].id
+"characterId=$characterId"
 ```
 
-**Expected:** the Add returns `200`, and the `grep -c` for "Smoke Test New Character" reports `1` —
-linked to the existing `Airplane!` Source, with no id supplied, resolved via ADR 013's algorithm finding
-no candidate, then a genuine Add.
+**Expected:** `airplaneSources=1` before anything runs, the Add returns `200`, `created=1` — linked to
+the existing `Airplane!` Source with no id supplied, resolved via ADR 013's algorithm finding no
+candidate and then a genuine Add — and a non-empty `characterId` for the Modify half.
+
+**On failure:** `airplaneSources=0` means the seed did not supply the Source every fixture here resolves
+against, and every later step would then be creating one rather than matching it. Stop.
 
 ### 3. Correct an existing Character by id, under `review`
 
-```bash
-cat > .claude/temp/smoke-175-modify.json <<EOF
+```powershell
+$modify = @"
 {
   "quotes": [{"id":"a1111175-0000-4000-8000-000000000002","quote":"A #175 smoke test modify-trigger quote.","originalLanguage":"en","source":"Airplane!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
   "characters": [{"id":"$characterId","name":"Renamed Via Smoke Test","sourceTitle":"Airplane!","sourceType":"movie"}]
 }
-EOF
-batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-modify.json" \
-            -F 'settings={"duplicateResolution":{"default":"review"}}' "http://localhost:18612/api/v1/import" \
-          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "batchId=$batchId"
+"@
+[IO.File]::WriteAllText("$temp\smoke-175-modify.json", $modify, [Text.UTF8Encoding]::new($false))
+
+$batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+              --file "$temp\smoke-175-modify.json" --duplicate-resolution review --expect 202 `
+            | ConvertFrom-Json).batchId
+$batchId
 ```
 
 **Expected:** a non-empty `batchId` — the import staged under `review`.
 
+This here-string is double-quoted (`@"…"@`) rather than literal, because `$characterId` has to be
+substituted into it. Nothing else in the JSON begins with `$`.
+
 ### 4. List **only this batch's** pending actions
 
-```bash
-curl -s "http://localhost:18612/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
-  | grep -o '"ambiguousFields":\[[^]]*\]'
-actionId=$(curl -s "http://localhost:18612/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
-           | grep -o '"id":"[0-9a-f-]\{36\}","batchId":"[^"]*","actionType":"[A-Za-z]*","entityType":"Character"' \
-           | head -1 | cut -d'"' -f4)
-echo "actionId=$actionId"
+```powershell
+$staged = (Invoke-RestMethod "$base/import/actions?status=pending&batchId=$batchId&pageSize=0").items
+$staged | Select-Object entityType, actionType, ambiguousFields
+
+$characterAction = ($staged | Where-Object { $_.entityType -eq 'Character' })[0]
+$actionId = $characterAction.id
+"actionId=$actionId ambiguous=$($characterAction.ambiguousFields -join ',')"
 ```
 
-**Expected:** the Character action's `ambiguousFields` is `["name"]` **only** — `sourceId` appearing
-would mean an unchanged `SourceId` is spuriously tripping `FieldMergeResolver` — and `actionId` is
-non-empty.
+**Expected:** `ambiguous=name` — **only** `name` — since `sourceId` appearing would mean an unchanged
+`SourceId` is spuriously tripping `FieldMergeResolver`, and `actionId` is non-empty.
 
 ### 5. Decide the ambiguous field, apply the batch, and read the Character back
 
-```bash
-curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
-  -d '{"characterName":{"choice":"replace"},"markCompletenessAs":"Complete"}' \
-  "http://localhost:18612/api/v1/import/actions/$actionId/decide"
+```powershell
+Invoke-RestMethod -Method Post -Uri "$base/import/actions/$actionId/decide" -Headers $key `
+  -ContentType 'application/json' -Body '{"characterName":{"choice":"replace"},"markCompletenessAs":"Complete"}' | Out-Null
 
-for id in $(curl -s "http://localhost:18612/api/v1/import/actions?status=Pending&batchId=$batchId&pageSize=0" \
-            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
-  curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
-    -d '{"quoteText":{"choice":"keep"}}' \
-    "http://localhost:18612/api/v1/import/actions/$id/decide"
-done
+foreach ($id in (Invoke-RestMethod "$base/import/actions?status=Pending&batchId=$batchId&pageSize=0").items.id) {
+  Invoke-RestMethod -Method Post -Uri "$base/import/actions/$id/decide" -Headers $key `
+    -ContentType 'application/json' -Body '{"quoteText":{"choice":"keep"}}' | Out-Null
+}
 
-curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18612/api/v1/import/actions/apply?batchId=$batchId"
-curl -s "http://localhost:18612/api/v1/masterdata/characters/$characterId"
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/actions/apply?batchId=$batchId" --expect 200 --status
+Invoke-RestMethod "$base/masterdata/characters/$characterId" | Select-Object id, name, completenessStatus
 ```
 
-**Expected:** the apply returns `200`, and the Character reads back
-`"name":"Renamed Via Smoke Test"` with `"completenessStatus":"Complete"`.
+**Expected:** the apply returns `200`, and the Character reads back `Renamed Via Smoke Test` with
+`completenessStatus` of `Complete`.
 
 **The loop decides the fixture's own quote action**, which `apply` requires and which naming only the
 Character action would leave pending — see [`07`](07-stagedirection-soundcue-modify.md) step 4 for the
@@ -151,73 +162,82 @@ the guard to block, and the blocked listing comes back empty for a reason that h
 completeness. Measured during #339's full run, where that re-import produced `totalCount 0` and the
 step read as a failure of the guard.
 
-```bash
-cat > .claude/temp/smoke-175-modify-again.json <<EOF
+```powershell
+$again = @"
 {
   "quotes": [{"id":"a1111175-0000-4000-8000-000000000003","quote":"A #175 smoke test third-name quote.","originalLanguage":"en","source":"Airplane!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
   "characters": [{"id":"$characterId","name":"Renamed A Third Time","sourceTitle":"Airplane!","sourceType":"movie"}]
 }
-EOF
-blockedBatchId=$(curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-modify-again.json" \
-                   -F 'settings={"duplicateResolution":{"default":"review"}}' "http://localhost:18612/api/v1/import" \
-                 | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "blockedBatchId=$blockedBatchId"
+"@
+[IO.File]::WriteAllText("$temp\smoke-175-modify-again.json", $again, [Text.UTF8Encoding]::new($false))
+
+$blockedBatchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+                     --file "$temp\smoke-175-modify-again.json" --duplicate-resolution review `
+                   | ConvertFrom-Json).batchId
+
+$blocked = (Invoke-RestMethod "$base/import/actions?batchId=$blockedBatchId&pageSize=0").items
+$blocked | Group-Object status | Select-Object Count, Name
+"blockedCharacter=$(@($blocked | Where-Object { $_.entityType -eq 'Character' -and $_.status -eq 'Blocked' }).Count)"
+(Invoke-RestMethod "$base/masterdata/characters/$characterId").name
 ```
 
-Then read what it staged:
+**Expected:** `blockedCharacter=1` — a genuinely different `name` against a `Complete` row stages
+**`Blocked`, not `Pending`** — and the Character still reads `Renamed Via Smoke Test`, not
+`Renamed A Third Time`. That is the same guarantee Source, Person, StageDirection and SoundCue already
+have.
 
-```bash
-curl -s "http://localhost:18612/api/v1/import/actions?status=blocked&batchId=$blockedBatchId&pageSize=0"
-```
-
-**Expected:** the blocked listing carries the Character action — a genuinely different `name` against a
-`Complete` row stages **`Blocked`, not `Pending`** — and reading the Character back shows the name from
-step 5, not `Renamed A Third Time`. That is the same guarantee Source, Person, StageDirection and
-SoundCue already have.
-
-```bash
-curl -s "http://localhost:18612/api/v1/masterdata/characters/$characterId"
-```
-
-**On failure:** an *empty* blocked listing is the tell that the fixture, not the guard, is wrong —
-either the name in the file already matches the stored one, or nothing staged. Check the batch's full
-tally before concluding the guard regressed.
+**On failure:** `blockedCharacter=0` with an otherwise-empty tally is the tell that the fixture, not
+the guard, is wrong — either the name in the file already matches the stored one, or nothing staged.
+The full tally is printed alongside for exactly that reason.
 
 ### 7. Add a Character carrying an explicit uppercase id — the T2-only fix
 
-```bash
-cat > .claude/temp/smoke-175-explicit-add.json <<'EOF'
+```powershell
+$explicit = @'
 {
   "quotes": [{"id":"a1111175-0000-4000-8000-000000000005","quote":"A #175 smoke test explicit-id-add quote.","originalLanguage":"en","source":"Airplane!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
   "characters": [{"id":"F5111175-0000-4000-8000-000000000175","name":"Explicit Id Character","sourceTitle":"Airplane!","sourceType":"movie"}]
 }
-EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-explicit-add.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
-curl -s -w "\n%{http_code}\n" "http://localhost:18612/api/v1/masterdata/characters/f5111175-0000-4000-8000-000000000175"
+'@
+[IO.File]::WriteAllText("$temp\smoke-175-explicit-add.json", $explicit, [Text.UTF8Encoding]::new($false))
+
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+  --file "$temp\smoke-175-explicit-add.json" --duplicate-resolution newest-wins --expect 200 --status
+
+$explicitCharacter = dotnet script scripts/testing/http.csx -- `
+  --url "$base/masterdata/characters/f5111175-0000-4000-8000-000000000175" --expect 200 | ConvertFrom-Json
+"id=$($explicitCharacter.id) canonical=$($explicitCharacter.id -ceq 'f5111175-0000-4000-8000-000000000175')"
 ```
 
-**Expected:** the explicit-id Add succeeds, and the lowercase masterdata lookup returns `200`. The
-returned `id` is the lowercase-canonicalized form of the file's own id — **never an unrelated
-`EntityIdentity`-derived one**.
+**Expected:** the explicit-id Add succeeds, the lowercase masterdata lookup returns `200`, and
+`canonical=True` — the returned `id` is the lowercase-canonicalized form of the file's own id,
+**never an unrelated `EntityIdentity`-derived one**.
 
 ### 8. Match an existing Source through a differently-cased title
 
-```bash
-cat > .claude/temp/smoke-175-source-casing.json <<'EOF'
+```powershell
+$casing = @'
 {
   "quotes": [{"id":"a1111175-0000-4000-8000-000000000006","quote":"A #175 smoke test source-casing quote.","originalLanguage":"en","source":"AIRPLANE!","date":"1980","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
   "characters": [{"name":"Case Insensitive Source Character","sourceTitle":"AIRPLANE!","sourceType":"movie"}]
 }
-EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-175-source-casing.json" \
-  -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18612/api/v1/import"
-curl -s "http://localhost:18612/api/v1/masterdata/sources?pageSize=0"
+'@
+[IO.File]::WriteAllText("$temp\smoke-175-source-casing.json", $casing, [Text.UTF8Encoding]::new($false))
+
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+  --file "$temp\smoke-175-source-casing.json" --duplicate-resolution newest-wins --expect 200 --status
+
+$sources = (Invoke-RestMethod "$base/masterdata/sources?pageSize=0").items
+"storedCasing=$(@($sources | Where-Object { $_.title -ceq 'Airplane!' }).Count)"
+"uppercaseDuplicate=$(@($sources | Where-Object { $_.title -ceq 'AIRPLANE!' }).Count)"
 ```
 
-**Expected:** despite `AIRPLANE!` appearing in both the quote's `source` and the character's
-`sourceTitle`, the Sources list still contains exactly one `"title":"Airplane!"` row — the entry
-resolved to the pre-existing Source rather than creating a case-sensitive duplicate.
+**Expected:** `storedCasing=1` and `uppercaseDuplicate=0` — despite `AIRPLANE!` appearing in both the
+quote's `source` and the character's `sourceTitle`, the entry resolved to the pre-existing Source
+rather than creating a case-sensitive duplicate.
+
+**Both comparisons are `-ceq`.** With `-eq` the two lines would count the same rows and always agree,
+so the assertion could never fail — the casing is the entire subject here.
 
 ## Observed effect
 
@@ -226,7 +246,7 @@ observation for the explicit-id half — the import reported success in the fail
 
 ## Cleanup
 
-```bash
-rm -f .claude/temp/smoke-175-*.json
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-12
+Get-ChildItem $temp -Filter 'smoke-175-*.json' | Remove-Item -ErrorAction SilentlyContinue
 ```

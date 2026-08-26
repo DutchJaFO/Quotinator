@@ -16,12 +16,17 @@ input.
 does, so the unit suite cannot establish this behaviour at all. A passing unit test here would be
 evidence about the TestServer, not about the application.
 
+**The `detail` field is asserted as present and non-empty, never against its exact wording.** The text
+is localised, so it varies with the request's `Accept-Language`; what the test is about is that a
+`detail` exists at all, which a bare `400` does not carry.
+
 ## Steps
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-import-06 --port 18606
+$base = "http://localhost:18606/api/v1"
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -31,22 +36,27 @@ never became healthy.
 
 ### 2. Post an import request with no body at all
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18606/api/v1/import"
+```powershell
+$bodyless = dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" --expect 422 | ConvertFrom-Json
+"status=$($bodyless.status) hasDetail=$([bool]$bodyless.detail) hasTraceId=$([bool]$bodyless.traceId)"
+$bodyless.detail
 ```
 
-**Expected:** `422` with a `detail` field — "you must provide either a file… or a batchId", paraphrased
-per locale. **Not** a bare `400` with no `detail` at all.
+**Expected:** `422`, `hasDetail=True` and `hasTraceId=True`, with a `detail` naming the missing input —
+"you must provide either a file… or a batchId", paraphrased per locale. **Not** a bare `400` with no
+`detail` at all.
 
 ### 3. Post a bodyless request naming an unknown `batchId`
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18606/api/v1/import?batchId=00000000-0000-0000-0000-000000000000"
+```powershell
+$unknown = dotnet script scripts/testing/http.csx -- --method POST `
+  --url "$base/import?batchId=00000000-0000-0000-0000-000000000000" --expect 404 | ConvertFrom-Json
+"status=$($unknown.status) hasDetail=$([bool]$unknown.detail)"
+$unknown.detail
 ```
 
 **Expected:** `404` (unknown batch) even with zero body and no `Content-Type`, proving `batchId` mode
-never attempts to read the request body.
+never attempts to read the request body — again with its own `detail`.
 
 ## Observed effect
 
@@ -77,6 +87,6 @@ parameters automatically again instead of reading `HttpRequest` manually — see
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-06
 ```

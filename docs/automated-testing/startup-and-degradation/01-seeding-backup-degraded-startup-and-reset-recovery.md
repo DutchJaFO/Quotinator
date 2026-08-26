@@ -8,9 +8,9 @@
 
 **Beyond the profile.** The data directory is a **bind mount** instead of the profile's named volume,
 so the host can manipulate the SQLite file directly — the whole test turns on breaking the schema from
-outside the container. It runs its own container (`qt-startup-01`, started three times against that one
-directory), and the Constrained defect is a `DROP TABLE Quotinator_Quote` applied
-by the host while the container is stopped.
+outside the container. It runs its own container (`qt-startup-01`, stopped and started around a host
+edit), and the Constrained defect is a `DROP TABLE Quotinator_Quote` applied by the host while the
+container is stopped.
 
 `Quotinator.Tools.DbInspector` cannot be used here: it opens read-only (`Mode=ReadOnly`, see its
 `README.md`) and cannot run the `DROP TABLE` this needs. `scripts/testing/execute-sql.csx` is the writable
@@ -32,14 +32,14 @@ before that. Its own justification named the missing gate that #277 supplied.
 
 ## Determinism
 
-- **`MSYS_NO_PATHCONV=1` and an explicit Windows-style source path are required under Git Bash.**
-  Without them Git Bash's POSIX-to-Windows path conversion mangles the `-v` argument — confirmed live:
-  `$(pwd)/...:/data` silently became a bind mount to `\Program Files\Git\data`, and the container wrote
-  nothing to the intended host directory at all. The test then reads an empty directory and reports
-  nonsense.
+- **The bind path is an absolute Windows path, built from `$PWD`.** One directory, on one filesystem,
+  with nothing translating it on the way to `docker`. The POSIX-style path this document used before
+  depended on Git Bash rewriting it, and when that rewriting misfired the container silently bound
+  `\Program Files\Git\data` and wrote nothing to the intended directory at all — after which the test
+  reads an empty directory and reports nonsense.
 - **The third start waits for *listening*, not for healthy.** That container is degraded by design and
-  `/health` returns 503, so polling for a 200 would loop forever. The first two waits poll for healthy,
-  because they are not degraded.
+  `/health` returns 503, so polling for a 200 would spend the whole timeout before failing for the
+  wrong reason. The first two waits poll for healthy, because they are not degraded.
 - **The container must be stopped before the host writes to the database file**, and started again
   afterwards. Editing a SQLite file underneath a running process is a different test with a different
   outcome.
@@ -53,51 +53,51 @@ before that. Its own justification named the missing gate that #277 supplied.
 
 ### 1. Seed a fresh container against a bind-mounted data directory
 
-```bash
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-01 --port 18401 \
-  --bind .claude/temp/qt-startup-01-data
-docker logs qt-startup-01 2>&1 | grep "\[Database - Init\]"
-ls .claude/temp/qt-startup-01-data/backups/ 2>/dev/null
+```powershell
+$dataDir = "$PWD\.claude\temp\qt-startup-01-data"
+New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-01 --port 18401 --bind $dataDir
+
+docker logs qt-startup-01 2>&1 | Select-String -SimpleMatch '[Database - Init]'
+"backups=$(@(Get-ChildItem "$dataDir\backups\*.db" -ErrorAction SilentlyContinue).Count)"
 ```
 
 **Expected:** the init log shows `schema created at baseline` (fresh database, baseline path), and
-`backups/` does not exist or is empty. A baseline run has nothing to lose, so no backup is taken.
+`backups=0` — the directory does not exist yet. A baseline run has nothing to lose, so no backup is
+taken.
 
 **On failure:** an empty host directory, or an init log that never mentions the baseline, means the
-bind mount did not take effect — see the `MSYS_NO_PATHCONV` note in Determinism. Stop: every step
-below reads and writes that directory, and against the wrong one they report nonsense.
+bind mount did not take effect. Stop: every step below reads and writes that directory, and against the
+wrong one they report nonsense.
 
 ### 2. Restart unchanged — nothing is at risk, so nothing is backed up
 
-```bash
+```powershell
 docker restart qt-startup-01
-until curl -sf http://localhost:18401/api/v1/health > /dev/null; do sleep 1; done
-docker logs qt-startup-01 2>&1 | grep "\[Database - Init\]" | tail -3
-ls .claude/temp/qt-startup-01-data/backups/*.db 2>/dev/null | wc -l
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/health" --wait-for 200 --status
+
+docker logs qt-startup-01 2>&1 | Select-String -SimpleMatch '[Database - Init]' | Select-Object -Last 3
+"backups=$(@(Get-ChildItem "$dataDir\backups\*.db" -ErrorAction SilentlyContinue).Count)"
 ```
 
-**Expected:** `schema is up to date`, and the backup count is still `0`. No migration is pending and
-the content already exists, so neither risky action runs and there is nothing to protect against.
+**Expected:** `schema is up to date`, and `backups=0` still. No migration is pending and the content
+already exists, so neither risky action runs and there is nothing to protect against.
 
 ### 3. Break the schema on the host side, then restart
 
-This start is a raw `docker run` rather than a `create`, because it must mount the directory the
-earlier steps already seeded — `create` always starts from a clean one:
+The container stays the one step 1 created — it is already bound to this directory, so nothing needs
+re-running. It is stopped only so the host can write to the database file safely:
 
-```bash
-docker rm -f qt-startup-01
-MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-01 -p 18401:8080 \
-  -v "C:/repos/Quotinator/.claude/temp/qt-startup-01-data:/data" \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest quotinator:local
-until curl -sf http://localhost:18401/api/v1/health > /dev/null; do sleep 1; done
+```powershell
 docker stop qt-startup-01
-dotnet script scripts/testing/execute-sql.csx -- \
-  --db .claude/temp/qt-startup-01-data/quotinatordata.db \
+dotnet script scripts/testing/execute-sql.csx -- `
+  --db "$dataDir\quotinatordata.db" `
   --sql "PRAGMA foreign_keys=OFF; DROP TABLE Quotinator_Quote;"
 docker start qt-startup-01
-until curl -s -o /dev/null http://localhost:18401/api/v1/health; do sleep 1; done
-docker logs qt-startup-01 2>&1 | tail -20
-ls .claude/temp/qt-startup-01-data/backups/*.db 2>/dev/null | wc -l
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/health" --wait-for 503 --status
+
+docker logs qt-startup-01 2>&1 | Select-Object -Last 20
+"backups=$(@(Get-ChildItem "$dataDir\backups\*.db" -ErrorAction SilentlyContinue).Count)"
 docker ps -a --filter name=qt-startup-01 --format "{{.Status}}"
 ```
 
@@ -108,39 +108,52 @@ docker ps -a --filter name=qt-startup-01 --format "{{.Status}}"
 `SqliteException: ... no such table: Quotinator_Quote` attached as the log event's exception — **not**
 a bare .NET unhandled-exception runtime dump.
 
-The backup count reads `1` — the first backup this test has produced, because step 2 correctly took
-none. This is the case a backup exists for: seeding was about to run against a database it could not
-repair, and the backup is what let it restore rather than leave a broken one behind. One file per
-`CreateBackup` call; its `-shm`/`-wal` sidecars are not separate backups.
+`backups=1` — the first backup this test has produced, because step 2 correctly took none. This is the
+case a backup exists for: seeding was about to run against a database it could not repair, and the
+backup is what let it restore rather than leave a broken one behind. One file per `CreateBackup` call;
+its `-shm`/`-wal` sidecars are not separate backups.
 
 `docker ps -a` shows the container as `Up …`, **not** `Exited` — the app degrades, it does not crash.
 
 **On failure:** an `Exited` container means the app crashed instead of degrading, which is the defect
 this test exists to catch — and there is then no server left to answer the degraded-surface and Reset
-steps below. Stop and record the exit rather than running them against nothing.
+steps below. Stop and record the exit rather than running them against nothing. The `--wait-for 503`
+above fails within its own timeout in that case, rather than hanging.
 
 ### 4. Confirm the degraded surface
 
-```bash
-curl -s -w " [%{http_code}]\n" http://localhost:18401/api/v1/health
-curl -s -w " [%{http_code}]\n" http://localhost:18401/api/v1/quotes/random
+```powershell
+$health = dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/health" --expect 503 | ConvertFrom-Json
+"health status=$($health.status) reason=$($health.reason)"
+$random = dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/quotes/random" --expect 503 | ConvertFrom-Json
+"random status=$($random.status) reason=$($random.reason)"
 ```
 
-**Expected:** `/health` returns `503` with `{"status":"unhealthy","reason":"..."}`, not a bare `200`.
-`/quotes/random` returns `503` with `{"status":"unavailable","reason":"..."}`, never a raw exception.
+**Expected:** `/health` returns `503` with `status=unhealthy` and a populated `reason`, not a bare
+`200`. `/quotes/random` returns `503` with `status=unavailable` and its own `reason`, never a raw
+exception.
 
-### 5. Call Reset with a wrong or missing key while still degraded
+### 5. Call Reset with a missing key while still degraded
 
-Call Reset with a wrong or missing `X-Api-Key` while still degraded.
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "http://localhost:18401/api/v1/admin/database/reset" --no-key --expect 401 --status
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "http://localhost:18401/api/v1/admin/database/reset" --api-key wrong-key --expect 401 --status
+```
 
-**Expected:** `401`, not `503`, confirming the health gate exempts `/api/v1/admin/*` from the 503 gate
-entirely rather than blocking the route and only letting an authenticated call through.
+**Expected:** `401` both times, not `503` — confirming the health gate exempts `/api/v1/admin/*` from
+the 503 gate entirely, rather than blocking the route and only letting an authenticated call through.
+
+Both the missing key and the wrong key are tried: a route that answered `503` to one and `401` to the
+other would still be broken, and testing only one could not tell.
 
 ### 6. Reset the database while degraded
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  http://localhost:18401/api/v1/admin/database/reset -o /dev/null
+```powershell
+$reset = dotnet script scripts/testing/http.csx -- --method POST `
+  --url "http://localhost:18401/api/v1/admin/database/reset" --expect 200 | ConvertFrom-Json
+$reset | ConvertTo-Json -Depth 3
 ```
 
 **Expected:** `200` with a row-count summary of **all zeros**. It performs its own independent schema
@@ -149,15 +162,16 @@ afterwards (#156).
 
 ### 7. Confirm the app recovers without a restart
 
-```bash
-curl -s -w " [%{http_code}]\n" http://localhost:18401/api/v1/health
-curl -s -w " [%{http_code}]\n" http://localhost:18401/api/v1/quotes/random
+```powershell
+(dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/health" --expect 200 | ConvertFrom-Json).status
+$after = dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/quotes/random" --expect 200 | ConvertFrom-Json
+"status=$($after.status) items=$(@($after.items).Count)"
 ```
 
-**Expected:** `/health` returns `200` with `{"status":"healthy"}`, proving
-`DatabaseHealthState.MarkHealthy()` clears the degraded state rather than requiring a process restart.
-`/quotes/random` returns `200` with `{"status":"NoResults", ...}` and an empty `items` array — not
-`503`, and not real quote data, because the database is genuinely empty after a Reset.
+**Expected:** `/health` returns `200` and `healthy`, proving `DatabaseHealthState.MarkHealthy()` clears
+the degraded state rather than requiring a process restart. `/quotes/random` returns `200`,
+`status=NoResults` and `items=0` — not `503`, and not real quote data, because the database is
+genuinely empty after a Reset.
 
 ## Observed effect
 
@@ -180,9 +194,9 @@ what the assertions are made against.
 
 ## Cleanup
 
-```bash
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-01 \
-  --bind .claude/temp/qt-startup-01-data
+```powershell
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-01 --bind $dataDir
+Remove-Item $dataDir -Recurse -Force -ErrorAction SilentlyContinue
 ```
 
 This test's data directory is a bind mount rather than a named volume, so removing the directory is

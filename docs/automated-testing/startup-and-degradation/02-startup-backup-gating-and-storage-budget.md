@@ -9,8 +9,8 @@
 **Beyond the profile.** The volume is *reused across restarts* rather than being a one-boot
 environment — the whole test is about what successive startups against the same data directory do, and
 a fresh container each time would never reach the states being checked. It therefore runs its own
-container and volume (`qt-startup-02` / `qt-startup-02-data`), and a **second** container on
-the same volume for the final step, carrying `Quotinator__MaxBackupStorageGb=0`.
+container and volume (`qt-startup-02` / `qt-startup-02-data`), and the final step **re-enters** that
+same volume with `Quotinator__MaxBackupStorageGb=0` set.
 
 The sequence matters and each step depends on the one before it: fresh baseline → healthy restart →
 Reset → restart-after-Reset → budget exceeded.
@@ -23,22 +23,22 @@ and nothing to seed puts nothing at risk. That is #277's gating, and it is why t
 
 ## Determinism
 
-- **Waits for health, not a duration**, at every start except where noted.
+- **Waits for health, not a duration**, at every start.
 - **The backup count is cumulative and asserted at each step** (`0`, then `0`, then `1`, then `2`, then
   still `2`). Checking only the final number would not distinguish which startup took which backup.
-- **`docker logs --since` windows are generous** relative to the poll, so a fast startup does not push
-  the lines being grepped outside the window.
-- The budget run needs its **own container with `Quotinator__MaxBackupStorageGb=0`** — the budget is
-  configuration, not runtime state, so it cannot be applied to the running container. It is named
-  `qt-startup-02-budget` so the two are never confused in a `docker logs` line.
+- **The budget run re-enters the same volume rather than starting a second container.** The budget is
+  configuration and cannot be applied to a running container, but `reenter` replaces the container
+  while keeping the data — which is what this step needs, and it leaves exactly one container whose
+  log cannot be confused with a sibling's. That is why the `docker logs --since` windows this document
+  used are gone: there is no earlier container's output left to scope past.
 
 ## Steps
 
 ### 1. Install a fresh baseline
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-02 --port 18402
-docker logs qt-startup-02 2>&1 | grep "Database - Backup"
+docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'Database - Backup'
 ```
 
 **Expected:** no `[Database - Backup]` lines at all. Nothing exists to lose.
@@ -49,52 +49,57 @@ different sequence. Stop and remove the volume before re-running.
 
 ### 2. Restart while healthy
 
-```bash
+```powershell
 docker restart qt-startup-02
-until curl -sf http://localhost:18402/api/v1/health > /dev/null; do sleep 1; done
-docker logs qt-startup-02 --since 60s 2>&1 | grep "Database - Backup\|schema is up to date"
-docker exec qt-startup-02 sh -c "ls /data/backups 2>&1 || echo 'no backups dir — correct'"
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18402/api/v1/health" --wait-for 200 --status
+
+docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'Database - Backup', 'schema is up to date'
+"backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
 ```
 
-**Expected:** `schema is up to date` and **no** `[Database - Backup]` line. `/data/backups` should not
-even exist yet.
+**Expected:** `schema is up to date`, **no** `[Database - Backup]` line, and `backups=0` — the
+`/data/backups` directory does not even exist yet, which is why the listing is allowed to fail.
 
 ### 3. Reset the database
 
-```bash
-curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18402/api/v1/admin/database/reset"
-docker exec qt-startup-02 sh -c "ls /data/backups | wc -l"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18402/api/v1/admin/database/reset" --expect 200 | Out-Null
+"backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
 ```
 
-**Expected:** exactly one backup. Reset backs up unconditionally, being the highest-risk operation.
+**Expected:** `backups=1`. Reset backs up unconditionally, being the highest-risk operation.
 
 ### 4. Restart immediately after the Reset
 
-```bash
+```powershell
 docker restart qt-startup-02
-until curl -sf http://localhost:18402/api/v1/health > /dev/null; do sleep 1; done
-docker logs qt-startup-02 --since 60s 2>&1 | grep "Database - Backup"
-docker exec qt-startup-02 sh -c "ls /data/backups | wc -l"
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18402/api/v1/health" --wait-for 200 --status
+
+docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'Database - Backup'
+"backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
 ```
 
-**Expected:** takes a backup too, bringing the count to `2`. Content-seed has real work to do again
+**Expected:** a `[Database - Backup]` line, and `backups=2`. Content-seed has real work to do again
 (Quotes are empty) even though the schema itself needed no migration. **This is the exact case a
 `MigrationApplied`-based gate was found to miss**, and the reason the gate is not based on it.
 
 ### 5. Reset again with the backup budget already exceeded
 
-```bash
-docker rm -f qt-startup-02 2>/dev/null
-MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-02-budget -p 19402:8080 -v qt-startup-02-data:/data \
-  -e Quotinator__DataDir=/data -e Quotinator__AdminApiKey=smoketest -e Quotinator__MaxBackupStorageGb=0 quotinator:local
-until curl -sf http://localhost:19402/api/v1/health > /dev/null; do sleep 1; done
-curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:19402/api/v1/admin/database/reset"
-docker logs qt-startup-02-budget --since 60s 2>&1 | grep "LogBackupSkippedBudgetExceeded"
-docker exec qt-startup-02-budget sh -c "ls /data/backups | wc -l"
+```powershell
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-02 --port 18402 `
+  --env Quotinator__MaxBackupStorageGb=0
+
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18402/api/v1/admin/database/reset" --expect 200 | Out-Null
+docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'LogBackupSkippedBudgetExceeded', 'budget'
+"backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
 ```
 
 **Expected:** Reset still succeeds (`200`, database rebuilt). The backup is skipped with a warning log,
-not an exception, and the count stays at `2`.
+not an exception, and `backups=2` — unchanged from step 4, because the new one was never written.
+
+**On failure:** `backups=3` means the budget was not applied. Check that `reenter` (not `create`) was
+used — `create` would have wiped the volume and taken the count back to zero, which reads as a budget
+failure while actually being a lost environment.
 
 ## Observed effect
 
@@ -103,7 +108,6 @@ are observed state and are asserted above.
 
 ## Cleanup
 
-```bash
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-02-budget
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-02
 ```

@@ -31,8 +31,10 @@ The steps below stage that batch themselves rather than borrowing one, so this d
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-import-02 --port 18602
+$key  = @{'X-Api-Key' = 'smoketest'}
+$base = "http://localhost:18602/api/v1"
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -42,13 +44,11 @@ never became healthy.
 
 ### 2. Stage a batch under `review`
 
-```bash
-batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
-            -F "file=@data/sources/quotinator-curated.json" \
-            -F 'settings={"duplicateResolution":{"default":"review"}}' \
-            "http://localhost:18602/api/v1/import" \
-          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "batchId=$batchId"
+```powershell
+$batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+              --file data/sources/quotinator-curated.json --duplicate-resolution review --expect 202 `
+            | ConvertFrom-Json).batchId
+$batchId
 ```
 
 **Expected:** a non-empty `batchId` — every step below is scoped to it.
@@ -58,27 +58,23 @@ all while still returning plausible-looking codes. Stop.
 
 ### 3. List this batch's pending actions
 
-```bash
-curl -s "http://localhost:18602/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
-  | grep -o '"id":"[0-9a-f-]\{36\}"' | wc -l
+```powershell
+(Invoke-RestMethod "$base/import/actions?status=pending&batchId=$batchId&pageSize=0").totalCount
 ```
 
 **Expected:** a non-zero count — the actions this batch staged, which step 4 must decide in full.
 
 ### 4. Decide every one of them, then confirm none is left
 
-```bash
-for id in $(curl -s "http://localhost:18602/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
-            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
-  curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
-    -d '{"quoteText":{"choice":"keep"}}' \
-    "http://localhost:18602/api/v1/import/actions/$id/decide"
-done
-curl -s "http://localhost:18602/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
-  | grep -o '"totalCount":[0-9]*'
+```powershell
+foreach ($id in (Invoke-RestMethod "$base/import/actions?status=pending&batchId=$batchId&pageSize=0").items.id) {
+  Invoke-RestMethod -Method Post -Uri "$base/import/actions/$id/decide" `
+    -Headers $key -ContentType 'application/json' -Body '{"quoteText":{"choice":"keep"}}' | Out-Null
+}
+(Invoke-RestMethod "$base/import/actions?status=pending&batchId=$batchId&pageSize=0").totalCount
 ```
 
-**Expected:** that count reads `0`.
+**Expected:** `0`.
 
 **On failure:** with any action still pending, `apply` returns `422` by design and the reversal below is
 never reached — so a genuine failure would be indistinguishable from an incomplete setup, which is the
@@ -86,27 +82,27 @@ trap this confirmation exists to close. Stop and decide the remainder.
 
 ### 5. Apply through the staged path
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18602/api/v1/import/actions/apply?batchId=$batchId"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "$base/import/actions/apply?batchId=$batchId" --expect 200 --status
 ```
 
 **Expected:** `200`.
 
 ### 6. Preview the reversal
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18602/api/v1/import/actions/reverse?batchId=$batchId&preview=true"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "$base/import/actions/reverse?batchId=$batchId&preview=true" --expect 200 --status
 ```
 
 **Expected:** `200`, never the `422` this issue reported.
 
 ### 7. Reverse the batch
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18602/api/v1/import/actions/reverse?batchId=$batchId"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "$base/import/actions/reverse?batchId=$batchId" --expect 200 --status
 ```
 
 **Expected:** `200`, never the `422` this issue reported.
@@ -124,6 +120,6 @@ added elsewhere.
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-02
 ```

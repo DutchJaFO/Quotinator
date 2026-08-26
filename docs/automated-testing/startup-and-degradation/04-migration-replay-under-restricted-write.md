@@ -30,6 +30,9 @@ failures: `quotes` is non-zero, and the seed's own report shows nothing `Pending
   point is the predecessor release, not that specific tag.
 - **`--read-only` applies to the root filesystem while `/data` stays a writable volume.** That is the
   restriction under test: everything except the data directory is unwritable.
+- **The second run is a `reenter`, not a `create`.** `create` wipes the volume, which would throw away
+  the populated database this test exists to migrate — and the run would then pass for the same reason
+  the discarded fresh-baseline attempt did, by never exercising the code path at all.
 - **The seeded volume is consumed by the first run.** It upgrades the schema in place, so a second
   attempt against the same volume no longer exercises the migration at all. Clone it first if
   re-running.
@@ -50,15 +53,16 @@ AppArmor kernel support to test the real mechanism directly (confirmed live:
 
 ### 1. Seed a populated database from the predecessor release
 
-```bash
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-04 --port 18404 \
+```powershell
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-04 --port 18404 `
   --image ghcr.io/dutchjafo/quotinator:1.8.2
-curl -s "http://localhost:18404/api/v1/version" | grep -o '"quotes":[0-9]*'
-docker stop -t 15 qt-startup-04 && docker rm qt-startup-04
+
+$seeded = (Invoke-RestMethod "http://localhost:18404/api/v1/version").database
+"quotes=$($seeded.quotes) sources=$($seeded.sources)"
 ```
 
 **Expected:** a non-zero `quotes` count, and a seed reporting zero failures — nothing `Pending`,
-`Blocked` or `Stale`. Record the count; the upgrade step compares against it.
+`Blocked` or `Stale`. `$seeded` is kept for step 2 to compare against.
 
 **On failure:** a zero or partial count means the volume is only partially seeded, and the upgrade
 below has nothing meaningful to replay against — a pass would then say nothing about the restricted
@@ -66,23 +70,28 @@ environment. Stop and re-seed rather than continuing.
 
 ### 2. Upgrade to the current build under the restricted environment
 
-```bash
-MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-04 -p 18404:8080 \
-  --read-only \
-  -v qt-startup-04-data:/data -e Quotinator__DataDir=/data \
-  quotinator:local
-until curl -s -o /dev/null http://localhost:18404/api/v1/health; do sleep 1; done
-curl -s -w " [%{http_code}]\n" "http://localhost:18404/api/v1/health"
-curl -s "http://localhost:18404/api/v1/version"
-docker logs qt-startup-04 2>&1 | grep "migration applied\|SqliteException\|SQLite Error"
+```powershell
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-04 --port 18404 `
+  --image quotinator:local --read-only --wait-listening
+
+(dotnet script scripts/testing/http.csx -- --url "http://localhost:18404/api/v1/health" --expect 200 | ConvertFrom-Json).status
+$upgraded = (Invoke-RestMethod "http://localhost:18404/api/v1/version").database
+"quotes=$($upgraded.quotes) same=$($upgraded.quotes -eq $seeded.quotes)"
+
+$log = docker logs qt-startup-04 2>&1 | Out-String
+"migrationApplied=$(([regex]::Matches($log, 'migration applied')).Count)"
+"sqliteErrors=$(([regex]::Matches($log, 'SqliteException|SQLite Error')).Count)"
 ```
 
-**Expected:** `/health` returns `200 {"status":"healthy"}`. `/version` shows the **same** quote count as
-the seeding run recorded, and every other bundled count non-zero — migration replay must not lose
-content, which is a relationship between the two runs rather than a number either of them should
-predict. The logs show a `migration applied:` line and **no** `SqliteException`/`SQLite Error` line —
-the fix means the migration's temp files never touch disk at all, so restricting every other writable
-path does not matter.
+**Expected:** `/health` returns `200` and `healthy`. `same=True` — the quote count is identical to what
+the seeding run recorded, because migration replay must not lose content; that is a relationship
+between the two runs rather than a number either of them should predict. `migrationApplied` is non-zero
+and `sqliteErrors` is `0` — the fix means the migration's temp files never touch disk at all, so
+restricting every other writable path does not matter.
+
+The start waits for *listening* rather than healthy: if the migration fails this container answers
+`503` by design, and waiting for `200` would burn the whole timeout before the assertions that name
+the failure ever run.
 
 ## Observed effect
 
@@ -102,7 +111,7 @@ Not required on every run — a one-time gut-check when this document itself cha
 In `Program.cs`, temporarily change `useMemoryTempStore: true` to `false` at `SqliteConnectionFactory`'s
 DI registration site, rebuild, and repeat the upgrade against a **fresh clone** of the seeded volume:
 
-```bash
+```powershell
 docker run --rm -v qt-startup-04-data:/from -v qt-startup-04-data-clone:/to alpine sh -c "cp -a /from/. /to/"
 ```
 
@@ -111,9 +120,9 @@ before committing anything.
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-04
-docker volume rm qt-startup-04-data-clone 2>/dev/null
+docker volume rm qt-startup-04-data-clone 2>$null
 ```
 
 If the gut-check section above was run, confirm `useMemoryTempStore: true` has been restored in

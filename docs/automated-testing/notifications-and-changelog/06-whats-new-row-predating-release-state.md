@@ -7,10 +7,9 @@
 ## Preconditions
 
 **Beyond the profile.** One container of this test's own (`qt-notif-06`, on a bind-mounted directory rather
-than the profile's named volume, so the file can be edited from a helper container while the app is
-stopped), plus a one-shot `--rm alpine` running `sqlite3` to do the editing. The Constrained defect is
-**a state, not a flag**: a what's-new row injected in the pre-backfill shape, and the schema counter
-rolled back one step so the backfill replays over it.
+than the profile's named volume, so the file can be edited from the host while the app is
+stopped). The Constrained defect is **a state, not a flag**: a what's-new row injected in the
+pre-backfill shape, and the schema counter rolled back one step so the backfill replays over it.
 
 **The database must have taken the incremental path, which is why this is Upgraded rather than
 Fresh.** `ApplyMigrationPhaseAsync` records one `System_SchemaVersion` row per migration it applies, so
@@ -51,10 +50,15 @@ go stale on its own and get "fixed" by editing a digit.
 second leaves the app at `503 unhealthy` rather than serving. Step 3 asserts the health state for
 exactly this reason.
 
-**A restarted container's log still contains the previous boot's banner.** Waiting on
-`docker logs … | grep "Quotinator ready"` therefore returns immediately, matching the *first* boot —
-which is how a degraded restart was first read as a successful one during #339's full run. Assert the
-count, or read `/api/v1/health`, rather than waiting for a line that is already there.
+**A restarted container's log still contains the previous boot's banner.** Waiting for a
+`Quotinator ready` line in `docker logs` therefore returns immediately, matching the *first* boot —
+which is how a degraded restart was first read as a successful one during #339's full run. Poll
+`/api/v1/health` instead of waiting for a line that is already there.
+
+**The injected row's `Metadata` is a JSON literal, so its SQL goes through a file.** Windows PowerShell
+5.1 strips double quotes out of an argument on its way to a native process — a here-string included —
+so passing this statement inline would store `{version:1.8.4}` and the backfill would then be tested
+against data that is not the shape it exists for. See the index's *Every command is PowerShell*.
 
 - `DELETE ... WHERE Version = (SELECT MAX(Version) ...)` is deliberately relative, so it stays correct
   after migrations are consolidated.
@@ -70,24 +74,22 @@ count, or read `/api/v1/health`, rather than waiting for a line that is already 
 Seed from the last published release, then let the current build replay its migrations over it. That
 replay is what leaves one `System_SchemaVersion` row per version, which step 2's rollback needs:
 
-```bash
-dotnet script scripts/testing/test-env.csx -- create --name qt-notif-06 --port 18506 \
-  --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind /tmp/qt-notif-06/data
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-06
+```powershell
+$dataDir = "$PWD\.claude\temp\qt-notif-06-data"
+New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
-MSYS_NO_PATHCONV=1 docker run -d --name qt-notif-06 -p 18506:8080 \
-  -v /tmp/qt-notif-06/data:/data -e Quotinator__DataDir=/data \
-  -e Quotinator__AdminApiKey=smoketest quotinator:local
-until curl -sf http://localhost:18506/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-06 --port 18506 `
+  --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind $dataDir
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-notif-06 --port 18506 `
+  --image quotinator:local --bind $dataDir
+
 docker stop -t 15 qt-notif-06
-
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-06/data:/data alpine sh -c \
-  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db \
-   'SELECT COUNT(*) FROM System_SchemaVersion;'"
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
+  --sql "SELECT COUNT(*) AS SchemaVersionRows FROM System_SchemaVersion"
 ```
 
-**Expected:** the upgrade reports healthy, and the counter holds **more than one row** — one per
-migration the replay applied.
+**Expected:** the upgrade reports healthy — which `reenter`'s own readiness poll establishes before it
+returns — and the counter holds **more than one row**, one per migration the replay applied.
 
 **On failure:** a count of `1` means this database took the baseline path rather than the incremental
 one, and step 2's rollback would then empty the table instead of undoing a single migration. The
@@ -100,19 +102,31 @@ schema, and the rollback below would then be undoing something other than the ba
 
 ### 2. Inject a what's-new row in the pre-backfill shape, and roll back far enough to replay the backfill
 
-```bash
-# 2. inject a what's-new row in the pre-backfill shape, and undo the newest applied migration
-MSYS_NO_PATHCONV=1 docker run --rm -v /tmp/qt-notif-06/data:/data alpine sh -c \
-  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db \
-   \"INSERT INTO System_Notification (Id, Type, Body, DateCreated, IsDismissed, IsDeleted, Title, Metadata, MetadataKind) \
-     VALUES (lower(hex(randomblob(16))), 'Information', 'legacy highlights', '2026-08-16 09:00:00', 0, 0, \
-             'What''s new in v1.8.4', '{\\\"version\\\":\\\"1.8.4\\\"}', 'WhatsNew'); \
-     DELETE FROM System_SchemaVersion WHERE Version = (SELECT MAX(Version) FROM System_SchemaVersion); \
-     DELETE FROM System_SchemaVersion WHERE Version = (SELECT MAX(Version) FROM System_SchemaVersion);\""
+```powershell
+$fixture = "$PWD\.claude\temp\qt-notif-06.sql"
+$sql = @'
+INSERT INTO System_Notification (Id, Type, Body, DateCreated, IsDismissed, IsDeleted, Title, Metadata, MetadataKind)
+VALUES (lower(hex(randomblob(16))), 'Information', 'legacy highlights', '2026-08-16 09:00:00', 0, 0,
+        'What''s new in v1.8.4', '{"version":"1.8.4"}', 'WhatsNew');
+DELETE FROM System_SchemaVersion WHERE Version = (SELECT MAX(Version) FROM System_SchemaVersion);
+DELETE FROM System_SchemaVersion WHERE Version = (SELECT MAX(Version) FROM System_SchemaVersion);
+'@
+[IO.File]::WriteAllText($fixture, $sql, [Text.UTF8Encoding]::new($false))
+
+dotnet script scripts/testing/execute-sql.csx -- --db "$dataDir\quotinatordata.db" --sql-file $fixture
+
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
+  --sql "SELECT Title, Metadata FROM System_Notification WHERE MetadataKind = 'WhatsNew'"
 ```
 
-**Expected:** `sqlite3` completes with no error — the pre-backfill row is present and the schema
-counter has moved back far enough that the what's-new backfill is among the migrations still to apply.
+**Expected:** no SQL error, and the injected row reads `{"version":"1.8.4"}` — **with its double
+quotes**. The pre-backfill row is present and the schema counter has moved back far enough that the
+what's-new backfill is among the migrations still to apply.
+
+**The read-back is not decoration.** If the JSON arrived as `{version:1.8.4}`, the quotes were stripped
+on the way to the process and the backfill would be tested against a shape it will never see — a
+passing or failing result would say nothing either way. That is why the statement goes through
+`--sql-file` and why this step reads the stored value rather than trusting the write.
 
 **Two deletes, because the backfill is no longer the newest migration.** Determinism states the
 condition; this is it having arrived. `BackfillWhatsNewReleaseState` is followed by
@@ -127,26 +141,30 @@ today's answer, not a constant — every migration added after the backfill adds
 repeated is what needs re-deriving, and step 3's `applying N pending "Data" migration(s) (version X →
 Y)` line is what tells you whether the range now covers it.
 
-**On failure:** a `sqlite3` error means the constructed state was never reached, so the restart below
+**On failure:** a SQL error means the constructed state was never reached, so the restart below
 replays nothing and any result it produces is meaningless. Stop.
 
 ### 3. Restart so the rolled-back migration replays over the injected row
 
-```bash
-# 3. restart so the rolled-back migrations replay over the injected row
+```powershell
 docker start qt-notif-06
-until curl -s -o /dev/null http://localhost:18506/api/v1/health; do sleep 1; done
-curl -s -w " [%{http_code}]\n" http://localhost:18506/api/v1/health
-docker logs qt-notif-06 2>&1 | grep -o 'applying [0-9]* pending "Data" migration(s) (version [0-9]* . [0-9]*)' | tail -1
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18506/api/v1/health" --wait-for 200 --status
+
+(Invoke-RestMethod "http://localhost:18506/api/v1/health").status
+docker logs qt-notif-06 2>&1 | Select-String -Pattern 'applying \d+ pending "Data" migration\(s\) \(version \d+ . \d+\)' | Select-Object -Last 1
+
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
+  --sql "SELECT Title, Metadata FROM System_Notification WHERE MetadataKind = 'WhatsNew' ORDER BY Title"
 ```
 
-**Expected:** `/health` returns `200 {"status":"healthy"}`, and the last `applying` line shows a range
+**Expected:** `/health` returns `200` and `healthy`, and the last `applying` line shows a range
 that **includes the what's-new backfill** — `version 9 → 11` when measured, against `version 10 → 11`
 for a rollback that stopped one short.
 
-**Wait on `/health`, not on the log.** A restarted container's log still holds the previous boot's
-`Quotinator ready` banner, so `grep -q` returns immediately and a degraded restart reads as a
-successful one — which is how this was first misread during #339's full run.
+**Poll `/health`, not the log.** A restarted container's log still holds the previous boot's
+`Quotinator ready` banner, so a match on that line returns immediately and a degraded restart reads as a
+successful one — which is how this was first misread during #339's full run. `--wait-for 200` polls the
+live state, and gives up rather than hanging if it never arrives.
 
 **A `503 unhealthy` here is the rollback having gone too far**, not a backfill defect: replaying from a
 version the schema has already passed fails on the first statement that recreates an existing object,
@@ -156,18 +174,19 @@ state before reading the row.
 
 **Expected, once healthy:**
 
-- Logs `applying … pending "Data" migration(s)` and reaches `Quotinator ready`.
+- Logs `applying … pending "Data" migration(s)` and the container serves.
 - The injected row's `Metadata` becomes `{"version":"1.8.4","releaseState":"Released"}` — a `version`
   key present meant a tagged release under the convention that wrote those rows.
 - A row that already states its own release state is **unchanged**. `json_insert` only adds a key that
-  is missing, so replaying the chain cannot rewrite correct data.
+  is missing, so replaying the chain cannot rewrite correct data. Both rows are listed by the same
+  query for exactly this reason.
 
 ## Observed effect
 
 **Captured 2026-08-25.** Against an upgraded database rolled back two migrations, the restart logged
 `applying 2 pending "Data" migration(s) (version 9 → 11)`, stayed healthy, and left:
 
-```
+```text
 What's new (unreleased)   {"releaseState":"Unreleased","contentHash":"2EE673F9"}
 What's new in v1.8.4      {"version":"1.8.4","releaseState":"Released"}
 ```
@@ -187,9 +206,10 @@ which is why step 3 asserts both.
 
 ## Cleanup
 
-```bash
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-06 \
-  --bind /tmp/qt-notif-06/data
+```powershell
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-06 --bind $dataDir
+Remove-Item $dataDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $fixture -ErrorAction SilentlyContinue
 ```
 
 The data directory is a bind mount rather than a named volume, so removing the directory is what

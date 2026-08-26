@@ -32,7 +32,7 @@ would have broken those references if left incomplete, so a seed completing with
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-id-01 --port 18201
 ```
 
@@ -43,8 +43,9 @@ that never became healthy.
 
 ### 2. Read the seed's own log before importing anything
 
-```bash
-docker logs qt-id-01 2>&1 | grep -c "SQLite Error 19"
+```powershell
+$log = docker logs qt-id-01 2>&1 | Out-String
+([regex]::Matches($log, 'SQLite Error 19')).Count
 ```
 
 **Expected:** `0` — the container's seed produced no `SQLite Error 19`.
@@ -55,34 +56,43 @@ built correctly. Stop.
 
 ### 3. Import a fixture whose quote and Source both carry file-authored explicit ids
 
-```bash
-cat > .claude/temp/smoke-209.json <<'EOF'
+```powershell
+$fixture = "$PWD\.claude\temp\smoke-209.json"
+$json = @'
 {
   "quotes": [{"id":"F6ABCDE1-0000-4000-8000-00000000ABC1","quote":"A #209 smoke test line.","originalLanguage":"en","source":"209 Smoke Test Film","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
   "sources": [{"id":"F6ABCDE2-0000-4000-8000-00000000ABC2","title":"209 Smoke Test Film","type":"movie"}]
 }
-EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-209.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18201/api/v1/import"
+'@
+[IO.File]::WriteAllText($fixture, $json, [Text.UTF8Encoding]::new($false))
+
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18201/api/v1/import" `
+  --file $fixture --duplicate-resolution newest-wins --expect 200
 ```
 
-**Expected:** the import returns `200`.
+**Expected:** `200`. A `newest-wins` import resolves as it goes, so nothing is staged and the answer is
+not the `202` a `review` import gives.
 
 ### 4. Look the Source up by the id the file authored
 
-```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18201/api/v1/masterdata/sources/f6abcde2-0000-4000-8000-00000000abc2"
+```powershell
+$source = dotnet script scripts/testing/http.csx -- `
+  --url "http://localhost:18201/api/v1/masterdata/sources/f6abcde2-0000-4000-8000-00000000abc2" `
+  --expect 200 | ConvertFrom-Json
+$source.id
 ```
 
-**Expected:** `200`, with `id` shown canonicalized — lowercase, per ADR 012's system-wide convention.
+**Expected:** `200`, and the id echoed back **lowercase** — `f6abcde2-0000-4000-8000-00000000abc2`,
+canonicalized per ADR 012's system-wide convention, rather than the uppercase form the file carried.
 
 ### 5. Fetch the quote and confirm its Source join still resolves
 
-```bash
-curl -s "http://localhost:18201/api/v1/quotes/f6abcde1-0000-4000-8000-00000000abc1"
+```powershell
+(Invoke-RestMethod "http://localhost:18201/api/v1/quotes/f6abcde1-0000-4000-8000-00000000abc1").source
 ```
 
-**Expected:** the quote lookup resolves `source` to `"209 Smoke Test Film"` via the Quote→Source join,
-proving the fix did not break the join in order to make the masterdata lookup work.
+**Expected:** `209 Smoke Test Film`, resolved through the Quote→Source join — proving the fix did not
+break the join in order to make the masterdata lookup work.
 
 ## Observed effect
 
@@ -96,7 +106,7 @@ join.
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-id-01
-rm .claude/temp/smoke-209.json
+Remove-Item $fixture
 ```

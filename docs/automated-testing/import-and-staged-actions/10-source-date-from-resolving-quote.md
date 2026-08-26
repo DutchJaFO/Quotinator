@@ -33,7 +33,8 @@ a date, even when the resolving quote had one.
   can silently omit real, committed data. **Confirmed live 2026-08-04**: a batch-links count read `3`
   instead of the correct `4` from a bare copy, and matched once the sidecars were included.
   `sqlite3` is not present in the image, so `PRAGMA wal_checkpoint` via `docker exec` is not an
-  option — copying the sidecars is the only fix that does not need a Dockerfile change.
+  option — copying the sidecars is the only fix that does not need a Dockerfile change. Their copies
+  are allowed to fail, because a cleanly stopped database has already checkpointed and removed them.
 - **Assert the relationship, not the totals.** `have_date` must be non-zero and a large majority of
   `sources` — before the fix it was always `0`, which is the fact this establishes. The absolute
   figures are data and move with the dataset (`439/479` when #191 shipped, `423/461` on 2026-08-22);
@@ -48,8 +49,9 @@ a date, even when the resolving quote had one.
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-import-10 --port 18610
+$base = "http://localhost:18610/api/v1"
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -61,25 +63,29 @@ never became healthy.
 
 This does not re-exercise the fix:
 
-```bash
-curl -s "http://localhost:18610/api/v1/quotes/search?q=Airplane&field=source"
+```powershell
+$airplane = (Invoke-RestMethod "$base/quotes/search?q=Airplane&field=source").items
+"items=$(@($airplane).Count) withoutDate=$(@($airplane | Where-Object { -not $_.date }).Count)"
+$airplane | Select-Object -First 1 source, date
 ```
 
-**Expected:** items whose `date` is `"1980"`, not `null`. This Source already exists from seeding, so
-the call confirms the read path only — it does not by itself re-exercise `ResolveSourceAsync`.
+**Expected:** a non-zero `items`, `withoutDate=0`, and a `date` of `1980`. This Source already exists
+from seeding, so the call confirms the read path only — it does not by itself re-exercise
+`ResolveSourceAsync`.
 
 ### 3. Count the Sources carrying a date, against a fresh seed
 
 This is the actual code path:
 
-```bash
+```powershell
 docker stop -t 15 qt-import-10
 docker cp qt-import-10:/data/quotinatordata.db .claude/temp/inspect-191.db
-docker cp qt-import-10:/data/quotinatordata.db-wal .claude/temp/inspect-191.db-wal || true
-docker cp qt-import-10:/data/quotinatordata.db-shm .claude/temp/inspect-191.db-shm || true
+docker cp qt-import-10:/data/quotinatordata.db-wal .claude/temp/inspect-191.db-wal 2>$null
+docker cp qt-import-10:/data/quotinatordata.db-shm .claude/temp/inspect-191.db-shm 2>$null
 docker start qt-import-10
-until curl -sf http://localhost:18610/api/v1/health > /dev/null; do sleep 1; done
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
+dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --status
+
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" `
   --sql "SELECT COUNT(*) AS sources, SUM(CASE WHEN Date IS NOT NULL THEN 1 ELSE 0 END) AS have_date FROM Quotinator_Source WHERE IsDeleted = 0"
 ```
 
@@ -89,8 +95,8 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
 
 This is the implicit-discovery path this fixes:
 
-```bash
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
+```powershell
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" `
   --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Airplane!' AND IsDeleted = 0"
 ```
 
@@ -100,8 +106,8 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
 
 This is the gap described in Preconditions:
 
-```bash
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
+```powershell
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" `
   --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Jurassic Park' AND IsDeleted = 0"
 ```
 
@@ -110,8 +116,8 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
 
 ### 6. Cross-check `Frozen` — the other title the fixed gap named
 
-```bash
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" \
+```powershell
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-191.db" `
   --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE Title = 'Frozen' AND IsDeleted = 0"
 ```
 
@@ -131,7 +137,8 @@ to inherit: missing upstream data rather than a defect in this path.
 
 ## Cleanup
 
-```bash
-rm -f .claude/temp/inspect-191.db .claude/temp/inspect-191.db-wal .claude/temp/inspect-191.db-shm
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-10
+Remove-Item .claude/temp/inspect-191.db, .claude/temp/inspect-191.db-wal, `
+            .claude/temp/inspect-191.db-shm -ErrorAction SilentlyContinue
 ```

@@ -20,19 +20,25 @@ below.
 ## Determinism
 
 **Wait for the bundled seed to finish before checking** — same partial-seed caveat as
-[`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md). Poll `/api/v1/version` until the
-counts settle.
+[`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md). The profile's own readiness poll is
+what gates that.
 
 **Every existing unit fixture pre-seeded the canonical Source as a real DB row**, which masked both
 bugs below. That is why this check is live: the failing condition only exists when the canonical Source
 has *not* yet been created.
 
+**The audit trail records `Purged`, not `Purge`.** This document counted the latter until #339's full
+run, so it read `0` against 4 real traces and the "rules out an empty list" table below was satisfied
+by a pattern that could never match.
+
 ## Steps
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-import-17 --port 18617
+$key  = @{'X-Api-Key' = 'smoketest'}
+$base = "http://localhost:18617/api/v1"
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -42,19 +48,25 @@ never became healthy.
 
 ### 2. Read the pending and stale lists after the fresh seed, before anything else runs
 
-```bash
-curl -s http://localhost:18617/api/v1/version
-docker logs qt-import-17 2>&1 | grep -c "\[Database - Seed\] .* report: "
-docker logs qt-import-17 2>&1 | grep "\[Database - Seed\] .* alias staleness evaluated"
-curl -s -H "X-Api-Key: smoketest" "http://localhost:18617/api/v1/admin/audit?table=Import_Action&pageSize=0" | grep -o '"operation":"Purged"' | wc -l
-curl -s "http://localhost:18617/api/v1/import/actions?status=pending&pageSize=0" | grep -o '"totalCount":[0-9]*'
-curl -s "http://localhost:18617/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
+```powershell
+(Invoke-RestMethod "$base/version").database
+
+$log = docker logs qt-import-17 2>&1 | Out-String
+$reportLinesFresh = ([regex]::Matches($log, '\[Database - Seed\].*report: ')).Count
+"reportLines=$reportLinesFresh"
+$log -split "`n" | Select-String -SimpleMatch 'alias staleness evaluated'
+
+$audit = (Invoke-RestMethod "$base/admin/audit?table=Import_Action&pageSize=0" -Headers $key).items
+"purgedTraces=$(@($audit | Where-Object { $_.operation -eq 'Purged' }).Count)"
+"seedBatches=$((Invoke-RestMethod "$base/import/batches?type=seed").totalCount)"
+
+"pending=$((Invoke-RestMethod "$base/import/actions?status=pending&pageSize=0").totalCount)"
+"stale=$((Invoke-RestMethod "$base/import/actions?status=stale&pageSize=0").totalCount)"
 ```
 
-**Expected:** the counts have settled; the report count is non-zero, one line per bundled file, each
+**Expected:** the counts have settled; `reportLines` is non-zero, one per bundled file, each
 rendering `stale=0`; a line states that source-alias staleness was **evaluated** and over how many
-aliases; the `Purged` trace count matches the number of bundled batches; and both `status=pending` and
-`status=stale` report `totalCount: 0`.
+aliases; `purgedTraces` matches `seedBatches`; and both `pending` and `stale` read `0`.
 
 **Each reading rules out a different way of producing those empty lists**, the same way
 [`16-conflict-rule-staleness.md`](16-conflict-rule-staleness.md) sets out for conflict rules:
@@ -67,21 +79,26 @@ aliases; the `Purged` trace count matches the number of bundled batches; and bot
 
 **On failure:** a missing evaluation line makes this step inconclusive rather than passing — `stale=0`
 in the report and an empty list are both produced equally by a mechanism that ran and found none and by
-one that never ran. See the index's *When the expected situation does not occur*, cause 3.
+one that never ran. See the index's *When the expected situation does not occur*, cause 3, and
+[#347](https://github.com/DutchJaFO/Quotinator/issues/347), which this test remains blocked on.
 
 ### 3. Reseed and repeat, which is the second of the two paths
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18617/api/v1/admin/database/reseed"
-docker logs qt-import-17 2>&1 | grep -c "\[Database - Seed\] .* report: "
-docker logs qt-import-17 2>&1 | grep -c "\[Database - Seed\] .* alias staleness evaluated"
-curl -s "http://localhost:18617/api/v1/import/actions?status=pending&pageSize=0" | grep -o '"totalCount":[0-9]*'
-curl -s "http://localhost:18617/api/v1/import/actions?status=stale&pageSize=0" | grep -o '"totalCount":[0-9]*'
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/admin/database/reseed" --expect 200 --status
+
+$after = docker logs qt-import-17 2>&1 | Out-String
+$reportLinesAfter = ([regex]::Matches($after, '\[Database - Seed\].*report: ')).Count
+$evaluationsAfter = ([regex]::Matches($after, 'alias staleness evaluated')).Count
+"reportLines=$reportLinesFresh -> $reportLinesAfter increased=$($reportLinesAfter -gt $reportLinesFresh)"
+"aliasEvaluations=$evaluationsAfter"
+
+"pending=$((Invoke-RestMethod "$base/import/actions?status=pending&pageSize=0").totalCount)"
+"stale=$((Invoke-RestMethod "$base/import/actions?status=stale&pageSize=0").totalCount)"
 ```
 
-**Expected:** the reseed returns `200`; both counts have **increased** over step 2's readings, since the
-reseed plans every bundled file again; and both `status=pending` and `status=stale` report
-`totalCount: 0`.
+**Expected:** the reseed returns `200`; `increased=True` and `aliasEvaluations` has grown too, since the
+reseed plans every bundled file again; and both `pending` and `stale` read `0`.
 
 **Comparing against step 2 rather than asserting a number** is what makes this the second path rather
 than a repeat of the first: the reseed's own lines are indistinguishable from first-boot lines except
@@ -110,6 +127,6 @@ tests alone.**
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-17
 ```

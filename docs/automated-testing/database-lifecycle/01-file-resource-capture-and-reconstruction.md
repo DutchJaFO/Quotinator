@@ -31,7 +31,7 @@ the profile's own first boot, and a container that has not finished seeding has 
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-db-01 --port 18301
 ```
 
@@ -42,27 +42,31 @@ that never became healthy.
 
 ### 2. Confirm the profile finished seeding
 
-```bash
-docker logs qt-db-01 2>&1 | grep -c "Quotinator ready"
+```powershell
+([regex]::Matches((docker logs qt-db-01 2>&1 | Out-String), 'Quotinator ready')).Count
 ```
 
 **Expected:** `1`. Seeding, and the file capture that happens as part of it, are complete.
 
-Counted rather than eyeballed: a `tail` of the log is read by a human deciding whether it looks
-finished, which is not a condition that can fail.
+Counted rather than eyeballed: reading the tail of a log and deciding whether it looks finished is not
+a condition that can fail.
 
 **On failure:** a container still initialising has nothing to inspect, and every check below would read
 a half-built capture. Wait for seeding to finish rather than continuing.
 
 ### 3. Confirm all bundled files were captured with correct provenance
 
-```bash
-MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db .claude/temp/smoke251.db
-MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db-wal .claude/temp/smoke251.db-wal || true
-MSYS_NO_PATHCONV=1 docker cp qt-db-01:/data/quotinatordata.db-shm .claude/temp/smoke251.db-shm || true
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db \
+```powershell
+docker cp qt-db-01:/data/quotinatordata.db .claude/temp/smoke251.db
+docker cp qt-db-01:/data/quotinatordata.db-wal .claude/temp/smoke251.db-wal 2>$null
+docker cp qt-db-01:/data/quotinatordata.db-shm .claude/temp/smoke251.db-shm 2>$null
+
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db `
   --sql "SELECT Id, FileName, Origin, HomeDirectoryKey, LineEnding, EndsWithTrailingNewline, Converter, ConverterOptions FROM Import_FileResource WHERE IsDeleted = 0 ORDER BY FileName"
 ```
+
+The two sidecar copies are allowed to fail — a database whose WAL has already been checkpointed has no
+`-wal` file, and that is not an error. `2>$null` keeps that from reading as one.
 
 **Expected:** one row per bundled source file plus `manifest.json` itself, each with `Origin = System`
 and `HomeDirectoryKey = sources`. At the time of writing that is
@@ -78,8 +82,8 @@ in the manifest.
 Not just the two whose files were never redirected to the download cache — the #251 follow-up bug in
 `SeedBatch.SourceDirectory`:
 
-```bash
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db \
+```powershell
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db .claude/temp/smoke251.db `
   --sql "SELECT fr.FileName, COUNT(frb.Id) AS BatchLinks FROM Import_FileResource fr LEFT JOIN Import_FileResourceBatch frb ON frb.FileResourceId = fr.Id WHERE fr.IsDeleted = 0 GROUP BY fr.Id ORDER BY fr.FileName"
 ```
 
@@ -88,59 +92,61 @@ one of them; every other row shows `1`, having driven only itself.
 
 ### 5. List the captured file resources
 
-```bash
-curl -s "http://localhost:18301/api/v1/import/file-resources"
+```powershell
+$resources = (Invoke-RestMethod "http://localhost:18301/api/v1/import/file-resources").items
+$resources | Select-Object fileName, origin, homeDirectoryKey, linkedBatchCount | Format-Table
+@($resources | Where-Object { $_.PSObject.Properties.Name -contains 'linkedBatchIds' }).Count
 ```
 
-**Expected:** each item includes `homeDirectoryKey` (`"sources"` for bundled rows) and
-`linkedBatchCount`, but **no** `linkedBatchIds` key.
+**Expected:** each item carries `homeDirectoryKey` (`sources` for bundled rows) and `linkedBatchCount`,
+and the final line reports `0` — the list shape does **not** include `linkedBatchIds`, which belongs to
+the detail endpoint only.
 
 ### 6. Reject an unknown `origin`
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/file-resources?origin=bogus"
+```powershell
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18301/api/v1/import/file-resources?origin=bogus" --expect 422 --status
 ```
 
 **Expected:** `422`.
 
 ### 7. Filter the list to `origin=system`
 
-```bash
-curl -s "http://localhost:18301/api/v1/import/file-resources?origin=system"
+```powershell
+$system = (Invoke-RestMethod "http://localhost:18301/api/v1/import/file-resources?origin=system").items
+"system=$(@($system).Count) allBundled=$(@($resources).Count) other=$(@($system | Where-Object { $_.origin -ne 'system' }).Count)"
 ```
 
-**Expected:** one row per bundled source file plus the manifest, and none are `user` or `upload` origin
-on a fresh container.
+**Expected:** `system` equals `allBundled` from step 5 and `other` is `0` — on a fresh container every
+captured row is bundled, so nothing is `user` or `upload` origin.
 
 ### 8. Fetch one file resource's detail
 
-Substitute the `manifest.json` id from the provenance check:
+```powershell
+$manifestId = ($resources | Where-Object { $_.fileName -eq 'manifest.json' }).id
+$curatedId  = ($resources | Where-Object { $_.fileName -eq 'quotinator-curated.json' }).id
+"manifestId=$manifestId curatedId=$curatedId"
 
-```bash
-manifestId=$(curl -s "http://localhost:18301/api/v1/import/file-resources" \
-             | grep -o '{"id":"[0-9a-f-]\{36\}","fileName":"manifest.json"' | cut -d'"' -f4)
-curatedId=$(curl -s "http://localhost:18301/api/v1/import/file-resources" \
-            | grep -o '{"id":"[0-9a-f-]\{36\}","fileName":"quotinator-curated.json"' | cut -d'"' -f4)
-echo "manifestId=$manifestId curatedId=$curatedId"
-curl -s "http://localhost:18301/api/v1/import/file-resources/$manifestId"
+$detail = Invoke-RestMethod "http://localhost:18301/api/v1/import/file-resources/$manifestId"
+"linkedBatchCount=$($detail.linkedBatchCount) linkedBatchIds=$(@($detail.linkedBatchIds).Count)"
 ```
 
-**Expected:** `linkedBatchCount` and the length of `linkedBatchIds` both equal the `BatchLinks` figure
-the batch-links query reported.
+**Expected:** `linkedBatchCount` and the length of `linkedBatchIds` are equal, and both match the
+`BatchLinks` figure step 4 reported for `manifest.json`.
 
 ### 9. List the seed batches
 
-```bash
-curl -s "http://localhost:18301/api/v1/import/batches?type=seed"
+```powershell
+(Invoke-RestMethod "http://localhost:18301/api/v1/import/batches?type=seed").totalCount
 ```
 
-**Expected:** one seed batch per bundled file, matching the `BatchLinks` figure the batch-links query
-reported rather than a fixed number.
+**Expected:** one seed batch per bundled file, matching the `BatchLinks` figure step 4 reported rather
+than a fixed number.
 
 ### 10. Reject an unknown batch `status`
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/batches?status=bogus"
+```powershell
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18301/api/v1/import/batches?status=bogus" --expect 422 --status
 ```
 
 **Expected:** `422`.
@@ -149,76 +155,87 @@ curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/b
 
 Every batch id from the file-resource detail must exist here:
 
-```bash
-linkedBatchId=$(curl -s "http://localhost:18301/api/v1/import/file-resources/$manifestId" \
-                | grep -o '"linkedBatchIds":\[[^]]*\]' | grep -o '[0-9a-f-]\{36\}' | head -1)
-echo "linkedBatchId=$linkedBatchId"
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/batches/$linkedBatchId"
+```powershell
+$linkedBatchId = $detail.linkedBatchIds[0]
+$linkedBatchId
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18301/api/v1/import/batches/$linkedBatchId" --expect 200 --status
 ```
 
 **Expected:** `200`, proving the FileResource detail and the batches endpoint agree on what exists.
 
 ### 12. Reconstruct a captured file byte-for-byte
 
-```bash
-curl -s "http://localhost:18301/api/v1/import/file-resources/$curatedId/download" -o .claude/temp/downloaded.json
-MSYS_NO_PATHCONV=1 docker cp qt-db-01:/app/data/sources/quotinator-curated.json .claude/temp/original.json
-diff .claude/temp/downloaded.json .claude/temp/original.json && echo IDENTICAL
+```powershell
+Invoke-WebRequest "http://localhost:18301/api/v1/import/file-resources/$curatedId/download" `
+  -OutFile .claude/temp/downloaded.json -UseBasicParsing
+docker cp qt-db-01:/app/data/sources/quotinator-curated.json .claude/temp/original.json
+
+(Get-FileHash .claude/temp/downloaded.json).Hash -eq (Get-FileHash .claude/temp/original.json).Hash
 ```
 
-**Expected:** prints `IDENTICAL`. No `X-Api-Key` required; it is a read-only endpoint.
+**Expected:** `True`. No `X-Api-Key` required; it is a read-only endpoint. Compared by hash rather than
+by eye, so a single differing byte fails rather than being scrolled past.
 
 ### 13. Override the line ending to CRLF
 
-Confirmed via hex dump, not word count:
+```powershell
+Invoke-WebRequest "http://localhost:18301/api/v1/import/file-resources/$curatedId/download?lineEnding=crlf" `
+  -OutFile .claude/temp/crlf.json -UseBasicParsing
 
-```bash
-curl -s "http://localhost:18301/api/v1/import/file-resources/$curatedId/download?lineEnding=crlf" -o .claude/temp/crlf.json
-xxd .claude/temp/crlf.json | head -3
+$crlfBytes     = [IO.File]::ReadAllBytes("$PWD\.claude\temp\crlf.json")
+$originalBytes = [IO.File]::ReadAllBytes("$PWD\.claude\temp\original.json")
+function Count-Crlf($bytes) {
+  $n = 0
+  for ($i = 0; $i -lt $bytes.Length - 1; $i++) { if ($bytes[$i] -eq 13 -and $bytes[$i + 1] -eq 10) { $n++ } }
+  $n
+}
+"crlf=$(Count-Crlf $crlfBytes) original=$(Count-Crlf $originalBytes)"
 ```
 
-**Expected:** the hex dump shows `0d0a` sequences even though the file was captured as bare `LF`.
+**Expected:** `crlf` is non-zero and `original` is `0` — the override introduced `0d0a` sequences into
+a file captured as bare `LF`. The original is counted alongside as the positive control: without it, a
+non-zero count could just as easily mean the file always had CRLF.
 
 ### 14. Download an unknown file resource
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/file-resources/00000000-0000-0000-0000-000000000000/download"
+```powershell
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18301/api/v1/import/file-resources/00000000-0000-0000-0000-000000000000/download" --expect 404 --status
 ```
 
 **Expected:** `404`.
 
 ### 15. Download with an invalid `lineEnding`
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:18301/api/v1/import/file-resources/$curatedId/download?lineEnding=bogus"
+```powershell
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18301/api/v1/import/file-resources/$curatedId/download?lineEnding=bogus" --expect 422 --status
 ```
 
 **Expected:** `422`.
 
 ### 16. Prune without an admin key
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" -X POST "http://localhost:18301/api/v1/import/file-resources/prune"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18301/api/v1/import/file-resources/prune" --no-key --expect 401 --status
 ```
 
 **Expected:** `401`.
 
 ### 17. Prune with a malformed `keepPerFile`
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18301/api/v1/import/file-resources/prune?keepPerFile=abc"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18301/api/v1/import/file-resources/prune?keepPerFile=abc" --expect 422 --status
 ```
 
 **Expected:** `422`.
 
 ### 18. Prune with a valid key
 
-```bash
-curl -s -X POST -H "X-Api-Key: smoketest" "http://localhost:18301/api/v1/import/file-resources/prune"
+```powershell
+(dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18301/api/v1/import/file-resources/prune" --expect 200 | ConvertFrom-Json).prunedCount
 ```
 
-**Expected:** `200` with `{"prunedCount":0}` — nothing to prune, since each bundled file has only one
-captured version after a single startup.
+**Expected:** `0` — nothing to prune, since each bundled file has only one captured version after a
+single startup.
 
 **On failure:** a non-zero `prunedCount` means more than one startup wrote captured versions — a reused
 volume rather than a prune defect, see Determinism. Start again from a fresh volume rather than
@@ -231,8 +248,9 @@ state and are asserted above. What the container logs during capture has not bee
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-01
-rm -f .claude/temp/smoke251.db .claude/temp/smoke251.db-wal .claude/temp/smoke251.db-shm \
-      .claude/temp/downloaded.json .claude/temp/original.json .claude/temp/crlf.json
+Remove-Item .claude/temp/smoke251.db, .claude/temp/smoke251.db-wal, .claude/temp/smoke251.db-shm, `
+            .claude/temp/downloaded.json, .claude/temp/original.json, .claude/temp/crlf.json `
+            -ErrorAction SilentlyContinue
 ```

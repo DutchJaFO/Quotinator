@@ -509,6 +509,13 @@ So **no JSON is ever passed to a native process as an argument**, and `Invoke-Re
 before PowerShell 7, so **multipart upload has no cmdlet path at all**. Both are why
 [`scripts/testing/http.csx`](../../scripts/testing/http.csx) exists.
 
+**A here-string does not escape this.** `@'…'@` is literal to PowerShell, but the stripping happens
+when the value is handed to the process, not when it is parsed — so SQL carrying a JSON literal loses
+its quotes the same way, and lands in the database as corrupt data rather than failing. Where a fixture's
+SQL contains a double quote, write it to a file and use
+[`execute-sql.csx`](../../scripts/testing/execute-sql.csx)'s `--sql-file`. SQL with no double quote in
+it — every string single-quoted, as most fixtures are — passes safely through `--sql`.
+
 **Five idioms cover the whole suite. Use these, and say why at the command if you depart from them.**
 
 **Read JSON and assert on it** — a cmdlet, so nothing parses the URL on the way, and the result is an

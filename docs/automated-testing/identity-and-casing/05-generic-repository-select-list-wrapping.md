@@ -22,7 +22,10 @@ hand-written `Sql.cs` queries do. This confirms the `SELECT *` removal did not b
 ## Determinism
 
 - **`items` must be populated on every endpoint**, not merely present. An empty page returns `200` and
-  asserts nothing about column wrapping.
+  asserts nothing about column wrapping, which is why the count is printed per endpoint rather than
+  the status code alone.
+- **The casing comparison is `-cne`.** `-ne` is case-insensitive in PowerShell, so with it an
+  uppercase id would compare equal to its own lowercase form and the assertion could never fail.
 - These endpoints are the **only** live paths that exercise `RepositorySql`'s rewritten queries end to
   end, via `SqliteRepository<T>`/`SqliteRestorableRepository<T>`'s generic `GetPageAsync`/`GetByIdAsync`.
   Characters additionally exercise `SqliteLinkRepository` through the `Quotinator_CharacterSource`
@@ -32,7 +35,7 @@ hand-written `Sql.cs` queries do. This confirms the `SELECT *` removal did not b
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-id-05 --port 18205
 ```
 
@@ -43,38 +46,42 @@ that never became healthy.
 
 ### 2. Page every generic-repository-backed list endpoint
 
-```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/sources?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/characters?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/people?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/series?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/universes?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/conversations?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/stagedirections?pageSize=2"
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/soundcues?pageSize=2"
+```powershell
+$paths = 'masterdata/sources', 'masterdata/characters', 'masterdata/people', 'masterdata/series',
+         'masterdata/universes', 'conversations', 'masterdata/stagedirections', 'masterdata/soundcues'
+foreach ($path in $paths) {
+  $page = Invoke-RestMethod "http://localhost:18205/api/v1/$path`?pageSize=2"
+  $wrong = @($page.items.id | Where-Object { $_ -cne $_.ToLowerInvariant() })
+  "$path items=$(@($page.items).Count) notLowercase=$($wrong.Count)"
+}
 ```
 
-**Expected:** every list call returns `200` with populated `items` and lowercase `id` fields.
+**Expected:** every endpoint reports a non-zero `items` and `notLowercase=0`.
 
-**On failure:** a `200` carrying an empty `items` is not a pass — it asserts nothing about column
-wrapping, and points at the seed rather than at the queries under test (see Preconditions: this test
-can be blocked by a broken import). Stop; step 3 has no id to take.
+**On failure:** `items=0` is not a pass — it asserts nothing about column wrapping, and points at the
+seed rather than at the queries under test (see Preconditions: this test can be blocked by a broken
+import). Stop; step 3 has no id to take.
 
 ### 3. Fetch one Source by id in both casings
 
 Take one of the returned ids and fetch it both ways, confirming `GetByIdAsync`'s case-insensitive
 lookup survived the rewrite:
 
-```bash
-sourceId=$(curl -s "http://localhost:18205/api/v1/masterdata/sources?pageSize=1" \
-           | grep -o '"id":"[0-9a-f-]\{36\}"' | head -1 | cut -d'"' -f4)
-echo "sourceId=$sourceId  upper=$(echo "$sourceId" | tr 'a-f' 'A-F')"
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/sources/$sourceId"
-curl -s -w "\n%{http_code}\n" "http://localhost:18205/api/v1/masterdata/sources/$(echo "$sourceId" | tr 'a-f' 'A-F')"
+```powershell
+$sourceId = (Invoke-RestMethod "http://localhost:18205/api/v1/masterdata/sources?pageSize=1").items[0].id
+$upper = $sourceId.ToUpperInvariant()
+"sourceId=$sourceId upper=$upper"
+
+$lowerCall = dotnet script scripts/testing/http.csx -- --url "http://localhost:18205/api/v1/masterdata/sources/$sourceId" --expect 200 | ConvertFrom-Json
+$upperCall = dotnet script scripts/testing/http.csx -- --url "http://localhost:18205/api/v1/masterdata/sources/$upper"    --expect 200 | ConvertFrom-Json
+"sameRecord=$($lowerCall.title -ceq $upperCall.title) bothLowercase=$(($lowerCall.id -ceq $sourceId) -and ($upperCall.id -ceq $sourceId))"
 ```
 
-**Expected:** both `GET .../sources/{id}` calls return `200` with the same record, and its `id` renders
-lowercase regardless of the casing requested.
+**Expected:** both calls return `200`, `sameRecord=True`, and `bothLowercase=True` — the record's `id`
+renders lowercase regardless of the casing requested.
+
+**On failure:** if `$upper` equals `$sourceId`, the id drawn from the page happened to be all digits
+and there is nothing to case-flip. Take a different one rather than recording a pass.
 
 ## Observed effect
 
@@ -83,6 +90,6 @@ container emits while serving them.
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-id-05
 ```

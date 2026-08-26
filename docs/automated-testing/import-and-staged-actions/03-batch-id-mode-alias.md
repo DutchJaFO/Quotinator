@@ -31,8 +31,9 @@ Nothing beyond the Fresh profile — the batch is staged by the preview call in 
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-import-03 --port 18603
+$base = "http://localhost:18603/api/v1"
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -42,44 +43,45 @@ never became healthy.
 
 ### 2. Stage a batch by previewing the curated file under `skip`
 
-```bash
-batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
-            -F "file=@data/sources/quotinator-curated.json" \
-            -F 'settings={"duplicateResolution":{"default":"skip"}}' \
-            "http://localhost:18603/api/v1/import/preview" \
-          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "batchId=$batchId"
+```powershell
+$batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/preview" `
+              --file data/sources/quotinator-curated.json --duplicate-resolution skip `
+            | ConvertFrom-Json).batchId
+$batchId
 ```
 
 **Expected:** the response carries a `batchId` — the readings below are scoped to it.
 
 ### 3. Record the staged state before applying
 
-```bash
-curl -s "http://localhost:18603/api/v1/import/actions?batchId=$batchId&pageSize=0" \
-  | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
+```powershell
+$before = (Invoke-RestMethod "$base/import/actions?batchId=$batchId&pageSize=0").items
+$before | Group-Object status | Select-Object Count, Name
+"total=$(@($before).Count) applied=$(@($before | Where-Object { $_.status -eq 'Applied' }).Count)"
 ```
 
-**Expected:** the batch's actions are staged and none is `Applied`.
+**Expected:** the batch's actions are staged and `applied=0`.
 
 ### 4. Apply by `batchId`
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18603/api/v1/import?batchId=$batchId"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST --url "$base/import?batchId=$batchId" --expect 200 --status
 ```
 
 **Expected:** `200`.
 
 ### 5. Read the same listing again
 
-```bash
-curl -s "http://localhost:18603/api/v1/import/actions?batchId=$batchId&pageSize=0" \
-  | grep -o '"status":"[A-Za-z]*"' | sort | uniq -c
+```powershell
+$after = (Invoke-RestMethod "$base/import/actions?batchId=$batchId&pageSize=0").items
+$after | Group-Object status | Select-Object Count, Name
+"total=$(@($after).Count) sameTotal=$(@($after).Count -eq @($before).Count)"
+"notApplied=$(@($after | Where-Object { $_.status -ne 'Applied' }).Count)"
 ```
 
-**Expected:** every one of them reads `Applied`, and the total number of actions is unchanged between
-the two readings.
+**Expected:** `notApplied=0` — every one of them reads `Applied` — and `sameTotal=True`: the number of
+actions is unchanged between the two readings, so the alias applied the batch rather than staging a new
+one.
 
 ## Observed effect
 
@@ -87,6 +89,6 @@ Not yet established as a captured record.
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-03
 ```

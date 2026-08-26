@@ -26,7 +26,7 @@ the same bug class
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-id-03 --port 18203
 ```
 
@@ -37,8 +37,9 @@ that never became healthy.
 
 ### 2. Establish the log's starting state
 
-```bash
-docker logs qt-id-03 2>&1 | grep -c "SQLite Error 19"
+```powershell
+$before = ([regex]::Matches((docker logs qt-id-03 2>&1 | Out-String), 'SQLite Error 19')).Count
+$before
 ```
 
 **Expected:** `0`. The profile's own seed produced no foreign-key violation.
@@ -48,14 +49,18 @@ measuring that rather than this test's import. Stop — this is a profile proble
 
 ### 3. Import a conversation line whose `quoteId` casing does not match its quote
 
-```bash
-cat > .claude/temp/smoke-210-conv.json <<'EOF'
+```powershell
+$fixture = "$PWD\.claude\temp\smoke-210-conv.json"
+$json = @'
 {
   "quotes": [{"id":"f0000210-0000-4000-8000-000000000211","quote":"A #210 conversation-line smoke test quote.","originalLanguage":"en","source":"Smoke Test Film 210b","date":"2026","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],
   "conversations": [{"id":"f0000210-0000-4000-8000-000000000212","description":"A #210 smoke test conversation.","lines":[{"order":1,"type":"quote","quoteId":"F0000210-0000-4000-8000-000000000211"}]}]
 }
-EOF
-curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-210-conv.json" -F 'settings={"duplicateResolution":{"default":"newest-wins"}}' -w "\n%{http_code}\n" "http://localhost:18203/api/v1/import"
+'@
+[IO.File]::WriteAllText($fixture, $json, [Text.UTF8Encoding]::new($false))
+
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18203/api/v1/import" `
+  --file $fixture --duplicate-resolution newest-wins --expect 200
 ```
 
 **Expected:** `200`.
@@ -64,11 +69,12 @@ curl -s -X POST -H "X-Api-Key: smoketest" -F "file=@.claude/temp/smoke-210-conv.
 
 ### 4. Confirm no foreign-key violation was logged
 
-```bash
-docker logs qt-id-03 2>&1 | grep -c "SQLite Error 19"
+```powershell
+$after = ([regex]::Matches((docker logs qt-id-03 2>&1 | Out-String), 'SQLite Error 19')).Count
+"$before -> $after"
 ```
 
-**Expected:** still `0` — unchanged from step 2.
+**Expected:** `0 -> 0` — unchanged from step 2.
 
 The status code alone is not the whole assertion: the log is where
 `SQLite Error 19: FOREIGN KEY constraint failed` would name itself, and comparing against step 2 is what
@@ -81,7 +87,7 @@ Not yet established as a captured record. The failure mode is known and specific
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-id-03
-rm .claude/temp/smoke-210-conv.json
+Remove-Item $fixture
 ```

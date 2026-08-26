@@ -13,10 +13,10 @@ the name reused across the two runs), and the Constrained defect is intended to 
 `--read-only` on the root filesystem with `/data` left writable — which is the part that no longer
 works.
 
-**Its premise is unreachable, measured 2026-08-18.** This test forces a migration failure with
-`--read-only` on the root filesystem while `/data` stays a writable volume. #294 subsequently made
-exactly that arrangement survivable — the migration's temp files never touch disk, so restricting
-every other path no longer causes a failure.
+**Its premise is unreachable, measured 2026-08-18 and again 2026-08-26.** This test forces a migration
+failure with `--read-only` on the root filesystem while `/data` stays a writable volume. #294
+subsequently made exactly that arrangement survivable — the migration's temp files never touch disk, so
+restricting every other path no longer causes a failure.
 
 The setup here is byte-identical to
 [`04-migration-replay-under-restricted-write.md`](04-migration-replay-under-restricted-write.md), which
@@ -49,11 +49,11 @@ Not established, and that is the defect. The original intended, but never pinned
 
 ### 1. Seed a real, unmodified v1.8.2 database
 
-```bash
-dotnet script scripts/testing/test-env.csx -- create --name qt-startup-05 --port 18405 \
+```powershell
+dotnet script scripts/testing/test-env.csx -- create --name qt-startup-05 --port 18405 `
   --image ghcr.io/dutchjafo/quotinator:1.8.2
-curl -s "http://localhost:18405/api/v1/version" | grep -o '"quotes":[0-9]*'
-docker stop -t 15 qt-startup-05 && docker rm qt-startup-05
+
+(Invoke-RestMethod "http://localhost:18405/api/v1/version").database.quotes
 ```
 
 **Expected:** `quotes` is non-zero and the seed reports zero failures.
@@ -63,29 +63,26 @@ rather than proceeding.
 
 ### 2. Start the current build with a read-only root filesystem and read health
 
-```bash
-MSYS_NO_PATHCONV=1 docker run -d --name qt-startup-05 -p 18405:8080 \
-  --read-only \
-  -v qt-startup-05-data:/data -e Quotinator__DataDir=/data \
-  quotinator:local
-until curl -s -o /dev/null http://localhost:18405/api/v1/health; do sleep 1; done
-curl -s -w " [%{http_code}]\n" http://localhost:18405/api/v1/health
+```powershell
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-05 --port 18405 `
+  --image quotinator:local --read-only --wait-listening
+
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/api/v1/health" --expect 503
 ```
 
-**Expected:** `/health` returns
-`503 {"status":"unhealthy",...}`, confirming the test reached the failure state.
+**Expected:** `503` with `status=unhealthy`, confirming the test reached the failure state.
 
-**On failure:** `200` healthy is what this setup actually measures today (see Observed effect). That is
-the known, tracked contradiction, not a new result — stop rather than running the degraded-page steps
-against a container that never degraded.
+**On failure:** `200` healthy is what this setup actually measures today (see Observed effect), and
+`--expect 503` ends the step there. That is the known, tracked contradiction, not a new result — stop
+rather than running the degraded-page steps against a container that never degraded.
 
 ### 3. Read the degraded pages and the notifications API
 
-```bash
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18405/"
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18405/stats"
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18405/notifications"
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18405/api/v1/notifications"
+```powershell
+foreach ($path in '/', '/stats', '/notifications') {
+  dotnet script scripts/testing/http.csx -- --url "http://localhost:18405$path" --expect 200 --status
+}
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18405/api/v1/notifications" --expect 503 --status
 ```
 
 **Expected:** `/`, `/stats` and
@@ -124,8 +121,9 @@ state, not merely for a response.
 
 ## Observed effect
 
-**Measured 2026-08-18: `200` healthy.** The container does not degrade under this setup, so none of the
-degraded-page assertions above are exercised at all.
+**Measured 2026-08-18 and confirmed again 2026-08-26 during the PowerShell conversion: `200` healthy.**
+The container does not degrade under this setup, so none of the degraded-page assertions above are
+exercised at all.
 
 The original incident this reproduced was real — a live HA v1.8.2 → v1.8.3-beta upgrade whose migration
 failed partway through, leaving `NotificationSummary` (embedded in Home's modal) and `/notifications`
@@ -137,6 +135,6 @@ degraded-skip fix together. What no longer holds is the mechanism that made the 
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-05
 ```

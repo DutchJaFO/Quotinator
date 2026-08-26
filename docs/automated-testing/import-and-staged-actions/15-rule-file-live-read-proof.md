@@ -28,52 +28,69 @@ they exist to prove the mechanism, not to change data.
 - **A second `MergedFields` row may legitimately appear**, for vilaboim's own cross-file duplicate of
   the same quote id, resolved by its own unmodified rule. Each bundled file's rule file governs only
   that file's batch, so the second row is expected and unaffected.
+- **Both edits are made by `scripts/testing/conflict-rule.csx`, not by hand.** Until #339's PowerShell
+  conversion this document asked the reader to delete a rule, restore it and change a value — three
+  manual edits in a folder called `automated-testing`. The script fails loudly when the rule it is
+  asked for is absent, so a mis-typed id ends the step rather than leaving the file unchanged and the
+  result looking like the mechanism not working.
+- **The edits are reverted with `git checkout`, not by editing back.** The script re-indents the whole
+  file as it writes, so a hand-reversal would leave formatting noise; git restores the exact bytes.
 
 ## Steps
 
 ### 1. Remove the rule and confirm the conflict returns
 
-Temporarily delete the Auntie Mame rule entirely from `nikhilnamal17-conflict-rules.json`
-(`entityId: 088603c0-…`), then:
+```powershell
+$rules = 'data/sources/nikhilnamal17-conflict-rules.json'
+$auntieMame = '088603c0-b35a-1b48-977d-ca08489a0cbb'
 
-```bash
+dotnet script scripts/testing/conflict-rule.csx -- --file $rules --entity-id $auntieMame --remove
+
 docker build -f docker/Dockerfile -t quotinator:local .
-dotnet script scripts/testing/test-env.csx -- create --name qt-import-15 --port 18615 \
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-15 --port 18615 `
   --env Quotinator__AutoPurgeBundledImportActions=false
-curl -s "http://localhost:18615/api/v1/import/actions?status=pending"
+
+$pending = (Invoke-RestMethod "http://localhost:18615/api/v1/import/actions?status=pending&pageSize=0").items
+"pending=$(@($pending).Count)"
+$pending | Where-Object { $_.entityId -eq $auntieMame } | Select-Object entityType, actionType, ambiguousFields
 ```
 
 **Expected:** with the rule removed, that quote's conflict stages `Pending` again, with
-`ambiguousFields: ["date"]`.
+`ambiguousFields` of `date`.
 
 That proves the mechanism consults the file's content on every seed rather than a cached decision from
 an earlier run.
 
+**On failure:** an empty listing means either the rule was never removed — the script prints what it
+did, so check that line — or the image was not rebuilt from the edited file.
+
 ### 2. Restore the rule as `Replace`, rebuild, and seed a second container
 
-Restore the rule and change its `resolution` from `Keep` to `Replace`, then rebuild and run a second
-container against the rebuilt image:
+```powershell
+git checkout -- $rules
+dotnet script scripts/testing/conflict-rule.csx -- --file $rules --entity-id $auntieMame `
+  --field date --resolution Replace
 
-```bash
 docker build -f docker/Dockerfile -t quotinator:local .
-dotnet script scripts/testing/test-env.csx -- create --name qt-import-15-replace --port 19615 \
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-15-replace --port 19615 `
   --env Quotinator__AutoPurgeBundledImportActions=false
 ```
 
-**Expected:** the health poll returns — the second container has completed its own first-boot seed
-against the rebuilt image.
+**Expected:** the script reports `resolution Keep -> Replace`, and the health poll returns — the second
+container has completed its own first-boot seed against the rebuilt image.
 
 ### 3. Read the recorded merge decision from the audit trail
 
 **Stop the container first** — a copy taken while the app is writing can be torn, and a torn copy reads
 as "no rows", which is indistinguishable from the assertion failing:
 
-```bash
+```powershell
 docker stop -t 15 qt-import-15-replace
 docker cp qt-import-15-replace:/data/quotinatordata.db .claude/temp/inspect-181.db
-docker cp qt-import-15-replace:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal || true
-docker cp qt-import-15-replace:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm || true
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" \
+docker cp qt-import-15-replace:/data/quotinatordata.db-wal .claude/temp/inspect-181.db-wal 2>$null
+docker cp qt-import-15-replace:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-shm 2>$null
+
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
   --sql "SELECT MergedFields FROM Import_Action WHERE EntityId='088603c0-b35a-1b48-977d-ca08489a0cbb' AND ActionType='Modify'"
 ```
 
@@ -99,19 +116,23 @@ that did not.
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-15
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-15-replace
-rm -f .claude/temp/inspect-181.db .claude/temp/inspect-181.db-wal .claude/temp/inspect-181.db-shm
+Remove-Item .claude/temp/inspect-181.db, .claude/temp/inspect-181.db-wal, `
+            .claude/temp/inspect-181.db-shm -ErrorAction SilentlyContinue
+
+git checkout -- $rules
+git status --porcelain $rules
 ```
 
-**Revert both rule-file edits.** Confirm `nikhilnamal17-conflict-rules.json` matches `git status` clean
-before committing anything.
+**Both rule-file edits are reverted by that `git checkout`**, and the empty `git status` output is the
+confirmation — not an assumption that the file is back.
 
 **Then rebuild the image, and only then move on.** The last build above baked the mutated `Replace`
 rule into `quotinator:local`, and reverting the file on the host does not touch the image. Every
 sibling test running that tag would otherwise be running a rule file that does not exist in the repo:
 
-```bash
+```powershell
 docker build -f docker/Dockerfile -t quotinator:local .
 ```

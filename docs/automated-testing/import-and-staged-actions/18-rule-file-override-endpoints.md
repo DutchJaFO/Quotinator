@@ -20,13 +20,19 @@ and decides one itself.
   that another did not ask for.
 - **The alias-candidate check is structural, not a candidate count** — see Observed effect. Asserting a
   specific number of candidates would fail for a correct reason the moment a data-quality fix lands.
+- **The before/after rule ids are compared as sets of objects**, not as sorted text files. The
+  comparison is "is every id that was there before still there", which a set difference states
+  directly.
 
 ## Steps
 
 ### 1. Create this test's own environment
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-import-18 --port 18618
+$key  = @{'X-Api-Key' = 'smoketest'}
+$base = "http://localhost:18618/api/v1"
+$ruleFile = 'nikhilnamal17-conflict-rules.json'
 ```
 
 **Expected:** the app reports healthy — the bundled seed has finished.
@@ -36,17 +42,16 @@ never became healthy.
 
 ### 2. Confirm no override is active, and capture the bundled file's rules for comparison
 
-```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18618/api/v1/import/rules/conflict?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled" \
-  -o /tmp/rules-before.json
-grep -o '"isOverrideActive":[a-z]*' /tmp/rules-before.json
-grep -o '"entityId":"[^"]*"' /tmp/rules-before.json | sort > /tmp/rule-ids-before.txt
-wc -l < /tmp/rule-ids-before.txt
+```powershell
+$before = dotnet script scripts/testing/http.csx -- `
+  --url "$base/import/rules/conflict?fileName=$ruleFile&origin=Bundled" --expect 200 | ConvertFrom-Json
+
+$idsBefore = @($before.rules.entityId)
+"isOverrideActive=$($before.isOverrideActive) rules=$($idsBefore.Count)"
 ```
 
-**Expected:** `200` with `isOverrideActive:false`, and a non-zero rule count written to
-`/tmp/rule-ids-before.txt` — 13 at the time of writing, but the assertion is "not zero", not the
-figure.
+**Expected:** `200` with `isOverrideActive=False`, and a non-zero rule count — 13 at the time of
+writing, but the assertion is "not zero", not the figure.
 
 **The file has to be one that ships with rules, which is why it is `nikhilnamal17-conflict-rules.json`.**
 This document named `quotinator-curated-conflict-rules.json` until #339's full run, and that file ships
@@ -65,15 +70,12 @@ notice.
 
 ### 3. Stage a batch to generate from
 
-```bash
-batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
-            -F "file=@data/sources/quotinator-curated.json" \
-            -F 'settings={"duplicateResolution":{"default":"review"}}' \
-            "http://localhost:18618/api/v1/import" \
-          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-actionId=$(curl -s "http://localhost:18618/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
-           | grep -o '"id":"[0-9a-f-]\{36\}"' | head -1 | cut -d'"' -f4)
-echo "batchId=$batchId actionId=$actionId"
+```powershell
+$batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
+              --file data/sources/quotinator-curated.json --duplicate-resolution review --expect 202 `
+            | ConvertFrom-Json).batchId
+$actionId = (Invoke-RestMethod "$base/import/actions?status=pending&batchId=$batchId&pageSize=0").items[0].id
+"batchId=$batchId actionId=$actionId"
 ```
 
 **Expected:** both values non-empty — at least one pending action was staged, and the next step needs
@@ -81,49 +83,58 @@ both.
 
 ### 4. Decide one action, and generate the rule-file override from it
 
-```bash
-curl -s -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
-  -d '{"quoteText":{"choice":"keep"}}' \
-  "http://localhost:18618/api/v1/import/actions/$actionId/decide"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18618/api/v1/import/rules/conflict/generate?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled&batchId=$batchId"
+```powershell
+Invoke-RestMethod -Method Post -Uri "$base/import/actions/$actionId/decide" -Headers $key `
+  -ContentType 'application/json' -Body '{"quoteText":{"choice":"keep"}}' | Out-Null
+
+$generated = dotnet script scripts/testing/http.csx -- --method POST `
+  --url "$base/import/rules/conflict/generate?fileName=$ruleFile&origin=Bundled&batchId=$batchId" `
+  --expect 200 | ConvertFrom-Json
+"isOverrideActive=$($generated.isOverrideActive) rulesAdded=$($generated.rulesAdded)"
 ```
 
-**Expected:** `generate` returns `200` with `isOverrideActive: true` and `rulesAdded` at least `1`.
+**Expected:** `generate` returns `200` with `isOverrideActive=True` and `rulesAdded` at least `1`.
 
 ### 5. Re-read the effective rules, and compare them against the before-capture
 
-```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18618/api/v1/import/rules/conflict?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled" \
-  -o /tmp/rules-after.json
-grep -o '"isOverrideActive":[a-z]*' /tmp/rules-after.json
-grep -o '"entityId":"[^"]*"' /tmp/rules-after.json | sort > /tmp/rule-ids-after.txt
-comm -23 /tmp/rule-ids-before.txt /tmp/rule-ids-after.txt
+```powershell
+$after = dotnet script scripts/testing/http.csx -- `
+  --url "$base/import/rules/conflict?fileName=$ruleFile&origin=Bundled" --expect 200 | ConvertFrom-Json
+
+$idsAfter = @($after.rules.entityId)
+"isOverrideActive=$($after.isOverrideActive) rules=$($idsAfter.Count)"
+
+$dropped = @($idsBefore | Where-Object { $_ -notin $idsAfter })
+"dropped=$($dropped.Count) $($dropped -join ' ')"
 ```
 
-**Expected:** the repeated `GET` returns `isOverrideActive:true`, proving the override took effect for
-reads, and **`comm -23` prints nothing.** Every rule id present before is still present after — that is
+**Expected:** the repeated `GET` returns `isOverrideActive=True`, proving the override took effect for
+reads, and **`dropped=0`.** Every rule id present before is still present after — that is
 the merge-preserves-existing-rules guarantee `EffectiveRuleFileResolver` exists for, and the only form
-in which it can actually fail. Any id printed is a bundled rule the merge dropped.
+in which it can actually fail. Any id listed is a bundled rule the merge dropped.
 
 ### 6. Remove the override, and repeat the `DELETE`
 
-```bash
-curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: smoketest" \
-  "http://localhost:18618/api/v1/import/rules/conflict?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled"
-curl -s -w "\n%{http_code}\n" -X DELETE -H "X-Api-Key: smoketest" \
-  "http://localhost:18618/api/v1/import/rules/conflict?fileName=nikhilnamal17-conflict-rules.json&origin=Bundled"
+```powershell
+dotnet script scripts/testing/http.csx -- --method DELETE `
+  --url "$base/import/rules/conflict?fileName=$ruleFile&origin=Bundled" --expect 204 --status
+dotnet script scripts/testing/http.csx -- --method DELETE `
+  --url "$base/import/rules/conflict?fileName=$ruleFile&origin=Bundled" --expect 404 --status
 ```
 
 **Expected:** `DELETE` returns `204`; a repeat `DELETE` returns `404`.
 
 ### 7. Call the alias-candidate suggestion endpoint — read-only, no key needed
 
-```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18618/api/v1/import/rules/alias?fileName=quotinator-curated-source-aliases.json&origin=Bundled"
+```powershell
+$alias = dotnet script scripts/testing/http.csx -- `
+  --url "$base/import/rules/alias?fileName=quotinator-curated-source-aliases.json&origin=Bundled" `
+  --no-key --expect 200 | ConvertFrom-Json
+"hasCandidates=$($alias.PSObject.Properties.Name -contains 'candidates') candidates=$(@($alias.candidates).Count)"
 ```
 
-**Expected:** `200` with a well-formed `candidates` array.
+**Expected:** `200`, `hasCandidates=True`, and a well-formed `candidates` array. Called with `--no-key`
+deliberately: this endpoint is read-only and requires none, and sending one would leave that untested.
 
 **What the alias check verifies is structural**: `200` with a well-formed array, confirming the endpoint
 runs cleanly end to end against the full live `Quotinator_Source` table. **Not a candidate count.**
@@ -154,8 +165,7 @@ part of a test run.**
 
 ## Cleanup
 
-```bash
-rm -f /tmp/rules-before.json /tmp/rules-after.json /tmp/rule-ids-before.txt /tmp/rule-ids-after.txt
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-18
 ```
 

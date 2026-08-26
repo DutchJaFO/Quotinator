@@ -34,18 +34,24 @@ about. A count asserts something nobody intended and gets "fixed" by editing a d
   empty, so the genuinely-zero-rows path is otherwise never exercised. It produces more than one
   notification now, so dismissing only the announcement leaves the page populated and the empty state
   unreached.
+- **Step 7 edits the database from the host, against a stopped container.** A clean `docker stop -t 15`
+  checkpoints and removes the `-wal`/`-shm` sidecars (measured), so copying the `.db` file out, editing
+  it and copying it back cannot leave a stale sidecar behind for SQLite to recover from.
 
 ## Steps
 
 ### 1. Start a container of this test's own and list its notifications
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-01 --port 18501
-curl -s -w " [%{http_code}]\n" "http://localhost:18501/api/v1/notifications"
+
+$notifications = (dotnet script scripts/testing/http.csx -- --url "http://localhost:18501/api/v1/notifications?pageSize=0" --expect 200 | ConvertFrom-Json).items
+@($notifications | Where-Object { $_.title -match 'operation IDs were renamed' }).Count
 ```
 
-**Expected:** `GET /notifications` returns `200`, and the response **contains** the announcement titled
-"Two API operation IDs were renamed" — the notification a fresh container is known to produce.
+**Expected:** `200`, and `1` — the announcement about the renamed API operation IDs is present, the
+notification a fresh container is known to produce. Asserted by identity, never by a total: see
+Determinism for the two occasions a count was wrong here.
 
 **On failure:** an empty list means seeding had not finished writing the startup notification, not that
 no notification is produced — the two are indistinguishable from an early read (see Preconditions).
@@ -53,34 +59,53 @@ Stop and let the container finish rather than reading the absence as a result.
 
 ### 2. Dismiss an unknown notification with no admin key
 
-```bash
-curl -s -w " [%{http_code}]\n" -X POST "http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss" `
+  --no-key --expect 401 --status
 ```
 
 **Expected:** `401`.
 
 ### 3. Dismiss the same all-zero id with the correct key
 
-```bash
-curl -s -w " [%{http_code}]\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "http://localhost:18501/api/v1/notifications/00000000-0000-0000-0000-000000000000/dismiss" `
+  --expect 404 --status
 ```
 
-**Expected:** `404` — no notification exists with that id.
+**Expected:** `404` — no notification exists with that id. Taken with step 2, that separates "the key
+was rejected" from "the row was not found"; either alone could be produced by the other cause.
 
 ### 4. Confirm the OpenAPI spec carries the Notifications tag
 
-```bash
-curl -s "http://localhost:18501/openapi/v1.json" | grep -o '"Notifications"' | head -1
+```powershell
+$spec = Invoke-RestMethod "http://localhost:18501/openapi/v1.json"
+$operations = foreach ($path in $spec.paths.PSObject.Properties) {
+  foreach ($verb in $path.Value.PSObject.Properties) { $verb.Value }
+}
+"taggedOperations=$(@($operations | Where-Object { $_.tags -ccontains 'Notifications' }).Count)"
+"declaredTags=$((@($spec.tags).name | Sort-Object) -join ', ')"
 ```
 
-**Expected:** the OpenAPI spec contains the `Notifications` tag.
+**Expected:** `taggedOperations` is non-zero — the notification endpoints are grouped under
+`Notifications` rather than falling into whatever group they would otherwise land in. Read from the
+operations' own `tags` arrays rather than matched as text, so the assertion cannot be satisfied by the
+word appearing somewhere unrelated in the document.
+
+**`declaredTags` is printed for information and is not asserted.** Measured 2026-08-26: the spec's
+top-level `tags` array declares six — `System`, `Quotes`, `Admin`, `Import`, `Conversations`,
+`MasterData` — and `Notifications` is not among them, even though operations carry it. That array is
+where a tag's description and ordering come from, so the group renders without either. It is a
+documentation inconsistency rather than a functional defect, it is not what this test is about, and it
+is recorded here rather than absorbed into an assertion — see *Explicitly not covered here*.
 
 ### 5. Render the notification pages, and assert on the DOM
 
 **This step needs a browser driver** — the pages are Blazor and the assertions are about what renders,
-so `curl` cannot make them. They are stated as DOM reads so a driver can run them unattended, and so
-two runs check the same thing.
+so an HTTP call cannot make them. They are stated as DOM reads so a driver can run them unattended, and
+so two runs check the same thing.
 
 **Expected:** every row of the table below holds, on both pages.
 
@@ -99,20 +124,21 @@ rows with the Created / Type / Message / Expires / Status / Action columns, and 
 
 ### 6. Dismiss every active notification and re-read both pages
 
-```bash
-for id in $(curl -s "http://localhost:18501/api/v1/notifications?pageSize=0" \
-            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
-  curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-    "http://localhost:18501/api/v1/notifications/$id/dismiss"
-done
-curl -s "http://localhost:18501/api/v1/notifications?pageSize=0" | grep -o '"isDismissed":[a-z]*' | sort | uniq -c
+```powershell
+foreach ($id in (Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=0").items.id) {
+  dotnet script scripts/testing/http.csx -- --method POST `
+    --url "http://localhost:18501/api/v1/notifications/$id/dismiss" --expect 200 --status
+}
+
+$all = (Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=0").items
+"total=$(@($all).Count) stillActive=$(@($all | Where-Object { -not $_.isDismissed }).Count)"
 ```
 
-**Expected:** each dismiss returns `200`, and every row then reads `"isDismissed":true`.
+**Expected:** each dismiss returns `200`, and then `stillActive=0` against a non-zero `total`.
 
 **`GET /notifications` returns dismissed rows too** — the API's default is unfiltered, while the
 *page's* filter defaults to Active. Do not read a still-populated API response as a failed dismiss;
-read the flag.
+read the flag, which is why both numbers are printed.
 
 Then, with the driver again:
 
@@ -131,29 +157,38 @@ trigger, one already-expired row and one already-dismissed row. Nothing in the a
 these, so the test constructs them — against a **stopped** container, since writing to a SQLite file
 underneath a running process is a different scenario:
 
-```bash
+```powershell
 docker stop -t 15 qt-notif-01
-MSYS_NO_PATHCONV=1 docker run --rm -v qt-notif-01-data:/data alpine sh -c \
-  "apk add --no-cache sqlite >/dev/null 2>&1; sqlite3 /data/quotinatordata.db \
-   \"INSERT INTO System_Notification (Id, Type, Title, Body, ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DateCreated, IsDeleted) VALUES
-     ('a0000278-0000-4000-8000-000000000001','ActionRequired','Smoke test action required','A #278 smoke test row needing an action.',NULL,0,NULL,'DatabaseReset','2026-01-01 00:00:00',0),
-     ('a0000278-0000-4000-8000-000000000002','Information','Smoke test expired','A #278 smoke test row that has already expired.','2020-01-01 00:00:00',0,NULL,NULL,'2026-01-01 00:00:00',0),
-     ('a0000278-0000-4000-8000-000000000003','Information','Smoke test dismissed','A #278 smoke test row already dismissed.',NULL,1,'2026-01-02 00:00:00',NULL,'2026-01-01 00:00:00',0);\""
+docker cp qt-notif-01:/data/quotinatordata.db .claude/temp/notif-01.db
+
+dotnet script scripts/testing/execute-sql.csx -- --db .claude/temp/notif-01.db --sql @'
+INSERT INTO System_Notification (Id, Type, Title, Body, ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DateCreated, IsDeleted) VALUES
+  ('a0000278-0000-4000-8000-000000000001','ActionRequired','Smoke test action required','A #278 smoke test row needing an action.',NULL,0,NULL,'DatabaseReset','2026-01-01 00:00:00',0),
+  ('a0000278-0000-4000-8000-000000000002','Information','Smoke test expired','A #278 smoke test row that has already expired.','2020-01-01 00:00:00',0,NULL,NULL,'2026-01-01 00:00:00',0),
+  ('a0000278-0000-4000-8000-000000000003','Information','Smoke test dismissed','A #278 smoke test row already dismissed.',NULL,1,'2026-01-02 00:00:00',NULL,'2026-01-01 00:00:00',0);
+'@
+
+docker cp .claude/temp/notif-01.db qt-notif-01:/data/quotinatordata.db
 docker start qt-notif-01
-until curl -sf http://localhost:18501/api/v1/health > /dev/null; do sleep 1; done
-curl -s "http://localhost:18501/api/v1/notifications?pageSize=0" | grep -o "Smoke test" | wc -l
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18501/api/v1/health" --wait-for 200 --status
+
+$rows = (Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=0").items
+@($rows | Where-Object { $_.title -like 'Smoke test*' }).Count
 ```
 
-**Expected:** `sqlite3` completes with no error, and the count is `3` — all three rows are present and
-readable through the API.
+**Expected:** `execute-sql.csx` reports `3 row(s) affected`, and the count reads `3` — all three rows
+are present and readable through the API.
 
-**`grep -o … | wc -l`, never `grep -c`.** The response is single-line JSON, so `grep -c` counts the one
-matching *line* and reports `1` however many rows exist — this step required `3` from a `grep -c` until
-#339's full run, and therefore failed on a correct setup every time. It is the second document in the
-suite to have carried this exact bug; see the index's *A count is evidence only if the instrument
-counts the right thing*.
+**Counted as objects, not as text matches.** The response is single-line JSON, so a line-counting match
+reports `1` however many rows exist — this step required `3` from exactly that shape until #339's full
+run, and therefore failed on a correct setup every time. It is the second document in the suite to have
+carried this bug; see the index's *A count is evidence only if the instrument counts the right thing*.
 
-**On failure:** a `sqlite3` error means the rows were never created, and every assertion in step 8 then
+**The edit goes through `execute-sql.csx` against a copy of the file**, rather than through a
+throwaway container installing `sqlite3` over the network. It is this project's own tool per ADR 010,
+and it removes a network dependency from the middle of a test.
+
+**On failure:** a SQL error means the rows were never created, and every assertion in step 8 then
 reads an unchanged page. That is a setup failure, not a result — stop.
 
 A CHECK-constraint rejection here is worth reading rather than working around: `Type` and
@@ -179,15 +214,15 @@ and status cell —
 
 - The row's buttons become **Confirm** and **Cancel**.
 - Click **Cancel**: the buttons revert to a single **Run**.
-- `curl -s http://localhost:18501/api/v1/version | grep -o '"quotes":[0-9]*'` is **unchanged** — Cancel
-  called nothing.
+- `(Invoke-RestMethod "http://localhost:18501/api/v1/version").database.quotes` is **unchanged** —
+  Cancel called nothing.
 
 **Action button, Confirm path.** Click **Run**, then **Confirm**.
 
-- `/version`'s `quotes` count drops to `0`, matching
+- `(Invoke-RestMethod "http://localhost:18501/api/v1/version").database.quotes` drops to `0`, matching
   [`database-lifecycle/03-reset-is-a-full-wipe.md`](../database-lifecycle/03-reset-is-a-full-wipe.md).
-- `curl -s "http://localhost:18501/api/v1/notifications?pageSize=0"` returns **no rows** — Reset wipes
-  `System_Notification` along with every other table.
+- `(Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize=0").items` is **empty** —
+  Reset wipes `System_Notification` along with every other table.
 
 **The quote count is what makes Cancel and Confirm distinguishable.** Both leave the page looking
 similar; only the domain read separates "reverted without calling anything" from "ran the reset".
@@ -209,10 +244,20 @@ Driving the ActionRequired row's **Run → Confirm** performed a full database r
 
 What the container logs while writing the startup notification has still not been recorded.
 
+## Explicitly not covered here
+
+**`Notifications` is missing from the OpenAPI spec's top-level `tags` array**, found while converting
+this document (2026-08-26). The six other tags are declared there; this one exists only on the
+operations that carry it, so Scalar renders the group without the description and ordering that array
+supplies. Nothing is broken — the endpoints are grouped and callable — and it is deliberately left
+un-asserted here rather than quietly folded into step 4, because absorbing a finding into a test is how
+it stops being one. Step 4 prints the declared list so the state is visible on every run.
+
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-01
+Remove-Item .claude/temp/notif-01.db -ErrorAction SilentlyContinue
 ```
 
 If the Action button's **Confirm** path was exercised, the volume holds a wiped, post-Reset database —

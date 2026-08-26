@@ -25,14 +25,17 @@ level. That means its own container, since a configuration value is fixed at sta
 - **The batch for the happy path is staged by this document**, via a preview of the bundled curated
   file — the same way `03-batch-id-mode-alias.md` obtains one. Borrowing a batch from another test
   would make this unrunnable alone.
+- **The log lines are counted with `[regex]::Matches`, not by matching lines.** Several `import/actions`
+  entries can share a line, and a line-counting form would report `1` for any number of them.
 
 ## Steps
 
 ### 1. Create this test's own environment, with request logging genuinely on
 
-```bash
-dotnet script scripts/testing/test-env.csx -- create --name qt-import-11 --port 18611 \
+```powershell
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-11 --port 18611 `
   --env Quotinator__LogRequests=true --env Quotinator__LogLevel=debug
+$base = "http://localhost:18611/api/v1"
 ```
 
 **Expected:** the health poll returns — the container is up, with both logging variables set.
@@ -41,9 +44,10 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-import-11 --port 
 
 A request whose outcome is not in doubt, and its line must appear:
 
-```bash
-curl -s -o /dev/null "http://localhost:18611/api/v1/health"
-docker logs qt-import-11 2>&1 | grep -c "→ 200"
+```powershell
+Invoke-RestMethod "$base/health" | Out-Null
+$log = docker logs qt-import-11 2>&1 | Out-String
+([regex]::Matches($log, '→ 200')).Count
 ```
 
 **Expected:** **request logging is live** — the `→ 200` count is non-zero.
@@ -53,43 +57,47 @@ concluded from the log; that is a setup failure, not a result. Stop.
 
 ### 3. Call all three staged-action endpoints with no `batchId`
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18611/api/v1/import/actions/apply"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18611/api/v1/import/actions/discard"
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" "http://localhost:18611/api/v1/import/actions/reverse"
+```powershell
+foreach ($action in 'apply', 'discard', 'reverse') {
+  $problem = dotnet script scripts/testing/http.csx -- --method POST `
+    --url "$base/import/actions/$action" --expect 422 | ConvertFrom-Json
+  "$action -> $($problem.status): $($problem.detail)"
+}
 ```
 
-**Expected:** all three bodyless calls return `422` with `"detail":"You must provide a batchId."` —
+**Expected:** all three bodyless calls return `422` with a `detail` naming the missing `batchId` —
 **never** the generic "Numeric parameters..." message.
 
 ### 4. Read the status those same calls were logged with
 
-```bash
-docker logs qt-import-11 2>&1 | grep "import/actions" | grep -o "→ [0-9]*" | sort | uniq -c
+```powershell
+$actionLines = (docker logs qt-import-11 2>&1 | Out-String) -split "`n" |
+               Where-Object { $_ -match 'import/actions' }
+"logged422=$(@($actionLines | Where-Object { $_ -match '→ 422' }).Count)"
+"logged200=$(@($actionLines | Where-Object { $_ -match '→ 200' }).Count)"
 ```
 
-**Expected:** the `import/actions` log lines read **`→ 422` three times and `→ 200` not at all**.
+**Expected:** `logged422=3` and `logged200=0` — the `import/actions` lines report the status the client
+actually received.
 
 Counting them is the assertion: a single missing line would otherwise be invisible.
 
 ### 5. Stage a batch for the happy path, this document's own
 
-```bash
-batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
-            -F "file=@data/sources/quotinator-curated.json" \
-            -F 'settings={"duplicateResolution":{"default":"skip"}}' \
-            "http://localhost:18611/api/v1/import/preview" \
-          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "batchId=$batchId"
+```powershell
+$batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/preview" `
+              --file data/sources/quotinator-curated.json --duplicate-resolution skip `
+            | ConvertFrom-Json).batchId
+$batchId
 ```
 
 **Expected:** a non-empty `batchId`, which the next step applies.
 
 ### 6. Apply that batch with a real `batchId`
 
-```bash
-curl -s -w "\n%{http_code}\n" -X POST -H "X-Api-Key: smoketest" \
-  "http://localhost:18611/api/v1/import/actions/apply?batchId=$batchId"
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST `
+  --url "$base/import/actions/apply?batchId=$batchId" --expect 200 --status
 ```
 
 **Expected:** `200`, proving the fix did not simply make the endpoint return `422` unconditionally.
@@ -117,6 +125,6 @@ by it.
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-11
 ```

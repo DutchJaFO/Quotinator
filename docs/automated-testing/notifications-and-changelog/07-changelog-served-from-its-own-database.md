@@ -45,9 +45,11 @@ neither is predicted**, since the changelog grows with every release.
 
 ### 1. Start a container of this test's own on a bind-mounted directory
 
-```bash
-dotnet script scripts/testing/test-env.csx -- create --name qt-notif-07 --port 18507 \
-  --bind /tmp/qt-notif-07/data
+```powershell
+$dataDir = "$PWD\.claude\temp\qt-notif-07-data"
+New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-07 --port 18507 --bind $dataDir
 ```
 
 **Expected:** the app reaches healthy, having initialised and imported the changelog during startup.
@@ -56,16 +58,21 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-notif-07 --port 1
 
 **The file must exist alongside `quotinatordata.db`** — an in-memory database leaves nothing on disk:
 
-```bash
-docker exec qt-notif-07 sh -c "ls -l /data/quotinatorchangelog.db"
+```powershell
+Get-ChildItem $dataDir -Filter *.db | Select-Object Name, Length
 ```
 
-**Expected:** `/data/quotinatorchangelog.db` exists.
+**Expected:** both `quotinatordata.db` and `quotinatordata`'s changelog sibling
+`quotinatorchangelog.db` are listed, each with a non-zero length. Read from the host directory rather
+than from inside the container, because the bind mount is what makes the file's existence on real
+storage the thing being observed.
 
 ### 3. Confirm the database-backed read path is in use, not the fallback
 
-```bash
-docker logs qt-notif-07 2>&1 | grep -E "Changelog - (Init|Import|Read)"
+```powershell
+$log = docker logs qt-notif-07 2>&1 | Out-String
+$log -split "`n" | Select-String -Pattern 'Changelog - (Init|Import|Read)'
+"fallbacks=$(([regex]::Matches($log, 'falling back to the JSON-backed changelog service')).Count)"
 ```
 
 **Expected:** `[Changelog - Import] refreshed N entries across 3 language(s)` appears, and so does
@@ -73,36 +80,44 @@ docker logs qt-notif-07 2>&1 | grep -E "Changelog - (Init|Import|Read)"
 itself answered. **The two counts match each other**; the value itself is data. The three languages
 are asserted, because that is the shipped set rather than a content count.
 
-No `falling back to the JSON-backed changelog service` line appears at any point.
+`fallbacks=0` — no `falling back to the JSON-backed changelog service` line appears at any point. That
+is the weaker half of the assertion and is why the positive line above is read first: an absent warning
+is produced identically by a healthy read and by the silent fallback this test exists to catch.
 
 ### 4. Confirm a real page request is served from the database
 
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:18507/about
-curl -s http://localhost:18507/about | grep -oE "changelog-entry" | wc -l
-docker logs qt-notif-07 2>&1 | grep -c "entries from the database"
-docker logs qt-notif-07 2>&1 | grep -c "falling back to the JSON-backed changelog service"
+```powershell
+$before = ([regex]::Matches((docker logs qt-notif-07 2>&1 | Out-String), 'entries from the database')).Count
+
+$about = dotnet script scripts/testing/http.csx -- --url "http://localhost:18507/about" --expect 200 | Out-String
+"changelogEntries=$(([regex]::Matches($about, 'changelog-entry')).Count)"
+
+$after = ([regex]::Matches((docker logs qt-notif-07 2>&1 | Out-String), 'entries from the database')).Count
+"served before=$before after=$after increased=$($after -gt $before)"
+"fallbacks=$(([regex]::Matches((docker logs qt-notif-07 2>&1 | Out-String), 'falling back to the JSON-backed changelog service')).Count)"
 ```
 
-**Expected:** `/about` returns `200` and renders changelog entries. **There is deliberately no REST
-endpoint here** — changelog content is surfaced only on the About page
-(`Components/Pages/About.razor`), so that is what must be read. The `entries from the database` count
-**increased** as a result of that request; the fallback count is `0`.
+**Expected:** `/about` returns `200`, `changelogEntries` is non-zero, `increased=True`, and
+`fallbacks=0`. **There is deliberately no REST endpoint here** — changelog content is surfaced only on
+the About page (`Components/Pages/About.razor`), so that is what must be read. The count of
+`entries from the database` grew as a result of that request, which is what ties the page render to the
+database rather than to the fallback.
 
 ### 5. Confirm the file survives a restart with its content intact
 
 **The file must survive a restart with its content intact** — it is rebuilt from the bundled JSON at
 every startup, so this confirms the rebuild is idempotent rather than duplicating rows:
 
-```bash
+```powershell
 docker restart qt-notif-07
-until curl -sf http://localhost:18507/api/v1/health > /dev/null; do sleep 1; done
-docker exec qt-notif-07 sh -c "ls -l /data/quotinatorchangelog.db"
-docker logs qt-notif-07 2>&1 | tail -40 | grep -E "Changelog - (Init|Import)"
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18507/api/v1/health" --wait-for 200 --status
+
+Get-ChildItem $dataDir -Filter quotinatorchangelog.db | Select-Object Name, Length
+docker logs qt-notif-07 2>&1 | Select-String -Pattern 'Changelog - (Init|Import)' | Select-Object -Last 4
 ```
 
-**Expected:** after restart, the file is still present and the import reports the same entry count — no
-duplication.
+**Expected:** after restart, the file is still present and the import reports the same entry count as
+step 3 did — no duplication.
 
 ## Observed effect
 
@@ -119,7 +134,7 @@ contents are wholly derived from JSON shipped in the image, so nothing user-auth
 
 ## Cleanup
 
-```bash
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-07 \
-  --bind /tmp/qt-notif-07/data
+```powershell
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-07 --bind $dataDir
+Remove-Item $dataDir -Recurse -Force -ErrorAction SilentlyContinue
 ```

@@ -14,17 +14,18 @@ startup completes almost immediately and the window this test observes does not 
 
 ## Determinism
 
-**This test deliberately observes a transient state, and that is why it keeps a fixed `sleep`.** The
-first set of requests must land *before* seeding completes.
+**This test deliberately observes a transient state, and that is why it keeps a fixed `Start-Sleep`.**
+The first set of requests must land *before* seeding completes.
 
 Polling for readiness would defeat the test outright. **And polling for the `starting` state itself is
 worse than the sleep, not better** — a transient state may already have passed by the first poll, so
-the loop would hang forever on a fast machine, where the sleep merely fails. A poll is the right tool
-for waiting until something *becomes* true and stays true; it cannot catch a window that has closed.
+`--wait-for 503` would spend its whole timeout on a fast machine, where the sleep merely fails. A poll
+is the right tool for waiting until something *becomes* true and stays true; it cannot catch a window
+that has closed.
 
 The exposure is a race: on a fast enough machine seeding could finish inside the first second and the
 requests would hit a ready app. **That failure mode is loud, not silent** — the assertions require
-`503 {"status":"starting"}`, so catching the wrong state fails the test rather than passing it against
+`503` and `status=starting`, so catching the wrong state fails the test rather than passing it against
 the wrong thing. A false negative, never a false positive. If it starts failing spuriously, the fix is
 a larger seed or a slower start, not a longer sleep.
 
@@ -34,49 +35,57 @@ The second wait is an ordinary readiness wait and polls.
 
 ### 1. Request the three surfaces during initialisation, before seeding completes
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-03 --port 18403 --no-wait
-sleep 1
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18403/api/v1/health"
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18403/api/v1/version"
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18403/"
+Start-Sleep 1
+
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/health" --expect 503
+$version = dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/version" --expect 200 | ConvertFrom-Json
+"version status=$($version.status) hasDatabase=$($version.PSObject.Properties.Name -contains 'database')"
+
+$page = dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/" --expect 200 | Out-String
+"autoRefresh=$([bool]($page -match '(?i)<meta[^>]+http-equiv\s*=\s*.refresh'))"
+"externalAssets=$(([regex]::Matches($page, '(?i)(src|href)\s*=\s*["'']https?://')).Count)"
 ```
 
 **Expected:**
 
-- `/health` returns `503 {"status":"starting"}`
-- `/version` returns `200 {"status":"starting","version":"..."}` — with no environment or database
-  fields
-- `/` returns `200` with a self-contained HTML wait page: auto-refresh meta tag, localized heading and
-  body, no external assets. Never a hang, never a raw error.
+- `/health` returns `503` with `{"status":"starting"}`
+- `/version` returns `200`, `status=starting`, and `hasDatabase=False` — no environment or database
+  fields while still initialising
+- `/` returns `200` with `autoRefresh=True` and `externalAssets=0`: a self-contained HTML wait page
+  that refreshes itself and pulls in nothing from outside. Never a hang, never a raw error.
 
-**On failure:** a healthy `200 {"status":"healthy"}` here means seeding finished before the requests
-landed — the window was missed rather than the wait page being broken (see Determinism). Stop and
-re-run; do not lengthen the sleep.
+**On failure:** a `200` from `/health` means seeding finished before the requests landed — the window
+was missed rather than the wait page being broken (see Determinism). Stop and re-run; do not lengthen
+the sleep.
 
 ### 2. Re-read health and version after seeding completes
 
-```bash
-until curl -sf http://localhost:18403/api/v1/health > /dev/null; do sleep 1; done
-curl -s -w "\nHTTP %{http_code}\n" "http://localhost:18403/api/v1/health"
-curl -s "http://localhost:18403/api/v1/version"
+```powershell
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18403/api/v1/health" --wait-for 200 --status
+(Invoke-RestMethod "http://localhost:18403/api/v1/health").status
+$ready = Invoke-RestMethod "http://localhost:18403/api/v1/version"
+"status=$($ready.status) quotes=$($ready.database.quotes)"
 ```
 
-**Expected:**
-
-- `/health` returns `200 {"status":"healthy"}`
-- `/version` returns `200 {"status":"ready", ..., "database": {...}}` with real counts
+**Expected:** `/health` returns `200` and `healthy`; `/version` reports `status=ready` with a non-zero
+`quotes` count — the same two fields that were absent in step 1, now populated.
 
 ### 3. Confirm Kestrel bound before the app's own banner
 
-```bash
-docker logs qt-startup-03 2>&1 | grep "Now listening on\|Server] listening on\|Quotinator ready"
+```powershell
+$log = docker logs qt-startup-03 2>&1 | Out-String
+$kestrel = $log.IndexOf('Now listening on')
+$banner  = $log.IndexOf('Quotinator ready')
+"kestrelAt=$kestrel bannerAt=$banner kestrelFirst=$(($kestrel -ge 0) -and ($banner -gt $kestrel))"
 ```
 
-**Expected:** **log ordering is itself an assertion.** `Microsoft.Hosting.Lifetime`'s own
-`Now listening on` — Kestrel actually bound — must appear **before** the app's own
-`[Server] listening on` / `Quotinator ready` banner. That ordering is what proves Kestrel accepted
-connections for the whole wait-page window rather than only after it.
+**Expected:** **log ordering is itself an assertion.** `kestrelFirst=True` —
+`Microsoft.Hosting.Lifetime`'s own `Now listening on`, meaning Kestrel actually bound, appears
+**before** the app's own `Quotinator ready` banner. That ordering is what proves Kestrel accepted
+connections for the whole wait-page window rather than only after it. Compared by position rather than
+read by eye, so a reversed order fails rather than being scrolled past.
 
 ## Observed effect
 
@@ -86,6 +95,6 @@ otherwise look like a dead server.
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-03
 ```
