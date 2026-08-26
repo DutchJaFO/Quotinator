@@ -165,12 +165,36 @@ What can be asserted are the facts the operation itself establishes:
 fails or passes for reasons that have nothing to do with the application.** Every count a document
 asserts must be checked against three questions before it is trusted.
 
-**Does it count the right unit?** `grep -c` counts *matching lines*, not matches. This suite's
-responses are single-line JSON, so a `grep -c` against one returns `1` however many times the string
-occurs — and `0` only when it occurs never. `notifications-and-changelog/01` requires `3` from exactly
-this shape and therefore fails on a correct setup every run. Use `grep -o … | wc -l`, which counts
-occurrences. This is the second document in the suite to carry the bug; the first is recorded under
-*Cause 3, instrument broken* above.
+**Does it count the right unit?** `Select-String` returns one result per *matching line*, not per match
+— the same trap `grep -c` set before the suite was PowerShell, and piping it into `Measure-Object` does
+not fix it. This suite's responses are single-line JSON, so counting that way returns `1` however many
+times the string occurs, and `0` only when it occurs never. `notifications-and-changelog/01` required
+`3` from exactly this shape and therefore failed on a correct setup every run.
+
+Two forms that do count the right thing:
+
+```powershell
+([regex]::Matches($text, 'pattern')).Count                   # occurrences in a block of text
+@(Invoke-RestMethod $url).items.Count                        # better still — count objects, not text
+```
+
+The second is the real answer wherever the response is JSON. A count taken from a parsed object cannot
+disagree with the response about what a match is.
+
+**Always wrap a filtered result in `@(…)` before taking `.Count`:**
+
+```powershell
+@($response.items | Where-Object { $_.source -eq $title }).Count
+```
+
+Windows PowerShell 5.1 gives a single `PSCustomObject` **no `Count` property at all**, so the same
+expression written without the `@(…)` prints an empty string rather than `1` when exactly one row
+matches — while being perfectly correct for zero rows and for two. Measured on this machine, and it
+cost a false failure while converting `api-surface/03`, whose filter found the one row it was looking
+for and reported nothing.
+
+The one-row case is the *most likely* outcome of a well-targeted assertion, which is what makes this
+worth a rule: the unwrapped form fails precisely when the test is working.
 
 **Does it match what the application actually emits?** Two live cases. `import-and-staged-actions/16`
 and `17` count `"operation":"Purge"` while the audit trail records `"operation":"Purged"` — the
@@ -179,11 +203,11 @@ traces are present. `import-and-staged-actions/05` counts `"totalCount"` in a `/
 response, and that endpoint returns `totalMatching`; the count is empty forever, so its resurrection
 check silently asserts nothing.
 
-**Does it match case the way the assertion needs?** `grep` is case-sensitive and PowerShell's
-`Select-String` is not. A check for a case-variant duplicate written with the wrong one matches the
-correctly-cased row and reports a duplicate that does not exist — found during #339's own run, against
-`import-and-staged-actions/12`'s `AIRPLANE!` fixture. Where casing *is* the subject, say so at the
-command and use a case-sensitive form.
+**Does it match case the way the assertion needs?** `Select-String` is case-**in**sensitive by default,
+and `-eq` on a string is too. A check for a case-variant duplicate written without thinking about it
+matches the correctly-cased row and reports a duplicate that does not exist — found during #339's own
+run, against `import-and-staged-actions/12`'s `AIRPLANE!` fixture. Where casing *is* the subject, use
+`Select-String -CaseSensitive` or `-ceq`, and say at the command that the casing is the point.
 
 **And the expected number itself must be derived in the same run, never predicted.** That rule is
 stated above; these three are about the instrument rather than the expectation, and a document can get
@@ -273,7 +297,7 @@ the same code path:
 |---|---|---|
 | `System` | The bundled sources folder inside the image | Only by rebuilding the image, or by a registered override |
 | `User` | `{dataDir}/imports/` — inside the volume | `docker cp` into the volume, or a bind mount, before the container starts |
-| `Upload` | `POST /import` / `POST /import/preview` | A `curl` — no file placement at all |
+| `Upload` | `POST /import` / `POST /import/preview` | One `http.csx --file` call — no file placement at all |
 
 **Only one of the three needs an image step.** A defective user-import file goes into the volume with
 no rebuild, and an upload needs nothing but a request. Reach for a rebuild only when the behaviour under
@@ -389,23 +413,30 @@ machine takes, and it is wrong in both directions: too short and the test fails 
 for a reason that has nothing to do with what it verifies; too long and every run pays for the worst
 case. Poll for the state the test actually depends on.
 
-Two canonical waits, because tests do not all wait for the same thing:
+**`create` and `reenter` already wait**, so most documents never write a wait at all. These are for the
+moments they cannot cover — after a `docker restart` or `docker start` a document issues itself.
 
-```bash
+Three canonical waits, because tests do not all wait for the same thing:
+
+```powershell
 # Wait until the app is healthy — the normal case.
-until curl -sf http://localhost:8080/api/v1/health > /dev/null; do sleep 1; done
+dotnet script scripts/testing/http.csx -- --url "http://localhost:PORT/api/v1/health" --wait-for 200 --status
 ```
 
-```bash
-# Wait until the app is listening, whatever it answers — for degraded scenarios, where
-# /health returning 503 IS the expected outcome and the first form would loop forever.
-until curl -s -o /dev/null http://localhost:8080/api/v1/health; do sleep 1; done
+```powershell
+# Wait until the app answers 503 — for a degraded scenario, where that IS the expected outcome and
+# waiting for 200 would spend the whole timeout before failing for the wrong reason.
+dotnet script scripts/testing/http.csx -- --url "http://localhost:PORT/api/v1/health" --wait-for 503 --status
 ```
 
-```bash
+```powershell
 # Wait on the log — for a container with no published port, where neither HTTP form is available.
-until docker logs <name> 2>&1 | grep -q "Quotinator ready"; do sleep 1; done
+while (-not (docker logs qt-example 2>&1 | Select-String -SimpleMatch 'Quotinator ready')) { Start-Sleep 1 }
 ```
+
+**Both HTTP forms give up.** `--wait-timeout` defaults to 300 seconds and a condition that never
+arrives exits non-zero, so a wrong expectation fails the step instead of hanging the run. The log form
+does not — bound it yourself if what it waits for might never appear.
 
 A wait that is genuinely for elapsed time — a TTL expiring, a refresh interval passing, confirming a
 container *stayed* dead rather than became ready — is not a readiness wait and keeps its `sleep`. It
@@ -421,7 +452,7 @@ number.
 
 **The same applies inside a document.** An `Expected output` bullet names the endpoint or the command it
 describes — never "the first call", "the second one", or "the call above". A `Steps` section is several
-code blocks holding many `curl` invocations, so a positional reference makes the reader count them to
+code blocks holding many calls, so a positional reference makes the reader count them to
 find out what is being claimed, and reads as a contradiction the moment neighbouring bullets state
 different status codes for different endpoints. Found exactly that way: `200`, `404` and `202` listed
 in consecutive bullets, correct for three separate endpoints, and unreadable as anything but a conflict
@@ -441,7 +472,7 @@ Three shapes currently break this, and each has an answer:
   `notifications-and-changelog/01`'s rendered pages and Action-button flow, and
   `startup-and-degradation/05`'s three Blazor pages are all this shape.
 - **"Read the response and see that X is there."** An assertion a human evaluates is one nothing
-  records. Count it, `grep` it, diff it — as `19` already does for its removed fields, precisely because
+  records. Count it, match it, diff it — as `19` already does for its removed fields, precisely because
   reading an absence by eye cannot fail.
 - **"Take a screenshot."** Worth keeping as evidence, but the *assertion* alongside it has to be
   machine-checkable, or the screenshot is the only record and nothing compares it to anything.
@@ -449,39 +480,119 @@ Three shapes currently break this, and each has an answer:
 **A step that genuinely cannot be automated is a finding, not an exemption** — say what blocks it, in
 the document, so it reads as known rather than as an oversight.
 
+#### Every command is PowerShell
+
+**This project's shell is PowerShell, and so is this suite.** Not a style preference — three reasons,
+each of which cost something before the rule existed:
+
+- **[ADR 010](../architecture-decisions/010-repository-is-csharp-only.md) already forbids the
+  alternative.** *"No Python, Perl, Node.js, or Unix text-processing one-liners (`sed`, `awk`, etc.)
+  anywhere in this repository or its tooling"*, and *"PowerShell remains the primary shell"*. A
+  committed `grep -o '"batchId":"[^"]*"' | cut -d'"' -f4` is precisely that shape.
+- **Bash produced two false defect reports during the 2026-08-25 full run.** Its path conversion mounted
+  a directory inside the Docker VM where `dotnet script` mounted the Windows one, and an unprotected
+  `-e Quotinator__DataDir=/data` was rewritten to `C:/Program Files/Git/data`.
+- **String-matching a response is where this suite's instrument bugs come from.** `grep -c` counts
+  lines, not matches; a pattern misses a space against a pretty-printed spec; a check for a case variant
+  matches the correctly-cased row. Parse the response into an object and the whole class disappears —
+  which is why the rule below is *assert on a property*, not *translate the `grep`*.
+
+**Windows PowerShell 5.1 is the target.** `pwsh` is not installed on the development machine, and a test
+suite may not impose a shell upgrade as a prerequisite. Two consequences are measured, not assumed:
+
+| Written in PowerShell 5.1 | What a native exe actually receives |
+|---|---|
+| `'{"quoteText":{"choice":"keep"}}'` | `{quoteText:{choice:keep}}` — the JSON is destroyed |
+| `'{\"quoteText\":\"keep\"}'` | `{"quoteText":"keep"}` — correct, and unreadable |
+
+So **no JSON is ever passed to a native process as an argument**, and `Invoke-RestMethod` has no `-Form`
+before PowerShell 7, so **multipart upload has no cmdlet path at all**. Both are why
+[`scripts/testing/http.csx`](../../scripts/testing/http.csx) exists.
+
+**Five idioms cover the whole suite. Use these, and say why at the command if you depart from them.**
+
+**Read JSON and assert on it** — a cmdlet, so nothing parses the URL on the way, and the result is an
+object rather than a line of text:
+
+```powershell
+$page = Invoke-RestMethod "http://localhost:PORT/api/v1/quotes?pageSize=0"
+$page.totalCount
+$page.items | Where-Object { $_.type -eq 'movie' } | Measure-Object | Select-Object -ExpandProperty Count
+```
+
+**Send a JSON body** — `-Body` is a cmdlet parameter, so the JSON survives:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://localhost:PORT/api/v1/import/actions/$id/decide" `
+  -Headers @{'X-Api-Key' = 'smoketest'} -ContentType 'application/json' `
+  -Body '{"quoteText":{"choice":"keep"}}'
+```
+
+**Upload a file, expect a non-2xx status, or wait for one** — the helper. `--expect` exits non-zero on a
+mismatch, which is what stops a run at the step that failed rather than three steps later:
+
+```powershell
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:PORT/api/v1/import" `
+  --file data/sources/quotinator-curated.json --duplicate-resolution review --expect 202
+```
+
+```powershell
+dotnet script scripts/testing/http.csx -- --url "http://localhost:PORT/api/v1/quotes?page=0" --expect 422
+```
+
+The body goes to stdout and nothing else does, so it pipes straight into `ConvertFrom-Json`; the request
+line and the status go to stderr, where a reader sees them and a pipeline does not.
+
+**Wait for a condition, never a duration** — and unlike the `until … done` loop this replaces, it gives
+up rather than hanging (one such loop ran ten minutes before being stopped by hand):
+
+```powershell
+dotnet script scripts/testing/http.csx -- --url "http://localhost:PORT/api/v1/health" --wait-for 200 --status
+```
+
+**Read the container log** — `Select-String`, and where a *count* is the assertion, count occurrences
+rather than matching lines:
+
+```powershell
+docker logs qt-example 2>&1 | Select-String -SimpleMatch 'Quotinator ready'
+([regex]::Matches((docker logs qt-example 2>&1 | Out-String), 'Seeded')).Count
+```
+
+`Select-String` is case-**in**sensitive by default, where `grep` was not. Where casing is the subject of
+the assertion — a test about a case-variant duplicate, for instance — pass `-CaseSensitive` and say at
+the command that the casing is the point.
+
 #### Capture ids into variables, never into `<placeholders>`
 
 A step reading `…/apply?batchId=<batchId>` cannot run: something has to read the previous response and
 paste the value in, and that something is a person. Capture it instead, in the same block that produced
-it:
+it — and note that none of this needs a text-extraction step, because the response is already an object:
 
-```bash
-batchId=$(curl -s -X POST -H "X-Api-Key: smoketest" \
-            -F "file=@data/sources/quotinator-curated.json" \
-            -F 'settings={"duplicateResolution":{"default":"review"}}' \
-            "http://localhost:PORT/api/v1/import" \
-          | grep -o '"batchId":"[^"]*"' | cut -d'"' -f4)
-echo "batchId=$batchId"
+```powershell
+$batchId = (dotnet script scripts/testing/http.csx -- --method POST `
+              --url "http://localhost:PORT/api/v1/import" `
+              --file data/sources/quotinator-curated.json --duplicate-resolution review `
+            | ConvertFrom-Json).batchId
+$batchId
 ```
 
-```bash
+```powershell
 # the first pending action in that batch
-actionId=$(curl -s "http://localhost:PORT/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
-           | grep -o '"id":"[0-9a-f-]\{36\}"' | head -1 | cut -d'"' -f4)
+$actionId = (Invoke-RestMethod "http://localhost:PORT/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0").items[0].id
 ```
 
-```bash
+```powershell
 # every pending action in that batch, decided in turn
-for id in $(curl -s "http://localhost:PORT/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0" \
-            | grep -o '"id":"[0-9a-f-]\{36\}"' | cut -d'"' -f4); do
-  curl -s -o /dev/null -X POST -H "X-Api-Key: smoketest" -H "Content-Type: application/json" \
-    -d '{"quoteText":{"choice":"keep"}}' \
-    "http://localhost:PORT/api/v1/import/actions/$id/decide"
-done
+foreach ($id in (Invoke-RestMethod "http://localhost:PORT/api/v1/import/actions?status=pending&batchId=$batchId&pageSize=0").items.id) {
+  Invoke-RestMethod -Method Post -Uri "http://localhost:PORT/api/v1/import/actions/$id/decide" `
+    -Headers @{'X-Api-Key' = 'smoketest'} -ContentType 'application/json' `
+    -Body '{"quoteText":{"choice":"keep"}}' | Out-Null
+}
 ```
 
-**`echo` the captured value.** An empty variable produces a request to `…?batchId=` and a confusing
-error several steps later; echoing it turns that into an immediately visible blank.
+**Echo the captured value** — the bare `$batchId` line above. An empty variable produces a request to
+`…?batchId=` and a confusing error several steps later; echoing it turns that into an immediately
+visible blank.
 
 **`pageSize=0` on any listing a loop reads from**, or the default page of 20 silently truncates the
 set — the curated file stages more than that.
@@ -531,11 +642,11 @@ document whose environment is both writes both, base first:
 **A profile is a recipe, not a shared instance.** Each test creates its own container and its own
 volume, named after itself, and destroys both when it is done — two lines, with its own name and port:
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- create --name <name> --port <port>
 ```
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name <name>
 ```
 
@@ -554,14 +665,28 @@ Options exist for the cases that genuinely differ, and a document passes only wh
 | `--bind <dir>` | A directory instead of a named volume, where something outside the container must read or edit the database file |
 | `--wait-listening` | A degraded scenario where `503` is the expected outcome, so waiting for healthy would hang |
 | `--no-wait` | A container that should not be waited on before the next step |
+| `--read-only` | A read-only root filesystem, for a test whose subject is what happens when the application cannot write |
 
 **`--port` itself is optional.** A container nothing connects to over HTTP — one waited on by its own
 log line — publishes none, and omitting the flag is how a document says so. Requiring one would force
 it to invent a number it never uses, which then contradicts its own `Determinism`.
 
-**`create` always starts from a clean volume.** A step that must run against data an earlier step
-produced — a second startup, an upgrade against a seeded directory — stays a raw `docker run` and says
-why. The script owns creating and destroying an environment, not re-entering one.
+**`create` starts from an empty volume; `reenter` runs the same recipe against data that is already
+there.** A second startup, or an upgrade to a different `--image` over a database a prior one wrote,
+uses `reenter` — the container is replaced, the data is not:
+
+```powershell
+dotnet script scripts/testing/test-env.csx -- reenter --name <name> --port <port> --image quotinator:local
+```
+
+They are two commands rather than a flag on one because a step doing the second thing should say so.
+That matters most with `--bind`, where the script cannot tell them apart anyway: a bind directory
+belongs to the document, and neither command touches it.
+
+**No document writes its own `docker run`.** Nine did, before `reenter` existed, and five of those nine
+needed nothing more than `--bind` to begin with. Each carried a `MSYS_NO_PATHCONV=1` that existed only
+because the block was bash — and that flag being *absent* once rewrote `-e Quotinator__DataDir=/data`
+into `C:/Program Files/Git/data` and produced a false defect report.
 
 **The admin key is `smoketest`**, set by the script. Documents use it literally rather than carrying a
 `<your admin key>` placeholder for a reader to resolve.
@@ -572,19 +697,21 @@ verbatim.** Three things resolve `/tmp/x` differently, measured on Docker Deskto
 
 | Resolver | `/tmp/x` becomes |
 |---|---|
-| Git Bash | `C:\Users\<user>\AppData\Local\Temp\x` |
-| Docker Desktop `-v` | the same |
+| Docker Desktop `-v` | `C:\Users\<user>\AppData\Local\Temp\x` |
 | .NET `Path.GetFullPath` | `C:\tmp\x` — a different directory, which does not exist |
 
-So bash and `docker` agree, and a **.NET** tool does not. Resolving the path inside this script would
-bind `C:\tmp\x`, and the test would then read an empty database — which looks exactly like a passing
-check. That is also why a host-side `DbInspector` call cannot read a bind-mounted database by its
-`/tmp/…` path: it is not that the path lives inside a VM, it is that .NET roots it at the current drive.
+Resolving the path inside the script would bind `C:\tmp\x`, and the test would then read an empty
+database — which looks exactly like a passing check. That is also why a host-side `DbInspector` call
+cannot read a bind-mounted database by its `/tmp/…` path: it is not that the path lives inside a VM, it
+is that .NET roots it at the current drive.
+
+**A PowerShell path is the unambiguous form**, and it is what a document should prefer: `--bind
+"$env:TEMP\qt-example"` names one directory on one filesystem, with nothing translating it on the way.
 
 **Building the image is the one genuinely shared step**, because it is the same image for every test
 and rebuilding it per test would be absurd:
 
-```bash
+```powershell
 docker build -f docker/Dockerfile -t quotinator:local .
 ```
 
@@ -712,7 +839,7 @@ environment once, restore it between tests.
 
 **Image.** Tag the milestone's base image and save it once:
 
-```bash
+```powershell
 docker tag quotinator:local quotinator:m<N>-base
 docker save -o .claude/temp/test-environments/quotinator-m<N>-base.tar quotinator:m<N>-base
 ```
@@ -832,6 +959,16 @@ Fixture files, seed data, and expected-output samples a test needs go in a subfo
 document. Executable scripts go to `scripts/testing/`, per
 [ADR 010](../architecture-decisions/010-repository-is-csharp-only.md) — never inline in the document,
 never beside it.
+
+The five this suite runs on:
+
+| Script | What it is for |
+|---|---|
+| [`test-env.csx`](../../scripts/testing/test-env.csx) | Create, re-enter and destroy a test's own container and volume |
+| [`http.csx`](../../scripts/testing/http.csx) | Upload a file, expect a non-2xx status, or wait for one — the three things Windows PowerShell 5.1 cannot do cleanly |
+| [`execute-sql.csx`](../../scripts/testing/execute-sql.csx) | Run SQL against a database file, to break or repair it from the host side |
+| [`sqlite-storage-probe.csx`](../../scripts/testing/sqlite-storage-probe.csx) | Measure what SQLite reports about a file's storage |
+| [`corrupt-csv-cell.csx`](../../scripts/testing/corrupt-csv-cell.csx) | Damage one cell of an exported CSV, so a re-import has something to reject |
 
 ---
 
@@ -999,7 +1136,7 @@ Every variable the outcome depends on, and how each is pinned.
 
 ### 1. <what this step does>
 
-```bash
+```powershell
 <the command>
 ```
 
@@ -1030,7 +1167,7 @@ How to return the machine to a clean state.
 - **It invites finishing a test that has already failed.** Naming the consequence at the step is what
   makes stopping the obvious action rather than a judgement call.
 - **It forces positional references.** With expectations pooled at the end, they get written as "the
-  first call", "the second one" — and the reader has to count `curl` invocations across several code
+  first call", "the second one" — and the reader has to count invocations across several code
   blocks to find out what is being claimed. Found live: `200`, `404` and `202` in consecutive bullets,
   each correct for a different endpoint, unreadable as anything but a contradiction. An expectation
   written beside its command cannot have this problem.

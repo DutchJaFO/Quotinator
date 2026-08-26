@@ -13,9 +13,17 @@
 //
 // Usage (run from repo root):
 //   dotnet-script scripts/testing/test-env.csx -- create  --name <name> --port <port> [options]
+//   dotnet-script scripts/testing/test-env.csx -- reenter --name <name> --port <port> [options]
 //   dotnet-script scripts/testing/test-env.csx -- destroy --name <name> [--bind <host-dir>]
 //
-// create options:
+// create starts from an empty volume; reenter runs the same recipe against data that is already there
+// — a second startup, or an upgrade to a different --image over a database a prior one wrote. They are
+// two commands rather than a flag on one because a step doing the second thing should say so, instead
+// of a reader inferring it from which mount type happens to be in use. (With --bind the distinction is
+// invisible to this script either way: a bind directory belongs to the document, and neither command
+// touches it.)
+//
+// create and reenter options:
 //   --name  <name>        Container name; its volume is <name>-data (required)
 //   --port  <port>        Host port published to the container's 8080. Omit it for a container
 //                         nothing connects to over HTTP — one waited on by its own log line, say.
@@ -28,6 +36,8 @@
 //                         means. Guessing wrong binds a different filesystem and the test reads an
 //                         empty database that looks exactly like a passing check.
 //   --env   <K=V>         Extra environment variable; repeatable.
+//   --read-only           Run with a read-only root filesystem, for a test whose subject is what the
+//                         application does when it cannot write.
 //   --no-wait             Skip the readiness poll — for a container that publishes no port, or one
 //                         expected to degrade rather than become healthy.
 //   --wait-listening      Poll for any answer rather than a healthy one, for a degraded scenario
@@ -88,9 +98,9 @@ int Run(string arguments, bool ignoreFailure = false, bool quiet = false)
 string command = Args.FirstOrDefault() ?? "";
 string? name   = Value("--name");
 
-if (string.IsNullOrEmpty(name) || command is not ("create" or "destroy"))
+if (string.IsNullOrEmpty(name) || command is not ("create" or "reenter" or "destroy"))
 {
-    Console.Error.WriteLine("Usage: dotnet-script scripts/testing/test-env.csx -- create|destroy --name <name> [...]");
+    Console.Error.WriteLine("Usage: dotnet-script scripts/testing/test-env.csx -- create|reenter|destroy --name <name> [...]");
     Environment.Exit(1);
     return;
 }
@@ -126,9 +136,11 @@ if (port is not null && (!int.TryParse(port, out int portNumber) || portNumber i
 
 string image = Value("--image") ?? "quotinator:local";
 
-// Always from a clean slate: a container or volume left by an earlier run would make "fresh" a lie,
-// and the test reading it would report a failure that belongs to its predecessor.
+// The container always goes, on both commands: reenter is about keeping the *data*, and a container
+// still holding the database open would stop the new one from reading it.
 Run($"rm -f {name}", ignoreFailure: true, quiet: true);
+
+bool fresh = command == "create";
 
 string mount;
 
@@ -140,7 +152,11 @@ if (bind is not null)
 }
 else
 {
-    Run($"volume rm {volume}", ignoreFailure: true, quiet: true);
+    // Only on create: a volume left by an earlier run would make "fresh" a lie, and the test reading
+    // it would report a failure that belongs to its predecessor. reenter is the case where that
+    // earlier run is the point.
+    if (fresh) Run($"volume rm {volume}", ignoreFailure: true, quiet: true);
+
     mount = $"-v {volume}:/data";
 }
 
@@ -153,9 +169,10 @@ List<string> settings =
 
 settings.AddRange(Values("--env").Select(e => $"-e {e}"));
 
-string publish = port is null ? "" : $"-p {port}:8080 ";
+string publish  = port is null ? "" : $"-p {port}:8080 ";
+string readOnly = Flag("--read-only") ? "--read-only " : "";
 
-Run($"run -d --name {name} {publish}{mount} {string.Join(" ", settings)} {image}");
+Run($"run -d --name {name} {publish}{readOnly}{mount} {string.Join(" ", settings)} {image}");
 
 if (port is null)
 {

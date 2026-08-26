@@ -50,8 +50,8 @@ default and a second on `false` for the same reason.
 
 ### 1. Create this test's own environment
 
-```bash
-dotnet script scripts/testing/test-env.csx -- create --name qt-api-02 --port 18102 \
+```powershell
+dotnet script scripts/testing/test-env.csx -- create --name qt-api-02 --port 18102 `
   --env Quotinator__AutoPurgeBundledImportActions=false
 ```
 
@@ -64,24 +64,32 @@ that never became healthy.
 
 Two of the assertions below invert on an empty table, so this is a precondition rather than preamble:
 
-```bash
-curl -s "http://localhost:18102/api/v1/quotes?pageSize=1" | grep -o '"totalCount":[0-9]*'
-curl -s "http://localhost:18102/api/v1/admin/audit?pageSize=1" -H "X-Api-Key: smoketest" | grep -o '"totalCount":[0-9]*'
-curl -s "http://localhost:18102/api/v1/import/actions?pageSize=1" | grep -o '"totalCount":[0-9]*'
+```powershell
+$key  = @{'X-Api-Key' = 'smoketest'}
+$base = "http://localhost:18102/api/v1"
+$endpoints = @{
+  quotes  = "$base/quotes"
+  audit   = "$base/admin/audit"
+  actions = "$base/import/actions"
+}
+foreach ($name in $endpoints.Keys) {
+  "$name totalCount = $((Invoke-RestMethod "$($endpoints[$name])?pageSize=1" -Headers $key).totalCount)"
+}
 ```
 
 **Expected:** all three report a non-zero `totalCount`.
 
-**On failure:** a zero from `/import/actions` means step 1's auto-purge delta did not take effect, and
+**On failure:** a zero from `actions` means step 1's auto-purge delta did not take effect, and
 every `/import/actions` assertion below then reports a false failure that looks exactly like a
 pagination defect. Stop and re-create the container with the delta rather than recording the result.
 
 ### 2. Request every row with `pageSize=0`
 
-```bash
-curl -s "http://localhost:18102/api/v1/quotes?pageSize=0"
-curl -s "http://localhost:18102/api/v1/admin/audit?pageSize=0" -H "X-Api-Key: smoketest"
-curl -s "http://localhost:18102/api/v1/import/actions?pageSize=0"
+```powershell
+foreach ($name in $endpoints.Keys) {
+  $all = Invoke-RestMethod "$($endpoints[$name])?pageSize=0" -Headers $key
+  "$name items=$($all.items.Count) pageSize=$($all.pageSize) totalCount=$($all.totalCount)"
+}
 ```
 
 **Expected:** on all three, `items` contains every row (not zero), and `pageSize` in the response
@@ -89,19 +97,21 @@ equals `totalCount`. That is the effective-size contract, not the literal `0` re
 
 ### 3. Request a page size above the maximum
 
-```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/quotes?pageSize=501"
-curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/admin/audit?pageSize=501" -H "X-Api-Key: smoketest"
-curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/import/actions?pageSize=501"
+```powershell
+foreach ($name in $endpoints.Keys) {
+  dotnet script scripts/testing/http.csx -- --url "$($endpoints[$name])?pageSize=501" --expect 422 --status
+}
 ```
 
-**Expected:** all three return `422`. Above 500 is rejected, never silently clamped.
+**Expected:** all three return `422`. Above 500 is rejected, never silently clamped — and `--expect`
+makes a `200` here end the step rather than being read past.
 
 ### 4. Omit `pageSize` and read the applied default
 
-```bash
-curl -s "http://localhost:18102/api/v1/admin/audit" -H "X-Api-Key: smoketest"
-curl -s "http://localhost:18102/api/v1/import/actions"
+```powershell
+foreach ($name in @('audit', 'actions')) {
+  "$name pageSize = $((Invoke-RestMethod $endpoints[$name] -Headers $key).pageSize)"
+}
 ```
 
 **Expected:** both responses report `20`, not the endpoints' old default of `50`.
@@ -112,10 +122,10 @@ recording this either way.
 
 ### 5. Request a page beyond the last
 
-```bash
-curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/quotes?pageSize=500&page=99"
-curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/admin/audit?pageSize=1&page=999999" -H "X-Api-Key: smoketest"
-curl -s -w "\n%{http_code}\n" "http://localhost:18102/api/v1/import/actions?pageSize=1&page=999999"
+```powershell
+dotnet script scripts/testing/http.csx -- --url "$base/quotes?pageSize=500&page=99" --expect 422 --status
+dotnet script scripts/testing/http.csx -- --url "$base/admin/audit?pageSize=1&page=999999" --expect 422 --status
+dotnet script scripts/testing/http.csx -- --url "$base/import/actions?pageSize=1&page=999999" --expect 422 --status
 ```
 
 **Expected:** all three return `422`.
@@ -134,9 +144,10 @@ stub readers those tests use echo their input back instead of exercising real SQ
 ## Explicitly not covered here
 
 `page`/`pageSize` publishing as `integer` rather than `string` on the live spec is **not** part of
-this test. It was originally a `curl | grep` check here, and the first version of that command was
-wrong — it assumed single-line JSON and never matched anything. Grepping a pretty-printed multi-line
-body for a nested field is fragile and its pass/fail needs a human to eyeball the output.
+this test. It was originally a text-matching check on the published spec here, and the first version of
+that command was wrong — it assumed single-line JSON and never matched anything. Matching a
+pretty-printed multi-line body for a nested field is fragile and its pass/fail needs a human to eyeball
+the output.
 
 It is now `OpenApiSpecEndpointTests`, a `WebApplicationFactory` test that fetches the real
 `/openapi/v1.json` through the full pipeline and asserts the type via `JsonDocument` — so it runs
@@ -144,6 +155,6 @@ deterministically in every `dotnet test` instead of requiring a live container.
 
 ## Cleanup
 
-```bash
+```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-api-02
 ```

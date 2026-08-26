@@ -1,6 +1,6 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress (all steps done, including the full 43-document run on 2026-08-25; rows 27 and 28 still open — row 27's placeholder and browser-step work is done, but the suite is written in bash and this project uses PowerShell, converted in its own session — `16` and `17` cannot confirm their own behaviour until [#347](https://github.com/DutchJaFO/Quotinator/issues/347) makes the staleness evaluation observable)
+**Status:** In progress — execute steps 20–25, the PowerShell conversion row 27 deferred to its own session (started 2026-08-26). Steps 1–19 are done, including the full 43-document run on 2026-08-25. Row 28 stays blocked independently: `16` and `17` cannot confirm their own behaviour until [#347](https://github.com/DutchJaFO/Quotinator/issues/347) makes the staleness evaluation observable
 **GitHub issue:** #339
 **Tiers required:** none — see *Tiers* below
 **Depends on:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347) for verification row 28
@@ -121,6 +121,71 @@ Three constraints it must respect, each measured rather than assumed:
   port forced two documents to invent numbers that then contradicted their own `Determinism`.
 - **`create` always starts clean, so it cannot re-enter an environment.** Eight steps — upgrades against
   a seeded directory, second startups — stay raw `docker` and say why.
+
+**That last constraint was accepted too readily and is lifted in the 2026-08-26 scope change below.**
+Re-entry is not something `create` *cannot* express — it is something the script was never asked to
+express. Five of the nine raw blocks re-enter a **bind** directory, which `create --bind` already
+preserves because the script deliberately never touches a bind path, so those nine lines were duplicating
+the recipe for no reason at all.
+
+---
+
+## Scope change — the suite is converted from bash to PowerShell (2026-08-26)
+
+**Added by developer decision.** Verification row 27 records the finding and defers the work: the suite
+is written in a shell this project does not use. 320 ```bash fences, none of which run in PowerShell —
+`grep` 158, `MSYS_NO_PATHCONV=1` 51, `cut -d` 40, `until … done` 37, `wc -l` 29, heredocs 19.
+
+**This is not a dialect preference.** Three separate reasons, each measured rather than assumed:
+
+- **ADR 010 already forbids it.** *"No Python, Perl, Node.js, or Unix text-processing one-liners (`sed`,
+  `awk`, etc.) anywhere in this repository or its tooling — not as committed scripts, not as ad hoc
+  one-off commands"*, and *"PowerShell remains the primary shell"*. A committed
+  `grep -o '"batchId":"[^"]*"' | cut -d'"' -f4` is exactly the shape that names, and 40 documents carry
+  one. The suite has been out of compliance with an ADR this same issue revised (step 9) since it was
+  written.
+- **Bash actively produced two false defect reports during #339's own run.** Its path conversion mounted
+  a VM-internal directory where `dotnet script` mounted the Windows one, and without
+  `MSYS_NO_PATHCONV=1` it rewrote `-e Quotinator__DataDir=/data` into `C:/Program Files/Git/data`.
+- **The instrument bugs row 28 kept repairing are a property of string-matching a response.**
+  `grep -c` counting lines rather than matches, `Select-String` being case-insensitive where `grep` is
+  not, a pattern missing a space against a pretty-printed spec — six of the twelve repairs after the
+  full run were this class. Parsing the response into an object removes the class, rather than fixing
+  its instances one at a time.
+
+**The idiom, settled before conversion (developer decision, 2026-08-26).** Cmdlets where they work,
+`.csx` helpers where Windows PowerShell 5.1 cannot. `pwsh` is not installed on the development machine
+and installing it is not a prerequisite this suite may impose, so 5.1 is the target — which rules two
+things out by measurement, not by taste:
+
+| Written in PowerShell 5.1 | What a native exe actually receives |
+|---|---|
+| `'{"quoteText":{"choice":"keep"}}'` | `{quoteText:{choice:keep}}` — the JSON is destroyed |
+| `'{\"quoteText\":\"keep\"}'` | `{"quoteText":"keep"}` — correct, and hand-escaped 52 times |
+
+So `curl.exe` cannot carry a JSON body without hand-escaping every one of the 12 `-d` bodies and 40
+`-F 'settings={…}'` fields — the same silent-corruption shape the suite already got burned by. And
+`Invoke-RestMethod` has **no `-Form`** before PowerShell 7, so multipart upload has no cmdlet path at
+all. The resolution is one helper rather than one workaround per call site.
+
+**Four rules, each with the reason stated at the point of use:**
+
+- **Reading JSON to assert on** — `Invoke-RestMethod`, then assert on properties. No argument layer to
+  mangle the URL, and the result is an object rather than a line of text.
+- **Sending a JSON body** — `Invoke-RestMethod -Method Post -ContentType application/json -Body`. A
+  cmdlet parameter, so the JSON survives.
+- **A status a test expects to be non-2xx** — `scripts/testing/http.csx`. 88 such expectations across 24
+  documents (35 × 422, 24 × 503, 15 × 404), and `Invoke-RestMethod` throws on every one of them; reading
+  the body back out of the exception in 5.1 takes a `StreamReader` over `$_.Exception.Response`.
+- **Uploading a file** — the same helper. It also returns the `batchId` directly, which retires the
+  `grep -o … | cut` capture idiom the index currently has to teach.
+
+**Measured, so the helper is affordable:** a warm `dotnet script` invocation costs ~300 ms on this
+machine, so the ~120 helper calls across the suite add well under a minute in total.
+
+**Converting without running is the mistake row 27 already records** — *"the replacements written for
+this row are themselves bash, so they moved the documents further from runnable"*. The conversion is
+therefore not done when the fences are rewritten; it is done when they have been executed.
 
 ---
 
@@ -789,6 +854,89 @@ browser-worded steps remain elsewhere.
 
 **Three index rules came out of it** — a count needs a working instrument, a removal needs a positive
 control, and one prior version is not enough because users skip releases.
+
+---
+
+### 20. Write `scripts/testing/http.csx`, the one helper the conversion needs
+
+**Status:** ✅ Done — 2026-08-26. Written and exercised against a live container on all seven paths:
+body to stdout piped into `ConvertFrom-Json`, `--status`, an expected `422` whose problem body is
+readable, an `--expect` mismatch exiting 1, a multipart import returning its `batchId` through the
+parsed body, `--json-stdin`, and `--no-key` producing `401`.
+
+**One thing the run found that would have been a silent corruption.** PowerShell 5.1 prefixes a **BOM**
+when it pipes a string into a native process, so a JSON body arrives as `﻿{…}` and fails to parse
+server-side — which would have read as an application defect. The helper strips it, and says why at the
+line that does.
+
+One helper, not two. It covers exactly what Windows PowerShell 5.1 cannot do cleanly and nothing more:
+a multipart file upload, a status a test expects to be non-2xx, and a JSON body reaching a native
+process intact. Everything a cmdlet already does well stays a cmdlet.
+
+Its output contract matters as much as its inputs: the body goes to stdout so a step can pipe it
+straight into `ConvertFrom-Json`, and the status goes somewhere that does not corrupt that pipe. An
+`--expect <code>` that exits non-zero on a mismatch is what makes a failure stop at the step that
+caused it, which the index already requires of every step.
+
+Per ADR 010 it is a `.csx` under `scripts/testing/`, not a `.ps1` — that ADR names a multi-line
+PowerShell script as having the same reviewability problem it rejects Python for.
+
+### 21. Extend `test-env.csx` so no document hand-rolls `docker run`
+
+**Status:** ✅ Done — 2026-08-26. `reenter` and `--read-only` added, both verified live: `reenter` left
+an imported batch's 12 pending actions in place where `create` on the same name and port returned 0, and
+`--read-only` reached `docker run` and produced the degraded `503` the read-only tests are about.
+
+Nine raw `docker run -d` blocks survive, and the claim in verification row 25 that they *cannot* be
+expressed is only half true:
+
+- **Five need no script change at all.** `notifications-and-changelog/02`–`06` re-boot against a bind
+  directory, and `create --bind` preserves it — the script never touches a bind path by design. These
+  nine lines are pure duplication, and each one carries an `MSYS_NO_PATHCONV=1` that exists only because
+  the block is bash.
+- **Four need the script to grow.** `startup-and-degradation/02`, `04` and `05` re-enter a **named**
+  volume, which `create` wipes on purpose, and two of them add `--read-only`.
+
+The addition is a re-entry command that runs the identical recipe without removing the volume, and a
+`--read-only` flag. Naming it as its own command rather than a flag on `create` is deliberate: a step
+that re-enters an environment should say so, instead of a reader inferring it from which mount type
+happens to be in use.
+
+### 22. State the shell conventions in the index
+
+**Status:** ⬜ Not started.
+
+The four rules above go in `README.md` with their reasons, in the same place the id-capture convention
+is already taught — and that section shrinks, because the helper returns the `batchId` rather than the
+document extracting it from a response by hand.
+
+### 23. Convert all 43 documents
+
+**Status:** ⬜ Not started.
+
+Category by category, so a failure is attributable. The mechanical half is `until … done` → `while`,
+`$(…)` → `$(…)` with PowerShell semantics, `/dev/null` → `$null`, and `MSYS_NO_PATHCONV=1` simply
+deleted — it is a Git Bash workaround with nothing to work around here.
+
+The half that is not mechanical is every `grep`-based count. Those become property assertions on a
+parsed object where the response is JSON, which is the point of the exercise; a count that stays a text
+match says why at the command.
+
+### 24. Guard the conversion so it cannot drift back
+
+**Status:** ⬜ Not started.
+
+A test in `RepositoryStructureTests` asserting no bash-only construct survives in
+`docs/automated-testing/`, red before step 23. Without it the next document written in this suite is
+written in whatever its author last had in a terminal — which is how the current state arose.
+
+### 25. Run the converted suite
+
+**Status:** ⬜ Not started.
+
+Row 27 is not closed by rewriting fences. Scope to agree with the developer before starting: the full
+43 is the honest proof, and 2026-08-25 showed a full run is affordable, but the smoke set plus every
+document whose commands changed shape is the smaller defensible option.
 
 ---
 
