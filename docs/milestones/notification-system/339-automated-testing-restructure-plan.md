@@ -1,6 +1,6 @@
 # #339 — Restructure the T2 suite into docs/automated-testing/, one document per test
 
-**Status:** In progress — execute steps 20–25, the PowerShell conversion row 27 deferred to its own session (started 2026-08-26). Steps 1–19 are done, including the full 43-document run on 2026-08-25. Row 28 stays blocked independently: `16` and `17` cannot confirm their own behaviour until [#347](https://github.com/DutchJaFO/Quotinator/issues/347) makes the staleness evaluation observable
+**Status:** In progress — steps 1–24 are done. All 43 documents are PowerShell and a guard test holds them there; **step 25 is the remainder**: 26 documents were executed end to end during the conversion, and the other 17 (all in `import-and-staged-actions`) are converted and guarded but not yet run. Row 28 stays blocked independently: `16` and `17` cannot confirm their own behaviour until [#347](https://github.com/DutchJaFO/Quotinator/issues/347) makes the staleness evaluation observable
 **GitHub issue:** #339
 **Tiers required:** none — see *Tiers* below
 **Depends on:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347) for verification row 28
@@ -904,39 +904,74 @@ happens to be in use.
 
 ### 22. State the shell conventions in the index
 
-**Status:** ⬜ Not started.
-
-The four rules above go in `README.md` with their reasons, in the same place the id-capture convention
-is already taught — and that section shrinks, because the helper returns the `batchId` rather than the
-document extracting it from a response by hand.
+**Status:** ✅ Done — 2026-08-26. `README.md` carries the five idioms with their reasons, both measured
+5.1 traps, `reenter`, the bind-path guidance, and a table of the five scripts the suite runs on. The
+id-capture section shrank as expected: the helper returns the `batchId` in a parsed response, so nothing
+extracts it from text.
 
 ### 23. Convert all 43 documents
 
-**Status:** ⬜ Not started.
+**Status:** ✅ Done — 2026-08-26, category by category. 320 ```bash fences became 0.
 
-Category by category, so a failure is attributable. The mechanical half is `until … done` → `while`,
-`$(…)` → `$(…)` with PowerShell semantics, `/dev/null` → `$null`, and `MSYS_NO_PATHCONV=1` simply
-deleted — it is a Git Bash workaround with nothing to work around here.
+**The mechanical half was the smaller half.** `MSYS_NO_PATHCONV=1` was simply deleted — all 51 of them —
+and every `docker cp`, `docker logs` and bind mount then worked with a plain Windows path. What took the
+time was the `grep`-based assertions: each one became a property assertion on a parsed object, which is
+the point of the exercise rather than a side effect of it.
 
-The half that is not mechanical is every `grep`-based count. Those become property assertions on a
-parsed object where the response is JSON, which is the point of the exercise; a count that stays a text
-match says why at the command.
+**Four documents got a materially better mechanism, not just a translation:**
+
+- `api-surface/04` reads the OpenAPI spec as an object graph instead of matching a pretty-printed
+  document — the exact shape that let its removal half pass for weeks on patterns that could never match.
+- `notifications-and-changelog/02`, `03` and `05` read the database with `DbInspector` from the host
+  instead of a throwaway `alpine` container that installed `sqlite3` **over the network** and nested SQL
+  three quoting levels deep. What made that possible is the absolute Windows bind path: the old
+  POSIX-style path was the reason a host-side read was unsafe.
+- `notifications-and-changelog/01` and `06` write their fixtures through `execute-sql.csx` rather than
+  the same alpine container.
+- `import-and-staged-actions/15` no longer asks a person to hand-edit a bundled rule file three times —
+  `scripts/testing/conflict-rule.csx` does it, and `git checkout` reverts it.
 
 ### 24. Guard the conversion so it cannot drift back
 
-**Status:** ⬜ Not started.
+**Status:** ✅ Done — 2026-08-26.
+`RepositoryStructureTests.EveryAutomatedTestingCodeBlock_IsPowerShell`, red against 283 fences across
+all 43 documents before the conversion and green after it.
 
-A test in `RepositoryStructureTests` asserting no bash-only construct survives in
-`docs/automated-testing/`, red before step 23. Without it the next document written in this suite is
-written in whatever its author last had in a terminal — which is how the current state arose.
+It checks fenced code only — prose naming a past defect is load-bearing in the index and banning the
+word would delete it — and exempts a fence containing `sh -c`, where the payload runs inside a Linux
+container. Two of its own false positives were found by running it and fixed: a PowerShell `for (…)`
+loop, and the word `isDismissed` containing `sed `.
+
+It also guards the `@(…).Count` trap, which is not a bash construct at all but fails in exactly the
+same silent way.
 
 ### 25. Run the converted suite
 
-**Status:** ⬜ Not started.
+**Status:** 🟡 Partly done — 2026-08-26. **26 of 43 documents were executed end to end during the
+conversion**, every step of each, against real containers: all of `api-surface`, all of
+`identity-and-casing`, all of `database-lifecycle`, all of `startup-and-degradation`, all of
+`notifications-and-changelog`, and `import-and-staged-actions` 01, 05, 07, 13, 14 and 19 — which
+includes every smoke-set member.
 
-Row 27 is not closed by rewriting fences. Scope to agree with the developer before starting: the full
-43 is the honest proof, and 2026-08-25 showed a full run is affordable, but the smoke set plus every
-document whose commands changed shape is the smaller defensible option.
+**The remaining 17 were converted but not executed**: `import-and-staged-actions` 02, 03, 04, 06, 08,
+09, 10, 11, 12, 15, 16, 17, 18. They reuse the idioms the executed documents established, and the guard
+proves no bash construct survives in them — but that is not the same claim as having run them, and this
+row stays open until it is.
+
+**What the run found, none of it in the application:**
+
+- `notifications-and-changelog/02` step 6 could not fail as written — it inserted a legacy row while the
+  real metadata-carrying announcement was still present, so structural dedupe correctly suppressed the
+  re-announcement whether or not text matching was also alive. Fixed by deleting the structural row in
+  the same edit, and verified both ways.
+- `import-and-staged-actions/19` step 9 asserted the API's field names against a log line that writes
+  human-readable plurals, reporting three types missing that were plainly there.
+- `api-surface/03`'s import returns `200`, not the `202` the document expected — `newest-wins` resolves
+  as it goes, and only `review` stages something.
+- **`Notifications` is missing from the OpenAPI spec's top-level `tags` array** while the other six are
+  declared. Not a functional defect and not this issue's to fix; recorded in
+  `notifications-and-changelog/01`'s *Explicitly not covered here* and surfaced to the developer rather
+  than absorbed into an assertion.
 
 ---
 
@@ -970,7 +1005,7 @@ document whose commands changed shape is the smaller defensible option.
 | 24 | ✅ | Every test creates and destroys its own container and volume, so any two can run concurrently | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother` — red while documents shared `qt-env` on `8080`. Checks three things: a document publishes every port it talks to, no two publish the same one, and every port is a real one. That last check exists because the first port scheme derived a second container's port by appending a digit, producing `181031` — above the 65535 maximum, so `docker run` would simply have failed, and a uniqueness check alone was perfectly happy with it. 43 documents, 51 distinct ports, no `qt-env` and no "restore the profile" anywhere |
 | 25 | ✅ | The container recipe exists once, and every document invokes it rather than repeating it | Live | `scripts/testing/test-env.csx` creates and destroys a test's environment; all 43 documents call it. Verified live: named volume with a port (healthy, seeded), no port at all (publishes nothing), and a bind mount (database lands in the bound directory). Eight steps stay raw `docker` because they re-enter an environment an earlier step produced, which `create` cannot express |
 | 26 | ✅ | Every step carries its own expected result, so a failure stops the run at the step that caused it | Unit test | `RepositoryStructureTests.EveryAutomatedTestingStep_CarriesItsOwnExpectedResult` — red against all 43 before the conversion. Checks per step, not by total: a document where one step carries three expectations and another none would balance out under a count |
-| 27 | ❌ | Every test runs unattended | Live | **Advanced substantially, but not closed — the suite is written in a shell this project does not use.** Every `<batchId>`/`<id>` placeholder is gone: 16 documents capture ids into variables and echo them, with the convention stated once in the index, and a loop decides every staged action rather than naming one. Two poll gates that hung rather than failed are fixed, as is a stale script path and nine `docker cp` calls that aborted a run. `api-surface/04` step 6 no longer opens a browser — it counts `X by ID` against `X by id` in the published spec. The three genuinely browser-driven steps became driver steps stating explicit DOM assertions, all verified against a real browser. The one manual edit became `scripts/testing/corrupt-csv-cell.csx` per ADR 010. **What blocks the row: 320 ```bash fences, none of which run in PowerShell** — `grep` 169, `$(...)` 55, `MSYS_NO_PATHCONV=1` 51, `cut -d` 40, `until … done` 37, `wc -l` 29, heredocs 20, `for … in` 10. The replacements written for this row are themselves bash, so they moved the documents further from runnable. Bash is not merely unused here: during #339's own run its path conversion mounted a VM-internal directory where `dotnet script` mounted the Windows one, and without `MSYS_NO_PATHCONV=1` it rewrote `-e Quotinator__DataDir=/data` to `C:/Program Files/Git/data` — together producing two false defect reports. Converting the suite to PowerShell is its own session (developer direction, 2026-08-25) |
+| 27 | 🟡 | Every test runs unattended | Live | **The shell half is closed; the run that proves it is 26 of 43.** All 320 ```bash fences are PowerShell, `RepositoryStructureTests.EveryAutomatedTestingCodeBlock_IsPowerShell` holds it there, and the last three human-required steps are gone — `conflict-rule.csx` makes `import-and-staged-actions/15`'s three rule-file edits, and the two remaining alpine-plus-`apk`-over-the-network reads became `DbInspector` calls. 51 `MSYS_NO_PATHCONV=1` deleted; every `--bind` is now an absolute Windows path, which is what made a host-side database read safe. **What keeps the row open is step 25**: 17 `import-and-staged-actions` documents are converted and guarded but have not been executed, and "the guard passes" is not the same claim as "it ran". Two 5.1 traps were measured and are now index rules plus guard checks: a native process never receives a double quote (so no JSON reaches one — `execute-sql.csx` gained `--sql-file` for the fixture that needs it), and `.Count` on a single `PSCustomObject` returns blank, failing precisely when a well-targeted assertion matches its one row. Earlier: every `<batchId>`/`<id>` placeholder is gone, two poll gates that hung rather than failed are fixed, and `api-surface/04` step 6 counts the published spec instead of opening a browser, with the three genuinely browser-driven steps stated as DOM assertions verified against a real browser |
 | 28 | ❌ | Every document can distinguish the feature working from the feature broken | Live | **Twelve more repaired after the full run**, on top of the 13 earlier. Six instruments could not fail or could not pass: `api-surface/04`'s three greps missed a space against the pretty-printed spec, so its *removal* half had been passing on a pattern that could never match; `16` and `17` counted `"operation":"Purge"` where the audit records `"Purged"`, reading 0 against 8 and 4 real traces; `import-and-staged-actions/05` counted `totalCount` on an endpoint that returns `totalMatching`; `notifications-and-changelog/01` step 7 required 3 from a `grep -c` against single-line JSON. Six assertions were vacuous as ordered: a scoped-clear check comparing 0 with 0, a schema-version check comparing 1 with 1 under a profile where multi-row history cannot exist, an already-canonical id fixture, a merge check against the one bundled rule file shipping zero rules, and two fixtures asserting outcomes they could not produce. `notifications-and-changelog/06` was misread as an application defect and was not one — its rollback emptied the counter and the replay failed, restored its backup and degraded, which imitates a broken backfill exactly. **`16` and `17` still cannot**, and remain failing tests that block release: the staleness *evaluation* is still unobservable, filed as [#347](https://github.com/DutchJaFO/Quotinator/issues/347). Their `Purged` grep is fixed, so that is now the only gap of the two |
 | 29 | ✅ | The unverified changelog round-trip tooling is removed, and `changelog.csx`'s own lack of test coverage is filed rather than absorbed | Live | `scripts/changelog-import.csx`, `scripts/changelog-upgrade.csx` and `scripts/changelog-reference/` are gone, and [#340](https://github.com/DutchJaFO/Quotinator/issues/340) covers testing `changelog.csx`. `scripts/README.md` still names them — deliberately, in a removal note recording what went and why. This row originally asked for "no reference to them", which a removal record cannot satisfy and should not |
 | 30 | ✅ | No reference to `docs/smoke-tests.md` resolves to nothing | Live | Every remaining mention names where the suite went. **Not** a bare `grep` for absence — archival plan docs keep the old name deliberately, with the pointer alongside. Nor a same-line grep: the pointer is often on the wrapped line below, so ten mentions look unresolved until each is read |

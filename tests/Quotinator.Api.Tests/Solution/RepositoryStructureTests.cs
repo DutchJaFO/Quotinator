@@ -430,6 +430,149 @@ public partial class RepositoryStructureTests
     }
 
     /// <summary>
+    /// Every runnable code block in the T2 suite — the index included — is PowerShell, and carries no
+    /// construct that only a Unix shell provides.
+    /// </summary>
+    /// <remarks>
+    /// PowerShell is this project's shell, and ADR 010 forbids Unix text-processing one-liners outright.
+    /// The suite was nonetheless written in bash, which cost two false defect reports during #339's own
+    /// full run: Git Bash's path conversion mounted a directory inside the Docker VM where
+    /// <c>dotnet script</c> mounted the Windows one, and an unprotected <c>-e Quotinator__DataDir=/data</c>
+    /// was rewritten to <c>C:/Program Files/Git/data</c>. Without a guard the next document written here
+    /// is written in whatever its author last had in a terminal, which is how that state arose.
+    ///
+    /// Only fenced code is checked. Prose naming a construct is a record of a past defect — several such
+    /// records are load-bearing in the index — and banning the word rather than the command would delete
+    /// them. A fence containing <c>sh -c</c> is exempt for the same reason in reverse: what follows runs
+    /// inside a Linux container, where a Unix shell is the only shell there is.
+    /// </remarks>
+    [TestMethod]
+    public void EveryAutomatedTestingCodeBlock_IsPowerShell()
+    {
+        Assert.IsTrue(Directory.Exists(AutomatedTestingDir),
+            $"{AutomatedTestingRelativePath} does not exist.");
+
+        List<string> documents = [.. FindAutomatedTestingDocuments(), "README.md"];
+        List<string> failures = [];
+
+        foreach (string document in documents)
+        {
+            string[] lines = File.ReadAllLines(
+                Path.Combine(AutomatedTestingDir, document.Replace('/', Path.DirectorySeparatorChar)));
+
+            string? fenceLanguage = null;
+            int fenceStart = 0;
+            List<string> fenceLines = [];
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (!lines[i].StartsWith("```", StringComparison.Ordinal))
+                {
+                    if (fenceLanguage is not null) fenceLines.Add(lines[i]);
+                    continue;
+                }
+
+                if (fenceLanguage is null)
+                {
+                    fenceLanguage = lines[i][3..].Trim();
+                    fenceStart = i + 1;
+                    fenceLines = [];
+                    continue;
+                }
+
+                if (ShellFenceLanguages.Contains(fenceLanguage))
+                    failures.Add($"{document}:{fenceStart} — fence is ```{fenceLanguage}, not ```powershell");
+                else if (fenceLanguage == "powershell")
+                    failures.AddRange(UnixOnlyConstructs(document, fenceStart, fenceLines));
+
+                fenceLanguage = null;
+            }
+        }
+
+        Assert.IsEmpty(failures,
+            "Every command in the T2 suite is PowerShell (ADR 010, and #339's own run):\n"
+            + string.Join("\n", failures.Order()));
+    }
+
+    private static readonly HashSet<string> ShellFenceLanguages =
+        new(StringComparer.OrdinalIgnoreCase) { "bash", "sh", "shell", "zsh" };
+
+    /// <summary>
+    /// Each entry pairs a construct no Windows PowerShell session provides with what to write instead,
+    /// so a failure tells the reader the fix rather than only the fault.
+    /// </summary>
+    private static readonly (string Construct, string Instead)[] UnixOnlyShellConstructs =
+    [
+        ("MSYS_NO_PATHCONV", "nothing — it is a Git Bash workaround with nothing to work around here"),
+        ("/dev/null",        "$null, or | Out-Null"),
+        ("curl ",            "Invoke-RestMethod, or scripts/testing/http.csx"),
+        ("curl.exe",         "Invoke-RestMethod, or scripts/testing/http.csx"),
+        ("grep",             "Select-String — and to count, [regex]::Matches(...).Count"),
+        ("cut -d",           "a property on the object ConvertFrom-Json returns"),
+        ("wc -l",            "Measure-Object, or .Count on a parsed response"),
+        ("; do",             "foreach (...) { ... }"),
+        ("; done",           "foreach (...) { ... }"),
+        ("<<'",              "a here-string: @'...'@"),
+    ];
+
+    /// <summary>
+    /// Constructs recognised only where a command can begin, because their spelling also occurs inside
+    /// ordinary text. Matching anywhere would flag <c># Wait until the app is healthy</c> as a shell
+    /// loop and <c>isDismissed </c> as <c>sed</c> — both measured — and a guard that fires on prose gets
+    /// worked around rather than obeyed.
+    /// </summary>
+    private static readonly (string Construct, string Instead)[] UnixOnlyShellCommands =
+    [
+        ("until", "http.csx --wait-for, or while (...) { Start-Sleep 1 }"),
+        ("export", "$env:NAME = 'value'"),
+        ("sed", "nothing — ADR 010 forbids it outright"),
+        ("awk", "nothing — ADR 010 forbids it outright"),
+    ];
+
+    /// <summary>
+    /// A fence carrying <c>sh -c</c> runs its payload inside a Linux container, so the Unix forms in it
+    /// are correct rather than left over — the exemption is the whole fence because a continuation
+    /// splits one such command across lines.
+    /// </summary>
+    private static IEnumerable<string> UnixOnlyConstructs(string document, int fenceStart, List<string> fenceLines)
+    {
+        if (fenceLines.Any(l => l.Contains("sh -c", StringComparison.Ordinal))) yield break;
+
+        for (int i = 0; i < fenceLines.Count; i++)
+        {
+            foreach ((string construct, string instead) in UnixOnlyShellConstructs)
+            {
+                if (fenceLines[i].Contains(construct, StringComparison.Ordinal))
+                    yield return $"{document}:{fenceStart + i} — `{construct.Trim()}` is not PowerShell; use {instead}";
+            }
+
+            string command = fenceLines[i].TrimStart();
+
+            foreach ((string construct, string instead) in UnixOnlyShellCommands)
+            {
+                if (command.StartsWith($"{construct} ", StringComparison.Ordinal))
+                    yield return $"{document}:{fenceStart + i} — `{construct}` is not PowerShell; use {instead}";
+            }
+
+            // `for` is the one shared spelling: PowerShell's own loop opens a parenthesis where bash's
+            // names a variable, so only the bash form is a finding.
+            if (command.StartsWith("for ", StringComparison.Ordinal) && !command.StartsWith("for (", StringComparison.Ordinal))
+                yield return $"{document}:{fenceStart + i} — bash `for … in` is not PowerShell; use foreach (...) {{ ... }}";
+
+            // Windows PowerShell 5.1 gives a single PSCustomObject no Count property, so a filter that
+            // matches exactly one row prints nothing where the test expects 1 — correct for zero rows
+            // and for two, blank for the one case a well-targeted assertion is most likely to produce.
+            if (fenceLines[i].Contains("Where-Object", StringComparison.Ordinal)
+                && fenceLines[i].Contains(".Count", StringComparison.Ordinal)
+                && !fenceLines[i].Contains("@(", StringComparison.Ordinal))
+            {
+                yield return $"{document}:{fenceStart + i} — a filtered .Count needs @(…) around it, "
+                    + "or it reports blank for exactly one match";
+            }
+        }
+    }
+
+    /// <summary>
     /// Every test document publishes the ports it talks to, and no two documents publish the same one,
     /// so any pair of tests can run at the same time without reaching each other's state.
     /// </summary>
