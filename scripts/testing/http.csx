@@ -36,6 +36,9 @@
 //                         Adds the import "settings" multipart field as
 //                         {"duplicateResolution":{"default":"<mode>"}} — the only settings shape the
 //                         suite uses. Built here so no document has to put JSON on a command line
+//   --field  <name=value> Extra multipart field alongside --file; repeatable. For plain values only —
+//                         a JSON value would lose its quotes on the way here, which is exactly what
+//                         --duplicate-resolution exists to avoid
 //   --json-stdin          Read the request body from stdin and send it as application/json. A leading
 //                         BOM is stripped: PowerShell 5.1 adds one when it pipes a string to a native
 //                         process, and it would otherwise reach the server as part of the body
@@ -54,6 +57,16 @@ using System.Net.Http.Headers;
 
 string? Value(string flag) => Args.SkipWhile(a => a != flag).Skip(1).FirstOrDefault();
 bool Flag(string flag) => Args.Contains(flag);
+
+List<string> Values(string flag)
+{
+    List<string> found = [];
+
+    for (int i = 0; i < Args.Count - 1; i++)
+        if (Args[i] == flag) found.Add(Args[i + 1]);
+
+    return found;
+}
 
 string? url = Value("--url");
 
@@ -111,6 +124,20 @@ if (file is not null)
 
     if (duplicateResolution is not null)
         form.Add(new StringContent($"{{\"duplicateResolution\":{{\"default\":\"{duplicateResolution}\"}}}}"), "settings");
+
+    foreach (string field in Values("--field"))
+    {
+        int separator = field.IndexOf('=');
+
+        if (separator < 1)
+        {
+            Console.Error.WriteLine($"--field takes name=value; {field} has no name.");
+            Environment.Exit(1);
+            return;
+        }
+
+        form.Add(new StringContent(field[(separator + 1)..]), field[..separator]);
+    }
 
     content = form;
 }

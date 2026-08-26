@@ -11,20 +11,30 @@
 //
 // Usage (run from repo root):
 //   dotnet-script scripts/testing/execute-sql.csx -- --db <path-to-db-file> --sql "<statement(s)>"
+//   dotnet-script scripts/testing/execute-sql.csx -- --db <path-to-db-file> --sql-file <path>
 //
 // Options:
-//   --db   <path>   Path to the SQLite database file (required)
-//   --sql  <text>   One or more semicolon-separated SQL statements to execute (required)
+//   --db       <path>   Path to the SQLite database file (required)
+//   --sql      <text>   One or more semicolon-separated SQL statements to execute
+//   --sql-file <path>   Read the statements from a file instead. Required whenever the SQL contains a
+//                       double quote — a JSON literal, say. Windows PowerShell 5.1 strips double
+//                       quotes out of an argument on its way to a native process, so
+//                       --sql "INSERT ... VALUES ('{""a"":1}')" arrives as {a:1} and is stored as
+//                       corrupt data rather than failing. Measured, not theoretical.
+//
+// Exactly one of --sql and --sql-file is given.
 
 #r "nuget: Microsoft.Data.Sqlite, 10.0.10"
 using Microsoft.Data.Sqlite;
 
-var dbArg  = Args.SkipWhile(a => a != "--db").Skip(1).FirstOrDefault();
-var sqlArg = Args.SkipWhile(a => a != "--sql").Skip(1).FirstOrDefault();
+string? dbArg      = Args.SkipWhile(a => a != "--db").Skip(1).FirstOrDefault();
+string? sqlArg     = Args.SkipWhile(a => a != "--sql").Skip(1).FirstOrDefault();
+string? sqlFileArg = Args.SkipWhile(a => a != "--sql-file").Skip(1).FirstOrDefault();
 
-if (string.IsNullOrEmpty(dbArg) || string.IsNullOrEmpty(sqlArg))
+if (string.IsNullOrEmpty(dbArg) || string.IsNullOrEmpty(sqlArg) == string.IsNullOrEmpty(sqlFileArg))
 {
-    Console.Error.WriteLine("Usage: dotnet-script scripts/execute-sql.csx -- --db <path> --sql \"<statement(s)>\"");
+    Console.Error.WriteLine(
+        "Usage: dotnet-script scripts/testing/execute-sql.csx -- --db <path> (--sql \"<statement(s)>\" | --sql-file <path>)");
     Environment.Exit(1);
     return;
 }
@@ -36,15 +46,24 @@ if (!File.Exists(dbArg))
     return;
 }
 
-using (var connection = new SqliteConnection($"Data Source={dbArg}"))
+if (sqlFileArg is not null && !File.Exists(sqlFileArg))
+{
+    Console.Error.WriteLine($"SQL file not found: {sqlFileArg}");
+    Environment.Exit(1);
+    return;
+}
+
+string sql = sqlFileArg is null ? sqlArg! : File.ReadAllText(sqlFileArg);
+
+using (SqliteConnection connection = new($"Data Source={dbArg}"))
 {
     connection.Open();
-    using (var command = connection.CreateCommand())
+    using (SqliteCommand command = connection.CreateCommand())
     {
-        command.CommandText = sqlArg;
+        command.CommandText = sql;
         try
         {
-            var rowsAffected = command.ExecuteNonQuery();
+            int rowsAffected = command.ExecuteNonQuery();
             Console.WriteLine($"OK — {rowsAffected} row(s) affected.");
         }
         catch (SqliteException ex)
