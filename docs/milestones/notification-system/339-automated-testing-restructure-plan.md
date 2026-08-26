@@ -954,7 +954,7 @@ four for reasons the documents themselves already state:
 | Not executed | Why |
 |---|---|
 | `notifications-and-changelog/01` steps 5 and 8 | Browser-driver steps — DOM reads and a Run → Confirm click. Verified against a real browser during the 2026-08-25 run; a driver, not a shell, performs them |
-| `startup-and-degradation/05` steps 3–4 | Its step 2 fails on the known [#327](https://github.com/DutchJaFO/Quotinator/issues/327) contradiction, and the document says to stop there rather than run the degraded-page steps against a container that never degraded |
+| `startup-and-degradation/05` step 4 | The same browser-driver shape. Its steps 1–3 failed on 2026-08-26 and **pass since the 2026-08-27 rewrite** — see the scope change below |
 
 **Nothing failed in the application.** Every failure was a defect in a test document, and each was
 repaired and re-run:
@@ -973,19 +973,79 @@ repaired and re-run:
 - `api-surface/03`'s import returns `200`, not the `202` the document expected — `newest-wins` resolves
   as it goes, and only `review` stages something.
 
-**Two tests still fail, both already tracked:**
+**`16` and `17` still fail, and that is [#347](https://github.com/DutchJaFO/Quotinator/issues/347).**
+Neither emits a `rule staleness evaluated` / `alias staleness evaluated` line (`evaluationLines=0`,
+measured), so the mechanism's own execution stays unobservable. Row 28 records it.
 
-- `16` and `17` — neither emits a `rule staleness evaluated` / `alias staleness evaluated` line
-  (`evaluationLines=0`, measured), so the mechanism's own execution stays unobservable. That is
-  [#347](https://github.com/DutchJaFO/Quotinator/issues/347), and it is what row 28 records.
-- `startup-and-degradation/05` — `--expect 503` now ends the run at step 2 rather than letting the
-  degraded-page steps run against a healthy container, which is the improvement the conversion brings
-  to an already-known failure.
+---
 
-**One finding that is not this issue's to fix.** `Notifications` is missing from the OpenAPI spec's
-top-level `tags` array while the other six are declared, so the group renders without its description
-and ordering. Nothing is broken. Recorded in `notifications-and-changelog/01`'s *Explicitly not covered
-here* and surfaced to the developer rather than absorbed into an assertion.
+## Scope change — `05`'s premise turned out to be reachable (2026-08-27)
+
+**Added after the developer questioned whether `startup-and-degradation/05` failing meant the
+assumptions behind it were wrong.** They were. Two things were wrong, and the first hid the second.
+
+**First, the conversion changed a pinned variable.** `04` and `05` originally stopped the seeding
+container with `docker stop -t 15` — a clean shutdown, after which SQLite has checkpointed and removed
+the `-wal`/`-shm` sidecars. `reenter` used `docker rm -f`, a SIGKILL that leaves them behind. #326 had
+measured that *sidecar state decides whether a read-only mount degrades*, so this silently changed what
+the two read-only tests were testing. `reenter` now stops cleanly first, and says at the line why.
+
+**Second, and the real finding: the premise was never unreachable.** This document had said since
+2026-08-18 that #294 made the failure state impossible to provoke and that
+[#327](https://github.com/DutchJaFO/Quotinator/issues/327) would have to replace the test. Measured
+2026-08-27, across four combinations:
+
+| `/data` | Migration pending | Sidecars | Result |
+|---|---|---|---|
+| Writable, root `--read-only` | yes | either | `200` healthy — #294's fix working |
+| Read-only | no, already migrated | present | `200` healthy, `SQLite Error 8` logged |
+| **Read-only** | **yes** | absent | **`503` unhealthy, `SQLite Error 14`** |
+| **Read-only** | **yes** | present | **`503` unhealthy** |
+
+The lever was wrong, not the feature. `--read-only` denies the *root filesystem* while leaving `/data`
+writable — which is `04`'s subject and survivable by design. Denying **`/data` itself** with a genuinely
+pending migration degrades every time, and **sidecar state does not decide it**, which narrows #326's
+finding rather than contradicting it.
+
+**It reproduces the original incident's own error code.** `SQLite Error 14: 'unable to open database
+file'` is exactly what the live v1.8.2 → v1.8.3-beta upgrade reported. The old technique could not:
+its own Observed effect recorded `SQLite Error 10: 'disk I/O error'` and conceded "an exact match is not
+expected".
+
+`test-env.csx` gained `--read-only-data`; `05` was rewritten around it and **now passes end to end** —
+steps 1–3 verified live, step 4 being the browser-driver step. It was a failing test blocked on another
+issue; it is neither now. **#327's scope should be revisited rather than assumed** — this implements the
+first of its three proposed scenarios, and the corrupt-database and schema-ahead cases remain its own.
+
+---
+
+## Scope change — the missing OpenAPI tag description (2026-08-27)
+
+**Added by developer direction**, on the finding the run surfaced: `Notifications` was used by two
+operations but absent from the spec's top-level `tags` array, so the group rendered with no description
+and no ordering while the other six had both. Consistency is the point, so it is fixed here rather than
+filed.
+
+One line in `Program.cs`'s document transformer, plus a guard —
+`OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` — confirmed red against the
+unfixed file and green after, and verified on a rebuilt image rather than only in the test: seven tags,
+all described, nothing undeclared. **The guard derives the expected set from the operations' own tags**,
+so a tag added to an endpoint and nowhere else fails on its own rather than waiting for someone to
+remember a list; it also catches a tag declared with an empty description, which renders identically to
+a missing one.
+
+**Documented as [ADR 020](../../architecture-decisions/020-openapi-tags-are-declared-with-descriptions.md)**
+(developer direction: *document and guard it so we don't make the mistake again*). No existing ADR
+reached the tag set — the nearest rules were `CLAUDE.md`'s *Endpoint naming convention* and its
+*OpenAPI and Scalar documentation language* decision — so this is a new one rather than a revision. It
+records why the two mechanisms are independent by construction, and why the guard reads the operations
+rather than a maintained list: a list would reproduce the same manual step that failed, one layer down.
+`CLAUDE.md` gained a matching *Endpoint groups* section beside the naming conventions it belongs with.
+
+**One thing left as an observation, not fixed.** Nothing guards that an ADR is listed in
+`docs/architecture-decisions/README.md`'s index and in `Quotinator.slnx` — both were updated by hand
+here. That is the same class of two-independent-places drift this ADR is about, and worth its own issue
+if the developer wants one.
 
 **`import-and-staged-actions/15` leaves the shared image mutated by design**, and its own Cleanup says
 so. The rule file was reverted with `git checkout`, `quotinator:local` rebuilt from it, and the result

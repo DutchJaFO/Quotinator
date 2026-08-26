@@ -94,12 +94,17 @@ $operations = foreach ($path in $spec.paths.PSObject.Properties) {
 operations' own `tags` arrays rather than matched as text, so the assertion cannot be satisfied by the
 word appearing somewhere unrelated in the document.
 
-**`declaredTags` is printed for information and is not asserted.** Measured 2026-08-26: the spec's
-top-level `tags` array declares six — `System`, `Quotes`, `Admin`, `Import`, `Conversations`,
-`MasterData` — and `Notifications` is not among them, even though operations carry it. That array is
-where a tag's description and ordering come from, so the group renders without either. It is a
-documentation inconsistency rather than a functional defect, it is not what this test is about, and it
-is recorded here rather than absorbed into an assertion — see *Explicitly not covered here*.
+**`declaredTags` names all seven, `Notifications` among them.** It was missing until 2026-08-27 — the
+constant existed and the operations carried it, but the spec's top-level `tags` array declared only the
+other six, so the group rendered with no description and no ordering. Found by reading the live spec
+during #339's PowerShell conversion, and fixed in the same issue.
+
+**The assertion for that now lives at unit tier**, where it belongs:
+`OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` fetches the live
+`/openapi/v1.json` through the full pipeline and checks every tag an operation carries against the
+declared set — derived from the operations themselves, so a tag added to an endpoint and nowhere else
+fails without anyone updating a list. This step prints the tags for context rather than re-asserting
+what a deterministic test already covers.
 
 ### 5. Render the notification pages, and assert on the DOM
 
@@ -243,15 +248,6 @@ Driving the ActionRequired row's **Run → Confirm** performed a full database r
 `799 → 0`, and the notification table emptied with it.
 
 What the container logs while writing the startup notification has still not been recorded.
-
-## Explicitly not covered here
-
-**`Notifications` is missing from the OpenAPI spec's top-level `tags` array**, found while converting
-this document (2026-08-26). The six other tags are declared there; this one exists only on the
-operations that carry it, so Scalar renders the group without the description and ordering that array
-supplies. Nothing is broken — the endpoints are grouped and callable — and it is deliberately left
-un-asserted here rather than quietly folded into step 4, because absorbing a finding into a test is how
-it stops being one. Step 4 prints the declared list so the state is visible on every run.
 
 ## Cleanup
 

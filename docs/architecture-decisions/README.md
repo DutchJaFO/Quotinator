@@ -42,3 +42,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 017 | [017-join-capable-reads-use-joinqueryrepository.md](017-join-capable-reads-use-joinqueryrepository.md) | Join-capable reads use JoinQueryRepository/IJoinStrategy, even without an immediate capability gain |
 | 018 | [018-system-content-in-quotinator-data.md](018-system-content-in-quotinator-data.md) | System-level content (notifications, changelog, future genre) belongs in Quotinator.Data |
 | 019 | [019-central-package-version-management.md](019-central-package-version-management.md) | Every NuGet package version is declared once, centrally |
+| 020 | [020-openapi-tags-are-declared-with-descriptions.md](020-openapi-tags-are-declared-with-descriptions.md) | Every OpenAPI tag an endpoint uses is declared with a description |

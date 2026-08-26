@@ -510,6 +510,23 @@ at runtime and never risks CA1873, so there is no performance tradeoff for tying
 is what actually prevents the "same name spelled out twice with no compiler link" class of drift #269
 introduced (a hardcoded tag duplicating the endpoint's own `WithName`) and #279 fixed.
 
+### Endpoint groups: every tag is declared with a description
+
+**`.WithTags(ApiTags.X)` puts an endpoint in a group; it does not give that group a description or a
+position.** Those come from the document's top-level `tags` array in `Program.cs`'s
+`AddDocumentTransformer`, a separate collection maintained by hand — so **adding an endpoint group is
+not complete until its `document.Tags` entry exists, in the same commit**. See
+[ADR 020](docs/architecture-decisions/020-openapi-tags-are-declared-with-descriptions.md).
+
+A tag used but not declared still renders: bare, undescribed, and after the declared ones. Nothing
+fails. `ApiTags.Notifications` shipped that way and survived two releases before being found by reading
+the live spec (#339). **A declared entry with an empty description is the same defect** — the rule is
+about what a reader sees, not about the array having a row.
+
+`OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` enforces it against the
+real `/openapi/v1.json`, deriving the expected set from the operations' own tags rather than from a
+list in the test — a maintained list would reproduce the same manual step one layer down.
+
 ### Masterdata reference shape
 
 Any FK-valued field on a masterdata response DTO (e.g. a Source's link to its Series, a Character's links

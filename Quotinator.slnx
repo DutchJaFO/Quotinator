@@ -130,6 +130,7 @@
     <File Path="docs/architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md" />
     <File Path="docs/architecture-decisions/018-system-content-in-quotinator-data.md" />
     <File Path="docs/architecture-decisions/019-central-package-version-management.md" />
+    <File Path="docs/architecture-decisions/020-openapi-tags-are-declared-with-descriptions.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />

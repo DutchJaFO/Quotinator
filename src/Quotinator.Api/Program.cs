@@ -81,6 +81,7 @@ builder.Services.AddOpenApi(options =>
             new() { Name = ApiTags.Import,        Description = "Endpoints for importing quote data and reviewing/resolving merge conflicts. Write operations require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter." },
             new() { Name = ApiTags.Conversations, Description = "Endpoints for fetching multi-line conversations (a stage direction and/or sound cue alongside one or more quotes)." },
             new() { Name = ApiTags.MasterData,    Description = "Endpoints for fetching the shared reference data — Sources, Characters, People, Series, and Universes — that quotes and conversations are built from." },
+            new() { Name = ApiTags.Notifications, Description = "Endpoints for listing startup and maintenance notifications, and for dismissing them. Dismissing requires `X-Api-Key` authentication; listing does not." },
         };
 
         document.Info = new()
