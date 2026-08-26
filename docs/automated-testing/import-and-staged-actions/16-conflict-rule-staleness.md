@@ -57,22 +57,33 @@ reseed re-plans against a populated database rather than an empty one.
 ### 3. Reseed, then list the stale actions
 
 ```powershell
+function Get-PurgedTraces {
+  $audit = (Invoke-RestMethod "$base/admin/audit?table=Import_Action&pageSize=0" -Headers $key).items
+  @($audit | Where-Object { $_.operation -eq 'Purged' }).Count
+}
+$purgedBefore = Get-PurgedTraces
+
 dotnet script scripts/testing/http.csx -- --method POST --url "$base/admin/database/reseed" --expect 200 --status
 
 $log = docker logs qt-import-16 2>&1 | Out-String
 "reportLines=$(([regex]::Matches($log, '\[Database - Seed\].*report: ')).Count)"
 $log -split "`n" | Select-String -SimpleMatch 'rule staleness evaluated'
 
-$audit = (Invoke-RestMethod "$base/admin/audit?table=Import_Action&pageSize=0" -Headers $key).items
-"purgedTraces=$(@($audit | Where-Object { $_.operation -eq 'Purged' }).Count)"
-"seedBatches=$((Invoke-RestMethod "$base/import/batches?type=seed").totalCount)"
+$purgedAfter = Get-PurgedTraces
+"purgedTraces=$purgedBefore -> $purgedAfter increased=$($purgedAfter -gt $purgedBefore)"
 
 "stale=$((Invoke-RestMethod "$base/import/actions?status=stale&pageSize=0").totalCount)"
 ```
 
 **Expected:** the reseed returns `200`; `reportLines` is non-zero, one per bundled
 file, each rendering `stale=0`; a line states that rule staleness was **evaluated** and over how many
-rules; `purgedTraces` matches `seedBatches`; and `stale=0`.
+rules; `increased=True`; and `stale=0`.
+
+**The purge traces are compared before and after, not against the batch count.** The first boot
+already purged one set, so after a reseed the total is *two* rounds — measured `4` then `8` on
+2026-08-26 against four bundled files. An equality with the seed-batch count holds only on a fresh boot,
+which is [`17`](17-source-alias-staleness.md)'s step 2, not this one. What this step needs is that the
+reseed's own action rows existed and were removed, and the delta states exactly that.
 
 **Each reading rules out a different way of producing that empty list**, which is why an empty list on
 its own establishes nothing:
@@ -80,7 +91,7 @@ its own establishes nothing:
 | Reading | Rules out |
 |---|---|
 | Report lines present, one per file | The reseed never re-planned anything |
-| `Purged` traces present | The action rows existed and were removed, leaving an empty list behind |
+| `Purged` traces increased | The action rows existed and were removed, leaving an empty list behind |
 | Evaluation line present | The mechanism never compared the rules at all |
 
 **`stale=0` in the report cannot carry the last one.** It is produced identically by *compared the
