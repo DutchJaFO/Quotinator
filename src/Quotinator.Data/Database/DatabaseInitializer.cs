@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Quotinator.Data.Connections;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Logging;
 using Quotinator.Data.Models;
@@ -469,7 +470,8 @@ public class DatabaseInitializer(
             return;
         }
 
-        string? backupPath = CreateBackup(connection, Math.Max(DataSchemaVersion, SchemaVersion));
+        DatabaseBackupResult backup = CreateBackup(connection, Math.Max(DataSchemaVersion, SchemaVersion));
+        string? backupPath = backup.Path;
         try
         {
             await OnInitialisedAsync(connection);
@@ -566,7 +568,8 @@ public class DatabaseInitializer(
             ? [.. await connection.QueryAsync<SystemSchemaVersionRow>(Sql.Schema.GetAllConsumerVersions)]
             : [];
 
-        string? backupPath = CreateBackup(connection, SchemaVersion);
+        DatabaseBackupResult resetBackup = CreateBackup(connection, SchemaVersion);
+        string? backupPath = resetBackup.Path;
 
         try
         {
@@ -631,14 +634,20 @@ public class DatabaseInitializer(
         Logger.LogLegacyFilenameMigrationComplete(_options.DbPath);
     }
 
-    // Storage pre-flight check (#277) — two independent conditions, either enough to skip a backup
-    // (warning logged, no exception, caller proceeds without one): a hard budget on how large the
+    // Storage pre-flight check (#277) — two independent conditions: a hard budget on how large the
     // BackupsPath folder's own accumulated backups may grow ("never exceed our budget," per explicit
     // developer direction — independent of how much real disk space happens to be free), and a real
     // free-space check via IDiskSpaceProvider (so a genuinely full disk is never written to,
-    // regardless of budget headroom). A failure writing the file itself, once both checks pass, is a
-    // distinct condition — DatabaseBackupWriteException, not a skip.
-    private string? CreateBackup(SqliteConnection connection, int fromVersion)
+    // regardless of budget headroom).
+    //
+    // #327: every obstacle is now *reported* rather than some being skipped silently and others thrown
+    // as one undifferentiated exception. A backup exists to make a startup or a destructive action
+    // safe, so failing to take one is a failure to surface with options attached — and the five ways it
+    // can fail have five different remedies, which a caller can only offer if it is told which one it
+    // hit. Attribution is structural, not message-parsing: each step is attempted on its own, so the
+    // failing step names the fault. By the time BackupDatabase runs the destination is already proven
+    // creatable and openable, which is what makes a failure there the source's.
+    internal DatabaseBackupResult CreateBackup(SqliteConnection connection, int fromVersion)
     {
         long estimatedBytes = File.Exists(_options.DbPath) ? new FileInfo(_options.DbPath).Length : 0L;
         long budgetBytes    = _options.MaxBackupStorageGb * 1_073_741_824L;
@@ -649,14 +658,14 @@ public class DatabaseInitializer(
         if (existingBytes + estimatedBytes > budgetBytes)
         {
             Logger.LogBackupSkippedBudgetExceeded(_options.MaxBackupStorageGb, existingBytes, estimatedBytes);
-            return null;
+            return DatabaseBackupResult.Failed(BackupOutcome.BudgetExceeded);
         }
 
         long availableBytes = _diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath);
         if (availableBytes < estimatedBytes)
         {
             Logger.LogBackupSkippedInsufficientDiskSpace(availableBytes, estimatedBytes);
-            return null;
+            return DatabaseBackupResult.Failed(BackupOutcome.InsufficientDiskSpace);
         }
 
         // #289: millisecond precision, not just seconds — found live when #289's migration squash
@@ -672,21 +681,45 @@ public class DatabaseInitializer(
         string backupName = $"{Path.GetFileNameWithoutExtension(_options.DbPath)}_v{fromVersion}_{timestamp}Z.db";
         string backupPath = Path.Combine(_options.BackupsPath, backupName);
 
+        try { Directory.CreateDirectory(_options.BackupsPath); }
+        catch (Exception ex) { return DatabaseBackupResult.Failed(BackupOutcome.DestinationDirectoryNotWritable, ex); }
+
+        Logger.LogBackupStarting(fromVersion, backupPath);
+
+        using SqliteConnection dest = new SqliteConnection($"Data Source={backupPath}");
+        try { dest.Open(); }
+        catch (Exception ex) { return DatabaseBackupResult.Failed(BackupOutcome.DestinationFileNotWritable, ex); }
+
         try
         {
-            Directory.CreateDirectory(_options.BackupsPath);
-            Logger.LogBackupStarting(fromVersion, backupPath);
-            using SqliteConnection dest = new SqliteConnection($"Data Source={backupPath}");
-            dest.Open();
             connection.BackupDatabase(dest);
-            Logger.LogBackupComplete();
-            return backupPath;
+        }
+        catch (SqliteException ex)
+        {
+            // The one place a typed error code is consulted rather than the failing step. A disk that
+            // fills partway through the copy fails at this same statement as an unreadable source, and
+            // reporting a full volume as a corrupt database would send an operator after a fault that
+            // is not there. SqliteErrorCode is a code, not a parsed message.
+            return DatabaseBackupResult.Failed(ClassifyCopyFailure(ex), ex);
         }
         catch (Exception ex)
         {
-            throw new DatabaseBackupWriteException(backupPath, ex);
+            return DatabaseBackupResult.Failed(BackupOutcome.Unclassified, ex);
         }
+
+        Logger.LogBackupComplete();
+        return DatabaseBackupResult.Success(backupPath);
     }
+
+    // SQLITE_NOTADB (26) and SQLITE_CORRUPT (11) are the source; SQLITE_FULL (13) is the volume. Any
+    // other code is reported as unclassified rather than guessed at — an unnamed variant is an
+    // unanswered question, and a wrong name is worse than no name.
+    private static BackupOutcome ClassifyCopyFailure(SqliteException ex) => ex.SqliteErrorCode switch
+    {
+        26 or 11 => BackupOutcome.SourceUnreadable,
+        13       => BackupOutcome.DiskFilledDuringBackup,
+        _        => BackupOutcome.Unclassified,
+    };
 
     // Restores a backup file created by CreateBackup back into the live connection — the reverse
     // direction of the same SQLite online-backup API. Used when a migration attempt fails partway
@@ -774,9 +807,10 @@ public class DatabaseInitializer(
         // skipOwnBackup: DropAndRebuildAsync (Reset) already took its own backup before this call —
         // Data's counter is never wiped by Reset, so this condition would otherwise fire pointlessly
         // (a redundant second backup) on every Reset.
-        string? backupPath = !skipOwnBackup && (dataCurrent > 0 || consumerCurrent > 0)
+        DatabaseBackupResult? migrationBackup = !skipOwnBackup && (dataCurrent > 0 || consumerCurrent > 0)
             ? CreateBackup(connection, Math.Max(dataCurrent, consumerCurrent))
             : null;
+        string? backupPath = migrationBackup?.Path;
 
         // Some migrations recreate a table (SQLite has no ALTER ... CHECK) to widen a constraint,
         // which requires dropping a table that other tables still hold live foreign-key references

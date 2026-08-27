@@ -135,10 +135,28 @@ any of the existing uncommitted code is kept.
 
 ### 3. Finish the outcome type and the call sites
 
-**Status:** ⬜ Partly written, uncommitted, unheld to any test
+**Status:** ✅ Attribution done and held to tests; the refusal it enables is step 4
 
-`BackupOutcome`, `DatabaseBackupResult` and `CreateBackup`'s attribution exist; the three call sites do
-not compile against them yet.
+`BackupOutcome`, `DatabaseBackupResult` and `CreateBackup`'s structural attribution are in, all three
+call sites compile, and the solution builds at 0 warnings. `CreateBackup` is `internal` rather than
+private so `Quotinator.Data.Tests` can put each variant to its own assertion directly; driving five
+different failure states through a full initialisation would test the plumbing rather than the
+attribution, and two of them need injected providers regardless.
+
+**`DatabaseBackupOutcomeTests` — 5 tests, and each was shown able to fail.** They passed on first run,
+because the implementation was written before them (the wrong order, recorded in this plan's Next
+action). Passing was therefore not evidence of anything, so attribution was collapsed to a single
+`Unclassified` for every failure path and the suite re-run: **all four variant tests failed and the
+success control still passed**, which is what the discrimination claim actually rests on.
+
+**One deliberate red is now outstanding, and it must not be "fixed" by editing its expectation.**
+`DatabaseInitializerTests.InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason` fails with
+*"Expected exception of exact type DatabaseBackupWriteException but no exception was thrown"*. That is
+correct and expected at this point: the destination-failure path no longer throws, and nothing has yet
+replaced the throw with a refusal — so startup currently **proceeds unprotected**, which is exactly the
+defect requirement 2 names. The test is the red for step 4; it goes green when the refusal lands, not
+before, and not by changing what it asserts.
+
 
 ### 4. Reset refusal, override, logging and audit
 
@@ -165,8 +183,8 @@ later. No `QTN-` code is allocated here; see the Scope boundary in the issue.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Every backup attempt reports which of the five obstacles it hit | Unit test | `DatabaseBackupOutcomeTests.BudgetExceeded_IsReportedAsBudgetExceeded`, `...InsufficientDiskSpace_IsReportedAsInsufficientDiskSpace`, `...UnwritableBackupsDirectory_IsReportedAsDestinationDirectoryNotWritable`, `...CorruptSourceDatabase_IsReportedAsSourceUnreadable` |
-| 2 | ❌ | An unrecognised failure reports as `Unclassified` and carries the underlying error, rather than being folded into the nearest named variant | Unit test | `DatabaseBackupOutcomeTests.UnrecognisedCopyFailure_IsReportedAsUnclassified_CarryingTheUnderlyingError` |
+| 1 | ✅ | Every backup attempt reports which of the five obstacles it hit | Unit test | `DatabaseBackupOutcomeTests.BudgetExceeded_IsReportedAsBudgetExceeded`, `...InsufficientDiskSpace_IsReportedAsInsufficientDiskSpace`, `...UnwritableBackupsDirectory_IsReportedAsDestinationDirectoryNotWritable`, `...CorruptSourceDatabase_IsReportedAsSourceUnreadable`, plus `...SucceedingBackup_ReportsSucceededAndTheFileItWrote` as the control. Each shown able to fail by collapsing attribution to one outcome — 4 of 5 failed, the control correctly did not |
+| 2 | ❌ | An unrecognised failure reports as `Unclassified` and carries the underlying error, rather than being folded into the nearest named variant | Unit test | `DatabaseBackupOutcomeTests.UnrecognisedCopyFailure_IsReportedAsUnclassified_CarryingTheUnderlyingError` — not yet written. `ClassifyCopyFailure` returns `Unclassified` for any code other than 26/11/13, but an unexercised branch is not a verified one |
 | 3 | ❌ | Startup degrades with the variant named, rather than proceeding unprotected | Unit test | `DatabaseInitializerTests.InitialiseAsync_BackupImpossible_DegradesWithAReasonNamingTheVariant`, `...InitialiseAsync_BackupImpossible_DoesNotProceedUnprotected` |
 | 4 | ❌ | Reset refuses, with a stated failure rather than an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.Reset_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500`, `...ResponseNamesTheCauseAndItsRemedy`, `...DoesNotRebuildTheDatabase` |
 | 5 | ❌ | The override proceeds, and only where the action can complete without a backup | Unit test | `AdminEndpointsTests.Reset_WithOverride_ProceedsAndRebuilds` |
