@@ -1017,6 +1017,7 @@ The five this suite runs on:
 | 03 | [Kestrel serves a wait page during initialisation](startup-and-degradation/03-startup-wait-page.md) | yes |
 | 04 | [Migration replay under restricted write](startup-and-degradation/04-migration-replay-under-restricted-write.md) | no |
 | 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | no |
+| 06 | [A recorded schema version ahead of the build stays healthy](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | no |
 
 ### `notifications-and-changelog/`
 

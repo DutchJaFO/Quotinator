@@ -337,6 +337,7 @@
     <File Path="docs/automated-testing/startup-and-degradation/03-startup-wait-page.md" />
     <File Path="docs/automated-testing/startup-and-degradation/04-migration-replay-under-restricted-write.md" />
     <File Path="docs/automated-testing/startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md" />
+    <File Path="docs/automated-testing/startup-and-degradation/06-schema-version-ahead-of-the-application.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/notifications-and-changelog/">
     <File Path="docs/automated-testing/notifications-and-changelog/01-notification-system.md" />
