@@ -54,12 +54,14 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#324](https://github.com/DutchJaFO/Quotinator/issues/324) | Notification: report when a source update attempt fails | Planning | T1 ⬜ T2 ⬜ | [324-source-refresh-failure-notification-plan.md](324-source-refresh-failure-notification-plan.md) |
 | [#325](https://github.com/DutchJaFO/Quotinator/issues/325) | Source download: no address-family fallback — a black-holed IPv6 path fails the download even though IPv4 works | Waiting for release | T1 ✅ T2 ✅ | [325-address-family-fallback-plan.md](325-address-family-fallback-plan.md) |
 | [#326](https://github.com/DutchJaFO/Quotinator/issues/326) | Startup crashes instead of degrading when the data directory is read-only and a migration is pending | Waiting for release | T1 ✅ T2 ✅ | [326-startup-degrades-on-unwritable-data-directory-plan.md](326-startup-degrades-on-unwritable-data-directory-plan.md) |
-| [#327](https://github.com/DutchJaFO/Quotinator/issues/327) | Smoke tests: prove startup problems degrade rather than crash | Planning | T1 ⬜ T2 ⬜ | [327-startup-degradation-smoke-coverage-plan.md](327-startup-degradation-smoke-coverage-plan.md) |
+| [#327](https://github.com/DutchJaFO/Quotinator/issues/327) | Smoke tests: prove startup problems degrade rather than crash | In progress | T1 ⬜ T2 ⬜ | [327-startup-degradation-smoke-coverage-plan.md](327-startup-degradation-smoke-coverage-plan.md) |
 | [#328](https://github.com/DutchJaFO/Quotinator/issues/328) | Smoke tests: verify bundled imports and endpoint behaviour against a real database | Planning | T1 ⬜ T2 ⬜ | [328-bundled-import-and-live-endpoint-coverage-plan.md](328-bundled-import-and-live-endpoint-coverage-plan.md) |
 | [#329](https://github.com/DutchJaFO/Quotinator/issues/329) | Source refresh: no retry on a marginal connect, and sources download sequentially | Planning | T1 ⬜ T2 ⬜ | [329-source-refresh-retry-and-parallelism-plan.md](329-source-refresh-retry-and-parallelism-plan.md) |
 | [#330](https://github.com/DutchJaFO/Quotinator/issues/330) | File metadata: sidecar and database record for every file we create or inspect | Planning | T1 ⬜ T2 ⬜ | [330-file-metadata-sidecar-and-record-plan.md](330-file-metadata-sidecar-and-record-plan.md) |
 | [#331](https://github.com/DutchJaFO/Quotinator/issues/331) | Source refresh: conditional requests so an unchanged source is not re-downloaded | Planning | T1 ⬜ T2 ⬜ | [331-conditional-source-requests-plan.md](331-conditional-source-requests-plan.md) |
 | [#339](https://github.com/DutchJaFO/Quotinator/issues/339) | Restructure the T2 suite into docs/automated-testing/, one document per test | In progress | T1 ⬜ T2 ✅ | [339-automated-testing-restructure-plan.md](339-automated-testing-restructure-plan.md) |
+| [#348](https://github.com/DutchJaFO/Quotinator/issues/348) | Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable | Planning | T1 ⬜ T2 ⬜ | [348-backup-outcomes-and-refusal-plan.md](348-backup-outcomes-and-refusal-plan.md) |
+| [#349](https://github.com/DutchJaFO/Quotinator/issues/349) | Admin endpoints to list, delete and report status for database backups | Planning | T1 ⬜ T2 ⬜ | [349-backup-management-endpoints-plan.md](349-backup-management-endpoints-plan.md) |
 
 ---
 
@@ -125,11 +127,14 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #326 ─── (none) — independent bug, found while re-checking the smoke tests. Violates the never-crash
          rule: a read-only data directory plus a pending migration exits the process instead of
          degrading. Blocks #327, whose degradation scenarios include this one
-#327 ─── depended on #326, which is now done, so it is unblocked. Replaces the obsolete #293
-         reproduction, whose --read-only technique #294 made survivable. Inherits a corrected premise:
-         #326 measured that WAL sidecar state, not a pending migration, decides whether a read-only
-         mount degrades — so #327's named scenario must pin how the seeding container is stopped or it
-         reproduces only by luck
+#327 ─── depended on #326, which is now done. Now depends on #348: its corrupt- and truncated-database
+         documents are written against the refusal behaviour that issue delivers, since a document
+         asserting today's unhandled 500 would have to be rewritten a week later. Replaces the obsolete
+         #293 reproduction, whose --read-only technique #294 made survivable. Inherits a corrected
+         premise: #326 measured that WAL sidecar state, not a pending migration, decides whether a
+         read-only mount degrades. #339 has already delivered its requirement 1 and its first scenario
+         (the rewritten startup-and-degradation/05), so what remains is two documents, one overshoot
+         document, and the in-process cases — which are written and green
 #328 ─── (none) — covers two guarantees no unit test can reach: bundled content imports cleanly, and
          endpoints behave correctly against a real database rather than the stubs the endpoint tests
          deliberately use
@@ -153,6 +158,17 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
          Blocks #327 and #328, which author their documents into that structure rather than into the
          monolith it removes. Revises ADR 010 in place (test-only scripts move to scripts/testing/)
          and resolves the live-only Definition-of-done gap in issues.md that #328 hits
+#348 ─── (none) — found by #327 while measuring whether a stated recovery route can actually succeed.
+         Blocks #327's two remaining degradation documents. A backup exists to make a startup or a
+         destructive action safe, so a backup that cannot be taken becomes a reported failure with
+         options rather than a silent skip (two variants today) or an unhandled 500 (three more). Also
+         replaces the storage arithmetic, which decides a hard yes/no from a size SQLite's page-level
+         copy does not guarantee, with a 90% operating quota plus a reserve to the absolute ceiling.
+         Soft-relates to #349, which supplies the in-app remedy its messages point at — either order
+#349 ─── depends on nothing; #348's remedy text names its endpoints once they exist and the manual
+         option until then, so the two can land either way round. Adds GET/DELETE /admin/backups and
+         GET /admin/backups/status under a new Backup tag — the first new endpoint group since ADR 020,
+         so it is also that rule's first live application. Restoring a backup is explicitly future work
 #313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
          this milestone could be trusted, because Api tests asserted before the app finished starting
          (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
@@ -181,29 +197,32 @@ step, the other reuses it.
 | 7 | **#309** ✅ | Done. T1 confirmed live (2026-08-19) surfaced four further defects — all fixed and verified; see steps 14–18 in its plan doc. T2 green the same day |
 | 8 | **#326** ✅ | Done, `Waiting for release`. All 12 verification rows green including T1 and a T2 controlled pair. It also corrected its own premise, which #327 inherits: sidecar state decides whether a read-only mount degrades, **not** a pending migration |
 | 9 | **#339** | Restructures the T2 suite into `docs/automated-testing/` and defines the three run scopes. Placed ahead of #327 and #328 so both author into the new structure rather than editing a monolith that is then split around them. Scope grew twice after its audit: the environment profiles every document declares, then the requirement that every test can actually fail. Blocked on #347 for its last verification row |
-| 10 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. #326 is done, so it is unblocked. Must pin the WAL sidecar state explicitly — its named scenario does not reproduce reliably otherwise, and #326's plan doc carries the measurement |
-| 11 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above |
-| 12 | **#329** | Retry and parallelism for source downloads. After the smoke-test issues, which close a verification gap; before #324, which consumes its statistics |
-| 13 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
-| 14 | **#319** | Translated title/body. Before every producer below, each of which writes new user-facing text |
-| 15 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. Independent of everything above it, and #331 below cannot start without it |
-| 16 | **#331** | Conditional requests, storing validators in #330's shape. Lands before #324 so the source-download subsystem is finished before anything reports on it |
-| 17 | **#324** | Reports on the finished source-download subsystem. Last in that cluster, so it is written once rather than revised as #329/#330/#331 land |
-| 18 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
-| 19 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
-| 20 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 21 | **#305** | Independent bug; can slot in anywhere |
-| 22 | **#306** | Independent bug; can slot in anywhere |
-| 23 | **#308** | Per-type layout across both surfaces. Last, because it cannot settle those layouts before the producers that need them exist |
+| 10 | **#348** | Backup outcomes and refusal. Ahead of #327 because that issue's corrupt- and truncated-database documents assert against the behaviour this one delivers; writing them first means writing them twice. Found by #327 itself, while measuring whether a stated recovery route can actually succeed |
+| 11 | **#349** | Backup list/delete/status endpoints — the in-app remedy #348's messages point at, and what lets an operator resolve a full backup folder without filesystem access. Either order relative to #348; placed after it so the remedy text is written once against endpoints that exist |
+| 12 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. #326 is done and #339 has already delivered its requirement 1 and first scenario, so what remains is the corrupt, truncated and overshoot documents — the first two waiting on #348. Must pin the WAL sidecar state explicitly; #326's plan doc carries the measurement |
+| 13 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above |
+| 14 | **#329** | Retry and parallelism for source downloads. After the smoke-test issues, which close a verification gap; before #324, which consumes its statistics |
+| 15 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
+| 16 | **#319** | Translated title/body. Before every producer below, each of which writes new user-facing text |
+| 17 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. Independent of everything above it, and #331 below cannot start without it |
+| 18 | **#331** | Conditional requests, storing validators in #330's shape. Lands before #324 so the source-download subsystem is finished before anything reports on it |
+| 19 | **#324** | Reports on the finished source-download subsystem. Last in that cluster, so it is written once rather than revised as #329/#330/#331 land |
+| 20 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 21 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 22 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 23 | **#305** | Independent bug; can slot in anywhere |
+| 24 | **#306** | Independent bug; can slot in anywhere |
+| 25 | **#308** | Per-type layout across both surfaces. Last, because it cannot settle those layouts before the producers that need them exist |
 
 ---
 
 ## PR merge plan
 
-All twenty-three issues are self-contained on top of already-released infrastructure (#278, #80, #154,
+All twenty-five issues are self-contained on top of already-released infrastructure (#278, #80, #154,
 #156) — none leave anything half-wired if merged independently, except #81 (which genuinely cannot
 merge before #309 and #307), #319 (which cannot merge before #312), #331 (which cannot merge before
-#330) and #327/#328 (which cannot merge before #339). Those are real implementation-order
-dependencies, not just sequencing preferences.
+#330), #328 (which cannot merge before #339), and #327 (which cannot merge before #339 for its
+structure, nor before #348 for the behaviour its corrupt- and truncated-database documents assert).
+Those are real implementation-order dependencies, not just sequencing preferences.
 Default assumption per `process.md`: the branch stays open until all issues in the milestone are done,
 then one PR — no known reason to depart from that default.
