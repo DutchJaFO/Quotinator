@@ -1,6 +1,6 @@
 # #348 — Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #348
 **Tiers required:** T1, T2
 **Depends on:** none — found by #327, blocks #327's two remaining degradation documents
@@ -25,7 +25,7 @@ not just whether a stated recovery route is reachable, but whether it can succee
 
 ## Next action
 
-**Write the verification checklist and the red tests named in the issue, before any more implementation.**
+**Write the red tests named in the checklist below, before any more implementation.**
 
 Part of the shape is already written on the `feature/notification-system` branch, from before the work
 was split out of #327: `BackupOutcome`, `DatabaseBackupResult`, and `CreateBackup` rewritten to attribute
@@ -90,7 +90,7 @@ warning log line, and an audit entry, so nobody hunts for a backup that was neve
 
 ### 1. Write the verification checklist
 
-**Status:** ⬜ Not started
+**Status:** ✅ Written — 14 rows, one per requirement, plus the design note the out-of-range case needed
 
 Every requirement in the issue gets a row, per `process.md`'s Planning step 5.
 
@@ -133,5 +133,36 @@ later. No `QTN-` code is allocated here; see the Scope boundary in the issue.
 
 ## Verification checklist
 
-**Not yet written — this is step 1, and implementation does not resume until it exists.** Recorded as an
-explicit gap rather than an empty table, so the doc's own state says what the next action is.
+| # | Status | Requirement | Method | Verification |
+|---|--------|-------------|--------|--------------|
+| 1 | ❌ | Every backup attempt reports which of the five obstacles it hit | Unit test | `DatabaseBackupOutcomeTests.BudgetExceeded_IsReportedAsBudgetExceeded`, `...InsufficientDiskSpace_IsReportedAsInsufficientDiskSpace`, `...UnwritableBackupsDirectory_IsReportedAsDestinationDirectoryNotWritable`, `...CorruptSourceDatabase_IsReportedAsSourceUnreadable` |
+| 2 | ❌ | An unrecognised failure reports as `Unclassified` and carries the underlying error, rather than being folded into the nearest named variant | Unit test | `DatabaseBackupOutcomeTests.UnrecognisedCopyFailure_IsReportedAsUnclassified_CarryingTheUnderlyingError` |
+| 3 | ❌ | Startup degrades with the variant named, rather than proceeding unprotected | Unit test | `DatabaseInitializerTests.InitialiseAsync_BackupImpossible_DegradesWithAReasonNamingTheVariant`, `...InitialiseAsync_BackupImpossible_DoesNotProceedUnprotected` |
+| 4 | ❌ | Reset refuses, with a stated failure rather than an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.Reset_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500`, `...ResponseNamesTheCauseAndItsRemedy`, `...DoesNotRebuildTheDatabase` |
+| 5 | ❌ | The override proceeds, and only where the action can complete without a backup | Unit test | `AdminEndpointsTests.Reset_WithOverride_ProceedsAndRebuilds` |
+| 6 | ❌ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.Reset_WithOverride_LogsThatTheBackupWasSkipped`, `...WritesAnAuditEntryRecordingTheSkip`. `AuditOperation.BackupSkipped` needs no migration — `Audit_Entry.Operation` is `TEXT NOT NULL` with no CHECK constraint (verified 2026-08-27), so ADR 008's checklist does not apply |
+| 7 | ❌ | A healthy database is entirely unaffected | Unit test | `AdminEndpointsTests.Reset_WhenBackupSucceeds_IsUnchanged` — the regression control for the whole change |
+| 8 | ❌ | A caller can ask whether a backup is possible without attempting one, in the same variant vocabulary | Unit test | `DatabaseBackupPreflightTests.CanCreateBackup_WhenNothingObstructsIt_ReportsThatItCan`, `...WhenBudgetIsAlreadyExhausted_ReportsTheVariantAnAttemptWouldReport`, `...WhenTheDestinationIsNotWritable_ReportsTheVariantAnAttemptWouldReport` |
+| 9 | ❌ | The operating quota is honoured, the reserve is reachable only by override, and the ceiling never is | Unit test | `DatabaseBackupQuotaTests.UsageBelowTheQuota_TakesTheBackupWithoutComment`, `...UsageAtTheQuota_IsReported_AndDoesNotUseTheReserveByDefault`, `...UsageAtTheQuota_WithOverride_UsesTheReserveAndTakesTheBackup`, `...UsageAtTheAbsoluteCeiling_IsRefusedEvenWithOverride` |
+| 10 | ❌ | The quota percentage is configurable and defaults to 90 | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_IsConfigurable_AndDefaultsTo90` |
+| 11 | ❌ | An out-of-range percentage is reported loudly and the default used — never silently clamped, and never a crash | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_OutOfRange_IsAConfigurationErrorNotSilentlyClamped`. See the design note below: throwing would breach the never-crash contract, so "not silently" is satisfied by a warning naming the value and the accepted range |
+| 12 | ❌ | Each variant's message states symptom, cause and remedy | Live | Read per variant. The property #333's sweep needs in order to write a Knowledgebase entry without guesswork; no `QTN-` code is allocated here, per #333 requirement 8's precedent |
+| 13 | ❌ | The two existing tests whose expectation changes are updated deliberately, not to make a red run pass | Unit test | `CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` (asserts today that seeding proceeds — the behaviour this issue reverses) and `InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason` (asserts `DatabaseBackupWriteException` exactly) |
+| 14 | ❌ | The corrupt and truncated databases that started this are actually recoverable end to end | Live | T2: with the fix in place, a corrupt database's Reset succeeds or refuses with a workable remedy — the measurement #327 made, re-run |
+
+---
+
+## Design note — an out-of-range quota percentage must not crash
+
+The issue says an out-of-range value is "a configuration error, not something to clamp silently".
+Taken literally that suggests throwing, which would breach the never-crash contract this milestone is
+built around: a typo in one tuning value must not stop the application starting.
+
+The project's existing precedent is the opposite extreme — an unrecognised `Quotinator:LogLevel` falls
+back to `Information` **silently**, with no warning at all (`Program.cs`'s `switch`). Neither extreme is
+right here, and the precedent is not adopted just because it exists.
+
+**Resolved:** report it loudly — a warning naming the supplied value and the accepted range — and use
+the default. That is not a silent clamp, and it is not a crash. The triage question in
+`docs/knowledgebase.md` supports treating it this way: a wrong quota percentage does not prevent the
+application or the API from functioning.
