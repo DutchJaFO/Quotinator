@@ -1,8 +1,12 @@
+using System.Data;
 using System.Net;
+using Dapper;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Startup;
+using Quotinator.Data.Connections;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Paths;
 
 namespace Quotinator.Api.Tests.Startup;
@@ -109,6 +113,76 @@ public class StartupResilienceTests
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, $"{route} must render degraded UI, not 500");
     }
 
+    /// <summary>
+    /// #327 — a database file that is not a database at all. Distinct from the unopenable-path case
+    /// above: there SQLite cannot reach a file, here it reaches one and rejects its contents, which is
+    /// what a half-written or externally-corrupted volume actually produces.
+    /// </summary>
+    [TestMethod]
+    public void Startup_DatabaseFileCorrupt_EntersDegradedStateInsteadOfCrashing()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase();
+
+        using HttpClient client = factory.CreateClient();
+
+        Assert.IsTrue(
+            factory.Services.GetRequiredService<StartupPhaseState>().IsComplete,
+            "startup never completed — the process died rather than degrading, which is the outcome the "
+            + "never-crash contract forbids");
+    }
+
+    [TestMethod]
+    public async Task Startup_DatabaseFileCorrupt_HealthReportsUnhealthyRatherThanBeingUnreachable()
+    {
+        using WebApplicationFactory<Program> factory = FactoryWithCorruptDatabase();
+
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+        string body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("unhealthy", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// #327/#289 — a recorded schema version ahead of this build is deliberately **not** a degradation.
+    /// The schema is complete and only the counter is stale, so the contract is the opposite of every
+    /// other case here: healthy, plus a notification saying what happened. Asserting 503 would either
+    /// fail or get "fixed" by breaking correct behaviour.
+    /// </summary>
+    [TestMethod]
+    public async Task Startup_SchemaVersionAheadOfApplication_StaysHealthyAndSurfacesTheOvershoot()
+    {
+        string dataDirectory = NewDataDirectory();
+
+        // A real, fully migrated database first. The overshoot #289 describes is a stale counter on a
+        // complete schema; bumping the counter of an empty directory would test a database that never
+        // migrated at all, which is a different thing that happens to set the same flag.
+        using (WebApplicationFactory<Program> firstRun = FactoryFor(dataDirectory))
+        {
+            using HttpClient warmUp = firstRun.CreateClient();
+        }
+
+        RecordASchemaVersionAheadOfThisBuild(dataDirectory);
+
+        using WebApplicationFactory<Program> factory = FactoryFor(dataDirectory);
+        using HttpClient client = factory.CreateClient();
+
+        HttpResponseMessage health = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
+        Assert.AreEqual(
+            HttpStatusCode.OK, health.StatusCode,
+            "an overshoot is not a fault — the schema is complete and the app works normally, so "
+            + "degrading here would be the regression, not the safeguard");
+
+        HttpResponseMessage notifications = await client.GetAsync(NotificationsRoute, TestContext.CancellationToken);
+        string body = await notifications.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.Contains(
+            NotificationMetadataKind.SchemaVersionOvershoot.ToString(), body, StringComparison.OrdinalIgnoreCase,
+            "the overshoot was detected but never surfaced, so an operator has no way to learn their "
+            + "version bookkeeping is stale");
+    }
+
     [TestMethod]
     public async Task Startup_KeysDirectoryCannotBeCreated_StartsDegradedInsteadOfCrashingBeforeKestrelBinds()
     {
@@ -130,6 +204,39 @@ public class StartupResilienceTests
     }
 
     private const string HealthRoute = "/api/v1/health";
+    private const string NotificationsRoute = "/api/v1/notifications";
+
+    private WebApplicationFactory<Program> FactoryWithCorruptDatabase()
+    {
+        string dataDirectory = NewDataDirectory();
+        // Bytes that are not a SQLite file: the 16-byte header check fails and SQLite reports
+        // SQLITE_NOTADB. Deliberately not a truncated real database — that reports SQLITE_CORRUPT from
+        // a different code path, and producing one in-process would mean seeding a database first only
+        // to chop it, which is slower and pins less. The container scenario covers truncation.
+        File.WriteAllText(
+            Path.Combine(dataDirectory, DataPaths.DatabaseFile),
+            "this file is not a SQLite database");
+
+        return FactoryFor(dataDirectory);
+    }
+
+    /// <summary>
+    /// Records one version beyond whatever this build actually migrated to, rather than a literal —
+    /// the suite's rule that no test asserts or depends on a specific migration number applies here
+    /// too, and a literal would need editing every time a milestone adds a migration.
+    /// </summary>
+    private static void RecordASchemaVersionAheadOfThisBuild(string dataDirectory)
+    {
+        using IDbConnection connection =
+            new SqliteConnectionFactory(Path.Combine(dataDirectory, DataPaths.DatabaseFile)).CreateConnection();
+
+        int recorded = connection.ExecuteScalar<int>(
+            "SELECT COALESCE(MAX(Version), 0) FROM System_ConsumerSchemaVersion;");
+
+        connection.Execute(
+            "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (@v, @at);",
+            new { v = recorded + 1, at = DateTimeOffset.UtcNow.ToString("O") });
+    }
 
     private WebApplicationFactory<Program> FactoryWithUnopenableDatabase()
     {
