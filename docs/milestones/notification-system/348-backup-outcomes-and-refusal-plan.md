@@ -25,14 +25,17 @@ not just whether a stated recovery route is reachable, but whether it can succee
 
 ## Next action
 
-**Write the red tests named in the checklist below, before any more implementation.**
+**Build the endpoint half: the Reset response, its remedy text, and the override's audit entry.**
 
-Part of the shape is already written on the `feature/notification-system` branch, from before the work
-was split out of #327: `BackupOutcome`, `DatabaseBackupResult`, and `CreateBackup` rewritten to attribute
-each failure structurally. That code is uncommitted and the build is red — three call sites still expect
-the old `string?`. It was written ahead of its tests, which is the wrong order; the checklist and the
-red tests come first, and the existing code is then held to them rather than assumed correct because it
-exists.
+`Quotinator.Data` now reports *which* obstacle stopped a backup and refuses rather than proceeding
+unprotected. What is missing is everything above that line: `POST /admin/database/reset` still returns
+its old shape, so a refusal has no way to reach a caller as `200`-means-success-and-anything-else-
+explains-itself; the per-variant remedy text does not exist; and an override that skips a backup logs it
+but writes no audit entry.
+
+The remedy text belongs in the Api layer, not in `Quotinator.Data` — that project is domain-agnostic per
+ADR 004 and has no business deciding what an operator is told, which is also what keeps the text
+localisable later.
 
 ---
 
@@ -126,7 +129,7 @@ Every requirement in the issue gets a row, per `process.md`'s Planning step 5.
 
 ### 2. Write the red tests
 
-**Status:** ⬜ Not started
+**Status:** ⬜ Twelve written and green; the endpoint-layer ones wait on the endpoint existing
 
 The fourteen named in the issue, plus the two whose expectation changes deliberately
 (`CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` and
