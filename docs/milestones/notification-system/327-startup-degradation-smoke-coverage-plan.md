@@ -66,7 +66,7 @@ the verification checklist still hold them to their result.
 
 ### 1. Record the scope change on the issue
 
-**Status:** ⬜ Not started
+**Status:** ✅ Posted 2026-08-27 — covers both scope changes, #339's delivery and the #348/#349 split
 
 Per `process.md`'s *Scope changes and deferrals*: a comment on #327 stating what #339 delivered, so the
 issue page reflects the actual scope before it is closed against it. The Scope change section above is
@@ -140,7 +140,7 @@ green.
 
 ### 4. Establish the overshoot scenario's real contract
 
-**Status:** ✅ Confirmed by measurement — `200 healthy` plus the notification, as predicted
+**Status:** ✅ Confirmed in-process, then verified live in a container by [`06`](../../automated-testing/startup-and-degradation/06-schema-version-ahead-of-the-application.md)
 
 A database whose recorded version is ahead of the build is **not** a degradation case and must not
 assert the degraded contract. `DatabaseInitializer` detects it deliberately and continues
@@ -249,13 +249,21 @@ from drifting are part of this step, not a follow-up to it.
 
 ### 12. Propose the smoke-set designation
 
-**Status:** ⬜ Not started
+**Status:** ⬜ Partly done — `06` proposed as `Smoke: no` from its own run; the other two follow when they exist
 
 Deferred to after the runs by developer decision (2026-08-27), rather than proposed up front: the
 question is whether either failure is basic enough that its breaking would invalidate other results,
-and the runs are what answer that. Both documents carry a provisional `Smoke: no` until then — the
-field cannot be left blank, since the template check and
-`SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` both require it.
+and the runs are what answer that. Every document carries a `Smoke:` value regardless — the field cannot
+be left blank, since the template check and `SmokeSetInTheIndex_MatchesTheDocumentsMarkedSmoke` both
+require it.
+
+**`06` — proposed `no`, with the run behind it.** The smoke set answers *does this container
+fundamentally work*, and a test belongs in it when its failure would invalidate most other results.
+`06`'s run showed the opposite: the application is entirely healthy under an overshoot — `/health` at
+`200`, quote endpoints serving normally — so nothing else in the suite depends on this test passing. It
+also needs a hand-built state (a stopped container plus a SQL insert) that no other test's setup
+produces, which is the shape of a targeted scenario rather than a baseline check. Matches `01`, `02`,
+`04` and `05`, all `no`; only `03` (the wait page) is in the set for this category.
 
 ### 13. Run the new documents and the smoke set
 
@@ -278,10 +286,10 @@ the two new documents sit beside it.
 | 5 | ❌ | Each scenario states the reachable recovery route and whether it can succeed | Live | **`05` done**: its Observed effect states the route is reachable but a Reset cannot fix it, and step 2 asserts the reason names `Restore write access` — confirmed `True` live. Stays ❌ until the other documents do the same |
 | 6 | ❌ | Scenarios are independent — own container, volume, port, seed and teardown | Unit test | `RepositoryStructureTests.EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother` covers the port half; the rest by reading each document's `create`/`destroy` pair |
 | 7 | ❌ | Corrupt/truncated database scenario reaches its failure state | Live | Confirmed degraded by a step that checks it, not inferred from the recipe |
-| 8 | ❌ | Overshoot scenario asserts healthy plus the overshoot notification, not the degraded contract | Live | `/health` 200; the notification is present |
-| 9 | ❌ | No scenario asserts a migration number or schema version | Live | Read per document, not a bare `grep` — the overshoot document necessarily discusses versions, and what must be absent is a literal, not the word |
+| 8 | ✅ | Overshoot scenario asserts healthy plus the overshoot notification, not the degraded contract | Live | [`06`](../../automated-testing/startup-and-degradation/06-schema-version-ahead-of-the-application.md) — run end to end 2026-08-27: `/health` `200`, `found=True`, `type=actionrequired`, `bodyNamesTheRemedy=True`, and the detection line in the log |
+| 9 | ❌ | No scenario asserts a migration number or schema version | Live | `06` holds: it inserts `MAX(Version) + 1` rather than a literal, and the versions in its Observed effect are marked as observed output, not assertions. Stays ❌ until the other two documents exist |
 | 10 | ✅ | In-process cases extend `StartupResilienceTests`, and each is shown able to fail | Unit test | `Startup_DatabaseFileCorrupt_EntersDegradedStateInsteadOfCrashing`, `Startup_DatabaseFileCorrupt_HealthReportsUnhealthyRatherThanBeingUnreachable`, `Startup_SchemaVersionAheadOfApplication_StaysHealthyAndSurfacesTheOvershoot` — 12/12 green. Two shown able to fail by negative control; the first is a regression guard nothing can provoke on demand, recorded as such in step 5 rather than implied |
 | 11 | ❌ | Each new document carries #339's template fields including Determinism and its smoke designation | Unit test | `EveryAutomatedTestingDocument_NamesAKnownEnvironmentProfile`, `EveryAutomatedTestingStep_CarriesItsOwnExpectedResult`, `EveryAutomatedTestingCodeBlock_IsPowerShell`, plus a field check against the template |
 | 12 | ❌ | Both documents are linked from the index and every link resolves | Unit test | `EveryAutomatedTestingDocument_IsLinkedFromTheIndex`, `EveryAutomatedTestingIndexLink_ResolvesToAnExistingDocument`, `EveryAutomatedTestingCrossReference_ResolvesToAnExistingDocument` |
 | 13 | ❌ | The smoke designation is proposed from what the runs showed, and approved | Live | Proposal recorded in step 11 with the run that justifies it; developer decision recorded here |
-| 14 | ❌ | The scope change is recorded on the GitHub issue, so the spec reflects what #327 actually delivered | Live | Comment on #327 naming requirement 1 and requirement 6's first scenario as delivered by #339 |
+| 14 | ✅ | The scope change is recorded on the GitHub issue, so the spec reflects what #327 actually delivered | Live | Comment posted 2026-08-27 covering both scope changes — what #339 delivered, and the split into #348/#349 |
