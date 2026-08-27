@@ -344,7 +344,8 @@ string backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: 
     ? customBackupPath
     : Path.Combine(dataDir, DataPaths.BackupsFolder);
 int             maxBackupStorageGb = builder.Configuration.GetValue("Quotinator:MaxBackupStorageGb", 1);
-DatabaseOptions dbOptions          = new() { DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb };
+int             backupQuotaPercent = builder.Configuration.GetValue("Quotinator:BackupQuotaPercent", DatabaseOptions.DefaultBackupQuotaPercent);
+DatabaseOptions dbOptions          = new() { DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb, BackupQuotaPercent = backupQuotaPercent };
 // useMemoryTempStore: true — see SqliteConnectionFactory.cs's own comment for the #294 incident this
 // opts into working around. Safe here because Quotinator's own dataset (hundreds to low-thousands of
 // quotes) makes the resulting RAM cost negligible; Quotinator.Data itself stays unopinionated and

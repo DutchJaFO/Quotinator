@@ -50,7 +50,7 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public bool SchemaVersionOvershootDetected => false;
 
     /// <inheritdoc/>
-    public BackupOutcome CheckBackupReadiness() => BackupOutcome.Succeeded;
+    public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
 
     /// <inheritdoc/>
     public IReadOnlyList<FileImportReport> LastSeedReport => [];

@@ -81,7 +81,7 @@ public class StartupSummaryLoggerTests
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
 
-        public BackupOutcome CheckBackupReadiness() => BackupOutcome.Succeeded;
+        public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
         public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
         public Task<SeedPreviewResult> PreviewSeedAsync() =>

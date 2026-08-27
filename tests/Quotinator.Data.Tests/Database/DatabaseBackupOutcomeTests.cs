@@ -111,6 +111,36 @@ public class DatabaseBackupOutcomeTests
         Assert.IsNotNull(result.Error);
     }
 
+    /// <summary>
+    /// Covers the copy failing with something that is not a <see cref="SqliteException"/> at all — the
+    /// generic catch, not the unrecognised-error-code path.
+    /// <para>
+    /// <strong>Verified by mutation, because both paths return the same member and a passing test could
+    /// not tell them apart.</strong> Changing the generic catch's return fails this test; that is what
+    /// establishes which branch it reaches. <c>ClassifyCopyFailure</c>'s own <c>_ =&gt;</c> default —
+    /// a real <see cref="SqliteException"/> carrying a code other than 26, 11 or 13 — stays
+    /// unexercised, because provoking one on demand needs a SQLite failure mode this fixture cannot
+    /// produce. Recorded as a known gap rather than claimed as covered.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void CopyFailureThatIsNotASqliteError_IsReportedAsUnclassified_CarryingTheUnderlyingError()
+    {
+        // A closed source connection: the copy cannot even begin. What matters is what happens with a
+        // failure the classifier has no name for — report it as unnamed and carry the error, rather
+        // than pick whichever named variant looks closest. An operator can act on "we do not know, here
+        // is the error"; they cannot act on a confident wrong answer.
+        using SqliteConnection connection = SeededDatabase();
+        connection.Close();
+        DatabaseInitializer initializer = CreateInitializer();
+
+        DatabaseBackupResult result = initializer.CreateBackup(connection, fromVersion: 1);
+
+        Assert.AreEqual(BackupOutcome.Unclassified, result.Outcome);
+        Assert.IsNotNull(result.Error, "an unnamed variant is only actionable if it carries the real error");
+        Assert.IsNull(result.Path);
+    }
+
     [TestMethod]
     public void SucceedingBackup_ReportsSucceededAndTheFileItWrote()
     {

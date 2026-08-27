@@ -525,7 +525,11 @@ public class DatabaseInitializer(
         // #348: check before acting. A Reset drops every table, so it is the last operation that should
         // run without a restore point — and a full backup folder or an unwritable destination is an
         // ordinary condition with a remedy, not something to discover by throwing halfway through.
-        BackupOutcome readiness = CheckBackupReadiness();
+        // allowNoBackup is the operator accepting responsibility, so it also unlocks the reserve — and
+        // that ordering matters: a Reset blocked only by the operating quota should take a real backup
+        // out of the reserve rather than run with none at all. Proceeding unprotected is the last
+        // resort, not the first thing the override reaches for.
+        BackupOutcome readiness = CheckBackupReadiness(allowReserve: allowNoBackup);
         if (readiness != BackupOutcome.Succeeded && !allowNoBackup)
         {
             Logger.LogResetRefusedNoBackup(readiness.ToString());
@@ -543,15 +547,17 @@ public class DatabaseInitializer(
     }
 
     /// <inheritdoc/>
-    public BackupOutcome CheckBackupReadiness()
+    public BackupOutcome CheckBackupReadiness(bool allowReserve = false)
     {
-        long budgetBytes   = _options.MaxBackupStorageGb * 1_073_741_824L;
+        long ceilingBytes  = _options.MaxBackupStorageGb * 1_073_741_824L;
+        long limitBytes    = allowReserve ? ceilingBytes : ceilingBytes * EffectiveQuotaPercent() / 100L;
         long existingBytes = ExistingBackupBytes();
 
-        // The ceiling is the fact that can be known exactly: what is already on disk. What a new backup
-        // will *add* is not knowable — SQLite copies pages, so the source file's length only
-        // approximates the result — which is why this checks headroom rather than fit.
-        if (existingBytes >= budgetBytes)
+        // Headroom, not fit. What is already on disk can be known exactly; what a new backup will *add*
+        // cannot — SQLite copies pages, so the source file's length only approximates the result. The
+        // reserve between the quota and the ceiling is what absorbs that uncertainty, and reaching into
+        // it is the caller's explicit choice rather than something this check makes for them.
+        if (existingBytes >= limitBytes)
             return BackupOutcome.BudgetExceeded;
 
         if (_diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath) <= 0L)
@@ -561,6 +567,20 @@ public class DatabaseInitializer(
         catch (Exception) { return BackupOutcome.DestinationDirectoryNotWritable; }
 
         return BackupOutcome.Succeeded;
+    }
+
+    // An out-of-range quota is a configuration error, and it is neither clamped silently nor allowed to
+    // stop the application: a typo in one tuning value must not breach the never-crash contract. It is
+    // reported loudly and the default is used instead — which is a different thing from quietly
+    // rounding it into range, where the operator would never learn their setting was ignored.
+    private int EffectiveQuotaPercent()
+    {
+        int configured = _options.BackupQuotaPercent;
+        if (configured is > 0 and <= 100)
+            return configured;
+
+        Logger.LogBackupQuotaPercentOutOfRange(configured, DatabaseOptions.DefaultBackupQuotaPercent);
+        return DatabaseOptions.DefaultBackupQuotaPercent;
     }
 
     private long ExistingBackupBytes() => Directory.Exists(_options.BackupsPath)

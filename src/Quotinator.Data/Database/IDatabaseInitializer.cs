@@ -80,8 +80,14 @@ public interface IDatabaseInitializer
     /// handled around the attempt itself.
     /// </para>
     /// </summary>
+    /// <param name="allowReserve">
+    /// When <c>true</c>, measures against the absolute ceiling rather than the operating quota,
+    /// reaching into the reserve between them. Never a default: the reserve exists so an operator who
+    /// has reached the normal quota still has room for the one backup they most need, which only works
+    /// if routine operation cannot consume it.
+    /// </param>
     /// <returns><see cref="BackupOutcome.Succeeded"/> when a backup can be taken; otherwise the obstacle.</returns>
-    BackupOutcome CheckBackupReadiness();
+    BackupOutcome CheckBackupReadiness(bool allowReserve = false);
 
     /// <summary>Ensures WAL mode is active, applies any pending schema migrations, and seeds the database from source files if empty.</summary>
     /// <returns>

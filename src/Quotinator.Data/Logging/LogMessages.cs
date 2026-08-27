@@ -86,6 +86,10 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] reset proceeding WITHOUT a backup ({Obstacle}) — the caller accepted responsibility. There is no restore point for this reset; do not look for one later")]
     public static partial void LogResetProceedingWithoutBackup(this ILogger logger, string obstacle);
 
+    /// <summary>Logs that the configured backup quota percentage is out of range and the default is being used (#348).</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] Quotinator:BackupQuotaPercent is {Configured}, which is outside 1-100 — using the {Default}% default instead. The configured value is ignored, not adjusted; correct it to take effect")]
+    public static partial void LogBackupQuotaPercentOutOfRange(this ILogger logger, int configured, int @default);
+
     /// <summary>Logs that the separate changelog database's schema is already fully up to date — no migration needed.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Init] schema is up to date (v{Version})")]
     public static partial void LogChangelogSchemaUpToDate(this ILogger logger, int version);
