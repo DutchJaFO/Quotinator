@@ -84,6 +84,36 @@ variant and its remedy — never an unhandled `500`. The override means the oper
 responsibility **and** the action can complete without a backup. A skipped backup is recorded twice: a
 warning log line, and an audit entry, so nobody hunts for a backup that was never made.
 
+### How a refusal travels — a result, not an exception
+
+**Developer direction, 2026-08-27**, correcting this plan's first reading:
+
+> *"We only use exceptions when there is no other method of detecting the issue. Anything else simply
+> needs a response that declares success/failure + reason. This is why we use the status check to see if
+> we can do a backup. We still handle exceptions as despite the status check we may still get
+> exceptions."*
+
+So the order is **check, then act, then still catch**:
+
+1. **Check.** The pre-flight reports whether a backup can be taken, in the variant vocabulary. This is
+   the normal path and it involves no exception, because a full backup folder is an ordinary operating
+   condition rather than an exceptional one.
+2. **Act.** `CreateBackup` returns a result declaring success or failure plus the reason. A caller that
+   must refuse returns its own failure result; it does not throw to communicate a condition it already
+   knows about.
+3. **Still catch.** The check cannot foresee everything — the state can change between checking and
+   acting, and a genuinely unforeseen failure is exactly what an exception is for. Exceptions remain
+   handled, as the backstop rather than as the mechanism.
+
+**The endpoint contract, same direction:** `200` means the endpoint did what was asked. Any other status
+is an error whose **response content carries the reason and the potential solutions, if any**. A refusal
+is therefore a non-2xx with the variant, its cause, and the remedies — naming which are actionable
+through [#349](https://github.com/DutchJaFO/Quotinator/issues/349)'s endpoints and which are not.
+
+This replaces the "typed exception caught at the endpoint boundary" this plan first proposed. That shape
+would have made an expected, recoverable condition travel as an exception purely because the existing
+startup path already threw — reasoning from what the code does rather than from what the condition is.
+
 ---
 
 ## Steps
