@@ -4,6 +4,14 @@
 **Environment:** Fresh
 **Traces to:** #327, #289
 
+> **⚠ This document asserts a contract that is being reversed.**
+> [#350](https://github.com/DutchJaFO/Quotinator/issues/350) establishes that an overshoot must
+> **degrade** rather than run healthy: the missing migrations may have added, altered or removed things
+> this build does not expect, so the schema's shape is unknown and serving from it is a foot gun. Every
+> assertion below about `/health` returning `200` — and the step 3 note telling you not to "fix" a `503`
+> — is superseded by that issue, which owns rewriting this document. It is left in place meanwhile
+> because deleting it before its replacement exists would trade a wrong test for no test.
+
 ## Preconditions
 
 **Beyond the profile.** The database is the one the Fresh profile's own startup creates, fully migrated,

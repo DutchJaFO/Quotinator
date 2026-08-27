@@ -62,6 +62,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#339](https://github.com/DutchJaFO/Quotinator/issues/339) | Restructure the T2 suite into docs/automated-testing/, one document per test | In progress | T1 ⬜ T2 ✅ | [339-automated-testing-restructure-plan.md](339-automated-testing-restructure-plan.md) |
 | [#348](https://github.com/DutchJaFO/Quotinator/issues/348) | Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable | Planning | T1 ⬜ T2 ⬜ | [348-backup-outcomes-and-refusal-plan.md](348-backup-outcomes-and-refusal-plan.md) |
 | [#349](https://github.com/DutchJaFO/Quotinator/issues/349) | Admin endpoints to list, delete and report status for database backups | Planning | T1 ⬜ T2 ⬜ | [349-backup-management-endpoints-plan.md](349-backup-management-endpoints-plan.md) |
+| [#350](https://github.com/DutchJaFO/Quotinator/issues/350) | A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown | Planning | T1 ⬜ T2 ⬜ | [350-overshoot-must-degrade-plan.md](350-overshoot-must-degrade-plan.md) |
 
 ---
 
@@ -169,6 +170,12 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
          option until then, so the two can land either way round. Adds GET/DELETE /admin/backups and
          GET /admin/backups/status under a new Backup tag — the first new endpoint group since ADR 020,
          so it is also that rule's first live application. Restoring a backup is explicitly future work
+#350 ─── (none) — found by #327, which built the first coverage of the overshoot state and asserted the
+         behaviour this issue reverses. Overturns #289's continue-and-notify design: an overshoot means
+         this build does not know what the missing migrations did, so the schema's shape is unknown and
+         the app must degrade rather than serve from it. Owns rewriting startup-and-degradation/06 and
+         replacing the in-process test #327 added, so #327 does not touch either again. Names restoring
+         an older backup as a second remedy alongside Reset, which #349 records as future work
 #313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
          this milestone could be trusted, because Api tests asserted before the app finished starting
          (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
@@ -199,26 +206,27 @@ step, the other reuses it.
 | 9 | **#339** | Restructures the T2 suite into `docs/automated-testing/` and defines the three run scopes. Placed ahead of #327 and #328 so both author into the new structure rather than editing a monolith that is then split around them. Scope grew twice after its audit: the environment profiles every document declares, then the requirement that every test can actually fail. Blocked on #347 for its last verification row |
 | 10 | **#348** | Backup outcomes and refusal. Ahead of #327 because that issue's corrupt- and truncated-database documents assert against the behaviour this one delivers; writing them first means writing them twice. Found by #327 itself, while measuring whether a stated recovery route can actually succeed |
 | 11 | **#349** | Backup list/delete/status endpoints — the in-app remedy #348's messages point at, and what lets an operator resolve a full backup folder without filesystem access. Either order relative to #348; placed after it so the remedy text is written once against endpoints that exist |
-| 12 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. #326 is done and #339 has already delivered its requirement 1 and first scenario, so what remains is the corrupt, truncated and overshoot documents — the first two waiting on #348. Must pin the WAL sidecar state explicitly; #326's plan doc carries the measurement |
-| 13 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above |
-| 14 | **#329** | Retry and parallelism for source downloads. After the smoke-test issues, which close a verification gap; before #324, which consumes its statistics |
-| 15 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
-| 16 | **#319** | Translated title/body. Before every producer below, each of which writes new user-facing text |
-| 17 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. Independent of everything above it, and #331 below cannot start without it |
-| 18 | **#331** | Conditional requests, storing validators in #330's shape. Lands before #324 so the source-download subsystem is finished before anything reports on it |
-| 19 | **#324** | Reports on the finished source-download subsystem. Last in that cluster, so it is written once rather than revised as #329/#330/#331 land |
-| 20 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
-| 21 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
-| 22 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 23 | **#305** | Independent bug; can slot in anywhere |
-| 24 | **#306** | Independent bug; can slot in anywhere |
-| 25 | **#308** | Per-type layout across both surfaces. Last, because it cannot settle those layouts before the producers that need them exist |
+| 12 | **#350** | Overshoot must degrade, not run healthy. Placed beside the other two safe-start fixes rather than with the coverage work: it changes application behaviour, and #327's overshoot document is rewritten against the result. Reverses #289's shipped continue-and-notify design |
+| 13 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. #326 is done and #339 delivered its requirement 1 and first scenario; the overshoot document and its in-process test now belong to #350, leaving the corrupt and truncated documents, both waiting on #348. Must pin the WAL sidecar state explicitly; #326's plan doc carries the measurement |
+| 14 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above |
+| 15 | **#329** | Retry and parallelism for source downloads. After the smoke-test issues, which close a verification gap; before #324, which consumes its statistics |
+| 16 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
+| 17 | **#319** | Translated title/body. Before every producer below, each of which writes new user-facing text |
+| 18 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. Independent of everything above it, and #331 below cannot start without it |
+| 19 | **#331** | Conditional requests, storing validators in #330's shape. Lands before #324 so the source-download subsystem is finished before anything reports on it |
+| 20 | **#324** | Reports on the finished source-download subsystem. Last in that cluster, so it is written once rather than revised as #329/#330/#331 land |
+| 21 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 22 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 23 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 24 | **#305** | Independent bug; can slot in anywhere |
+| 25 | **#306** | Independent bug; can slot in anywhere |
+| 26 | **#308** | Per-type layout across both surfaces. Last, because it cannot settle those layouts before the producers that need them exist |
 
 ---
 
 ## PR merge plan
 
-All twenty-five issues are self-contained on top of already-released infrastructure (#278, #80, #154,
+All twenty-six issues are self-contained on top of already-released infrastructure (#278, #80, #154,
 #156) — none leave anything half-wired if merged independently, except #81 (which genuinely cannot
 merge before #309 and #307), #319 (which cannot merge before #312), #331 (which cannot merge before
 #330), #328 (which cannot merge before #339), and #327 (which cannot merge before #339 for its

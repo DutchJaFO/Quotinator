@@ -145,10 +145,14 @@ public class StartupResilienceTests
     }
 
     /// <summary>
-    /// #327/#289 — a recorded schema version ahead of this build is deliberately **not** a degradation.
-    /// The schema is complete and only the counter is stale, so the contract is the opposite of every
-    /// other case here: healthy, plus a notification saying what happened. Asserting 503 would either
-    /// fail or get "fixed" by breaking correct behaviour.
+    /// #327/#289 — asserts the shipped behaviour: an overshoot runs healthy, plus a notification.
+    /// <para>
+    /// <strong>This contract is being reversed by #350.</strong> An overshoot means the missing
+    /// migrations may have added, altered or removed things this build does not expect, so the schema's
+    /// shape is unknown and serving from it is a foot gun. #350 makes it degrade, and <em>replaces</em>
+    /// this test rather than editing it — the method name states the old contract, and flipping the
+    /// assertion in place would leave a name that lies about what it checks.
+    /// </para>
     /// </summary>
     [TestMethod]
     public async Task Startup_SchemaVersionAheadOfApplication_StaysHealthyAndSurfacesTheOvershoot()
