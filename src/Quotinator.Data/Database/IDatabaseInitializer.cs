@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Data.Database;
@@ -69,8 +70,26 @@ public interface IDatabaseInitializer
     /// </summary>
     IReadOnlyList<FileImportReport> LastSeedReport { get; }
 
+    /// <summary>
+    /// Whether a backup can be taken right now, and if not, which obstacle is in the way (#348).
+    /// <para>
+    /// Cheap and read-mostly — it inspects storage headroom and whether the destination can be written,
+    /// never database content — so a caller can ask before acting rather than discovering the answer by
+    /// failing. It cannot see every obstacle: an unreadable source only reveals itself to an actual
+    /// attempt, and the state can change between checking and acting, which is why exceptions are still
+    /// handled around the attempt itself.
+    /// </para>
+    /// </summary>
+    /// <returns><see cref="BackupOutcome.Succeeded"/> when a backup can be taken; otherwise the obstacle.</returns>
+    BackupOutcome CheckBackupReadiness();
+
     /// <summary>Ensures WAL mode is active, applies any pending schema migrations, and seeds the database from source files if empty.</summary>
-    Task InitialiseAsync();
+    /// <returns>
+    /// Whether initialisation completed, and if not, which backup obstacle stopped it. A backup that
+    /// cannot be taken refuses rather than proceeding unprotected: the schema change would then be
+    /// unrecoverable, which is the outcome the backup exists to prevent.
+    /// </returns>
+    Task<DatabaseOperationResult> InitialiseAsync();
 
     /// <summary>Clears all data tables and reimports from all configured source files. Schema migration history is preserved. Updates the row-count properties when done.</summary>
     /// <param name="forceSourceRefresh">
@@ -91,7 +110,19 @@ public interface IDatabaseInitializer
     /// and replayed from scratch. Defaults to <c>false</c>, matching the historical behaviour.
     /// </param>
     /// <param name="forceSourceRefresh">Same meaning as <see cref="ReseedAsync"/>'s parameter of the same name.</param>
-    Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false);
+    /// <param name="allowNoBackup">
+    /// When <c>true</c>, proceeds even though no backup could be taken. Two things at once: the caller
+    /// accepts responsibility for there being no restore point, <em>and</em> asserts the action can
+    /// complete without one. Never a default, and the skip is recorded in the log and the audit trail so
+    /// nobody later hunts for a backup that was never made.
+    /// </param>
+    /// <returns>
+    /// Whether the reset ran, and if not, which backup obstacle refused it. Refusing is a result rather
+    /// than an exception: a full backup folder is an ordinary operating condition with remedies, not an
+    /// unforeseen fault.
+    /// </returns>
+    Task<DatabaseOperationResult> ResetAsync(
+        bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false);
 
     /// <summary>
     /// Scans all configured source files without touching the database and returns a preview of what a

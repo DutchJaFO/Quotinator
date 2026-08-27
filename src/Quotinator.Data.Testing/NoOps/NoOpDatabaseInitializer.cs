@@ -1,4 +1,5 @@
 using Quotinator.Data.Database;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Data.Testing.NoOps;
@@ -49,16 +50,19 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public bool SchemaVersionOvershootDetected => false;
 
     /// <inheritdoc/>
+    public BackupOutcome CheckBackupReadiness() => BackupOutcome.Succeeded;
+
+    /// <inheritdoc/>
     public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
     /// <inheritdoc/>
-    public Task InitialiseAsync() => Task.CompletedTask;
+    public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
 
     /// <inheritdoc/>
     public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
 
     /// <inheritdoc/>
-    public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false) => Task.CompletedTask;
+    public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
 
     /// <inheritdoc/>
     public Task<SeedPreviewResult> PreviewSeedAsync()

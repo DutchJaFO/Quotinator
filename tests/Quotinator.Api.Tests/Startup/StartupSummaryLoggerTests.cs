@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Serilog;
@@ -78,9 +79,11 @@ public class StartupSummaryLoggerTests
         public string? MigrationApplied => migrationApplied;
         public bool SchemaVersionOvershootDetected => false;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
-        public Task InitialiseAsync()                    => Task.CompletedTask;
+        public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
+
+        public BackupOutcome CheckBackupReadiness() => BackupOutcome.Succeeded;
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
-        public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false) => Task.CompletedTask;
+        public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
         public Task<SeedPreviewResult> PreviewSeedAsync() =>
             Task.FromResult(new SeedPreviewResult([], []));
         public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false) =>

@@ -31,7 +31,7 @@ public class ProgramNotificationSeedingRegressionTests
     [TestMethod]
     public async Task Health_NoOpDatabaseInitializer_StaysHealthyDespiteMissingNotificationTable()
     {
-        using var factory = new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
+        using WebApplicationFactory<Program> factory = new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
@@ -41,7 +41,7 @@ public class ProgramNotificationSeedingRegressionTests
                 // non-existent System_Notification table doesn't propagate.
             }));
 
-        var response = await factory.CreateClient().GetAsync("/api/v1/health", TestContext.CancellationToken);
+        HttpResponseMessage response = await factory.CreateClient().GetAsync("/api/v1/health", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("{\"status\":\"healthy\"}", await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
@@ -58,9 +58,9 @@ public class ProgramNotificationSeedingRegressionTests
     [TestMethod]
     public async Task Startup_SchemaVersionOvershootDetected_SeedsActionRequiredNotification()
     {
-        var writer = new FakeNotificationWriter();
+        FakeNotificationWriter writer = new FakeNotificationWriter();
 
-        using var factory = new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
+        using WebApplicationFactory<Program> factory = new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
@@ -69,12 +69,12 @@ public class ProgramNotificationSeedingRegressionTests
                 services.AddSingleton<Quotinator.Data.Repositories.INotificationReader>(new FakeNotificationReader());
             }));
 
-        using var client = factory.CreateClient();
+        using HttpClient client = factory.CreateClient();
         await client.GetAsync("/api/v1/health", TestContext.CancellationToken);
 
         // #279's own unconditional operation-id-rename notification also seeds whenever dbHealth is
         // healthy, alongside this one — assert on the specific #289 message, not the total count.
-        var overshootMessage = writer.WrittenMessages.SingleOrDefault(m => m.Contains("data v3") && m.Contains("app v5"));
+        string? overshootMessage = writer.WrittenMessages.SingleOrDefault(m => m.Contains("data v3") && m.Contains("app v5"));
         Assert.IsNotNull(overshootMessage, "the schema-version-overshoot notification must have been seeded");
     }
 
@@ -89,7 +89,7 @@ public class ProgramNotificationSeedingRegressionTests
     [TestMethod]
     public async Task Stats_DatabaseDegraded_RendersWithoutQueryingFileResourceOrImportBatchRepositories()
     {
-        using var factory = new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
+        using WebApplicationFactory<Program> factory = new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
@@ -100,8 +100,8 @@ public class ProgramNotificationSeedingRegressionTests
                 services.AddSingleton<IImportBatchRepository>(new ThrowingImportBatchRepository());
             }));
 
-        using var client = factory.CreateClient();
-        var response = await client.GetAsync("/stats", TestContext.CancellationToken);
+        using HttpClient client = factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync("/stats", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode,
             "the /stats page must render successfully while degraded, not crash from a live query against not-yet-created tables");
@@ -123,9 +123,11 @@ public class ProgramNotificationSeedingRegressionTests
         public string? MigrationApplied => null;
         public bool SchemaVersionOvershootDetected => false;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
-        public Task InitialiseAsync() => throw new InvalidOperationException("simulated migration failure");
+        public Task<DatabaseOperationResult> InitialiseAsync() => throw new InvalidOperationException("simulated migration failure");
+
+        public BackupOutcome CheckBackupReadiness() => BackupOutcome.Succeeded;
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
-        public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false) => Task.CompletedTask;
+        public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
         public Task<SeedPreviewResult> PreviewSeedAsync() => Task.FromResult(new SeedPreviewResult([], []));
         public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false) => Task.FromResult(new SourceCacheResolution([], []));
     }
@@ -180,9 +182,11 @@ public class ProgramNotificationSeedingRegressionTests
         public string? MigrationApplied => null;
         public bool SchemaVersionOvershootDetected => true;
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
-        public Task InitialiseAsync() => Task.CompletedTask;
+        public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
+
+        public BackupOutcome CheckBackupReadiness() => BackupOutcome.Succeeded;
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
-        public Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false) => Task.CompletedTask;
+        public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
         public Task<SeedPreviewResult> PreviewSeedAsync() => Task.FromResult(new SeedPreviewResult([], []));
         public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false) => Task.FromResult(new SourceCacheResolution([], []));
     }

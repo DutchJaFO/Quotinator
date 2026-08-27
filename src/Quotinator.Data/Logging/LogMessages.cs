@@ -74,6 +74,18 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] skipping backup — insufficient free disk space ({AvailableBytes} available, {EstimatedBytes} estimated bytes needed)")]
     public static partial void LogBackupSkippedInsufficientDiskSpace(this ILogger logger, long availableBytes, long estimatedBytes);
 
+    /// <summary>Logs that seeding refused to run because no backup could be taken (#348).</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Backup] seeding refused — no backup could be taken ({Obstacle}). Proceeding would leave a schema change with no restore point, so the database is left untouched and startup degrades")]
+    public static partial void LogSeedRefusedNoBackup(this ILogger logger, string obstacle);
+
+    /// <summary>Logs that a Reset refused to run because no backup could be taken (#348).</summary>
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Backup] reset refused — no backup could be taken ({Obstacle}). A reset drops every table, so it does not run without a restore point unless the caller explicitly accepts that")]
+    public static partial void LogResetRefusedNoBackup(this ILogger logger, string obstacle);
+
+    /// <summary>Logs that a Reset ran without a backup because the caller explicitly accepted the risk (#348).</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] reset proceeding WITHOUT a backup ({Obstacle}) — the caller accepted responsibility. There is no restore point for this reset; do not look for one later")]
+    public static partial void LogResetProceedingWithoutBackup(this ILogger logger, string obstacle);
+
     /// <summary>Logs that the separate changelog database's schema is already fully up to date — no migration needed.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Init] schema is up to date (v{Version})")]
     public static partial void LogChangelogSchemaUpToDate(this ILogger logger, int version);

@@ -389,7 +389,7 @@ public class DatabaseInitializer(
     protected static SemaphoreSlim SharedSeedLock => SeedLock;
 
     /// <inheritdoc/>
-    public async Task InitialiseAsync()
+    public async Task<DatabaseOperationResult> InitialiseAsync()
     {
         MigrateFilenameIfNeeded();
 
@@ -398,7 +398,11 @@ public class DatabaseInitializer(
 
         EnableWal(connection);
         bool tookBaselinePath = await ApplyMigrationsAsync(connection);
-        await RunInitialisedHookAsync(connection, tookBaselinePath);
+        BackupOutcome? obstacle = await RunInitialisedHookAsync(connection, tookBaselinePath);
+
+        return obstacle is null
+            ? DatabaseOperationResult.Success()
+            : DatabaseOperationResult.RefusedForBackup(obstacle.Value);
     }
 
     /// <summary>
@@ -462,16 +466,26 @@ public class DatabaseInitializer(
     // following a Reset, where MigrationApplied stays null (Reset sets schema-version counters
     // directly via the baseline path) even though content-seed genuinely has real work to do. A
     // genuinely fresh (baseline) database has nothing to lose and is still skipped outright.
-    private async Task RunInitialisedHookAsync(SqliteConnection connection, bool tookBaselinePath)
+    private async Task<BackupOutcome?> RunInitialisedHookAsync(SqliteConnection connection, bool tookBaselinePath)
     {
         if (tookBaselinePath || !await SafeHasPendingContentSeedAsync(connection))
         {
             await OnInitialisedAsync(connection);
-            return;
+            return null;
         }
 
         DatabaseBackupResult backup = CreateBackup(connection, Math.Max(DataSchemaVersion, SchemaVersion));
-        string? backupPath = backup.Path;
+
+        // #348: no backup, no destructive step. Seeding writes content this database cannot get back
+        // if it goes wrong, and the backup is the only thing that could have got it back — so
+        // proceeding "anyway" trades a recoverable stop for an unrecoverable one. The caller degrades
+        // and reports which obstacle it was; it does not throw, because nothing here is unforeseen.
+        if (!backup.Succeeded)
+        {
+            Logger.LogSeedRefusedNoBackup(backup.Outcome.ToString());
+            return backup.Outcome;
+        }
+
         try
         {
             await OnInitialisedAsync(connection);
@@ -479,13 +493,15 @@ public class DatabaseInitializer(
         catch (Exception ex)
         {
             Logger.LogError(ex, "[Database - Init] seeding failed — restoring pre-seed backup, database left unchanged...");
-            if (backupPath is not null)
+            if (backup.Path is not null)
             {
-                RestoreBackup(connection, backupPath);
+                RestoreBackup(connection, backup.Path);
                 Logger.LogInformation("[Database - Init] pre-seed backup restored.");
             }
             throw;
         }
+
+        return null;
     }
 
     /// <inheritdoc/>
@@ -503,12 +519,53 @@ public class DatabaseInitializer(
     protected virtual Task OnReseedAsync(SqliteConnection connection, bool forceSourceRefresh) => Task.CompletedTask;
 
     /// <inheritdoc/>
-    public async Task ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false)
+    public async Task<DatabaseOperationResult> ResetAsync(
+        bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false)
     {
+        // #348: check before acting. A Reset drops every table, so it is the last operation that should
+        // run without a restore point — and a full backup folder or an unwritable destination is an
+        // ordinary condition with a remedy, not something to discover by throwing halfway through.
+        BackupOutcome readiness = CheckBackupReadiness();
+        if (readiness != BackupOutcome.Succeeded && !allowNoBackup)
+        {
+            Logger.LogResetRefusedNoBackup(readiness.ToString());
+            return DatabaseOperationResult.RefusedForBackup(readiness);
+        }
+
         using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
         await connection.OpenAsync();
+
+        if (readiness != BackupOutcome.Succeeded)
+            Logger.LogResetProceedingWithoutBackup(readiness.ToString());
+
         await OnResetAsync(connection, preserveSchemaVersion, forceSourceRefresh);
+        return DatabaseOperationResult.Success(backupSkippedByOverride: readiness != BackupOutcome.Succeeded);
     }
+
+    /// <inheritdoc/>
+    public BackupOutcome CheckBackupReadiness()
+    {
+        long budgetBytes   = _options.MaxBackupStorageGb * 1_073_741_824L;
+        long existingBytes = ExistingBackupBytes();
+
+        // The ceiling is the fact that can be known exactly: what is already on disk. What a new backup
+        // will *add* is not knowable — SQLite copies pages, so the source file's length only
+        // approximates the result — which is why this checks headroom rather than fit.
+        if (existingBytes >= budgetBytes)
+            return BackupOutcome.BudgetExceeded;
+
+        if (_diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath) <= 0L)
+            return BackupOutcome.InsufficientDiskSpace;
+
+        try { Directory.CreateDirectory(_options.BackupsPath); }
+        catch (Exception) { return BackupOutcome.DestinationDirectoryNotWritable; }
+
+        return BackupOutcome.Succeeded;
+    }
+
+    private long ExistingBackupBytes() => Directory.Exists(_options.BackupsPath)
+        ? Directory.EnumerateFiles(_options.BackupsPath).Sum(f => new FileInfo(f).Length)
+        : 0L;
 
     /// <summary>
     /// Called by <see cref="ResetAsync"/>. Override to replace the default no-op with a

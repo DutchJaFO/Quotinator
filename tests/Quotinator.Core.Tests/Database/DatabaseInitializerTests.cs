@@ -2148,21 +2148,23 @@ public class DatabaseInitializerTests
     }
 
     [TestMethod]
-    public async Task CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException()
+    public async Task CreateBackup_InsufficientStorageSpace_RefusesToSeedRatherThanProceedUnprotected()
     {
         QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
         await db1.InitialiseAsync();
 
         SeedBatch batch = SimpleQuoteBatch();
         QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
-        await db2.InitialiseAsync();
+        DatabaseOperationResult result = await db2.InitialiseAsync();
 
+        Assert.IsFalse(result.Succeeded, "seeding must not proceed when no backup could be taken");
+        Assert.AreEqual(BackupOutcome.InsufficientDiskSpace, result.BackupObstacle);
         Assert.AreEqual(0, BackupFileCount(), "Backup must be skipped, not written, when real free space is insufficient");
 
         using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote WHERE IsDeleted = 0;");
-        Assert.AreEqual(1, quoteCount, "Seeding must still proceed even when the backup was skipped");
+        Assert.AreEqual(0, quoteCount, "the database is left untouched rather than half-seeded with no restore point");
     }
 
     [TestMethod]
@@ -2179,7 +2181,7 @@ public class DatabaseInitializerTests
     }
 
     [TestMethod]
-    public async Task InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason()
+    public async Task InitialiseAsync_BackupWriteFails_ReportsTheObstacleRatherThanThrowing()
     {
         QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
         await db1.InitialiseAsync();
@@ -2188,10 +2190,16 @@ public class DatabaseInitializerTests
         // at that exact path, so creating it as a directory throws IOException.
         File.WriteAllText(_backups, "blocker");
 
-        QuotinatorDatabaseInitializer db2 = CreateInitializer([], useBaseline: true);
-        DatabaseBackupWriteException ex = await Assert.ThrowsExactlyAsync<DatabaseBackupWriteException>(() => db2.InitialiseAsync());
+        SeedBatch batch = SimpleQuoteBatch();
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true);
+        DatabaseOperationResult result = await db2.InitialiseAsync();
 
-        Assert.IsInstanceOfType<IOException>(ex.InnerException);
+        // #348 replaced the DatabaseBackupWriteException this used to assert. The destination being
+        // unwritable is detected, not unforeseen, so it is reported rather than thrown — and it is
+        // reported as its own variant, distinguishable from a budget ceiling or an unreadable source,
+        // which the single exception type could not express.
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual(BackupOutcome.DestinationDirectoryNotWritable, result.BackupObstacle);
     }
 
     [TestMethod]

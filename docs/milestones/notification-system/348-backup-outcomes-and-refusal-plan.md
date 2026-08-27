@@ -160,7 +160,7 @@ before, and not by changing what it asserts.
 
 ### 4. Reset refusal, override, logging and audit
 
-**Status:** ⬜ Not started
+**Status:** ⬜ Refusal and the pre-flight are in; the override's audit entry and the endpoint response are not
 
 Includes a new `AuditOperation.BackupSkipped`.
 
@@ -185,7 +185,7 @@ later. No `QTN-` code is allocated here; see the Scope boundary in the issue.
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | Every backup attempt reports which of the five obstacles it hit | Unit test | `DatabaseBackupOutcomeTests.BudgetExceeded_IsReportedAsBudgetExceeded`, `...InsufficientDiskSpace_IsReportedAsInsufficientDiskSpace`, `...UnwritableBackupsDirectory_IsReportedAsDestinationDirectoryNotWritable`, `...CorruptSourceDatabase_IsReportedAsSourceUnreadable`, plus `...SucceedingBackup_ReportsSucceededAndTheFileItWrote` as the control. Each shown able to fail by collapsing attribution to one outcome — 4 of 5 failed, the control correctly did not |
 | 2 | ❌ | An unrecognised failure reports as `Unclassified` and carries the underlying error, rather than being folded into the nearest named variant | Unit test | `DatabaseBackupOutcomeTests.UnrecognisedCopyFailure_IsReportedAsUnclassified_CarryingTheUnderlyingError` — not yet written. `ClassifyCopyFailure` returns `Unclassified` for any code other than 26/11/13, but an unexercised branch is not a verified one |
-| 3 | ❌ | Startup degrades with the variant named, rather than proceeding unprotected | Unit test | `DatabaseInitializerTests.InitialiseAsync_BackupImpossible_DegradesWithAReasonNamingTheVariant`, `...InitialiseAsync_BackupImpossible_DoesNotProceedUnprotected` |
+| 3 | ✅ | Startup refuses rather than proceeding unprotected, naming the variant | Unit test | `DatabaseInitializerTests.CreateBackup_InsufficientStorageSpace_RefusesToSeedRatherThanProceedUnprotected` and `...InitialiseAsync_BackupWriteFails_ReportsTheObstacleRatherThanThrowing` — both assert the result's `BackupObstacle` and that the database is left untouched. Reporting the variant *to the operator* as a degraded health reason is the Api layer's half and is row 12 |
 | 4 | ❌ | Reset refuses, with a stated failure rather than an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.Reset_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500`, `...ResponseNamesTheCauseAndItsRemedy`, `...DoesNotRebuildTheDatabase` |
 | 5 | ❌ | The override proceeds, and only where the action can complete without a backup | Unit test | `AdminEndpointsTests.Reset_WithOverride_ProceedsAndRebuilds` |
 | 6 | ❌ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.Reset_WithOverride_LogsThatTheBackupWasSkipped`, `...WritesAnAuditEntryRecordingTheSkip`. `AuditOperation.BackupSkipped` needs no migration — `Audit_Entry.Operation` is `TEXT NOT NULL` with no CHECK constraint (verified 2026-08-27), so ADR 008's checklist does not apply |
@@ -195,7 +195,7 @@ later. No `QTN-` code is allocated here; see the Scope boundary in the issue.
 | 10 | ❌ | The quota percentage is configurable and defaults to 90 | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_IsConfigurable_AndDefaultsTo90` |
 | 11 | ❌ | An out-of-range percentage is reported loudly and the default used — never silently clamped, and never a crash | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_OutOfRange_IsAConfigurationErrorNotSilentlyClamped`. See the design note below: throwing would breach the never-crash contract, so "not silently" is satisfied by a warning naming the value and the accepted range |
 | 12 | ❌ | Each variant's message states symptom, cause and remedy | Live | Read per variant. The property #333's sweep needs in order to write a Knowledgebase entry without guesswork; no `QTN-` code is allocated here, per #333 requirement 8's precedent |
-| 13 | ❌ | The two existing tests whose expectation changes are updated deliberately, not to make a red run pass | Unit test | `CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` (asserts today that seeding proceeds — the behaviour this issue reverses) and `InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason` (asserts `DatabaseBackupWriteException` exactly) |
+| 13 | ✅ | The two existing tests whose expectation changes are updated deliberately, not to make a red run pass | Unit test | Both rewritten with names stating the new contract, not edited assertions under old names: `CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` → `..._RefusesToSeedRatherThanProceedUnprotected`, and `InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason` → `..._ReportsTheObstacleRatherThanThrowing`. Each carries a comment saying what changed and why, so neither reads as a test bent to fit |
 | 14 | ❌ | The corrupt and truncated databases that started this are actually recoverable end to end | Live | T2: with the fix in place, a corrupt database's Reset succeeds or refuses with a workable remedy — the measurement #327 made, re-run |
 
 ---
