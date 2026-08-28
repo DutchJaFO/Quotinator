@@ -39,6 +39,9 @@
 //   --read-only           Run with a read-only root filesystem, leaving /data writable. Since #294 the
 //                         application survives this — migration temp files never touch disk — so it is
 //                         the flag for proving that, not for provoking a failure.
+//   --tmpfs-data <size>   Mount /data as a tmpfs with a hard size ceiling (e.g. 6m), replacing the
+//                         volume or bind entirely. For provoking a genuinely full disk mid-write; the
+//                         data does not survive the container, which is fine for that purpose only.
 //   --read-only-data      Mount /data itself read-only. This is the one that degrades: with a genuinely
 //                         pending migration the initializer cannot write, and reports 503 with
 //                         SQLite Error 14 — the original incident's own error code. Measured
@@ -186,6 +189,15 @@ settings.AddRange(Values("--env").Select(e => $"-e {e}"));
 
 string publish  = port is null ? "" : $"-p {port}:8080 ";
 string readOnly = Flag("--read-only") ? "--read-only " : "";
+
+// #348: a data directory with a hard size ceiling, for the backup case that needs the volume to run
+// out of space *during* a write rather than before it. tmpfs because a bind mount inherits the host
+// filesystem's free space, which no test can control. It replaces the mount entirely — the data is
+// gone when the container is, which is the point: this is for provoking a full disk, never for a
+// scenario that needs its database to survive a restart.
+string? tmpfsSize = Value("--tmpfs-data");
+if (tmpfsSize is not null)
+    mount = $"--mount type=tmpfs,destination=/data,tmpfs-size={tmpfsSize}";
 
 Run($"run -d --name {name} {publish}{readOnly}{mount} {string.Join(" ", settings)} {image}");
 

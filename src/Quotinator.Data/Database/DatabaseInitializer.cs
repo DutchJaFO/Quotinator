@@ -555,6 +555,13 @@ public class DatabaseInitializer(
         {
             await OnResetAsync(connection, preserveSchemaVersion, forceSourceRefresh);
         }
+        // The backup failed after the pre-flight passed — a disk that filled mid-copy, or any obstacle
+        // the check could not see in advance. It carries the outcome, so nothing is guessed here.
+        catch (DatabaseBackupUnavailableException ex)
+        {
+            Logger.LogResetRefusedNoBackup(ex.Outcome.ToString());
+            return DatabaseOperationResult.RefusedForBackup(ex.Outcome);
+        }
         catch (SqliteException ex) when (ex.SqliteErrorCode is 26 or 11 or 14 or 8)
         {
             // 26/11 are the source; 14/8 are the storage refusing a write the pre-flight's probe should
@@ -687,6 +694,20 @@ public class DatabaseInitializer(
             : [];
 
         DatabaseBackupResult resetBackup = CreateBackup(connection, SchemaVersion);
+
+        // #348: the last gate before every table is dropped, and the one the pre-flight cannot stand in
+        // for. Found live on a size-capped volume: the disk filled *during* the copy, SQLite abandoned a
+        // truncated backup file, and this method carried on and rebuilt the database anyway — returning
+        // 200 with the only restore point being an unusable fragment. Strictly worse than the unhandled
+        // 500 this issue set out to remove, because it looked like success.
+        //
+        // Thrown rather than returned: this runs inside OnResetAsync, whose signature belongs to
+        // subclasses, so there is no result to hand back from here. ResetAsync catches it and converts
+        // it into the same refusal a pre-flight failure produces — the exception is the transport, not
+        // the report.
+        if (!resetBackup.Succeeded)
+            throw new DatabaseBackupUnavailableException(resetBackup.Outcome, resetBackup.Error);
+
         string? backupPath = resetBackup.Path;
 
         try

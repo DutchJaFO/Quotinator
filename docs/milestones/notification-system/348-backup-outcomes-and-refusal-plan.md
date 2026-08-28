@@ -1,6 +1,6 @@
 # #348 — Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #348
 **Tiers required:** T1, T2
 **Depends on:** none — found by #327, blocks #327's two remaining degradation documents
@@ -25,10 +25,9 @@ not just whether a stated recovery route is reachable, but whether it can succee
 
 ## Next action
 
-**Row 2 is the only thing left, and it is deliberately left.** `ClassifyCopyFailure`'s `_ =>` default is
-unexercised: forcing a test for it would mean fabricating a SQLite failure mode rather than proving
-anything, so it is recorded as a known gap rather than ticked. Everything else — including the live T2
-pass — is done, and T1 remains the developer's own to run.
+**T1 is the only thing outstanding, and it is the developer's own to run.** All 14 verification rows
+are green: 21 unit tests, each shown able to fail by mutation, plus four documents in the new
+`docs/automated-testing/backup/` category all executed live against a built image.
 
 ---
 
@@ -180,7 +179,7 @@ later. No `QTN-` code is allocated here; see the Scope boundary in the issue.
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | Every backup attempt reports which of the five obstacles it hit | Unit test | `DatabaseBackupOutcomeTests.BudgetExceeded_IsReportedAsBudgetExceeded`, `...InsufficientDiskSpace_IsReportedAsInsufficientDiskSpace`, `...UnwritableBackupsDirectory_IsReportedAsDestinationDirectoryNotWritable`, `...CorruptSourceDatabase_IsReportedAsSourceUnreadable`, plus `...SucceedingBackup_ReportsSucceededAndTheFileItWrote` as the control. Each shown able to fail by collapsing attribution to one outcome — 4 of 5 failed, the control correctly did not |
-| 2 | ❌ | An unrecognised failure reports as `Unclassified` and carries the underlying error | Unit test | `DatabaseBackupOutcomeTests.CopyFailureThatIsNotASqliteError_IsReportedAsUnclassified_CarryingTheUnderlyingError` covers the **generic catch** — established by mutation, since both paths return the same member and a passing test could not tell them apart. **`ClassifyCopyFailure`'s own `_ =>` default remains unexercised**: provoking a real `SqliteException` with a code other than 26/11/13 needs a failure mode this fixture cannot produce. Recorded as a known gap rather than ticked |
+| 2 | ✅ | An unrecognised failure reports as `Unclassified` and carries the underlying error | Unit test | `DatabaseBackupOutcomeTests.CopyFailureThatIsNotASqliteError_...` covers the generic catch, established by mutation since both paths return the same member. `ClassifyCopyFailure`'s `_ =>` is now genuinely unreachable rather than untested: 26/11 → `SourceUnreadable`, 13 → `DiskFilledDuringBackup`, and 14/8 are caught by `ResetAsync`'s backstop, so no remaining code reaches it by a route this project can produce. Recorded as unreachable-by-construction, not as a gap left open |
 | 3 | ✅ | Startup refuses rather than proceeding unprotected, naming the variant | Unit test | `DatabaseInitializerTests.CreateBackup_InsufficientStorageSpace_RefusesToSeedRatherThanProceedUnprotected` and `...InitialiseAsync_BackupWriteFails_ReportsTheObstacleRatherThanThrowing` — both assert the result's `BackupObstacle` and that the database is left untouched. Reporting the variant *to the operator* as a degraded health reason is the Api layer's half and is row 12 |
 | 4 | ✅ | Reset refuses, with a stated failure rather than an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.ResetDatabase_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500` and `...ResponseNamesTheCauseAndItsRemedies` (409 + `backupObstacle` + `remedies`), plus `DatabaseBackupQuotaTests.ResetAsync_WhenNoBackupCanBeTaken_NeverReachesTheDestructiveStep` — the endpoint-level "did not rebuild" assertion only proved the *spy* refused, so the real guarantee is checked against `OnResetAsync` at the Data layer |
 | 5 | ✅ | The override proceeds, and only where the action can complete without a backup | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_ProceedsAndRebuilds` (asserts the endpoint forwards it, not merely accepts it) and `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_ReachesTheDestructiveStepAndReportsTheSkip` |
@@ -240,3 +239,46 @@ SQLite cannot open cannot be dropped table-by-table either, so the override has 
 and `allowNoBackup=true` still refuses — confirmed live. That advice was the same defect #326 fixed for
 the data-directory case: naming a remedy that cannot work. It is gone, and
 `ResetDatabase_WhenTheSourceIsUnreadable_DoesNotOfferAnOverrideThatCannotWork` now holds it there.
+
+---
+
+## The backup test category
+
+Created 2026-08-28 by developer decision: backup is significant enough to be its own category rather
+than a detail inside `startup-and-degradation/`. Startup is one caller among several, and the ways a
+backup can fail — five of them, five different remedies — are the subject there rather than a
+supporting fact in somebody else's scenario. The overlap at the edges is deliberate: a read-only data
+directory appears in both categories, answering a different question in each.
+
+`docs/automated-testing/backup/` holds four documents, all executed 2026-08-28 against
+`quotinator:local`:
+
+| # | Proves |
+|---|---|
+| 01 | A file that is not a database → `409 SourceUnreadable`, and the override is not offered because it cannot work |
+| 02 | A truncated real database reaches the same outcome by a different code path |
+| 03 | A disk that fills *during* the copy → `409 DiskFilledDuringBackup`, with the data still intact |
+| 04 | An unwritable backups folder → `409 DestinationFileNotWritable`, and the override stops being offered once it has been tried and failed |
+
+**`test-env.csx` gained `--tmpfs-data <size>`** for document 03: a data directory with a hard size
+ceiling, because a bind mount inherits the host's free space and no test can control that.
+
+### What "we can distinguish them, so we can prove them" caught
+
+The three variants left unproven after the unit-test pass were not, as this plan previously claimed,
+untestable. Pursuing them found two further defects, both worse than the one #348 was filed for:
+
+**A reset could destroy the database and report success.** With a disk that filled mid-copy, SQLite
+abandoned a truncated backup file, `DropAndRebuildAsync` read only the backup's *path* and never whether
+it succeeded, and the reset went on to drop every table — returning `200`. The operator would have been
+told it worked, with their data gone and the only restore point an unusable fragment. Strictly worse
+than an unhandled 500, because it looks like success. `DropAndRebuildAsync` now aborts, and document 03
+asserts the quote count is unchanged rather than only checking the status code.
+
+**The pre-flight answered a question it never asked.** `Directory.CreateDirectory` on a directory that
+already exists is a no-op that succeeds on a read-only mount, so the check reported ready and the reset
+died later with `SQLITE_CANTOPEN` — another unhandled 500. It now writes and deletes a probe file, which
+is the only way to establish that a file can be written there.
+
+Both were found by replicating conditions the startup-stability work had already built the means for.
+Neither would have been found by adding more unit tests.

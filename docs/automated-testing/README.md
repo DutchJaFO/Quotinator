@@ -1019,6 +1019,22 @@ The five this suite runs on:
 | 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | no |
 | 06 | [A recorded schema version ahead of the build stays healthy](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | no |
 
+### `backup/`
+
+The safety backup every migration, seed and Reset takes first. It has its own category rather than
+sitting inside `startup-and-degradation/` because it is a feature in its own right (developer decision,
+2026-08-28): startup is one caller among several, and the ways a backup can fail — five of them, with
+five different remedies — are the subject here rather than a detail of somebody else's scenario. There
+is deliberate overlap at the edges: a read-only data directory appears in both categories, answering a
+different question in each.
+
+| # | Test | Smoke |
+|---|---|---|
+| 01 | [Refuses a reset when the source cannot be read](backup/01-refuses-a-reset-when-the-source-cannot-be-read.md) | no |
+| 02 | [Refuses a reset when the database is truncated](backup/02-refuses-a-reset-when-the-database-is-truncated.md) | no |
+| 03 | [Refuses a reset when the disk fills during the backup](backup/03-refuses-a-reset-when-the-disk-fills-during-the-backup.md) | no |
+| 04 | [Refuses a reset when the backup folder cannot be written](backup/04-refuses-a-reset-when-the-backup-folder-cannot-be-written.md) | no |
+
 ### `notifications-and-changelog/`
 
 | # | Test | Smoke |

@@ -332,6 +332,12 @@
     <File Path="docs/automated-testing/database-lifecycle/02-audit-export-and-conflict-data-purge.md" />
     <File Path="docs/automated-testing/database-lifecycle/03-reset-is-a-full-wipe.md" />
   </Folder>
+  <Folder Name="/docs/automated-testing/backup/">
+    <File Path="docs/automated-testing/backup/01-refuses-a-reset-when-the-source-cannot-be-read.md" />
+    <File Path="docs/automated-testing/backup/02-refuses-a-reset-when-the-database-is-truncated.md" />
+    <File Path="docs/automated-testing/backup/03-refuses-a-reset-when-the-disk-fills-during-the-backup.md" />
+    <File Path="docs/automated-testing/backup/04-refuses-a-reset-when-the-backup-folder-cannot-be-written.md" />
+  </Folder>
   <Folder Name="/docs/automated-testing/startup-and-degradation/">
     <File Path="docs/automated-testing/startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md" />
     <File Path="docs/automated-testing/startup-and-degradation/02-startup-backup-gating-and-storage-budget.md" />
