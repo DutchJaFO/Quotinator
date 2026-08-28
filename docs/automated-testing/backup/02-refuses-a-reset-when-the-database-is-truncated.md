@@ -90,6 +90,29 @@ unit tests, which use non-database bytes, do not exercise.
 **On failure:** a `200` from health means the truncation did not take. A `500` from the reset means the
 refusal is not reached on this path even though it is on `01`'s.
 
+### 4. Apply the remedy, and confirm a reset then works
+
+```powershell
+$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-02"
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-02 --bind $dataDir
+
+Remove-Item "$dataDir\quotinatordata.db"
+
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-02 --port 18382 `
+  --image quotinator:local --bind $dataDir
+
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18382/api/v1/admin/database/reset" `
+  --method POST --expect 200 --status
+```
+
+**Expected:** healthy, and `200`.
+
+**The positive control.** Step 3 asserts a refusal; on its own that would pass against a build refusing
+every reset. This shows the refusal is caused by the truncation and nothing else — and that the remedy
+the refusal names actually resolves it.
+
+**On failure:** a `409` means the refusal is not specific to the sabotage, and step 3 proves nothing.
+
 ## Observed effect
 
 **Measured 2026-08-28** against `quotinator:local`: a 4,562,944-byte database cut to 2,281,472 bytes

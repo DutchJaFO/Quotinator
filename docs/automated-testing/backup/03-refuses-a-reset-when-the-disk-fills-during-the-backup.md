@@ -74,6 +74,28 @@ $after = (Invoke-RestMethod "http://localhost:18383/api/v1/version").database.qu
 only restore point is a truncated fragment. This assertion is the substantive one; step 2's status code
 alone would not catch it.
 
+### 4. Give it room, and confirm a reset then works
+
+```powershell
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-03
+
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-03 --port 18383 `
+  --image quotinator:local --tmpfs-data 64m
+
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18383/api/v1/admin/database/reset" `
+  --method POST --expect 200 --status
+```
+
+**Expected:** `200`.
+
+**The positive control, and the remedy.** Steps 2 and 3 assert a refusal and untouched data; both would
+hold against a build that refused every reset. The same image on the same kind of mount, differing only
+in how much room it has, must succeed — which is also what proves step 2's stated remedy, *"free disk
+space and retry"*, is real advice.
+
+**On failure:** a `409` at 64 MB means the refusal is not caused by the ceiling, and this document's
+whole premise is wrong. Re-measure rather than raising the number until it passes.
+
 ## Observed effect
 
 **Measured 2026-08-28** against `quotinator:local`, and this document exists because the first

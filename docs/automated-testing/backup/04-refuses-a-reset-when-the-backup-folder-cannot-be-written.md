@@ -86,6 +86,27 @@ nothing. `remedyCount=1` confirms removing it left something actionable behind r
 **On failure:** `offersOverride=True` means the guidance has regressed to repeating advice the request
 itself just disproved.
 
+### 4. Remount writable, and confirm a reset then works
+
+```powershell
+$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-04"
+dotnet script scripts/testing/test-env.csx -- reenter --name qt-backup-04 --port 18384 `
+  --image quotinator:local --bind $dataDir
+
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18384/api/v1/admin/database/reset" `
+  --method POST --expect 200 --status
+```
+
+**Expected:** healthy, and `200`.
+
+**The positive control.** Steps 2 and 3 both assert refusals, so both would hold against a build that
+refused every reset — the same container and the same data directory, differing only in the read-only
+flag, must succeed. It is also the proof that *"restore write access … then restart"*, the one remedy
+left standing after step 3, actually resolves the condition.
+
+**On failure:** a `409` here means the refusal has nothing to do with the mount being read-only, and
+steps 2 and 3 prove nothing about it.
+
 ## Observed effect
 
 **Measured 2026-08-28** against `quotinator:local`.

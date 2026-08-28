@@ -282,3 +282,18 @@ is the only way to establish that a file can be written there.
 
 Both were found by replicating conditions the startup-stability work had already built the means for.
 Neither would have been found by adding more unit tests.
+
+### Every document proves the negative *and* the positive
+
+Added 2026-08-28 on developer reminder, and it was a real gap rather than a formality. As first written,
+all four documents asserted only refusals — so **all four would have passed against a build that refused
+every reset**, which is the same class of hole as a test that cannot fail.
+
+Each now ends by removing its own sabotage and confirming a reset returns `200`. That step does two jobs
+at once: it is the positive control, and it is the proof that the remedy the refusal *names* actually
+resolves the condition — `01` and `02` delete the unreadable file, `03` gives the volume room, `04`
+remounts writable. All four executed 2026-08-28.
+
+The unit tests already carried both sides — `SucceedingBackup_…` as the control against four failure
+variants, `ResetDatabase_WhenBackupSucceeds_IsUnchanged` against the refusals, below-quota against
+at-quota, and the override reaching the destructive step against a refusal that does not.

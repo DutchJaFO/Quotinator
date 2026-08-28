@@ -110,6 +110,33 @@ dotnet script scripts/testing/http.csx -- `
 **On failure:** a `200` would mean the reset ran against a file SQLite cannot open, which is not
 possible; investigate what actually happened rather than accepting the pass.
 
+### 6. Apply the remedy this document names, and confirm a reset then works
+
+```powershell
+$dataDir = "C:\repos\Quotinator\.claude\temp\qt-backup-01"
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-01 --bind $dataDir
+
+Remove-Item "$dataDir\quotinatordata.db"
+
+dotnet script scripts/testing/test-env.csx -- create --name qt-backup-01 --port 18381 `
+  --image quotinator:local --bind $dataDir
+
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18381/api/v1/admin/database/reset" `
+  --method POST --expect 200 --status
+```
+
+**Expected:** the container reaches healthy, and the reset returns `200`.
+
+**Two things at once, and both are load-bearing.** It is this document's **positive control**: every step
+above asserts a refusal, so without a passing case the whole document would still pass against a build
+that refused *everything*. And it is the proof that the remedy step 4 hands the operator — *"move or
+delete the database file, and restart"* — actually resolves the condition, rather than being advice
+nobody checked.
+
+**On failure:** a `409` here means the refusal is not specific to the sabotage, and every assertion
+above is worthless. A container that will not reach healthy means the named remedy does not work, which
+is a defect in the guidance rather than in this test.
+
 ## Observed effect
 
 **Measured 2026-08-28** against `quotinator:local`.
