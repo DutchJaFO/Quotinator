@@ -257,6 +257,32 @@ public class AdminEndpointsTests
             "the override is a remedy the caller can act on immediately, so it must be offered");
     }
 
+    /// <summary>
+    /// Found live, not by unit test: a corrupt database passes the pre-flight (which inspects storage,
+    /// never the database) and then fails inside the table drop, because SQLite will not open the file
+    /// at all. The override cannot rescue that — there is nothing to drop — so offering it would name a
+    /// remedy that cannot succeed, which is the exact defect #326 fixed for the data-directory case.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetDatabase_WhenTheSourceIsUnreadable_DoesNotOfferAnOverrideThatCannotWork()
+    {
+        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.SourceUnreadable };
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+
+        string allRemedies = string.Join(" ",
+            doc.RootElement.GetProperty("remedies").EnumerateArray().Select(r => r.GetString()!));
+
+        Assert.DoesNotContain(
+            "allowNoBackup", allRemedies, StringComparison.Ordinal,
+            "a reset cannot run against a file SQLite will not open, whatever the caller accepts");
+        Assert.Contains("restart", allRemedies, StringComparison.OrdinalIgnoreCase,
+            "the remedy that does work is replacing the file from outside the application");
+    }
+
     [TestMethod]
     public async Task ResetDatabase_WithOverride_ProceedsAndRebuilds()
     {

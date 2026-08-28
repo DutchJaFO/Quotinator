@@ -542,7 +542,25 @@ public class DatabaseInitializer(
         if (readiness != BackupOutcome.Succeeded)
             Logger.LogResetProceedingWithoutBackup(readiness.ToString());
 
-        await OnResetAsync(connection, preserveSchemaVersion, forceSourceRefresh);
+        // The backstop the pre-flight cannot replace. CheckBackupReadiness inspects storage and the
+        // destination — it never reads the database, so an unreadable *source* passes it and only
+        // reveals itself here. Found live: a corrupt file cleared the check, then failed inside
+        // DropAllTablesAsync, which reaches sqlite_master, and reached the client as an unhandled 500 —
+        // the very defect this issue exists to remove, surviving in a path the unit tests did not cover.
+        //
+        // The override cannot rescue this one either: a database SQLite will not open cannot be dropped
+        // table-by-table, so "proceed without a backup" has nothing to proceed with. It is reported as
+        // SourceUnreadable whose remedy is to replace the file from outside the application.
+        try
+        {
+            await OnResetAsync(connection, preserveSchemaVersion, forceSourceRefresh);
+        }
+        catch (SqliteException ex) when (ex.SqliteErrorCode is 26 or 11)
+        {
+            Logger.LogResetRefusedNoBackup(BackupOutcome.SourceUnreadable.ToString());
+            return DatabaseOperationResult.RefusedForBackup(BackupOutcome.SourceUnreadable);
+        }
+
         return DatabaseOperationResult.Success(backupSkippedByOverride: readiness != BackupOutcome.Succeeded);
     }
 

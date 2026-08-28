@@ -25,14 +25,10 @@ not just whether a stated recovery route is reachable, but whether it can succee
 
 ## Next action
 
-**Run the live T2 pass (row 14): confirm a corrupt and a truncated database are now genuinely recoverable.**
-
-Everything else is done. The measurement that started this issue — `POST /admin/database/reset` returning
-an unhandled `500` on exactly the databases whose `/health` recommends it — needs re-running against a
-built image to show it now refuses with a stated `409`, and succeeds with `allowNoBackup=true`.
-
-Row 2 stays ❌ on purpose: `ClassifyCopyFailure`'s `_ =>` default is unexercised, and forcing a test for
-it would mean fabricating a SQLite failure mode rather than proving anything.
+**Row 2 is the only thing left, and it is deliberately left.** `ClassifyCopyFailure`'s `_ =>` default is
+unexercised: forcing a test for it would mean fabricating a SQLite failure mode rather than proving
+anything, so it is recorded as a known gap rather than ticked. Everything else — including the live T2
+pass — is done, and T1 remains the developer's own to run.
 
 ---
 
@@ -160,7 +156,7 @@ before, and not by changing what it asserts.
 
 ### 4. Reset refusal, override, logging and audit
 
-**Status:** ⬜ Refusal and the pre-flight are in; the override's audit entry and the endpoint response are not
+**Status:** ✅ Refusal, override, `AuditOperation.BackupSkipped`, and the 409 response with cause and remedies
 
 Includes a new `AuditOperation.BackupSkipped`.
 
@@ -172,7 +168,7 @@ Includes a new `AuditOperation.BackupSkipped`.
 
 ### 6. Remedy text per variant
 
-**Status:** ⬜ Not started
+**Status:** ✅ `BackupObstacleGuidance` in the Api layer — six causes, remedies ordered most-actionable-first
 
 Each states symptom, cause and remedy — the property #333's sweep needs to write a Knowledgebase entry
 later. No `QTN-` code is allocated here; see the Scope boundary in the issue.
@@ -196,7 +192,7 @@ later. No `QTN-` code is allocated here; see the Scope boundary in the issue.
 | 11 | ✅ | An out-of-range percentage is reported loudly and the default used — never silently clamped, and never a crash | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_OutOfRange_IsReportedAndTheDefaultUsed_NotClampedAndNotFatal` — asserts both halves: the default applied (a clamp to 100 would have allowed the write) and the warning names the setting, so an ignored value is not silently substituted |
 | 12 | ✅ | Each variant's message states symptom, cause and remedy | Live | `BackupObstacleGuidance` — five named causes plus an explicit "not one this build recognises" for the sixth, each with remedies ordered most-actionable-first. `SourceUnreadable` deliberately omits removing old backups: the obstacle is the source, so freeing destination space changes nothing, and naming a remedy that cannot work is the defect #326 fixed. Lives in the Api layer, keeping `Quotinator.Data` domain-agnostic per ADR 004 |
 | 13 | ✅ | The two existing tests whose expectation changes are updated deliberately, not to make a red run pass | Unit test | Both rewritten with names stating the new contract, not edited assertions under old names: `CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` → `..._RefusesToSeedRatherThanProceedUnprotected`, and `InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason` → `..._ReportsTheObstacleRatherThanThrowing`. Each carries a comment saying what changed and why, so neither reads as a test bent to fit |
-| 14 | ❌ | The corrupt and truncated databases that started this are actually recoverable end to end | Live | T2: with the fix in place, a corrupt database's Reset succeeds or refuses with a workable remedy — the measurement #327 made, re-run |
+| 14 | ✅ | The corrupt and truncated databases that started this are actually recoverable end to end | Live | T2, 2026-08-28, against a rebuilt `quotinator:local`. Corrupt file and truncated file both now answer `409` with `backupObstacle: SourceUnreadable`, the cause, and two workable remedies; `allowNoBackup=true` correctly still refuses; a healthy database still returns `200`. **This row found a defect four green unit tests had missed — see the note below** |
 
 ---
 
@@ -214,3 +210,33 @@ right here, and the precedent is not adopted just because it exists.
 the default. That is not a silent clamp, and it is not a crash. The triage question in
 `docs/knowledgebase.md` supports treating it this way: a wrong quota percentage does not prevent the
 application or the API from functioning.
+
+---
+
+## What the live pass caught that the unit tests did not
+
+Row 14 was expected to be a formality — every unit test was green and the design was settled. It was
+not a formality, and this is why the row exists.
+
+**The first live run still returned `500`.** Not the old `500`: a new one, from `DropAllTablesAsync`
+rather than `CreateBackup`. The reason is a gap the unit tests could not see, because they exercised
+the pre-flight and the attempt separately and never drove a corrupt file through the whole path:
+
+`CheckBackupReadiness` inspects storage headroom and whether the *destination* can be written. It never
+reads the database. So an unreadable **source** passes the check cleanly, `ResetAsync` proceeds, and the
+failure surfaces later — inside the table drop, which reaches `sqlite_master` on a file SQLite will not
+open. The refusal was in the right place for four of the five variants and the wrong place for the
+fifth.
+
+**The fix is the backstop the developer's own rule already provides for.** *"We still handle exceptions
+as despite the status check we may still get exceptions."* `ResetAsync` now catches `SQLITE_NOTADB`/
+`SQLITE_CORRUPT` around `OnResetAsync` and converts it into the same `SourceUnreadable` refusal result
+the pre-flight would have produced had it been able to see it. Check, act, still catch — with this being
+exactly the case the third clause exists for.
+
+**And it corrected a remedy that was wrong.** The `SourceUnreadable` guidance had offered
+*"Retry with allowNoBackup=true … this is the only way a reset can run"*. Measured: it is not. A database
+SQLite cannot open cannot be dropped table-by-table either, so the override has nothing to proceed with
+and `allowNoBackup=true` still refuses — confirmed live. That advice was the same defect #326 fixed for
+the data-directory case: naming a remedy that cannot work. It is gone, and
+`ResetDatabase_WhenTheSourceIsUnreadable_DoesNotOfferAnOverrideThatCannotWork` now holds it there.

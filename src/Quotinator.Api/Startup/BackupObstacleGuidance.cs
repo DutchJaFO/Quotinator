@@ -77,13 +77,16 @@ internal static class BackupObstacleGuidance
         // Removing old backups is deliberately absent here: the obstacle is the source, so freeing
         // destination space changes nothing. Naming a remedy that cannot work is the defect #326 fixed
         // for the data-directory case, and repeating it here would be the same mistake in a new place.
+        // No allowNoBackup here, and that omission is measured rather than assumed: a database SQLite
+        // will not open cannot be dropped table-by-table either, so a reset has nothing to work with
+        // whatever the caller accepts. Offering the override would name a remedy that cannot succeed —
+        // the same defect #326 fixed for the data-directory case. The file has to be replaced from
+        // outside the application.
         BackupOutcome.SourceUnreadable =>
         [
             "Stop the application, move or delete the database file, and restart — the database will be "
             + "rebuilt empty.",
-            "Restore an older backup in place of the unreadable file.",
-            "Retry with allowNoBackup=true: a database that cannot be read also cannot be backed up, so "
-            + "this is the only way a reset can run.",
+            "Restore an older backup in place of the unreadable file, then restart.",
         ],
         BackupOutcome.DiskFilledDuringBackup =>
         [
