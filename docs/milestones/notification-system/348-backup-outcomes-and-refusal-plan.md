@@ -25,17 +25,14 @@ not just whether a stated recovery route is reachable, but whether it can succee
 
 ## Next action
 
-**Build the endpoint half: the Reset response, its remedy text, and the override's audit entry.**
+**Run the live T2 pass (row 14): confirm a corrupt and a truncated database are now genuinely recoverable.**
 
-`Quotinator.Data` now reports *which* obstacle stopped a backup and refuses rather than proceeding
-unprotected. What is missing is everything above that line: `POST /admin/database/reset` still returns
-its old shape, so a refusal has no way to reach a caller as `200`-means-success-and-anything-else-
-explains-itself; the per-variant remedy text does not exist; and an override that skips a backup logs it
-but writes no audit entry.
+Everything else is done. The measurement that started this issue — `POST /admin/database/reset` returning
+an unhandled `500` on exactly the databases whose `/health` recommends it — needs re-running against a
+built image to show it now refuses with a stated `409`, and succeeds with `allowNoBackup=true`.
 
-The remedy text belongs in the Api layer, not in `Quotinator.Data` — that project is domain-agnostic per
-ADR 004 and has no business deciding what an operator is told, which is also what keeps the text
-localisable later.
+Row 2 stays ❌ on purpose: `ClassifyCopyFailure`'s `_ =>` default is unexercised, and forcing a test for
+it would mean fabricating a SQLite failure mode rather than proving anything.
 
 ---
 
@@ -129,7 +126,7 @@ Every requirement in the issue gets a row, per `process.md`'s Planning step 5.
 
 ### 2. Write the red tests
 
-**Status:** ⬜ Twelve written and green; the endpoint-layer ones wait on the endpoint existing
+**Status:** ✅ Twenty-one written and green, each shown able to fail by mutation
 
 The fourteen named in the issue, plus the two whose expectation changes deliberately
 (`CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` and
@@ -189,15 +186,15 @@ later. No `QTN-` code is allocated here; see the Scope boundary in the issue.
 | 1 | ✅ | Every backup attempt reports which of the five obstacles it hit | Unit test | `DatabaseBackupOutcomeTests.BudgetExceeded_IsReportedAsBudgetExceeded`, `...InsufficientDiskSpace_IsReportedAsInsufficientDiskSpace`, `...UnwritableBackupsDirectory_IsReportedAsDestinationDirectoryNotWritable`, `...CorruptSourceDatabase_IsReportedAsSourceUnreadable`, plus `...SucceedingBackup_ReportsSucceededAndTheFileItWrote` as the control. Each shown able to fail by collapsing attribution to one outcome — 4 of 5 failed, the control correctly did not |
 | 2 | ❌ | An unrecognised failure reports as `Unclassified` and carries the underlying error | Unit test | `DatabaseBackupOutcomeTests.CopyFailureThatIsNotASqliteError_IsReportedAsUnclassified_CarryingTheUnderlyingError` covers the **generic catch** — established by mutation, since both paths return the same member and a passing test could not tell them apart. **`ClassifyCopyFailure`'s own `_ =>` default remains unexercised**: provoking a real `SqliteException` with a code other than 26/11/13 needs a failure mode this fixture cannot produce. Recorded as a known gap rather than ticked |
 | 3 | ✅ | Startup refuses rather than proceeding unprotected, naming the variant | Unit test | `DatabaseInitializerTests.CreateBackup_InsufficientStorageSpace_RefusesToSeedRatherThanProceedUnprotected` and `...InitialiseAsync_BackupWriteFails_ReportsTheObstacleRatherThanThrowing` — both assert the result's `BackupObstacle` and that the database is left untouched. Reporting the variant *to the operator* as a degraded health reason is the Api layer's half and is row 12 |
-| 4 | ❌ | Reset refuses, with a stated failure rather than an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.Reset_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500`, `...ResponseNamesTheCauseAndItsRemedy`, `...DoesNotRebuildTheDatabase` |
-| 5 | ❌ | The override proceeds, and only where the action can complete without a backup | Unit test | `AdminEndpointsTests.Reset_WithOverride_ProceedsAndRebuilds` |
-| 6 | ❌ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.Reset_WithOverride_LogsThatTheBackupWasSkipped`, `...WritesAnAuditEntryRecordingTheSkip`. `AuditOperation.BackupSkipped` needs no migration — `Audit_Entry.Operation` is `TEXT NOT NULL` with no CHECK constraint (verified 2026-08-27), so ADR 008's checklist does not apply |
-| 7 | ❌ | A healthy database is entirely unaffected | Unit test | `AdminEndpointsTests.Reset_WhenBackupSucceeds_IsUnchanged` — the regression control for the whole change |
-| 8 | ❌ | A caller can ask whether a backup is possible without attempting one, in the same variant vocabulary | Unit test | `DatabaseBackupPreflightTests.CanCreateBackup_WhenNothingObstructsIt_ReportsThatItCan`, `...WhenBudgetIsAlreadyExhausted_ReportsTheVariantAnAttemptWouldReport`, `...WhenTheDestinationIsNotWritable_ReportsTheVariantAnAttemptWouldReport` |
+| 4 | ✅ | Reset refuses, with a stated failure rather than an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.ResetDatabase_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500` and `...ResponseNamesTheCauseAndItsRemedies` (409 + `backupObstacle` + `remedies`), plus `DatabaseBackupQuotaTests.ResetAsync_WhenNoBackupCanBeTaken_NeverReachesTheDestructiveStep` — the endpoint-level "did not rebuild" assertion only proved the *spy* refused, so the real guarantee is checked against `OnResetAsync` at the Data layer |
+| 5 | ✅ | The override proceeds, and only where the action can complete without a backup | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_ProceedsAndRebuilds` (asserts the endpoint forwards it, not merely accepts it) and `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_ReachesTheDestructiveStepAndReportsTheSkip` |
+| 6 | ✅ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip`. `AuditOperation.BackupSkipped` needs no migration — `Audit_Entry.Operation` is `TEXT NOT NULL` with no CHECK constraint (verified 2026-08-27), so ADR 008's checklist does not apply |
+| 7 | ✅ | A healthy database is entirely unaffected | Unit test | `AdminEndpointsTests.ResetDatabase_WhenBackupSucceeds_IsUnchanged` — 200, the reset ran, and nothing claims a backup was skipped. The regression control for the whole issue |
+| 8 | ✅ | A caller can ask whether a backup is possible without attempting one, in the same variant vocabulary | Unit test | `IDatabaseInitializer.CheckBackupReadiness(bool allowReserve)`, driven by all four `DatabaseBackupQuotaTests` headroom cases. Consumed for real by `ResetAsync`, which checks before opening a connection — so it is exercised as a pre-flight, not only asserted directly |
 | 9 | ✅ | The operating quota is honoured, the reserve is reachable only by override, and the ceiling never is | Unit test | `DatabaseBackupQuotaTests.UsageBelowTheQuota_ReportsThatABackupCanBeTaken`, `...UsageAtTheQuota_IsRefused_WithoutReachingIntoTheReserve`, `...UsageAtTheQuota_WithTheReserveAllowed_CanStillTakeABackup`, `...UsageAtTheAbsoluteCeiling_IsRefusedEvenWithTheReserveAllowed`. Shown able to fail: with the quota mutated away so the limit is always the ceiling, 3 of 7 fail |
 | 10 | ✅ | The quota percentage is configurable and defaults to 90 | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_IsConfigurable` (60% usage passes a 90% quota and fails a 50% one, so the setting is genuinely consulted) and `...QuotaPercent_DefaultsTo90`, which reads the property off a real instance — comparing the constant to a literal is const-folded and can never fail, which MSTEST0032 flagged |
 | 11 | ✅ | An out-of-range percentage is reported loudly and the default used — never silently clamped, and never a crash | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_OutOfRange_IsReportedAndTheDefaultUsed_NotClampedAndNotFatal` — asserts both halves: the default applied (a clamp to 100 would have allowed the write) and the warning names the setting, so an ignored value is not silently substituted |
-| 12 | ❌ | Each variant's message states symptom, cause and remedy | Live | Read per variant. The property #333's sweep needs in order to write a Knowledgebase entry without guesswork; no `QTN-` code is allocated here, per #333 requirement 8's precedent |
+| 12 | ✅ | Each variant's message states symptom, cause and remedy | Live | `BackupObstacleGuidance` — five named causes plus an explicit "not one this build recognises" for the sixth, each with remedies ordered most-actionable-first. `SourceUnreadable` deliberately omits removing old backups: the obstacle is the source, so freeing destination space changes nothing, and naming a remedy that cannot work is the defect #326 fixed. Lives in the Api layer, keeping `Quotinator.Data` domain-agnostic per ADR 004 |
 | 13 | ✅ | The two existing tests whose expectation changes are updated deliberately, not to make a red run pass | Unit test | Both rewritten with names stating the new contract, not edited assertions under old names: `CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` → `..._RefusesToSeedRatherThanProceedUnprotected`, and `InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason` → `..._ReportsTheObstacleRatherThanThrowing`. Each carries a comment saying what changed and why, so neither reads as a test bent to fit |
 | 14 | ❌ | The corrupt and truncated databases that started this are actually recoverable end to end | Live | T2: with the fix in place, a corrupt database's Reset succeeds or refuses with a workable remedy — the measurement #327 made, re-run |
 

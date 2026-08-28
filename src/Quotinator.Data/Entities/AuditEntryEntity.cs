@@ -72,6 +72,12 @@ public static class AuditOperation
     public const string Reseed = "Reseeded";
     /// <summary>The database schema was dropped and recreated, then reimported from source files.</summary>
     public const string Reset = "Reset";
+    /// <summary>
+    /// A destructive operation ran without its safety backup, because the caller explicitly accepted
+    /// that (#348). Recorded so a later "why is there no backup from that date" question has an answer
+    /// that outlives the log.
+    /// </summary>
+    public const string BackupSkipped = "BackupSkipped";
     /// <summary>A user-provided import file was processed.</summary>
     public const string Import = "Imported";
     /// <summary>A database backup was created.</summary>

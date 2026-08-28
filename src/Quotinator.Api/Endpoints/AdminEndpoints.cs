@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Quotinator.Api.Startup;
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
@@ -210,9 +211,43 @@ internal static class AdminEndpoints
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, INotificationWriter notificationWriter, IAppVersionTracker appVersionTracker, IVersionService versionService, ILogger<Program> logger, bool preserveSchemaVersion = false, bool forceSourceRefresh = false) =>
+        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, INotificationWriter notificationWriter, IAppVersionTracker appVersionTracker, IVersionService versionService, IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<Program> logger, bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) =>
         {
-            await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh);
+            DatabaseOperationResult reset = await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh, allowNoBackup);
+
+            // #348: a reset that could not take a backup did not run. 200 means the endpoint did what
+            // was asked; this did not, so it is an error whose body carries the cause and what the
+            // operator can do about it. 409 rather than 500: nothing failed unexpectedly — the state of
+            // the backup storage conflicts with running a destructive operation, and that is a
+            // condition the caller can resolve and retry.
+            if (!reset.Succeeded)
+            {
+                BackupOutcome obstacle = reset.BackupObstacle ?? BackupOutcome.Unclassified;
+                return Results.Problem(
+                    title: "Reset refused — no backup could be taken",
+                    detail: BackupObstacleGuidance.Cause(obstacle),
+                    statusCode: StatusCodes.Status409Conflict,
+                    extensions: new Dictionary<string, object?>
+                    {
+                        ["backupObstacle"] = obstacle.ToString(),
+                        ["remedies"]       = BackupObstacleGuidance.Remedies(obstacle),
+                    });
+            }
+
+            // #348: a backup that was skipped by explicit override is recorded where it will still be
+            // found long after the log has rotated. Without this, "there is no backup from that date"
+            // has no answer but guesswork — which is exactly what the override must not cost.
+            if (reset.BackupSkippedByOverride)
+            {
+                await auditWriter.WriteAsync(new AuditEntryEntity
+                {
+                    TableName   = "Database",
+                    Operation   = AuditOperation.BackupSkipped,
+                    Agent       = callerContext.Agent,
+                    PerformedAt = DateTime.UtcNow,
+                });
+            }
+
             dbHealth.MarkHealthy();
             // #278: dismiss any ActionRequired notification recommending a Reset, now that one has
             // actually completed. Reset itself drops and rebuilds System_Notification along with
@@ -257,6 +292,7 @@ internal static class AdminEndpoints
         .WithSummary("Reset the database")
         .Produces<DatabaseSeedSummaryResponse>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
+        .Produces<ProblemDetails>(StatusCodes.Status409Conflict)
         .WithDescription(
             "Drops the entire database and rebuilds it from scratch via the baseline schema — equivalent to " +
             "deleting the database file and restarting, except it does **not** reimport any bundled or user " +
@@ -269,6 +305,12 @@ internal static class AdminEndpoints
             "independent of the database, since nothing gets imported by this call. " +
             "Returns the row counts (all zero immediately after a reset) and a per-file, per-entity-type report (issue #221); " +
             "the report reflects no activity since Reset does not seed. " +
+            "A reset takes a safety backup first, and **refuses with `409 Conflict` if one cannot be taken** (issue #348) — " +
+            "the response names which obstacle stopped it (`backupObstacle`) and what can be done about it (`remedies`). " +
+            "Pass `allowNoBackup=true` to proceed anyway: this both accepts responsibility for there being no restore point " +
+            "and asserts the reset can complete without one. It also unlocks the reserve above the normal backup quota, so a " +
+            "reset blocked only by that quota takes a real backup rather than none at all. A backup skipped this way is " +
+            "recorded in the audit trail, so it stays discoverable long after the log has rotated. " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 

@@ -99,6 +99,44 @@ public class DatabaseBackupQuotaTests
             "the same 60% is outside a 50% quota — so the setting is genuinely consulted, not ignored");
     }
 
+    /// <summary>
+    /// The substantive half of "a refusal does not rebuild". Asserting this at the endpoint layer only
+    /// proves the spy refused, since a stub's own bookkeeping is what records whether a reset ran — so
+    /// the guarantee is checked here, against the real <see cref="DatabaseInitializer.ResetAsync"/>,
+    /// where <c>OnResetAsync</c> is the actual destructive step.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_WhenNoBackupCanBeTaken_NeverReachesTheDestructiveStep()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+        RecordingInitializer initializer = new RecordingInitializer(NewOptions(), _dbPath);
+
+        DatabaseOperationResult result = await initializer.ResetAsync();
+
+        Assert.IsFalse(result.Succeeded);
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, result.BackupObstacle);
+        Assert.IsFalse(
+            initializer.ResetHookRan,
+            "refusing has to mean the tables were never dropped — a refusal that still wiped the "
+            + "database would be strictly worse than the unhandled 500 it replaced");
+    }
+
+    [TestMethod]
+    public async Task ResetAsync_WithTheOverride_ReachesTheDestructiveStepAndReportsTheSkip()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+        RecordingInitializer initializer = new RecordingInitializer(NewOptions(), _dbPath);
+
+        DatabaseOperationResult result = await initializer.ResetAsync(allowNoBackup: true);
+
+        Assert.IsTrue(result.Succeeded);
+        Assert.IsTrue(initializer.ResetHookRan);
+        Assert.IsTrue(
+            result.BackupSkippedByOverride,
+            "the caller has to be told it ran without a backup, or the audit trail above it has nothing "
+            + "to record");
+    }
+
     [TestMethod]
     public void QuotaPercent_DefaultsTo90()
     {
@@ -142,11 +180,8 @@ public class DatabaseBackupQuotaTests
         stream.SetLength(target);
     }
 
-    private DatabaseInitializer CreateInitializer(
-        int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent, ILogger<DatabaseInitializer>? logger = null)
-    {
-        SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
-        DatabaseOptions options = new DatabaseOptions
+    private DatabaseOptions NewOptions(int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent) =>
+        new DatabaseOptions
         {
             DbPath = _dbPath,
             BackupsPath = _backups,
@@ -154,9 +189,28 @@ public class DatabaseBackupQuotaTests
             BackupQuotaPercent = quotaPercent,
         };
 
-        return new DatabaseInitializer(factory, options, [],
+    private DatabaseInitializer CreateInitializer(
+        int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent, ILogger<DatabaseInitializer>? logger = null)
+        => new DatabaseInitializer(new SqliteConnectionFactory(_dbPath), NewOptions(quotaPercent), [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
             logger ?? NullLogger<DatabaseInitializer>.Instance);
+
+    /// <summary>
+    /// Records whether the destructive reset hook actually ran, which is the only way to tell a refusal
+    /// apart from a reset that wiped the database and then reported failure.
+    /// </summary>
+    private sealed class RecordingInitializer(DatabaseOptions options, string dbPath)
+        : DatabaseInitializer(new SqliteConnectionFactory(dbPath), options, [],
+            NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
+            NullLogger<DatabaseInitializer>.Instance)
+    {
+        public bool ResetHookRan { get; private set; }
+
+        protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
+        {
+            ResetHookRan = true;
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>

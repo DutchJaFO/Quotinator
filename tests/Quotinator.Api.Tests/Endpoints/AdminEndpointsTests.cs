@@ -1,3 +1,4 @@
+using System.Data;
 using Quotinator.Data.Enums;
 using System.Net;
 using System.Text.Json;
@@ -9,6 +10,7 @@ using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Import;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Tests.Endpoints;
@@ -19,14 +21,15 @@ public class AdminEndpointsTests
     private const string TestKey = "test-admin-key";
 
     private static WebApplicationFactory<Program> CreateFactory(
-        string? adminApiKey = null, IDatabaseInitializer? dbInitializer = null, INotificationWriter? notificationWriter = null) =>
+        string? adminApiKey = null, IDatabaseInitializer? dbInitializer = null, INotificationWriter? notificationWriter = null,
+        IAuditEntryWriter? auditWriter = null) =>
         new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton(dbInitializer ?? NoOpDatabaseInitializer.Instance);
-                services.AddSingleton<IAuditEntryWriter>(new NoOpAuditEntryWriter());
+                services.AddSingleton(auditWriter ?? (IAuditEntryWriter)new NoOpAuditEntryWriter());
                 services.AddSingleton<IAuditEntryReader>(new NoOpAuditEntryReader());
                 services.AddSingleton<ICallerContext>(new NoOpCallerContext());
                 services.AddSingleton(notificationWriter ?? (INotificationWriter)NoOpNotificationWriter.Instance);
@@ -178,6 +181,140 @@ public class AdminEndpointsTests
         Assert.IsTrue(doc.RootElement.TryGetProperty("reports",         out _), "#221: per-file report array replacing the old flat duplicates count");
     }
 
+    // ── #348: a reset that cannot take a backup ───────────────────────────────
+
+    /// <summary>
+    /// The regression control for the whole of #348: on a database where a backup succeeds, none of the
+    /// refusal machinery is visible. Without this, every other test here could pass while the endpoint
+    /// had quietly started refusing everything.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetDatabase_WhenBackupSucceeds_IsUnchanged()
+    {
+        SpyDatabaseInitializer spy = new SpyDatabaseInitializer();
+        RecordingAuditWriter audit = new RecordingAuditWriter();
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy, auditWriter: audit);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(spy.ResetRan);
+        Assert.DoesNotContain(
+            AuditOperation.BackupSkipped, audit.Operations,
+            "nothing was skipped, so nothing should claim it was");
+    }
+
+    [TestMethod]
+    public async Task ResetDatabase_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500()
+    {
+        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.SourceUnreadable };
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
+
+        Assert.AreEqual(
+            HttpStatusCode.Conflict, response.StatusCode,
+            "the pre-#348 behaviour was an unhandled 500 on exactly this state — the one the /health "
+            + "reason tells the operator to resolve by resetting");
+    }
+
+    [TestMethod]
+    public async Task ResetDatabase_WhenNoBackupCanBeTaken_DoesNotRebuildTheDatabase()
+    {
+        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded };
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
+
+        await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
+
+        Assert.IsFalse(
+            spy.ResetRan,
+            "refusing has to mean the destructive step did not run — a 409 alongside a completed wipe "
+            + "would be the worst of both");
+    }
+
+    [TestMethod]
+    public async Task ResetDatabase_WhenNoBackupCanBeTaken_ResponseNamesTheCauseAndItsRemedies()
+    {
+        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded };
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+
+        Assert.AreEqual(
+            nameof(BackupOutcome.BudgetExceeded), doc.RootElement.GetProperty("backupObstacle").GetString(),
+            "which of the five obstacles it was — the whole point of attributing them");
+        Assert.Contains("quota", doc.RootElement.GetProperty("detail").GetString()!, StringComparison.OrdinalIgnoreCase);
+
+        JsonElement remedies = doc.RootElement.GetProperty("remedies");
+        Assert.IsGreaterThan(0, remedies.GetArrayLength(), "an error that names no way out is not actionable");
+        string allRemedies = string.Join(" ", remedies.EnumerateArray().Select(r => r.GetString()!));
+        Assert.Contains(
+            "allowNoBackup", allRemedies, StringComparison.Ordinal,
+            "the override is a remedy the caller can act on immediately, so it must be offered");
+    }
+
+    [TestMethod]
+    public async Task ResetDatabase_WithOverride_ProceedsAndRebuilds()
+    {
+        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded };
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset?allowNoBackup=true", null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.IsTrue(spy.ResetRan);
+        Assert.IsTrue(spy.LastAllowNoBackup, "the endpoint must actually forward the override, not just accept it");
+    }
+
+    [TestMethod]
+    public async Task ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip()
+    {
+        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded };
+        RecordingAuditWriter audit = new RecordingAuditWriter();
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy, auditWriter: audit);
+
+        await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset?allowNoBackup=true", null, TestContext.CancellationToken);
+
+        Assert.Contains(
+            AuditOperation.BackupSkipped, audit.Operations,
+            "a log line rotates away; the audit row is what still answers \"why is there no backup from "
+            + "that date\" months later");
+    }
+
+    /// <summary>
+    /// Records the operations written, so a test can assert that a skipped backup left a trail rather
+    /// than only a log line. The connection-bound overloads are unused here — the Reset endpoint writes
+    /// through the connectionless one — but must exist to satisfy the interface.
+    /// </summary>
+    private sealed class RecordingAuditWriter : IAuditEntryWriter
+    {
+        public List<string> Operations { get; } = [];
+
+        public Task WriteAsync(AuditEntryEntity entry)
+        {
+            Operations.Add(entry.Operation);
+            return Task.CompletedTask;
+        }
+
+        public Task WriteAsync(AuditEntryEntity entry, IDbConnection connection, IDbTransaction? transaction = null)
+            => WriteAsync(entry);
+
+        public Task WriteAsync(IReadOnlyList<AuditEntryEntity> entries, IDbConnection connection, IDbTransaction? transaction = null)
+        {
+            foreach (AuditEntryEntity entry in entries)
+                Operations.Add(entry.Operation);
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(string? table = null) => Task.CompletedTask;
+    }
+
     /// <summary>
     /// POST /admin/database/reset calls DismissByTriggerAsync(DatabaseReset) as part of its own
     /// success path (#278) — verified via a spy writer rather than a real Reset round-trip, since a
@@ -225,6 +362,15 @@ public class AdminEndpointsTests
     {
         public bool? LastPreserveSchemaVersion { get; private set; }
 
+        /// <summary>#348 — set to make the spy refuse a reset, as a real initializer would when no backup can be taken.</summary>
+        public BackupOutcome? RefuseWith { get; init; }
+
+        /// <summary>#348 — whether the reset actually ran, so a test can assert a refusal rebuilt nothing.</summary>
+        public bool ResetRan { get; private set; }
+
+        /// <summary>#348 — what the endpoint forwarded as the override, so a test can assert it is threaded through.</summary>
+        public bool? LastAllowNoBackup { get; private set; }
+
         public int    SchemaVersion    => 5;
         public int    DataSchemaVersion => 2;
         public int    QuoteCount       => 0;
@@ -248,7 +394,15 @@ public class AdminEndpointsTests
         public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false)
         {
             LastPreserveSchemaVersion = preserveSchemaVersion;
-            return Task.FromResult(DatabaseOperationResult.Success());
+            LastAllowNoBackup         = allowNoBackup;
+
+            // Mirrors the real initializer: the override is what turns a refusal into a run, so a spy
+            // that refused regardless would make the override untestable at this layer.
+            if (RefuseWith is not null && !allowNoBackup)
+                return Task.FromResult(DatabaseOperationResult.RefusedForBackup(RefuseWith.Value));
+
+            ResetRan = true;
+            return Task.FromResult(DatabaseOperationResult.Success(backupSkippedByOverride: RefuseWith is not null));
         }
 
         public Task<SeedPreviewResult> PreviewSeedAsync()
