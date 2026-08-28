@@ -555,10 +555,17 @@ public class DatabaseInitializer(
         {
             await OnResetAsync(connection, preserveSchemaVersion, forceSourceRefresh);
         }
-        catch (SqliteException ex) when (ex.SqliteErrorCode is 26 or 11)
+        catch (SqliteException ex) when (ex.SqliteErrorCode is 26 or 11 or 14 or 8)
         {
-            Logger.LogResetRefusedNoBackup(BackupOutcome.SourceUnreadable.ToString());
-            return DatabaseOperationResult.RefusedForBackup(BackupOutcome.SourceUnreadable);
+            // 26/11 are the source; 14/8 are the storage refusing a write the pre-flight's probe should
+            // have caught first. Both are included because the backstop's job is to be wider than the
+            // check, not to mirror it — a code reaching here at all means the check missed something.
+            BackupOutcome obstacle = ex.SqliteErrorCode is 26 or 11
+                ? BackupOutcome.SourceUnreadable
+                : BackupOutcome.DestinationFileNotWritable;
+
+            Logger.LogResetRefusedNoBackup(obstacle.ToString());
+            return DatabaseOperationResult.RefusedForBackup(obstacle);
         }
 
         return DatabaseOperationResult.Success(backupSkippedByOverride: readiness != BackupOutcome.Succeeded);
@@ -583,6 +590,22 @@ public class DatabaseInitializer(
 
         try { Directory.CreateDirectory(_options.BackupsPath); }
         catch (Exception) { return BackupOutcome.DestinationDirectoryNotWritable; }
+
+        // Creating the directory proves nothing when it already exists — CreateDirectory is a no-op
+        // then, and returns happily on a read-only mount. Found live: a reset against `--read-only-data`
+        // with backups/ already present cleared this check, then failed with SQLITE_CANTOPEN inside the
+        // table drop and reached the client as an unhandled 500. So the check writes something, which is
+        // the only way to answer the question it claims to answer.
+        string probePath = Path.Combine(_options.BackupsPath, ".writable-probe");
+        try
+        {
+            File.WriteAllBytes(probePath, []);
+            File.Delete(probePath);
+        }
+        catch (Exception)
+        {
+            return BackupOutcome.DestinationFileNotWritable;
+        }
 
         return BackupOutcome.Succeeded;
     }

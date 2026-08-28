@@ -283,6 +283,35 @@ public class AdminEndpointsTests
             "the remedy that does work is replacing the file from outside the application");
     }
 
+    /// <summary>
+    /// Found live on a read-only <c>/data</c>: the override was offered, was used, still refused — and
+    /// the response then repeated the same advice that had just failed. Advice already disproved on this
+    /// very request is worse than no advice, because it sends the operator round the same loop.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetDatabase_WhenTheOverrideWasTriedAndStillRefused_DoesNotOfferItAgain()
+    {
+        SpyDatabaseInitializer spy = new SpyDatabaseInitializer
+        {
+            RefuseWith = BackupOutcome.DestinationFileNotWritable,
+            RefuseEvenWithOverride = true,
+        };
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset?allowNoBackup=true", null, TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+
+        string allRemedies = string.Join(" ",
+            doc.RootElement.GetProperty("remedies").EnumerateArray().Select(r => r.GetString()!));
+
+        Assert.AreEqual(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.DoesNotContain(
+            "allowNoBackup", allRemedies, StringComparison.Ordinal,
+            "it was just tried and did not work — repeating it is advice the request itself disproved");
+        Assert.IsGreaterThan(0, allRemedies.Length, "removing the disproved remedy must not leave nothing");
+    }
+
     [TestMethod]
     public async Task ResetDatabase_WithOverride_ProceedsAndRebuilds()
     {
@@ -391,6 +420,9 @@ public class AdminEndpointsTests
         /// <summary>#348 — set to make the spy refuse a reset, as a real initializer would when no backup can be taken.</summary>
         public BackupOutcome? RefuseWith { get; init; }
 
+        /// <summary>#348 — refuse even when the override is passed, as a read-only /data genuinely does.</summary>
+        public bool RefuseEvenWithOverride { get; init; }
+
         /// <summary>#348 — whether the reset actually ran, so a test can assert a refusal rebuilt nothing.</summary>
         public bool ResetRan { get; private set; }
 
@@ -424,7 +456,7 @@ public class AdminEndpointsTests
 
             // Mirrors the real initializer: the override is what turns a refusal into a run, so a spy
             // that refused regardless would make the override untestable at this layer.
-            if (RefuseWith is not null && !allowNoBackup)
+            if (RefuseWith is not null && (!allowNoBackup || RefuseEvenWithOverride))
                 return Task.FromResult(DatabaseOperationResult.RefusedForBackup(RefuseWith.Value));
 
             ResetRan = true;

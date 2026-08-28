@@ -230,7 +230,7 @@ internal static class AdminEndpoints
                     extensions: new Dictionary<string, object?>
                     {
                         ["backupObstacle"] = obstacle.ToString(),
-                        ["remedies"]       = BackupObstacleGuidance.Remedies(obstacle),
+                        ["remedies"]       = BackupObstacleGuidance.Remedies(obstacle, allowNoBackup),
                     });
             }
 

@@ -51,7 +51,21 @@ internal static class BackupObstacleGuidance
     /// which never happens today, and would itself be worth reporting if it did.
     /// </summary>
     /// <param name="obstacle">The obstacle that stopped the backup.</param>
-    internal static IReadOnlyList<string> Remedies(BackupOutcome obstacle) => obstacle switch
+    /// <param name="overrideAlreadyTried">
+    /// Whether the caller already passed the override on this request. When they did and it still
+    /// refused, offering it again would repeat advice that has just been shown not to work — found live
+    /// on a read-only <c>/data</c>, where the override cannot help because the reset itself cannot write
+    /// either. The remaining remedies are the ones that have not been disproved.
+    /// </param>
+    internal static IReadOnlyList<string> Remedies(BackupOutcome obstacle, bool overrideAlreadyTried = false)
+    {
+        IReadOnlyList<string> all = RemediesFor(obstacle);
+        return overrideAlreadyTried
+            ? [.. all.Where(r => !r.Contains("allowNoBackup", StringComparison.Ordinal))]
+            : all;
+    }
+
+    private static IReadOnlyList<string> RemediesFor(BackupOutcome obstacle) => obstacle switch
     {
         BackupOutcome.BudgetExceeded =>
         [
