@@ -23,6 +23,9 @@ happened.
 - **`?lang=` and `Accept-Language` are pinned separately in every request.** A step that set neither
   would resolve against the container's own culture, which is the host's, and the result would depend
   on the machine running it.
+- **The row count is asserted before any field, in steps 2, 3 and 4.** A join can return too few rows
+  (excluding notifications with no translation) or too many (one per translation); both leave `items[0]`
+  looking entirely correct, so no field assertion can detect either.
 - **A language with no translation is the point of step 3, not a failure of it.** The fallback is the
   contract; a run that cannot reach an untranslated language has not tested the fallback and fails.
 - **Never assert a specific migration number or schema version** — the tables arrive in whatever
@@ -43,11 +46,22 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-notif-08 --port 1
 ### 2. Read a notification in its original language
 
 ```powershell
-(Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=en").items[0] |
-  Select-Object language, originalLanguage, isTranslated, title, body | Format-List
+$r = Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=en"
+"count=$($r.items.Count) totalCount=$($r.totalCount)"
+$r.items[0] | Select-Object language, originalLanguage, isTranslated, title, body | Format-List
 ```
 
-**Expected:** `language` is `en`, `originalLanguage` is `en`, and `isTranslated` is `False`.
+**Expected:** `count` is at least `1` and equal to `totalCount`, then `language` is `en`,
+`originalLanguage` is `en`, and `isTranslated` is `False`.
+
+**The count is asserted before anything else because the read is a join.** A notification is one row
+joined to zero-or-more translation rows, so the two ways this can go wrong are *fewer* rows than
+expected (the join eliminating notifications that have no translation) and *more* (one copy per
+translation). Both are invisible to any step that reads `items[0]` and inspects its fields — the fields
+would be perfectly correct on a list that is missing half its entries, or repeating them.
+
+**A `count` of `0` is a failure, not an empty database.** The startup producers write on first boot, so
+an empty list here means the join dropped them.
 
 `title` and `body` are non-empty. An empty `body` here means the read projection's `COALESCE` returned
 nothing for a notification that definitely has text, which is the failure mode the fallback exists to
@@ -59,12 +73,20 @@ subsequent fallback resolves to nothing, so the remaining steps would report an 
 ### 3. Read the same notification in a language it has no translation for
 
 ```powershell
-(Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=fr").items[0] |
-  Select-Object language, originalLanguage, isTranslated, body | Format-List
+$en = Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=en"
+$fr = Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=fr"
+"en=$($en.items.Count) fr=$($fr.items.Count) — equal: $($en.items.Count -eq $fr.items.Count)"
+$fr.items[0] | Select-Object language, originalLanguage, isTranslated, body | Format-List
 ```
 
-**Expected:** `language` is `en` — **not** `fr` — `isTranslated` is `False`, and `body` is the same
-text step 2 returned.
+**Expected:** `equal: True`, then `language` is `en` — **not** `fr` — `isTranslated` is `False`, and
+`body` is the same text step 2 returned.
+
+**`equal: False` is the failure this step exists for, and it outranks every field below it.** A
+requested language with no translations must return exactly the same notifications as any other; if the
+count drops, the join is excluding rows rather than falling back, and a reader in an untranslated
+language sees nothing at all rather than English. That is a harder failure than a mistranslation and it
+is invisible to a step that only inspects the first item's fields.
 
 **The response must not report `language: fr`.** Echoing the requested language back for text that was
 not translated is the specific defect this contract prevents: it makes an untranslated notification
@@ -76,14 +98,21 @@ would render blank to every reader outside its original language. That is cause 
 ### 4. Read it in a language it does have a translation for
 
 ```powershell
-$nl = (Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=nl").items[0]
-$en = (Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=en").items[0]
+$nlAll = Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=nl"
+$enAll = Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=en"
+"nl=$($nlAll.items.Count) en=$($enAll.items.Count) — equal: $($nlAll.items.Count -eq $enAll.items.Count)"
+$nl = $nlAll.items[0]; $en = $enAll.items[0]
 $nl | Select-Object language, originalLanguage, isTranslated | Format-List
 "same body as English: $($nl.body -eq $en.body)"
 ```
 
-**Expected:** `language` is `nl`, `originalLanguage` is `en`, `isTranslated` is `True`, and the
-comparison prints `False` — the Dutch body genuinely differs from the English one.
+**Expected:** `equal: True`, then `language` is `nl`, `originalLanguage` is `en`, `isTranslated` is
+`True`, and the comparison prints `False` — the Dutch body genuinely differs from the English one.
+
+**`equal: False` here means duplication, not omission** — this is the language that *has* translation
+rows, so a join that fans out returns one copy of the notification per translation. It is the mirror of
+step 3's failure and needs its own check, because a list that is too long reads as perfectly correct
+from `items[0]`.
 
 **`same body as English: True` is a failure even though every field looks right.** It means the join
 matched no translation row and the `COALESCE` fell through to the original while the `CASE` still
