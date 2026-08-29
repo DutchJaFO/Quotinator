@@ -579,6 +579,65 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
+    /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema"/>,
+    /// for <c>System_NotificationTranslation</c> (added by #319's Data-owned migration). The parity
+    /// test compares column ordinals, which is why a column added by <c>ALTER TABLE … ADD COLUMN</c>
+    /// must trail in the baseline rather than sit where it reads most naturally.
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationTranslationSchema()
+    {
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync(TestContext.CancellationToken);
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync(TestContext.CancellationToken);
+
+        List<string> schemaA = await DumpTableSchemaAsync(connA, "System_NotificationTranslation");
+        List<string> schemaB = await DumpTableSchemaAsync(connB, "System_NotificationTranslation");
+
+        Assert.IsNotEmpty(schemaA, "System_NotificationTranslation is missing from Data's baseline path.");
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_NotificationTranslation schema differs between Data's baseline and incremental paths — " +
+            "update DataBaselineSql to match DataOwnedMigrations' final result.");
+    }
+
+    /// <summary>
+    /// <c>System_Notification.OriginalLanguage</c> reaches the same shape on both paths — a column
+    /// added by <c>ALTER TABLE</c> is the exact case where the baseline silently drifts.
+    /// </summary>
+    [TestMethod]
+    public async Task DataOwnedBaseline_And_IncrementalReplay_AgreeOnNotificationOriginalLanguage()
+    {
+        using TempDatabase tempA = new([]);
+        DatabaseInitializer dbA = CreateBareInitializer(tempA.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await dbA.InitialiseAsync();
+
+        using TempDatabase tempB = new([]);
+        DatabaseInitializer dbB = CreateBareInitializer(tempB.DbPath, []);
+        await dbB.InitialiseForTestingAsync(forceIncremental: true);
+
+        using SqliteConnection connA = new($"Data Source={tempA.DbPath}");
+        await connA.OpenAsync(TestContext.CancellationToken);
+        using SqliteConnection connB = new($"Data Source={tempB.DbPath}");
+        await connB.OpenAsync(TestContext.CancellationToken);
+
+        string? defaultA = await connA.ExecuteScalarAsync<string>(
+            "SELECT dflt_value FROM pragma_table_info('System_Notification') WHERE name = 'OriginalLanguage';");
+        string? defaultB = await connB.ExecuteScalarAsync<string>(
+            "SELECT dflt_value FROM pragma_table_info('System_Notification') WHERE name = 'OriginalLanguage';");
+
+        Assert.IsNotNull(defaultA, "System_Notification.OriginalLanguage is missing from Data's baseline path.");
+        Assert.AreEqual(defaultB, defaultA, "OriginalLanguage's default differs between the baseline and incremental paths.");
+    }
+
+    /// <summary>
     /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural round-trip
     /// closes that gap for <c>System_Notification.Type</c>/<c>DismissTriggerKey</c>'s enum values
     /// (#278, ADR 008), for both the baseline and incremental paths.
@@ -666,9 +725,9 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync(TestContext.CancellationToken);
         int dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(11, dataRows,
+        Assert.AreEqual(13, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(11, db.DataSchemaVersion);
+        Assert.AreEqual(13, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

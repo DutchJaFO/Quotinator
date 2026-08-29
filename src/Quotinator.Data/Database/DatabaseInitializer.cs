@@ -100,6 +100,13 @@ public class DatabaseInitializer(
         // to every payload rather than what's-new's alone — the remaining kinds' stored rows are
         // brought onto that shape so they stay identifiable instead of re-announcing themselves.
         new SchemaMigration { Version = 11, Sql = NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields },
+        // #319: a notification records which language its own Title/Body are written in, so a reader
+        // requesting a language with no translation falls back to the original rather than to nothing.
+        new SchemaMigration { Version = 12, Sql = NotificationTranslationMigrations.AddOriginalLanguageColumn },
+        // #319: and gains a sibling table holding one translated Title/Body per language — the same
+        // arrangement Quotinator_Quote/Quotinator_QuoteTranslation already uses, which is what keeps
+        // the original text (and therefore every producer's content hash) on the parent row untouched.
+        new SchemaMigration { Version = 13, Sql = NotificationTranslationMigrations.CreateNotificationTranslationTable },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -300,10 +307,27 @@ public class DatabaseInitializer(
             Metadata          TEXT,
             MetadataKind      TEXT
                               CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew')),
-            AppVersionId      TEXT    REFERENCES System_AppVersion(Id)
+            AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
+            OriginalLanguage  TEXT    NOT NULL DEFAULT 'en'
         );
         CREATE INDEX IF NOT EXISTS IX_System_Notification_Active ON System_Notification (IsDismissed, IsDeleted, ExpiresAt);
         CREATE INDEX IF NOT EXISTS IX_System_Notification_DismissTriggerKey ON System_Notification (DismissTriggerKey);
+
+        -- #319. Trails System_Notification because it references it. OriginalLanguage above trails
+        -- AppVersionId for the same reason Title/Metadata/MetadataKind/AppVersionId trail IsDeleted:
+        -- migration 12 adds it via ALTER TABLE, and the parity test compares column ordinals.
+        CREATE TABLE IF NOT EXISTS System_NotificationTranslation (
+            Id             TEXT    PRIMARY KEY,
+            NotificationId TEXT    NOT NULL REFERENCES System_Notification(Id),
+            Language       TEXT    NOT NULL,
+            Title          TEXT,
+            Body           TEXT    NOT NULL,
+            DateCreated    TEXT    NOT NULL,
+            DateModified   TEXT,
+            DateDeleted    TEXT,
+            IsDeleted      INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (NotificationId, Language)
+        );
 
         -- Application and SequenceNumber trail after IsDeleted for the same reason System_Notification's
         -- new columns do: #312 adds them via ALTER TABLE ADD COLUMN, which appends, and the schema-drift

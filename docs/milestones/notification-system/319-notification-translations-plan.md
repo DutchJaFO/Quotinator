@@ -1,6 +1,6 @@
 # #319 — Notification title and body are not translated
 
-**Status:** Planning
+**Status:** In progress (step 2)
 **GitHub issue:** #319
 **Tiers required:** T1, T2
 **Depends on:** #278, #312
@@ -67,7 +67,7 @@ where ADR 015's prefix rule applies unambiguously.
 
 `OriginalLanguage` can be added with `ALTER TABLE … ADD COLUMN` (no CHECK widening involved), so this
 does not need a table rebuild. Baseline updated to match in the same commit, per the schema-drift parity
-tests. Migration number assigned at implementation time — `DataOwnedMigrations` ends at 11 today.
+tests. Delivered as `DataOwnedMigrations` 12 and 13 — one schema change each, per CLAUDE.md.
 
 **No CHECK constraint on `Language`.** ADR 008 governs enum-backed columns; a language code is not
 enum-backed here, and `Quotinator_QuoteTranslation.Language` has no CHECK either. Consistent with the
@@ -225,13 +225,34 @@ producers, 10 the surfaces.
 
 ### 1. Schema
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `System_Notification.OriginalLanguage` via `ALTER TABLE … ADD COLUMN` (`NOT NULL DEFAULT 'en'`), and a
 new `System_NotificationTranslation` table — `RecordBase` per ADR 002, `System_` prefix and singular per
 ADR 015, columns `NotificationId`/`Language`/`Title`/`Body` with `Title` nullable. No CHECK on
 `Language`, matching `Quotinator_QuoteTranslation`. Update `DataBaselineSql` in the same commit; the
 schema-drift parity tests fail otherwise.
+
+Delivered as **two** migrations, not one — `NotificationTranslationMigrations.AddOriginalLanguageColumn`
+(12) and `.CreateNotificationTranslationTable` (13) — per CLAUDE.md's one-schema-change-per-migration
+rule; the two are independent, so bundling them would only make a partial failure harder to reason
+about. `UNIQUE (NotificationId, Language)` mirrors `Quotinator_QuoteTranslation`'s own constraint, so
+one-translation-per-language is enforced by the database rather than by each producer.
+
+In the baseline, `OriginalLanguage` trails `AppVersionId` and the new table trails
+`System_Notification`: the parity test compares column *ordinals*, and an `ALTER TABLE … ADD COLUMN`
+always appends — the same reason `Title`/`Metadata`/`MetadataKind`/`AppVersionId` already trail
+`IsDeleted` there.
+
+**Three existing tests pinned the Data migration count at 11 and went red on 13** —
+`ApplyBaselineAsync_NoConsumerBaselineDefined_FallsThroughToIncremental` plus two in
+`Quotinator.Core.Tests.DatabaseInitializerTests`. Updated to 13, which is the intended maintenance step
+for these: they exist to pin the count, so every migration addition moves them.
+
+`NotificationTranslationTests` lives in `tests/Quotinator.Data.Tests/Repositories/` rather than
+`Database/`, since most of the methods the issue names for it are reader/writer behaviour; its one
+migration test uses `TempDatabase` + the migration constant directly, the same technique
+`NotificationLegacyBackfillMigrationTests` established.
 
 ### 2. Entity and translation DTO
 
@@ -345,9 +366,9 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | `System_Notification` gains `OriginalLanguage`, existing rows defaulting to `en` | Unit test | Real-SQLite migration test asserting the backfilled value, not just the column's presence |
-| 2 | ❌ | `System_NotificationTranslation` exists with `RecordBase`'s columns | Unit test | Existing `RecordBase` schema-conformance test pattern (ADR 002) |
-| 3 | ❌ | Baseline and incremental replay produce an identical schema for both tables | Unit test | `DataOwnedBaseline_And_IncrementalReplay_…` parity tests (existing, must still pass) |
+| 1 | ✅ | `System_Notification` gains `OriginalLanguage`, existing rows defaulting to `en` | Unit test | `NotificationTranslationTests.Migration_ExistingRows_DefaultToEnglishOriginalLanguage` — inserts a row at the pre-319 schema, runs migration 12, asserts the backfilled `en` |
+| 2 | ✅ | `System_NotificationTranslation` exists with `RecordBase`'s columns | Unit test | `NotificationTranslationTests.NotificationTranslationTable_HasRecordBaseColumns` — all four audit columns plus its own four |
+| 3 | ✅ | Baseline and incremental replay produce an identical schema for both tables | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationTranslationSchema` and `..._AgreeOnNotificationOriginalLanguage` |
 | 4 | ❌ | Writing a notification with translations persists one row per language | Unit test | Real SQLite, via `INotificationWriter.WriteAsync` |
 | 5 | ❌ | Reading in a translated language returns the translated title and body | Unit test | Real SQLite |
 | 6 | ❌ | Reading in an untranslated language falls back to the original text | Unit test | Real SQLite — the transparent-fallback contract |
