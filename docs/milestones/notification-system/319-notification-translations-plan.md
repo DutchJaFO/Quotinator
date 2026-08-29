@@ -1,6 +1,6 @@
 # #319 — Notification title and body are not translated
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 3)
 **GitHub issue:** #319
 **Tiers required:** T1, T2
 **Depends on:** #278, #312
@@ -98,12 +98,12 @@ row supplying a body but no title falls back to the original title rather than d
 in one call rather than the row being enriched afterward (issue requirement 3). Shape:
 
 ```
-IReadOnlyList<NotificationTranslationDto>   // (Language, Title, Body)
+IReadOnlyList<NotificationTranslation>   // (Language, Title, Body)
 ```
 
 A list of a small record rather than a dictionary: `Title` is nullable and independent of `Body`, which
-a `Dictionary<string, string>` cannot express, and the `Dto` suffix follows ADR 016's rule the
-same way `NotificationMetadataDto` does.
+a `Dictionary<string, string>` cannot express. Unsuffixed rather than `…Dto` — see step 2 for why
+ADR 016 puts it outside the four-suffix scheme.
 
 `NotificationSeeding.SeedOnceAsync` threads the same parameter through. **Its identity comparison is
 untouched, and the separate translation table is what guarantees that.** Stated precisely, because the
@@ -254,12 +254,21 @@ for these: they exist to pin the count, so every migration addition moves them.
 migration test uses `TempDatabase` + the migration constant directly, the same technique
 `NotificationLegacyBackfillMigrationTests` established.
 
-### 2. Entity and translation DTO
+### 2. Entity and translation value type
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `NotificationTranslationEntity` mirroring `QuoteTranslationEntity`, plus the
-`NotificationTranslationDto(Language, Title, Body)` record the write side takes.
+`NotificationTranslation(Language, Title, Body)` record the write side takes.
+
+**Named `NotificationTranslation`, not `NotificationTranslationDto` — the plan's `Dto` was wrong.**
+ADR 016 defines `Dto` as a wire-format shape: an on-disk JSON file, or a JSON blob serialized into and
+read back out of a database column. This type is neither — it is never serialized, only carried from a
+producer into `WriteAsync`, where each instance becomes a row. The plan justified the suffix as
+"the same way `NotificationMetadataDto` does", but that comparison does not hold: that one genuinely is
+database-column JSON. ADR 016's out-of-scope clause covers this case, alongside `MasterDataReference`
+and `SeedBatch`, so it stays unsuffixed. ADRs outrank a plan doc per CLAUDE.md's authoritative-sources
+order, which is why this was changed rather than followed.
 
 ### 3. Backfill migration for the one existing row
 
