@@ -144,6 +144,8 @@
   "ErrorRuleFileOverrideNotFound": "Für diesen fileName/origin existiert keine registrierte Override.",
   "ErrorFileResourceNotFound": "Es existiert keine erfasste Importdatei mit dieser ID.",
   "ErrorNotificationNotFound": "Es existiert keine Benachrichtigung mit dieser ID.",
+  "ErrorBackupNameInvalid": "'name' muss ein Dateiname einer Sicherung sein, kein Pfad.",
+  "ErrorBackupNotFound": "Es existiert keine Sicherung mit diesem Namen.",
   "ErrorLineEndingInvalid": "'lineEnding' muss 'lf', 'crlf' oder 'cr' sein.",
   "ErrorKeepPerFileInvalid": "'keepPerFile' muss eine nicht-negative ganze Zahl sein.",
   "ErrorFileResourceOriginInvalid": "'origin' muss 'System', 'User' oder 'Upload' sein.",

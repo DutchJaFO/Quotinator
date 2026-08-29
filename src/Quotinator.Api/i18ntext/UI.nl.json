@@ -144,6 +144,8 @@
   "ErrorRuleFileOverrideNotFound": "Er bestaat geen geregistreerde override voor die fileName/origin.",
   "ErrorFileResourceNotFound": "Er bestaat geen vastgelegd importbestand met dat ID.",
   "ErrorNotificationNotFound": "Er bestaat geen melding met dat ID.",
+  "ErrorBackupNameInvalid": "'name' moet een bestandsnaam van een back-up zijn, geen pad.",
+  "ErrorBackupNotFound": "Er bestaat geen back-up met die naam.",
   "ErrorLineEndingInvalid": "'lineEnding' moet 'lf', 'crlf' of 'cr' zijn.",
   "ErrorKeepPerFileInvalid": "'keepPerFile' moet een niet-negatief geheel getal zijn.",
   "ErrorFileResourceOriginInvalid": "'origin' moet 'System', 'User' of 'Upload' zijn.",

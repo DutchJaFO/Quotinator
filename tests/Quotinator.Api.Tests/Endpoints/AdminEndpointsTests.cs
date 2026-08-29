@@ -413,6 +413,24 @@ public class AdminEndpointsTests
         Assert.IsTrue(spy.LastPreserveSchemaVersion);
     }
 
+    /// <summary>
+    /// #349 — a refused reset's remedies name the endpoints that can actually resolve it, rather than
+    /// describing an action the operator has no route to perform.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetRefusedForBudget_RemedyNamesTheBackupEndpoints()
+    {
+        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded };
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.Conflict, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        Assert.Contains("/api/v1/admin/backups", body, StringComparison.Ordinal);
+    }
+
     private sealed class SpyDatabaseInitializer : IDatabaseInitializer
     {
         public bool? LastPreserveSchemaVersion { get; private set; }
@@ -447,6 +465,7 @@ public class AdminEndpointsTests
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
 
         public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
+        public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success("spy-backup.db"));
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
 
         public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false)

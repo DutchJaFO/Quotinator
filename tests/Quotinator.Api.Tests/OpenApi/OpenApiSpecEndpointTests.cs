@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Quotinator.Api.Tests.Fakes;
+using Quotinator.Constants.Api;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
 using Quotinator.Data.Testing.NoOps;
@@ -126,6 +127,49 @@ public class OpenApiSpecEndpointTests
         Assert.IsEmpty(failures,
             "Every tag an endpoint uses is declared with a description, or its group renders without one:\n"
             + string.Join("\n", failures));
+    }
+
+    /// <summary>
+    /// The five backup routes carry <c>Backup</c>, not <c>Admin</c> (#349).
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="EveryTagAnEndpointUses_IsDeclaredWithADescription"/> because that test
+    /// stays green if the tag is never introduced at all — it only checks that whatever tags exist are
+    /// declared. This one checks the deliberate departure from the group-level default actually
+    /// happened, which is the part a later reader is most likely to "correct" back.
+    /// </remarks>
+    [TestMethod]
+    public async Task BackupRoutes_AreTaggedBackup_NotAdmin()
+    {
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client = factory.CreateClient();
+
+        JsonDocument? doc = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
+
+        string[] backupPaths =
+        [
+            .. doc!.RootElement.GetProperty("paths").EnumerateObject()
+                 .Select(p => p.Name)
+                 .Where(p => p.StartsWith("/api/v1/admin/backups", StringComparison.OrdinalIgnoreCase))
+        ];
+
+        Assert.HasCount(5, backupPaths,
+            "expected the list, status, create, content and delete paths:\n" + string.Join("\n", backupPaths));
+
+        List<string> failures = [];
+        foreach (JsonProperty path in doc.RootElement.GetProperty("paths").EnumerateObject()
+                                        .Where(p => backupPaths.Contains(p.Name)))
+        {
+            foreach (JsonProperty operation in path.Value.EnumerateObject())
+            {
+                string[] tags = [.. operation.Value.GetProperty("tags").EnumerateArray().Select(t => t.GetString()!)];
+
+                if (!tags.Contains(ApiTags.Backup))
+                    failures.Add($"{operation.Name.ToUpperInvariant()} {path.Name} — tagged {string.Join(", ", tags)}, not {ApiTags.Backup}");
+            }
+        }
+
+        Assert.IsEmpty(failures, string.Join("\n", failures));
     }
 
     public TestContext TestContext { get; set; }

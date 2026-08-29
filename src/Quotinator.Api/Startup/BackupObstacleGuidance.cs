@@ -69,7 +69,11 @@ internal static class BackupObstacleGuidance
     {
         BackupOutcome.BudgetExceeded =>
         [
-            "Remove one or more old backups to free quota.",
+            // #349 gave this remedy a route. Until those endpoints existed it described an action the
+            // operator had no way to perform from inside the application, which is the gap that issue
+            // was filed to close — so it names them now rather than leaving the advice abstract.
+            "Remove one or more old backups to free quota — list them with GET /api/v1/admin/backups "
+            + "and remove one with DELETE /api/v1/admin/backups/{name}.",
             "Raise the quota by increasing Quotinator:MaxBackupStorageGb, then restart.",
             "Retry with allowNoBackup=true to proceed without a backup, accepting that this action will "
             + "have no restore point.",
@@ -77,7 +81,7 @@ internal static class BackupObstacleGuidance
         BackupOutcome.InsufficientDiskSpace =>
         [
             "Free disk space on the volume holding the data directory.",
-            "Removing old backups reclaims some of that space.",
+            "Removing old backups reclaims some of that space — DELETE /api/v1/admin/backups/{name}.",
             "Retry with allowNoBackup=true to proceed without a backup, accepting that this action will "
             + "have no restore point.",
         ],

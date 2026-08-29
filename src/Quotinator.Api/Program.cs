@@ -82,6 +82,7 @@ builder.Services.AddOpenApi(options =>
             new() { Name = ApiTags.Conversations, Description = "Endpoints for fetching multi-line conversations (a stage direction and/or sound cue alongside one or more quotes)." },
             new() { Name = ApiTags.MasterData,    Description = "Endpoints for fetching the shared reference data — Sources, Characters, People, Series, and Universes — that quotes and conversations are built from." },
             new() { Name = ApiTags.Notifications, Description = "Endpoints for listing startup and maintenance notifications, and for dismissing them. Dismissing requires `X-Api-Key` authentication; listing does not." },
+            new() { Name = ApiTags.Backup,        Description = "Endpoints for managing database backups — listing what exists, taking one on demand, downloading one so it survives the container, removing one to free quota, and reporting whether a backup can be taken right now. All require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter. They remain reachable while the database is degraded, which is the state they exist for." },
         };
 
         document.Info = new()
@@ -352,6 +353,15 @@ DatabaseOptions dbOptions          = new() { DbPath = dbPath, BackupsPath = back
 // defaults to false since it doesn't know a future consumer's dataset size.
 SqliteConnectionFactory connectionFactory = new(dbPath, useMemoryTempStore: true);
 builder.Services.AddSingleton<IDiskSpaceProvider, DiskSpaceProvider>();
+
+// #349: registered so the backup endpoints' reader and writer resolve the same folder and the same
+// storage budget the initializer was built with, rather than each rebuilding an opinion about where
+// backups live. The reader and writer never open the database, which is what keeps those endpoints
+// answerable while it is degraded.
+builder.Services.AddSingleton(dbOptions);
+builder.Services.AddSingleton<IDatabaseBackupReader>(sp =>
+    new DatabaseBackupReader(dbOptions, sp.GetRequiredService<IDiskSpaceProvider>()));
+builder.Services.AddSingleton<IDatabaseBackupWriter>(_ => new DatabaseBackupWriter(dbOptions));
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 
 // #309: separate database for changelog content (ADR 018) — no relational or transactional coupling
@@ -796,6 +806,7 @@ app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDat
 
 app.MapQuoteEndpoints();
 app.MapAdminEndpoints();
+app.MapBackupEndpoints();
 app.MapImportEndpoints();
 app.MapImportRuleEndpoints();
 app.MapImportFileResourceEndpoints();
