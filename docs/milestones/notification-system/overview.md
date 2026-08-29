@@ -63,6 +63,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#348](https://github.com/DutchJaFO/Quotinator/issues/348) | Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable | Waiting for release | T1 ⬜ T2 ✅ | [348-backup-outcomes-and-refusal-plan.md](348-backup-outcomes-and-refusal-plan.md) |
 | [#349](https://github.com/DutchJaFO/Quotinator/issues/349) | Admin endpoints to list, delete and report status for database backups | Planning | T1 ⬜ T2 ⬜ | [349-backup-management-endpoints-plan.md](349-backup-management-endpoints-plan.md) |
 | [#350](https://github.com/DutchJaFO/Quotinator/issues/350) | A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown | Planning | T1 ⬜ T2 ⬜ | [350-overshoot-must-degrade-plan.md](350-overshoot-must-degrade-plan.md) |
+| [#351](https://github.com/DutchJaFO/Quotinator/issues/351) | `AuditOperation` is a string-constant set where the project's convention is an enum | Planning | T1 ⬜ T2 ⬜ | [351-audit-operation-enum-plan.md](351-audit-operation-enum-plan.md) |
 
 ---
 
@@ -176,6 +177,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
          the app must degrade rather than serve from it. Owns rewriting startup-and-degradation/06 and
          replacing the in-process test #327 added, so #327 does not touch either again. Names restoring
          an older backup as a second remedy alongside Reset, which #349 records as future work
+#351 ─── (none) — found while planning #349, which adds a thirteenth const string into the shape this
+         issue replaces. Takes whatever members exist when it runs, so either order relative to #349.
+         Its table rebuild is written against this milestone's own end-of-milestone migration
+         consolidation, not as a permanent numbered step — the frozen boundary is the last released
+         migration, which is what makes the conversion affordable here rather than deferred
 #313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
          this milestone could be trusted, because Api tests asserted before the app finished starting
          (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
@@ -221,12 +227,13 @@ step, the other reuses it.
 | 24 | **#305** | Independent bug; can slot in anywhere |
 | 25 | **#306** | Independent bug; can slot in anywhere |
 | 26 | **#308** | Per-type layout across both surfaces. Last, because it cannot settle those layouts before the producers that need them exist |
+| 27 | **#351** | `AuditOperation` to an enum with its CHECK constraint. Independent of everything above and slottable anywhere; placed last so #349's own new member is already in place when the conversion runs, and so its table rebuild is written with this milestone's full migration set visible |
 
 ---
 
 ## PR merge plan
 
-All twenty-six issues are self-contained on top of already-released infrastructure (#278, #80, #154,
+All twenty-seven issues are self-contained on top of already-released infrastructure (#278, #80, #154,
 #156) — none leave anything half-wired if merged independently, except #81 (which genuinely cannot
 merge before #309 and #307), #319 (which cannot merge before #312), #331 (which cannot merge before
 #330), #328 (which cannot merge before #339), and #327 (which cannot merge before #339 for its

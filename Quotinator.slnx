@@ -310,6 +310,7 @@
     <File Path="docs/milestones/notification-system/348-backup-outcomes-and-refusal-plan.md" />
     <File Path="docs/milestones/notification-system/349-backup-management-endpoints-plan.md" />
     <File Path="docs/milestones/notification-system/350-overshoot-must-degrade-plan.md" />
+    <File Path="docs/milestones/notification-system/351-audit-operation-enum-plan.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/">
     <File Path="docs/automated-testing/README.md" />
