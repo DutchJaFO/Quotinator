@@ -94,7 +94,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #303 ─── depends on #278 and #312 (same as #302); same seeding-loop hook point as #302; its review page
          depends on the existing #154 staging model (ImportAction, IImportActionReader/Service) and the
          existing /import/actions REST endpoints — all already shipped, nothing new needed there
-#307 ─── depends on #80 (extends its shipped schema/generator/models) and, per ADR 018, on #309's
+#307 ─── its mechanism is independent, but its *first real use* is not: a populated
+         audienceHighlights.notification key cannot be shown to work until #308 renders more than one
+         highlight in the startup dialog, so #308 owns that verification (2026-08-29). Until then the
+         key stays absent, which is the designed no-notification case rather than a gap.
+         Also depends on #80 (extends its shipped schema/generator/models) and, per ADR 018, on #309's
          importer abstraction existing conceptually (not a hard build-order dependency — #307's schema
          field addition doesn't itself need System_Changelog to exist yet)
 #308 ─── depends on #278 (extends its shipped NotificationTable component) and #312 (hard — renders
@@ -225,12 +229,12 @@ step, the other reuses it.
 | 8 | **#326** ✅ | Done, `Waiting for release`. All 12 verification rows green including T1 and a T2 controlled pair. It also corrected its own premise, which #327 inherits: sidecar state decides whether a read-only mount degrades, **not** a pending migration |
 | 9 | **#348** ✅ | Done, `Waiting for release` — T1 outstanding, the developer's own. Backup outcomes and refusal: five named obstacles, a reset that refuses rather than returning an unhandled 500, and a 90% operating quota with a reserve. Found by #327 while measuring whether a stated recovery route can actually succeed |
 | 10 | **#349** ✅ | Done. Grew from three endpoints to five — list, delete, status, download, create — under their own `Backup` tag. Three defects were found by running it rather than by unit tests: an unhandled 500 on delete against a read-only mount, another on download caused by a pooled connection holding every backup file open, and no logging at all |
-| 11 | **#307** | Finish what is already open before starting anything new — two documentation-confirmation rows outstanding, see its plan doc. Its flagged-highlight field is what #81's producer already reads |
+| 11 | **#307** | Finish what is already open before starting anything new — two documentation-confirmation rows outstanding, see its plan doc. Its flagged-highlight field is what #81's producer already reads. **Closes on the mechanism only**: populating `audienceHighlights.notification` with real content cannot be verified until #308 renders multiple highlights in the startup dialog, so that first real use belongs there, not here (developer direction, 2026-08-29) |
 | 12 | **#319** | Translated title/body. The gateway to the whole cluster below: every producer after it writes new user-facing text, and building any of them first means building the text twice |
 | 13 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
 | 14 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
 | 15 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 16 | **#308** | Per-type layout across both surfaces. Last of the notification cluster, because it cannot settle those layouts before the producers that need them exist |
+| 16 | **#308** | Per-type layout across both surfaces. Last of the notification cluster, because it cannot settle those layouts before the producers that need them exist. **Also owns #307's first real use**: its own background names this case — a what's-new notification with more than one highlight per release — so proving a populated `audienceHighlights.notification` actually reaches the startup dialog is verified here, where the rendering exists |
 | 17 | **#350** | Overshoot must degrade, not run healthy. Changes application behaviour, and #327's overshoot document is rewritten against the result. Reverses #289's shipped continue-and-notify design |
 | 18 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. Unblocked: #326 is done, #348's refusal behaviour is in, and #339 has already delivered the structure these documents are authored into. The overshoot document and its in-process test belong to #350 |
 | 19 | **#328** | Bundled-import and live-endpoint smoke coverage; authors into the same delivered structure |

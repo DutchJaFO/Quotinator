@@ -151,8 +151,9 @@ never a bare string literal.
 | 2 | ✅ | `GetHighlightsFor(ChangelogReservedAudience.Notification)` returns an empty list (not null, no exception) when the key is absent | Unit test | `ChangelogUnreleasedTests.GetHighlightsFor_NotificationKeyAbsent_ReturnsEmptyList` |
 | 3 | ✅ | A changelog entry using `audienceHighlights.notification` is schema-valid | Unit test | `ChangelogSchemaTests.NotificationAudienceKey_IsSchemaValid` |
 | 4 | ✅ | The same entry's `notification` key round-trips through `IChangelogService.GetForCulture` into `GetHighlightsFor` | Unit test | `ChangelogServiceTests.NotificationAudienceKey_RoundTripsThroughGetHighlightsFor` |
-| 5 | ❌ | `schemas/changelog.schema.json`'s `audienceHighlights` description documents the reserved `notification` key | Manual | Developer reads the updated schema file description — pending confirmation |
-| 6 | ❌ | CLAUDE.md's Pre-Push Checklist references the convention | Manual | Developer reads the updated CLAUDE.md section — pending confirmation |
+| 5 | ❌ | `schemas/changelog.schema.json`'s `audienceHighlights` description documents the reserved `notification` key | Manual | Developer reads the updated schema file description — pending confirmation. The text is at `schemas/changelog.schema.json:73` |
+| 6 | ❌ | CLAUDE.md's Pre-Push Checklist references the convention | Manual | Developer reads the updated CLAUDE.md section — pending confirmation. The text is at `CLAUDE.md:1186` |
+| 9 | ⏸ | A populated `notification` key actually reaches the startup dialog | Live | **Deferred to #308** (developer direction, 2026-08-29). The key is unexercised by real data today, and cannot be shown to work until the dialog renders more than one highlight — which is #308's own subject, named in its background. Until then the key stays absent, which is the designed no-notification case, not a gap. Recorded here so the mechanism is not mistaken for verified end to end |
 | 7 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s), confirmed |
 | 8 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` — all projects passed, confirmed |
 
