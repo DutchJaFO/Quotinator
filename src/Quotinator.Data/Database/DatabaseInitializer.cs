@@ -861,7 +861,23 @@ public class DatabaseInitializer(
 
         Logger.LogBackupStarting(fromVersion, backupPath);
 
-        using SqliteConnection dest = new SqliteConnection($"Data Source={backupPath}");
+        // #349: pooling is off for this connection, and that is load-bearing rather than tidiness.
+        // Microsoft.Data.Sqlite pools by default, so disposing a pooled connection returns it to the
+        // pool and keeps its file handle open for the life of the process — which left every backup
+        // this application ever wrote locked. Found in T1: downloading a backup taken moments earlier
+        // failed with "the process cannot access the file because it is being used by another process",
+        // and the other process was this one. Invisible on Unix, where a retained handle blocks
+        // neither a second open nor an unlink, which is why no container test caught it.
+        //
+        // Pooling buys nothing here in any case: this connection is opened once, written once by the
+        // page copy, and never used again.
+        string destConnectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = backupPath,
+            Pooling    = false,
+        }.ToString();
+
+        using SqliteConnection dest = new SqliteConnection(destConnectionString);
         try { dest.Open(); }
         catch (Exception ex) { return DatabaseBackupResult.Failed(BackupOutcome.DestinationFileNotWritable, ex); }
 

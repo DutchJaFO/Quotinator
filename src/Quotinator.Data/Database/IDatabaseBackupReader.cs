@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Database;
@@ -22,12 +23,17 @@ public interface IDatabaseBackupReader
     BackupStorageUsage GetUsage();
 
     /// <summary>
-    /// Opens one backup file for reading, or returns <see langword="null"/> when no such file exists.
-    /// The caller owns the returned stream.
+    /// Opens one backup file for reading, reporting what happened rather than throwing.
+    /// <para>
+    /// A file that cannot be opened is an ordinary condition with a remedy, not an unforeseen fault.
+    /// Letting it escape as an exception is what produced an unhandled <c>500</c> when a download met
+    /// a locked file.
+    /// </para>
     /// </summary>
     /// <param name="name">The file name, as <see cref="List"/> reports it.</param>
-    /// <returns>A readable stream, or <see langword="null"/> when the name is unsafe or absent.</returns>
-    Stream? OpenRead(string name);
+    /// <param name="stream">The readable stream when the outcome is <see cref="BackupReadOutcome.Opened"/>; otherwise <see langword="null"/>. The caller owns it.</param>
+    /// <returns>Which of the four outcomes occurred.</returns>
+    BackupReadOutcome TryOpenRead(string name, out Stream? stream);
 
     /// <summary>Whether a backup with this name currently exists and is safe to act on.</summary>
     /// <param name="name">The file name, as <see cref="List"/> reports it.</param>

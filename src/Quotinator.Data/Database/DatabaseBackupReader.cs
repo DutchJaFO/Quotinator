@@ -1,3 +1,4 @@
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 
 namespace Quotinator.Data.Database;
@@ -61,16 +62,28 @@ public sealed class DatabaseBackupReader(DatabaseOptions options, IDiskSpaceProv
     }
 
     /// <inheritdoc/>
-    public Stream? OpenRead(string name)
+    public BackupReadOutcome TryOpenRead(string name, out Stream? stream)
     {
-        if (!Exists(name))
-            return null;
+        stream = null;
 
-        BackupFileNames.TryResolve(options.BackupsPath, name, out string fullPath);
+        if (!BackupFileNames.IsBackup(name) || !BackupFileNames.TryResolve(options.BackupsPath, name, out string fullPath))
+            return BackupReadOutcome.InvalidName;
 
-        // FileShare.Read rather than None: a download must not block a concurrent backup from being
-        // taken, and nothing here writes.
-        return new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (!File.Exists(fullPath))
+            return BackupReadOutcome.NotFound;
+
+        try
+        {
+            // FileShare.ReadWrite, not Read: a reader that refuses writers cannot open a file some
+            // other handle already holds writable, which is how a download failed against a backup
+            // being written. Nothing here writes, so tolerating one costs nothing.
+            stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return BackupReadOutcome.Opened;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return BackupReadOutcome.NotReadable;
+        }
     }
 
     /// <inheritdoc/>

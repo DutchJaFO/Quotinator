@@ -95,7 +95,7 @@ public class DatabaseBackupReaderTests
         // Consistent across every route, not just the listing: a probe that is invisible in the list
         // but downloadable by name would be a worse answer than either alone.
         Assert.IsFalse(reader.Exists(BackupFileNames.ProbeFileName));
-        Assert.IsNull(reader.OpenRead(BackupFileNames.ProbeFileName));
+        Assert.AreEqual(BackupReadOutcome.InvalidName, reader.TryOpenRead(BackupFileNames.ProbeFileName, out _));
         Assert.AreEqual(BackupDeleteOutcome.InvalidName, new DatabaseBackupWriter(Options(_backups)).Delete(BackupFileNames.ProbeFileName));
         Assert.IsTrue(File.Exists(Path.Combine(_backups, BackupFileNames.ProbeFileName)),
             "refusing to treat it as a backup must not mean deleting it either");
@@ -164,21 +164,65 @@ public class DatabaseBackupReaderTests
         byte[] written = [1, 2, 3, 4, 5];
         File.WriteAllBytes(Path.Combine(_backups, "present.db"), written);
 
-        using Stream? stream = CreateReader().OpenRead("present.db");
+        Assert.AreEqual(BackupReadOutcome.Opened, CreateReader().TryOpenRead("present.db", out Stream? stream));
 
         Assert.IsNotNull(stream);
+        using Stream owned = stream!;
         using MemoryStream buffer = new MemoryStream();
         stream!.CopyTo(buffer);
         Assert.AreSequenceEqual(written, buffer.ToArray());
     }
 
-    /// <summary>A name with no file behind it opens nothing.</summary>
+    /// <summary>A name with no file behind it opens nothing, and says which nothing.</summary>
     [TestMethod]
-    public void OpenRead_UnknownName_IsNull() => Assert.IsNull(CreateReader().OpenRead("absent.db"));
+    public void OpenRead_UnknownName_IsNotFound()
+    {
+        Assert.AreEqual(BackupReadOutcome.NotFound, CreateReader().TryOpenRead("absent.db", out Stream? stream));
+        Assert.IsNull(stream);
+    }
 
     /// <summary>A name that is a path opens nothing, whatever it points at.</summary>
     [TestMethod]
-    public void OpenRead_UnsafeName_IsNull() => Assert.IsNull(CreateReader().OpenRead("../escape.db"));
+    public void OpenRead_UnsafeName_IsInvalidName()
+    {
+        Assert.AreEqual(BackupReadOutcome.InvalidName, CreateReader().TryOpenRead("../escape.db", out Stream? stream));
+        Assert.IsNull(stream);
+    }
+
+    /// <summary>
+    /// A backup another handle holds open for writing is still readable — a download must not fail
+    /// because something else has the file open.
+    /// </summary>
+    [TestMethod]
+    public void OpenRead_FileHeldOpenForWriting_StillReads()
+    {
+        WriteBackup("busy.db", 64);
+        using FileStream holder = new FileStream(
+            Path.Combine(_backups, "busy.db"), FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+
+        Assert.AreEqual(BackupReadOutcome.Opened, CreateReader().TryOpenRead("busy.db", out Stream? stream));
+        stream?.Dispose();
+    }
+
+    /// <summary>
+    /// A backup that genuinely cannot be opened is reported, not thrown.
+    /// <para>
+    /// Found live in T1 (#349): the download endpoint answered an unhandled <c>500</c> when the file
+    /// was locked. The lock itself was our own leaked handle and is fixed at source, but a reader that
+    /// throws on any IO failure would produce the same <c>500</c> for the next cause — which is the
+    /// defect class #348 exists to remove.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void OpenRead_FileCannotBeOpened_IsReported_NotThrown()
+    {
+        WriteBackup("locked.db", 64);
+        using FileStream exclusive = new FileStream(
+            Path.Combine(_backups, "locked.db"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        Assert.AreEqual(BackupReadOutcome.NotReadable, CreateReader().TryOpenRead("locked.db", out Stream? stream));
+        Assert.IsNull(stream);
+    }
 
     /// <summary>Exists distinguishes a real backup from one that was never there.</summary>
     [TestMethod]

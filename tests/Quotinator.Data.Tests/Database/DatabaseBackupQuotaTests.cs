@@ -196,6 +196,47 @@ public class DatabaseBackupQuotaTests
     }
 
     /// <summary>
+    /// A backup that has just been taken is immediately readable and removable — no handle is retained.
+    /// <para>
+    /// Found live in T1 (#349, 2026-08-29): downloading a backup created moments earlier answered an
+    /// unhandled <c>500</c>, "the process cannot access the file because it is being used by another
+    /// process". The other process was this one. <c>Microsoft.Data.Sqlite</c> pools connections by
+    /// default, so disposing the destination connection returns it to the pool and keeps its file
+    /// handle open for the life of the process — every backup ever taken stayed locked.
+    /// </para>
+    /// <para>
+    /// This assertion can only <em>fail</em> on Windows: on Unix a retained handle does not prevent
+    /// another open or an unlink, so the same leak is invisible there. Recorded rather than hidden —
+    /// the guarantee is the same on both, and the leak was real on both.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task CreateBackupAsync_LeavesNoHandleOnTheFileItWrote()
+    {
+        RecordingInitializer initializer = new RecordingInitializer(NewOptions(), _dbPath);
+        await CreateSeededDatabaseAsync();
+
+        DatabaseBackupResult result = await initializer.CreateBackupAsync();
+
+        Assert.AreEqual(BackupOutcome.Succeeded, result.Outcome);
+
+        using (FileStream stream = new FileStream(result.Path!, FileMode.Open, FileAccess.Read, FileShare.Read))
+            Assert.IsGreaterThan(0L, stream.Length);
+
+        File.Delete(result.Path!);
+        Assert.IsFalse(File.Exists(result.Path!), "a backup nothing holds open can be removed");
+    }
+
+    private async Task CreateSeededDatabaseAsync()
+    {
+        using SqliteConnection connection = new SqliteConnection($"Data Source={_dbPath}");
+        await connection.OpenAsync();
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "CREATE TABLE IF NOT EXISTS Probe (Id INTEGER PRIMARY KEY)";
+        await command.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
     /// Writes filler into the backups folder until it occupies the given share of the ceiling. The
     /// ceiling is 1 GB in these tests, so the files are sized from that rather than from any real
     /// database — this fixture is about headroom arithmetic, not about backup content.

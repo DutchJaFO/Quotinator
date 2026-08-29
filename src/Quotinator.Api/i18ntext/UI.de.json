@@ -147,6 +147,7 @@
   "ErrorBackupNameInvalid": "'name' muss ein Dateiname einer Sicherung sein, kein Pfad.",
   "ErrorBackupNotFound": "Es existiert keine Sicherung mit diesem Namen.",
   "ErrorBackupNotRemovable": "Diese Sicherung existiert, konnte aber nicht entfernt werden — das Datenverzeichnis ist schreibgeschützt, oder dem Containerbenutzer fehlen die Schreibrechte. Stellen Sie den Schreibzugriff wieder her und versuchen Sie es erneut.",
+  "ErrorBackupNotReadable": "Diese Sicherung existiert, konnte aber nicht gelesen werden — ein anderer Prozess hält die Datei, oder die Berechtigungen verweigern den Lesezugriff. Versuchen Sie es gleich erneut und prüfen Sie das Anwendungsprotokoll, falls es bestehen bleibt.",
   "ErrorLineEndingInvalid": "'lineEnding' muss 'lf', 'crlf' oder 'cr' sein.",
   "ErrorKeepPerFileInvalid": "'keepPerFile' muss eine nicht-negative ganze Zahl sein.",
   "ErrorFileResourceOriginInvalid": "'origin' muss 'System', 'User' oder 'Upload' sein.",

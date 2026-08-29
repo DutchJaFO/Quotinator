@@ -70,6 +70,7 @@ public static class ApiMessages
     public const string BackupNameInvalid                = "ErrorBackupNameInvalid";
     public const string BackupNotFound                   = "ErrorBackupNotFound";
     public const string BackupNotRemovable               = "ErrorBackupNotRemovable";
+    public const string BackupNotReadable                = "ErrorBackupNotReadable";
     public const string StartupWaitHeading               = "StartupWaitHeading";
     public const string StartupWaitBody                  = "StartupWaitBody";
 }

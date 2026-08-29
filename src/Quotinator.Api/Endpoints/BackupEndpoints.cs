@@ -193,13 +193,21 @@ internal static class BackupEndpoints
             IDatabaseBackupReader reader,
             IApiLocalizer localizer) =>
         {
-            if (!reader.IsValidName(name))
-                return Results.Problem(detail: localizer[ApiMessages.BackupNameInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
+            BackupReadOutcome outcome = reader.TryOpenRead(name, out Stream? content);
 
-            Stream? content = reader.OpenRead(name);
-            return content is null
-                ? Results.Problem(detail: localizer[ApiMessages.BackupNotFound], statusCode: StatusCodes.Status404NotFound)
-                : Results.File(content, "application/octet-stream", Path.GetFileName(name));
+            // Every outcome is a stated answer, for the same reason the delete endpoint states its
+            // own: a file that cannot be opened is an ordinary condition, and letting the IO failure
+            // escape produced an unhandled 500 in T1.
+            return outcome switch
+            {
+                BackupReadOutcome.Opened      => Results.File(content!, "application/octet-stream", Path.GetFileName(name)),
+                BackupReadOutcome.InvalidName => Results.Problem(detail: localizer[ApiMessages.BackupNameInvalid], statusCode: StatusCodes.Status422UnprocessableEntity),
+                BackupReadOutcome.NotFound    => Results.Problem(detail: localizer[ApiMessages.BackupNotFound], statusCode: StatusCodes.Status404NotFound),
+                _                             => Results.Problem(
+                                                     title: "Backup could not be read",
+                                                     detail: localizer[ApiMessages.BackupNotReadable],
+                                                     statusCode: StatusCodes.Status409Conflict),
+            };
         })
         // A fetch, but by name rather than by id — noted here as the convention requires, rather than
         // forced into "X by ID" wording that would describe a Guid lookup this is not.
@@ -208,6 +216,7 @@ internal static class BackupEndpoints
         .Produces<FileResult>(StatusCodes.Status200OK, "application/octet-stream")
         .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
         .Produces<ProblemDetails>(StatusCodes.Status404NotFound)
+        .Produces<ProblemDetails>(StatusCodes.Status409Conflict)
         .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
         .WithDescription(
             "Downloads one stored backup, so a restore point can survive the container it was taken in. " +

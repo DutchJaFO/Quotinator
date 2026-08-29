@@ -77,6 +77,34 @@ public class AdminBackupCreateEndpointTests
         Assert.IsEmpty(harness.FilesOnDisk());
     }
 
+    /// <summary>
+    /// A backup can be downloaded immediately after being created.
+    /// <para>
+    /// The exact T1 failure (#349, 2026-08-29): create returned `201`, and downloading that same file
+    /// answered an unhandled `500` because the pooled SQLite connection that wrote it still held the
+    /// handle. `Create_TheCreatedFileAppearsInTheList_AndCanBeDownloaded` did not catch it because the
+    /// harness's stub writes the file with plain IO rather than through a SQLite connection — this one
+    /// is guarded at the Data layer instead, by
+    /// `DatabaseBackupQuotaTests.CreateBackupAsync_LeavesNoHandleOnTheFileItWrote`, and kept here as
+    /// the endpoint-level statement of the same guarantee.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task Create_ThenDownloadImmediately_Succeeds()
+    {
+        using BackupTestHarness harness = new BackupTestHarness();
+        HttpClient client = harness.AuthenticatedClient();
+
+        HttpResponseMessage created = await client.PostAsync(Create, null, TestContext.CancellationToken);
+        string name = JsonDocument.Parse(await created.Content.ReadAsStringAsync(TestContext.CancellationToken))
+                                  .RootElement.GetProperty("name").GetString()!;
+
+        HttpResponseMessage downloaded = await client.GetAsync($"{Backups}/{name}/content", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, downloaded.StatusCode);
+        Assert.IsGreaterThan(0, (await downloaded.Content.ReadAsByteArrayAsync(TestContext.CancellationToken)).Length);
+    }
+
     /// <summary>A creation is recorded in the audit trail, under the operation declared for exactly this.</summary>
     [TestMethod]
     public async Task Create_WritesAnAuditEntry()

@@ -147,6 +147,7 @@
   "ErrorBackupNameInvalid": "'name' moet een bestandsnaam van een back-up zijn, geen pad.",
   "ErrorBackupNotFound": "Er bestaat geen back-up met die naam.",
   "ErrorBackupNotRemovable": "Die back-up bestaat, maar kon niet worden verwijderd — de datamap is alleen-lezen, of de containergebruiker heeft er geen schrijfrechten op. Herstel de schrijftoegang en probeer het opnieuw.",
+  "ErrorBackupNotReadable": "Die back-up bestaat, maar kon niet worden gelezen — een ander proces houdt het bestand vast, of de rechten staan lezen niet toe. Probeer het zo opnieuw en raadpleeg het applicatielog als het blijft optreden.",
   "ErrorLineEndingInvalid": "'lineEnding' moet 'lf', 'crlf' of 'cr' zijn.",
   "ErrorKeepPerFileInvalid": "'keepPerFile' moet een niet-negatief geheel getal zijn.",
   "ErrorFileResourceOriginInvalid": "'origin' moet 'System', 'User' of 'Upload' zijn.",

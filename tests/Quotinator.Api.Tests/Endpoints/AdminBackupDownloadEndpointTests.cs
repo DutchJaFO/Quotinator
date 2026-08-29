@@ -123,6 +123,25 @@ public class AdminBackupDownloadEndpointTests
         }
     }
 
+    /// <summary>
+    /// A backup that cannot be opened answers 409, never an unhandled 500 — the read-side counterpart
+    /// of the delete endpoint's own refusal, and the shape T1 found missing here.
+    /// </summary>
+    [TestMethod]
+    public async Task Download_FileCannotBeOpened_Returns409NotAnUnhandled500()
+    {
+        using BackupTestHarness harness = new BackupTestHarness();
+        harness.WriteBackup("locked.db");
+
+        using FileStream exclusive = new FileStream(
+            Path.Combine(harness.BackupsPath, "locked.db"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        HttpResponseMessage response = await harness.AuthenticatedClient()
+            .GetAsync($"{Backups}/locked.db/content", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
     /// <summary>Downloading sits behind the admin API key.</summary>
     [TestMethod]
     public async Task Download_WithoutApiKey_Returns401()
