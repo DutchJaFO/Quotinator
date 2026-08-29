@@ -225,25 +225,31 @@ step, the other reuses it.
 | 8 | **#326** ✅ | Done, `Waiting for release`. All 12 verification rows green including T1 and a T2 controlled pair. It also corrected its own premise, which #327 inherits: sidecar state decides whether a read-only mount degrades, **not** a pending migration |
 | 9 | **#348** ✅ | Done, `Waiting for release` — T1 outstanding, the developer's own. Backup outcomes and refusal: five named obstacles, a reset that refuses rather than returning an unhandled 500, and a 90% operating quota with a reserve. Found by #327 while measuring whether a stated recovery route can actually succeed |
 | 10 | **#349** ✅ | Done. Grew from three endpoints to five — list, delete, status, download, create — under their own `Backup` tag. Three defects were found by running it rather than by unit tests: an unhandled 500 on delete against a read-only mount, another on download caused by a pooled connection holding every backup file open, and no logging at all |
-| 11 | **#350** | Overshoot must degrade, not run healthy. The first item that is both unblocked and unstarted, so it is now genuinely next. Changes application behaviour, and #327's overshoot document is rewritten against the result. Reverses #289's shipped continue-and-notify design |
-| 12 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. Unblocked: #326 is done, #348's refusal behaviour is in, and #339 has already delivered the structure these documents are authored into. The overshoot document and its in-process test belong to #350. Must pin the WAL sidecar state explicitly; #326's plan doc carries the measurement |
-| 13 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above, and authors into the same delivered structure |
-| 14 | **#339** | **Moved down from 9 (2026-08-29).** Its structure is delivered and in use — what remains is one verification row, "every document can distinguish the feature working from the feature broken", which is blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone. Leaving it at 9 made the whole sequence unworkable, since nothing after it could proceed while it waited on another milestone. Running it *after* #327 and #328 is also better than before: those two add documents, and this row validates every document there is |
-| 15 | **#329** | Retry and parallelism for source downloads. After the smoke-test issues, which close a verification gap; before #324, which consumes its statistics |
-| 16 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
-| 17 | **#319** | Translated title/body. Before every producer below, each of which writes new user-facing text |
-| 18 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. Independent of everything above it, and #331 below cannot start without it. Also owns giving a *backup* file its own record, which #349 deferred here rather than extending the audit schema |
-| 19 | **#331** | Conditional requests, storing validators in #330's shape. Lands before #324 so the source-download subsystem is finished before anything reports on it |
-| 20 | **#324** | Reports on the finished source-download subsystem. Last in that cluster, so it is written once rather than revised as #329/#330/#331 land |
-| 21 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
-| 22 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
-| 23 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 24 | **#305** | Independent bug; can slot in anywhere |
-| 25 | **#306** | Independent bug; can slot in anywhere |
-| 26 | **#308** | Per-type layout across both surfaces. Last, because it cannot settle those layouts before the producers that need them exist |
+| 11 | **#307** | Finish what is already open before starting anything new — two documentation-confirmation rows outstanding, see its plan doc. Its flagged-highlight field is what #81's producer already reads |
+| 12 | **#319** | Translated title/body. The gateway to the whole cluster below: every producer after it writes new user-facing text, and building any of them first means building the text twice |
+| 13 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 14 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 15 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 16 | **#308** | Per-type layout across both surfaces. Last of the notification cluster, because it cannot settle those layouts before the producers that need them exist |
+| 17 | **#350** | Overshoot must degrade, not run healthy. Changes application behaviour, and #327's overshoot document is rewritten against the result. Reverses #289's shipped continue-and-notify design |
+| 18 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. Unblocked: #326 is done, #348's refusal behaviour is in, and #339 has already delivered the structure these documents are authored into. The overshoot document and its in-process test belong to #350 |
+| 19 | **#328** | Bundled-import and live-endpoint smoke coverage; authors into the same delivered structure |
+| 20 | **#339** | **Moved down from 9 (2026-08-29).** Its structure is delivered and in use — what remains is one verification row, "every document can distinguish the feature working from the feature broken", blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone. Leaving it at 9 made the sequence unworkable, since nothing after it could proceed while it waited on another milestone. Running it after #327/#328 is also better than before: those two add documents, and this row validates every document there is |
+| 21 | **#329** | Retry and parallelism for source downloads. Before #324, which consumes its statistics |
+| 22 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. #331 below cannot start without it. Also owns giving a *backup* file its own record, which #349 deferred here rather than extending the audit schema |
+| 23 | **#331** | Conditional requests, storing validators in #330's shape. Lands before #324 so the source-download subsystem is finished before anything reports on it |
+| 24 | **#324** | The one notification issue that cannot join the cluster above: it reports on the source-download subsystem and consumes #329's statistics, so it stays after them and is written once rather than revised as #329/#330/#331 land |
+| 25 | **#305** | Independent bug; can slot in anywhere |
+| 26 | **#306** | Independent bug; can slot in anywhere |
 | 27 | **#351** | `AuditOperation` to an enum with its CHECK constraint. Independent of everything above and slottable anywhere; placed last so #349's own new member is already in place when the conversion runs, and so its table rebuild is written with this milestone's full migration set visible |
 | 28 | **#352** | Restore a stored backup. After #349, whose `{name}` guard and create endpoint it relies on being there — not for compilation, but so the remedy text and the operator's loop are written once |
 | 29 | **#353** | Upload a backup file. Last of the backup cluster: it is the only endpoint that accepts an arbitrary file, and writing it after restore exists means its validation is written against a real consumer rather than a hypothetical one |
+
+**Notifications come first from position 11 (developer direction, 2026-08-29).** The safe-start cluster
+(#326, #348, #349) and the backup endpoints grew large enough to crowd out the milestone's own subject:
+every notification producer was still unstarted at position 21 or below. #307 and #319 lead because one
+is already open and the other is the gateway every producer's text depends on. Only #324 stays behind
+the source-download work, because it reports on statistics #329 has not established yet.
 
 **#339's blocker reaches past this issue.** Per the PR merge plan below, the branch stays open until every
 issue in the milestone is done — so #347, in the v1.9.0 milestone, gates this milestone's close and not
