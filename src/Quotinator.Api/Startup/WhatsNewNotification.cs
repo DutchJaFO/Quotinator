@@ -123,6 +123,8 @@ internal static class WhatsNewNotification
     /// *different* releases, all of them written *by* this one version, which is exactly the
     /// distinction provenance draws.
     /// </param>
+    /// <param name="localizer">Supplies each notification title in every language (#319); <see langword="null"/> in unit tests, where the English template is enough.</param>
+    /// <param name="translatedDocuments">Each non-English changelog document, keyed by language (#319), supplying the translated highlight text.</param>
     internal static async Task SeedAsync(
         INotificationReader reader, INotificationWriter writer, ChangelogDocument? document,
         string? lastActiveVersion, string currentVersion, Guid? appVersionId,
@@ -233,7 +235,7 @@ internal static class WhatsNewNotification
     /// honestly as untranslated.
     /// </para>
     /// </summary>
-    private static IReadOnlyList<NotificationTranslation> BuildTranslations(
+    private static List<NotificationTranslation> BuildTranslations(
         IApiLocalizer? localizer,
         IReadOnlyDictionary<string, ChangelogDocument>? translatedDocuments,
         string titleKey,

@@ -17,6 +17,9 @@ public class NotificationTranslationSourceTests
 {
     private static readonly string I18nDir = Path.Combine(AppContext.BaseDirectory, "i18ntext");
 
+    // The non-original languages this project ships, alphabetically — the order .Order() produces.
+    private static readonly string[] ExpectedTranslatedLanguages = ["de", "nl"];
+
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>Every non-English locale file contributes one translation, resolving no culture at all.</summary>
@@ -32,7 +35,7 @@ public class NotificationTranslationSourceTests
 
         List<string> languages = [.. translations.Select(t => t.Language).Order()];
 
-        Assert.AreSequenceEqual(new[] { "de", "nl" }, languages,
+        Assert.AreSequenceEqual(ExpectedTranslatedLanguages, languages,
             "English is the original and stays on the notification row, so it is never a translation.");
     }
 
@@ -108,7 +111,7 @@ public class NotificationTranslationSourceTests
 
         IReadOnlyList<NotificationTranslation> translations = seeds.Single().Translations;
 
-        Assert.AreEqual(1, translations.Count);
+        Assert.HasCount(1, translations);
         Assert.AreEqual("nl", translations[0].Language,
             "German had no changelog content, so it must contribute nothing rather than English text labelled 'de'.");
     }

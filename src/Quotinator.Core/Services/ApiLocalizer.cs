@@ -56,7 +56,7 @@ public static partial class ApiLocalizerFormatting
     public static string Substitute(string template, params object[] args)
         => PlaceholderPattern().Replace(template, m =>
         {
-            var index = int.Parse(m.Groups[1].Value);
+            int index = int.Parse(m.Groups[1].Value);
             return index < args.Length ? args[index]?.ToString() ?? string.Empty : m.Value;
         });
 }
@@ -100,9 +100,9 @@ public sealed class ApiLocalizer(string i18nTextDir) : IApiLocalizer
 
     private string Resolve(string key)
     {
-        var culture = CultureInfo.CurrentUICulture;
+        CultureInfo culture = CultureInfo.CurrentUICulture;
 
-        if (TryGet(culture.Name, key, out var v)) return v;
+        if (TryGet(culture.Name, key, out string? v)) return v;
         if (TryGet(culture.TwoLetterISOLanguageName, key, out v)) return v;
         if (TryGet("en-GB", key, out v)) return v;
         return key;
@@ -110,7 +110,7 @@ public sealed class ApiLocalizer(string i18nTextDir) : IApiLocalizer
 
     private bool TryGet(string lang, string key, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? value)
     {
-        if (_tables.TryGetValue(lang, out var table) && table.TryGetValue(key, out var v))
+        if (_tables.TryGetValue(lang, out IReadOnlyDictionary<string, string>? table) && table.TryGetValue(key, out string? v))
         {
             value = v;
             return true;
@@ -124,7 +124,7 @@ public sealed class ApiLocalizer(string i18nTextDir) : IApiLocalizer
 
     private static IReadOnlyDictionary<string, string> LoadTable(string path)
     {
-        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(path));
         return doc.RootElement
             .EnumerateObject()
             .ToDictionary(p => p.Name, p => p.Value.GetString() ?? string.Empty);

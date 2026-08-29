@@ -42,6 +42,7 @@ public static class NotificationSeeding
     /// <param name="title">Optional short headline shown above <paramref name="body"/>.</param>
     /// <param name="dismissTrigger">Which action, if performed, supersedes this notification.</param>
     /// <param name="expiresAt">When this notification stops being active. <see langword="null"/> means it never expires (#312's opt-in expiry).</param>
+    /// <param name="translations">Every non-original language's title and body, passed through to <see cref="INotificationWriter.WriteAsync"/> (#319). Never part of the identity comparison.</param>
     public static async Task<NotificationEntity?> SeedOnceAsync(
         INotificationReader reader,
         INotificationWriter writer,

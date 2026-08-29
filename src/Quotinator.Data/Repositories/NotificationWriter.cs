@@ -94,7 +94,8 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
         // stay a hand-rolled query here. The update half below is a single-table UPDATE and is not in
         // scope for that ADR.
         JoinQueryRepository<NotificationEntity> byId = new(Factory, new NotificationJoinStrategies.ById());
-        NotificationEntity? entity = (await byId.QueryAsync(new { id, lang = language })).FirstOrDefault();
+        IReadOnlyList<NotificationEntity> found = await byId.QueryAsync(new { id, lang = language });
+        NotificationEntity? entity = found.Count > 0 ? found[0] : null;
         if (entity is null)
             return null;
 

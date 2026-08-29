@@ -63,20 +63,13 @@ internal static class NotificationTranslationMigrations
         """;
 
     /// <summary>
-    /// Gives v1.8.3's shipped operation-id-rename announcement its Dutch and German translations — the
-    /// only notification any released build has actually persisted, so this backfills one row rather
-    /// than a corpus.
+    /// Superseded by <see cref="BackfillAnnouncementTranslationsByKind"/> and left unedited because it
+    /// has been applied to a real database.
     /// <para>
-    /// Conditional on that notification being present, exactly as migration 9 is, which is what stops
-    /// this inventing content: a database created fresh by a later build reaches this migration too
-    /// (baseline path, version recorded, then incremental) and never ran v1.8.3, so it matches nothing
-    /// and gains nothing. The <c>NOT EXISTS</c> guard makes each language's insert idempotent.
-    /// </para>
-    /// <para>
-    /// The text is a frozen copy of the <c>NotificationOperationIdRename*</c> keys in
-    /// <c>i18ntext/UI.*.json</c>, which is where the #279 producer reads the same strings for rows it
-    /// writes from now on. The duplication is deliberate and required: migration text must never change
-    /// once applied, so it cannot follow a later edit to those keys.
+    /// It matches <c>Metadata</c> against the exact legacy JSON v1.8.3 wrote. Migration 11 has since
+    /// <c>json_insert</c>ed <c>releaseState</c>, <c>version</c> and <c>contentHash</c> into that same
+    /// column, so by the time this runs the string comparison matches nothing and the statement is
+    /// inert. Kept in the sequence so a database that already recorded it stays consistent.
     /// </para>
     /// </summary>
     internal const string BackfillAnnouncementTranslations = """
@@ -109,6 +102,70 @@ internal static class NotificationTranslationMigrations
                0
         FROM System_Notification n
         WHERE n.Metadata = '{"announcement":"GetAllImportBatches"}'
+          AND NOT EXISTS (SELECT 1 FROM System_NotificationTranslation t
+                          WHERE LOWER(t.NotificationId) = LOWER(n.Id) AND LOWER(t.Language) = LOWER('de'));
+        """;
+
+    /// <summary>
+    /// Gives v1.8.3's shipped operation-id-rename announcement its Dutch and German translations — the
+    /// only notification any released build has actually persisted, so this backfills one row rather
+    /// than a corpus.
+    /// <para>
+    /// Identifies the row by <c>MetadataKind</c> plus the payload's own <c>announcement</c> key, read
+    /// with <c>json_extract</c>. Matching the whole <c>Metadata</c> string cannot work: migration 11
+    /// <c>json_insert</c>s further fields into that column, so the value v1.8.3 wrote is not the value
+    /// this migration meets. Reading one key is also stable against any later field being added.
+    /// </para>
+    /// <para>
+    /// Conditional on that notification being present, exactly as migration 9 is, which is what stops
+    /// this inventing content: a database created fresh by a later build reaches this migration too
+    /// (baseline path, version recorded, then incremental) and never ran v1.8.3, so it matches nothing
+    /// and gains nothing. The <c>NOT EXISTS</c> guard makes each language's insert idempotent, and also
+    /// makes this a no-op on the one database where the superseded statement above did run.
+    /// </para>
+    /// <para>
+    /// The text is a frozen copy of the <c>NotificationOperationIdRename*</c> keys in
+    /// <c>i18ntext/UI.*.json</c>, which is where the #279 producer reads the same strings for rows it
+    /// writes from now on. The duplication is deliberate and required: migration text must never change
+    /// once applied, so it cannot follow a later edit to those keys.
+    /// </para>
+    /// </summary>
+    internal const string BackfillAnnouncementTranslationsByKind = """
+        INSERT INTO System_NotificationTranslation (Id, NotificationId, Language, Title, Body, DateCreated, IsDeleted)
+        SELECT lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(2))) || '-' ||
+                   lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(6))),
+               n.Id,
+               'nl',
+               'Twee API-bewerkings-ID''s zijn hernoemd',
+               'Twee REST API-bewerkings-ID''s zijn hernoemd voor consistente naamgeving (issue #279): ' ||
+               'GetImportBatches → GetAllImportBatches en GetFileResources → GetAllFileResources. ' ||
+               'Dit raakt alleen een gegenereerde API-client die op bewerkings-ID werkt — routes en gedrag zijn ongewijzigd.',
+               strftime('%Y-%m-%d %H:%M:%S', 'now'),
+               0
+        FROM System_Notification n
+        WHERE n.MetadataKind = 'Announcement'
+          AND n.Metadata IS NOT NULL
+          AND json_valid(n.Metadata)
+          AND json_extract(n.Metadata, '$.announcement') = 'GetAllImportBatches'
+          AND NOT EXISTS (SELECT 1 FROM System_NotificationTranslation t
+                          WHERE LOWER(t.NotificationId) = LOWER(n.Id) AND LOWER(t.Language) = LOWER('nl'));
+
+        INSERT INTO System_NotificationTranslation (Id, NotificationId, Language, Title, Body, DateCreated, IsDeleted)
+        SELECT lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(2))) || '-' ||
+                   lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(6))),
+               n.Id,
+               'de',
+               'Zwei API-Operations-IDs wurden umbenannt',
+               'Zwei REST-API-Operations-IDs wurden aus Gründen der Namenskonsistenz umbenannt (Issue #279): ' ||
+               'GetImportBatches → GetAllImportBatches und GetFileResources → GetAllFileResources. ' ||
+               'Betroffen ist nur ein generierter API-Client, der die Operations-ID verwendet — Routen und Verhalten bleiben unverändert.',
+               strftime('%Y-%m-%d %H:%M:%S', 'now'),
+               0
+        FROM System_Notification n
+        WHERE n.MetadataKind = 'Announcement'
+          AND n.Metadata IS NOT NULL
+          AND json_valid(n.Metadata)
+          AND json_extract(n.Metadata, '$.announcement') = 'GetAllImportBatches'
           AND NOT EXISTS (SELECT 1 FROM System_NotificationTranslation t
                           WHERE LOWER(t.NotificationId) = LOWER(n.Id) AND LOWER(t.Language) = LOWER('de'));
         """;

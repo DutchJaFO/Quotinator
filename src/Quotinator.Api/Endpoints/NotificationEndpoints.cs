@@ -27,11 +27,11 @@ internal static class NotificationEndpoints
 {
     internal static void MapNotificationEndpoints(this WebApplication app)
     {
-        var publicGroup = app.MapGroup("/api/v1/notifications")
+        RouteGroupBuilder publicGroup = app.MapGroup("/api/v1/notifications")
                              .WithTags(ApiTags.Notifications)
                              .RequireRateLimiting(RateLimitPolicies.Admin);
 
-        var adminGroup = app.MapGroup("/api/v1/notifications")
+        RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/notifications")
                             .WithTags(ApiTags.Notifications)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
                             .AddEndpointFilter<AdminApiKeyFilter>()
@@ -44,18 +44,18 @@ internal static class NotificationEndpoints
             [Description("Number of entries per page (0-500). 0 means every notification as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
             [Description("ISO 639-1 language code for the notification's title and body. Falls back to the notification's original language when it has no translation for the requested one. Defaults to the request's Accept-Language.")] string? lang = null) =>
         {
-            if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
+            if (!PaginationParsing.TryParse(page, pageSize, localizer, out int pageValue, out int pageSizeValue, out IResult? pageError))
                 return pageError!;
 
             if (!InputValidation.TryNormalizeLang(ref lang))
                 return Results.Problem(detail: localizer[ApiMessages.LangInvalid], statusCode: StatusCodes.Status400BadRequest);
 
-            var result = await notifications.GetPagedAsync(pageValue, pageSizeValue, ResolveLanguage(lang));
+            PagedItems<NotificationEntity> result = await notifications.GetPagedAsync(pageValue, pageSizeValue, ResolveLanguage(lang));
 
-            var beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
+            IResult? beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
             if (beyondLastError is not null) return beyondLastError;
 
-            var mapped = new PagedItems<NotificationResponse>(
+            PagedItems<NotificationResponse> mapped = new PagedItems<NotificationResponse>(
                 [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
             return Results.Ok(mapped);
         })
@@ -74,13 +74,13 @@ internal static class NotificationEndpoints
             IApiLocalizer localizer,
             [Description("ISO 639-1 language code for the returned notification's title and body. Defaults to the request's Accept-Language.")] string? lang = null) =>
         {
-            if (!Guid.TryParse(id, out var notificationId))
+            if (!Guid.TryParse(id, out Guid notificationId))
                 return Results.Problem(detail: localizer[ApiMessages.NotificationNotFound], statusCode: StatusCodes.Status404NotFound);
 
             if (!InputValidation.TryNormalizeLang(ref lang))
                 return Results.Problem(detail: localizer[ApiMessages.LangInvalid], statusCode: StatusCodes.Status400BadRequest);
 
-            var dismissed = await notificationWriter.DismissAsync(notificationId, ResolveLanguage(lang));
+            NotificationEntity? dismissed = await notificationWriter.DismissAsync(notificationId, ResolveLanguage(lang));
             if (dismissed is null)
                 return Results.Problem(detail: localizer[ApiMessages.NotificationNotFound], statusCode: StatusCodes.Status404NotFound);
 

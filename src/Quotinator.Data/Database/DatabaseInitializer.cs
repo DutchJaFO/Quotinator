@@ -112,6 +112,11 @@ public class DatabaseInitializer(
         // present — a database that never ran v1.8.3 matches nothing and gains nothing, so the
         // baseline needs no counterpart.
         new SchemaMigration { Version = 14, Sql = NotificationTranslationMigrations.BackfillAnnouncementTranslations },
+        // #319: 14 identified the announcement by its whole Metadata string, which migration 11 has
+        // already rewritten by adding fields — so it matched nothing on any database that ran 11, which
+        // is every upgraded one. Found by a T1 run showing the announcement still in English beside a
+        // correctly translated notification. A new migration rather than an edit: 14 has been applied.
+        new SchemaMigration { Version = 15, Sql = NotificationTranslationMigrations.BackfillAnnouncementTranslationsByKind },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,

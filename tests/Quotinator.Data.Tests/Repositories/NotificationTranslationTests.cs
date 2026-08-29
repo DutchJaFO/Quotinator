@@ -109,8 +109,9 @@ public class NotificationTranslationTests
         using SqliteConnection connection = await OpenAsync(temp);
 
         await SeedLegacyAnnouncementAsync(connection);
+        await ApplyLegacyMetadataMigrationsAsync(connection);
         await ApplyTranslationSchemaAsync(connection);
-        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslations);
+        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslationsByKind);
 
         List<string> languages = [.. await connection.QueryAsync<string>(
             "SELECT Language FROM System_NotificationTranslation ORDER BY Language;")];
@@ -140,7 +141,7 @@ public class NotificationTranslationTests
         using SqliteConnection connection = await OpenAsync(temp);
 
         await ApplyTranslationSchemaAsync(connection);
-        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslations);
+        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslationsByKind);
 
         int translations = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_NotificationTranslation;");
@@ -156,9 +157,10 @@ public class NotificationTranslationTests
         using SqliteConnection connection = await OpenAsync(temp);
 
         await SeedLegacyAnnouncementAsync(connection);
+        await ApplyLegacyMetadataMigrationsAsync(connection);
         await ApplyTranslationSchemaAsync(connection);
-        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslations);
-        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslations);
+        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslationsByKind);
+        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslationsByKind);
 
         int translations = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_NotificationTranslation;");
@@ -409,6 +411,23 @@ public class NotificationTranslationTests
                 body,
                 now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
             });
+
+    /// <summary>
+    /// Brings the seeded announcement to the shape an upgraded database actually presents it in, by
+    /// running #312's own backfills over it — not a hand-written approximation of their result.
+    /// <para>
+    /// This is what the first version of these tests missed. Migration 11 <c>json_insert</c>s
+    /// <c>releaseState</c>/<c>version</c>/<c>contentHash</c> into <c>Metadata</c>, so a fixture that
+    /// seeds v1.8.3's literal JSON and stops there is a database no upgrade produces. A backfill
+    /// matching that literal passed here and matched nothing in the field.
+    /// </para>
+    /// </summary>
+    private static async Task ApplyLegacyMetadataMigrationsAsync(SqliteConnection connection)
+    {
+        await connection.ExecuteAsync(NotificationLegacyMetadataMigrations.BackfillAnnouncementMetadata);
+        await connection.ExecuteAsync(NotificationLegacyMetadataMigrations.BackfillAnnouncementProvenance);
+        await connection.ExecuteAsync(NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields);
+    }
 
     private static async Task ApplyTranslationSchemaAsync(SqliteConnection connection)
     {

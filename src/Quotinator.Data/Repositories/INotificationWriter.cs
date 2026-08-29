@@ -31,6 +31,7 @@ public interface INotificationWriter
     /// <param name="dismissTrigger">Which action, if performed, supersedes this notification.</param>
     /// <param name="metadata">Free-form producer-owned JSON payload. Requires <paramref name="metadataKind"/> when supplied.</param>
     /// <param name="metadataKind">Names the shape of <paramref name="metadata"/>.</param>
+    /// <param name="translations">Every non-original language's title and body, written as sibling rows in the same transaction (#319). The original language is never supplied here.</param>
     Task<NotificationEntity> WriteAsync(
         NotificationType type,
         string body,

@@ -292,6 +292,12 @@ position `MasterDataReference` and `SeedBatch` hold.
 
 **Status:** ✅ Done
 
+**The backfill is migration 15, not 14.** Migration 14 identified the announcement by its whole
+`Metadata` string, which migration 11 has already rewritten by `json_insert`ing further fields — so it
+matched nothing on any database that ran 11, which is every upgraded one. 15 reads the payload's own
+`announcement` key with `json_extract` instead, which is stable against any later field being added. 14
+stays in the sequence unedited: it has been applied to a real database.
+
 Translations for #279's v1.8.3 announcement — the only notification in any released database — sourced
 from `UI.*.json`. A new migration (14), never an edit to 8 or 9: both have been applied to real
 databases, and an applied migration is frozen. Conditional on the row existing, exactly as migration 9
@@ -305,6 +311,10 @@ consolidation pass can fold them however it prefers.
 `NotificationOperationIdRenameTitle`/`…Body` added to all three `UI.*.json` files in the same commit;
 the migration embeds a frozen copy of the same strings, which is required rather than sloppy — migration
 text must not follow a later edit to those keys.
+
+**Row 12's test now reproduces the field bug.** Pointed at migration 14 it fails; at 15 it passes — the
+fixture runs #312's own backfills over the seeded row rather than seeding their result, so it meets the
+shape an upgrade actually produces.
 
 **This step's tests rest on a mutation check, not on an observed red run** — the weaker of the two, and
 the one thing about this step's coverage a reader should not assume. Mutating the migration's `'nl'`
