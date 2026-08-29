@@ -255,7 +255,18 @@ Format: `[Subsystem - Phase] message text`
 | `[Api - GetAllConversations]` | Entry to GET /api/v1/conversations |
 | `[Api - GetConversationById]` | Entry to GET /api/v1/conversations/{id} |
 | `[Api - Import]` | Import endpoint handlers (`POST /import`, `/import/preview`, `/import/rules/*`) |
+| `[Api - GetAllBackups]` | Entry to GET /api/v1/admin/backups — logged at Debug (a read) |
+| `[Api - GetBackupStatus]` | Entry to GET /api/v1/admin/backups/status — logged at Debug (a read) |
+| `[Api - GetBackupContent]` | Entry to GET /api/v1/admin/backups/{name}/content — logged at Debug (a read) |
+| `[Api - CreateBackup]` | POST /api/v1/admin/backups/create — Information on success, Warning on refusal |
+| `[Api - DeleteBackup]` | DELETE /api/v1/admin/backups/{name} — Information on success, Warning on refusal |
 | `[Audit]` | Audit trail write operations (AuditWriter) |
+
+**Backup endpoints split by level deliberately (#349, developer decision 2026-08-29): a read is Debug,
+an action that creates or destroys a restore point is Information.** The status endpoint is designed to
+be called on every render of the degraded UI, so logging reads at Information would bury the two lines
+an operator actually needs — "a backup was created" and "a backup was removed" — under its own polling.
+This is the same reasoning the request log applies above, applied one layer up.
 
 New subsystems must register a prefix in this table before their log lines land in a PR.
 

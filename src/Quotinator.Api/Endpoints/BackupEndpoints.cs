@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Quotinator.Api.Logging;
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Api.Startup;
@@ -30,6 +32,11 @@ namespace Quotinator.Api.Endpoints;
 /// </summary>
 internal static class BackupEndpoints
 {
+    // Static classes cannot be type arguments (CS0718); this nested class is the ILogger<T> category.
+    private sealed class Log { }
+
+    // Held as consts (#279) so .WithName(...) and each handler's own logging tag can never drift
+    // apart — see CLAUDE.md's "Endpoint naming convention" section.
     private const string GetAllBackupsName    = "GetAllBackups";
     private const string DeleteBackupName     = "DeleteBackup";
     private const string GetBackupContentName = "GetBackupContent";
@@ -47,9 +54,12 @@ internal static class BackupEndpoints
         backups.MapGet("/", (
             IDatabaseBackupReader reader,
             IApiLocalizer localizer,
+            ILogger<Log> logger,
             [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
             [Description("Number of backups per page (0–500). 0 means every backup as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null) =>
         {
+            logger.LogBackupListRead($"[Api - {GetAllBackupsName}]", page, pageSize);
+
             if (!PaginationParsing.TryParse(page, pageSize, localizer, out int pageValue, out int pageSizeValue, out IResult? pageError))
                 return pageError!;
 
@@ -86,8 +96,11 @@ internal static class BackupEndpoints
 
         backups.MapGet("/status", (
             IDatabaseInitializer db,
-            IDatabaseBackupReader reader) =>
+            IDatabaseBackupReader reader,
+            ILogger<Log> logger) =>
         {
+            logger.LogBackupRead($"[Api - {GetBackupStatusName}]");
+
             BackupOutcome readiness = db.CheckBackupReadiness();
             bool           canBackUp = readiness == BackupOutcome.Succeeded;
             BackupStorageUsage usage = reader.GetUsage();
@@ -134,12 +147,15 @@ internal static class BackupEndpoints
         backups.MapPost("/create", async (
             IDatabaseInitializer db,
             IAuditEntryWriter auditWriter,
-            ICallerContext callerContext) =>
+            ICallerContext callerContext,
+            ILogger<Log> logger) =>
         {
             DatabaseBackupResult result = await db.CreateBackupAsync();
 
             if (!result.Succeeded)
             {
+                logger.LogBackupRefused($"[Api - {CreateBackupName}]", result.Outcome.ToString());
+
                 // 409 rather than 500, for the same reason a refused reset returns one: nothing failed
                 // unexpectedly — the state of backup storage conflicts with taking a backup, and that
                 // is a condition the caller can resolve and retry.
@@ -155,11 +171,15 @@ internal static class BackupEndpoints
             }
 
             string name = Path.GetFileName(result.Path!);
+            logger.LogBackupAction($"[Api - {CreateBackupName}]", "created", name);
 
+            // RecordId stays null per docs/logging.md's audit schema: an admin action is a
+            // database-level operation, and RecordId is documented as the affected row's UUID. The file
+            // name is therefore carried by the log line above rather than the audit row — see this
+            // issue's plan doc for the limitation that leaves.
             await auditWriter.WriteAsync(new AuditEntryEntity
             {
                 TableName   = "Database",
-                RecordId    = name,
                 Operation   = AuditOperation.Backup,
                 Agent       = callerContext.Agent,
                 PerformedAt = DateTime.UtcNow,
@@ -191,9 +211,15 @@ internal static class BackupEndpoints
         backups.MapGet("/{name}/content", (
             string name,
             IDatabaseBackupReader reader,
-            IApiLocalizer localizer) =>
+            IApiLocalizer localizer,
+            ILogger<Log> logger) =>
         {
+            logger.LogBackupReadByName($"[Api - {GetBackupContentName}]", name);
+
             BackupReadOutcome outcome = reader.TryOpenRead(name, out Stream? content);
+
+            if (outcome is not BackupReadOutcome.Opened)
+                logger.LogBackupRefused($"[Api - {GetBackupContentName}]", outcome.ToString());
 
             // Every outcome is a stated answer, for the same reason the delete endpoint states its
             // own: a file that cannot be opened is an ordinary condition, and letting the IO failure
@@ -232,9 +258,13 @@ internal static class BackupEndpoints
             IDatabaseBackupWriter writer,
             IAuditEntryWriter auditWriter,
             ICallerContext callerContext,
-            IApiLocalizer localizer) =>
+            IApiLocalizer localizer,
+            ILogger<Log> logger) =>
         {
             BackupDeleteOutcome outcome = writer.Delete(name);
+
+            if (outcome is not BackupDeleteOutcome.Deleted)
+                logger.LogBackupRefused($"[Api - {DeleteBackupName}]", outcome.ToString());
 
             // Every outcome is a stated answer. A removal the filesystem refuses is an ordinary
             // condition with a remedy — 409, the same shape a refused reset uses — and never an
@@ -252,13 +282,15 @@ internal static class BackupEndpoints
                     detail: localizer[ApiMessages.BackupNotRemovable],
                     statusCode: StatusCodes.Status409Conflict);
 
+            logger.LogBackupAction($"[Api - {DeleteBackupName}]", "removed", name);
+
             // Removing a backup removes a restore point, so it is recorded where it will still be found
             // long after the log has rotated — the reason an endpoint is preferred over deleting the
-            // file by hand in the first place.
+            // file by hand in the first place. RecordId stays null for the reason given on the create
+            // endpoint above.
             await auditWriter.WriteAsync(new AuditEntryEntity
             {
                 TableName   = "Database",
-                RecordId    = name,
                 Operation   = AuditOperation.BackupDeleted,
                 Agent       = callerContext.Agent,
                 PerformedAt = DateTime.UtcNow,

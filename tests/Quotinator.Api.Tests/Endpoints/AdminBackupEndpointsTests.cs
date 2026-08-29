@@ -93,8 +93,12 @@ public class AdminBackupEndpointsTests
         Assert.HasCount(1, harness.Audit.Entries);
         AuditEntryEntity entry = harness.Audit.Entries[0];
         Assert.AreEqual(AuditOperation.BackupDeleted, entry.Operation);
-        Assert.IsNotNull(entry.RecordId);
-        Assert.Contains("delete-me", entry.RecordId!, StringComparison.OrdinalIgnoreCase);
+        Assert.AreEqual("Database", entry.TableName);
+
+        // RecordId is null by documented design — docs/logging.md's audit schema reserves it for an
+        // affected row's UUID, and an admin action is database-level. Which file was removed is carried
+        // by the log line instead; asserted by AdminBackupLoggingTests.
+        Assert.IsNull(entry.RecordId);
     }
 
     /// <summary>Deleting a name that does not exist is a 404, distinguishable from a successful removal.</summary>

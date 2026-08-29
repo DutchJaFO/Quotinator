@@ -36,6 +36,52 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Information, Message = "[Api - Import] generated conflict-resolution override for {File} ({Origin}) from batch {BatchId} — {Added} rule(s) added")]
     public static partial void LogImportRuleOverrideGenerated(this ILogger logger, string file, string origin, string batchId, int added);
 
+    // #349 — reads and destructive actions are logged at different levels, deliberately (developer
+    // decision, 2026-08-29). A read is Debug: the status endpoint is designed to be called on every
+    // render of the degraded UI, so logging it at Information would bury the lines that matter under
+    // its own polling. An action that creates or destroys a restore point is Information, because it
+    // is what an operator reconstructing "what happened to my backups" needs to find.
+
+    /// <summary>Logs a paginated read of the backup list (#349). Debug — see the note above.</summary>
+    /// <param name="logger">The logger to write to.</param>
+    /// <param name="tag">The <c>[Api - Name]</c> prefix, built from the endpoint's own <c>WithName</c> constant.</param>
+    /// <param name="page">The raw, unparsed <c>page</c> query value.</param>
+    /// <param name="pageSize">The raw, unparsed <c>pageSize</c> query value.</param>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Tag:l} page={Page} pageSize={PageSize}")]
+    public static partial void LogBackupListRead(this ILogger logger, string tag, string? page, string? pageSize);
+
+    /// <summary>Logs a read of a backup endpoint that takes no identifying parameter (#349). Debug.</summary>
+    /// <param name="logger">The logger to write to.</param>
+    /// <param name="tag">The <c>[Api - Name]</c> prefix, built from the endpoint's own <c>WithName</c> constant.</param>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Tag:l} requested")]
+    public static partial void LogBackupRead(this ILogger logger, string tag);
+
+    /// <summary>Logs a read of a backup keyed by file name (#349). Debug.</summary>
+    /// <param name="logger">The logger to write to.</param>
+    /// <param name="tag">The <c>[Api - Name]</c> prefix, built from the endpoint's own <c>WithName</c> constant.</param>
+    /// <param name="name">The backup file name the caller asked for.</param>
+    [LoggerMessage(Level = LogLevel.Debug, Message = "{Tag:l} name={Name:l}")]
+    public static partial void LogBackupReadByName(this ILogger logger, string tag, string name);
+
+    /// <summary>
+    /// Logs a backup action that created or destroyed a restore point (#349). Information, not Debug:
+    /// this is the durable trace an operator reads when a backup they expected is not there, and it is
+    /// deliberately visible at the default log level.
+    /// </summary>
+    /// <param name="logger">The logger to write to.</param>
+    /// <param name="tag">The <c>[Api - Name]</c> prefix, built from the endpoint's own <c>WithName</c> constant.</param>
+    /// <param name="action">Past-tense verb for what was done.</param>
+    /// <param name="name">The backup file it was done to.</param>
+    [LoggerMessage(Level = LogLevel.Information, Message = "{Tag:l} {Action:l} {Name:l}")]
+    public static partial void LogBackupAction(this ILogger logger, string tag, string action, string name);
+
+    /// <summary>Logs a backup action this application declined to perform, and why (#349).</summary>
+    /// <param name="logger">The logger to write to.</param>
+    /// <param name="tag">The <c>[Api - Name]</c> prefix, built from the endpoint's own <c>WithName</c> constant.</param>
+    /// <param name="reason">The outcome or obstacle that stopped it.</param>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{Tag:l} refused — {Reason:l}")]
+    public static partial void LogBackupRefused(this ILogger logger, string tag, string reason);
+
     /// <summary>Logs one request-arrival line (Debug — see docs/logging.md's Request log section).</summary>
     [LoggerMessage(Level = LogLevel.Debug, Message = "{Tag:l} {Id:l} {Method:l} {Url:l}")]
     public static partial void LogRequestStart(this ILogger logger, string tag, string id, string method, string url);
