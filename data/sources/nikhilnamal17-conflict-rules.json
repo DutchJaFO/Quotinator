@@ -1,6 +1,31 @@
 {
   "rules": [
     {
+      "entityId": "79a24a93-062f-ee45-98ec-f95e20db8fa4",
+      "existingRecord": {
+        "quoteText": "I don't like sand. It's all coarse, and rough, and irritating. And it gets everywhere.",
+        "source": "The Lord of the Rings: The Two Towers",
+        "date": "2002",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "I don't like sand. It's all coarse, and rough, and irritating. And it gets everywhere.",
+        "source": "The Lord of the Rings: The Two Towers",
+        "date": "2002",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "source", "resolution": "Custom", "customValue": "Star Wars: Episode II – Attack of the Clones" },
+        { "field": "character", "resolution": "Custom", "customValue": "Anakin Skywalker" }
+      ]
+    },
+    {
       "entityId": "088603c0-b35a-1b48-977d-ca08489a0cbb",
       "existingRecord": {
         "quoteText": "Life is a banquet, and most poor suckers are starving to death!",
