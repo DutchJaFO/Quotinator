@@ -1,3 +1,4 @@
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
@@ -30,7 +31,8 @@ internal sealed class FakeNotificationWriter : INotificationWriter
         DateTime? expiresAt = null,
         NotificationDismissTrigger? dismissTrigger = null,
         string? metadata = null,
-        NotificationMetadataKind? metadataKind = null)
+        NotificationMetadataKind? metadataKind = null,
+        IReadOnlyList<NotificationTranslation>? translations = null)
     {
         WrittenMessages.Add(body);
         WrittenMetadata.Add((metadata, metadataKind));

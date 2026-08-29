@@ -51,7 +51,8 @@ public static class NotificationSeeding
         Guid? appVersionId,
         string? title = null,
         NotificationDismissTrigger? dismissTrigger = null,
-        DateTime? expiresAt = null)
+        DateTime? expiresAt = null,
+        IReadOnlyList<NotificationTranslation>? translations = null)
     {
         ArgumentNullException.ThrowIfNull(metadata);
 
@@ -71,7 +72,8 @@ public static class NotificationSeeding
             expiresAt:      expiresAt,
             dismissTrigger: dismissTrigger,
             metadata:       metadataJson,
-            metadataKind:   metadata.Kind);
+            metadataKind:   metadata.Kind,
+            translations:   translations);
     }
 
     /// <summary>

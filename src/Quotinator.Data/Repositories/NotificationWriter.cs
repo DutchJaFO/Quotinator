@@ -5,6 +5,7 @@ using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Queries;
 
 namespace Quotinator.Data.Repositories;
@@ -31,7 +32,8 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
         DateTime? expiresAt = null,
         NotificationDismissTrigger? dismissTrigger = null,
         string? metadata = null,
-        NotificationMetadataKind? metadataKind = null)
+        NotificationMetadataKind? metadataKind = null,
+        IReadOnlyList<NotificationTranslation>? translations = null)
     {
         NotificationEntity entity = new NotificationEntity
         {
@@ -54,7 +56,33 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
 
         using IDbConnection conn = Factory.CreateConnection();
         conn.Open();
-        await conn.InsertAsync(entity);
+
+        // One transaction: a notification whose translations failed to land would read as English to
+        // every non-English user with nothing to indicate the write was incomplete.
+        using IDbTransaction transaction = conn.BeginTransaction();
+
+        await conn.InsertAsync(entity, transaction);
+
+        foreach (NotificationTranslation translation in translations ?? [])
+        {
+            // The original language never becomes a translation row — the read path COALESCEs the
+            // translation over the notification's own text, so a row for the original language would
+            // be a second copy of text that is already there, free to drift from it.
+            if (string.Equals(translation.Language, entity.OriginalLanguage, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            await conn.InsertAsync(
+                new NotificationTranslationEntity
+                {
+                    NotificationId = entity.Id,
+                    Language       = translation.Language,
+                    Title          = translation.Title,
+                    Body           = translation.Body,
+                },
+                transaction);
+        }
+
+        transaction.Commit();
         return entity;
     }
 

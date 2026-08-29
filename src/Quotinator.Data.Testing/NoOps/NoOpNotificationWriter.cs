@@ -1,3 +1,4 @@
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
@@ -20,7 +21,8 @@ public sealed class NoOpNotificationWriter : INotificationWriter
         DateTime? expiresAt = null,
         NotificationDismissTrigger? dismissTrigger = null,
         string? metadata = null,
-        NotificationMetadataKind? metadataKind = null)
+        NotificationMetadataKind? metadataKind = null,
+        IReadOnlyList<NotificationTranslation>? translations = null)
         => Task.FromResult(new NotificationEntity
         {
             Type  = new SafeValue<NotificationType?>(type.ToString(), type),

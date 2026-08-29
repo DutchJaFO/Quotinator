@@ -1,5 +1,6 @@
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Notifications;
 
 namespace Quotinator.Data.Repositories;
 
@@ -38,7 +39,8 @@ public interface INotificationWriter
         DateTime? expiresAt = null,
         NotificationDismissTrigger? dismissTrigger = null,
         string? metadata = null,
-        NotificationMetadataKind? metadataKind = null);
+        NotificationMetadataKind? metadataKind = null,
+        IReadOnlyList<NotificationTranslation>? translations = null);
 
     /// <summary>
     /// Marks a single notification dismissed by Id. Returns the updated entity, or <see langword="null"/>

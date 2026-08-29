@@ -3,6 +3,8 @@ using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.Database;
@@ -284,6 +286,91 @@ public class NotificationTranslationTests
         Assert.AreEqual("Nederlandse tekst.", dismissed.Body,
             "The dismiss path echoes the notification back and must resolve it the same way a read does.");
         Assert.IsTrue(dismissed.IsDismissed);
+    }
+
+    // ── Write side (step 6) ──────────────────────────────────────────────────
+
+    /// <summary>A producer supplies every language in one call, and each becomes its own row.</summary>
+    [TestMethod]
+    public async Task Write_WithTranslations_PersistsOneRowPerLanguage()
+    {
+        using TempDatabase temp = new(SchemaThroughMigration11);
+        using SqliteConnection connection = await OpenAsync(temp);
+        await ApplyTranslationSchemaAsync(connection);
+
+        SqliteConnectionFactory factory = new(temp.DbPath);
+        NotificationWriter writer = new(factory);
+
+        await writer.WriteAsync(
+            NotificationType.Information, "English body.", appVersionId: null, title: "English headline",
+            translations:
+            [
+                new NotificationTranslation("nl", "Nederlandse kop", "Nederlandse tekst."),
+                new NotificationTranslation("de", "Deutsche Überschrift", "Deutscher Text."),
+            ]);
+
+        List<string> languages = [.. await connection.QueryAsync<string>(
+            "SELECT Language FROM System_NotificationTranslation ORDER BY Language;")];
+
+        Assert.AreSequenceEqual(ExpectedBackfilledLanguages, languages);
+
+        NotificationReader reader = TestNotificationReader.Create(temp.DbPath);
+        Assert.AreEqual("Deutscher Text.", (await reader.GetPagedAsync(1, 10, "de")).Items.Single().Body);
+    }
+
+    /// <summary>A producer supplying no translations writes none — the original text stands alone.</summary>
+    [TestMethod]
+    public async Task Write_WithoutTranslations_PersistsNoTranslationRows()
+    {
+        using TempDatabase temp = new(SchemaThroughMigration11);
+        using SqliteConnection connection = await OpenAsync(temp);
+        await ApplyTranslationSchemaAsync(connection);
+
+        NotificationWriter writer = new(new SqliteConnectionFactory(temp.DbPath));
+        await writer.WriteAsync(NotificationType.Warning, "English body.", appVersionId: null);
+
+        Assert.AreEqual(0, await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM System_NotificationTranslation;"));
+    }
+
+    /// <summary>
+    /// Identity is structural — the metadata payload — so a second seed carrying different
+    /// translations is still the same notification and is suppressed. Guards the invariant the read
+    /// path depends on: the original text never moves, so nothing a producer supplies as a translation
+    /// can change what a payload's content hash was taken over.
+    /// </summary>
+    [TestMethod]
+    public async Task Seed_SameNotificationWithDifferentTranslations_IsStillSuppressed()
+    {
+        using TempDatabase temp = new(SchemaThroughMigration11);
+        using SqliteConnection connection = await OpenAsync(temp);
+        await ApplyTranslationSchemaAsync(connection);
+
+        SqliteConnectionFactory factory = new(temp.DbPath);
+        NotificationReader reader = TestNotificationReader.Create(factory);
+        NotificationWriter writer = new(factory);
+
+        AnnouncementMetadataDto metadata = new()
+        {
+            Announcement = "SomethingRenamed",
+            ReleaseState = NotificationReleaseState.Released,
+            Version      = "1.9.0",
+            ContentHash  = NotificationContentHash.Of("English body."),
+        };
+
+        NotificationEntity? first = await NotificationSeeding.SeedOnceAsync(
+            reader, writer, NotificationType.Warning, metadata, "English body.", appVersionId: null,
+            translations: [new NotificationTranslation("nl", "Kop", "Eerste tekst.")]);
+
+        NotificationEntity? second = await NotificationSeeding.SeedOnceAsync(
+            reader, writer, NotificationType.Warning, metadata, "English body.", appVersionId: null,
+            translations: [new NotificationTranslation("nl", "Andere kop", "Andere tekst.")]);
+
+        Assert.IsNotNull(first);
+        Assert.IsNull(second, "A differing translation set does not make it a different notification.");
+        Assert.AreEqual(1, await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_Notification;"));
+        Assert.AreEqual(1, await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_NotificationTranslation;"),
+            "The suppressed seed must not append a second translation row either.");
     }
 
     private static async Task<NotificationReader> SeedTranslatedNotificationAsync(TempDatabase temp)
