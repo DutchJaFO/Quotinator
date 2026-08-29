@@ -10,8 +10,9 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 309, 312, 313, 320, 323, 325, 326],
+    "issues": [81, 309, 312, 313, 320, 323, 325, 326, 349],
     "highlights": [
+      "Sicherungen lassen sich jetzt verwalten, ohne die Dateien auf dem Server anzufassen: sehen, welche Sicherungen vorhanden sind und wie viel Platz bleibt, jederzeit selbst eine anlegen, eine herunterladen und sicher aufbewahren sowie alte löschen, um Platz freizugeben. Kann keine Sicherung angelegt werden, benennt Quotinator jetzt das Hindernis und was dagegen zu tun ist, statt ohne Erklärung fehlzuschlagen.",
       "Quotinator startet jetzt auch dann, wenn sein Datenverzeichnis nicht beschreibbar ist — ein schreibgeschütztes Volume oder falsche Berechtigungen. Statt sich zu beenden, startet es in einem eingeschränkten Zustand, benennt klar das Problem und dessen Behebung und hält Seiten und API-Dokumentation erreichbar, damit Sie handeln können.",
       "Beim Aktualisieren von Zitatquellen steht nun deutlich mehr Zeit für den Verbindungsaufbau zur Verfügung, bevor aufgegeben wird, sodass eine langsame oder kurzzeitig nicht erreichbare Verbindung keine Aktualisierung mehr ausfallen lässt. Ist eine Quelle wirklich nicht erreichbar, arbeitet Quotinator mit der bereits vorhandenen Kopie weiter.",
       "Nach einer Aktualisierung teilt Quotinator jetzt mit, was sich geändert hat: Eine Startbenachrichtigung zeigt die Highlights jeder übersprungenen Version, nicht nur der neuesten. Eine Neuinstallation sieht nur die Highlights der aktuellen Version, und es erscheint nichts, wenn eine Version nichts Nennenswertes enthält.",
@@ -24,6 +25,7 @@
       ]
     },
     "added": [
+      "Sicherungen sind jetzt über die API verwaltbar: auflisten mit Größe und Datum, eine auf Anforderung anlegen, eine herunterladen, damit sie den Container überdauert, und eine entfernen, um Platz freizugeben. Alle antworten auch dann, wenn die Datenbank selbst in einem eingeschränkten Zustand ist (issue #349)",
       "Eine What's-new-Startbenachrichtigung nach einer Aktualisierung, die jede Version abdeckt, die seit der zuletzt tatsächlich ausgeführten Version übersprungen wurde — eine Benachrichtigung pro Version, zuzüglich des noch nicht veröffentlichten Abschnitts, sofern dort etwas markiert ist; eine Neuinstallation sieht nur die aktuelle Version (issue #81)",
       "Quotinator verzeichnet jetzt, welche Anwendungsversionen die Datenbank verwendet haben, und verknüpft jede Benachrichtigung mit der Version, die sie hinzugefügt hat — die Grundlage dafür, später anzuzeigen, wann eine Benachrichtigung zuerst erschien (issue #312)"
     ],
@@ -35,6 +37,8 @@
       "Kann das Datenverzeichnis nicht beschrieben werden, benennt die gemeldete Ursache dies jetzt direkt und nennt den Lösungsweg, statt ein Zurücksetzen der Datenbank vorzuschlagen — das in dasselbe Verzeichnis schreibt und daher nie hätte funktionieren können (issue #326)"
     ],
     "fixed": [
+      "Ein Zitat aus Star Wars war in den mitgelieferten Daten The Lord of the Rings zugeordnet; es ist jetzt korrekt zugeordnet, samt ergänzter Figur",
+      "Von Quotinator angelegte Sicherungen blieben nach dem Schreiben von der Anwendung gesperrt, sodass sie bis zu einem Neustart weder heruntergeladen noch entfernt werden konnten. Sie werden jetzt unmittelbar nach dem Schreiben freigegeben (issue #349)",
       "Bei einem Upgrade erscheint keine zweite, doppelte Kopie einer Benachrichtigung mehr, die bereits vor dem Upgrade vorhanden war (issue #312)",
       "Ein während der Entwicklung entstandener Startfehler wurde behoben, durch den die Anwendung auf einer von einer Zwischenversion erstellten Datenbank nicht starten konnte; veröffentlichte Versionen waren nie betroffen (issue #312)",
       "Ein internes Problem der Testsuite wurde behoben, bei dem Tests laufen konnten, bevor die Anwendung vollständig gestartet war, wodurch ihre Ergebnisse unzuverlässig wurden — keine Auswirkungen auf die Anwendung selbst (issue #313)",

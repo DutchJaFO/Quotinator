@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-21 16:41 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-29 17:35 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Highlights
+- You can now manage backups without touching the server's files: see what backups exist and how much room is left, make one whenever you want, download one to keep somewhere safe, and delete old ones to free up space. If a backup cannot be made, Quotinator now says which obstacle is in the way and what to do about it, instead of failing without explanation.
 - Quotinator now starts even when its data folder cannot be written to — a read-only volume, or the wrong permissions. Instead of shutting down, it starts in a limited state, says plainly what is wrong and how to fix it, and keeps its pages and API documentation reachable so you can act on it.
 - Quote source updates now allow considerably more time to connect before giving up, so a slow or briefly unavailable connection no longer causes an update to be skipped. When a source genuinely cannot be reached, Quotinator carries on with the copy it already has.
 - After updating, Quotinator now tells you what changed: a startup notification lists the highlights of every release you skipped, not just the newest one. A fresh install only sees the current version's highlights, and nothing appears when a release has nothing worth flagging.
@@ -18,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Notifications no longer disappear on a timer by default. Previously every notification expired after 30 days, including ones about a problem that was still unresolved; now a notification stays until it is dismissed, or until the action it recommends has been carried out.
 
 ### Added
+- Backups can now be managed from the API: list what exists with sizes and dates, take one on demand, download one so it survives the container, and remove one to free space. Each answers even when the database itself is in a limited state (issue #349)
 - A what's-new startup notification after an update, covering every release missed since the last version this instance actually ran — one notification per release, plus the in-development section when it has anything flagged; a fresh install sees only the current version (issue #81)
 - Quotinator now keeps a record of which application versions have used the database, and links each notification to the version that added it — the groundwork for showing when a notification first appeared (issue #312)
 
@@ -29,6 +31,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - When the data directory cannot be written, the reported reason now names that directly and states how to resolve it, instead of suggesting a database reset — which writes to the same directory and therefore could not have worked (issue #326)
 
 ### Fixed
+- A quote from Star Wars was attributed to The Lord of the Rings in the bundled data, and is now correctly attributed, with its character filled in
+- Backups taken by Quotinator stayed locked by the application after being written, so one could not be downloaded or removed until a restart. They are released as soon as they are written (issue #349)
 - Upgrading no longer shows a second, duplicate copy of a notification that already existed before the upgrade (issue #312)
 - Fixed a startup failure introduced during development that could stop the app from starting on a database created by an in-between development build; released versions were never affected (issue #312)
 - Fixed an internal test-suite defect where tests could run against the app before it had finished starting up, which made their results unreliable — no effect on the application itself (issue #313)

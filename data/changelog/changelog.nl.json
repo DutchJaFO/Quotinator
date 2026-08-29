@@ -10,8 +10,9 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 309, 312, 313, 320, 323, 325, 326],
+    "issues": [81, 309, 312, 313, 320, 323, 325, 326, 349],
     "highlights": [
+      "Je kunt back-ups nu beheren zonder de bestanden op de server aan te raken: zien welke back-ups er zijn en hoeveel ruimte er over is, er zelf een maken wanneer je wilt, er een downloaden om veilig te bewaren, en oude verwijderen om ruimte vrij te maken. Als er geen back-up gemaakt kan worden, meldt Quotinator nu welk obstakel in de weg staat en wat je eraan kunt doen, in plaats van zonder uitleg te falen.",
       "Quotinator start nu ook wanneer er niet naar de datamap geschreven kan worden — een alleen-lezen volume, of verkeerde rechten. In plaats van af te sluiten start het in een beperkte toestand, meldt duidelijk wat er mis is en hoe je het oplost, en houdt de pagina's en de API-documentatie bereikbaar zodat je er iets mee kunt.",
       "Het bijwerken van quotebronnen krijgt nu aanzienlijk meer tijd om verbinding te maken voordat het opgeeft, zodat een trage of kortstondig onbereikbare verbinding niet langer een update overslaat. Wanneer een bron echt niet bereikbaar is, gaat Quotinator verder met de kopie die het al heeft.",
       "Na een update vertelt Quotinator nu wat er is veranderd: een opstartmelding toont de hoogtepunten van elke versie die je hebt overgeslagen, niet alleen van de nieuwste. Een nieuwe installatie ziet alleen de hoogtepunten van de huidige versie, en er verschijnt niets wanneer een versie niets noemenswaardigs bevat.",
@@ -24,6 +25,7 @@
       ]
     },
     "added": [
+      "Back-ups zijn nu via de API te beheren: bekijk welke er zijn met grootte en datum, maak er direct een, download er een zodat die de container overleeft, en verwijder er een om ruimte vrij te maken. Elk hiervan blijft werken, ook wanneer de database zelf in een beperkte toestand verkeert (issue #349)",
       "Een what's-new-opstartmelding na een update, met elke versie die is gemist sinds de laatste versie die deze installatie daadwerkelijk heeft gedraaid — één melding per versie, plus het nog-niet-uitgebrachte gedeelte wanneer daar iets voor is aangemerkt; een nieuwe installatie ziet alleen de huidige versie (issue #81)",
       "Quotinator houdt nu bij welke applicatieversies de database hebben gebruikt en koppelt elke melding aan de versie die hem heeft toegevoegd — de basis om later te tonen wanneer een melding voor het eerst verscheen (issue #312)"
     ],
@@ -35,6 +37,8 @@
       "Wanneer er niet naar de datamap geschreven kan worden, benoemt de gemelde reden dat nu rechtstreeks en vertelt hoe je het oplost, in plaats van een database-reset voor te stellen — die naar dezelfde map schrijft en dus nooit had kunnen werken (issue #326)"
     ],
     "fixed": [
+      "Een citaat uit Star Wars was in de meegeleverde gegevens toegeschreven aan The Lord of the Rings; dat is nu correct toegeschreven, met het personage ingevuld",
+      "Back-ups die Quotinator maakte, bleven na het schrijven door de applicatie vergrendeld, waardoor je er geen kon downloaden of verwijderen tot een herstart. Ze worden nu direct na het schrijven vrijgegeven (issue #349)",
       "Bij een upgrade verschijnt niet langer een tweede, dubbele kopie van een melding die al vóór de upgrade bestond (issue #312)",
       "Een tijdens de ontwikkeling ontstane opstartfout opgelost waardoor de app niet kon starten op een database die door een tussentijdse ontwikkelversie was aangemaakt; uitgebrachte versies waren nooit getroffen (issue #312)",
       "Een intern testprobleem opgelost waarbij tests konden draaien voordat de app volledig was opgestart, waardoor hun resultaten onbetrouwbaar werden — geen gevolgen voor de applicatie zelf (issue #313)",

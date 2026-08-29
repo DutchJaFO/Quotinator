@@ -1,6 +1,6 @@
 # #349 — Admin endpoints to list, delete and report status for database backups
 
-**Status:** In progress (step 12)
+**Status:** Waiting for release
 **GitHub issue:** #349
 **Tiers required:** T1, T2
 **Depends on:** none — pairs with [#348](https://github.com/DutchJaFO/Quotinator/issues/348), either order
@@ -29,9 +29,8 @@ from the action (developer direction, 2026-08-27).
 
 ## Next action
 
-**T1 — the developer's own to run, and the only thing outstanding.** Steps 1–11 are done and T2 has
-been executed twice: 33 of 34 verification rows are green, the solution builds at 0 warnings, the full
-suite passes, and `backup/05` was run live against `quotinator:local`.
+**Nothing outstanding — ready for release.** All 37 verification rows are green, T1 and T2 are both
+complete, the solution builds at 0 warnings, and the full suite passes.
 
 **Three defects were found by running things rather than by writing tests**, and each was invisible to
 the layer above it. T2 found an unhandled `500` on `DELETE` against a read-only mount (row 30). T1 then
@@ -277,7 +276,7 @@ rather than only the one being advertised as the remedy.
 
 ### 12. T1 and T2 verification
 
-**Status:** In progress — T2 done, T1 outstanding
+**Status:** ✅ Done
 
 T1 is the developer's own to run. T2 is a rebuilt image with the smoke set plus this issue's own
 document from step 11.
@@ -320,10 +319,33 @@ document from step 11.
 | 30 | ✅ | A removal the filesystem refuses is a stated answer, not an unhandled failure | Unit test | `DatabaseBackupReaderTests.Delete_FileCannotBeRemoved_IsReported_NotThrown` and `AdminBackupEndpointsTests.DeleteBackup_FileCannotBeRemoved_Returns409NotAnUnhandled500`, plus `backup/05` step 7 live. Found by running `backup/05` rather than by any unit test: `DELETE` on a read-only data directory threw out of `File.Delete` and reached the caller as a bare `500` — #348's own defect class, on the one path an operator is most likely to take. `IDatabaseBackupWriter` now returns `BackupDeleteOutcome`, which also separates "was never there" from "could not be removed" |
 | 31 | ✅ | A read the filesystem refuses is a stated answer, not an unhandled failure | Unit test | `DatabaseBackupReaderTests.OpenRead_FileCannotBeOpened_IsReported_NotThrown` and `AdminBackupDownloadEndpointTests.Download_FileCannotBeOpened_Returns409NotAnUnhandled500`. The read-side mirror of row 30, which was fixed without it — the reader now returns `BackupReadOutcome` and opens with `FileShare.ReadWrite`, so a file another handle holds writable is still downloadable |
 | 32 | ✅ | A backup we have just written is not still held open by us | Unit test | `DatabaseBackupQuotaTests.CreateBackupAsync_LeavesNoHandleOnTheFileItWrote`, plus `AdminBackupCreateEndpointTests.Create_ThenDownloadImmediately_Succeeds` and `backup/05` step 6 reading the stored file from the host. Found in T1: `Microsoft.Data.Sqlite` pools by default, so the destination connection kept its handle after disposal and every backup ever written stayed locked — a download moments later was an unhandled `500`. Invisible on Unix, which is why the T2 pass missed it and mistook it for a host quirk |
-| 33 | ✅ | `docs/api-endpoints.md` and the `[Description]` attributes describe all five endpoints | Live | Both updated in the implementing commit; the status endpoint's description states what it touches rather than claiming read-only |
-| 34 | ❌ | The Blazor UI still renders and the endpoints answer against a real container | Live | T2 re-run 2026-08-29 after the handle fix — create, download and host-side read all confirmed. T1 in Visual Studio is the developer's own and is what remains |
+| 33 | ✅ | Every endpoint is visible in the log, at the level its kind deserves | Unit test | `AdminBackupLoggingTests` — reads at Debug (the status endpoint is polled on every degraded-UI render), create and delete at Information, refusals at Warning and never demoted. Asserted through a real Serilog pipeline via `CaptureSink`, per `docs/logging.md`'s rule that a MEL double cannot prove a `{:l}` specifier is present. **These endpoints originally logged nothing at all**: logging was never made a requirement, so no test could have caught its absence — and requirement 14's "referenced by both the registration and its own logging tag" was half-unread |
+| 34 | ✅ | Every log tag is declared in `docs/logging.md` before it appears in code | Unit test | `AdminBackupLoggingTests.EveryBackupTag_IsRegisteredInTheLoggingDocument` — reads the document itself rather than a list here. That rule existed with nothing enforcing it, which is how five unregistered tags nearly shipped |
+| 35 | ✅ | The audit trail records what it is documented to record, and nothing more | Unit test | `AdminBackupEndpointsTests.DeleteBackup_WritesAnAuditEntry` and `AdminBackupCreateEndpointTests.Create_WritesAnAuditEntry`, both with `TableName = "Database"` and `RecordId = null` per `docs/logging.md`'s audit schema. A `BackupDownloaded` operation was added and then removed: the document is explicit that reads are not audited, and a download leaves the backup in place (developer decision, 2026-08-29) |
+| 36 | ✅ | `docs/api-endpoints.md` and the `[Description]` attributes describe all five endpoints | Live | Both updated in the implementing commit; the status endpoint's description states what it touches rather than claiming read-only |
+| 37 | ✅ | The Blazor UI still renders and the endpoints answer against a real container | Live | T2 re-run 2026-08-29 after the handle fix — create, download and host-side read all confirmed. T1 in Visual Studio is the developer's own and is what remains |
 
 ---
+
+## Deferred — a per-file record for backups
+
+**A backup file gets no metadata record today, and that belongs to
+[#330](https://github.com/DutchJaFO/Quotinator/issues/330), not here** (developer direction,
+2026-08-29). The project already keeps per-file records for imported content; a backup is a file this
+application creates and should be treated the same way.
+
+This also settles a limitation found while wiring the audit trail. `docs/logging.md`'s audit schema
+reserves `RecordId` for an affected row's UUID and states that an admin action carries `null`, so an
+audit entry can say a backup was removed but not *which* one — the file name lives in the log line
+instead. Extending the audit schema to carry a file name was considered and rejected: the file identity
+belongs in #330's file-keyed record, which exists for exactly this, rather than in a table keyed by
+database rows.
+
+#330 covers this in principle but not yet in wiring — its background enumerates bundled sources, the
+manifest, downloaded caches and user imports, and its establishment hook is "first download or first
+inspection, during manifest creation", which a backup never passes through. Its own justification for
+including the manifest is that *"applies to all files we create" wins*, which is the argument for
+backups too.
 
 ## Scope changes
 
