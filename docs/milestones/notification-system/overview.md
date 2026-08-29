@@ -158,7 +158,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
          staleness rule is #330's reconciliation rule). Reports into #329's statistics but does not
          depend on it; a 304 still needs the connection #329 makes reliable, so neither reduces the
          other's problem. Introduces SourceRefreshOutcome.Unchanged, which #324 may choose to surface
-#339 ─── #347 — restructures the T2 suite into docs/automated-testing/ and defines the run scopes.
+#339 ─── #347 (in the v1.9.0 milestone, not this one — the only cross-milestone dependency here, and it
+         gates this milestone's close, not just this issue's). Restructures the T2 suite into
+         docs/automated-testing/ and defines the run scopes.
          Blocks #327 and #328, which author their documents into that structure rather than into the
          monolith it removes. Revises ADR 010 in place (test-only scripts move to scripts/testing/)
          and resolves the live-only Definition-of-done gap in issues.md that #328 hits
@@ -221,16 +223,16 @@ step, the other reuses it.
 | 6 | **#83** ✅ | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
 | 7 | **#309** ✅ | Done. T1 confirmed live (2026-08-19) surfaced four further defects — all fixed and verified; see steps 14–18 in its plan doc. T2 green the same day |
 | 8 | **#326** ✅ | Done, `Waiting for release`. All 12 verification rows green including T1 and a T2 controlled pair. It also corrected its own premise, which #327 inherits: sidecar state decides whether a read-only mount degrades, **not** a pending migration |
-| 9 | **#339** | Restructures the T2 suite into `docs/automated-testing/` and defines the three run scopes. Placed ahead of #327 and #328 so both author into the new structure rather than editing a monolith that is then split around them. Scope grew twice after its audit: the environment profiles every document declares, then the requirement that every test can actually fail. Blocked on #347 for its last verification row |
-| 10 | **#348** | Backup outcomes and refusal. Ahead of #327 because that issue's corrupt- and truncated-database documents assert against the behaviour this one delivers; writing them first means writing them twice. Found by #327 itself, while measuring whether a stated recovery route can actually succeed |
-| 11 | **#349** | Backup list/delete/status endpoints — the in-app remedy #348's messages point at, and what lets an operator resolve a full backup folder without filesystem access. Either order relative to #348; placed after it so the remedy text is written once against endpoints that exist |
-| 12 | **#350** | Overshoot must degrade, not run healthy. Placed beside the other two safe-start fixes rather than with the coverage work: it changes application behaviour, and #327's overshoot document is rewritten against the result. Reverses #289's shipped continue-and-notify design |
-| 13 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. #326 is done and #339 delivered its requirement 1 and first scenario; the overshoot document and its in-process test now belong to #350, leaving the corrupt and truncated documents, both waiting on #348. Must pin the WAL sidecar state explicitly; #326's plan doc carries the measurement |
-| 14 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above |
+| 9 | **#348** ✅ | Done, `Waiting for release` — T1 outstanding, the developer's own. Backup outcomes and refusal: five named obstacles, a reset that refuses rather than returning an unhandled 500, and a 90% operating quota with a reserve. Found by #327 while measuring whether a stated recovery route can actually succeed |
+| 10 | **#349** ✅ | Done. Grew from three endpoints to five — list, delete, status, download, create — under their own `Backup` tag. Three defects were found by running it rather than by unit tests: an unhandled 500 on delete against a read-only mount, another on download caused by a pooled connection holding every backup file open, and no logging at all |
+| 11 | **#350** | Overshoot must degrade, not run healthy. The first item that is both unblocked and unstarted, so it is now genuinely next. Changes application behaviour, and #327's overshoot document is rewritten against the result. Reverses #289's shipped continue-and-notify design |
+| 12 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. Unblocked: #326 is done, #348's refusal behaviour is in, and #339 has already delivered the structure these documents are authored into. The overshoot document and its in-process test belong to #350. Must pin the WAL sidecar state explicitly; #326's plan doc carries the measurement |
+| 13 | **#328** | Bundled-import and live-endpoint smoke coverage; independent of everything above, and authors into the same delivered structure |
+| 14 | **#339** | **Moved down from 9 (2026-08-29).** Its structure is delivered and in use — what remains is one verification row, "every document can distinguish the feature working from the feature broken", which is blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone. Leaving it at 9 made the whole sequence unworkable, since nothing after it could proceed while it waited on another milestone. Running it *after* #327 and #328 is also better than before: those two add documents, and this row validates every document there is |
 | 15 | **#329** | Retry and parallelism for source downloads. After the smoke-test issues, which close a verification gap; before #324, which consumes its statistics |
 | 16 | **#307** | Two documentation-confirmation rows outstanding — see its plan doc |
 | 17 | **#319** | Translated title/body. Before every producer below, each of which writes new user-facing text |
-| 18 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. Independent of everything above it, and #331 below cannot start without it |
+| 18 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. Independent of everything above it, and #331 below cannot start without it. Also owns giving a *backup* file its own record, which #349 deferred here rather than extending the audit schema |
 | 19 | **#331** | Conditional requests, storing validators in #330's shape. Lands before #324 so the source-download subsystem is finished before anything reports on it |
 | 20 | **#324** | Reports on the finished source-download subsystem. Last in that cluster, so it is written once rather than revised as #329/#330/#331 land |
 | 21 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
@@ -242,6 +244,10 @@ step, the other reuses it.
 | 27 | **#351** | `AuditOperation` to an enum with its CHECK constraint. Independent of everything above and slottable anywhere; placed last so #349's own new member is already in place when the conversion runs, and so its table rebuild is written with this milestone's full migration set visible |
 | 28 | **#352** | Restore a stored backup. After #349, whose `{name}` guard and create endpoint it relies on being there — not for compilation, but so the remedy text and the operator's loop are written once |
 | 29 | **#353** | Upload a backup file. Last of the backup cluster: it is the only endpoint that accepts an arbitrary file, and writing it after restore exists means its validation is written against a real consumer rather than a hypothetical one |
+
+**#339's blocker reaches past this issue.** Per the PR merge plan below, the branch stays open until every
+issue in the milestone is done — so #347, in the v1.9.0 milestone, gates this milestone's close and not
+only #339's. That is a cross-milestone dependency worth watching rather than discovering at close time.
 
 ---
 
