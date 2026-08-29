@@ -6,9 +6,8 @@
 **Depends on:** #278, #312
 
 > **Next action: execute the Steps.** This plan is ready. Schema, read-side resolution, language
-> selection and the backfill are all settled (developer decisions, 2026-08-16). The one open question
-> below is a decision for #309, not a blocker for this issue — it only affects whether a neighbouring
-> table gets renamed before or after this one lands.
+> selection, the backfill and the producer sources are all settled; nothing here is waiting on a
+> decision.
 
 ---
 
@@ -47,11 +46,12 @@ direction, 2026-08-16): store translations at creation, record the original's la
 - **The three existing producers are `Program.cs` (#279's announcement, #289's overshoot) and
   `Startup/WhatsNewNotification.cs` (#81)** — the only `SeedOnceAsync` callers.
 - **#309's changelog table is per-language**, so #81's producer genuinely can source all three
-  languages: `ChangelogEntity` carries a `Language` column
-  (`src/Quotinator.Data/Entities/ChangelogEntity.cs:17`). The issue says "from the per-language
-  changelog files it already reads" — since #309 that content is read from a database, not the JSON
-  files, but the per-language guarantee the claim depends on does hold. Note that it is a *separate*
-  database (#309, ADR 018), so this is a cross-database read, not a join — see step 9 and "Finding".
+  languages: `ChangelogEntryEntity` carries a `Language` column, and `ChangelogLineEntity` carries the
+  `AudienceKey` #307's reserved `notification` highlights use. All three locale files carry
+  `audienceHighlights.notification` today. The issue says "from the per-language changelog files it
+  already reads" — since #309 that content is read from a database, not the JSON files, but the
+  per-language guarantee the claim depends on does hold. Note that it is a *separate* database
+  (#309, ADR 018), so this is a cross-database read, not a join — see step 9.
 
 **The issue body's `System_NotificationTranslation` name is correct.** It lives in the main database,
 where ADR 015's prefix rule applies unambiguously.
@@ -82,8 +82,9 @@ over a `LEFT JOIN`, mirroring `Sql.Quotes.SelectBase` exactly:
 - join condition `{IdClauses.Join("t.NotificationId", "n.Id")} AND {TextClauses.Equals("t.Language", "lang")} AND t.IsDeleted = 0`
 - `CASE WHEN t.Body IS NOT NULL THEN LOWER(@lang) ELSE n.OriginalLanguage END AS EffectiveLanguage`
 
-All four queries (`SelectActive`, `SelectPage`, `SelectById`, and the count) share the projection, so
-`@lang` must be bound on every one — `null` when no language is requested, exactly as `Sql.Quotes` does.
+Three queries share the projection — `SelectActive`, `SelectPage` and `SelectById` — so `@lang` must be
+bound on every one, `null` when no language is requested, exactly as `Sql.Quotes` does. `CountAll` is a
+bare `SELECT COUNT(*)` that does not use `SelectColumns`, so it neither gains the join nor needs `@lang`.
 
 `TextClauses.Equals` rather than a hand-written `LOWER(…) = LOWER(…)`, per the case-insensitive-by-default
 rule: a translation's `Language` is never canonicalised at capture, so the SQL side needs its own wrap.
@@ -104,8 +105,19 @@ A list of a small record rather than a dictionary: `Title` is nullable and indep
 a `Dictionary<string, string>` cannot express, and the `Dto` suffix follows ADR 016's #264 revision the
 same way `NotificationMetadataDto` does.
 
-`NotificationSeeding.SeedOnceAsync` threads the same parameter through. Its identity comparison is
-untouched — identity is structural, from the metadata payload, and has never involved text.
+`NotificationSeeding.SeedOnceAsync` threads the same parameter through. **Its identity comparison is
+untouched, and the separate translation table is what guarantees that.** Stated precisely, because the
+looser version — "identity has never involved text" — is not true and invites a false alarm: two of the
+three producers hash their body into the payload's `ContentHash` (`NotificationContentHash.Of(...)` in
+#279's announcement and in #81's unreleased what's-new seed). What makes that safe is that the
+original-language text stays on `System_Notification.Body`, exactly as `Quotinator_Quote.QuoteText` does,
+while translations go to `System_NotificationTranslation`. The hashed string is therefore byte-identical
+before and after this issue. `SeedOnceAsync` itself compares only the deserialised metadata payload —
+`body` is passed straight to `WriteAsync` and never enters the comparison.
+
+That invariant is structural, not incidental: `COALESCE(t.Body, n.Body)` only resolves if the original
+stays on the parent row and the translation table holds *other* languages. Never write an
+original-language row into `System_NotificationTranslation`.
 
 ### Language selection — two inputs, one precedence rule
 
@@ -130,7 +142,7 @@ endpoint already calls (`QuoteEndpoints.cs:98`, `ConversationEndpoints.cs:95`) �
 comparison or being echoed back. It lowercases the value, which is why the SQL side still needs its own
 `TextClauses.Equals` wrap for the never-canonicalised `Language` column.
 
-`GetActiveNotificationsAsync` has exactly one consumer, `NotificationSummary.razor.cs:26`, and no REST
+`GetActiveNotificationsAsync` has exactly one consumer, `NotificationSummary.razor.cs:38`, and no REST
 endpoint — so the active-notification path takes `CurrentUICulture` only, with no parameter to add.
 
 ### Response shape
@@ -155,7 +167,7 @@ belong with that same work rather than being a separate concern (developer decis
 Mechanically that means a migration in the same `NotificationLegacyMetadataMigrations` family, folded
 together by the end-of-milestone consolidation pass the overview already plans. It cannot be an edit to
 migration 8 or 9 themselves if either has already been applied to a real database — including the
-developer's own — per the frozen-migration rule and ADR 015's #254 revision. If neither has, folding it
+developer's own — per ADR 015's frozen-migration rule. If neither has, folding it
 directly in is simpler and equivalent.
 
 The translated text comes from `UI.*.json`, the same source the #279 producer itself will use.
@@ -166,7 +178,14 @@ The translated text comes from `UI.*.json`, the same source the #279 producer it
 |---|---|
 | #279 announcement (`Program.cs`) | `i18ntext/UI.*.json` |
 | #289 schema-version overshoot (`Program.cs`) | `i18ntext/UI.*.json` |
-| #81 what's-new (`Startup/WhatsNewNotification.cs`) | The `Changelog` table's per-language rows — already translated at source, so nothing is translated here |
+| #81 what's-new body (`Startup/WhatsNewNotification.cs`) | The `Changelog` table's per-language rows — already translated at source, so nothing is translated here |
+| #81 what's-new **title** (same file) | `i18ntext/UI.*.json` — the changelog has no title to give |
+
+**#81's titles are not in the changelog, and are hardcoded English today.** `$"What's new in v{release.Version}"`
+and `"What's new (unreleased)"` are C# literals in `WhatsNewNotification.cs` — a live string-centralisation
+violation this issue is the natural place to fix. They need `UI.*.json` keys, with the version substituted
+via `IApiLocalizer.Format`'s `{0}` mechanism rather than interpolated into the resolved string. Only the
+*body* comes from the changelog.
 
 Reading `UI.*.json` for all three languages at write time is not what `IApiLocalizer` does — it resolves
 one language, from `CurrentUICulture`. This issue needs *every* language at once. Whether that is a new
@@ -174,21 +193,28 @@ method on `IApiLocalizer` or a separate reader is a step-level decision, but it 
 culture: a producer running at startup has no request culture to speak of, which is the whole reason
 this issue exists.
 
+**#289's producer stays in scope, and its text will be written twice** (developer decision, 2026-08-29).
+#350 rewrites the overshoot notification's wording entirely — it drops the "schema is complete / app
+working normally" claims, names restoring a backup as a second remedy alongside Reset, and moves the
+notification off the `dbHealth.IsHealthy` gate. #350 is sequenced after this issue, so the three
+translations written here are discarded there and re-written against #350's own wording. Accepted
+deliberately rather than resequencing: recorded here so the rework reads as a known cost, not as this
+plan having missed the conflict. Issue requirement 7 (substituting both recorded schema versions into
+each language's text) stays with this issue and is re-applied by #350 to its replacement text.
+
 ### Rendering
 
 Both surfaces resolve through the same read path: the `/notifications` page (`Notifications.razor.cs`,
 via `NotificationTable`) and the startup popups (`StartupSuccessModal`/`StartupErrorModal`, via
-`NotificationSummary`). Neither renders text directly today — both bind whatever the reader returned —
-so if the reader resolves correctly, both surfaces follow without markup changes beyond passing the
-language through.
+`NotificationSummary`, which itself delegates to `NotificationTable`). Neither renders text directly —
+both bind whatever the reader returned — so if the reader resolves correctly, both surfaces follow
+without markup changes beyond passing the language through.
 
----
-
-## Open question — for the developer, not to be assumed
-
-1. **What are the table-naming rules when an application has more than one database?** ADR 015 assumes
-   one, and the changelog database is effectively a second user-domain database. Needs a clarification
-   ADR; not a blocker for this issue, whose own table lives in the main database. See "Finding" below.
+**Only `Body` is rendered anywhere today.** `NotificationTable.razor:27` prints `@notification.Body` and
+nothing prints `Title`, which has been stored but unrendered since #312. So this issue can only prove a
+translated *body* live; proving a translated *title* belongs to #308, which adds per-type layout across
+both surfaces. Row 22 is scoped to `Body` for that reason (developer decision, 2026-08-29) — deliberately
+not by adding markup here, which would pre-empt the layout #308 exists to settle.
 
 ---
 
@@ -246,8 +272,10 @@ parameter with no second caller — decide at implementation which reads better.
 
 `INotificationWriter.WriteAsync` and `NotificationSeeding.SeedOnceAsync` take
 `IReadOnlyList<NotificationTranslationDto>`, persisting one row per language in the same transaction as
-the notification. Identity comparison is untouched — it is structural, from the metadata payload, and
-has never involved text (row 11 guards this).
+the notification. Identity comparison is untouched: `SeedOnceAsync` compares only the metadata payload,
+and the payload's `ContentHash` keeps hashing the original-language `Body` on the notification row, which
+this issue does not move (row 11 guards this — see "Write side" for why the looser "identity never
+involves text" phrasing is wrong). The original language is never written as a translation row.
 
 ### 7. Endpoint parameter
 
@@ -269,17 +297,29 @@ keep-API-docs-in-sync rule.
 **Status:** ⬜ Not started
 
 #279's and #289's producers (`Program.cs`) supply translations from `UI.*.json`; #81's
-(`Startup/WhatsNewNotification.cs`) from the `Changelog` table's per-language rows. Reading every
-language at once is not what `IApiLocalizer` does — it resolves one, from `CurrentUICulture` — so this
-needs an all-languages reader that resolves no culture at all. A startup producer has no request
-culture, which is the reason this issue exists.
+(`Startup/WhatsNewNotification.cs`) supplies its body from the `Changelog` table's per-language rows and
+its title from `UI.*.json` (see "Producers" — the changelog has no title to give, and the two literals
+there today are hardcoded English). Reading every language at once is not what `IApiLocalizer` does — it
+resolves one, from `CurrentUICulture` — so this needs an all-languages reader that resolves no culture at
+all. A startup producer has no request culture, which is the reason this issue exists.
+
+**#81 needs no new changelog API — it needs one guard.** The changelog lives in its own database
+(#309, ADR 018), so this is a cross-database read, not a join. `IChangelogReader.GetDocumentAsync(culture)`
+resolves one language per call, which is sufficient: call it once per language. What it does *not* do is
+fail when a language is missing — it falls back to `en` and returns the English document. The returned
+`ChangelogDocument` carries its own `Language`, so compare that against the code requested and **skip
+writing the translation row when they differ**. Writing it anyway would persist English text in an `nl`
+row, and the read path would then report `language: nl, isTranslated: true` for text that is English —
+strictly worse than having no row, since the `COALESCE` fallback would otherwise correctly report
+`language: en, isTranslated: false`, which is issue requirement 8 behaving as specified.
 
 ### 10. Surfaces
 
 **Status:** ⬜ Not started
 
 `NotificationSummary` and `NotificationTable` pass `CurrentUICulture`'s language through to the reader.
-Neither renders text itself today, so no markup change beyond threading the language.
+Neither composes text itself, so no markup change beyond threading the language. `NotificationTable`
+renders `Body` only; `Title` stays unrendered until #308, and this step does not add it.
 
 ### 11. Docs
 
@@ -301,46 +341,6 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 
 ---
 
-## Finding — ADR 015 assumes one database per application
-
-**No table needs renaming, and no ADR is wrong.** This section originally recorded #309's
-`Changelog`/`ChangelogLine`/`ChangelogSchemaVersion` as an ADR 015 violation. That was wrong, and is
-corrected in place rather than deleted, because misreading it is the evidence for what the actual gap is.
-
-**The separation is decided at ADR level, not in a code comment.** ADR 018's "Database placement"
-section rules that file-authored system content moves to a separate database when it has no
-transactional coupling to domain writes, names `System_Changelog` as its reference example, and adds
-that every database gets the same migration capability without exception. `ChangelogContentMigrations`'
-class doc restates the naming consequence: a dedicated, single-purpose database has nothing to
-disambiguate from, since ADR 015's prefixes substitute for SQLite's lack of schema qualification *within
-one flat namespace*.
-
-**ADR 005 is not wrong either** (developer clarification, 2026-08-16). Its `System_Changelog` naming was
-correct under the assumption in force when it was written — one database per application. ADR 018 later
-moved the content to its own database, and the implementation dropped the prefix as a consequence of
-that move. Neither document accounted for an application having more than one database, because at the
-time none did.
-
-**The changelog database is effectively a second user-domain database** (developer clarification,
-2026-08-16), not a system database — which is the part the existing vocabulary has no answer for. ADR
-015 defines `Import_`/`Audit_`/`System_` for `Quotinator.Data`'s own tables and one prefix
-(`Quotinator_`) for the consuming application's domain tables, all within a single namespace. It says
-nothing about what naming applies in a second database, or whether a database holding one domain needs a
-prefix at all.
-
-**So the open question is an ADR-level one:** when an application has more than one database, what are
-the naming and ownership rules per database? That is a clarification ADR (or an ADR 015 revision), not a
-correction to anything already written. #309's plan doc would follow whatever it settles.
-
-**Nothing in this issue depends on the outcome.** `System_NotificationTranslation` lives in the main
-database, where ADR 015 applies unambiguously.
-
-**One thing to carry into step 9:** the changelog being a separate database means #81's producer reads
-its per-language rows across a database boundary, not with a join. Worth confirming at implementation
-that the existing changelog reader already exposes what that producer needs.
-
----
-
 ## Verification
 
 | # | Status | Requirement | Method | Verification |
@@ -354,11 +354,13 @@ that the existing changelog reader already exposes what that producer needs.
 | 7 | ❌ | A translation supplying a body but no title falls back to the original title only | Unit test | Guards `COALESCE` being per-field, not per-row |
 | 8 | ❌ | Language matching is case-insensitive (`NL` resolves the `nl` row) | Unit test | Real SQLite; `TextClauses.Equals`, per the project-wide rule |
 | 9 | ❌ | `EffectiveLanguage` reports the language actually returned | Unit test | Both the translated and fallback cases |
-| 10 | ❌ | All four notification queries resolve translations, not only the list | Unit test | `SelectActive`, `SelectPage`, `SelectById` — a missed `@lang` binding on one is the likely defect |
-| 11 | ❌ | Identity/dedupe is unaffected by text or language | Unit test | `SeedOnceAsync` still suppresses a duplicate whose translations differ |
+| 10 | ❌ | All three projection-sharing queries resolve translations, not only the list | Unit test | `SelectActive`, `SelectPage`, `SelectById` — a missed `@lang` binding on one is the likely defect. `CountAll` is excluded: it does not use the projection |
+| 11 | ❌ | Identity/dedupe is unaffected by text or language | Unit test | `SeedOnceAsync` still suppresses a duplicate whose translations differ — and a producer whose `ContentHash` covers its body still dedupes, proving the hashed original-language `Body` did not move |
 | 12 | ❌ | The one already-persisted notification (#279's v1.8.3 announcement) gains translations via migration | Unit test | Real-SQLite test from a database at the pre-#319 schema carrying that row — asserts the translations exist, and that a database without the row gains nothing |
 | 13 | ❌ | #279's and #289's producers write translations from `UI.*.json` | Unit test | Per-producer |
-| 14 | ❌ | #81's producer writes translations from the `Changelog` table's per-language rows | Unit test | Per-producer |
+| 14 | ❌ | #81's producer writes body translations from the `Changelog` table's per-language rows | Unit test | Per-producer |
+| 14a | ❌ | #81's producer writes no translation row for a language the changelog lacks | Unit test | Changelog with `en` only; asserts no `nl` row is written and the read path reports `language: en, isTranslated: false` — guards `GetDocumentAsync`'s silent `en` fallback being persisted as a fake Dutch translation |
+| 14b | ❌ | #81's titles resolve per language from `UI.*.json`, with the version substituted | Unit test | Per-producer — covers both the per-release title and the unreleased one, which are hardcoded English literals today |
 | 15 | ❌ | Every new key exists in all three locale files | Unit test | `TranslationCompletenessTests` (existing) |
 | 16 | ❌ | `GET /notifications?lang=nl` returns Dutch text | Unit test | Endpoint test |
 | 17 | ❌ | With no `lang`, the endpoint follows the request culture | Unit test | Endpoint test with `Accept-Language: nl` |
@@ -366,7 +368,8 @@ that the existing changelog reader already exposes what that producer needs.
 | 19 | ❌ | A malformed `lang` is rejected consistently with the quote endpoints | Unit test | `InputValidation.TryNormalizeLang`'s existing contract — same status code as `/quotes` returns for the same input |
 | 20 | ❌ | `language`/`originalLanguage`/`isTranslated` are populated correctly | Unit test | Endpoint test, translated and fallback cases |
 | 21 | ❌ | The dismiss endpoint resolves text the same way | Unit test | Endpoint test — it echoes the notification back |
-| 22 | ❌ | Both surfaces render resolved text | Live (T1) | Notifications page and startup popup, UI switched to `nl` — screenshot, not text extraction |
-| 23 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | ADR 009, plus smoke-test 39e's intermediate-version check |
+| 22 | ❌ | Both surfaces render a resolved **body** | Live (T2) | Notifications page and startup popup, UI switched to `nl` — screenshot, not text extraction. Scoped to `Body`: `Title` is rendered nowhere until #308, so it cannot be seen here. T2, not T1 — T1's whole job is confirming the app still starts (`docs/release-verification.md`) |
+| 23 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | ADR 009, plus `docs/automated-testing/notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md` |
+| 23a | ❌ | The application still starts with the new schema and read path in place | Live (T1) | Visual Studio run completes startup — T1's own scope |
 | 24 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 25 | ❌ | Full test suite green | Build | `dotnet test --configuration Release -m:1` |
