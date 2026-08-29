@@ -33,6 +33,9 @@ public class NotificationTranslationTests
     private static readonly string[] RecordBaseColumns =
         ["Id", "DateCreated", "DateModified", "DateDeleted", "IsDeleted"];
 
+    // The two non-original languages, alphabetically — the order the assertion's own ORDER BY produces.
+    private static readonly string[] ExpectedBackfilledLanguages = ["de", "nl"];
+
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>
@@ -103,10 +106,10 @@ public class NotificationTranslationTests
         await ApplyTranslationSchemaAsync(connection);
         await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslations);
 
-        List<string> languages = (await connection.QueryAsync<string>(
-            "SELECT Language FROM System_NotificationTranslation ORDER BY Language;")).ToList();
+        List<string> languages = [.. await connection.QueryAsync<string>(
+            "SELECT Language FROM System_NotificationTranslation ORDER BY Language;")];
 
-        Assert.AreSequenceEqual(new[] { "de", "nl" }, languages,
+        Assert.AreSequenceEqual(ExpectedBackfilledLanguages, languages,
             "The legacy announcement must gain exactly the two non-original languages.");
 
         string? dutchTitle = await connection.ExecuteScalarAsync<string>(
