@@ -10,12 +10,12 @@ public interface INotificationReader
     /// Returns every undismissed, unexpired, non-deleted notification, newest first — the set
     /// surfaced in <c>StartupSuccessModal</c>/<c>StartupErrorModal</c>.
     /// </summary>
-    Task<IReadOnlyList<NotificationEntity>> GetActiveNotificationsAsync();
+    Task<IReadOnlyList<NotificationEntity>> GetActiveNotificationsAsync(string? language = null);
 
     /// <summary>
     /// Returns a paginated page of the full notification history (including dismissed/expired,
     /// excluding only soft-deleted rows), newest first — backs <c>GET /api/v1/notifications</c> and
     /// the Blazor Notifications page.
     /// </summary>
-    Task<PagedItems<NotificationEntity>> GetPagedAsync(int page, int pageSize);
+    Task<PagedItems<NotificationEntity>> GetPagedAsync(int page, int pageSize, string? language = null);
 }

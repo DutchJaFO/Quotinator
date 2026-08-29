@@ -33,9 +33,12 @@ public class NotificationReaderTests
         conn.Execute(NotificationMigrations.CreateNotificationTable);
         conn.Execute(AppVersionMigrations.CreateAppVersionTable);
         conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
+        // #319: the language column and the translation table the read projection joins against.
+        conn.Execute(NotificationTranslationMigrations.AddOriginalLanguageColumn);
+        conn.Execute(NotificationTranslationMigrations.CreateNotificationTranslationTable);
 
         SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
-        _reader = new NotificationReader(factory);
+        _reader = TestNotificationReader.Create(factory);
         _writer = new NotificationWriter(factory);
     }
 
@@ -122,7 +125,7 @@ public class NotificationReaderTests
                 conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
             }
 
-            NotificationReader reader = new NotificationReader(new SqliteConnectionFactory(dbPath));
+            NotificationReader reader = TestNotificationReader.Create(dbPath);
 
             IReadOnlyList<NotificationEntity> result = await reader.GetActiveNotificationsAsync();
 
@@ -149,7 +152,7 @@ public class NotificationReaderTests
                 conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
             }
 
-            NotificationReader reader = new NotificationReader(new SqliteConnectionFactory(dbPath));
+            NotificationReader reader = TestNotificationReader.Create(dbPath);
 
             PagedItems<NotificationEntity> result = await reader.GetPagedAsync(1, 20);
 

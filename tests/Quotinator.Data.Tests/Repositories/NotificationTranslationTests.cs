@@ -1,6 +1,10 @@
 using Dapper;
 using Microsoft.Data.Sqlite;
+using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
+using Quotinator.Data.Entities;
+using Quotinator.Data.Models;
+using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Repositories;
@@ -160,6 +164,164 @@ public class NotificationTranslationTests
         Assert.AreEqual(2, translations,
             "The NOT EXISTS guard makes each language's insert idempotent.");
     }
+
+    // ── Read-path resolution (steps 4/5) ─────────────────────────────────────
+
+    /// <summary>A language with a translation returns that translation's title and body.</summary>
+    [TestMethod]
+    public async Task Read_RequestedLanguageHasTranslation_ReturnsTranslatedTitleAndBody()
+    {
+        using TempDatabase temp = new(SchemaThroughMigration11);
+        NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
+
+        PagedItems<NotificationEntity> page = await reader.GetPagedAsync(1, 10, "nl");
+        NotificationEntity row = page.Items.Single();
+
+        Assert.AreEqual("Nederlandse kop", row.Title);
+        Assert.AreEqual("Nederlandse tekst.", row.Body);
+    }
+
+    /// <summary>A language with no translation transparently falls back to the original text.</summary>
+    [TestMethod]
+    public async Task Read_RequestedLanguageHasNoTranslation_FallsBackToOriginalLanguage()
+    {
+        using TempDatabase temp = new(SchemaThroughMigration11);
+        NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
+
+        PagedItems<NotificationEntity> page = await reader.GetPagedAsync(1, 10, "fr");
+        NotificationEntity row = page.Items.Single();
+
+        Assert.AreEqual("English headline", row.Title);
+        Assert.AreEqual("English body.", row.Body);
+        Assert.AreEqual("en", row.EffectiveLanguage,
+            "Falling back must report the language actually returned, not the one asked for.");
+    }
+
+    /// <summary>A row with no translations at all still renders — the legacy case.</summary>
+    [TestMethod]
+    public async Task Read_LegacyRowWithNoTranslations_ReturnsStoredEnglishText()
+    {
+        using TempDatabase temp = new(SchemaThroughMigration11);
+        using SqliteConnection connection = await OpenAsync(temp);
+        await ApplyTranslationSchemaAsync(connection);
+        await InsertNotificationAsync(connection, "English headline", "English body.");
+
+        NotificationReader reader = CreateReader(temp);
+        PagedItems<NotificationEntity> page = await reader.GetPagedAsync(1, 10, "nl");
+        NotificationEntity row = page.Items.Single();
+
+        Assert.AreEqual("English body.", row.Body, "A notification with no translations must never render empty.");
+        Assert.AreEqual("en", row.EffectiveLanguage);
+    }
+
+    /// <summary>
+    /// A translation supplying a body but no title falls back to the original title only — the
+    /// COALESCE is per field, not per row, so the translated body must survive.
+    /// </summary>
+    [TestMethod]
+    public async Task Read_TranslationHasBodyButNoTitle_FallsBackToOriginalTitleOnly()
+    {
+        using TempDatabase temp = new(SchemaThroughMigration11);
+        using SqliteConnection connection = await OpenAsync(temp);
+        await ApplyTranslationSchemaAsync(connection);
+        Guid id = await InsertNotificationAsync(connection, "English headline", "English body.");
+        await InsertTranslationAsync(connection, id, "nl", title: null, body: "Nederlandse tekst.");
+
+        NotificationReader reader = CreateReader(temp);
+        NotificationEntity row = (await reader.GetPagedAsync(1, 10, "nl")).Items.Single();
+
+        Assert.AreEqual("English headline", row.Title, "A missing translated title falls back on its own.");
+        Assert.AreEqual("Nederlandse tekst.", row.Body, "The translated body must not be dropped with it.");
+    }
+
+    /// <summary>`NL` resolves the `nl` row — case-insensitive by default, per the project-wide rule.</summary>
+    [TestMethod]
+    public async Task Read_RequestedLanguageDiffersInCase_StillResolvesTheTranslation()
+    {
+        using TempDatabase temp = new(SchemaThroughMigration11);
+        NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
+
+        NotificationEntity row = (await reader.GetPagedAsync(1, 10, "NL")).Items.Single();
+
+        Assert.AreEqual("Nederlandse tekst.", row.Body);
+        Assert.AreEqual("nl", row.EffectiveLanguage, "EffectiveLanguage is reported lowercase.");
+    }
+
+    /// <summary>
+    /// The active-notification query resolves translations too, not only the paged one — the three
+    /// queries share a projection, and a missed `@lang` binding on one is the likely defect.
+    /// </summary>
+    [TestMethod]
+    public async Task Read_ActiveQuery_ResolvesTranslationsToo()
+    {
+        using TempDatabase temp = new(SchemaThroughMigration11);
+        NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
+
+        IReadOnlyList<NotificationEntity> active = await reader.GetActiveNotificationsAsync("nl");
+
+        Assert.AreEqual("Nederlandse tekst.", active.Single().Body);
+    }
+
+    /// <summary>
+    /// The by-id query resolves translations too. It is the third query sharing the projection and the
+    /// only one reached through the writer, so it is the one a missed `@lang` binding would hide in.
+    /// </summary>
+    [TestMethod]
+    public async Task Read_ByIdQueryViaDismiss_ResolvesTranslationsToo()
+    {
+        using TempDatabase temp = new(SchemaThroughMigration11);
+        using SqliteConnection connection = await OpenAsync(temp);
+        await ApplyTranslationSchemaAsync(connection);
+        Guid id = await InsertNotificationAsync(connection, "English headline", "English body.");
+        await InsertTranslationAsync(connection, id, "nl", "Nederlandse kop", "Nederlandse tekst.");
+
+        SqliteConnectionFactory factory = new(temp.DbPath);
+        NotificationWriter writer = new(factory);
+
+        NotificationEntity? dismissed = await writer.DismissAsync(id, "nl");
+
+        Assert.IsNotNull(dismissed);
+        Assert.AreEqual("Nederlandse tekst.", dismissed.Body,
+            "The dismiss path echoes the notification back and must resolve it the same way a read does.");
+        Assert.IsTrue(dismissed.IsDismissed);
+    }
+
+    private static async Task<NotificationReader> SeedTranslatedNotificationAsync(TempDatabase temp)
+    {
+        using SqliteConnection connection = await OpenAsync(temp);
+        await ApplyTranslationSchemaAsync(connection);
+        Guid id = await InsertNotificationAsync(connection, "English headline", "English body.");
+        await InsertTranslationAsync(connection, id, "nl", "Nederlandse kop", "Nederlandse tekst.");
+        return CreateReader(temp);
+    }
+
+    private static NotificationReader CreateReader(TempDatabase temp)
+        => TestNotificationReader.Create(temp.DbPath);
+
+    private static async Task<Guid> InsertNotificationAsync(SqliteConnection connection, string title, string body)
+    {
+        Guid id = Guid.NewGuid();
+        await connection.ExecuteAsync(
+            "INSERT INTO System_Notification (Id, Type, Title, Body, DateCreated, IsDeleted, IsDismissed, OriginalLanguage) " +
+            "VALUES (@id, 'Information', @title, @body, @now, 0, 0, 'en');",
+            new { id = id.ToString(), title, body, now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
+        return id;
+    }
+
+    private static async Task InsertTranslationAsync(
+        SqliteConnection connection, Guid notificationId, string language, string? title, string body)
+        => await connection.ExecuteAsync(
+            "INSERT INTO System_NotificationTranslation (Id, NotificationId, Language, Title, Body, DateCreated, IsDeleted) " +
+            "VALUES (@id, @notificationId, @language, @title, @body, @now, 0);",
+            new
+            {
+                id = Guid.NewGuid().ToString(),
+                notificationId = notificationId.ToString(),
+                language,
+                title,
+                body,
+                now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+            });
 
     private static async Task ApplyTranslationSchemaAsync(SqliteConnection connection)
     {

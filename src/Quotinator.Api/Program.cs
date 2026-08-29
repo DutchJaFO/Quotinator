@@ -17,6 +17,7 @@ using Quotinator.Constants.Routes;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Entities;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Helpers;
@@ -410,7 +411,19 @@ builder.Services.AddSingleton<ISourceFileOverrideRegistry, SourceFileOverrideReg
 builder.Services.AddSingleton<IFileResourceRepository, SqliteFileResourceRepository>();
 builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
 builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
-builder.Services.AddSingleton<INotificationReader, NotificationReader>();
+// #319: JoinQueryRepository/IJoinStrategy per ADR 017 — the notification reads became two-table
+// projections over System_NotificationTranslation. Registered through the service-provider factory
+// overload rather than AddSingleton<JoinQueryRepository<T>>() like the joins above, because all three
+// notification strategies return the same NotificationEntity: three registrations of one closed
+// generic would collapse to whichever landed last. The alternative — three identical row types whose
+// only purpose is to make DI's type-based resolution work — would read worse than the problem it
+// solves. Per CLAUDE.md's DI policy this is the factory overload's intended use, not a bare `new`.
+builder.Services.AddSingleton<INotificationReader>(sp => new NotificationReader(
+    sp.GetRequiredService<IDbConnectionFactory>(),
+    new JoinQueryRepository<NotificationEntity>(
+        sp.GetRequiredService<IDbConnectionFactory>(), new NotificationJoinStrategies.Active()),
+    new JoinQueryRepository<NotificationEntity>(
+        sp.GetRequiredService<IDbConnectionFactory>(), new NotificationJoinStrategies.Page())));
 builder.Services.AddSingleton<INotificationWriter, NotificationWriter>();
 builder.Services.AddSingleton<INotificationActionExecutor, NotificationActionExecutor>();
 builder.Services.AddSingleton<IAppVersionTracker, AppVersionTracker>();

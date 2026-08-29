@@ -8,6 +8,8 @@ using Quotinator.Data.Enums;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 
+using Quotinator.Data.Tests.Repositories;
+
 namespace Quotinator.Data.Tests.Notifications;
 
 /// <summary>
@@ -51,10 +53,13 @@ public class NotificationSeedingTests
         conn.Execute(NotificationMigrations.CreateNotificationTable);
         conn.Execute(AppVersionMigrations.CreateAppVersionTable);
         conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
+        // #319: the language column and the translation table the read projection joins against.
+        conn.Execute(NotificationTranslationMigrations.AddOriginalLanguageColumn);
+        conn.Execute(NotificationTranslationMigrations.CreateNotificationTranslationTable);
 
         SqliteConnectionFactory factory = new(_dbPath);
         _writer = new NotificationWriter(factory);
-        _reader = new NotificationReader(factory);
+        _reader = TestNotificationReader.Create(factory);
     }
 
     [TestCleanup]

@@ -578,10 +578,32 @@ internal static class Sql
     /// <summary>System_Notification table (#278). INSERT is handled by Dapper.Contrib via <see cref="Repositories.NotificationWriter"/>.</summary>
     internal static class Notifications
     {
+        /// <summary>
+        /// #319: Title/Body resolve to the requested language's translation when one exists, falling
+        /// back per field to the notification's own original text. Mirrors <c>Sql.Quotes.SelectBase</c>
+        /// exactly, including the <c>EffectiveLanguage</c> <c>CASE</c>.
+        /// <para>
+        /// <c>@lang</c> must be bound on every query using this projection — <see langword="null"/>
+        /// when no language is requested, exactly as the quote queries do.
+        /// </para>
+        /// </summary>
         private static readonly string SelectColumns =
-            $"{IdClauses.SelectColumn("Id")}, Type, Title, Body, Metadata, MetadataKind, " +
-            $"{IdClauses.SelectColumn("AppVersionId")}, " +
-            "ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DateCreated, DateModified, DateDeleted, IsDeleted";
+            $"{IdClauses.SelectColumn("n.Id", "Id")}, n.Type, " +
+            "COALESCE(t.Title, n.Title) AS Title, " +
+            "COALESCE(t.Body,  n.Body)  AS Body, " +
+            "n.Metadata, n.MetadataKind, " +
+            $"{IdClauses.SelectColumn("n.AppVersionId", "AppVersionId")}, " +
+            "n.ExpiresAt, n.IsDismissed, n.DismissedAt, n.DismissTriggerKey, " +
+            "n.DateCreated, n.DateModified, n.DateDeleted, n.IsDeleted, n.OriginalLanguage, " +
+            "CASE WHEN t.Body IS NOT NULL THEN LOWER(@lang) ELSE n.OriginalLanguage END AS EffectiveLanguage";
+
+        // TextClauses.Equals on Language rather than a hand-written LOWER(...) = LOWER(...): a
+        // translation's Language is never canonicalised at capture, so the SQL side needs its own wrap
+        // even though InputValidation.TryNormalizeLang already lowercases the request's value.
+        private static readonly string FromWithTranslation =
+            "FROM System_Notification n " +
+            "LEFT JOIN System_NotificationTranslation t " +
+            $"ON {IdClauses.Join("t.NotificationId", "n.Id")} AND {TextClauses.Equals("t.Language", "lang")} AND t.IsDeleted = 0";
 
         /// <summary>
         /// Undismissed, unexpired, non-deleted notifications, newest first — the set surfaced in the
@@ -589,21 +611,21 @@ internal static class Sql
         /// to sort/compare correctly against the TEXT-stored <c>ExpiresAt</c> column.
         /// </summary>
         internal static readonly string SelectActive =
-            $"SELECT {SelectColumns} FROM System_Notification " +
-            "WHERE IsDismissed = 0 AND IsDeleted = 0 AND (ExpiresAt IS NULL OR ExpiresAt > @now) " +
-            "ORDER BY DateCreated DESC;";
+            $"SELECT {SelectColumns} {FromWithTranslation} " +
+            "WHERE n.IsDismissed = 0 AND n.IsDeleted = 0 AND (n.ExpiresAt IS NULL OR n.ExpiresAt > @now) " +
+            "ORDER BY n.DateCreated DESC;";
 
         /// <summary>Full notification history (including dismissed/expired), paginated, newest first — backs the REST list endpoint and the Blazor Notifications page.</summary>
         internal static readonly string SelectPage =
-            $"SELECT {SelectColumns} FROM System_Notification WHERE IsDeleted = 0 " +
-            "ORDER BY DateCreated DESC LIMIT @pageSize OFFSET @offset;";
+            $"SELECT {SelectColumns} {FromWithTranslation} WHERE n.IsDeleted = 0 " +
+            "ORDER BY n.DateCreated DESC LIMIT @pageSize OFFSET @offset;";
 
         /// <summary>Total non-deleted row count, for <see cref="SelectPage"/>'s pagination envelope.</summary>
         internal const string CountAll = "SELECT COUNT(*) FROM System_Notification WHERE IsDeleted = 0;";
 
         /// <summary>Single-notification lookup by Id — backs the dismiss endpoint's existence check.</summary>
         internal static readonly string SelectById =
-            $"SELECT {SelectColumns} FROM System_Notification WHERE {IdClauses.Equals("Id", "id")};";
+            $"SELECT {SelectColumns} {FromWithTranslation} WHERE {IdClauses.Equals("n.Id", "id")};";
 
         /// <summary>Marks one notification dismissed by Id. Idempotent — dismissing an already-dismissed row is a no-op in effect, not an error.</summary>
         internal static readonly string UpdateDismissById =

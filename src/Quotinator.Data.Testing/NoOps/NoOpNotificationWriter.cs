@@ -29,7 +29,7 @@ public sealed class NoOpNotificationWriter : INotificationWriter
         });
 
     /// <inheritdoc/>
-    public Task<NotificationEntity?> DismissAsync(Guid id)
+    public Task<NotificationEntity?> DismissAsync(Guid id, string? language = null)
         => Task.FromResult<NotificationEntity?>(null);
 
     /// <inheritdoc/>

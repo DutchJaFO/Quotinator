@@ -59,14 +59,19 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
     }
 
     /// <inheritdoc/>
-    public async Task<NotificationEntity?> DismissAsync(Guid id)
+    public async Task<NotificationEntity?> DismissAsync(Guid id, string? language = null)
     {
-        using IDbConnection conn = Factory.CreateConnection();
-        conn.Open();
-
-        NotificationEntity? entity = await conn.QuerySingleOrDefaultAsync<NotificationEntity>(Sql.Notifications.SelectById, new { id });
+        // The read half goes through JoinQueryRepository/IJoinStrategy per ADR 017 — since #319
+        // SelectById is a two-table projection, so it is the same join the reader executes and cannot
+        // stay a hand-rolled query here. The update half below is a single-table UPDATE and is not in
+        // scope for that ADR.
+        JoinQueryRepository<NotificationEntity> byId = new(Factory, new NotificationJoinStrategies.ById());
+        NotificationEntity? entity = (await byId.QueryAsync(new { id, lang = language })).FirstOrDefault();
         if (entity is null)
             return null;
+
+        using IDbConnection conn = Factory.CreateConnection();
+        conn.Open();
 
         SafeValue<DateTime?> now = SafeDateValue.Now;
         await conn.ExecuteAsync(Sql.Notifications.UpdateDismissById,

@@ -60,6 +60,30 @@ public sealed class NotificationEntity : RecordBase
     /// </summary>
     public SafeValue<DateTime?> ExpiresAt { get; init; } = SafeValue<DateTime?>.Empty;
 
+    /// <summary>
+    /// ISO 639-1 code of the language <see cref="Title"/> and <see cref="Body"/> are written in (#319).
+    /// Every row written before that column existed is <c>en</c>, backfilled by migration 12 — a
+    /// statement of fact about the shipped corpus, not a guess.
+    /// <para>
+    /// The read path falls back to this language's text whenever the requested language has no
+    /// translation, which is why the original text stays here rather than moving into
+    /// <see cref="NotificationTranslationEntity"/> alongside the others.
+    /// </para>
+    /// </summary>
+    public string OriginalLanguage { get; init; } = "en";
+
+    /// <summary>
+    /// The language actually resolved for this read — the requested one when a translation existed,
+    /// <see cref="OriginalLanguage"/> when it did not. Populated by the read projection's own
+    /// <c>CASE</c>, never stored.
+    /// <para>
+    /// <c>[Computed]</c> so Dapper.Contrib and <c>ReflectedColumnMetadata</c> both exclude it from
+    /// writes: it is a property of one query's result, not a column of the table.
+    /// </para>
+    /// </summary>
+    [Computed]
+    public string? EffectiveLanguage { get; init; }
+
     /// <summary>Whether this notification has been dismissed. Mirrors <see cref="RecordBase.IsDeleted"/>/<see cref="RecordBase.DateDeleted"/>'s own flag-plus-timestamp pairing style.</summary>
     public bool IsDismissed { get; set; }
 

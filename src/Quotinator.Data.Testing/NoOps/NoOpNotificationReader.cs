@@ -11,10 +11,10 @@ public sealed class NoOpNotificationReader : INotificationReader
     public static readonly NoOpNotificationReader Instance = new();
 
     /// <inheritdoc/>
-    public Task<IReadOnlyList<NotificationEntity>> GetActiveNotificationsAsync()
+    public Task<IReadOnlyList<NotificationEntity>> GetActiveNotificationsAsync(string? language = null)
         => Task.FromResult<IReadOnlyList<NotificationEntity>>([]);
 
     /// <inheritdoc/>
-    public Task<PagedItems<NotificationEntity>> GetPagedAsync(int page, int pageSize)
+    public Task<PagedItems<NotificationEntity>> GetPagedAsync(int page, int pageSize, string? language = null)
         => Task.FromResult(new PagedItems<NotificationEntity>([], page, pageSize, 0));
 }

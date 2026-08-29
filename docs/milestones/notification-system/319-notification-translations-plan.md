@@ -1,6 +1,6 @@
 # #319 — Notification title and body are not translated
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 6)
 **GitHub issue:** #319
 **Tiers required:** T1, T2
 **Depends on:** #278, #312
@@ -326,7 +326,7 @@ reported as a failure of this rule, not quietly mutation-checked into looking eq
 
 ### 4. Read-path SQL
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `Sql.Notifications.SelectColumns` becomes a projection over a `LEFT JOIN` on
 `System_NotificationTranslation`, with `COALESCE` per field and an `EffectiveLanguage` `CASE` — the
@@ -340,7 +340,23 @@ in step 5 only return it, which is also what keeps the guard tests scanning it.
 
 ### 5. Reader — via `JoinQueryRepository`/`IJoinStrategy`, per ADR 017
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Delivered as written below, with two things the plan did not anticipate:
+
+- **`NotificationEntity` gained `EffectiveLanguage` as `[Computed]`.** It is a property of one query's
+  result, not a column, and `ReflectedColumnMetadata` already excludes `[Computed]` from persisted
+  columns exactly as Dapper.Contrib does — so the projection can surface it without the entity
+  claiming a column that does not exist.
+- **The missing-table catch now also matches `System_NotificationTranslation`.** The two tables arrive
+  in separate migrations, so the degraded state #263/#280 protects can now be reached with one present
+  and the other not.
+
+Three existing fixtures (`NotificationReaderTests`, `NotificationWriterTests`,
+`NotificationSeedingTests`) build their schema from a hand-listed migration sequence and went red the
+moment the entity gained a real column their tables lacked; each now applies migrations 12 and 13 too.
+`TestNotificationReader` was added so the three-argument construction is written once rather than at
+five call sites, where a partially-wired reader would still compile.
 
 **The plan originally had the reader keep its raw `conn.QueryAsync` calls. That violates ADR 017** and
 was missed because the pre-implementation check compared the plan against the *code* and never against
@@ -463,12 +479,12 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 | 2 | ✅ | `System_NotificationTranslation` exists with `RecordBase`'s columns | Unit test | `NotificationTranslationTests.NotificationTranslationTable_HasRecordBaseColumns` — all four audit columns plus its own four |
 | 3 | ✅ | Baseline and incremental replay produce an identical schema for both tables | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationTranslationSchema` and `..._AgreeOnNotificationOriginalLanguage` |
 | 4 | ❌ | Writing a notification with translations persists one row per language | Unit test | Real SQLite, via `INotificationWriter.WriteAsync` |
-| 5 | ❌ | Reading in a translated language returns the translated title and body | Unit test | Real SQLite |
-| 6 | ❌ | Reading in an untranslated language falls back to the original text | Unit test | Real SQLite — the transparent-fallback contract |
-| 7 | ❌ | A translation supplying a body but no title falls back to the original title only | Unit test | Guards `COALESCE` being per-field, not per-row |
-| 8 | ❌ | Language matching is case-insensitive (`NL` resolves the `nl` row) | Unit test | Real SQLite; `TextClauses.Equals`, per the project-wide rule |
-| 9 | ❌ | `EffectiveLanguage` reports the language actually returned | Unit test | Both the translated and fallback cases |
-| 10 | ❌ | All three projection-sharing queries resolve translations, not only the list | Unit test | `SelectActive`, `SelectPage`, `SelectById` — a missed `@lang` binding on one is the likely defect. `CountAll` is excluded: it does not use the projection |
+| 5 | ✅ | Reading in a translated language returns the translated title and body | Unit test | Real SQLite |
+| 6 | ✅ | Reading in an untranslated language falls back to the original text | Unit test | Real SQLite — the transparent-fallback contract |
+| 7 | ✅ | A translation supplying a body but no title falls back to the original title only | Unit test | Guards `COALESCE` being per-field, not per-row |
+| 8 | ✅ | Language matching is case-insensitive (`NL` resolves the `nl` row) | Unit test | Real SQLite; `TextClauses.Equals`, per the project-wide rule |
+| 9 | ✅ | `EffectiveLanguage` reports the language actually returned | Unit test | Both the translated and fallback cases |
+| 10 | ✅ | All three projection-sharing queries resolve translations, not only the list | Unit test | `SelectActive`, `SelectPage`, `SelectById` — a missed `@lang` binding on one is the likely defect. `CountAll` is excluded: it does not use the projection |
 | 11 | ❌ | Identity/dedupe is unaffected by text or language | Unit test | `SeedOnceAsync` still suppresses a duplicate whose translations differ — and a producer whose `ContentHash` covers its body still dedupes, proving the hashed original-language `Body` did not move |
 | 12 | ✅ | The one already-persisted notification (#279's v1.8.3 announcement) gains translations via migration | Unit test | `NotificationTranslationTests.Migration_LegacyAnnouncementPresent_GainsDutchAndGermanTranslations`, `..._NoLegacyAnnouncement_WritesNoTranslations`, and `..._AppliedTwice_LeavesOneTranslationPerLanguage` |
 | 13 | ❌ | #279's and #289's producers write translations from `UI.*.json` | Unit test | Per-producer |

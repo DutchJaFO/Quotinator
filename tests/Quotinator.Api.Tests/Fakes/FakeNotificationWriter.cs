@@ -49,7 +49,7 @@ internal sealed class FakeNotificationWriter : INotificationWriter
         return Task.FromResult(entity);
     }
 
-    public Task<NotificationEntity?> DismissAsync(Guid id)
+    public Task<NotificationEntity?> DismissAsync(Guid id, string? language = null)
     {
         if (!_notifications.TryGetValue(id, out NotificationEntity? entity))
             return Task.FromResult<NotificationEntity?>(null);

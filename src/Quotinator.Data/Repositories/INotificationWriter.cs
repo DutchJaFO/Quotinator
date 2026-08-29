@@ -44,7 +44,7 @@ public interface INotificationWriter
     /// Marks a single notification dismissed by Id. Returns the updated entity, or <see langword="null"/>
     /// when no notification with that Id exists.
     /// </summary>
-    Task<NotificationEntity?> DismissAsync(Guid id);
+    Task<NotificationEntity?> DismissAsync(Guid id, string? language = null);
 
     /// <summary>
     /// Marks every active (undismissed, non-deleted) notification carrying <paramref name="trigger"/>

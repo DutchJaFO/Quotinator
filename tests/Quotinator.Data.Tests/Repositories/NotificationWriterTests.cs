@@ -36,10 +36,13 @@ public class NotificationWriterTests
         conn.Execute(AppVersionHistoryMigrations.AddApplicationColumn);
         conn.Execute(AppVersionHistoryMigrations.AddSequenceNumberColumn);
         conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
+        // #319: the language column and the translation table the read projection joins against.
+        conn.Execute(NotificationTranslationMigrations.AddOriginalLanguageColumn);
+        conn.Execute(NotificationTranslationMigrations.CreateNotificationTranslationTable);
 
         SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
         _writer = new NotificationWriter(factory);
-        _reader = new NotificationReader(factory);
+        _reader = TestNotificationReader.Create(factory);
     }
 
     [TestCleanup]
