@@ -283,5 +283,101 @@ public class NotificationEndpointsTests
             "#312 renamed Message to Body — a client still seeing 'message' means the rename never reached the wire.");
     }
 
+    // ── Language resolution (#319) ───────────────────────────────────────────
+
+    /// <summary>`?lang=` reaches the reader, the way it does on the quote endpoints.</summary>
+    [TestMethod]
+    public async Task GetNotifications_LangSupplied_PassesItToTheReader()
+    {
+        FakeNotificationReader reader = new();
+        reader.Seed(BuildNotification(message: "anything"));
+
+        using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader);
+        HttpResponseMessage response = await factory.CreateClient()
+            .GetAsync("/api/v1/notifications?lang=nl", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("nl", reader.LastRequestedLanguage);
+    }
+
+    /// <summary>With no `lang`, the endpoint follows the request culture.</summary>
+    [TestMethod]
+    public async Task GetNotifications_NoLang_FollowsTheRequestCulture()
+    {
+        FakeNotificationReader reader = new();
+        reader.Seed(BuildNotification(message: "anything"));
+
+        using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader);
+        HttpClient client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Accept-Language", "nl");
+
+        await client.GetAsync("/api/v1/notifications", TestContext.CancellationToken);
+
+        Assert.AreEqual("nl", reader.LastRequestedLanguage);
+    }
+
+    /// <summary>`lang` wins over the request culture when both are present.</summary>
+    [TestMethod]
+    public async Task GetNotifications_LangAndAcceptLanguageDiffer_LangWins()
+    {
+        FakeNotificationReader reader = new();
+        reader.Seed(BuildNotification(message: "anything"));
+
+        using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader);
+        HttpClient client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Accept-Language", "de");
+
+        await client.GetAsync("/api/v1/notifications?lang=nl", TestContext.CancellationToken);
+
+        Assert.AreEqual("nl", reader.LastRequestedLanguage,
+            "?lang= selects the notification's content language; Accept-Language only fills in when it is absent.");
+    }
+
+    /// <summary>A malformed `lang` is rejected the same way the quote endpoints reject it.</summary>
+    [TestMethod]
+    public async Task GetNotifications_MalformedLang_Returns400()
+    {
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        HttpResponseMessage response = await factory.CreateClient()
+            .GetAsync("/api/v1/notifications?lang=not-a-language", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode,
+            "InputValidation.TryNormalizeLang's existing contract — same status as /quotes returns for the same input.");
+    }
+
+    /// <summary>The response carries the three language fields every `lang`-accepting read endpoint reports.</summary>
+    [TestMethod]
+    public async Task GetNotifications_ResponseCarriesLanguageFields()
+    {
+        FakeNotificationReader reader = new();
+        NotificationEntity translated = BuildNotification(message: "Nederlandse tekst.");
+        reader.Seed(translated);
+
+        using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader);
+        HttpResponseMessage response = await factory.CreateClient()
+            .GetAsync("/api/v1/notifications?lang=nl", TestContext.CancellationToken);
+        string json = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.Contains("\"language\":", json);
+        Assert.Contains("\"originalLanguage\":", json);
+        Assert.Contains("\"isTranslated\":", json);
+    }
+
+    /// <summary>The dismiss endpoint resolves text the same way, since it echoes the notification back.</summary>
+    [TestMethod]
+    public async Task DismissNotification_PassesLangToTheWriter()
+    {
+        FakeNotificationWriter writer = new();
+        NotificationEntity existing = BuildNotification(message: "anything");
+        writer.Seed(existing);
+
+        using WebApplicationFactory<Program> factory = CreateFactory(adminApiKey: TestKey, notificationWriter: writer);
+        HttpClient client = CreateClientWithKey(factory);
+
+        await client.PostAsync($"/api/v1/notifications/{existing.Id}/dismiss?lang=nl", null, TestContext.CancellationToken);
+
+        Assert.AreEqual("nl", writer.LastRequestedLanguage);
+    }
+
     public TestContext TestContext { get; set; }
 }

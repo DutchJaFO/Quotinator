@@ -51,8 +51,14 @@ internal sealed class FakeNotificationWriter : INotificationWriter
         return Task.FromResult(entity);
     }
 
+    /// <summary>The language the last dismiss asked for (#319) — recorded so an endpoint test can assert
+    /// the endpoint actually passed it on rather than swallowing it.</summary>
+    public string? LastRequestedLanguage { get; private set; }
+
     public Task<NotificationEntity?> DismissAsync(Guid id, string? language = null)
     {
+        LastRequestedLanguage = language;
+
         if (!_notifications.TryGetValue(id, out NotificationEntity? entity))
             return Task.FromResult<NotificationEntity?>(null);
 

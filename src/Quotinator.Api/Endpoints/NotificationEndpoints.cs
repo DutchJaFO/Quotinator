@@ -1,9 +1,11 @@
 using System.ComponentModel;
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
@@ -39,12 +41,16 @@ internal static class NotificationEndpoints
             INotificationReader notifications,
             IApiLocalizer localizer,
             [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
-            [Description("Number of entries per page (0-500). 0 means every notification as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null) =>
+            [Description("Number of entries per page (0-500). 0 means every notification as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
+            [Description("ISO 639-1 language code for the notification's title and body. Falls back to the notification's original language when it has no translation for the requested one. Defaults to the request's Accept-Language.")] string? lang = null) =>
         {
             if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
                 return pageError!;
 
-            var result = await notifications.GetPagedAsync(pageValue, pageSizeValue);
+            if (!InputValidation.TryNormalizeLang(ref lang))
+                return Results.Problem(detail: localizer[ApiMessages.LangInvalid], statusCode: StatusCodes.Status400BadRequest);
+
+            var result = await notifications.GetPagedAsync(pageValue, pageSizeValue, ResolveLanguage(lang));
 
             var beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
             if (beyondLastError is not null) return beyondLastError;
@@ -65,12 +71,16 @@ internal static class NotificationEndpoints
         adminGroup.MapPost("/{id}/dismiss", async (
             string id,
             INotificationWriter notificationWriter,
-            IApiLocalizer localizer) =>
+            IApiLocalizer localizer,
+            [Description("ISO 639-1 language code for the returned notification's title and body. Defaults to the request's Accept-Language.")] string? lang = null) =>
         {
             if (!Guid.TryParse(id, out var notificationId))
                 return Results.Problem(detail: localizer[ApiMessages.NotificationNotFound], statusCode: StatusCodes.Status404NotFound);
 
-            var dismissed = await notificationWriter.DismissAsync(notificationId);
+            if (!InputValidation.TryNormalizeLang(ref lang))
+                return Results.Problem(detail: localizer[ApiMessages.LangInvalid], statusCode: StatusCodes.Status400BadRequest);
+
+            var dismissed = await notificationWriter.DismissAsync(notificationId, ResolveLanguage(lang));
             if (dismissed is null)
                 return Results.Problem(detail: localizer[ApiMessages.NotificationNotFound], statusCode: StatusCodes.Status404NotFound);
 
@@ -100,5 +110,22 @@ internal static class NotificationEndpoints
         IsDismissed       = entity.IsDismissed,
         DismissedAt       = entity.DismissedAt.Parsed,
         DismissTriggerKey = entity.DismissTriggerKey.Parsed?.ToString().ToLowerInvariant() ?? (entity.DismissTriggerKey.Raw.Length > 0 ? entity.DismissTriggerKey.Raw : null),
+        // EffectiveLanguage is null only when a caller bypasses the read projection (a fake in an
+        // endpoint test); the original language is the honest answer there, since no translation was
+        // resolved.
+        Language          = entity.EffectiveLanguage ?? entity.OriginalLanguage,
+        OriginalLanguage  = entity.OriginalLanguage,
+        IsTranslated      = !string.Equals(
+                                entity.EffectiveLanguage ?? entity.OriginalLanguage,
+                                entity.OriginalLanguage,
+                                StringComparison.OrdinalIgnoreCase),
     };
+
+    // ?lang= selects the notification's *content* language, the way it does for quotes; Accept-Language
+    // fills in only when it is absent. This is the deliberate extension CLAUDE.md's language rule does
+    // not cover: a notification is persisted content that reads as a UI message, so it takes the
+    // content treatment on the API and the UI treatment everywhere it renders. The prohibition that
+    // still stands unchanged is the specific one — ?lang= never drives error-message language.
+    private static string ResolveLanguage(string? lang) =>
+        lang ?? CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
 }

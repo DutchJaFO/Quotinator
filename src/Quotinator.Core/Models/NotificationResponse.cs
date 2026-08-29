@@ -41,4 +41,16 @@ public sealed class NotificationResponse
 
     /// <summary>Which action, if performed, supersedes this notification (e.g. <c>databasereset</c>), or <see langword="null"/>.</summary>
     public string? DismissTriggerKey { get; init; }
+
+    /// <summary>
+    /// The language <see cref="Title"/> and <see cref="Body"/> are actually returned in (#319) — the
+    /// requested one when a translation existed, <see cref="OriginalLanguage"/> when it did not.
+    /// </summary>
+    public required string Language { get; init; }
+
+    /// <summary>The language this notification's text was originally written in.</summary>
+    public required string OriginalLanguage { get; init; }
+
+    /// <summary><see langword="true"/> when <see cref="Language"/> and <see cref="OriginalLanguage"/> differ.</summary>
+    public required bool IsTranslated { get; init; }
 }
