@@ -213,7 +213,7 @@ without markup changes beyond passing the language through.
 **Only `Body` is rendered anywhere today.** `NotificationTable.razor:27` prints `@notification.Body` and
 nothing prints `Title`, which has been stored but unrendered since #312. So this issue can only prove a
 translated *body* live; proving a translated *title* belongs to #308, which adds per-type layout across
-both surfaces. Row 22 is scoped to `Body` for that reason (developer decision, 2026-08-29) — deliberately
+both surfaces. Row 24 is scoped to `Body` for that reason (developer decision, 2026-08-29) — deliberately
 not by adding markup here, which would pre-empt the layout #308 exists to settle.
 
 ---
@@ -359,17 +359,17 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 | 12 | ❌ | The one already-persisted notification (#279's v1.8.3 announcement) gains translations via migration | Unit test | Real-SQLite test from a database at the pre-#319 schema carrying that row — asserts the translations exist, and that a database without the row gains nothing |
 | 13 | ❌ | #279's and #289's producers write translations from `UI.*.json` | Unit test | Per-producer |
 | 14 | ❌ | #81's producer writes body translations from the `Changelog` table's per-language rows | Unit test | Per-producer |
-| 14a | ❌ | #81's producer writes no translation row for a language the changelog lacks | Unit test | Changelog with `en` only; asserts no `nl` row is written and the read path reports `language: en, isTranslated: false` — guards `GetDocumentAsync`'s silent `en` fallback being persisted as a fake Dutch translation |
-| 14b | ❌ | #81's titles resolve per language from `UI.*.json`, with the version substituted | Unit test | Per-producer — covers both the per-release title and the unreleased one, which are hardcoded English literals today |
-| 15 | ❌ | Every new key exists in all three locale files | Unit test | `TranslationCompletenessTests` (existing) |
-| 16 | ❌ | `GET /notifications?lang=nl` returns Dutch text | Unit test | Endpoint test |
-| 17 | ❌ | With no `lang`, the endpoint follows the request culture | Unit test | Endpoint test with `Accept-Language: nl` |
-| 18 | ❌ | `lang` takes precedence over the request culture when both are present | Unit test | Endpoint test — `Accept-Language: de` plus `?lang=nl` returns Dutch |
-| 19 | ❌ | A malformed `lang` is rejected consistently with the quote endpoints | Unit test | `InputValidation.TryNormalizeLang`'s existing contract — same status code as `/quotes` returns for the same input |
-| 20 | ❌ | `language`/`originalLanguage`/`isTranslated` are populated correctly | Unit test | Endpoint test, translated and fallback cases |
-| 21 | ❌ | The dismiss endpoint resolves text the same way | Unit test | Endpoint test — it echoes the notification back |
-| 22 | ❌ | Both surfaces render a resolved **body** | Live (T2) | Notifications page and startup popup, UI switched to `nl` — screenshot, not text extraction. Scoped to `Body`: `Title` is rendered nowhere until #308, so it cannot be seen here. T2, not T1 — T1's whole job is confirming the app still starts (`docs/release-verification.md`) |
-| 23 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | ADR 009, plus `docs/automated-testing/notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md` |
-| 23a | ❌ | The application still starts with the new schema and read path in place | Live (T1) | Visual Studio run completes startup — T1's own scope |
-| 24 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 25 | ❌ | Full test suite green | Build | `dotnet test --configuration Release -m:1` |
+| 15 | ❌ | #81's producer writes no translation row for a language the changelog lacks | Unit test | Changelog with `en` only; asserts no `nl` row is written and the read path reports `language: en, isTranslated: false` — guards `GetDocumentAsync`'s silent `en` fallback being persisted as a fake Dutch translation |
+| 16 | ❌ | #81's titles resolve per language from `UI.*.json`, with the version substituted | Unit test | Per-producer — covers both the per-release title and the unreleased one, which are hardcoded English literals today |
+| 17 | ❌ | Every new key exists in all three locale files | Unit test | `TranslationCompletenessTests` (existing) |
+| 18 | ❌ | `GET /notifications?lang=nl` returns Dutch text | Unit test | Endpoint test |
+| 19 | ❌ | With no `lang`, the endpoint follows the request culture | Unit test | Endpoint test with `Accept-Language: nl` |
+| 20 | ❌ | `lang` takes precedence over the request culture when both are present | Unit test | Endpoint test — `Accept-Language: de` plus `?lang=nl` returns Dutch |
+| 21 | ❌ | A malformed `lang` is rejected consistently with the quote endpoints | Unit test | `InputValidation.TryNormalizeLang`'s existing contract — same status code as `/quotes` returns for the same input |
+| 22 | ❌ | `language`/`originalLanguage`/`isTranslated` are populated correctly | Unit test | Endpoint test, translated and fallback cases |
+| 23 | ❌ | The dismiss endpoint resolves text the same way | Unit test | Endpoint test — it echoes the notification back |
+| 24 | ❌ | Both surfaces render a resolved **body** | Live (T2) | Notifications page and startup popup, UI switched to `nl` — screenshot, not text extraction. Scoped to `Body`: `Title` is rendered nowhere until #308, so it cannot be seen here. T2, not T1 — T1's whole job is confirming the app still starts (`docs/release-verification.md`) |
+| 25 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | ADR 009, plus `docs/automated-testing/notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md` |
+| 26 | ❌ | The application still starts with the new schema and read path in place | Live (T1) | Visual Studio run completes startup — T1's own scope |
+| 27 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 28 | ❌ | Full test suite green | Build | `dotnet test --configuration Release -m:1` |
