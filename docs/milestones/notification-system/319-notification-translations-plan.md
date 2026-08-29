@@ -440,6 +440,11 @@ renders `Body` only; `Title` stays unrendered until #308, and this step does not
 
 **Status:** ✅ Done
 
+Two T2 documents added under `docs/automated-testing/notifications-and-changelog/` and registered in the
+suite index and `Quotinator.slnx`: `08` covers read-time resolution on a fresh container, `09` the
+upgrade backfill on a released database. Rows 24 and 25 are executed from these — a live row with
+nothing to run it from is a promise, not a verification.
+
 New `UI.*.json` keys in all three locales; `data/changelog/changelog.{en,nl,de}.json` `unreleased`
 entries in lockstep; `[Subsystem - Phase]` prefixes on any new log lines.
 
@@ -483,8 +488,8 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 | 21 | ✅ | A malformed `lang` is rejected consistently with the quote endpoints | Unit test | `InputValidation.TryNormalizeLang`'s existing contract — same status code as `/quotes` returns for the same input |
 | 22 | ✅ | `language`/`originalLanguage`/`isTranslated` are populated correctly | Unit test | Endpoint test, translated and fallback cases |
 | 23 | ✅ | The dismiss endpoint resolves text the same way | Unit test | Endpoint test — it echoes the notification back |
-| 24 | ❌ | Both surfaces render a resolved **body** | Live (T2) | Notifications page and startup popup, UI switched to `nl` — screenshot, not text extraction. Scoped to `Body`: `Title` is rendered nowhere until #308, so it cannot be seen here. T2, not T1 — T1's whole job is confirming the app still starts (`docs/release-verification.md`) |
-| 25 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | ADR 009, plus `docs/automated-testing/notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md` |
+| 24 | ❌ | Both surfaces render a resolved **body** | Live (T2) | `notifications-and-changelog/08`, plus the Notifications page and startup popup, UI switched to `nl` — screenshot, not text extraction. Scoped to `Body`: `Title` is rendered nowhere until #308, so it cannot be seen here. T2, not T1 — T1's whole job is confirming the app still starts (`docs/release-verification.md`) |
+| 25 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | `notifications-and-changelog/09`; ADR 009, plus `docs/automated-testing/notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md` |
 | 26 | ❌ | The application still starts with the new schema and read path in place | Live (T1) | Visual Studio run completes startup — T1's own scope |
 | 27 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 28 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 3,661 passed, 0 failed across all 10 projects |

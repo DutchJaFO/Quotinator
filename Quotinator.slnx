@@ -358,6 +358,8 @@
     <File Path="docs/automated-testing/notifications-and-changelog/05-legacy-notification-provenance.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/06-whats-new-row-predating-release-state.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/07-changelog-served-from-its-own-database.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/08-notification-text-resolves-per-language.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/import-and-staged-actions/">
     <File Path="docs/automated-testing/import-and-staged-actions/01-staged-action-review-workflow.md" />

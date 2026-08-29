@@ -1061,6 +1061,8 @@ different question in each.
 | 05 | [The legacy notification gains provenance](notifications-and-changelog/05-legacy-notification-provenance.md) | no |
 | 06 | [A what's-new row predating release state is backfilled](notifications-and-changelog/06-whats-new-row-predating-release-state.md) | no |
 | 07 | [The changelog is served from its own on-disk database](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | yes |
+| 08 | [A notification's title and body resolve to the requested language](notifications-and-changelog/08-notification-text-resolves-per-language.md) | no |
+| 09 | [Upgrading translates the notification a released build already wrote](notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md) | no |
 
 ### `import-and-staged-actions/`
 
