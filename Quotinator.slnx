@@ -340,6 +340,7 @@
     <File Path="docs/automated-testing/backup/02-refuses-a-reset-when-the-database-is-truncated.md" />
     <File Path="docs/automated-testing/backup/03-refuses-a-reset-when-the-disk-fills-during-the-backup.md" />
     <File Path="docs/automated-testing/backup/04-refuses-a-reset-when-the-backup-folder-cannot-be-written.md" />
+    <File Path="docs/automated-testing/backup/05-a-full-quota-is-resolvable-from-inside-the-application.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/startup-and-degradation/">
     <File Path="docs/automated-testing/startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md" />

@@ -1,6 +1,6 @@
 # #349 — Admin endpoints to list, delete and report status for database backups
 
-**Status:** Planning
+**Status:** In progress (step 12)
 **GitHub issue:** #349
 **Tiers required:** T1, T2
 **Depends on:** none — pairs with [#348](https://github.com/DutchJaFO/Quotinator/issues/348), either order
@@ -29,9 +29,10 @@ from the action (developer direction, 2026-08-27).
 
 ## Next action
 
-**Execute this plan, starting at step 1.** Both design questions raised while refining it are decided
-(2026-08-29) and written into the Design below: what the status endpoint does about #348's probe write,
-and how a backup deletion is recorded in the audit trail.
+**T1 — the developer's own to run.** Steps 1–11 are done: five endpoints, 29 of 31 verification rows
+green, a clean solution build (0 warnings) and a full suite pass (3,604 tests), and `quotinator:local`
+rebuilt. What remains is T1 in Visual Studio and the T2 pass that runs this issue's own
+`backup/05` document, which is written but has never been executed.
 
 ---
 
@@ -149,7 +150,7 @@ compounding failure `CLAUDE.md`'s *Authoritative sources* section warns about.
 
 ### 1. Expose backup enumeration and the storage figures
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 The handlers must not touch the filesystem directly, so this adds a reader/writer pair in
 `Quotinator.Data` consumed through DI — `IDatabaseBackupReader` (enumerate the folder; report the
@@ -165,9 +166,14 @@ number a Reset refuses on cannot diverge.
 
 ### 2. Write the red tests
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Every method named in the Verification checklist below, red before any handler exists.
+
+`BackupStorageBudgetTests` and `DatabaseBackupReaderTests` are separate classes, not folded into
+`DatabaseBackupQuotaTests` because its fixture was already there. That folding was tried and was wrong:
+the agreement test it produced would hold just as well if both sides computed the same wrong number, and
+writing the reader's own class properly is what found the probe-artefact defect in row 27.
 
 Both halves of the traversal cases are asserted deliberately — rejected *and* nothing deleted — since a
 status assertion alone would pass even if the file had already gone. Per the positive-control rule in
@@ -176,7 +182,7 @@ working case beside the refusals, not only the refusals.
 
 ### 3. Declare the `Backup` tag and register the group
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `ApiTags.Backup`, its own `MapGroup` chaining the admin API key and `RateLimitPolicies.Admin`, and the
 `document.Tags` entry with a real description in `Program.cs`'s `AddDocumentTransformer` — in the same
@@ -185,7 +191,7 @@ This is that rule's first live application since #339 found the gap it was writt
 
 ### 4. Implement `GET /api/v1/admin/backups`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Paginated via `PaginationParsing.TryParse`, returning `PagedItems<T>`, with `pageSize = 0` meaning every
 row and the response reporting the actual count. `GetAllBackups` / "List backups", the `WithName` value
@@ -193,7 +199,7 @@ held in a `private const string` referenced by both the registration and its log
 
 ### 5. Implement `DELETE /api/v1/admin/backups/{name}`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `{name}` is a file name, never a path: anything carrying a separator or a traversal segment is rejected
 before it reaches the filesystem, and the resolved path is verified to sit inside `BackupsPath`. An
@@ -204,7 +210,7 @@ The guard is written once here and reused by step 6, not implemented twice.
 
 ### 6. Implement `GET /api/v1/admin/backups/{name}/content`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Streamed rather than buffered, `Content-Disposition` naming the stored file, the same `{name}` guard and
 the same `404` as step 5. `GetBackupContent` / "Backup content by name" — a fetch, but by name rather
@@ -216,7 +222,7 @@ so it is a known trade-off rather than a surprise.
 
 ### 7. Implement `POST /api/v1/admin/backups/create`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `CreateBackup` / "Create a backup", calling step 1's newly exposed initialiser method. It refuses in
 #348's vocabulary — obstacle plus remedies, the same shape a refused Reset returns — rather than
@@ -225,7 +231,7 @@ download it via step 6. The audit entry uses the existing `AuditOperation.Backup
 
 ### 8. Implement `GET /api/v1/admin/backups/status`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `CheckBackupReadiness` for the readiness half, step 1's figures for the quota half, and free disk space
 via `IDiskSpaceProvider` — reported alongside the quota, not folded into it. Obstacle wording comes from
@@ -235,7 +241,7 @@ requires: this is not a list, not a fetch by id, and not an action.
 
 ### 9. Point #348's remedy text at these endpoints
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `BackupObstacleGuidance.Remedies(BudgetExceeded)` currently says *"Remove one or more old backups to free
 quota"* with no way to do it, and `InsufficientDiskSpace` says removing backups reclaims space the same
@@ -244,7 +250,7 @@ recorded, and the reason it was written as advice rather than an instruction.
 
 ### 10. Update the API documentation
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `docs/api-endpoints.md` and the `[Description]` attributes, in the same commit. The issue body's
 "read-only" claim about the status endpoint was corrected in place on 2026-08-29, so what remains here
@@ -252,7 +258,7 @@ is the repository documentation.
 
 ### 11. Add the T2 document for a full-quota refusal
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done (written; running it is step 12)
 
 `docs/automated-testing/backup/` has documents 01–04 and none of them covers `BudgetExceeded` — the one
 obstacle these endpoints remedy. The new document sabotages by filling the quota, asserts the `409`, then
@@ -277,34 +283,37 @@ document from step 11.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | The list reports every backup with the facts needed to choose one — name, size, when taken | Unit test | `AdminBackupEndpointsTests.GetBackups_ReturnsEachBackupWithItsNameSizeAndTimestamp` |
-| 2 | ❌ | An empty backups folder is an empty page, not a `404` | Unit test | `AdminBackupEndpointsTests.GetBackups_NoBackupsExist_ReturnsAnEmptyPageNotA404` |
-| 3 | ❌ | A deletion removes the named file and nothing else | Unit test | `AdminBackupEndpointsTests.DeleteBackup_RemovesOnlyTheNamedFile` |
-| 4 | ❌ | A deletion writes an audit entry, so "why is there no backup from that date" has an answer | Unit test | `AdminBackupEndpointsTests.DeleteBackup_WritesAnAuditEntry`. `AuditOperation.BackupDeleted` needs no migration — `Audit_Entry.Operation` is `TEXT NOT NULL` with no CHECK constraint, per #348's row 6 |
-| 5 | ❌ | Deleting a name that does not exist is a `404`, distinguishable from a successful removal | Unit test | `AdminBackupEndpointsTests.DeleteBackup_UnknownName_Returns404` |
-| 6 | ❌ | No `{name}` route can escape the backups folder — rejected **and** nothing removed or served | Unit test | `AdminBackupEndpointsTests.DeleteBackup_PathTraversalAttempt_IsRejectedAndDeletesNothing`, `...DeleteBackup_AbsolutePathAttempt_IsRejectedAndDeletesNothing`, `AdminBackupDownloadEndpointTests.Download_PathTraversalAttempt_IsRejectedAndServesNothing`. Both halves asserted: a rejected status alone would pass against a build that had already deleted or served the file |
-| 7 | ❌ | All five endpoints sit behind the admin API key | Unit test | `AdminBackupEndpointsTests.GetBackups_WithoutApiKey_Returns401`, `...DeleteBackup_WithoutApiKey_Returns401`, `AdminBackupDownloadEndpointTests.Download_WithoutApiKey_Returns401`, `AdminBackupCreateEndpointTests.Create_WithoutApiKey_Returns401`, `AdminBackupStatusEndpointTests.GetStatus_WithoutApiKey_Returns401` |
-| 8 | ❌ | A download returns the stored file unaltered, named so it can be kept | Unit test | `AdminBackupDownloadEndpointTests.Download_ReturnsTheFilesBytes_ByteForByte` and `...Download_SetsAnAttachmentNameMatchingTheStoredFile` — byte-for-byte, since a backup that does not round-trip is not a restore point |
-| 9 | ❌ | Downloading a name that does not exist is a `404`, not an empty file | Unit test | `AdminBackupDownloadEndpointTests.Download_UnknownName_Returns404` |
-| 10 | ❌ | An operator can take a backup on demand, and is told what it produced | Unit test | `AdminBackupCreateEndpointTests.Create_WritesABackupFile_AndNamesItInTheResponse` |
-| 11 | ❌ | A create that cannot take a backup refuses with the obstacle and its remedies, never a success with no file | Unit test | `AdminBackupCreateEndpointTests.Create_WhenNoBackupCanBeTaken_RefusesWithTheObstacleAndItsRemedies` — the same shape a refused Reset returns |
-| 12 | ❌ | A creation writes an audit entry | Unit test | `AdminBackupCreateEndpointTests.Create_WritesAnAuditEntry`, using the existing `AuditOperation.Backup` (`"BackedUp"`) — declared since the audit trail was built and without a producer until now |
-| 13 | ❌ | The five endpoints compose: what create writes, list shows and download returns | Unit test | `AdminBackupCreateEndpointTests.Create_TheCreatedFileAppearsInTheList_AndCanBeDownloaded` — the operator's actual loop, asserted end to end rather than one endpoint at a time |
-| 14 | ❌ | The status endpoint says whether a backup can be taken right now, and names the obstacle when it cannot | Unit test | `AdminBackupStatusEndpointTests.GetStatus_WhenABackupIsPossible_SaysSo` and `...GetStatus_WhenABackupIsNotPossible_NamesTheObstacle` — the possible case is the positive control for the whole status suite |
-| 15 | ❌ | The status endpoint reports used, operating quota, absolute ceiling, what remains, and the percentage | Unit test | `AdminBackupStatusEndpointTests.GetStatus_ReportsUsedQuotaCeilingAndPercentage` |
-| 16 | ❌ | It reports whether the reserve between quota and ceiling is currently being relied on | Unit test | `AdminBackupStatusEndpointTests.GetStatus_ReportsWhetherTheReserveAboveTheQuotaIsInUse` |
-| 17 | ❌ | Real free disk space is reported alongside the quota, not folded into it | Unit test | `AdminBackupStatusEndpointTests.GetStatus_ReportsRealFreeDiskSpaceSeparatelyFromTheQuota` — the two are independent constraints and the backup path checks both |
-| 18 | ❌ | No backups is zero used, not an error | Unit test | `AdminBackupStatusEndpointTests.GetStatus_NoBackupsExist_ReportsZeroUsedNotAnError` |
-| 19 | ❌ | The status endpoint reads no database content, and answers while degraded | Unit test | `AdminBackupStatusEndpointTests.GetStatus_ReadsNoDatabaseContent_AndAnswersWhileDegraded`. The filesystem write it *does* perform is one zero-byte probe, by design — see the Design section |
-| 20 | ❌ | What status promises is what create actually does | Unit test | `AdminBackupStatusEndpointTests.GetStatus_AgreesWithWhatACreateAttemptActuallyDoes` — a status endpoint that says yes where create then refuses is worse than none; the check-and-attempt-agree property #348 found was worth its own test |
-| 21 | ❌ | All five routes reach their handlers while degraded, rather than being answered by the health gate | Unit test | `AdminBackupEndpointsTests.AllRoutes_RemainReachableWhileDegraded` — tested for these routes specifically rather than assumed to follow from #326's `Startup_DataDirectoryNotWritable_OpenApiRemainsReachableForRecovery` |
-| 22 | ❌ | The list honours the standard pagination contract in full | Unit test | `AdminBackupEndpointsPaginationTests.Page_Zero_Returns422`, `...Page_Malformed_Returns422`, `...PageSize_Malformed_Returns422`, `...PageSize_Negative_Returns422`, `...PageSize_AboveMax_Returns422_NeverClamped`, `...PageSize_Zero_ReturnsEveryRow_AndReportsTheActualCount`, `...PageSize_Omitted_DefaultsToTwenty`, `...Page_BeyondLastPage_Returns422_DistinctFromPageZero` |
-| 23 | ❌ | The `Backup` tag is declared with a real description, not used bare | Unit test | `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` — already green, must stay green once the tag exists. Plus `OpenApiSpecEndpointTests.BackupRoutes_AreTaggedBackup_NotAdmin`, since staying green would also be satisfied by never adding the tag at all |
-| 24 | ❌ | The published figures and the figure a Reset refuses on come from one place | Unit test | `DatabaseBackupQuotaTests` continues to pass unchanged against step 1's extracted helper, and `BackupStorageBudgetTests` asserts the reader and `CheckBackupReadiness` agree at the quota boundary |
-| 25 | ❌ | #348's remedy text names these endpoints rather than describing an action with no route | Unit test | `AdminEndpointsTests.ResetRefusedForBudget_RemedyNamesTheBackupEndpoints` |
-| 26 | ❌ | A full quota is resolvable end to end, from inside the application | Live | T2: the new `docs/automated-testing/backup/` document — fill the quota, `409` with `backupObstacle: BudgetExceeded`, `DELETE` a backup through the endpoint, reset then returns `200`. Exercises create, list, download and delete against a real container along the way |
-| 27 | ❌ | `docs/api-endpoints.md` and the `[Description]` attributes describe all five endpoints | Live | Both updated in the implementing commit; the status endpoint's description states what it touches rather than claiming read-only |
-| 28 | ❌ | The Blazor UI still renders and the endpoints answer against a real container | Live | T1 (developer) and T2 smoke set against a rebuilt `quotinator:local` |
+| 1 | ✅ | The list reports every backup with the facts needed to choose one — name, size, when taken | Unit test | `AdminBackupEndpointsTests.GetBackups_ReturnsEachBackupWithItsNameSizeAndTimestamp` |
+| 2 | ✅ | An empty backups folder is an empty page, not a `404` | Unit test | `AdminBackupEndpointsTests.GetBackups_NoBackupsExist_ReturnsAnEmptyPageNotA404` |
+| 3 | ✅ | A deletion removes the named file and nothing else | Unit test | `AdminBackupEndpointsTests.DeleteBackup_RemovesOnlyTheNamedFile` |
+| 4 | ✅ | A deletion writes an audit entry, so "why is there no backup from that date" has an answer | Unit test | `AdminBackupEndpointsTests.DeleteBackup_WritesAnAuditEntry`. `AuditOperation.BackupDeleted` needs no migration — `Audit_Entry.Operation` is `TEXT NOT NULL` with no CHECK constraint, per #348's row 6 |
+| 5 | ✅ | Deleting a name that does not exist is a `404`, distinguishable from a successful removal | Unit test | `AdminBackupEndpointsTests.DeleteBackup_UnknownName_Returns404` |
+| 6 | ✅ | No `{name}` route can escape the backups folder — rejected **and** nothing removed or served | Unit test | `AdminBackupEndpointsTests.DeleteBackup_PathTraversalAttempt_IsRejectedAndDeletesNothing`, `...DeleteBackup_AbsolutePathAttempt_IsRejectedAndDeletesNothing`, `AdminBackupDownloadEndpointTests.Download_PathTraversalAttempt_IsRejectedAndServesNothing`. Both halves asserted: a rejected status alone would pass against a build that had already deleted or served the file |
+| 7 | ✅ | All five endpoints sit behind the admin API key | Unit test | `AdminBackupEndpointsTests.GetBackups_WithoutApiKey_Returns401`, `...DeleteBackup_WithoutApiKey_Returns401`, `AdminBackupDownloadEndpointTests.Download_WithoutApiKey_Returns401`, `AdminBackupCreateEndpointTests.Create_WithoutApiKey_Returns401`, `AdminBackupStatusEndpointTests.GetStatus_WithoutApiKey_Returns401` |
+| 8 | ✅ | A download returns the stored file unaltered, named so it can be kept | Unit test | `AdminBackupDownloadEndpointTests.Download_ReturnsTheFilesBytes_ByteForByte` and `...Download_SetsAnAttachmentNameMatchingTheStoredFile` — byte-for-byte, since a backup that does not round-trip is not a restore point |
+| 9 | ✅ | Downloading a name that does not exist is a `404`, not an empty file | Unit test | `AdminBackupDownloadEndpointTests.Download_UnknownName_Returns404` |
+| 10 | ✅ | An operator can take a backup on demand, and is told what it produced | Unit test | `AdminBackupCreateEndpointTests.Create_WritesABackupFile_AndNamesItInTheResponse` |
+| 11 | ✅ | A create that cannot take a backup refuses with the obstacle and its remedies, never a success with no file | Unit test | `AdminBackupCreateEndpointTests.Create_WhenNoBackupCanBeTaken_RefusesWithTheObstacleAndItsRemedies` — the same shape a refused Reset returns |
+| 12 | ✅ | A creation writes an audit entry | Unit test | `AdminBackupCreateEndpointTests.Create_WritesAnAuditEntry`, using the existing `AuditOperation.Backup` (`"BackedUp"`) — declared since the audit trail was built and without a producer until now |
+| 13 | ✅ | The five endpoints compose: what create writes, list shows and download returns | Unit test | `AdminBackupCreateEndpointTests.Create_TheCreatedFileAppearsInTheList_AndCanBeDownloaded` — the operator's actual loop, asserted end to end rather than one endpoint at a time |
+| 14 | ✅ | The status endpoint says whether a backup can be taken right now, and names the obstacle when it cannot | Unit test | `AdminBackupStatusEndpointTests.GetStatus_WhenABackupIsPossible_SaysSo` and `...GetStatus_WhenABackupIsNotPossible_NamesTheObstacle` — the possible case is the positive control for the whole status suite |
+| 15 | ✅ | The status endpoint reports used, operating quota, absolute ceiling, what remains, and the percentage | Unit test | `AdminBackupStatusEndpointTests.GetStatus_ReportsUsedQuotaCeilingAndPercentage` |
+| 16 | ✅ | It reports whether the reserve between quota and ceiling is currently being relied on | Unit test | `AdminBackupStatusEndpointTests.GetStatus_ReportsWhetherTheReserveAboveTheQuotaIsInUse` |
+| 17 | ✅ | Real free disk space is reported alongside the quota, not folded into it | Unit test | `AdminBackupStatusEndpointTests.GetStatus_ReportsRealFreeDiskSpaceSeparatelyFromTheQuota` — the two are independent constraints and the backup path checks both |
+| 18 | ✅ | No backups is zero used, not an error | Unit test | `AdminBackupStatusEndpointTests.GetStatus_NoBackupsExist_ReportsZeroUsedNotAnError` |
+| 19 | ✅ | The status endpoint reads no database content, and answers while degraded | Unit test | `AdminBackupStatusEndpointTests.GetStatus_ReadsNoDatabaseContent_AndAnswersWhileDegraded`. The filesystem write it *does* perform is one zero-byte probe, by design — see the Design section |
+| 20 | ✅ | What status promises is what create actually does | Unit test | `AdminBackupStatusEndpointTests.GetStatus_AgreesWithWhatACreateAttemptActuallyDoes` — a status endpoint that says yes where create then refuses is worse than none; the check-and-attempt-agree property #348 found was worth its own test |
+| 21 | ✅ | All five routes reach their handlers while degraded, rather than being answered by the health gate | Unit test | `AdminBackupEndpointsTests.AllRoutes_RemainReachableWhileDegraded` — tested for these routes specifically rather than assumed to follow from #326's `Startup_DataDirectoryNotWritable_OpenApiRemainsReachableForRecovery` |
+| 22 | ✅ | The list honours the standard pagination contract in full | Unit test | `AdminBackupEndpointsPaginationTests.Page_Zero_Returns422`, `...Page_Malformed_Returns422`, `...PageSize_Malformed_Returns422`, `...PageSize_Negative_Returns422`, `...PageSize_AboveMax_Returns422_NeverClamped`, `...PageSize_Zero_ReturnsEveryRow_AndReportsTheActualCount`, `...PageSize_Omitted_DefaultsToTwenty`, `...Page_BeyondLastPage_Returns422_DistinctFromPageZero` |
+| 23 | ✅ | The `Backup` tag is declared with a real description, not used bare | Unit test | `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` — already green, must stay green once the tag exists. Plus `OpenApiSpecEndpointTests.BackupRoutes_AreTaggedBackup_NotAdmin`, since staying green would also be satisfied by never adding the tag at all |
+| 24 | ✅ | The published figures and the figure a Reset refuses on come from one place | Unit test | `DatabaseBackupQuotaTests.PublishedUsage_AgreesWithTheLimitAReadinessCheckRefusesOn` — checked at 50/89/95/100% of the ceiling, so agreement is proven across the quota boundary rather than at one safe point. Its other 11 tests pass unchanged against the extracted helper |
+| 25 | ✅ | The shared arithmetic is correct, not merely self-consistent | Unit test | `BackupStorageBudgetTests` — 19 cases over the ceiling, the quota percentage, the limit and the used total, each with the honoured value beside the rejected one. Distinct from row 24 on purpose: agreement would also hold if both sides computed the same wrong number. Shown able to fail by mutation — clamping the out-of-range percentage instead of falling back, and recursing into subdirectories, failed 7 between them |
+| 26 | ✅ | The reader answers correctly for a present backup and for an absent one | Unit test | `DatabaseBackupReaderTests` — 14 cases: listing, ordering, an empty folder, a missing folder, usage below and above the quota, free disk space, and open/exists/valid-name each proven on both a real backup and a name with nothing behind it |
+| 27 | ✅ | The pre-flight's own probe file is never offered as a backup | Unit test | `DatabaseBackupReaderTests.List_ExcludesTheWritabilityProbeArtefact` — written red and it failed: a `.writable-probe` left behind by a failed delete was listed, downloadable and deletable as if it were a restore point. Now excluded from listing, opening and deletion alike, and deliberately still counted in the storage total, which is a claim about bytes on disk |
+| 28 | ✅ | #348's remedy text names these endpoints rather than describing an action with no route | Unit test | `AdminEndpointsTests.ResetRefusedForBudget_RemedyNamesTheBackupEndpoints` |
+| 29 | ❌ | A full quota is resolvable end to end, from inside the application | Live | T2: `docs/automated-testing/backup/05-a-full-quota-is-resolvable-from-inside-the-application.md` — fill the quota, `409` with `backupObstacle: BudgetExceeded`, `DELETE` a backup through the endpoint, reset then returns `200`. Exercises create, list, download and delete against a real container along the way |
+| 30 | ✅ | `docs/api-endpoints.md` and the `[Description]` attributes describe all five endpoints | Live | Both updated in the implementing commit; the status endpoint's description states what it touches rather than claiming read-only |
+| 31 | ❌ | The Blazor UI still renders and the endpoints answer against a real container | Live | T1 (developer) and T2 smoke set against a rebuilt `quotinator:local`. The image builds clean (`docker build -f docker/Dockerfile -t quotinator:local .`, 2026-08-29); neither tier has been run yet |
 
 ---
 
