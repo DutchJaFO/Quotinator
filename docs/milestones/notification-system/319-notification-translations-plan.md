@@ -486,5 +486,5 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 | 24 | ❌ | Both surfaces render a resolved **body** | Live (T2) | Notifications page and startup popup, UI switched to `nl` — screenshot, not text extraction. Scoped to `Body`: `Title` is rendered nowhere until #308, so it cannot be seen here. T2, not T1 — T1's whole job is confirming the app still starts (`docs/release-verification.md`) |
 | 25 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | ADR 009, plus `docs/automated-testing/notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md` |
 | 26 | ❌ | The application still starts with the new schema and read path in place | Live (T1) | Visual Studio run completes startup — T1's own scope |
-| 27 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
-| 28 | ❌ | Full test suite green | Build | `dotnet test --configuration Release -m:1` |
+| 27 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
+| 28 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 3,661 passed, 0 failed across all 10 projects |
