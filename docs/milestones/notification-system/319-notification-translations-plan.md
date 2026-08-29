@@ -56,6 +56,29 @@ direction, 2026-08-16): store translations at creation, record the original's la
 **The issue body's `System_NotificationTranslation` name is correct.** It lives in the main database,
 where ADR 015's prefix rule applies unambiguously.
 
+## Verified against the governing standards
+
+Done after steps 1–3, because it should have been done before step 1 and was not: the check above
+compares this plan to the *code*, which is not the same thing as checking it against the rules that
+govern the design. Two defects reached implementation as a result — ADR 016's `Dto` boundary (step 2)
+and ADR 017's join mechanism (step 5) — each surfacing as a mid-work decision rather than a settled one.
+
+| Standard | Bearing on this issue | State |
+|---|---|---|
+| [ADR 017](../../architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md) | The read path becomes a two-table projection, so it must go through `JoinQueryRepository`/`IJoinStrategy` | **Plan was wrong** — step 5 rewritten |
+| [ADR 016](../../architecture-decisions/016-class-naming-suffixes-and-enum-placement.md) | `Dto` means a wire-format shape; the write-side type is neither file nor column JSON | **Plan was wrong** — see step 2 |
+| [ADR 002](../../architecture-decisions/002-recordbase-on-all-tables.md) | New table carries `RecordBase` | Satisfied (row 2) |
+| [ADR 015](../../architecture-decisions/015-domain-prefixed-table-naming.md) | `System_` domain, singular | Satisfied |
+| [ADR 008](../../architecture-decisions/008-enum-backed-columns-require-check-constraints.md) | Governs enum-backed columns only; a language code is not one | Not applicable, stated in step 1 |
+| [ADR 012](../../architecture-decisions/012-canonicalize-entity-ids-at-capture.md) + `SqlSelectPresentationGuard` | Aliased id columns in the new projection need `IdClauses.SelectColumn` | Folded into step 4 |
+| [ADR 020](../../architecture-decisions/020-openapi-tags-are-declared-with-descriptions.md) | No new endpoint group; `ApiTags.Notifications` is already declared with a description | Satisfied, nothing to do |
+| CLAUDE.md — DI policy | Three same-typed join repositories cannot resolve by type | Settled in step 5 (factory overload) |
+| CLAUDE.md — case-insensitive comparison | `TextClauses.Equals` on the translation's `Language` | Already in the design |
+| CLAUDE.md — string centralisation | SQL stays in `Sql.cs`; strategies only return it | Folded into step 4 |
+| CLAUDE.md — API docs in sync | `docs/api-endpoints.md` + `[Description]` for `lang` | Already in step 7 |
+| CLAUDE.md — `var` boyscout | `NotificationReader.cs` and four other files are not yet in the `IDE0008` list | Noted per step |
+| Blazor code-behind rule | Both surfaces already use code-behind | Satisfied |
+
 ## Design
 
 ### Schema
@@ -288,10 +311,18 @@ end-of-milestone consolidation pass can fold them however it prefers.
 the migration embeds a frozen copy of the same strings, which is required rather than sloppy — migration
 text must not follow a later edit to those keys.
 
-**Written before its tests, so the first run was green rather than red.** Sensitivity was proven by
-mutation instead: changing the migration's `'nl'` literal to `'xx'` turned two of the five tests red,
-then reverting returned them to green. Recorded rather than glossed — a mutation check is the weaker
-substitute, and the ordering slip is mine.
+**Written before its tests, so the first run was green rather than red — a procedure failure, not a
+style difference.** `process.md`'s Implementation step 1 is "write every test named in the plan doc's
+verification checklist first and confirm each one is genuinely red." Steps 1 and 2 followed it; step 3
+did not. Sensitivity was recovered after the fact by mutation — changing the migration's `'nl'` literal
+to `'xx'` turned two of the five tests red, reverting returned them to green — but a mutation check
+proves only that the test is wired to the behaviour. It does not prove the test would have failed
+against the *absence* of the feature, which is what red-first proves and what nothing can now recover
+for this step. Recorded rather than glossed.
+
+**Steps 4–11 are held to the written procedure**: the step's verification rows become tests, the tests
+are run and observed red, and only then is the code written. A step whose first test run is green is
+reported as a failure of this rule, not quietly mutation-checked into looking equivalent.
 
 ### 4. Read-path SQL
 
@@ -299,16 +330,55 @@ substitute, and the ordering slip is mine.
 
 `Sql.Notifications.SelectColumns` becomes a projection over a `LEFT JOIN` on
 `System_NotificationTranslation`, with `COALESCE` per field and an `EffectiveLanguage` `CASE` — the
-`Sql.Quotes.SelectBase` shape. `@lang` bound on all of `SelectActive`, `SelectPage` and `SelectById`;
+`Sql.Quotes.SelectBase` shape. `@lang` bound on `SelectActive`, `SelectPage` and `SelectById`;
 a missed binding on one is the likely defect, so row 10 tests each.
 
-### 5. Reader signature
+Aliasing the tables means every selected id column must go through
+`IdClauses.SelectColumn("n.Id", "Id")` / `("n.AppVersionId", "AppVersionId")` — `SqlSelectPresentationGuard`
+enforces this mechanically and will fail the build otherwise. The SQL stays in `Sql.cs`; the strategies
+in step 5 only return it, which is also what keeps the guard tests scanning it.
+
+### 5. Reader — via `JoinQueryRepository`/`IJoinStrategy`, per ADR 017
 
 **Status:** ⬜ Not started
 
-`INotificationReader`'s three methods take the requested language. `GetActiveNotificationsAsync`'s only
-caller is Blazor, so it takes `CurrentUICulture`'s value from the component rather than growing a
-parameter with no second caller — decide at implementation which reads better.
+**The plan originally had the reader keep its raw `conn.QueryAsync` calls. That violates ADR 017** and
+was missed because the pre-implementation check compared the plan against the *code* and never against
+the ADRs. ADR 017: "Any read that joins two or more tables, or returns a multi-table projection, uses
+`JoinQueryRepository<TResult>`/`IJoinStrategy<TResult>` … even when adopting it unlocks no new
+capability." Step 4 turns all three queries into exactly that. The one documented exemption
+(`ConversationLineCountReader`'s `QueryAsync<dynamic>`) does not apply — `NotificationEntity` is a
+concrete POCO — and ADR 017 explicitly refuses "no gain" as a reason.
+
+`NotificationReader` is compliant *today* only because its queries are single-table; the join is what
+brings it into scope.
+
+Three `IJoinStrategy<NotificationEntity>` implementations (active, page, by-id), each returning its
+`Sql.Notifications` constant. `CountAll` stays a plain scalar — no join, no projection, outside ADR 017.
+`NotificationWriter.DismissAsync` reads through the by-id strategy too, since it returns the same
+projection.
+
+**DI: one row type, three repositories constructed in the registration.** The codebase's usual shape is
+one distinct `TRow` per strategy (`JoinQueryRepository<SourceRow>`, `<LinkRow>`, …) so DI resolves them
+by type. That does not work here — all three return `NotificationEntity`, and three registrations of the
+same closed generic would silently collapse to the last one. Inventing three identical row types purely
+to satisfy type-based resolution would be worse to read than the problem it solves, so instead the
+reader and writer are registered with the service-provider factory overload
+(`AddSingleton<INotificationReader>(sp => new NotificationReader(new JoinQueryRepository<…>(…), …))`),
+which CLAUDE.md's DI policy names as the correct move whenever the container cannot supply a
+constructor argument. No bare `new` at a call site.
+
+**The missing-table catch stays in the reader**, not the repository. `JoinQueryRepository.QueryAsync`
+does not catch, and `IsMissingNotificationTable`'s degraded-state behaviour (#263/#280 — the
+Notifications page and startup modal stay reachable mid-migration) is load-bearing. ADR 017 explicitly
+allows a domain reader above the mechanism, so this composes rather than conflicts.
+
+`INotificationReader`'s two methods take the requested language; `GetActiveNotificationsAsync`'s only
+caller is Blazor, which passes `CurrentUICulture`'s value.
+
+**Boyscout:** `NotificationReader.cs` is `var`-heavy and not yet in `.editorconfig`'s `IDE0008` list.
+Touching it means converting its declarations to explicit types and adding it to that list in the same
+commit.
 
 ### 6. Write side
 
