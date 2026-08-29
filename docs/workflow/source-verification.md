@@ -69,7 +69,9 @@ files are regenerated from upstream by their converter, so an edit is overwritte
 **This does not resolve the underlying problem**, which is that a title like
 `Star Wars: Episode II - Attack of the Clones` carries a franchise, an episode number and a subtitle in
 one opaque string, and upstream data refers to the same film by any combination of them. A per-variant
-alias for each is a list that only grows. See the open issue on decomposed source titles.
+alias for each is a list that only grows — two of its rows exist solely because of the dash convention
+above. [#354](https://github.com/DutchJaFO/Quotinator/issues/354) is the mechanism that would make both
+those rows and this convention's manual application unnecessary.
 
 ## Handling conflicting sources
 
