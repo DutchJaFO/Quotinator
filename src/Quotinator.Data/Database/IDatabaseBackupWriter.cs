@@ -1,3 +1,5 @@
+using Quotinator.Data.Enums;
+
 namespace Quotinator.Data.Database;
 
 /// <summary>
@@ -13,13 +15,15 @@ namespace Quotinator.Data.Database;
 public interface IDatabaseBackupWriter
 {
     /// <summary>
-    /// Deletes one backup file.
+    /// Removes one backup file, reporting what happened rather than throwing.
+    /// <para>
+    /// A filesystem that refuses the removal is an ordinary operating condition with a remedy — the
+    /// same category as a full backup folder — not an unforeseen fault. Letting it escape as an
+    /// exception is what produced an unhandled <c>500</c> on a read-only data directory, which is
+    /// precisely the state an operator is in when they are told to remove old backups.
+    /// </para>
     /// </summary>
     /// <param name="name">The file name, as <see cref="IDatabaseBackupReader.List"/> reports it.</param>
-    /// <returns>
-    /// <see langword="true"/> when a file was removed; <see langword="false"/> when the name is unsafe
-    /// or no such file exists. The caller distinguishes those two before calling, so that a "removed"
-    /// and a "was never there" reach the operator as different answers.
-    /// </returns>
-    bool Delete(string name);
+    /// <returns>Which of the four outcomes occurred.</returns>
+    BackupDeleteOutcome Delete(string name);
 }

@@ -225,11 +225,23 @@ internal static class BackupEndpoints
             ICallerContext callerContext,
             IApiLocalizer localizer) =>
         {
-            if (!reader.IsValidName(name))
+            BackupDeleteOutcome outcome = writer.Delete(name);
+
+            // Every outcome is a stated answer. A removal the filesystem refuses is an ordinary
+            // condition with a remedy — 409, the same shape a refused reset uses — and never an
+            // unhandled 500, which is what this endpoint produced on a read-only data directory before
+            // the writer reported instead of throwing.
+            if (outcome is BackupDeleteOutcome.InvalidName)
                 return Results.Problem(detail: localizer[ApiMessages.BackupNameInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-            if (!writer.Delete(name))
+            if (outcome is BackupDeleteOutcome.NotFound)
                 return Results.Problem(detail: localizer[ApiMessages.BackupNotFound], statusCode: StatusCodes.Status404NotFound);
+
+            if (outcome is BackupDeleteOutcome.NotRemovable)
+                return Results.Problem(
+                    title: "Backup could not be removed",
+                    detail: localizer[ApiMessages.BackupNotRemovable],
+                    statusCode: StatusCodes.Status409Conflict);
 
             // Removing a backup removes a restore point, so it is recorded where it will still be found
             // long after the log has rotated — the reason an endpoint is preferred over deleting the
@@ -255,9 +267,12 @@ internal static class BackupEndpoints
         .Produces(StatusCodes.Status204NoContent)
         .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
         .Produces<ProblemDetails>(StatusCodes.Status404NotFound)
+        .Produces<ProblemDetails>(StatusCodes.Status409Conflict)
         .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
         .WithDescription(
             "Removes one stored backup, freeing quota so that backups become possible again once the folder is full. " +
+            "A backup that exists but cannot be removed — a read-only data directory, or a permission problem — returns " +
+            "`409 Conflict` naming that condition, never an unhandled error (issue #349). " +
             "`name` is the file name as `GET /api/v1/admin/backups` reports it — a name, never a path: anything containing a path separator or a " +
             "traversal segment is rejected with `422` before the filesystem is touched, and nothing is removed. " +
             "Deleting a name that does not exist is a `404`, so a caller can tell \"removed\" from \"was never there\". " +

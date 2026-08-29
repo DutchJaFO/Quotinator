@@ -146,6 +146,7 @@
   "ErrorNotificationNotFound": "Er bestaat geen melding met dat ID.",
   "ErrorBackupNameInvalid": "'name' moet een bestandsnaam van een back-up zijn, geen pad.",
   "ErrorBackupNotFound": "Er bestaat geen back-up met die naam.",
+  "ErrorBackupNotRemovable": "Die back-up bestaat, maar kon niet worden verwijderd — de datamap is alleen-lezen, of de containergebruiker heeft er geen schrijfrechten op. Herstel de schrijftoegang en probeer het opnieuw.",
   "ErrorLineEndingInvalid": "'lineEnding' moet 'lf', 'crlf' of 'cr' zijn.",
   "ErrorKeepPerFileInvalid": "'keepPerFile' moet een niet-negatief geheel getal zijn.",
   "ErrorFileResourceOriginInvalid": "'origin' moet 'System', 'User' of 'Upload' zijn.",

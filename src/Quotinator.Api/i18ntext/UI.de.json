@@ -146,6 +146,7 @@
   "ErrorNotificationNotFound": "Es existiert keine Benachrichtigung mit dieser ID.",
   "ErrorBackupNameInvalid": "'name' muss ein Dateiname einer Sicherung sein, kein Pfad.",
   "ErrorBackupNotFound": "Es existiert keine Sicherung mit diesem Namen.",
+  "ErrorBackupNotRemovable": "Diese Sicherung existiert, konnte aber nicht entfernt werden — das Datenverzeichnis ist schreibgeschützt, oder dem Containerbenutzer fehlen die Schreibrechte. Stellen Sie den Schreibzugriff wieder her und versuchen Sie es erneut.",
   "ErrorLineEndingInvalid": "'lineEnding' muss 'lf', 'crlf' oder 'cr' sein.",
   "ErrorKeepPerFileInvalid": "'keepPerFile' muss eine nicht-negative ganze Zahl sein.",
   "ErrorFileResourceOriginInvalid": "'origin' muss 'System', 'User' oder 'Upload' sein.",

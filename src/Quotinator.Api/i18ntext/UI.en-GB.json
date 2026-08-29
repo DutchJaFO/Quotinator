@@ -149,6 +149,7 @@
   "ErrorNotificationNotFound": "No notification exists with that ID.",
   "ErrorBackupNameInvalid": "'name' must be a backup file name, not a path.",
   "ErrorBackupNotFound": "No backup exists with that name.",
+  "ErrorBackupNotRemovable": "That backup exists but could not be removed — the data directory is read-only, or the container user lacks write permission on it. Restore write access, then retry.",
   "ErrorLineEndingInvalid": "'lineEnding' must be one of 'lf', 'crlf', or 'cr'.",
   "ErrorKeepPerFileInvalid": "'keepPerFile' must be a non-negative whole number.",
   "ErrorFileResourceOriginInvalid": "'origin' must be one of 'System', 'User', or 'Upload'.",

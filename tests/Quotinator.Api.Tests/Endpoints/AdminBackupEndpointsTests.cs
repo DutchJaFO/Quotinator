@@ -218,6 +218,38 @@ public class AdminBackupEndpointsTests
     }
 
     /// <summary>
+    /// A backup that cannot be removed answers 409, never an unhandled 500.
+    /// <para>
+    /// Found live during this issue's own T2 pass, against a read-only data directory: the delete
+    /// endpoint returned a bare `500`. That is the defect class #348 exists to remove, and the path is
+    /// the realistic one — a read-only mount is what degrades startup, and removing old backups is what
+    /// the operator is then told to do.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task DeleteBackup_FileCannotBeRemoved_Returns409NotAnUnhandled500()
+    {
+        using BackupTestHarness harness = new BackupTestHarness();
+        harness.WriteBackup("locked.db");
+        string path = Path.Combine(harness.BackupsPath, "locked.db");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+
+        try
+        {
+            HttpResponseMessage response = await harness.AuthenticatedClient()
+                .DeleteAsync($"{List}/locked.db", TestContext.CancellationToken);
+
+            Assert.AreEqual(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.IsTrue(File.Exists(path), "a refused removal must leave the backup in place");
+            Assert.IsEmpty(harness.Audit.Entries, "nothing was removed, so nothing is recorded as removed");
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
+    }
+
+    /// <summary>
     /// Every route in the group reaches its handler while the database is degraded — the state they
     /// exist for. Asserted for these routes specifically rather than inferred from #326's
     /// admin-surface property.

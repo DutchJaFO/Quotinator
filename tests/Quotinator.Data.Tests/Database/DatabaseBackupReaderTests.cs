@@ -1,4 +1,5 @@
 using Quotinator.Data.Database;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Data.Testing.NoOps;
 
@@ -95,7 +96,7 @@ public class DatabaseBackupReaderTests
         // but downloadable by name would be a worse answer than either alone.
         Assert.IsFalse(reader.Exists(BackupFileNames.ProbeFileName));
         Assert.IsNull(reader.OpenRead(BackupFileNames.ProbeFileName));
-        Assert.IsFalse(new DatabaseBackupWriter(Options(_backups)).Delete(BackupFileNames.ProbeFileName));
+        Assert.AreEqual(BackupDeleteOutcome.InvalidName, new DatabaseBackupWriter(Options(_backups)).Delete(BackupFileNames.ProbeFileName));
         Assert.IsTrue(File.Exists(Path.Combine(_backups, BackupFileNames.ProbeFileName)),
             "refusing to treat it as a backup must not mean deleting it either");
     }
@@ -199,6 +200,59 @@ public class DatabaseBackupReaderTests
         Assert.IsTrue(CreateReader().IsValidName("absent-but-well-formed.db"));
         Assert.IsFalse(CreateReader().IsValidName("../escape.db"));
     }
+
+    /// <summary>
+    /// A backup that cannot be removed is reported as such, not thrown.
+    /// <para>
+    /// Found live during #349's own T2 pass: on a read-only data directory the delete endpoint answered
+    /// an unhandled <c>500</c> — the exact defect class #348 exists to remove, reintroduced one endpoint
+    /// over. The path is not hypothetical: a read-only mount is what degrades startup in the first
+    /// place, and "remove old backups" is what the operator is then told to do.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void Delete_FileCannotBeRemoved_IsReported_NotThrown()
+    {
+        WriteBackup("locked.db", 32);
+        string path = Path.Combine(_backups, "locked.db");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+
+        try
+        {
+            BackupDeleteOutcome outcome = new DatabaseBackupWriter(Options(_backups)).Delete("locked.db");
+
+            Assert.AreEqual(BackupDeleteOutcome.NotRemovable, outcome);
+            Assert.IsTrue(File.Exists(path), "reporting the failure must not mean the file went anyway");
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
+    }
+
+    /// <summary>A removable backup is removed, and says so — the control for the case above.</summary>
+    [TestMethod]
+    public void Delete_RemovableBackup_IsRemoved()
+    {
+        WriteBackup("removable.db", 32);
+
+        BackupDeleteOutcome outcome = new DatabaseBackupWriter(Options(_backups)).Delete("removable.db");
+
+        Assert.AreEqual(BackupDeleteOutcome.Deleted, outcome);
+        Assert.IsFalse(File.Exists(Path.Combine(_backups, "removable.db")));
+    }
+
+    /// <summary>A name with nothing behind it is distinguishable from one that could not be removed.</summary>
+    [TestMethod]
+    public void Delete_UnknownName_IsNotFound_NotAFailure()
+    {
+        Assert.AreEqual(BackupDeleteOutcome.NotFound, new DatabaseBackupWriter(Options(_backups)).Delete("absent.db"));
+    }
+
+    /// <summary>An unsafe name is refused before the filesystem is touched.</summary>
+    [TestMethod]
+    public void Delete_UnsafeName_IsRefused() =>
+        Assert.AreEqual(BackupDeleteOutcome.InvalidName, new DatabaseBackupWriter(Options(_backups)).Delete("../escape.db"));
 
     private DatabaseBackupReader CreateReader() =>
         new DatabaseBackupReader(Options(_backups), NoOpDiskSpaceProvider.Instance);
