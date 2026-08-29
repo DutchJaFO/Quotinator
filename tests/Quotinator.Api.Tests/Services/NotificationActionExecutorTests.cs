@@ -142,6 +142,7 @@ public class NotificationActionExecutorTests
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
 
         public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
+        public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success("spy-backup.db"));
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
 
         public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false)

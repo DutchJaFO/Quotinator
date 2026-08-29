@@ -89,6 +89,23 @@ public interface IDatabaseInitializer
     /// <returns><see cref="BackupOutcome.Succeeded"/> when a backup can be taken; otherwise the obstacle.</returns>
     BackupOutcome CheckBackupReadiness(bool allowReserve = false);
 
+    /// <summary>
+    /// Takes a backup of the database now, because a caller asked for one (#349).
+    /// <para>
+    /// Every other backup in this application happens as a side effect of something else — a
+    /// migration, a seed, a Reset. This is the one an operator invokes deliberately, to have a restore
+    /// point before doing something they are not sure about. It is also what lets #352's restore
+    /// endpoint refuse to take a backup of its own: the operator takes one here first if they want
+    /// one, rather than a restore making that decision on their behalf.
+    /// </para>
+    /// </summary>
+    /// <returns>
+    /// The file that was written, or which obstacle stopped it — the same
+    /// <see cref="DatabaseBackupResult"/> every internal backup already produces, so an on-demand
+    /// backup reports its failures in exactly the vocabulary the rest of the application uses.
+    /// </returns>
+    Task<DatabaseBackupResult> CreateBackupAsync();
+
     /// <summary>Ensures WAL mode is active, applies any pending schema migrations, and seeds the database from source files if empty.</summary>
     /// <returns>
     /// Whether initialisation completed, and if not, which backup obstacle stopped it. A backup that

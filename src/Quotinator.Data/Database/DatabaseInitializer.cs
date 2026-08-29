@@ -579,11 +579,46 @@ public class DatabaseInitializer(
     }
 
     /// <inheritdoc/>
+    public async Task<DatabaseBackupResult> CreateBackupAsync()
+    {
+        // Check before acting, exactly as ResetAsync does — and for a second reason specific to this
+        // caller: the status endpoint reports this same check, so an on-demand backup that ignored it
+        // could succeed where status had just said it would not. A status endpoint that disagrees with
+        // the action beside it is worse than no status endpoint.
+        BackupOutcome readiness = CheckBackupReadiness();
+        if (readiness != BackupOutcome.Succeeded)
+            return DatabaseBackupResult.Failed(readiness);
+
+        // Opens its own connection: every other backup rides on one the caller already had open for a
+        // migration or a reset, and this one has no such caller.
+        SqliteConnection connection;
+        try
+        {
+            connection = (SqliteConnection)_factory.CreateConnection();
+            await connection.OpenAsync();
+        }
+        catch (SqliteException ex)
+        {
+            // A database that cannot even be opened is the source's problem, classified by the same
+            // typed error code the copy path uses rather than by a second, parallel judgement.
+            return DatabaseBackupResult.Failed(ClassifyCopyFailure(ex), ex);
+        }
+        catch (Exception ex)
+        {
+            return DatabaseBackupResult.Failed(BackupOutcome.Unclassified, ex);
+        }
+
+        using (connection)
+            return CreateBackup(connection, Math.Max(DataSchemaVersion, SchemaVersion));
+    }
+
+    /// <inheritdoc/>
     public BackupOutcome CheckBackupReadiness(bool allowReserve = false)
     {
-        long ceilingBytes  = _options.MaxBackupStorageGb * 1_073_741_824L;
-        long limitBytes    = allowReserve ? ceilingBytes : ceilingBytes * EffectiveQuotaPercent() / 100L;
-        long existingBytes = ExistingBackupBytes();
+        long limitBytes    = BackupStorageBudget.LimitBytes(_options, allowReserve);
+        long existingBytes = BackupStorageBudget.UsedBytes(_options.BackupsPath);
+
+        WarnIfQuotaPercentOutOfRange();
 
         // Headroom, not fit. What is already on disk can be known exactly; what a new backup will *add*
         // cannot — SQLite copies pages, so the source file's length only approximates the result. The
@@ -603,7 +638,7 @@ public class DatabaseInitializer(
         // with backups/ already present cleared this check, then failed with SQLITE_CANTOPEN inside the
         // table drop and reached the client as an unhandled 500. So the check writes something, which is
         // the only way to answer the question it claims to answer.
-        string probePath = Path.Combine(_options.BackupsPath, ".writable-probe");
+        string probePath = Path.Combine(_options.BackupsPath, BackupFileNames.ProbeFileName);
         try
         {
             File.WriteAllBytes(probePath, []);
@@ -621,19 +656,16 @@ public class DatabaseInitializer(
     // stop the application: a typo in one tuning value must not breach the never-crash contract. It is
     // reported loudly and the default is used instead — which is a different thing from quietly
     // rounding it into range, where the operator would never learn their setting was ignored.
-    private int EffectiveQuotaPercent()
+    //
+    // #349: the arithmetic itself moved to BackupStorageBudget so the status endpoint publishes the
+    // same numbers this class refuses on. What stays here is the reporting — a shared pure function is
+    // the wrong place to decide that something deserves a log line.
+    private void WarnIfQuotaPercentOutOfRange()
     {
-        int configured = _options.BackupQuotaPercent;
-        if (configured is > 0 and <= 100)
-            return configured;
-
-        Logger.LogBackupQuotaPercentOutOfRange(configured, DatabaseOptions.DefaultBackupQuotaPercent);
-        return DatabaseOptions.DefaultBackupQuotaPercent;
+        BackupStorageBudget.EffectiveQuotaPercent(_options, out bool outOfRange);
+        if (outOfRange)
+            Logger.LogBackupQuotaPercentOutOfRange(_options.BackupQuotaPercent, DatabaseOptions.DefaultBackupQuotaPercent);
     }
-
-    private long ExistingBackupBytes() => Directory.Exists(_options.BackupsPath)
-        ? Directory.EnumerateFiles(_options.BackupsPath).Sum(f => new FileInfo(f).Length)
-        : 0L;
 
     /// <summary>
     /// Called by <see cref="ResetAsync"/>. Override to replace the default no-op with a
@@ -786,13 +818,17 @@ public class DatabaseInitializer(
     // hit. Attribution is structural, not message-parsing: each step is attempted on its own, so the
     // failing step names the fault. By the time BackupDatabase runs the destination is already proven
     // creatable and openable, which is what makes a failure there the source's.
+    // #349: the two limits here answer different questions and are deliberately not the same number.
+    // This check enforces the absolute ceiling, at the point where the bytes are actually written —
+    // "never exceeded", per MaxBackupStorageGb's own definition. The operating quota is policy about
+    // what routine operation may consume, and it is enforced by CheckBackupReadiness, which every
+    // caller that can afford to stop consults first. Only the arithmetic is now shared, so neither
+    // side can drift from the other's idea of what a gigabyte or a percentage means.
     internal DatabaseBackupResult CreateBackup(SqliteConnection connection, int fromVersion)
     {
         long estimatedBytes = File.Exists(_options.DbPath) ? new FileInfo(_options.DbPath).Length : 0L;
-        long budgetBytes    = _options.MaxBackupStorageGb * 1_073_741_824L;
-        long existingBytes  = Directory.Exists(_options.BackupsPath)
-            ? Directory.EnumerateFiles(_options.BackupsPath).Sum(f => new FileInfo(f).Length)
-            : 0L;
+        long budgetBytes    = BackupStorageBudget.CeilingBytes(_options);
+        long existingBytes  = BackupStorageBudget.UsedBytes(_options.BackupsPath);
 
         if (existingBytes + estimatedBytes > budgetBytes)
         {

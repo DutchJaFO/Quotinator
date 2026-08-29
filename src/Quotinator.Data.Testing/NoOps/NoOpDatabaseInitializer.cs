@@ -53,6 +53,15 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Reports a written file without writing one — this type exists so a test touches no database and
+    /// no filesystem. A test that cares what a backup attempt actually did supplies its own
+    /// initializer rather than relying on this.
+    /// </remarks>
+    public Task<DatabaseBackupResult> CreateBackupAsync() =>
+        Task.FromResult(DatabaseBackupResult.Success("noop-backup.db"));
+
+    /// <inheritdoc/>
     public IReadOnlyList<FileImportReport> LastSeedReport => [];
 
     /// <inheritdoc/>

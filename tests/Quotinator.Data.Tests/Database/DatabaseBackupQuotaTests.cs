@@ -166,6 +166,36 @@ public class DatabaseBackupQuotaTests
     }
 
     /// <summary>
+    /// #349 — the figures the status endpoint publishes and the limit a destructive action refuses on
+    /// are computed by the same code, so they cannot drift apart.
+    /// <para>
+    /// Checked across the quota boundary in both directions rather than at one point: agreement that
+    /// holds only where nothing is near a limit is not agreement. This is the same "check and attempt
+    /// agree" property #348 found was worth its own test, applied to the reader that now reports it.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void PublishedUsage_AgreesWithTheLimitAReadinessCheckRefusesOn()
+    {
+        foreach (int percent in (int[])[50, 89, 95, 100])
+        {
+            FillBackupsTo(percentOfCeiling: percent);
+
+            DatabaseBackupReader reader = new DatabaseBackupReader(NewOptions(), NoOpDiskSpaceProvider.Instance);
+            Quotinator.Data.Models.BackupStorageUsage usage = reader.GetUsage();
+            BackupOutcome readiness = CreateInitializer().CheckBackupReadiness();
+
+            bool reportedOverQuota = usage.UsedBytes >= usage.QuotaBytes;
+            bool refusedForBudget  = readiness == BackupOutcome.BudgetExceeded;
+
+            Assert.AreEqual(reportedOverQuota, refusedForBudget,
+                $"at {percent}% of the ceiling the reader reported reserveInUse={usage.ReserveInUse} while the "
+                + $"readiness check said {readiness} — the operator would be told one thing and get another");
+            Assert.AreEqual(reportedOverQuota, usage.ReserveInUse);
+        }
+    }
+
+    /// <summary>
     /// Writes filler into the backups folder until it occupies the given share of the ceiling. The
     /// ceiling is 1 GB in these tests, so the files are sized from that rather than from any real
     /// database — this fixture is about headroom arithmetic, not about backup content.

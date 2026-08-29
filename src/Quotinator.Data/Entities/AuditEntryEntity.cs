@@ -82,4 +82,11 @@ public static class AuditOperation
     public const string Import = "Imported";
     /// <summary>A database backup was created.</summary>
     public const string Backup = "BackedUp";
+    /// <summary>
+    /// A database backup was deleted through the admin endpoint (#349). Recorded because removing a
+    /// backup removes a restore point: "why is there no backup from that date" must have an answer
+    /// that outlives the log, which is the reason an endpoint is preferred over deleting the file by
+    /// hand in the first place.
+    /// </summary>
+    public const string BackupDeleted = "BackupDeleted";
 }
