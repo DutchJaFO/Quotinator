@@ -285,6 +285,23 @@ begins once the plan doc's verification checklist exists and the issue's status 
 
    **A plan doc's steps are numbered sections, never a checklist.** A one-line checklist item is never enough room to describe a step properly — trying to fit detail into it forces a choice between cramming (unreadable) or a separate prose section that repeats the same content (duplication, the exact thing `Where information lives` warns against). Instead, each step is its own subsection — `### N. <short imperative title>` — with `**Status:** <state>` as the very first line of the section body, followed by whatever detail that step actually needs. No separate "Step status" list anywhere in the doc; the section *is* the status and the detail together, in one place. Numbered sequentially in real execution order — same rule as the Verification table: plain integers, never lettered, never out of position. A step discovered mid-implementation is inserted at its actual place in the sequence (renumbering everything after it), not appended out of order at the end.
 
+   **Every row must name a step someone can actually execute.** A verification an issue cannot run is
+   not a verification — it is a promise, and it keeps the issue open indefinitely while looking like
+   coverage. Two shapes to refuse:
+
+   - **A row waiting on a human to read something.** `Manual — developer reads the updated file` is a
+     step nobody schedules. Found live on #307 (2026-08-29): two documentation-confirmation rows held
+     a finished issue open for weeks. Both became one assertion over the documents' own text, which
+     runs on every build and cannot be forgotten.
+   - **A row that needs code this issue does not deliver.** An issue producing a data contract cannot
+     verify how another issue's UI renders it. That row belongs to whichever issue owns the rendering,
+     asserted against its own code — never carried as a deferred row here, which only moves the
+     unexecutable step rather than removing it.
+
+   If a requirement genuinely cannot be verified from within the issue, that is a signal the issue is
+   scoped wrong — either it is missing the code that would make it observable, or the requirement
+   belongs to a different issue.
+
    **Bug fixes:** before writing any fix, first confirm the bug is reproducible. Write a
    failing unit test that demonstrates the bug, or document the exact steps and observed
    output that prove it exists. The fix is complete only when that test passes or those

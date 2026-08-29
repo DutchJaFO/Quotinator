@@ -1,6 +1,6 @@
 # #307 — Changelog highlights: mark specific entries as notification-worthy
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #307
 **Tiers required:** T1, T2
 **Depends on:** #80
@@ -151,9 +151,13 @@ never a bare string literal.
 | 2 | ✅ | `GetHighlightsFor(ChangelogReservedAudience.Notification)` returns an empty list (not null, no exception) when the key is absent | Unit test | `ChangelogUnreleasedTests.GetHighlightsFor_NotificationKeyAbsent_ReturnsEmptyList` |
 | 3 | ✅ | A changelog entry using `audienceHighlights.notification` is schema-valid | Unit test | `ChangelogSchemaTests.NotificationAudienceKey_IsSchemaValid` |
 | 4 | ✅ | The same entry's `notification` key round-trips through `IChangelogService.GetForCulture` into `GetHighlightsFor` | Unit test | `ChangelogServiceTests.NotificationAudienceKey_RoundTripsThroughGetHighlightsFor` |
-| 5 | ❌ | `schemas/changelog.schema.json`'s `audienceHighlights` description documents the reserved `notification` key | Manual | Developer reads the updated schema file description — pending confirmation. The text is at `schemas/changelog.schema.json:73` |
-| 6 | ❌ | CLAUDE.md's Pre-Push Checklist references the convention | Manual | Developer reads the updated CLAUDE.md section — pending confirmation. The text is at `CLAUDE.md:1186` |
-| 9 | ❌ | A populated `notification` key appears as highlights in the startup dialog | Live | Populate `audienceHighlights.notification` in `changelog.en.json`'s release entry, start the app on an upgraded database, and read the startup notification: its highlights are the flagged items, and only those. **Not confirmable until #308 lands** — nothing renders more than one highlight before it, which is why this issue now sits after #308 in the order of operations rather than before it |
+| 5 | ✅ | `schemas/changelog.schema.json`'s `audienceHighlights` description documents the reserved `notification` key | Unit test | `ChangelogSchemaTests.ReservedNotificationKey_IsDocumentedInTheSchemaAndTheChecklist` — asserts the schema states the key is reserved and never falls back to the standard highlights |
+| 6 | ✅ | CLAUDE.md's Pre-Push Checklist references the convention | Unit test | Same test — asserts CLAUDE.md names `audienceHighlights.notification` and the never-falls-back rule. **Was two `Manual` rows reading "developer reads the updated file — pending confirmation"**, which left the issue open on a step nobody could run on demand; an issue must not depend on a verification step that cannot be executed (developer direction, 2026-08-29) |
+**No front-end verification row, deliberately** (developer direction, 2026-08-29). This issue delivers a
+data contract and a lookup method; there is no UI it can drive on its own, and a row asserting "the
+highlight appears in the startup dialog" would be a step this issue cannot execute. Whether a flagged
+highlight renders is the rendering issue's own verification, asserted there against its own code — not
+a promissory note carried here.
 | 7 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s), confirmed |
 | 8 | ✅ | Full test suite green | Build | `dotnet test --configuration Release` — all projects passed, confirmed |
 

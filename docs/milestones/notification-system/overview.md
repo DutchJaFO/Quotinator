@@ -44,7 +44,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed | Planning | T1 ⬜ T2 ⬜ | [302-clean-reseed-confirmation-notification-plan.md](302-clean-reseed-confirmation-notification-plan.md) |
 | [#303](https://github.com/DutchJaFO/Quotinator/issues/303) | Notification + minimal review page: alert when a reseed leaves import actions pending review | Planning | T1 ⬜ T2 ⬜ | [303-pending-review-alert-and-review-page-plan.md](303-pending-review-alert-and-review-page-plan.md) |
 | [#304](https://github.com/DutchJaFO/Quotinator/issues/304) | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) | Planning | T1 ⬜ T2 ⬜ | [304-reseed-notification-action-plan.md](304-reseed-notification-action-plan.md) |
-| [#307](https://github.com/DutchJaFO/Quotinator/issues/307) | Changelog highlights: mark specific entries as notification-worthy | In progress | T1 ✅ T2 ⬜ | [307-changelog-notification-audience-key-plan.md](307-changelog-notification-audience-key-plan.md) |
+| [#307](https://github.com/DutchJaFO/Quotinator/issues/307) | Changelog highlights: mark specific entries as notification-worthy | Waiting for release | T1 ✅ T2 ✅ | [307-changelog-notification-audience-key-plan.md](307-changelog-notification-audience-key-plan.md) |
 | [#308](https://github.com/DutchJaFO/Quotinator/issues/308) | Notification: multi-line/rich message layout | Planning | T1 ⬜ T2 ⬜ | [308-notification-rich-layout-plan.md](308-notification-rich-layout-plan.md) |
 | [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | Waiting for release | T1 ✅ T2 ✅ | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
 | [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify all expected tables exist at startup, not just row counts | Planning | T1 ⬜ T2 ⬜ | [305-database-integrity-check-plan.md](305-database-integrity-check-plan.md) |
@@ -94,10 +94,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #303 ─── depends on #278 and #312 (same as #302); same seeding-loop hook point as #302; its review page
          depends on the existing #154 staging model (ImportAction, IImportActionReader/Service) and the
          existing /import/actions REST endpoints — all already shipped, nothing new needed there
-#307 ─── depends on #308 (hard, for verification not compilation): a flagged highlight only proves
-         itself by appearing in the startup dialog, and nothing renders more than one highlight until
-         #308 lands. Its code and unit tests are complete; it cannot be closed before then (2026-08-29).
-         Also depends on #80 (extends its shipped schema/generator/models) and, per ADR 018, on #309's
+#307 ─── verified entirely by unit tests; it delivers a data contract and a lookup method and drives no
+         UI of its own, so it carries no front-end verification row (2026-08-29). Whether a flagged
+         highlight renders is #308's to assert, against #308's own code.
+         Depends on #80 (extends its shipped schema/generator/models) and, per ADR 018, on #309's
          importer abstraction existing conceptually (not a hard build-order dependency — #307's schema
          field addition doesn't itself need System_Changelog to exist yet)
 #308 ─── depends on #278 (extends its shipped NotificationTable component) and #312 (hard — renders
@@ -228,12 +228,12 @@ step, the other reuses it.
 | 8 | **#326** ✅ | Done, `Waiting for release`. All 12 verification rows green including T1 and a T2 controlled pair. It also corrected its own premise, which #327 inherits: sidecar state decides whether a read-only mount degrades, **not** a pending migration |
 | 9 | **#348** ✅ | Done, `Waiting for release` — T1 outstanding, the developer's own. Backup outcomes and refusal: five named obstacles, a reset that refuses rather than returning an unhandled 500, and a 90% operating quota with a reserve. Found by #327 while measuring whether a stated recovery route can actually succeed |
 | 10 | **#349** ✅ | Done. Grew from three endpoints to five — list, delete, status, download, create — under their own `Backup` tag. Three defects were found by running it rather than by unit tests: an unhandled 500 on delete against a read-only mount, another on download caused by a pooled connection holding every backup file open, and no logging at all |
-| 11 | **#319** | Translated title/body. The gateway to the whole cluster below: every producer after it writes new user-facing text, and building any of them first means building the text twice |
-| 12 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
-| 13 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
-| 14 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
-| 15 | **#308** | Per-type layout across both surfaces — it cannot settle those layouts before the producers above exist, and nothing below it can be seen working until it does |
-| 16 | **#307** | **Moved from 11 to last of the cluster (developer direction, 2026-08-29).** Its code is done and its unit tests are green, but it cannot be *verified*: a flagged highlight only proves itself by appearing in the startup dialog, and nothing renders more than one highlight until #308. Leaving it at 11 would have closed it on two documentation reads while the feature itself had never been seen working |
+| 11 | **#307** | Finish what is already open before starting anything new. All eight verification rows are green: its two documentation-confirmation rows became an assertion in `ChangelogSchemaTests` rather than a human read, and it carries no front-end row — it delivers a data contract and a lookup method, with the rendering of a flagged highlight verified by #308 against #308's own code |
+| 12 | **#319** | Translated title/body. The gateway to the producers below: every one of them writes new user-facing text, and building any first means building the text twice |
+| 13 | **#304** | Gives the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path |
+| 14 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 15 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
+| 16 | **#308** | Per-type layout across both surfaces. Last of the cluster, because it cannot settle those layouts before the producers above exist — and it owns proving that a flagged changelog highlight actually renders, which its own background already names |
 | 17 | **#350** | Overshoot must degrade, not run healthy. Changes application behaviour, and #327's overshoot document is rewritten against the result. Reverses #289's shipped continue-and-notify design |
 | 18 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. Unblocked: #326 is done, #348's refusal behaviour is in, and #339 has already delivered the structure these documents are authored into. The overshoot document and its in-process test belong to #350 |
 | 19 | **#328** | Bundled-import and live-endpoint smoke coverage; authors into the same delivered structure |

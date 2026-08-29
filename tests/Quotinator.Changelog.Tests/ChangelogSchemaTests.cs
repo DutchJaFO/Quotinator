@@ -282,6 +282,41 @@ public sealed partial class ChangelogSchemaTests
             "changelog.*.json not found — expected at data/changelog/ under the repo root.");
     }
 
+    /// <summary>
+    /// The reserved <c>notification</c> audience key is documented in both places a reader looks (#307).
+    /// <para>
+    /// Automated rather than left as "the developer reads the file": #307's verification checklist
+    /// carried two manual documentation-confirmation rows that stayed open for weeks, and an issue must
+    /// not depend on a verification step nobody can execute on demand (developer direction,
+    /// 2026-08-29). The schema owns the data contract; CLAUDE.md's Pre-Push Checklist owns the workflow
+    /// rule. Both must say the key never falls back to the standard highlights, because that is the one
+    /// behaviour distinguishing it from an ordinary audience like <c>ha-addon</c>.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void ReservedNotificationKey_IsDocumentedInTheSchemaAndTheChecklist()
+    {
+        string schema = File.ReadAllText(FindSchemaFile());
+        Assert.Contains("'notification' key is reserved", schema, StringComparison.Ordinal);
+        Assert.Contains("never falls back to the standard highlights", schema, StringComparison.Ordinal);
+
+        string claudeMd = File.ReadAllText(FindRepoFile("CLAUDE.md"));
+        Assert.Contains("audienceHighlights.notification", claudeMd, StringComparison.Ordinal);
+        Assert.Contains("never falling back to the full `highlights` list", claudeMd, StringComparison.Ordinal);
+    }
+
+    private static string FindRepoFile(string fileName)
+    {
+        DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            string path = Path.Combine(dir.FullName, fileName);
+            if (File.Exists(path)) return path;
+            dir = dir.Parent;
+        }
+        throw new FileNotFoundException($"{fileName} not found under the repo root.");
+    }
+
     private static string FindSchemaFile()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
