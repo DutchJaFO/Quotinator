@@ -23,11 +23,12 @@ prove the loop closes.
   cannot be configured — the setting is whole gigabytes.
 - **One filler file, sparse.** `SetLength` allocates without writing a gigabyte of content, so the step is
   fast and does not depend on the host's write throughput.
-- **Hash the backup from inside the container, not from the host.** A backup the container has just
-  written stays open to its connection pool, and Windows will not let the host read a file another
-  process holds. That is a host filesystem property, not an application one — the download itself
-  succeeds either way, and comparing the served bytes against `docker exec … sha256sum` measures what
-  this step is actually about.
+- **The stored backup is readable from the host, and that is itself part of what this document
+  proves.** It was not, on the first run: the connection that writes a backup was pooled, so its file
+  handle survived disposal and the file stayed locked for the life of the process. The first version of
+  this document worked around it by hashing inside the container and blamed the host filesystem — the
+  cause was ours, and it is fixed at source (`Pooling=false` on the destination connection). Hashing
+  from the host now is the check that the leak has not returned.
 - **`$_.ErrorDetails.Message` is null in Windows PowerShell 5.1** for these responses. The body is read
   off the exception's response stream instead; a snippet relying on `ErrorDetails` reports an empty
   obstacle and looks like a failure of the endpoint.
@@ -137,11 +138,17 @@ now succeeds.
 $name = (Invoke-RestMethod -Uri $base -Headers $key).items[0].name
 Invoke-WebRequest -Uri "$base/$name/content" -Headers $key -OutFile "$dataDir\downloaded.db" -UseBasicParsing
 
-docker exec qt-backup-05 sha256sum "/data/backups/$name"
-(Get-FileHash "$dataDir\downloaded.db" -Algorithm SHA256).Hash
+$a = (Get-FileHash "$dataDir\backups\$name" -Algorithm SHA256).Hash
+$b = (Get-FileHash "$dataDir\downloaded.db"  -Algorithm SHA256).Hash
+"match=$($a -eq $b)"
 ```
 
-**Expected:** the two hashes match, case aside.
+**Expected:** `match=True`.
+
+**Two assertions in one.** The hashes matching says the download is byte-for-byte. Reading the *stored*
+file from the host at all says no handle is still held on it — the leak that made an immediate download
+fail with an unhandled `500` in T1. A `Get-FileHash` that cannot open the stored file is that leak
+returning, not a test problem.
 
 **On failure:** a downloaded backup that does not match the stored file is not a restore point, whatever
 the status code said.
@@ -186,10 +193,23 @@ container's own hash of the stored file.
 **This pass found three defects in this document and one in the application.**
 
 The document named the wrong admin key, used `$_.ErrorDetails.Message` (null in Windows PowerShell 5.1,
-so the obstacle read as empty), and hashed the stored backup from the host — which Windows refuses while
-the container's connection pool still holds the file. All three are corrected above.
+so the obstacle read as empty), and worked around a locked backup file by hashing inside the container —
+attributing the lock to the host filesystem. That third one was wrong twice over: the lock was ours, and
+calling it a host property hid a real defect for a day. See the T1 note below.
 
-The application defect is step 7's subject, and it was not in the plan. `DELETE` against a read-only data
+**Re-run 2026-08-29, after the handle leak was fixed.** Creating a backup and downloading it immediately
+now returns `200`, and the stored file is readable from the host, which it was not before — so step 6
+hashes it directly rather than reaching into the container.
+
+**A second application defect was found in T1, which this T2 pass had missed entirely.** Downloading a
+backup created moments earlier answered an unhandled `500`: `Microsoft.Data.Sqlite` pools connections by
+default, so the destination connection that writes a backup returned to the pool on disposal and kept
+its file handle open for the life of the process. Every backup this application had ever written stayed
+locked. It is invisible on Unix — a retained handle blocks neither a second open nor an unlink — which
+is exactly why running this document in a Linux container could not catch it, and why the workaround
+above looked like a host quirk instead of evidence. The destination connection now opts out of pooling.
+
+The other application defect is step 7's subject, and it was not in the plan. `DELETE` against a read-only data
 directory answered an **unhandled `500`**: `File.Delete` threw, nothing caught it. That is precisely the
 defect class #348 was filed to remove, reintroduced one endpoint over, on the single path an operator is
 most likely to take — the read-only mount that degraded their startup is the same one that refuses the

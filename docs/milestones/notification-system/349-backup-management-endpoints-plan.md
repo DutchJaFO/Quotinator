@@ -30,11 +30,14 @@ from the action (developer direction, 2026-08-27).
 ## Next action
 
 **T1 — the developer's own to run, and the only thing outstanding.** Steps 1–11 are done and T2 has
-been executed: 31 of 32 verification rows are green, the solution builds at 0 warnings, the full suite
-passes, and `backup/05` was run live against `quotinator:local`.
+been executed twice: 33 of 34 verification rows are green, the solution builds at 0 warnings, the full
+suite passes, and `backup/05` was run live against `quotinator:local`.
 
-That run earned its place — it found an unhandled `500` on `DELETE` against a read-only data directory
-that no unit test had reached (row 32), plus three defects in the document's own commands.
+**Three defects were found by running things rather than by writing tests**, and each was invisible to
+the layer above it. T2 found an unhandled `500` on `DELETE` against a read-only mount (row 30). T1 then
+found a second unhandled `500` on download, caused by a pooled connection holding every backup file
+open — invisible in a Linux container, so no T2 pass could have caught it (row 32). Fixing that exposed
+the read path's missing mirror of row 30's own fix (row 31).
 
 ---
 
@@ -313,10 +316,12 @@ document from step 11.
 | 26 | ✅ | The reader answers correctly for a present backup and for an absent one | Unit test | `DatabaseBackupReaderTests` — 14 cases: listing, ordering, an empty folder, a missing folder, usage below and above the quota, free disk space, and open/exists/valid-name each proven on both a real backup and a name with nothing behind it |
 | 27 | ✅ | The pre-flight's own probe file is never offered as a backup | Unit test | `DatabaseBackupReaderTests.List_ExcludesTheWritabilityProbeArtefact` — written red and it failed: a `.writable-probe` left behind by a failed delete was listed, downloadable and deletable as if it were a restore point. Now excluded from listing, opening and deletion alike, and deliberately still counted in the storage total, which is a claim about bytes on disk |
 | 28 | ✅ | #348's remedy text names these endpoints rather than describing an action with no route | Unit test | `AdminEndpointsTests.ResetRefusedForBudget_RemedyNamesTheBackupEndpoints` |
-| 29 | ✅ | A full quota is resolvable end to end, from inside the application | Live | T2: `docs/automated-testing/backup/05-a-full-quota-is-resolvable-from-inside-the-application.md` — fill the quota, `409` with `backupObstacle: BudgetExceeded`, `DELETE` a backup through the endpoint, reset then returns `200`. Run 2026-08-29: the loop closed as designed, and the pass found three defects in the document plus an unhandled `500` in the application — see row 32 |
-| 32 | ✅ | A removal the filesystem refuses is a stated answer, not an unhandled failure | Unit test | `DatabaseBackupReaderTests.Delete_FileCannotBeRemoved_IsReported_NotThrown` and `AdminBackupEndpointsTests.DeleteBackup_FileCannotBeRemoved_Returns409NotAnUnhandled500`, plus `backup/05` step 7 live. Found by running `backup/05` rather than by any unit test: `DELETE` on a read-only data directory threw out of `File.Delete` and reached the caller as a bare `500` — #348's own defect class, on the one path an operator is most likely to take. `IDatabaseBackupWriter` now returns `BackupDeleteOutcome`, which also separates "was never there" from "could not be removed" |
-| 30 | ✅ | `docs/api-endpoints.md` and the `[Description]` attributes describe all five endpoints | Live | Both updated in the implementing commit; the status endpoint's description states what it touches rather than claiming read-only |
-| 31 | ❌ | The Blazor UI still renders and the endpoints answer against a real container | Live | T2 done 2026-08-29 — image rebuilt, all five endpoints driven live through `backup/05`, including on a read-only mount. T1 in Visual Studio is the developer's own and is what remains |
+| 29 | ✅ | A full quota is resolvable end to end, from inside the application | Live | T2: `docs/automated-testing/backup/05-a-full-quota-is-resolvable-from-inside-the-application.md` — fill the quota, `409` with `backupObstacle: BudgetExceeded`, `DELETE` a backup through the endpoint, reset then returns `200`. Run 2026-08-29: the loop closed as designed, and the pass found three defects in the document plus an unhandled `500` in the application — see row 30 |
+| 30 | ✅ | A removal the filesystem refuses is a stated answer, not an unhandled failure | Unit test | `DatabaseBackupReaderTests.Delete_FileCannotBeRemoved_IsReported_NotThrown` and `AdminBackupEndpointsTests.DeleteBackup_FileCannotBeRemoved_Returns409NotAnUnhandled500`, plus `backup/05` step 7 live. Found by running `backup/05` rather than by any unit test: `DELETE` on a read-only data directory threw out of `File.Delete` and reached the caller as a bare `500` — #348's own defect class, on the one path an operator is most likely to take. `IDatabaseBackupWriter` now returns `BackupDeleteOutcome`, which also separates "was never there" from "could not be removed" |
+| 31 | ✅ | A read the filesystem refuses is a stated answer, not an unhandled failure | Unit test | `DatabaseBackupReaderTests.OpenRead_FileCannotBeOpened_IsReported_NotThrown` and `AdminBackupDownloadEndpointTests.Download_FileCannotBeOpened_Returns409NotAnUnhandled500`. The read-side mirror of row 30, which was fixed without it — the reader now returns `BackupReadOutcome` and opens with `FileShare.ReadWrite`, so a file another handle holds writable is still downloadable |
+| 32 | ✅ | A backup we have just written is not still held open by us | Unit test | `DatabaseBackupQuotaTests.CreateBackupAsync_LeavesNoHandleOnTheFileItWrote`, plus `AdminBackupCreateEndpointTests.Create_ThenDownloadImmediately_Succeeds` and `backup/05` step 6 reading the stored file from the host. Found in T1: `Microsoft.Data.Sqlite` pools by default, so the destination connection kept its handle after disposal and every backup ever written stayed locked — a download moments later was an unhandled `500`. Invisible on Unix, which is why the T2 pass missed it and mistook it for a host quirk |
+| 33 | ✅ | `docs/api-endpoints.md` and the `[Description]` attributes describe all five endpoints | Live | Both updated in the implementing commit; the status endpoint's description states what it touches rather than claiming read-only |
+| 34 | ❌ | The Blazor UI still renders and the endpoints answer against a real container | Live | T2 re-run 2026-08-29 after the handle fix — create, download and host-side read all confirmed. T1 in Visual Studio is the developer's own and is what remains |
 
 ---
 
