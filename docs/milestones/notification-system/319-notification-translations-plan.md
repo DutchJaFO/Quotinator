@@ -56,28 +56,25 @@ direction, 2026-08-16): store translations at creation, record the original's la
 **The issue body's `System_NotificationTranslation` name is correct.** It lives in the main database,
 where ADR 015's prefix rule applies unambiguously.
 
-## Verified against the governing standards
+## Governing standards
 
-Done after steps 1–3, because it should have been done before step 1 and was not: the check above
-compares this plan to the *code*, which is not the same thing as checking it against the rules that
-govern the design. Two defects reached implementation as a result — ADR 016's `Dto` boundary (step 2)
-and ADR 017's join mechanism (step 5) — each surfacing as a mid-work decision rather than a settled one.
+The rules this issue's design is bound by, and where each is satisfied.
 
-| Standard | Bearing on this issue | State |
+| Standard | Bearing on this issue | Where |
 |---|---|---|
-| [ADR 017](../../architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md) | The read path becomes a two-table projection, so it must go through `JoinQueryRepository`/`IJoinStrategy` | **Plan was wrong** — step 5 rewritten |
-| [ADR 016](../../architecture-decisions/016-class-naming-suffixes-and-enum-placement.md) | `Dto` means a wire-format shape; the write-side type is neither file nor column JSON | **Plan was wrong** — see step 2 |
-| [ADR 002](../../architecture-decisions/002-recordbase-on-all-tables.md) | New table carries `RecordBase` | Satisfied (row 2) |
-| [ADR 015](../../architecture-decisions/015-domain-prefixed-table-naming.md) | `System_` domain, singular | Satisfied |
-| [ADR 008](../../architecture-decisions/008-enum-backed-columns-require-check-constraints.md) | Governs enum-backed columns only; a language code is not one | Not applicable, stated in step 1 |
-| [ADR 012](../../architecture-decisions/012-canonicalize-entity-ids-at-capture.md) + `SqlSelectPresentationGuard` | Aliased id columns in the new projection need `IdClauses.SelectColumn` | Folded into step 4 |
-| [ADR 020](../../architecture-decisions/020-openapi-tags-are-declared-with-descriptions.md) | No new endpoint group; `ApiTags.Notifications` is already declared with a description | Satisfied, nothing to do |
-| CLAUDE.md — DI policy | Three same-typed join repositories cannot resolve by type | Settled in step 5 (factory overload) |
-| CLAUDE.md — case-insensitive comparison | `TextClauses.Equals` on the translation's `Language` | Already in the design |
-| CLAUDE.md — string centralisation | SQL stays in `Sql.cs`; strategies only return it | Folded into step 4 |
-| CLAUDE.md — API docs in sync | `docs/api-endpoints.md` + `[Description]` for `lang` | Already in step 7 |
-| CLAUDE.md — `var` boyscout | `NotificationReader.cs` and four other files are not yet in the `IDE0008` list | Noted per step |
-| Blazor code-behind rule | Both surfaces already use code-behind | Satisfied |
+| [ADR 002](../../architecture-decisions/002-recordbase-on-all-tables.md) | The new table carries `RecordBase` | Step 1, row 2 |
+| [ADR 008](../../architecture-decisions/008-enum-backed-columns-require-check-constraints.md) | Governs enum-backed columns only; a language code is not one, so no CHECK | Step 1 |
+| [ADR 012](../../architecture-decisions/012-canonicalize-entity-ids-at-capture.md) + `SqlSelectPresentationGuard` | Aliased id columns in the projection go through `IdClauses.SelectColumn` | Step 4 |
+| [ADR 015](../../architecture-decisions/015-domain-prefixed-table-naming.md) | `System_` domain, singular | Step 1 |
+| [ADR 016](../../architecture-decisions/016-class-naming-suffixes-and-enum-placement.md) | The four suffixes name a wire or persistence boundary; the write-side type crosses neither, so it is unsuffixed | Step 2 |
+| [ADR 017](../../architecture-decisions/017-join-capable-reads-use-joinqueryrepository.md) | The read path is a two-table projection returning a concrete POCO, so it executes through `JoinQueryRepository`/`IJoinStrategy` | Step 5 |
+| [ADR 020](../../architecture-decisions/020-openapi-tags-are-declared-with-descriptions.md) | No new endpoint group; `ApiTags.Notifications` is already declared with a description | Nothing to do |
+| CLAUDE.md — DI policy | Three same-typed join repositories cannot resolve by type, so the reader is registered through the service-provider factory overload | Step 5 |
+| CLAUDE.md — case-insensitive comparison | `TextClauses.Equals` on the translation's `Language` | Step 4 |
+| CLAUDE.md — string centralisation | SQL stays in `Sql.cs`; strategies only return it | Step 4 |
+| CLAUDE.md — API docs in sync | `docs/api-endpoints.md` and `[Description]` for `lang` | Step 7 |
+| CLAUDE.md — `var` boyscout | Each file joins `.editorconfig`'s `IDE0008` list as it is first touched | Per step |
+| Blazor code-behind rule | Both surfaces already use code-behind | Step 10 |
 
 ## Design
 
@@ -183,15 +180,14 @@ every read endpoint that accepts `lang`, matching `QuoteResponse`:
 overshoot only writes when a schema version actually overshoots, and #81's what's-new producer has not
 shipped in a tagged release. So the backfill is one row, not a corpus.
 
-That row is **already being updated by a migration** — `NotificationLegacyMetadataMigrations`
-(migrations 8 and 9) gave it #312's structured metadata and its missing provenance. Its translations
-belong with that same work rather than being a separate concern (developer decision, 2026-08-16).
+That row is **already repaired by migrations of its own** — `NotificationLegacyMetadataMigrations`
+(8 and 9) gave it #312's structured metadata and its missing provenance, so its translations are the
+same kind of work and land the same way: a new migration, never an edit to 8 or 9, both of which have
+been applied to real databases and are frozen per ADR 015.
 
-Mechanically that means a migration in the same `NotificationLegacyMetadataMigrations` family, folded
-together by the end-of-milestone consolidation pass the overview already plans. It cannot be an edit to
-migration 8 or 9 themselves if either has already been applied to a real database — including the
-developer's own — per ADR 015's frozen-migration rule. If neither has, folding it
-directly in is simpler and equivalent.
+It lives in `NotificationTranslationMigrations` alongside the two schema migrations it depends on,
+since it backfills this issue's own table. The end-of-milestone consolidation pass the overview already
+plans can fold the family however it prefers.
 
 The translated text comes from `UI.*.json`, the same source the #279 producer itself will use.
 
@@ -284,14 +280,13 @@ migration test uses `TempDatabase` + the migration constant directly, the same t
 `NotificationTranslationEntity` mirroring `QuoteTranslationEntity`, plus the
 `NotificationTranslation(Language, Title, Body)` record the write side takes.
 
-**Named `NotificationTranslation`, not `NotificationTranslationDto` — the plan's `Dto` was wrong.**
-ADR 016 defines `Dto` as a wire-format shape: an on-disk JSON file, or a JSON blob serialized into and
-read back out of a database column. This type is neither — it is never serialized, only carried from a
-producer into `WriteAsync`, where each instance becomes a row. The plan justified the suffix as
-"the same way `NotificationMetadataDto` does", but that comparison does not hold: that one genuinely is
-database-column JSON. ADR 016's out-of-scope clause covers this case, alongside `MasterDataReference`
-and `SeedBatch`, so it stays unsuffixed. ADRs outrank a plan doc per CLAUDE.md's authoritative-sources
-order, which is why this was changed rather than followed.
+**The value type is unsuffixed.** ADR 016's four suffixes each name a boundary: `Entity` a table
+mapping, `Request`/`Response` an HTTP body, `Dto` a wire-format shape — an on-disk JSON file, or a JSON
+blob serialized into and read back out of a database column, which is what `NotificationMetadataDto`
+genuinely is. This type crosses none of them: it is never serialized, only carried from a producer into
+`WriteAsync`, where each instance becomes a row. ADR 016 answers "which boundary does this type exist
+to carry data across", and the answer here is none of the four, so it takes no suffix — the same
+position `MasterDataReference` and `SeedBatch` hold.
 
 ### 3. Backfill migration for the one existing row
 
@@ -303,26 +298,19 @@ databases, and an applied migration is frozen. Conditional on the row existing, 
 is, so a database that never ran v1.8.3 gains nothing.
 
 Placed in `NotificationTranslationMigrations` alongside this issue's own two schema migrations rather
-than in the `NotificationLegacyMetadataMigrations` family the plan first suggested — it backfills *this
-issue's* table, and grouping it with the schema it depends on keeps the three readable together. The
-end-of-milestone consolidation pass can fold them however it prefers.
+than in the `NotificationLegacyMetadataMigrations` family: it backfills *this issue's* table, and
+grouping it with the schema it depends on keeps the three readable together. The end-of-milestone
+consolidation pass can fold them however it prefers.
 
 `NotificationOperationIdRenameTitle`/`…Body` added to all three `UI.*.json` files in the same commit;
 the migration embeds a frozen copy of the same strings, which is required rather than sloppy — migration
 text must not follow a later edit to those keys.
 
-**Written before its tests, so the first run was green rather than red — a procedure failure, not a
-style difference.** `process.md`'s Implementation step 1 is "write every test named in the plan doc's
-verification checklist first and confirm each one is genuinely red." Steps 1 and 2 followed it; step 3
-did not. Sensitivity was recovered after the fact by mutation — changing the migration's `'nl'` literal
-to `'xx'` turned two of the five tests red, reverting returned them to green — but a mutation check
-proves only that the test is wired to the behaviour. It does not prove the test would have failed
-against the *absence* of the feature, which is what red-first proves and what nothing can now recover
-for this step. Recorded rather than glossed.
-
-**Steps 4–11 are held to the written procedure**: the step's verification rows become tests, the tests
-are run and observed red, and only then is the code written. A step whose first test run is green is
-reported as a failure of this rule, not quietly mutation-checked into looking equivalent.
+**This step's tests rest on a mutation check, not on an observed red run** — the weaker of the two, and
+the one thing about this step's coverage a reader should not assume. Mutating the migration's `'nl'`
+literal to `'xx'` turns two of them red, which proves they are wired to the behaviour; it does not
+prove they would fail against the feature's absence. Treat that as the evidence available for rows 1,
+2 and 12, not as equivalent to red-first.
 
 ### 4. Read-path SQL
 
@@ -342,7 +330,7 @@ in step 5 only return it, which is also what keeps the guard tests scanning it.
 
 **Status:** ✅ Done
 
-Delivered as written below, with two things the plan did not anticipate:
+Two details the mechanism requires:
 
 - **`NotificationEntity` gained `EffectiveLanguage` as `[Computed]`.** It is a property of one query's
   result, not a column, and `ReflectedColumnMetadata` already excludes `[Computed]` from persisted
@@ -358,16 +346,13 @@ moment the entity gained a real column their tables lacked; each now applies mig
 `TestNotificationReader` was added so the three-argument construction is written once rather than at
 five call sites, where a partially-wired reader would still compile.
 
-**The plan originally had the reader keep its raw `conn.QueryAsync` calls. That violates ADR 017** and
-was missed because the pre-implementation check compared the plan against the *code* and never against
-the ADRs. ADR 017: "Any read that joins two or more tables, or returns a multi-table projection, uses
+**SQL execution goes through `JoinQueryRepository`/`IJoinStrategy`, per ADR 017**: "Any read that joins
+two or more tables, or returns a multi-table projection, uses
 `JoinQueryRepository<TResult>`/`IJoinStrategy<TResult>` … even when adopting it unlocks no new
-capability." Step 4 turns all three queries into exactly that. The one documented exemption
-(`ConversationLineCountReader`'s `QueryAsync<dynamic>`) does not apply — `NotificationEntity` is a
-concrete POCO — and ADR 017 explicitly refuses "no gain" as a reason.
-
-`NotificationReader` is compliant *today* only because its queries are single-table; the join is what
-brings it into scope.
+capability." Step 4 makes all three notification queries exactly that. The ADR's one exemption
+(`ConversationLineCountReader`'s `QueryAsync<dynamic>`) does not apply, since `NotificationEntity` is a
+concrete POCO, and "no gain" is explicitly refused as a reason. The join is what brings this reader
+into the ADR's scope — single-table reads were outside it.
 
 Three `IJoinStrategy<NotificationEntity>` implementations (active, page, by-id), each returning its
 `Sql.Notifications` constant. `CountAll` stays a plain scalar — no join, no projection, outside ADR 017.
