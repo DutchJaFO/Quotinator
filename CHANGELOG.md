@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-29 17:35 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-29 20:48 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Quotinator now keeps a record of which application versions have used the database, and links each notification to the version that added it — the groundwork for showing when a notification first appeared (issue #312)
 
 ### Changed
+- Notifications now appear in the language the interface is set to, instead of always in English. A notification keeps the language it was written in, and Quotinator falls back to that original whenever it has no translation for the language you are reading in — so nothing ever appears blank or half-translated. The API can also be asked for a specific language, and reports which one it actually returned (issue #319)
 - Changelog content (shown on the About page) is now served from a database instead of static JSON files, refreshed automatically at startup — this makes the content queryable and is a step toward future features such as surfacing specific highlights as startup notifications; falls back to the original JSON files if the database is ever unavailable, so nothing changes for anyone reading the About page (issue #309)
 - Notifications gained a separate title, structured details describing what each one is about, and an expiry that is now only applied when a notification genuinely should stop being shown — previously every notification expired after 30 days regardless (issue #312)
 - The package versions Quotinator is built from are now declared once in a single central file instead of being repeated in every project, so a dependency update can no longer reach part of the solution and miss the rest — a build-tooling change with no effect on the application itself (issue #320)

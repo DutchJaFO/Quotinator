@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Repositories;
@@ -35,7 +36,11 @@ public partial class NotificationSummary
             return;
         }
 
-        Notifications = await NotificationReader.GetActiveNotificationsAsync();
+        // #319: the UI language decides the notification's language here — CurrentUICulture is what the
+        // LanguageSelector cookie and Accept-Language already resolve to, so the popup follows the rest
+        // of the interface rather than staying English inside a translated page.
+        Notifications = await NotificationReader.GetActiveNotificationsAsync(
+            CultureInfo.CurrentUICulture.TwoLetterISOLanguageName);
     }
 
     #endregion

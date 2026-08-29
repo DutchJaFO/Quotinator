@@ -1,6 +1,6 @@
 # #319 — Notification title and body are not translated
 
-**Status:** In progress (step 10)
+**Status:** In progress (step 12)
 **GitHub issue:** #319
 **Tiers required:** T1, T2
 **Depends on:** #278, #312
@@ -430,7 +430,7 @@ strictly worse than having no row, since the `COALESCE` fallback would otherwise
 
 ### 10. Surfaces
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `NotificationSummary` and `NotificationTable` pass `CurrentUICulture`'s language through to the reader.
 Neither composes text itself, so no markup change beyond threading the language. `NotificationTable`
@@ -438,7 +438,7 @@ renders `Body` only; `Title` stays unrendered until #308, and this step does not
 
 ### 11. Docs
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 New `UI.*.json` keys in all three locales; `data/changelog/changelog.{en,nl,de}.json` `unreleased`
 entries in lockstep; `[Subsystem - Phase]` prefixes on any new log lines.
@@ -450,7 +450,7 @@ non-step so a reader does not go looking for it as one.
 
 ### 12. Verification
 
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress — unit rows green; T1 and T2 outstanding
 
 Work the table below top to bottom. T2 before T1, per `docs/release-verification.md`.
 

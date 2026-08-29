@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Quotinator.Api.Components.Controls;
 using Quotinator.Api.Services;
@@ -83,7 +84,10 @@ public partial class Notifications
 
     private async Task LoadAsync()
     {
-        PagedItems<NotificationEntity> page = await NotificationReader.GetPagedAsync(1, 0);
+        // #319: same rule as the startup popup — the page renders in the UI language, so its
+        // notifications resolve to that language too, falling back to each one's original.
+        PagedItems<NotificationEntity> page = await NotificationReader.GetPagedAsync(
+            1, 0, CultureInfo.CurrentUICulture.TwoLetterISOLanguageName);
         AllNotifications = page.Items;
         Now = DateTime.UtcNow;
     }

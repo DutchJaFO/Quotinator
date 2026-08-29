@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 309, 312, 313, 320, 323, 325, 326, 349],
+    "issues": [81, 309, 312, 313, 319, 320, 323, 325, 326, 349],
     "highlights": [
       "Sicherungen lassen sich jetzt verwalten, ohne die Dateien auf dem Server anzufassen: sehen, welche Sicherungen vorhanden sind und wie viel Platz bleibt, jederzeit selbst eine anlegen, eine herunterladen und sicher aufbewahren sowie alte löschen, um Platz freizugeben. Kann keine Sicherung angelegt werden, benennt Quotinator jetzt das Hindernis und was dagegen zu tun ist, statt ohne Erklärung fehlzuschlagen.",
       "Quotinator startet jetzt auch dann, wenn sein Datenverzeichnis nicht beschreibbar ist — ein schreibgeschütztes Volume oder falsche Berechtigungen. Statt sich zu beenden, startet es in einem eingeschränkten Zustand, benennt klar das Problem und dessen Behebung und hält Seiten und API-Dokumentation erreichbar, damit Sie handeln können.",
@@ -21,7 +21,8 @@
     ],
     "audienceHighlights": {
       "notification": [
-        "Benachrichtigungen haben jetzt eine eigene Überschrift und laufen nicht mehr standardmäßig ab — eine zu einem ungelösten Problem bleibt bestehen, bis Sie sie schließen."
+        "Benachrichtigungen haben jetzt eine eigene Überschrift und laufen nicht mehr standardmäßig ab — eine zu einem ungelösten Problem bleibt bestehen, bis Sie sie schließen.",
+        "Benachrichtigungen folgen jetzt der Sprache Ihrer Oberfläche und greifen auf die Sprache zurück, in der sie verfasst wurden."
       ]
     },
     "added": [
@@ -30,6 +31,7 @@
       "Quotinator verzeichnet jetzt, welche Anwendungsversionen die Datenbank verwendet haben, und verknüpft jede Benachrichtigung mit der Version, die sie hinzugefügt hat — die Grundlage dafür, später anzuzeigen, wann eine Benachrichtigung zuerst erschien (issue #312)"
     ],
     "changed": [
+      "Benachrichtigungen erscheinen jetzt in der eingestellten Sprache der Oberfläche statt immer auf Englisch. Eine Benachrichtigung behält die Sprache, in der sie verfasst wurde, und Quotinator greift auf dieses Original zurück, sobald für die gelesene Sprache keine Übersetzung vorliegt — so bleibt nie etwas leer oder halb übersetzt. Die API kann zudem eine bestimmte Sprache anfordern und meldet, welche tatsächlich zurückgegeben wurde (Issue #319)",
       "Changelog-Inhalte (angezeigt auf der Über-Seite) werden jetzt aus einer Datenbank bereitgestellt statt aus statischen JSON-Dateien, automatisch beim Start aktualisiert — das macht die Inhalte abfragbar und ist ein Schritt hin zu zukünftigen Funktionen wie dem Anzeigen bestimmter Highlights als Startbenachrichtigungen; fällt auf die ursprünglichen JSON-Dateien zurück, falls die Datenbank einmal nicht verfügbar ist, sodass sich für niemanden, der die Über-Seite liest, etwas ändert (issue #309)",
       "Benachrichtigungen haben einen eigenen Titel erhalten, strukturierte Angaben dazu, worum es bei jeder einzelnen geht, und eine Ablauffrist, die jetzt nur noch angewendet wird, wenn eine Benachrichtigung tatsächlich nicht mehr angezeigt werden soll — zuvor lief jede Benachrichtigung nach 30 Tagen ab, unabhängig vom Inhalt (issue #312)",
       "Die Paketversionen, aus denen Quotinator gebaut wird, werden jetzt einmal in einer zentralen Datei deklariert, statt in jedem Projekt wiederholt zu werden, sodass ein Abhängigkeits-Update nicht mehr nur einen Teil der Projektmappe erreichen und den Rest auslassen kann — eine Änderung am Build-Werkzeug ohne Auswirkung auf die Anwendung selbst (issue #320)",
