@@ -64,6 +64,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#349](https://github.com/DutchJaFO/Quotinator/issues/349) | Admin endpoints to list, delete and report status for database backups | Planning | T1 ⬜ T2 ⬜ | [349-backup-management-endpoints-plan.md](349-backup-management-endpoints-plan.md) |
 | [#350](https://github.com/DutchJaFO/Quotinator/issues/350) | A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown | Planning | T1 ⬜ T2 ⬜ | [350-overshoot-must-degrade-plan.md](350-overshoot-must-degrade-plan.md) |
 | [#351](https://github.com/DutchJaFO/Quotinator/issues/351) | `AuditOperation` is a string-constant set where the project's convention is an enum | Planning | T1 ⬜ T2 ⬜ | [351-audit-operation-enum-plan.md](351-audit-operation-enum-plan.md) |
+| [#352](https://github.com/DutchJaFO/Quotinator/issues/352) | Restore a stored backup, refusing one taken ahead of this build | Planning | T1 ⬜ T2 ⬜ | [352-restore-a-stored-backup-plan.md](352-restore-a-stored-backup-plan.md) |
+| [#353](https://github.com/DutchJaFO/Quotinator/issues/353) | Upload a backup file | Planning | T1 ⬜ T2 ⬜ | [353-upload-a-backup-file-plan.md](353-upload-a-backup-file-plan.md) |
 
 ---
 
@@ -168,15 +170,25 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
          copy does not guarantee, with a 90% operating quota plus a reserve to the absolute ceiling.
          Soft-relates to #349, which supplies the in-app remedy its messages point at — either order
 #349 ─── depends on nothing; #348's remedy text names its endpoints once they exist and the manual
-         option until then, so the two can land either way round. Adds GET/DELETE /admin/backups and
-         GET /admin/backups/status under a new Backup tag — the first new endpoint group since ADR 020,
-         so it is also that rule's first live application. Restoring a backup is explicitly future work
+         option until then, so the two can land either way round. Adds list, delete, status, download
+         and on-demand create under a new Backup tag — the first new endpoint group since ADR 020, so it
+         is also that rule's first live application. Nothing here writes to the live database, which is
+         what keeps it separable from #352 and #353 (both filed 2026-08-29 after the scope grew)
 #350 ─── (none) — found by #327, which built the first coverage of the overshoot state and asserted the
          behaviour this issue reverses. Overturns #289's continue-and-notify design: an overshoot means
          this build does not know what the missing migrations did, so the schema's shape is unknown and
          the app must degrade rather than serve from it. Owns rewriting startup-and-degradation/06 and
          replacing the in-process test #327 added, so #327 does not touch either again. Names restoring
          an older backup as a second remedy alongside Reset, which #349 records as future work
+#352 ─── (none) — the remedy #348's SourceUnreadable text and #350's overshoot text both name and
+         neither can reach. Takes nothing from #349 but its `{name}` guard, so either order. Deliberately
+         does *not* back up before restoring: that would bolt a second data-retention decision onto an
+         endpoint with one job, feed the quota #348 refuses on, and duplicate a rollback SQLite already
+         guarantees — #349's create endpoint is where an operator takes a restore point instead
+#353 ─── (none) — the other half of #349's download: a restore point that can leave the container has to
+         be able to come back. Its optional-restore flag was rejected for the same side-effect-policy
+         reason as #352's pre-restore backup, which also removes any dependency on #352 in either
+         direction
 #351 ─── (none) — found while planning #349, which adds a thirteenth const string into the shape this
          issue replaces. Takes whatever members exist when it runs, so either order relative to #349.
          Its table rebuild is written against this milestone's own end-of-milestone migration
@@ -228,12 +240,14 @@ step, the other reuses it.
 | 25 | **#306** | Independent bug; can slot in anywhere |
 | 26 | **#308** | Per-type layout across both surfaces. Last, because it cannot settle those layouts before the producers that need them exist |
 | 27 | **#351** | `AuditOperation` to an enum with its CHECK constraint. Independent of everything above and slottable anywhere; placed last so #349's own new member is already in place when the conversion runs, and so its table rebuild is written with this milestone's full migration set visible |
+| 28 | **#352** | Restore a stored backup. After #349, whose `{name}` guard and create endpoint it relies on being there — not for compilation, but so the remedy text and the operator's loop are written once |
+| 29 | **#353** | Upload a backup file. Last of the backup cluster: it is the only endpoint that accepts an arbitrary file, and writing it after restore exists means its validation is written against a real consumer rather than a hypothetical one |
 
 ---
 
 ## PR merge plan
 
-All twenty-seven issues are self-contained on top of already-released infrastructure (#278, #80, #154,
+All twenty-nine issues are self-contained on top of already-released infrastructure (#278, #80, #154,
 #156) — none leave anything half-wired if merged independently, except #81 (which genuinely cannot
 merge before #309 and #307), #319 (which cannot merge before #312), #331 (which cannot merge before
 #330), #328 (which cannot merge before #339), and #327 (which cannot merge before #339 for its
