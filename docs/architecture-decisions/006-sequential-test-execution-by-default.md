@@ -34,6 +34,11 @@ parallel-safe.**
 
 Concretely:
 
+- **Every test project carries an explicit `[assembly: DoNotParallelize]`**, whether or not it
+  currently holds any state-sensitive tests. Relying on MSTest's implicit default would leave the
+  guarantee unstated and answerable only by reasoning about SDK behaviour; an explicit attribute per
+  project makes it answerable with one grep, and makes any class-level opt-in a visible departure from
+  a declared baseline rather than from an assumed one.
 - No test project has `[assembly: Parallelize]`.
 - A test class may add `[Parallelize]` at the class level only when all four of the following
   are true:
@@ -65,24 +70,3 @@ decision and identify which classes can be safely parallelised.
 consciously verify all four conditions. The friction is the point — it forces the question
 "is this actually safe?" rather than inheriting a risky default.
 
----
-
-## Revision — 2026-07-12
-
-The original decision relied on the *absence* of `[assembly: Parallelize]` as the sequential-execution
-guarantee, reasoning that MSTest's default (with neither attribute present) is already sequential. In
-practice this left the guarantee implicit and per-project-inconsistent: only `Quotinator.Data.Tests`
-and `Quotinator.Engine.Tests` actually carried an explicit `[assembly: DoNotParallelize]`;
-`Quotinator.Core.Tests` had an assembly-setup file but was missing the attribute, and six other test
-projects (`Api.Tests`, `Changelog.Tests`, `Constants.Tests`, `Converters.BasicJsonArray.Tests`,
-`Converters.Csv.Tests`, `Converters.RegexArray.Tests`, `Data.Testing.Tests`, `Tools.DbInspector.Tests`)
-had no assembly-level marker at all — correctness depended on an unstated default rather than a visible
-declaration.
-
-**Strengthened rule: every test project must carry an explicit `[assembly: DoNotParallelize]`,
-regardless of whether it currently has any state-sensitive tests.** This makes "is parallel execution
-enabled here" answerable by grepping one attribute per project, rather than by reasoning about SDK
-defaults — and any future `[Parallelize]` opt-in on a specific class becomes a visible, deliberate
-departure from an explicit baseline instead of an implicit one. All eleven active test projects now
-carry the attribute (a twelfth directory, `Quotinator.Converters.NikhilNamal17.Tests`, is stale —
-removed from the solution by #144 but its `obj/` folder was never deleted; not a live project).

@@ -1,16 +1,22 @@
 # ADR 005 — Quotinator.Changelog project scope
 
-**Status:** Accepted — the "Open question" below is resolved, see the Revision section
+**Status:** Accepted
 **Date:** 2026-06-25  
-**GitHub issues:** #80, #82
+**GitHub issues:** #80, #82, #309
 
 ---
 
 ## Context
 
-Changelog content is authored in `src/Quotinator.Api/resources/changelog.*.json` (one file per language) and rendered in two places: the Blazor UI and the generated `CHANGELOG.md` / `addon/CHANGELOG.md` markdown files. A decision was needed on whether changelog loading and generation logic should live in `Quotinator.Api`, `Quotinator.Core`, or a dedicated project.
+Changelog content is authored as one JSON file per language and rendered in two places: the Blazor UI
+and the generated `CHANGELOG.md` / `addon/CHANGELOG.md` markdown files. A decision was needed on whether
+changelog loading and generation logic should live in `Quotinator.Api`, `Quotinator.Core`, or a
+dedicated project.
 
-Keeping it in `Quotinator.Api` conflates presentation with logic and prevents the `scripts/changelog.csx` generator from using the same models without taking a dependency on the API project. Keeping it in `Quotinator.Core` introduces changelog concerns into the domain layer, which has nothing to do with quotes or data access.
+Keeping it in `Quotinator.Api` conflates presentation with logic and prevents the
+`scripts/changelog.csx` generator from using the same models without taking a dependency on the API
+project. Keeping it in `Quotinator.Core` introduces changelog concerns into the domain layer, which has
+nothing to do with quotes or data access.
 
 ---
 
@@ -18,14 +24,15 @@ Keeping it in `Quotinator.Api` conflates presentation with logic and prevents th
 
 `Quotinator.Changelog` is a **standalone, dependency-isolated project** responsible for:
 
-1. **Schema and models** — typed C# representation of the changelog JSON format (`ChangelogRoot`, `ChangelogRelease`, `ChangelogUnreleased`, etc.)
-2. **Loading** — deserialising per-language `changelog.*.json` files into typed models (`IChangelogService`)
+1. **Schema and models** — typed C# representation of the changelog JSON format (`ChangelogDocument`,
+   `ChangelogRelease`, `ChangelogUnreleased`, etc.)
+2. **Loading** — deserialising per-language changelog JSON files into typed models (`IChangelogService`)
 3. **Formatting** — generating output from loaded models (markdown formats, generated-file headers)
 
 ### Scope boundary — what Quotinator.Changelog does NOT do
 
-- No UI rendering — that is `Quotinator.Api`'s concern (Blazor components consume `IChangelogService`)
-- No database access — changelog data lives in JSON files, never in SQLite
+- No UI rendering — that is `Quotinator.Api`'s concern
+- No direct database access — the project is schema, parsing and formatting only
 - No domain logic — no knowledge of quotes, sources, genres, or any Quotinator domain concept
 - No dependency on `Quotinator.Core` or `Quotinator.Data` — the project is intentionally isolated
 
@@ -36,85 +43,42 @@ Keeping it in `Quotinator.Api` conflates presentation with logic and prevents th
 - `Microsoft.Extensions.Logging.Abstractions` (for `ILogger<T>` injection)
 - No NuGet packages that bring domain or persistence concerns
 
-Consuming projects (`Quotinator.Api`, `scripts/changelog.csx`) depend on `Quotinator.Changelog`. It never references them.
+Consuming projects depend on `Quotinator.Changelog`; it never references them. Those consumers are
+`Quotinator.Api`, `scripts/changelog.csx`, and `Quotinator.Data`, which parses the authored files
+through this project before storing the result.
+
+### Changelog content is database-backed system content
+
+Content is **authored** as JSON — same schema (`schemas/changelog.schema.json`), same generator
+(`scripts/changelog.csx`), same parsing (`IChangelogService`) — and **served** from the changelog
+database, per [ADR 018](018-system-content-in-quotinator-data.md)'s file-authored system-content
+pattern. The files live in a runtime-accessible location (`data/changelog/`), not compiled into the API
+assembly, so content is a data concern rather than a deploy-time one.
+
+`Quotinator.Changelog` itself still performs zero database access — that boundary is unchanged. A
+separate `Quotinator.Data`-owned component depends on this project to parse the files, then writes the
+result into `Changelog_Entry`/`Changelog_Line` (the `Changelog_` domain, per
+[ADR 015](015-domain-prefixed-table-naming.md)). Consumers such as the About page and the startup
+what's-new notification read from those tables rather than re-parsing JSON per request.
 
 ### Why a separate project
 
-- The `scripts/changelog.csx` generator script needs the same models and generation logic without pulling in the API or its dependencies
-- `Quotinator.Changelog.Tests` can verify schema correctness and generation output in complete isolation — no web host, no database, no DI container required
-- If Quotinator is ever published as a library or split into multiple services, the changelog component travels independently
-
----
-
-## Open question — where do the changelog JSON files live?
-
-This ADR defines the *library* scope but does not resolve where the *content* (the `changelog.*.json` files) is stored. The current placement — `src/Quotinator.Api/resources/` — was inherited from the initial implementation and was never an explicit decision.
-
-### The tension
-
-The current approach treats changelog content as a **deploy-time artifact**: the JSON files are part of the source tree, versioned with the code, and embedded in the build output. Updating the changelog requires a code commit and a deployment.
-
-An alternative is to treat changelog content as a **runtime artifact**: the JSON files live in a configurable location (e.g. the data directory alongside the database), loaded at startup like any other external data file. This would allow changelog content to be updated independently of code deployments — and opens the door to an external changelog management tool that operates outside the repository entirely.
-
-### Options
-
-| Option | Where files live | Update requires | Trade-offs |
-|--------|-----------------|-----------------|------------|
-| A (current) | `src/Quotinator.Api/resources/` | Code commit + deploy | Simple; content is versioned with code; developer workflow only |
-| B | Data directory (`{dataDir}/changelog/`) | File update in data dir | Decoupled from deployments; HA add-on users could update without a release |
-| C | External management tool + separate repo | Tool-managed, pulled at build or runtime | Maximum flexibility; significant complexity; may be over-engineering for a homelab project |
-
-### What needs to be decided
-
-1. Is changelog content a code concern (deploy-time) or a data concern (runtime)?
-2. Should `IChangelogService` accept a configurable file path, or always resolve from embedded resources?
-3. Is there value in an external changelog management tool for this project at all?
-
-### Resolution
-
-This question should be resolved in a follow-up decision — either by updating this ADR with the chosen option, or by opening a dedicated issue and referencing it here. Until resolved, Option A (current placement) remains in effect. No new code should embed assumptions about file location that would be hard to reverse.
+- The `scripts/changelog.csx` generator needs the same models and generation logic without pulling in
+  the API or its dependencies
+- `Quotinator.Changelog.Tests` can verify schema correctness and generation output in complete
+  isolation — no web host, no database, no DI container required
+- If Quotinator is ever published as a library or split into multiple services, the changelog component
+  travels independently
 
 ---
 
 ## Consequences
 
-- All changelog schema models, loading logic, and markdown generation live in `Quotinator.Changelog` — never in `Quotinator.Api` or `Quotinator.Core`
-- `Quotinator.Api` references `Quotinator.Changelog` for `IChangelogService` injection into Blazor pages and API endpoints
+- All changelog schema models, loading logic, and markdown generation live in `Quotinator.Changelog` —
+  never in `Quotinator.Api` or `Quotinator.Core`
+- `Quotinator.Data` depends on `Quotinator.Changelog` to parse authored content before storing it
 - `Quotinator.Changelog.Tests` tests schema compliance and generation output without any web host
-- New output formats (e.g. RSS, HTML fragment) are added to `Quotinator.Changelog/Formatting/` — not to the API project
-- Any temptation to add domain concepts (quote types, language codes as enums, etc.) to `Quotinator.Changelog` must be resisted — the project is format/serialisation only
-
----
-
-## Revision — resolves the "Open question" above
-
-**Decision: changelog content is database-backed system content, per
-[ADR 018](018-system-content-in-quotinator-data.md)'s file-authored system content pattern.**
-
-- The `changelog.*.json` files remain the authored source of truth — same schema
-  (`schemas/changelog.schema.json`), same generator (`scripts/changelog.csx`), same parsing
-  (`Quotinator.Changelog.Services.IChangelogService`). How changelog content is authored is unchanged.
-- The files move from the compiled `src/Quotinator.Api/resources/` location to a runtime-accessible
-  location, resolving Option A vs. B in favour of B — the exact path follows the existing
-  `{dataDir}`/`data/sources/` precedent, decided by the implementing issue.
-- A new `System_Changelog` table (`Quotinator.Data`-owned, `System_` domain per
-  [ADR 015](015-domain-prefixed-table-naming.md)) is refreshed from the parsed changelog content at
-  startup, via ADR 018's file-authored system-content mechanism. Consumers (the About page, a startup
-  what's-new notification) read from this table rather than re-parsing JSON per request.
-- Option C (external management tool) is rejected — unwarranted complexity for a homelab project.
-
-**Correction to this ADR's original "No database access" non-goal:** `Quotinator.Changelog` itself
-still performs zero direct database access — unchanged, still governs the project. A separate,
-`Quotinator.Data`-owned component depends on `Quotinator.Changelog` to parse the files, then writes the
-result into `System_Changelog`. The original wording — "changelog data lives in JSON files, never in
-SQLite" — described where the application stores changelog data; corrected to: changelog content is
-authored in JSON files and served from `System_Changelog`, while `Quotinator.Changelog` remains
-schema/parsing/formatting-only.
-
-**New dependency edge:** `Quotinator.Data` → `Quotinator.Changelog` (ADR 018).
-
-**Resolution of this ADR's three original questions:**
-1. Changelog content is a data/runtime concern, not a deploy-time one.
-2. Content resolves from a configurable/runtime location via a service reading `System_Changelog` —
-   exact mechanism decided by the implementing issue.
-3. No external management tool.
+- New output formats (e.g. RSS, HTML fragment) are added to `Quotinator.Changelog/Formatting/` — not to
+  the API project
+- Any temptation to add domain concepts (quote types, language codes as enums, etc.) to
+  `Quotinator.Changelog` must be resisted — the project is format/serialisation only

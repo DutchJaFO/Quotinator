@@ -110,57 +110,29 @@ a schema convention that exists only as "whatever the last similar column happen
 further from consistent with every new column, and by the time it's noticed, retrofitting it means
 a migration instead of a comment.
 
-### Retrofitting `ConflictPolicy` is out of scope for this ADR
+### Retrofitting an existing unconstrained column means a table rebuild
 
-This ADR governs new columns going forward. `ConflictPolicy` is a known, pre-existing gap under
-this rule — fixing it means a rebuild migration (an existing, currently-unconstrained column), not
-a one-line addition. Whether to do that now or track it separately is a scope decision for whoever
-picks it up, not settled by this ADR.
+Adding a `CHECK` to a column that already exists is not a one-line addition — SQLite has no
+`ALTER TABLE ... MODIFY CHECK`, so it takes a create-new-table + copy + drop + rename migration. The
+copy step must normalise pre-existing values: a column originally backfilled by
+`ALTER TABLE ... ADD COLUMN ... DEFAULT 'skip'` holds that literal lowercase default in every
+pre-existing row, never having passed through application code, which writes `Enum.ToString()` in
+PascalCase. Normalise defensively even where no legacy casing is expected.
 
 ---
 
 ## Consequences
 
-- Every future enum-backed column addition (in either `Quotinator.Data` or `Quotinator.Engine`)
-  must include a `CHECK` in the same commit that introduces the column — reviewers can check this
-  ADR instead of guessing from nearby code.
-- `Quotinator.Data`'s domain-agnostic tables (`System_ImportConflicts`, `System_ImportActions`, and
-  any future one) still get `CHECK`-constrained `enum` columns for their own Data-owned state
-  (`Status`, `ActionType`) — only their genuinely consumer-defined fields (`EntityType`, `BatchId`,
-  `ExistingBatchId`) stay open strings by design, and their entity doc comments say why per field.
-- `ImportBatches.ConflictPolicy` remains a known, tracked gap under this rule — not fixed by this
-  ADR, and not to be treated as precedent for a future column's design.
+- Every enum-backed column addition must include a `CHECK` in the same commit that introduces the
+  column — reviewers can check this ADR instead of guessing from nearby code.
+- `Quotinator.Data`'s domain-agnostic tables (`Import_Conflict`, `Import_Action`, and any future one)
+  still get `CHECK`-constrained `enum` columns for their own Data-owned state (`Status`, `ActionType`)
+  — only their genuinely consumer-defined fields (`EntityType`, `BatchId`, `ExistingBatchId`) stay
+  open strings by design, and their entity doc comments say why per field.
+- An enum with no persisted column needs no `CHECK`, but that status is not permanent: re-check the
+  exempt set whenever a column is added, since an enum can gain persistence long after it was listed.
 - The existing schema-drift tests (`Baseline_And_IncrementalReplay_AcceptSameCheckConstraintValues`
   et al.) already verify a `CHECK`, once added, behaves identically on both the incremental-replay
   and fresh-baseline paths — this ADR doesn't change that test's job, it just governs *when* a
   `CHECK` must exist in the first place.
 
----
-
-## Revision — issue #150 closed the tracked `ConflictPolicy`/`AppliedPolicy` gaps
-
-The `ImportBatches.ConflictPolicy` gap this ADR documented as deliberately out of scope is now
-closed, via a new migration that rebuilds the table under a temporary name (`ImportBatches.ConflictPolicy`
-CHECK, `Migration005_ImportBatchConflictPolicyCheckConstraint` in `QuotinatorMigrations`) —
-`ImportBatches.ConflictPolicy`'s pre-existing rows needed a normalising `CASE` in the rebuild's copy
-step, since the column's original `ALTER TABLE ... ADD COLUMN ... DEFAULT 'skip'` backfill wrote that
-literal lowercase default directly into every pre-existing row, never through application code (which
-has always written `DuplicateResolutionPolicy.ToString()`, PascalCase).
-
-`System_ImportConflicts.AppliedPolicy`, the other gap this issue's own filing identified, is fixed the
-same way (`ImportConflictMigrations.AddAppliedPolicyCheckConstraint`). Re-deriving the full inventory
-at implementation time (per this issue's own instruction not to treat the original table as gospel)
-found one further, previously-unlisted gap: `System_ImportActions.AppliedPolicy` — same enum, same
-missing `CHECK`, fixed the same way (`ImportActionMigrations.AddAppliedPolicyCheckConstraint`). Unlike
-its sibling table, this column has always been actively written (by `ImportActionPlanner`), always in
-PascalCase, with no `ALTER TABLE ... ADD COLUMN ... DEFAULT` backfill ever applied to it — so no
-legacy-casing values were expected in practice, though the copy step still normalises defensively.
-
-The six "no persisted column" enums this ADR's originating issue confirmed exempt were re-checked
-against the code as it stood at #150's implementation time, per that issue's own instruction to treat
-the six-enum list as a starting point, not gospel. One of them, `SeedBatchOrigin`, had in fact gained
-a persisted column since #150 was filed (`SourceFileOverride.Origin`, backing
-`System_SourceFileOverrides.Origin`) — but it already carries a `CHECK` constraint from the migration
-that introduced it, so this is confirmed compliant, not a new gap. The remaining five
-(`InsertStrategy`, `FilteredResultStatus`, `DownloadTarget`, `SeedFileIssue`, `SourceRefreshOutcome`)
-still have no persisted column at all.

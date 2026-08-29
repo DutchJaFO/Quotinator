@@ -195,7 +195,7 @@ addon/                    # Home Assistant add-on manifest and assets — stable
 addon-beta/               # Home Assistant add-on manifest and assets — beta channel, same image
 ```
 
-Dependency direction: `Quotinator.Api` → `Quotinator.Core`; `Quotinator.Core` → `Quotinator.Data`; `Quotinator.Api` → `Quotinator.Constants`. `Quotinator.Data` has no dependency on Core (must stay domain-agnostic — see ADR 004). `Quotinator.Data.Testing` → `Quotinator.Data` only. (Until #206, `Quotinator.Engine` sat between Api and Core as a separate project; it was merged into `Quotinator.Core` because Core's own "stay Dapper/SQLite-free" invariant — the only reason Engine existed as a *third* project rather than Core depending on Data directly — turned out not to be worth its cost. See ADR 004's `#206` revision for the full reasoning.)
+Dependency direction: `Quotinator.Api` → `Quotinator.Core`; `Quotinator.Core` → `Quotinator.Data`; `Quotinator.Api` → `Quotinator.Constants`. `Quotinator.Data` has no dependency on Core (must stay domain-agnostic — see ADR 004). `Quotinator.Data.Testing` → `Quotinator.Data` only. (Until #206, `Quotinator.Engine` sat between Api and Core as a separate project; it was merged into `Quotinator.Core` because Core's own "stay Dapper/SQLite-free" invariant — the only reason Engine existed as a *third* project rather than Core depending on Data directly — turned out not to be worth its cost. See ADR 004 for the boundary rules that resulted.)
 
 `tools/` holds standalone developer utilities that are never referenced by any `src/` project and never built into the Docker image — they exist purely to support local development/debugging. See `tools/Quotinator.Tools.DbInspector/README.md` for the current example.
 

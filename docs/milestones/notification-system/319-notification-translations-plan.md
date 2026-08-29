@@ -102,7 +102,7 @@ IReadOnlyList<NotificationTranslationDto>   // (Language, Title, Body)
 ```
 
 A list of a small record rather than a dictionary: `Title` is nullable and independent of `Body`, which
-a `Dictionary<string, string>` cannot express, and the `Dto` suffix follows ADR 016's #264 revision the
+a `Dictionary<string, string>` cannot express, and the `Dto` suffix follows ADR 016's rule the
 same way `NotificationMetadataDto` does.
 
 `NotificationSeeding.SeedOnceAsync` threads the same parameter through. **Its identity comparison is
