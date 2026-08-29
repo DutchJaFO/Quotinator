@@ -6,136 +6,135 @@
 
 ## Preconditions
 
-**Two containers over one bind-mounted directory**, the same shape
-[`02-notification-metadata-and-provenance.md`](02-notification-metadata-and-provenance.md) uses:
-`qt-notif-09-183` runs the published `ghcr.io/dutchjafo/quotinator:1.8.3` tag with **no published
-port**, then `qt-notif-09-current` runs the current build over the database it left behind.
+Beyond the profile: the prior side is the **published `ghcr.io/dutchjafo/quotinator:1.8.3` tag**, not
+the milestone base image. That version wrote the operation-id-rename announcement in English with no
+translation table to put anything else in, which is the state this upgrade has to repair — the base
+image already has the repair in it and would prove nothing.
 
-**v1.8.3's operation-id-rename announcement is the only notification any released build has
-persisted**, which is what makes this testable at all: the upgrade has exactly one row to translate,
-and a fresh install has none. A fresh container therefore cannot exercise this path — that is why this
-is an Upgraded scenario rather than a step inside
-[`08-notification-text-resolves-per-language.md`](08-notification-text-resolves-per-language.md).
-
-**The original English text must survive the upgrade untouched.** Each producer's content hash is taken
-over that text, so a backfill that moved or rewrote it would make the notification re-announce itself on
-the next start — a failure that only shows up one boot later, which is why step 5 restarts.
+Two containers over one bind-mounted directory the document creates and removes: `qt-notif-09-183`
+publishes no port and is waited on by its own log, then `qt-notif-09-current` publishes `18509`.
 
 ## Determinism
 
-- The released container publishes no port and waits on its own log, so nothing races the current
-  build for the database file.
-- The current build's wait terminates on **either** ready or unhandled exception, so a crash fails the
-  test rather than hanging it.
-- **Never assert a migration number or schema version.** Assert that the translations are present and
-  that the original is unchanged — both survive consolidation, a version number does not.
-- The bind directory is an absolute Windows path built from `$PWD`, so nothing translates it into a
-  different directory on the way to the container.
+- **The subject is one notification identified by a known cause** — the announcement, selected by
+  `metadataKind -eq 'announcement'`. Nothing counts notifications: how many exist depends on which
+  producers ran and what the changelog flags for the running version.
+- **The upgrade must be the thing that adds the translations**, so step 2 confirms the released
+  database has none before the current build touches it. Without that, a pass cannot distinguish the
+  backfill working from the translations having been there all along.
+- **The original English text must survive unchanged.** Each producer's content hash is taken over it,
+  so a backfill that rewrote it would leave the notification unrecognisable to the dedupe and it would
+  re-announce — a failure that appears one boot later, which is why step 6 restarts.
+- **Never assert a migration number or schema version.** Assert the translations are present and the
+  original is unchanged; both survive a migration consolidation, a version number does not.
+- The bind directory is a PowerShell absolute path, so nothing translates it into a different directory
+  on the way to the container.
+- Waits are on a condition, never a duration: the released container on its own log, the current build
+  on a health poll that gives up rather than hanging.
 
 ## Steps
 
 ### 1. Create the released baseline
 
 ```powershell
-$dataDir = "$PWD\.claude\temp\qt-notif-09-data"
+$dataDir = "$env:TEMP\qt-notif-09-data"
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-09-183 `
   --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind $dataDir
 while (-not (docker logs qt-notif-09-183 2>&1 | Select-String -SimpleMatch 'Quotinator ready')) { Start-Sleep 1 }
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-09-183 --bind $dataDir
 ```
 
-**Expected:** the released image reaches `Quotinator ready`, leaving a v1.8.3 database in `$dataDir`.
+**Expected:** the released image reaches `Quotinator ready` and the container is removed, leaving its
+database in `$dataDir`.
 
-### 2. Confirm the announcement is there, and English-only
+### 2. Confirm the released database has the announcement and no translations
 
 ```powershell
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
-  --sql "SELECT COUNT(*) FROM System_Notification WHERE Body LIKE '%GetAllImportBatches%'"
+  --sql "SELECT COUNT(*) AS Announcements FROM System_Notification WHERE Body LIKE '%GetAllImportBatches%'"
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
+  --sql "SELECT name FROM sqlite_master WHERE type='table' AND name='System_NotificationTranslation'"
 ```
 
-**Expected:** `1`.
+**Expected:** `Announcements` is `1`, and the second query returns no rows — the released schema has no
+translation table at all.
 
-**On failure:** `0` means the released image did not write the announcement, so there is nothing for the
-upgrade to translate and a green result below would mean only that no work was attempted. Stop —
-this is the precondition the whole scenario rests on.
+**On failure:** `0` announcements means there is nothing for the upgrade to translate, and every check
+below would pass by doing no work. A translation table already present means the prior image is not the
+released tag this test needs. Stop either way.
 
 ### 3. Upgrade to the current build
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- reenter --name qt-notif-09-current --port 18509 `
-  --image quotinator:local --bind $dataDir --no-wait
-
-while (-not (docker logs qt-notif-09-current 2>&1 | Select-String -SimpleMatch 'Quotinator ready', 'Unhandled exception')) { Start-Sleep 1 }
-docker logs qt-notif-09-current 2>&1 | Select-String -SimpleMatch 'pending', 'schema updated', 'Quotinator ready', 'Unhandled'
+  --image quotinator:local --bind $dataDir
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18509/api/v1/health" --wait-for 200 --status
+docker logs qt-notif-09-current 2>&1 | Select-String -SimpleMatch 'Unhandled exception'
 ```
 
-**Expected:** logs pending `Data` migrations, then `schema updated`, then `Quotinator ready`.
+**Expected:** `200`, and the log search returns nothing.
 
-**Must not log `Unhandled exception`.**
+**On failure:** any `Unhandled exception` means the migration threw rather than applying; the database
+is left as it was and the remaining steps would report an unrelated state. Stop.
 
-### 4. Read the announcement back in each language
+### 4. The announcement resolves in every language
 
 ```powershell
-foreach ($l in 'en','nl','de') {
-  $n = (Invoke-RestMethod "http://localhost:18509/api/v1/notifications?lang=$l").items |
-       Where-Object { $_.metadataKind -eq 'announcement' } | Select-Object -First 1
-  "{0}: language={1} isTranslated={2} :: {3}" -f $l, $n.language, $n.isTranslated, $n.title
+$base = "http://localhost:18509/api/v1"
+function Get-Announcement($lang) {
+  @((Invoke-RestMethod "$base/notifications?pageSize=0&lang=$lang").items |
+    Where-Object { $_.metadataKind -eq 'announcement' })[0]
 }
+$en = Get-Announcement 'en'; $nl = Get-Announcement 'nl'; $de = Get-Announcement 'de'
+"english=$($en.language -eq 'en' -and $en.isTranslated -eq $false) " +
+"dutch=$($nl.language -eq 'nl' -and $nl.isTranslated -eq $true) " +
+"german=$($de.language -eq 'de' -and $de.isTranslated -eq $true) " +
+"allDiffer=$(@($en.title, $nl.title, $de.title | Select-Object -Unique).Count -eq 3)"
 ```
 
-**Expected:** three lines. `en` reports `language=en isTranslated=False`; `nl` and `de` each report
-their own language with `isTranslated=True`, and each prints a **different** title from the English one
-and from each other.
+**Expected:** every value `True`.
 
-**Three identical titles is a failure even if every `language` field looks right** — it means the
-backfill wrote no translation rows and each read fell through to the original while the `CASE` still
-echoed the requested language. Comparing the titles is the only observation here that distinguishes a
-translated row from a labelled fallback.
+**On failure:** `allDiffer=False` with the language flags `True` means no translation rows were written
+and each read fell through to the original while still echoing the requested language — the backfill did
+not match the announcement row.
 
-**On failure:** if `nl` and `de` report `isTranslated=False`, the backfill did not match the
-announcement row. Re-run step 2 against the upgraded database — if the row is still there, the
-migration's matching predicate is at fault (cause 1), not the read path.
-
-### 5. Confirm the original text did not move, and does not re-announce
+### 5. The English text was not moved or rewritten
 
 ```powershell
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
-  --sql "SELECT COUNT(*) FROM System_Notification WHERE Body LIKE '%GetAllImportBatches%'"
+  --sql "SELECT COUNT(*) AS Announcements FROM System_Notification WHERE Body LIKE '%GetAllImportBatches%'"
+```
 
+**Expected:** `1` — the original row, still carrying the text the released build wrote.
+
+### 6. A second boot does not re-announce
+
+```powershell
 docker restart qt-notif-09-current | Out-Null
-while (-not (docker logs qt-notif-09-current 2>&1 | Select-String -SimpleMatch 'Quotinator ready', 'Unhandled exception')) { Start-Sleep 1 }
-
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18509/api/v1/health" --wait-for 200 --status
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
-  --sql "SELECT COUNT(*) FROM System_Notification WHERE Body LIKE '%GetAllImportBatches%'"
+  --sql "SELECT COUNT(*) AS Announcements FROM System_Notification WHERE Body LIKE '%GetAllImportBatches%'"
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
+  --sql "SELECT Language, COUNT(*) AS Rows FROM System_NotificationTranslation GROUP BY Language"
 ```
 
-**Expected:** `1` both times.
+**Expected:** `200`, `Announcements` still `1`, and one row per translated language each with `Rows` = `1`.
 
-**A second row after the restart is the failure this step exists for.** It means the English body no
-longer matches what the producer's content hash was taken over, so the dedupe no longer recognises the
-stored notification as the same one — the announcement would reappear on every upgrade. The count
-before the restart cannot reveal this on its own, which is why the restart is part of the step rather
-than a separate scenario.
+**On failure:** a second announcement means the stored English no longer matches what the producer's
+content hash covers, so the dedupe stopped recognising it. A `Rows` above `1` means the backfill appended
+instead of skipping what it had already written.
 
-### 6. Confirm the backfill is idempotent
+## Observed effect
 
-```powershell
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
-  --sql "SELECT Language, COUNT(*) FROM System_NotificationTranslation GROUP BY Language"
-```
+A user upgrading from v1.8.3 keeps the notification that release wrote, in the words it wrote, and gains
+Dutch and German versions of it without the notification reappearing as new. Reading the Notifications
+page in Dutch shows the Dutch text; reading it in English shows exactly what was there before the
+upgrade. A database that never ran v1.8.3 gains nothing, because the backfill matches no row there.
 
-**Expected:** one row per translated language, each with a count of exactly `1`, after a start and a
-restart have both run the migration path.
-
-**On failure:** a count above `1` means the backfill appended instead of skipping what it had already
-written.
-
-### 7. Tear down
+## Cleanup
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-09-current --bind $dataDir
+Remove-Item -Recurse -Force $dataDir
 ```
-
-**Expected:** the container is removed and the command reports no error.

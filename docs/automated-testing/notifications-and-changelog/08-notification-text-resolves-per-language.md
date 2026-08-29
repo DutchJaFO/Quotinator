@@ -6,30 +6,29 @@
 
 ## Preconditions
 
-A fresh container on the current build. The bundled startup producers write at least one notification
-with translations of their own, so nothing has to be imported to make this observable.
-
-The behaviour under test is a *read-time* resolution: one stored notification, several languages out.
-That is why every step below reads the same notification back rather than creating a new one per
-language — a test that wrote one notification per language would pass even if resolution never
-happened.
+Nothing beyond the profile. The operation-id-rename announcement is written by a startup producer on
+every healthy boot and carries translations of its own, so the subject exists without an import.
 
 ## Determinism
 
-- **Which notification is present depends on what the producers wrote**, so no step names a specific
-  title or body string. Each step reads `language`, `originalLanguage` and `isTranslated` off whatever
-  notification the list returns first, and compares *those* — the identity of the notification is not
-  the subject.
-- **`?lang=` and `Accept-Language` are pinned separately in every request.** A step that set neither
-  would resolve against the container's own culture, which is the host's, and the result would depend
-  on the machine running it.
-- **The row count is asserted before any field, in steps 2, 3 and 4.** A join can return too few rows
-  (excluding notifications with no translation) or too many (one per translation); both leave `items[0]`
-  looking entirely correct, so no field assertion can detect either.
-- **A language with no translation is the point of step 3, not a failure of it.** The fallback is the
-  contract; a run that cannot reach an untranslated language has not tested the fallback and fails.
-- **Never assert a specific migration number or schema version** — the tables arrive in whatever
-  migration the current build assigns them.
+- **The subject is one notification identified by a known cause** — the announcement, selected by
+  `metadataKind -eq 'announcement'`. No step counts notifications or reads `items[0]`: how many exist
+  depends on which producers exist and what the changelog flags for the running version, and which one
+  sorts first moves with them.
+- **Presence is asserted per language, never a total.** The failure this guards is a join that excludes
+  rows rather than falling back, which makes a notification vanish for a reader in an untranslated
+  language. Selecting the same notification by `metadataKind` in each language detects that without
+  depending on how many others are present.
+- **Every `.Count` is taken through `@(…)`.** PowerShell 5.1 gives a single `PSCustomObject` no `Count`
+  property, so an unwrapped count prints blank for exactly one match — the expected result here.
+- **`pageSize=0` on every listing**, so the selection searches the whole set rather than the first page.
+- **`?lang=` and `Accept-Language` are set explicitly in every request.** A request setting neither
+  resolves against the container's own culture, and the result would depend on the host.
+- **Comparing the Dutch body against the English one is what separates a translation from a labelled
+  fallback.** Every field can read correctly while the join matched nothing and `COALESCE` fell through
+  to the original with the `CASE` still reporting `nl`; no single field reveals that disagreement.
+- **Never assert a migration number or schema version** — the tables arrive in whatever migration the
+  current build assigns them.
 
 ## Steps
 
@@ -37,139 +36,109 @@ happened.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-08 --port 18508 --image quotinator:local
+dotnet script scripts/testing/http.csx -- --url "http://localhost:18508/api/v1/health" --wait-for 200 --status
 ```
 
-**Expected:** reaches `Quotinator ready`.
+**Expected:** `200`.
 
-**On failure:** nothing below can run. Stop.
+**On failure:** the producers have not run, so the subject does not exist. Stop.
 
-### 2. Read a notification in its original language
+### 2. The announcement resolves in its original language
 
 ```powershell
-$r = Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=en"
-"count=$($r.items.Count) totalCount=$($r.totalCount)"
-$r.items[0] | Select-Object language, originalLanguage, isTranslated, title, body | Format-List
+$base = "http://localhost:18508/api/v1"
+function Get-Announcement($lang) {
+  @((Invoke-RestMethod "$base/notifications?pageSize=0&lang=$lang").items |
+    Where-Object { $_.metadataKind -eq 'announcement' })[0]
+}
+$en = Get-Announcement 'en'
+"present=$($null -ne $en) lang=$($en.language -eq 'en') original=$($en.originalLanguage -eq 'en') " +
+"notTranslated=$($en.isTranslated -eq $false) hasBody=$(-not [string]::IsNullOrWhiteSpace($en.body))"
 ```
 
-**Expected:** `count` is at least `1` and equal to `totalCount`, then `language` is `en`,
-`originalLanguage` is `en`, and `isTranslated` is `False`.
+**Expected:** every value `True`.
 
-**The count is asserted before anything else because the read is a join.** A notification is one row
-joined to zero-or-more translation rows, so the two ways this can go wrong are *fewer* rows than
-expected (the join eliminating notifications that have no translation) and *more* (one copy per
-translation). Both are invisible to any step that reads `items[0]` and inspects its fields — the fields
-would be perfectly correct on a list that is missing half its entries, or repeating them.
+**On failure:** `present=False` means the join dropped the notification the producer wrote; `original=False`
+means the language column was never populated and every fallback below resolves to nothing. Stop either way.
 
-**A `count` of `0` is a failure, not an empty database.** The startup producers write on first boot, so
-an empty list here means the join dropped them.
-
-`title` and `body` are non-empty. An empty `body` here means the read projection's `COALESCE` returned
-nothing for a notification that definitely has text, which is the failure mode the fallback exists to
-prevent.
-
-**On failure:** if `originalLanguage` is empty rather than `en`, the column was never populated — every
-subsequent fallback resolves to nothing, so the remaining steps would report an unrelated symptom. Stop.
-
-### 3. Read the same notification in a language it has no translation for
+### 3. An untranslated language falls back rather than disappearing
 
 ```powershell
-$en = Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=en"
-$fr = Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=fr"
-"en=$($en.items.Count) fr=$($fr.items.Count) — equal: $($en.items.Count -eq $fr.items.Count)"
-$fr.items[0] | Select-Object language, originalLanguage, isTranslated, body | Format-List
+$fr = Get-Announcement 'fr'
+"present=$($null -ne $fr) reportsOriginal=$($fr.language -eq 'en') " +
+"notTranslated=$($fr.isTranslated -eq $false) sameBody=$($fr.body -eq $en.body)"
 ```
 
-**Expected:** `equal: True`, then `language` is `en` — **not** `fr` — `isTranslated` is `False`, and
-`body` is the same text step 2 returned.
+**Expected:** every value `True`.
 
-**`equal: False` is the failure this step exists for, and it outranks every field below it.** A
-requested language with no translations must return exactly the same notifications as any other; if the
-count drops, the join is excluding rows rather than falling back, and a reader in an untranslated
-language sees nothing at all rather than English. That is a harder failure than a mistranslation and it
-is invisible to a step that only inspects the first item's fields.
+**On failure:** `present=False` means a reader in an untranslated language sees no notification at all —
+the join is excluding rows instead of falling back, which is a harder failure than a missing translation.
 
-**The response must not report `language: fr`.** Echoing the requested language back for text that was
-not translated is the specific defect this contract prevents: it makes an untranslated notification
-indistinguishable from a translated one to any client that trusts the field.
-
-**On failure:** a `body` that is empty or null means the fallback did not fire at all, and the notification
-would render blank to every reader outside its original language. That is cause 1 — fix the code.
-
-### 4. Read it in a language it does have a translation for
+### 4. A translated language returns different text
 
 ```powershell
-$nlAll = Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=nl"
-$enAll = Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=en"
-"nl=$($nlAll.items.Count) en=$($enAll.items.Count) — equal: $($nlAll.items.Count -eq $enAll.items.Count)"
-$nl = $nlAll.items[0]; $en = $enAll.items[0]
-$nl | Select-Object language, originalLanguage, isTranslated | Format-List
-"same body as English: $($nl.body -eq $en.body)"
+$nl = Get-Announcement 'nl'
+"present=$($null -ne $nl) lang=$($nl.language -eq 'nl') original=$($nl.originalLanguage -eq 'en') " +
+"translated=$($nl.isTranslated -eq $true) bodyDiffers=$($nl.body -ne $en.body) " +
+"titleDiffers=$($nl.title -ne $en.title)"
 ```
 
-**Expected:** `equal: True`, then `language` is `nl`, `originalLanguage` is `en`, `isTranslated` is
-`True`, and the comparison prints `False` — the Dutch body genuinely differs from the English one.
+**Expected:** every value `True`.
 
-**`equal: False` here means duplication, not omission** — this is the language that *has* translation
-rows, so a join that fans out returns one copy of the notification per translation. It is the mirror of
-step 3's failure and needs its own check, because a list that is too long reads as perfectly correct
-from `items[0]`.
+**On failure:** `translated=False` means no translation row was written; `bodyDiffers=False` with
+`translated=True` means the projection's two halves disagree — see `Determinism`.
 
-**`same body as English: True` is a failure even though every field looks right.** It means the join
-matched no translation row and the `COALESCE` fell through to the original while the `CASE` still
-reported `nl` — the two halves of the projection disagreeing, which no single field can reveal on its
-own. This comparison is the only step that can tell a real translation from a fallback wearing its
-label.
-
-**On failure:** if `isTranslated` is `False`, no producer wrote a translation for Dutch. Check whether
-the startup producers ran at all (step 1's log) before concluding the read path is at fault — a missing
-row and a broken join look identical from here.
-
-### 5. Confirm `?lang=` outranks `Accept-Language`
+### 5. `?lang=` outranks `Accept-Language`
 
 ```powershell
-$h = @{ "Accept-Language" = "de" }
-(Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=nl" -Headers $h).items[0].language
-(Invoke-RestMethod "http://localhost:18508/api/v1/notifications" -Headers $h).items[0].language
+$h = @{ 'Accept-Language' = 'de' }
+$withLang = @((Invoke-RestMethod "$base/notifications?pageSize=0&lang=nl" -Headers $h).items |
+               Where-Object { $_.metadataKind -eq 'announcement' })[0].language
+$header   = @((Invoke-RestMethod "$base/notifications?pageSize=0" -Headers $h).items |
+               Where-Object { $_.metadataKind -eq 'announcement' })[0].language
+"langWins=$($withLang -eq 'nl') headerUsed=$($header -eq 'de')"
 ```
 
-**Expected:** the first prints `nl`, the second prints `de`.
+**Expected:** both `True`. Either alone would hold if the other input were ignored entirely.
 
-Both are needed. The first alone would pass if `Accept-Language` were ignored entirely; the second
-alone would pass if `?lang=` were. Together they establish the precedence rather than either half of it.
-
-**On failure:** if both print the same value, one of the two inputs is not reaching the reader.
-
-### 6. Confirm a malformed language is rejected
+### 6. A malformed language is rejected
 
 ```powershell
-try { Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=not-a-language" }
-catch { $_.Exception.Response.StatusCode.value__ }
+dotnet script scripts/testing/http.csx -- --url "$base/notifications?lang=not-a-language" --expect 400
 ```
 
-**Expected:** `400`, matching what `/api/v1/quotes` returns for the same input.
+**Expected:** exit code `0`.
 
-**On failure:** a `200` means the value reached the SQL comparison unvalidated. A `500` means it reached
+**On failure:** a `200` means the value reached the SQL comparison unvalidated; a `500` means it reached
 it and threw.
 
-### 7. Confirm the dismiss endpoint resolves the same way
+### 7. The dismiss endpoint resolves the same way
 
 ```powershell
-$id = (Invoke-RestMethod "http://localhost:18508/api/v1/notifications?lang=en").items[0].id
-$k  = @{ "X-Api-Key" = "<admin key>" }
-(Invoke-RestMethod -Method Post -Headers $k `
-  "http://localhost:18508/api/v1/notifications/$id/dismiss?lang=nl") |
-  Select-Object language, isTranslated, isDismissed | Format-List
+$id = $en.id
+$id
+$dismissed = Invoke-RestMethod -Method Post -Uri "$base/notifications/$id/dismiss?lang=nl" `
+  -Headers @{'X-Api-Key' = 'smoketest'}
+"lang=$($dismissed.language -eq 'nl') translated=$($dismissed.isTranslated -eq $true) " +
+"dismissed=$($dismissed.isDismissed -eq $true) bodyDiffers=$($dismissed.body -ne $en.body)"
 ```
 
-**Expected:** `language` is `nl`, `isTranslated` is `True`, `isDismissed` is `True`.
+**Expected:** `$id` prints a non-blank id, then every value `True`.
 
-The dismiss endpoint echoes the notification back, so it resolves text through the same projection. A
-`language` of `en` here means it does not, and a caller dismissing in Dutch would receive English.
+**On failure:** an empty `$id` produces a request to `…/notifications//dismiss`, which fails for an
+unrelated reason.
 
-### 8. Tear down
+## Observed effect
+
+A notification stores its text once, in the language its producer wrote it in, and the API renders that
+text into whichever language a caller asks for. A caller asking for a language the notification has no
+translation for receives the original text and is told so — `language` reports `en`, `isTranslated`
+reports `false` — rather than receiving an empty body or a language label that does not match the words.
+The Blazor surfaces make the same request using the interface's own culture, so a user reading the site
+in Dutch sees Dutch notification text with English as the visible fallback.
+
+## Cleanup
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-08
 ```
-
-**Expected:** the container is removed and the command reports no error.
