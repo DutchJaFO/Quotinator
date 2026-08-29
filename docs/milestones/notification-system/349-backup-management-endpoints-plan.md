@@ -34,6 +34,43 @@ handlers must not reach into the filesystem directly, and `DatabaseInitializer` 
 
 ---
 
+## What #348 already built that this issue consumes
+
+Recorded here rather than left for whoever starts this to rediscover — #348 landed after this plan was
+written and changed several of its premises.
+
+**The status endpoint's data source exists.** `IDatabaseInitializer.CheckBackupReadiness(bool
+allowReserve = false)` returns a `BackupOutcome`: `Succeeded`, or which of the obstacles is in the way.
+That is exactly requirement 3's "can a backup be made right now", so the endpoint **reports** it rather
+than reimplementing the question. It inspects storage headroom and destination writability — including
+a probe-file write, because `Directory.CreateDirectory` on an existing directory is a no-op that
+succeeds on a read-only mount — and never reads database content, so it is safe to call while degraded.
+
+**Cause and remedy text already exists too.** `Quotinator.Api.Startup.BackupObstacleGuidance` maps an
+obstacle to `Cause(...)` and `Remedies(..., overrideAlreadyTried)`. The status endpoint should use it
+rather than growing a second vocabulary for the same conditions; `Quotinator.Data` deliberately carries
+the typed outcome only, so all operator-facing wording lives in the Api layer.
+
+**Quota is two levels, so status reports two.** `DatabaseOptions.BackupQuotaPercent` (default 90) is the
+operating quota; `MaxBackupStorageGb` is the absolute ceiling; the reserve between them is reachable
+only when a caller explicitly asks. A status response showing a single number would misdescribe the
+model — see #348's plan for why the ceiling alone cannot be the answer.
+
+**Half the enumeration already exists, privately.** `DatabaseInitializer.ExistingBackupBytes()` sums the
+backups folder. That bears directly on this plan's open question: the choice is between promoting it and
+building the reader beside it, not between building something and nothing.
+
+**A deletion audit entry needs no migration.** `AuditOperation.BackupSkipped` set the precedent in #348,
+and `Audit_Entry.Operation` is `TEXT NOT NULL` with no CHECK constraint (verified 2026-08-27), so
+ADR 008's enum-column checklist does not apply to a new operation.
+
+**Ports 18381–18384 are taken** by `docs/automated-testing/backup/`, the category #348 created.
+`RepositoryStructureTests.EveryAutomatedTestingDocument_PublishesThePortsItUses_AndSharesNoneWithAnother`
+fails on a reuse, so any document this issue adds picks from elsewhere. That category is also where an
+endpoint document most likely belongs rather than a new one.
+
+---
+
 ## Design
 
 Three endpoints, all under a new `Backup` OpenAPI category (developer decision, 2026-08-27) rather than
