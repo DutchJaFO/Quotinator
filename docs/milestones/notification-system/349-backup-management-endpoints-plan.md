@@ -29,10 +29,12 @@ from the action (developer direction, 2026-08-27).
 
 ## Next action
 
-**T1 — the developer's own to run.** Steps 1–11 are done: five endpoints, 29 of 31 verification rows
-green, a clean solution build (0 warnings) and a full suite pass (3,604 tests), and `quotinator:local`
-rebuilt. What remains is T1 in Visual Studio and the T2 pass that runs this issue's own
-`backup/05` document, which is written but has never been executed.
+**T1 — the developer's own to run, and the only thing outstanding.** Steps 1–11 are done and T2 has
+been executed: 31 of 32 verification rows are green, the solution builds at 0 warnings, the full suite
+passes, and `backup/05` was run live against `quotinator:local`.
+
+That run earned its place — it found an unhandled `500` on `DELETE` against a read-only data directory
+that no unit test had reached (row 32), plus three defects in the document's own commands.
 
 ---
 
@@ -272,7 +274,7 @@ rather than only the one being advertised as the remedy.
 
 ### 12. T1 and T2 verification
 
-**Status:** ⬜ Not started
+**Status:** In progress — T2 done, T1 outstanding
 
 T1 is the developer's own to run. T2 is a rebuilt image with the smoke set plus this issue's own
 document from step 11.
@@ -311,9 +313,10 @@ document from step 11.
 | 26 | ✅ | The reader answers correctly for a present backup and for an absent one | Unit test | `DatabaseBackupReaderTests` — 14 cases: listing, ordering, an empty folder, a missing folder, usage below and above the quota, free disk space, and open/exists/valid-name each proven on both a real backup and a name with nothing behind it |
 | 27 | ✅ | The pre-flight's own probe file is never offered as a backup | Unit test | `DatabaseBackupReaderTests.List_ExcludesTheWritabilityProbeArtefact` — written red and it failed: a `.writable-probe` left behind by a failed delete was listed, downloadable and deletable as if it were a restore point. Now excluded from listing, opening and deletion alike, and deliberately still counted in the storage total, which is a claim about bytes on disk |
 | 28 | ✅ | #348's remedy text names these endpoints rather than describing an action with no route | Unit test | `AdminEndpointsTests.ResetRefusedForBudget_RemedyNamesTheBackupEndpoints` |
-| 29 | ❌ | A full quota is resolvable end to end, from inside the application | Live | T2: `docs/automated-testing/backup/05-a-full-quota-is-resolvable-from-inside-the-application.md` — fill the quota, `409` with `backupObstacle: BudgetExceeded`, `DELETE` a backup through the endpoint, reset then returns `200`. Exercises create, list, download and delete against a real container along the way |
+| 29 | ✅ | A full quota is resolvable end to end, from inside the application | Live | T2: `docs/automated-testing/backup/05-a-full-quota-is-resolvable-from-inside-the-application.md` — fill the quota, `409` with `backupObstacle: BudgetExceeded`, `DELETE` a backup through the endpoint, reset then returns `200`. Run 2026-08-29: the loop closed as designed, and the pass found three defects in the document plus an unhandled `500` in the application — see row 32 |
+| 32 | ✅ | A removal the filesystem refuses is a stated answer, not an unhandled failure | Unit test | `DatabaseBackupReaderTests.Delete_FileCannotBeRemoved_IsReported_NotThrown` and `AdminBackupEndpointsTests.DeleteBackup_FileCannotBeRemoved_Returns409NotAnUnhandled500`, plus `backup/05` step 7 live. Found by running `backup/05` rather than by any unit test: `DELETE` on a read-only data directory threw out of `File.Delete` and reached the caller as a bare `500` — #348's own defect class, on the one path an operator is most likely to take. `IDatabaseBackupWriter` now returns `BackupDeleteOutcome`, which also separates "was never there" from "could not be removed" |
 | 30 | ✅ | `docs/api-endpoints.md` and the `[Description]` attributes describe all five endpoints | Live | Both updated in the implementing commit; the status endpoint's description states what it touches rather than claiming read-only |
-| 31 | ❌ | The Blazor UI still renders and the endpoints answer against a real container | Live | T1 (developer) and T2 smoke set against a rebuilt `quotinator:local`. The image builds clean (`docker build -f docker/Dockerfile -t quotinator:local .`, 2026-08-29); neither tier has been run yet |
+| 31 | ❌ | The Blazor UI still renders and the endpoints answer against a real container | Live | T2 done 2026-08-29 — image rebuilt, all five endpoints driven live through `backup/05`, including on a read-only mount. T1 in Visual Studio is the developer's own and is what remains |
 
 ---
 
