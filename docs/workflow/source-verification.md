@@ -50,6 +50,23 @@ real world.
 **Tier 3 — last resort, corroboration only:**
 5. Fan wikis (Fandom and similar), review aggregators, or general unscoped search results
 
+## Fix what you find, when you find it
+
+**A data error noticed during ordinary use is corrected then — not held back for whichever systematic
+pass owns that class of error** (developer decision, 2026-08-29). Batching known-wrong data behind a
+future issue leaves it served in the meantime and buys nothing.
+
+Two things keep that from becoming untracked drift:
+
+- **The verification procedure above applies in full**, however small the fix. An intermediate
+  correction is not a licence to skip the Tier 1 lookup or the citation.
+- **The commit carries the umbrella issue's number**, so the trail stays in one place and the
+  systematic pass can see what has already been done. A wrong quote→Source attribution carries
+  [#355](https://github.com/DutchJaFO/Quotinator/issues/355); a missing field carries
+  [#5](https://github.com/DutchJaFO/Quotinator/issues/5); a quote that cannot be verified to exist at
+  all carries [#219](https://github.com/DutchJaFO/Quotinator/issues/219). That satisfies
+  `process.md`'s `type [#N]: short summary` convention without waiting for a dedicated issue per fix.
+
 ## House style: hyphens, never en dashes or em dashes
 
 **A title stored by this project uses a plain hyphen (`-`) wherever a source renders an en dash (`–`)
