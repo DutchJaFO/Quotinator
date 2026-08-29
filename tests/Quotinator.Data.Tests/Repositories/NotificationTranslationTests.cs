@@ -111,7 +111,7 @@ public class NotificationTranslationTests
         await SeedLegacyAnnouncementAsync(connection);
         await ApplyLegacyMetadataMigrationsAsync(connection);
         await ApplyTranslationSchemaAsync(connection);
-        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslationsByKind);
+        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslations);
 
         List<string> languages = [.. await connection.QueryAsync<string>(
             "SELECT Language FROM System_NotificationTranslation ORDER BY Language;")];
@@ -141,7 +141,7 @@ public class NotificationTranslationTests
         using SqliteConnection connection = await OpenAsync(temp);
 
         await ApplyTranslationSchemaAsync(connection);
-        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslationsByKind);
+        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslations);
 
         int translations = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_NotificationTranslation;");
@@ -159,8 +159,8 @@ public class NotificationTranslationTests
         await SeedLegacyAnnouncementAsync(connection);
         await ApplyLegacyMetadataMigrationsAsync(connection);
         await ApplyTranslationSchemaAsync(connection);
-        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslationsByKind);
-        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslationsByKind);
+        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslations);
+        await connection.ExecuteAsync(NotificationTranslationMigrations.BackfillAnnouncementTranslations);
 
         int translations = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_NotificationTranslation;");

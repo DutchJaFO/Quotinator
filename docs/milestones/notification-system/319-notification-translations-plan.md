@@ -292,11 +292,17 @@ position `MasterDataReference` and `SeedBatch` hold.
 
 **Status:** ✅ Done
 
-**The backfill is migration 15, not 14.** Migration 14 identified the announcement by its whole
-`Metadata` string, which migration 11 has already rewritten by `json_insert`ing further fields — so it
-matched nothing on any database that ran 11, which is every upgraded one. 15 reads the payload's own
-`announcement` key with `json_extract` instead, which is stable against any later field being added. 14
-stays in the sequence unedited: it has been applied to a real database.
+**Migration 14 matches the announcement by `MetadataKind` plus the payload's own `announcement` key,
+read with `json_extract` — never by the whole `Metadata` string.** Migration 11 `json_insert`s further
+fields into that column, so the value v1.8.3 wrote is not the value this migration meets; a whole-string
+comparison matches nothing on any database that ran 11, which is every upgraded one. Found by a T1 pass
+showing the announcement still in English beside a correctly translated notification.
+
+**That predicate was corrected in place after the migration had already run, as a one-time exception**
+(developer decision, 2026-08-29). It rests on the developer restoring a v1.8.3 backup between test runs,
+so no database was left stranded at a version whose script had changed. ADR 015's frozen-migration rule
+is unchanged and still governs: "unreleased" is not the test, and the next correction in this position
+takes a new version number.
 
 Translations for #279's v1.8.3 announcement — the only notification in any released database — sourced
 from `UI.*.json`. A new migration (14), never an edit to 8 or 9: both have been applied to real

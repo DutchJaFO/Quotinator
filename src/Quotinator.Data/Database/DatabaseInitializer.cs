@@ -111,12 +111,16 @@ public class DatabaseInitializer(
         // so it is the whole of the translation backfill. Data-only and conditional on that row being
         // present — a database that never ran v1.8.3 matches nothing and gains nothing, so the
         // baseline needs no counterpart.
+        //
+        // This migration's matching predicate was edited after it had already run on the developer's
+        // own database — a T1 pass found it matched nothing, because it compared the whole Metadata
+        // string and migration 11 had already json_insert'ed further fields into that column. Editing
+        // it in place is a **one-time exception** granted by deliberate developer decision (2026-08-29)
+        // and rests on a specific circumstance: that database was being restored from a v1.8.3 backup
+        // between test runs, so no database was left stranded at a version whose script had changed.
+        // ADR 015's revision (from #254) is unchanged and still governs — "unreleased" is not the test,
+        // and the next migration in this position gets a new version number, exactly as #254 requires.
         new SchemaMigration { Version = 14, Sql = NotificationTranslationMigrations.BackfillAnnouncementTranslations },
-        // #319: 14 identified the announcement by its whole Metadata string, which migration 11 has
-        // already rewritten by adding fields — so it matched nothing on any database that ran 11, which
-        // is every upgraded one. Found by a T1 run showing the announcement still in English beside a
-        // correctly translated notification. A new migration rather than an edit: 14 has been applied.
-        new SchemaMigration { Version = 15, Sql = NotificationTranslationMigrations.BackfillAnnouncementTranslationsByKind },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,

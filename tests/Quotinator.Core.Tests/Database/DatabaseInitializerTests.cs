@@ -1081,7 +1081,7 @@ public class DatabaseInitializerTests
             Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
         }
 
-        Assert.AreEqual(15, db2.DataSchemaVersion,
+        Assert.AreEqual(14, db2.DataSchemaVersion,
             "Every Data-owned migration after the first should have replayed from the correctly-seeded starting point of 1");
     }
 
@@ -1523,7 +1523,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(15, db.DataSchemaVersion);
+        Assert.AreEqual(14, db.DataSchemaVersion);
         Assert.AreEqual(5, db.SchemaVersion);
     }
 
