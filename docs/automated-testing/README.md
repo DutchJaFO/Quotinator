@@ -288,6 +288,20 @@ the old path is gone says nothing about the path that replaced it — see
 *also* showing that structural dedupe still suppresses a genuine duplicate. One without the other is
 half the feature.
 
+### A document that provokes a fault ends by proving the remedy works
+
+The rule above applies to every document that sabotages something, and it is the one most easily
+missed: a document that only ever asserts a refusal **passes against a build that refuses everything**.
+
+So a document ends by removing its own sabotage and confirming success in the same environment. That
+step is the positive control *and* the proof that the remedy the failure message names actually resolves
+the condition — one step, two jobs. See `backup/01`–`04`, where it is delete the unreadable file, give
+the volume room, and remount the directory writable, each followed by a `200`.
+
+Found live in #348: all four of that category's documents were green, and all four would have stayed
+green against a build that refused every reset, because not one contained a passing case. The general
+form of the rule is in [`docs/testing-policy.md`](../testing-policy.md)'s *Every test proves the
+positive result as well as the negative*.
 ### Import behaviour is proven at every origin, not just the convenient one
 
 Content reaches the database by three routes, and `FileResourceOrigin` names them because they are not

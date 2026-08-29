@@ -316,6 +316,21 @@ reason to *delay* writing it until the scope is actually settled, not to write i
 
 An issue is done only when every requirement in its GitHub spec is met and verified against actual code. Partial implementation means the issue stays open.
 
+**A test class named in the plan is written, or the reason it was not is recorded at the time.** A
+plan's test list is an estimate — the exact set only settles once the plan meets the code, and names
+drifting as they are written is expected. Silently dropping a named class is different: found live in
+#348, where `DatabaseBackupPreflightTests` was skipped on the grounds that its behaviour was "already
+covered" inside another class. It was not an acceptable substitute, and writing it properly exposed the
+property the separate class existed for — that the pre-flight check and the real attempt *agree*, which
+nothing else was asking.
+
+**Do not stop at a reporting boundary when the next piece of work is identified and unblocked.**
+Summarising progress is not a deliverable, and splitting one task across turns costs a round trip for
+nothing. Stop for a genuine decision — a scope question, an unsafe action, or a design call that is the
+developer's (see *Gap resolution* below) — never because the work looks large or the summary is getting
+long. Where one part is blocked, finish every unblocked part first and report the block at the end,
+rather than instead.
+
 ---
 
 ## New issues discovered during milestone work

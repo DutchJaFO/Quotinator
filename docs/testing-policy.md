@@ -77,6 +77,51 @@ hold the file open), and see `DatabaseInitializerTests.cs` for the established p
 - Utility / helper functions
 - **Translation completeness** — `Quotinator.Api.Tests` verifies that all i18n language files have the same keys as the English baseline and no empty values. These tests must pass on every build.
 
+## Every test proves the positive result as well as the negative
+
+A test that only asserts a failure passes against a build that fails everything. Whatever a test
+provokes, it must also establish what the working case looks like — otherwise the suite reports
+coverage it is not providing.
+
+Found live in #348: four T2 documents each sabotaged the backup path and asserted the resulting
+`409 Conflict`. All four were green, and **all four would have stayed green against a build that
+refused every reset**, because not one of them contained a passing case.
+
+**For a document or test that provokes a fault, the positive control is normally removing the sabotage
+and confirming success in the same environment** — which conveniently does a second job: it proves the
+remedy the failure message *names* actually resolves the condition, rather than being advice nobody
+checked. #348's four became: delete the unreadable file → `200`; give the volume room → `200`; remount
+the directory writable → `200`.
+
+**For unit tests the same rule is cheaper** — a success control beside the failure variants, the
+below-threshold case beside the above-threshold one, the override proceeding beside the refusal that
+does not.
+
+This is not the same as showing an assertion *can* fail (the mutation step under "Bug fixes" above), and
+neither substitutes for the other: mutation proves the test is wired to the behaviour, a positive
+control proves the behaviour is not simply failing everywhere.
+
+## A distinction the code makes is a distinction that can be proven
+
+If the application distinguishes two states, the means to reach both exists — so a member, branch or
+outcome with no test is a gap to close, never a reason to remove the distinction.
+
+**Do not merge or delete a case because testing it looks inconvenient**, and do not argue for merging
+from the fact that two cases produce the same user-facing text today: a distinction describes a *cause*,
+and identical wording now says nothing about whether it should stay identical.
+
+Found live in #348 (developer decision, 2026-08-28), where three `BackupOutcome` members had no test and
+merging two of them was proposed on exactly that reasoning. Pursuing them instead found two defects
+worse than the one the issue was filed for — a reset that destroyed the database and returned `200`, and
+a pre-flight check that succeeded without testing anything, because `Directory.CreateDirectory` is a
+no-op on a directory that already exists and returns happily on a read-only mount.
+
+**Before concluding a case is unreachable, check what replication tooling already exists.** Most of it
+does: `scripts/testing/test-env.csx`'s `--read-only`, `--read-only-data` and `--tmpfs-data` flags,
+`scripts/testing/sqlite-storage-probe.csx`'s measured storage-failure techniques, and the
+`docs/automated-testing/` environment profiles. A case that genuinely resists both a unit test and a
+container is reported as unreachable *with what was tried*, never quietly left untested.
+
 ## Parallel execution
 
 **Default: sequential.** No test project has `[assembly: Parallelize]`. Tests run sequentially within each project unless a class is explicitly opted in. See [ADR 006](architecture-decisions/006-sequential-test-execution-by-default.md) for the rationale — this policy exists because of observed flaky test failures caused by concurrent execution of tests that touch process-wide state.
