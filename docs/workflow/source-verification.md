@@ -50,6 +50,27 @@ real world.
 **Tier 3 — last resort, corroboration only:**
 5. Fan wikis (Fandom and similar), review aggregators, or general unscoped search results
 
+## House style: hyphens, never en dashes or em dashes
+
+**A title stored by this project uses a plain hyphen (`-`) wherever a source renders an en dash (`–`)
+or em dash (`—`)** (developer decision, 2026-08-29). This is a presentation convention, applied *after*
+the verification above has established what the title is — it never changes which work a title refers
+to, only how the separator is written.
+
+It matters because a dash character is part of the title string, and the title string is what a Source
+is matched and identified by. Wikipedia renders `Star Wars: Episode II – Attack of the Clones` with an
+en dash; storing that verbatim gave us four en-dash titles sitting beside six hyphen ones for films in
+the same franchise, which look identical to a reader and do not match each other.
+
+**A bundled source file that emits an en dash is bridged with a `SourceAliasRule`, not edited.** Those
+files are regenerated from upstream by their converter, so an edit is overwritten on the next refresh.
+`nikhilnamal17-source-aliases.json` carries the two Star Wars entries this applies to today.
+
+**This does not resolve the underlying problem**, which is that a title like
+`Star Wars: Episode II - Attack of the Clones` carries a franchise, an episode number and a subtitle in
+one opaque string, and upstream data refers to the same film by any combination of them. A per-variant
+alias for each is a list that only grows. See the open issue on decomposed source titles.
+
 ## Handling conflicting sources
 
 When Tier 1 sources disagree — as happened verifying "The Godfather Part II": IMDb's release-info page

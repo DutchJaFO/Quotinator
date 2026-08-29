@@ -21,7 +21,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "source", "resolution": "Custom", "customValue": "Star Wars: Episode II – Attack of the Clones" },
+        { "field": "source", "resolution": "Custom", "customValue": "Star Wars: Episode II - Attack of the Clones" },
         { "field": "character", "resolution": "Custom", "customValue": "Anakin Skywalker" }
       ]
     },
