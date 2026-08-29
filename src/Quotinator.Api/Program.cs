@@ -1065,7 +1065,14 @@ if (dbHealth.IsHealthy)
             },
             title: "Two API operation IDs were renamed",
             body: announcementBody,
-            appVersionId: currentVersion?.Id);
+            appVersionId: currentVersion?.Id,
+            // #319: every language at once. The English above stays the notification's own text — the
+            // content hash is taken over it, and the read path falls back to it — so only the other
+            // languages become translation rows.
+            translations: Quotinator.Api.Startup.NotificationTranslations.Build(
+                app.Services.GetRequiredService<IApiLocalizer>(),
+                ApiMessages.NotificationOperationIdRenameTitle,
+                ApiMessages.NotificationOperationIdRenameBody));
     }
     catch (Exception ex)
     {
@@ -1090,6 +1097,8 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
 {
     try
     {
+        IApiLocalizer localizer = app.Services.GetRequiredService<IApiLocalizer>();
+
         await NotificationSeeding.SeedOnceAsync(
             app.Services.GetRequiredService<INotificationReader>(),
             app.Services.GetRequiredService<INotificationWriter>(),
@@ -1104,15 +1113,21 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
                 // every upgrade.
                 ReleaseState = NotificationReleaseState.NotApplicable,
             },
-            title: "Recorded schema version is ahead of this build",
-            body: $"This database's recorded schema version (data v{dbInitializer.DataSchemaVersion}, " +
-                  $"app v{dbInitializer.SchemaVersion}) is ahead of what this build expects — usually because " +
-                  "a set of not-yet-released migrations were consolidated after this database already applied " +
-                  "them individually (issue #289). The schema itself is complete and the app is working " +
-                  "normally; running a database Reset (POST /api/v1/admin/database/reset) will true up the " +
-                  "version bookkeeping.",
+            // #319: both recorded versions are substituted into each language's own template, so the
+            // numbers are not embedded in prose written once in English. The structured values stay in
+            // the metadata payload above — this is the same pair, rendered.
+            title: Quotinator.Api.Startup.NotificationTranslations.Original(
+                       localizer, ApiMessages.NotificationSchemaOvershootTitle),
+            body: Quotinator.Api.Startup.NotificationTranslations.Original(
+                       localizer, ApiMessages.NotificationSchemaOvershootBody,
+                       dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion),
             dismissTrigger: NotificationDismissTrigger.DatabaseReset,
-            appVersionId: currentVersion?.Id);
+            appVersionId: currentVersion?.Id,
+            translations: Quotinator.Api.Startup.NotificationTranslations.Build(
+                localizer,
+                ApiMessages.NotificationSchemaOvershootTitle,
+                ApiMessages.NotificationSchemaOvershootBody,
+                bodyArgs: [dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion]));
     }
     catch (Exception ex)
     {
@@ -1141,14 +1156,20 @@ if (dbHealth.IsHealthy)
     {
         try
         {
-            ChangelogDocument? whatsNewDocument = await app.Services.GetRequiredService<IChangelogReader>().GetDocumentAsync(null);
+            IChangelogReader changelogReader = app.Services.GetRequiredService<IChangelogReader>();
+            ChangelogDocument? whatsNewDocument = await changelogReader.GetDocumentAsync(null);
+            // #319: the other languages' documents, each checked against what was actually asked for.
+            Dictionary<string, ChangelogDocument> translatedDocuments =
+                await Quotinator.Api.Startup.WhatsNewNotification.LoadTranslatedDocumentsAsync(changelogReader);
             await Quotinator.Api.Startup.WhatsNewNotification.SeedAsync(
                 app.Services.GetRequiredService<INotificationReader>(),
                 app.Services.GetRequiredService<INotificationWriter>(),
                 whatsNewDocument,
                 lastActiveVersion,
                 versionService.Version,
-                currentVersion?.Id);
+                currentVersion?.Id,
+                app.Services.GetRequiredService<IApiLocalizer>(),
+                translatedDocuments);
         }
         catch (Exception ex)
         {

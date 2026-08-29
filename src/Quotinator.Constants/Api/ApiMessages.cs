@@ -67,6 +67,29 @@ public static class ApiMessages
     public const string AuditExportDateRangeInvalid      = "ErrorAuditExportDateRangeInvalid";
     public const string AuditExportRowCapExceeded        = "ErrorAuditExportRowCapExceeded";
     public const string NotificationNotFound             = "ErrorNotificationNotFound";
+
+    // #319: notification content keys. Unlike every other constant here these do not name an error —
+    // they name the title/body a startup producer writes into System_Notification, resolved into every
+    // language at once rather than into CurrentUICulture. Kept alongside the rest so there is one
+    // place a localised string's key is declared, per the string-centralisation rule.
+
+    /// <summary>Title of #279's operation-id-rename announcement.</summary>
+    public const string NotificationOperationIdRenameTitle = "NotificationOperationIdRenameTitle";
+
+    /// <summary>Body of #279's operation-id-rename announcement.</summary>
+    public const string NotificationOperationIdRenameBody  = "NotificationOperationIdRenameBody";
+
+    /// <summary>Title of #81's what's-new notification for a tagged release. <c>{0}</c> is the version.</summary>
+    public const string NotificationWhatsNewReleasedTitle  = "NotificationWhatsNewReleasedTitle";
+
+    /// <summary>Title of #81's what's-new notification for the in-development section.</summary>
+    public const string NotificationWhatsNewUnreleasedTitle = "NotificationWhatsNewUnreleasedTitle";
+
+    /// <summary>Title of #289's schema-version-overshoot notification.</summary>
+    public const string NotificationSchemaOvershootTitle   = "NotificationSchemaOvershootTitle";
+
+    /// <summary>Body of #289's schema-version-overshoot notification. <c>{0}</c> is the data schema version, <c>{1}</c> the app's.</summary>
+    public const string NotificationSchemaOvershootBody    = "NotificationSchemaOvershootBody";
     public const string BackupNameInvalid                = "ErrorBackupNameInvalid";
     public const string BackupNotFound                   = "ErrorBackupNotFound";
     public const string BackupNotRemovable               = "ErrorBackupNotRemovable";

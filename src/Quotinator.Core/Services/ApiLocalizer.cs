@@ -22,6 +22,21 @@ public interface IApiLocalizer
     /// and <c>EntityFilterParsing</c> for the call sites this replaces.
     /// </summary>
     string Format(string key, params object[] args);
+
+    /// <summary>
+    /// Returns <paramref name="key"/> resolved in every language that defines it, keyed by ISO 639-1
+    /// code, with <paramref name="args"/> substituted into each language's own template (#319).
+    /// <para>
+    /// Resolves no culture at all, which is the point: a startup producer writing a notification has
+    /// no request culture, and the notification's text is stored per language rather than rendered
+    /// per request. A language whose file lacks the key is absent from the result rather than falling
+    /// back to English — a caller storing translations must be able to tell "this language has no
+    /// text" from "this language's text happens to be the English one".
+    /// </para>
+    /// </summary>
+    /// <param name="key">The message key to resolve.</param>
+    /// <param name="args">Positional <c>{0}</c>/<c>{1}</c> arguments, substituted into every language.</param>
+    IReadOnlyDictionary<string, string> ForEveryLanguage(string key, params object[] args);
 }
 
 /// <summary>
@@ -63,6 +78,25 @@ public sealed class ApiLocalizer(string i18nTextDir) : IApiLocalizer
 
     /// <inheritdoc/>
     public string Format(string key, params object[] args) => ApiLocalizerFormatting.Substitute(Resolve(key), args);
+
+    /// <inheritdoc/>
+    public IReadOnlyDictionary<string, string> ForEveryLanguage(string key, params object[] args)
+    {
+        Dictionary<string, string> result = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (KeyValuePair<string, IReadOnlyDictionary<string, string>> table in _tables)
+        {
+            if (!table.Value.TryGetValue(key, out string? value) || value.Length == 0)
+                continue;
+
+            // The file name carries the culture ("en-GB"), but a notification's Language column holds a
+            // two-letter code, so the key is narrowed here rather than at every call site.
+            string language = table.Key.Length > 2 ? table.Key[..2] : table.Key;
+            result[language] = ApiLocalizerFormatting.Substitute(value, args);
+        }
+
+        return result;
+    }
 
     private string Resolve(string key)
     {

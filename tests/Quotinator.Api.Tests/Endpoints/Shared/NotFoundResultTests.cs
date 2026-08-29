@@ -11,6 +11,11 @@ public class NotFoundResultTests
     {
         public string this[string key] => key;
         public string Format(string key, params object[] args) => ApiLocalizerFormatting.Substitute(this[key], args);
+
+        // Unused here — these tests exercise single-culture resolution. #319 added it to the interface
+        // for the startup producers, which resolve every language at once.
+        public IReadOnlyDictionary<string, string> ForEveryLanguage(string key, params object[] args)
+            => new Dictionary<string, string> { ["en"] = Format(key, args) };
     }
 
     private sealed class Widget

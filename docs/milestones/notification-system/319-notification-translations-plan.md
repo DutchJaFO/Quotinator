@@ -1,6 +1,6 @@
 # #319 — Notification title and body are not translated
 
-**Status:** In progress (step 9)
+**Status:** In progress (step 10)
 **GitHub issue:** #319
 **Tiers required:** T1, T2
 **Depends on:** #278, #312
@@ -409,7 +409,7 @@ keep-API-docs-in-sync rule.
 
 ### 9. Producers
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 #279's and #289's producers (`Program.cs`) supply translations from `UI.*.json`; #81's
 (`Startup/WhatsNewNotification.cs`) supplies its body from the `Changelog` table's per-language rows and
@@ -472,11 +472,11 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 | 10 | ✅ | All three projection-sharing queries resolve translations, not only the list | Unit test | `SelectActive`, `SelectPage`, `SelectById` — a missed `@lang` binding on one is the likely defect. `CountAll` is excluded: it does not use the projection |
 | 11 | ✅ | Identity/dedupe is unaffected by text or language | Unit test | `SeedOnceAsync` still suppresses a duplicate whose translations differ — and a producer whose `ContentHash` covers its body still dedupes, proving the hashed original-language `Body` did not move |
 | 12 | ✅ | The one already-persisted notification (#279's v1.8.3 announcement) gains translations via migration | Unit test | `NotificationTranslationTests.Migration_LegacyAnnouncementPresent_GainsDutchAndGermanTranslations`, `..._NoLegacyAnnouncement_WritesNoTranslations`, and `..._AppliedTwice_LeavesOneTranslationPerLanguage` |
-| 13 | ❌ | #279's and #289's producers write translations from `UI.*.json` | Unit test | Per-producer |
-| 14 | ❌ | #81's producer writes body translations from the `Changelog` table's per-language rows | Unit test | Per-producer |
-| 15 | ❌ | #81's producer writes no translation row for a language the changelog lacks | Unit test | Changelog with `en` only; asserts no `nl` row is written and the read path reports `language: en, isTranslated: false` — guards `GetDocumentAsync`'s silent `en` fallback being persisted as a fake Dutch translation |
-| 16 | ❌ | #81's titles resolve per language from `UI.*.json`, with the version substituted | Unit test | Per-producer — covers both the per-release title and the unreleased one, which are hardcoded English literals today |
-| 17 | ❌ | Every new key exists in all three locale files | Unit test | `TranslationCompletenessTests` (existing) |
+| 13 | ✅ | #279's and #289's producers write translations from `UI.*.json` | Unit test | Per-producer |
+| 14 | ✅ | #81's producer writes body translations from the `Changelog` table's per-language rows | Unit test | Per-producer |
+| 15 | ✅ | #81's producer writes no translation row for a language the changelog lacks | Unit test | Changelog with `en` only; asserts no `nl` row is written and the read path reports `language: en, isTranslated: false` — guards `GetDocumentAsync`'s silent `en` fallback being persisted as a fake Dutch translation |
+| 16 | ✅ | #81's titles resolve per language from `UI.*.json`, with the version substituted | Unit test | Per-producer — covers both the per-release title and the unreleased one, which are hardcoded English literals today |
+| 17 | ✅ | Every new key exists in all three locale files | Unit test | `TranslationCompletenessTests` (existing) |
 | 18 | ✅ | `GET /notifications?lang=nl` returns Dutch text | Unit test | Endpoint test |
 | 19 | ✅ | With no `lang`, the endpoint follows the request culture | Unit test | Endpoint test with `Accept-Language: nl` |
 | 20 | ✅ | `lang` takes precedence over the request culture when both are present | Unit test | Endpoint test — `Accept-Language: de` plus `?lang=nl` returns Dutch |

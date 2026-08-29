@@ -1,4 +1,6 @@
 using Quotinator.Changelog.Enums;
+using Quotinator.Constants.Api;
+using Quotinator.Core.Services;
 using Quotinator.Changelog.Models;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Notifications;
@@ -23,7 +25,12 @@ internal static class WhatsNewNotification
     /// <param name="Metadata">Identifies the notification and is stored alongside it — no composed key string is involved.</param>
     /// <param name="Title">Short headline.</param>
     /// <param name="Body">The flagged highlights, one per line.</param>
-    internal readonly record struct Seed(WhatsNewMetadataDto Metadata, string Title, string Body);
+    /// <param name="Translations">The same title and body in every other language (#319), built from that language's own changelog document.</param>
+    internal readonly record struct Seed(
+        WhatsNewMetadataDto Metadata,
+        string Title,
+        string Body,
+        IReadOnlyList<NotificationTranslation> Translations);
 
     /// <summary>
     /// Builds one notification per release with notification-flagged highlights in the range this app
@@ -38,14 +45,19 @@ internal static class WhatsNewNotification
     /// its inputs, kept separate from <see cref="SeedAsync"/> so it is unit-testable without a real
     /// <see cref="INotificationReader"/>/<see cref="INotificationWriter"/>.
     /// </summary>
-    internal static List<Seed> BuildSeeds(ChangelogDocument? document, string? lastActiveVersion, string currentVersion)
+    internal static List<Seed> BuildSeeds(
+        ChangelogDocument? document,
+        string? lastActiveVersion,
+        string currentVersion,
+        IApiLocalizer? localizer = null,
+        IReadOnlyDictionary<string, ChangelogDocument>? translatedDocuments = null)
     {
         if (document is null)
             return [];
 
         List<Seed> seeds = [];
 
-        Seed? unreleasedSeed = BuildUnreleasedSeed(document.Unreleased);
+        Seed? unreleasedSeed = BuildUnreleasedSeed(document.Unreleased, localizer, translatedDocuments);
         if (unreleasedSeed is not null)
             seeds.Add(unreleasedSeed.Value);
 
@@ -87,8 +99,13 @@ internal static class WhatsNewNotification
             // impossible rather than merely worked around.
             seeds.Add(new Seed(
                 new WhatsNewMetadataDto { ReleaseState = NotificationReleaseState.Released, Version = release.Version },
-                Title: $"What's new in v{release.Version}",
-                Body:  string.Join('\n', highlights)));
+                Title: TitleFor(localizer, ApiMessages.NotificationWhatsNewReleasedTitle, release.Version),
+                Body:  string.Join('\n', highlights),
+                Translations: BuildTranslations(
+                    localizer, translatedDocuments,
+                    ApiMessages.NotificationWhatsNewReleasedTitle, [release.Version],
+                    doc => doc.Releases.FirstOrDefault(r => r.Version == release.Version)
+                                       ?.GetHighlightsFor(ChangelogReservedAudience.Notification))));
         }
 
         return seeds;
@@ -108,24 +125,66 @@ internal static class WhatsNewNotification
     /// </param>
     internal static async Task SeedAsync(
         INotificationReader reader, INotificationWriter writer, ChangelogDocument? document,
-        string? lastActiveVersion, string currentVersion, Guid? appVersionId)
+        string? lastActiveVersion, string currentVersion, Guid? appVersionId,
+        IApiLocalizer? localizer = null,
+        IReadOnlyDictionary<string, ChangelogDocument>? translatedDocuments = null)
     {
-        foreach (Seed seed in BuildSeeds(document, lastActiveVersion, currentVersion))
+        foreach (Seed seed in BuildSeeds(document, lastActiveVersion, currentVersion, localizer, translatedDocuments))
         {
             await NotificationSeeding.SeedOnceAsync(
                 reader, writer, NotificationType.Information, seed.Metadata,
                 body:         seed.Body,
                 title:        seed.Title,
-                appVersionId: appVersionId);
+                appVersionId: appVersionId,
+                translations: seed.Translations);
         }
     }
+
+    /// <summary>
+    /// Loads the changelog document for each non-English language, dropping any the changelog does not
+    /// actually have content for (#319).
+    /// <para>
+    /// <see cref="IChangelogReader.GetDocumentAsync"/> falls back to English rather than returning
+    /// nothing, so the returned document's own <see cref="ChangelogDocument.Language"/> is what decides
+    /// whether a language is really present. Storing an unchecked result would write English text into
+    /// a <c>nl</c> translation row, and the read path would then report it as a Dutch translation —
+    /// strictly worse than having no row, which it reports honestly as untranslated.
+    /// </para>
+    /// </summary>
+    /// <param name="changelog">Reader the documents are fetched through.</param>
+    internal static async Task<Dictionary<string, ChangelogDocument>> LoadTranslatedDocumentsAsync(IChangelogReader changelog)
+    {
+        Dictionary<string, ChangelogDocument> documents = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string language in TranslatedLanguages)
+        {
+            ChangelogDocument? document = await changelog.GetDocumentAsync(language);
+            if (document is null)
+                continue;
+
+            if (!string.Equals(document.Language, language, StringComparison.OrdinalIgnoreCase))
+                continue; // the reader fell back to English — this language has no content of its own
+
+            documents[language] = document;
+        }
+
+        return documents;
+    }
+
+    // The languages this project ships changelog content in, minus the original. A constant rather than
+    // a discovered set because IChangelogReader resolves one requested language at a time and exposes
+    // no way to enumerate what it holds; keep in step with data/changelog/changelog.*.json.
+    private static readonly string[] TranslatedLanguages = ["nl", "de"];
 
     // unreleased has no version to key on, and — unlike a tagged release — its content can change
     // freely before it ships (highlights added, edited, or removed across a development session). A
     // fixed dedupe key would show it once, ever, and never again reflect a later edit; keying on a
     // hash of the flagged highlights themselves means it re-surfaces whenever that content actually
     // changes, and stays deduped (no restart spam) whenever it doesn't.
-    private static Seed? BuildUnreleasedSeed(ChangelogUnreleased? unreleased)
+    private static Seed? BuildUnreleasedSeed(
+        ChangelogUnreleased? unreleased,
+        IApiLocalizer? localizer,
+        IReadOnlyDictionary<string, ChangelogDocument>? translatedDocuments)
     {
         List<string> highlights = unreleased?.GetHighlightsFor(ChangelogReservedAudience.Notification) ?? [];
         if (highlights.Count == 0)
@@ -138,8 +197,71 @@ internal static class WhatsNewNotification
                 ReleaseState = NotificationReleaseState.Unreleased,
                 ContentHash  = NotificationContentHash.Of(body),
             },
-            Title: "What's new (unreleased)",
-            Body:  body);
+            Title: TitleFor(localizer, ApiMessages.NotificationWhatsNewUnreleasedTitle),
+            Body:  body,
+            Translations: BuildTranslations(
+                localizer, translatedDocuments,
+                ApiMessages.NotificationWhatsNewUnreleasedTitle, [],
+                doc => doc.Unreleased?.GetHighlightsFor(ChangelogReservedAudience.Notification)));
+    }
+
+    // The title is not in the changelog — only the highlights are — so it comes from i18ntext/UI.*.json
+    // like every other user-facing string. A null localizer is the unit-test path, where the English
+    // template is enough and loading the locale files would prove nothing.
+    private static string TitleFor(IApiLocalizer? localizer, string key, params object[] args)
+        => localizer is null
+            ? ApiLocalizerFormatting.Substitute(EnglishTitleFallback(key), args)
+            : NotificationTranslations.Original(localizer, key, args);
+
+    private static string EnglishTitleFallback(string key) => key switch
+    {
+        ApiMessages.NotificationWhatsNewReleasedTitle   => "What's new in v{0}",
+        ApiMessages.NotificationWhatsNewUnreleasedTitle => "What's new (unreleased)",
+        _                                              => key,
+    };
+
+    /// <summary>
+    /// One translation per language whose changelog genuinely carries this entry's flagged highlights
+    /// (#319). The body comes from that language's own changelog document — already translated at
+    /// source, so nothing is translated here; the title comes from <c>UI.*.json</c>, which is the only
+    /// half the changelog has no answer for.
+    /// <para>
+    /// A language contributes nothing unless its document actually has highlights for this entry.
+    /// <c>IChangelogReader</c> falls back to English for a language it has no content for, so a caller
+    /// that stored whatever came back would persist English text labelled <c>nl</c> — indistinguishable
+    /// from a real Dutch translation, and worse than no row at all, which the read path reports
+    /// honestly as untranslated.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<NotificationTranslation> BuildTranslations(
+        IApiLocalizer? localizer,
+        IReadOnlyDictionary<string, ChangelogDocument>? translatedDocuments,
+        string titleKey,
+        object[] titleArgs,
+        Func<ChangelogDocument, List<string>?> highlightsFor)
+    {
+        if (localizer is null || translatedDocuments is null || translatedDocuments.Count == 0)
+            return [];
+
+        IReadOnlyDictionary<string, string> titles = localizer.ForEveryLanguage(titleKey, titleArgs);
+        List<NotificationTranslation> translations = [];
+
+        foreach (KeyValuePair<string, ChangelogDocument> entry in translatedDocuments)
+        {
+            if (string.Equals(entry.Key, NotificationTranslations.OriginalLanguage, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            List<string>? highlights = highlightsFor(entry.Value);
+            if (highlights is null || highlights.Count == 0)
+                continue;
+
+            if (!titles.TryGetValue(entry.Key, out string? title))
+                continue;
+
+            translations.Add(new NotificationTranslation(entry.Key, title, string.Join('\n', highlights)));
+        }
+
+        return translations;
     }
 
     private static int IndexOfVersion(IReadOnlyList<ChangelogRelease> releases, string version)
