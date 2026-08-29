@@ -61,4 +61,55 @@ internal static class NotificationTranslationMigrations
             UNIQUE (NotificationId, Language)
         );
         """;
+
+    /// <summary>
+    /// Gives v1.8.3's shipped operation-id-rename announcement its Dutch and German translations — the
+    /// only notification any released build has actually persisted, so this backfills one row rather
+    /// than a corpus.
+    /// <para>
+    /// Conditional on that notification being present, exactly as migration 9 is, which is what stops
+    /// this inventing content: a database created fresh by a later build reaches this migration too
+    /// (baseline path, version recorded, then incremental) and never ran v1.8.3, so it matches nothing
+    /// and gains nothing. The <c>NOT EXISTS</c> guard makes each language's insert idempotent.
+    /// </para>
+    /// <para>
+    /// The text is a frozen copy of the <c>NotificationOperationIdRename*</c> keys in
+    /// <c>i18ntext/UI.*.json</c>, which is where the #279 producer reads the same strings for rows it
+    /// writes from now on. The duplication is deliberate and required: migration text must never change
+    /// once applied, so it cannot follow a later edit to those keys.
+    /// </para>
+    /// </summary>
+    internal const string BackfillAnnouncementTranslations = """
+        INSERT INTO System_NotificationTranslation (Id, NotificationId, Language, Title, Body, DateCreated, IsDeleted)
+        SELECT lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(2))) || '-' ||
+                   lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(6))),
+               n.Id,
+               'nl',
+               'Twee API-bewerkings-ID''s zijn hernoemd',
+               'Twee REST API-bewerkings-ID''s zijn hernoemd voor consistente naamgeving (issue #279): ' ||
+               'GetImportBatches → GetAllImportBatches en GetFileResources → GetAllFileResources. ' ||
+               'Dit raakt alleen een gegenereerde API-client die op bewerkings-ID werkt — routes en gedrag zijn ongewijzigd.',
+               strftime('%Y-%m-%d %H:%M:%S', 'now'),
+               0
+        FROM System_Notification n
+        WHERE n.Metadata = '{"announcement":"GetAllImportBatches"}'
+          AND NOT EXISTS (SELECT 1 FROM System_NotificationTranslation t
+                          WHERE LOWER(t.NotificationId) = LOWER(n.Id) AND LOWER(t.Language) = LOWER('nl'));
+
+        INSERT INTO System_NotificationTranslation (Id, NotificationId, Language, Title, Body, DateCreated, IsDeleted)
+        SELECT lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(2))) || '-' ||
+                   lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(6))),
+               n.Id,
+               'de',
+               'Zwei API-Operations-IDs wurden umbenannt',
+               'Zwei REST-API-Operations-IDs wurden aus Gründen der Namenskonsistenz umbenannt (Issue #279): ' ||
+               'GetImportBatches → GetAllImportBatches und GetFileResources → GetAllFileResources. ' ||
+               'Betroffen ist nur ein generierter API-Client, der die Operations-ID verwendet — Routen und Verhalten bleiben unverändert.',
+               strftime('%Y-%m-%d %H:%M:%S', 'now'),
+               0
+        FROM System_Notification n
+        WHERE n.Metadata = '{"announcement":"GetAllImportBatches"}'
+          AND NOT EXISTS (SELECT 1 FROM System_NotificationTranslation t
+                          WHERE LOWER(t.NotificationId) = LOWER(n.Id) AND LOWER(t.Language) = LOWER('de'));
+        """;
 }

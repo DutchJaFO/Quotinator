@@ -20,6 +20,8 @@
   "FileOriginSystem": "Gebündelt",
   "FileOriginUser": "Benutzer",
   "FileOriginUpload": "Hochgeladen",
+  "NotificationOperationIdRenameTitle": "Zwei API-Operations-IDs wurden umbenannt",
+  "NotificationOperationIdRenameBody": "Zwei REST-API-Operations-IDs wurden aus Gründen der Namenskonsistenz umbenannt (Issue #279): GetImportBatches → GetAllImportBatches und GetFileResources → GetAllFileResources. Betroffen ist nur ein generierter API-Client, der die Operations-ID verwendet — Routen und Verhalten bleiben unverändert.",
   "NotificationSummaryHeading": "Benachrichtigungen",
   "NotificationTypeInformation": "Information",
   "NotificationTypeWarning": "Warnung",

@@ -107,6 +107,11 @@ public class DatabaseInitializer(
         // arrangement Quotinator_Quote/Quotinator_QuoteTranslation already uses, which is what keeps
         // the original text (and therefore every producer's content hash) on the parent row untouched.
         new SchemaMigration { Version = 13, Sql = NotificationTranslationMigrations.CreateNotificationTranslationTable },
+        // #319: v1.8.3's shipped announcement is the only notification any released build persisted,
+        // so it is the whole of the translation backfill. Data-only and conditional on that row being
+        // present — a database that never ran v1.8.3 matches nothing and gains nothing, so the
+        // baseline needs no counterpart.
+        new SchemaMigration { Version = 14, Sql = NotificationTranslationMigrations.BackfillAnnouncementTranslations },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,

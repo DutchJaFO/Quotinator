@@ -1,6 +1,6 @@
 # #319 — Notification title and body are not translated
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 **GitHub issue:** #319
 **Tiers required:** T1, T2
 **Depends on:** #278, #312
@@ -272,12 +272,26 @@ order, which is why this was changed rather than followed.
 
 ### 3. Backfill migration for the one existing row
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Translations for #279's v1.8.3 announcement — the only notification in any released database — sourced
-from `UI.*.json`, in the `NotificationLegacyMetadataMigrations` family that already updates that row.
-A new migration rather than an edit to 8 or 9 if either has already been applied anywhere, including
-locally. Must be conditional on the row existing, exactly as migration 9 already is.
+from `UI.*.json`. A new migration (14), never an edit to 8 or 9: both have been applied to real
+databases, and an applied migration is frozen. Conditional on the row existing, exactly as migration 9
+is, so a database that never ran v1.8.3 gains nothing.
+
+Placed in `NotificationTranslationMigrations` alongside this issue's own two schema migrations rather
+than in the `NotificationLegacyMetadataMigrations` family the plan first suggested — it backfills *this
+issue's* table, and grouping it with the schema it depends on keeps the three readable together. The
+end-of-milestone consolidation pass can fold them however it prefers.
+
+`NotificationOperationIdRenameTitle`/`…Body` added to all three `UI.*.json` files in the same commit;
+the migration embeds a frozen copy of the same strings, which is required rather than sloppy — migration
+text must not follow a later edit to those keys.
+
+**Written before its tests, so the first run was green rather than red.** Sensitivity was proven by
+mutation instead: changing the migration's `'nl'` literal to `'xx'` turned two of the five tests red,
+then reverting returned them to green. Recorded rather than glossed — a mutation check is the weaker
+substitute, and the ordering slip is mine.
 
 ### 4. Read-path SQL
 
@@ -386,7 +400,7 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 | 9 | ❌ | `EffectiveLanguage` reports the language actually returned | Unit test | Both the translated and fallback cases |
 | 10 | ❌ | All three projection-sharing queries resolve translations, not only the list | Unit test | `SelectActive`, `SelectPage`, `SelectById` — a missed `@lang` binding on one is the likely defect. `CountAll` is excluded: it does not use the projection |
 | 11 | ❌ | Identity/dedupe is unaffected by text or language | Unit test | `SeedOnceAsync` still suppresses a duplicate whose translations differ — and a producer whose `ContentHash` covers its body still dedupes, proving the hashed original-language `Body` did not move |
-| 12 | ❌ | The one already-persisted notification (#279's v1.8.3 announcement) gains translations via migration | Unit test | Real-SQLite test from a database at the pre-#319 schema carrying that row — asserts the translations exist, and that a database without the row gains nothing |
+| 12 | ✅ | The one already-persisted notification (#279's v1.8.3 announcement) gains translations via migration | Unit test | `NotificationTranslationTests.Migration_LegacyAnnouncementPresent_GainsDutchAndGermanTranslations`, `..._NoLegacyAnnouncement_WritesNoTranslations`, and `..._AppliedTwice_LeavesOneTranslationPerLanguage` |
 | 13 | ❌ | #279's and #289's producers write translations from `UI.*.json` | Unit test | Per-producer |
 | 14 | ❌ | #81's producer writes body translations from the `Changelog` table's per-language rows | Unit test | Per-producer |
 | 15 | ❌ | #81's producer writes no translation row for a language the changelog lacks | Unit test | Changelog with `en` only; asserts no `nl` row is written and the read path reports `language: en, isTranslated: false` — guards `GetDocumentAsync`'s silent `en` fallback being persisted as a fake Dutch translation |

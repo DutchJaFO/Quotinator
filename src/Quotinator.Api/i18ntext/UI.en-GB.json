@@ -20,6 +20,8 @@
   "FileOriginSystem": "Bundled",
   "FileOriginUser": "User",
   "FileOriginUpload": "Uploaded",
+  "NotificationOperationIdRenameTitle": "Two API operation IDs were renamed",
+  "NotificationOperationIdRenameBody": "Two REST API operation IDs were renamed for naming consistency (issue #279): GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. This only affects a generated API client keyed by operation ID — routes and behaviour are unchanged.",
   "NotificationSummaryHeading": "Notifications",
   "NotificationTypeInformation": "Information",
   "NotificationTypeWarning": "Warning",

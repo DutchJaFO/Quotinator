@@ -20,6 +20,8 @@
   "FileOriginSystem": "Gebundeld",
   "FileOriginUser": "Gebruiker",
   "FileOriginUpload": "Geüpload",
+  "NotificationOperationIdRenameTitle": "Twee API-bewerkings-ID's zijn hernoemd",
+  "NotificationOperationIdRenameBody": "Twee REST API-bewerkings-ID's zijn hernoemd voor consistente naamgeving (issue #279): GetImportBatches → GetAllImportBatches en GetFileResources → GetAllFileResources. Dit raakt alleen een gegenereerde API-client die op bewerkings-ID werkt — routes en gedrag zijn ongewijzigd.",
   "NotificationSummaryHeading": "Meldingen",
   "NotificationTypeInformation": "Informatie",
   "NotificationTypeWarning": "Waarschuwing",
