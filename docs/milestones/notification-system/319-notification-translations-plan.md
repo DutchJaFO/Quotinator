@@ -480,6 +480,17 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 the Notifications page both rendered the announcement translated — German and Dutch respectively —
 which is what the earlier run showed still in English.
 
+**Three tests rest on a mutation check rather than an observed red run**, and a reader should not treat
+them as red-first evidence: step 3's migration tests, and the two the issue named that were written last
+— `Read_SchemaVersionOvershoot_SubstitutesBothVersionsIntoEachLanguage` and
+`Seed_WhatsNew_TakesTranslationsFromPerLanguageChangelogFiles`. Each was mutated to confirm it is wired
+to the behaviour (removing `bodyArgs`, and passing `translations: null` from `SeedAsync`, both turning
+the relevant test red), but a mutation proves wiring, not that the test would have failed against the
+feature's absence.
+
+The second of those two closed a real gap rather than a naming one: requirement 7's per-language version
+substitution was implemented and had no test of its own until it was written.
+
 **T2 passed 2026-08-30.** Both of this issue's documents ran green end to end, plus the designated
 smoke set — `api-surface/01` and `02`, `import-and-staged-actions/01`, `14` and `19`,
 `database-lifecycle/03`, `startup-and-degradation/03`, and `notifications-and-changelog/01` and `07`.
@@ -503,8 +514,8 @@ All containers and volumes were torn down, none left behind.
 | 10 | ✅ | All three projection-sharing queries resolve translations, not only the list | Unit test | `SelectActive`, `SelectPage`, `SelectById` — a missed `@lang` binding on one is the likely defect. `CountAll` is excluded: it does not use the projection |
 | 11 | ✅ | Identity/dedupe is unaffected by text or language | Unit test | `SeedOnceAsync` still suppresses a duplicate whose translations differ — and a producer whose `ContentHash` covers its body still dedupes, proving the hashed original-language `Body` did not move |
 | 12 | ✅ | The one already-persisted notification (#279's v1.8.3 announcement) gains translations via migration | Unit test | `NotificationTranslationTests.Migration_LegacyAnnouncementPresent_GainsDutchAndGermanTranslations`, `..._NoLegacyAnnouncement_WritesNoTranslations`, and `..._AppliedTwice_LeavesOneTranslationPerLanguage` |
-| 13 | ✅ | #279's and #289's producers write translations from `UI.*.json` | Unit test | Per-producer |
-| 14 | ✅ | #81's producer writes body translations from the `Changelog` table's per-language rows | Unit test | Per-producer |
+| 13 | ✅ | #279's and #289's producers write translations from `UI.*.json` | Unit test | `NotificationTranslationSourceTests.Build_TakesTitleAndBodyFromTheLocaleFiles` and `.Read_SchemaVersionOvershoot_SubstitutesBothVersionsIntoEachLanguage` — the latter covers requirement 7's two-version substitution per language |
+| 14 | ✅ | #81's producer writes body translations from the `Changelog` table's per-language rows | Unit test | `NotificationTranslationSourceTests.WhatsNew_TakesBodyTranslationsFromThePerLanguageChangelog` (builds them) and `WhatsNewNotificationTests.Seed_WhatsNew_TakesTranslationsFromPerLanguageChangelogFiles` (they reach the writer) |
 | 15 | ✅ | #81's producer writes no translation row for a language the changelog lacks | Unit test | Changelog with `en` only; asserts no `nl` row is written and the read path reports `language: en, isTranslated: false` — guards `GetDocumentAsync`'s silent `en` fallback being persisted as a fake Dutch translation |
 | 16 | ✅ | #81's titles resolve per language from `UI.*.json`, with the version substituted | Unit test | Per-producer — covers both the per-release title and the unreleased one, which are hardcoded English literals today |
 | 17 | ✅ | Every new key exists in all three locale files | Unit test | `TranslationCompletenessTests` (existing) |

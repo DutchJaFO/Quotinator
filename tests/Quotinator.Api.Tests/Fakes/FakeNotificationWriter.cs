@@ -1,4 +1,4 @@
-using Quotinator.Data.Notifications;
+﻿using Quotinator.Data.Notifications;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
@@ -20,6 +20,11 @@ internal sealed class FakeNotificationWriter : INotificationWriter
     /// <summary>Registers a fixed notification for a test to look up by id.</summary>
     public void Seed(NotificationEntity notification) => _notifications[notification.Id] = notification;
 
+    /// <summary>
+    /// Records the translation set passed to each <see cref="WriteAsync"/> call (#319), so a test can
+    /// assert that a producer's translations reached the writer rather than only that it built them.
+    /// </summary>
+    public List<IReadOnlyList<NotificationTranslation>> WrittenTranslations { get; } = [];
     /// <summary>Records the metadata passed to each <see cref="WriteAsync"/> call, so a test can assert on structured payloads rather than message text.</summary>
     public List<(string? Metadata, NotificationMetadataKind? Kind)> WrittenMetadata { get; } = [];
 
@@ -47,6 +52,7 @@ internal sealed class FakeNotificationWriter : INotificationWriter
                 : new SafeValue<NotificationMetadataKind?>(metadataKind.Value.ToString(), metadataKind),
             AppVersionId = appVersionId,
         };
+        WrittenTranslations.Add(translations ?? []);
         _notifications[entity.Id] = entity;
         return Task.FromResult(entity);
     }

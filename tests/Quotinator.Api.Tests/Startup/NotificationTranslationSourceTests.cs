@@ -1,4 +1,4 @@
-using Quotinator.Api.Startup;
+﻿using Quotinator.Api.Startup;
 using Quotinator.Changelog.Models;
 using Quotinator.Constants.Api;
 using Quotinator.Core.Services;
@@ -134,6 +134,36 @@ public class NotificationTranslationSourceTests
         Assert.AreEqual("Nieuw in v1.9.0", seed.Translations.Single(t => t.Language == "nl").Title);
     }
 
+    /// <summary>
+    /// #289's overshoot notification carries both recorded schema versions, and each language's own
+    /// template receives them — not one language's prose with numbers baked in at write time
+    /// (requirement 7).
+    /// </summary>
+    [TestMethod]
+    public void Read_SchemaVersionOvershoot_SubstitutesBothVersionsIntoEachLanguage()
+    {
+        ApiLocalizer localizer = new(I18nDir);
+
+        IReadOnlyList<NotificationTranslation> translations = NotificationTranslations.Build(
+            localizer,
+            ApiMessages.NotificationSchemaOvershootTitle,
+            ApiMessages.NotificationSchemaOvershootBody,
+            bodyArgs: [14, 5]);
+
+        Assert.IsNotEmpty(translations, "The overshoot notification must have translations to substitute into.");
+
+        foreach (NotificationTranslation translation in translations)
+        {
+            Assert.Contains("14", translation.Body,
+                $"The {translation.Language} body lost the data schema version.");
+            Assert.Contains("5", translation.Body,
+                $"The {translation.Language} body lost the application schema version.");
+            Assert.DoesNotContain("{0}", translation.Body,
+                $"The {translation.Language} body still carries an unsubstituted placeholder.");
+            Assert.DoesNotContain("{1}", translation.Body,
+                $"The {translation.Language} body still carries an unsubstituted placeholder.");
+        }
+    }
     /// <summary>Positional arguments substitute into each language's own template, not only English's.</summary>
     [TestMethod]
     public void Build_WithArguments_SubstitutesIntoEveryLanguage()

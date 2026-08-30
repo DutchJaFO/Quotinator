@@ -1,6 +1,7 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Quotinator.Api.Startup;
 using Quotinator.Api.Tests.Fakes;
+using Quotinator.Core.Services;
 using Quotinator.Changelog.Models;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
@@ -309,5 +310,35 @@ public class WhatsNewNotificationTests
         await WhatsNewNotification.SeedAsync(reader, writer, document, lastActiveVersion: "1.8.3", currentVersion: "1.8.3", appVersionId: null);
 
         Assert.IsEmpty(writer.WrittenMessages);
+    }
+
+    /// <summary>
+    /// The translations reach the writer, not just the seed. <c>BuildSeeds</c> is a pure function and is
+    /// covered on its own; this asserts the other half — that <c>SeedAsync</c> hands what it built to
+    /// <c>SeedOnceAsync</c> rather than dropping it on the way (#319).
+    /// </summary>
+    [TestMethod]
+    public async Task Seed_WhatsNew_TakesTranslationsFromPerLanguageChangelogFiles()
+    {
+        FakeNotificationReader reader = new();
+        FakeNotificationWriter writer = new();
+        ApiLocalizer localizer = new(Path.Combine(AppContext.BaseDirectory, "i18ntext"));
+
+        Dictionary<string, ChangelogDocument> translated = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["nl"] = new ChangelogDocument { Language = "nl", Releases = [BuildRelease("1.9.0", "Nederlandse hoogtepunt")] },
+        };
+
+        await WhatsNewNotification.SeedAsync(
+            reader, writer, BuildDocument("1.9.0", "English highlight"),
+            lastActiveVersion: null, currentVersion: "1.9.0", appVersionId: null,
+            localizer, translated);
+
+        Assert.HasCount(1, writer.WrittenTranslations);
+        IReadOnlyList<NotificationTranslation> written = writer.WrittenTranslations[0];
+        Assert.HasCount(1, written);
+        Assert.AreEqual("nl", written[0].Language);
+        Assert.AreEqual("Nederlandse hoogtepunt", written[0].Body,
+            "The translated body must come from the Dutch changelog document, not the English one.");
     }
 }
