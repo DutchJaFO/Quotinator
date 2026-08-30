@@ -43,6 +43,14 @@ public sealed class NotificationResponse
     public string? DismissTriggerKey { get; init; }
 
     /// <summary>
+    /// Why this notification stopped being active — <c>dismissed</c> when the user set it aside,
+    /// <c>resolved</c> when the thing it described was actually dealt with (#304).
+    /// <see langword="null"/> while it is still active, and on rows dismissed before this was recorded,
+    /// where the reason is genuinely unknown rather than being one value or the other.
+    /// </summary>
+    public string? DismissReason { get; init; }
+
+    /// <summary>
     /// The language <see cref="Title"/> and <see cref="Body"/> are actually returned in (#319) — the
     /// requested one when a translation existed, <see cref="OriginalLanguage"/> when it did not.
     /// </summary>

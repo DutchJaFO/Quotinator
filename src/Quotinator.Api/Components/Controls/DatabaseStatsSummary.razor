@@ -44,7 +44,7 @@
                             <a href="@row.SourceUrl" target="_blank" rel="noopener noreferrer">@row.SourceUrl</a>
                         }
                     </td>
-                    <td>@(row.LastUpdatedUtc?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                    <td>@LocalTimestamp.Render(row.LastUpdatedUtc)</td>
                     <td>@(row.RecordCount?.ToString() ?? "—")</td>
                 </tr>
             }

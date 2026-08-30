@@ -28,23 +28,14 @@ public class ReseedRecommendedMetadataTests
     private NotificationReader _reader = null!;
 
     [TestInitialize]
-    public void TestInitialize()
+    public async Task TestInitialize()
     {
         _tempDir = Directory.CreateTempSubdirectory("quotinator_reseed_metadata_test_").FullName;
         _dbPath = Path.Combine(_tempDir, "test.db");
 
-        using SqliteConnection conn = new($"Data Source={_dbPath}");
-        conn.Open();
-        conn.Execute(NotificationMigrations.CreateNotificationTable);
-        conn.Execute(AppVersionMigrations.CreateAppVersionTable);
-        conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
-        conn.Execute(NotificationTranslationMigrations.AddOriginalLanguageColumn);
-        conn.Execute(NotificationTranslationMigrations.CreateNotificationTranslationTable);
-        // #304's own rebuild — without it the CHECK rejects 'ReseedRecommended' and every test here
-        // fails on the write rather than on what it is actually asserting.
-        conn.Execute(NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind);
-        // #304: the read projection selects DismissReason.
-        conn.Execute(NotificationDismissReasonMigrations.AddDismissReasonColumn);
+        // The schema the application actually creates, not a hand-listed replay of the migrations that
+        // produce it — see CurrentSchema for why a listed sequence drifts.
+        await CurrentSchema.ApplyDataSchemaAsync(_dbPath);
 
         SqliteConnectionFactory factory = new(_dbPath);
         _writer = new NotificationWriter(factory);

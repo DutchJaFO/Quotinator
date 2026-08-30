@@ -110,6 +110,7 @@ internal static class NotificationEndpoints
         IsDismissed       = entity.IsDismissed,
         DismissedAt       = entity.DismissedAt.Parsed,
         DismissTriggerKey = entity.DismissTriggerKey.Parsed?.ToString().ToLowerInvariant() ?? (entity.DismissTriggerKey.Raw.Length > 0 ? entity.DismissTriggerKey.Raw : null),
+        DismissReason     = entity.DismissReason.Parsed?.ToString().ToLowerInvariant() ?? (entity.DismissReason.Raw.Length > 0 ? entity.DismissReason.Raw : null),
         // EffectiveLanguage is null only when a caller bypasses the read projection (a fake in an
         // endpoint test); the original language is the honest answer there, since no translation was
         // resolved.

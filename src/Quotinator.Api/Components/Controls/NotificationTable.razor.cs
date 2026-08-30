@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Quotinator.Api.Formatting;
 using Quotinator.Api.Services;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
@@ -42,6 +43,10 @@ public partial class NotificationTable
     /// Not a persisted column — computed from <see cref="NotificationEntity.IsDismissed"/>/
     /// <see cref="NotificationEntity.ExpiresAt"/> at render time via <see cref="GetDisplayStatus"/>.
     /// </summary>
+    /// <summary>Renders a stored UTC timestamp in the host's time zone — see <see cref="LocalTimestamp"/>.</summary>
+    /// <param name="utc">The stored UTC value, or <see langword="null"/>.</param>
+    internal static string Local(DateTime? utc) => LocalTimestamp.Render(utc);
+
     internal enum NotificationDisplayStatus { Active, Expired, Dismissed, Resolved }
 
     /// <summary>

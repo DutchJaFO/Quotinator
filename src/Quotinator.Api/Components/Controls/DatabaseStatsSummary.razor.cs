@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Quotinator.Api.Formatting;
 using Quotinator.Api.Startup;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;

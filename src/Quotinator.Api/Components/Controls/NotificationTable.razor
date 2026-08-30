@@ -22,10 +22,10 @@
         @foreach (var notification in Notifications)
         {
             <tr>
-                <td>@(notification.DateCreated.Parsed?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                <td>@Local(notification.DateCreated.Parsed)</td>
                 <td><span class="badge @BadgeClass(notification.Type.Parsed)">@TypeLabel(notification.Type.Parsed)</span></td>
                 <td>@notification.Body</td>
-                <td>@(notification.ExpiresAt.Parsed?.ToString("yyyy-MM-dd HH:mm") ?? "—")</td>
+                <td>@Local(notification.ExpiresAt.Parsed)</td>
                 <td>
                     @switch (GetDisplayStatus(notification, Now))
                     {

@@ -21,26 +21,14 @@ public class NotificationReaderTests
     private NotificationWriter _writer = null!;
 
     [TestInitialize]
-    public void TestInitialize()
+    public async Task TestInitialize()
     {
         _tempDir = Directory.CreateTempSubdirectory("quotinator_notification_reader_test_").FullName;
         _dbPath  = Path.Combine(_tempDir, "test.db");
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
-        conn.Open();
-        // Replays this table's real migration sequence rather than hand-writing its current shape:
-        // v1.8.0's CREATE, then #81's System_AppVersion (which #312's AppVersionId FK targets),
-        // then #312's own reshape. Keeps the fixture honest against what a real database has.
-        conn.Execute(NotificationMigrations.CreateNotificationTable);
-        conn.Execute(AppVersionMigrations.CreateAppVersionTable);
-        conn.Execute(NotificationSchemaMigrations.SplitMessageAndAddMetadata);
-        // #319: the language column and the translation table the read projection joins against.
-        conn.Execute(NotificationTranslationMigrations.AddOriginalLanguageColumn);
-        conn.Execute(NotificationTranslationMigrations.CreateNotificationTranslationTable);
-        // #304: the CHECK widening, then the column recording why a notification stopped being active —
-        // the read projection selects it, so it has to exist here.
-        conn.Execute(NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind);
-        conn.Execute(NotificationDismissReasonMigrations.AddDismissReasonColumn);
+        // The schema the application actually creates. This used to replay a hand-listed sequence,
+        // which reads as honest but is a maintained copy that drifts — see CurrentSchema.
+        await CurrentSchema.ApplyDataSchemaAsync(_dbPath);
 
         SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
         _reader = TestNotificationReader.Create(factory);

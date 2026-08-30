@@ -53,6 +53,39 @@ public class NotificationTableTests
     };
 
     /// <summary>
+    /// #304: a stored UTC timestamp is displayed in the host's own time zone. Found in T1, where an
+    /// event logged at 16:17 local was shown on the page as 14:17.
+    /// </summary>
+    [TestMethod]
+    public void Local_UtcValue_IsRenderedInTheHostTimeZone()
+    {
+        DateTime utc = new(2026, 8, 30, 14, 17, 0, DateTimeKind.Utc);
+
+        string rendered = NotificationTable.Local(utc);
+
+        Assert.AreEqual(utc.ToLocalTime().ToString("yyyy-MM-dd HH:mm"), rendered);
+    }
+
+    /// <summary>
+    /// A value read back with no <see cref="DateTimeKind"/> is still treated as UTC, which is what it
+    /// is — SQLite hands back an unspecified kind, and assuming local there would leave the display
+    /// correct only on a machine that happens to run in UTC.
+    /// </summary>
+    [TestMethod]
+    public void Local_UnspecifiedKind_IsTreatedAsUtcNotLocal()
+    {
+        DateTime unspecified = new(2026, 8, 30, 14, 17, 0, DateTimeKind.Unspecified);
+        DateTime asUtc = DateTime.SpecifyKind(unspecified, DateTimeKind.Utc);
+
+        Assert.AreEqual(asUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm"), NotificationTable.Local(unspecified));
+    }
+
+    /// <summary>No timestamp renders as an em dash rather than an empty cell or a default date.</summary>
+    [TestMethod]
+    public void Local_Null_RendersEmDash()
+        => Assert.AreEqual("—", NotificationTable.Local(null));
+
+    /// <summary>
     /// #304: a notification whose action was carried out reads as done, not as declined. Found in T1 —
     /// running the reseed reported "Dismissed", which tells the user the opposite of what they did.
     /// </summary>
