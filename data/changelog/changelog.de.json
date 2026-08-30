@@ -38,7 +38,11 @@
       "Benachrichtigungen haben einen eigenen Titel erhalten, strukturierte Angaben dazu, worum es bei jeder einzelnen geht, und eine Ablauffrist, die jetzt nur noch angewendet wird, wenn eine Benachrichtigung tatsächlich nicht mehr angezeigt werden soll — zuvor lief jede Benachrichtigung nach 30 Tagen ab, unabhängig vom Inhalt (issue #312)",
       "Die Paketversionen, aus denen Quotinator gebaut wird, werden jetzt einmal in einer zentralen Datei deklariert, statt in jedem Projekt wiederholt zu werden, sodass ein Abhängigkeits-Update nicht mehr nur einen Teil der Projektmappe erreichen und den Rest auslassen kann — eine Änderung am Build-Werkzeug ohne Auswirkung auf die Anwendung selbst (issue #320)",
       "Für das Herunterladen von Zitatquellen stehen jetzt bis zu einer Minute für den Verbindungsaufbau und bis zu neunzig Sekunden insgesamt zur Verfügung, statt zehn und dreißig Sekunden. Die kürzeren Grenzen machten aus einer zeitweise langsamen Verbindung häufiger eine ausgefallene Aktualisierung, als dass sie echte Wartezeit verhindert hätten (issues #323, #325)",
-      "Kann das Datenverzeichnis nicht beschrieben werden, benennt die gemeldete Ursache dies jetzt direkt und nennt den Lösungsweg, statt ein Zurücksetzen der Datenbank vorzuschlagen — das in dasselbe Verzeichnis schreibt und daher nie hätte funktionieren können (issue #326)"
+      "Kann das Datenverzeichnis nicht beschrieben werden, benennt die gemeldete Ursache dies jetzt direkt und nennt den Lösungsweg, statt ein Zurücksetzen der Datenbank vorzuschlagen — das in dasselbe Verzeichnis schreibt und daher nie hätte funktionieren können (issue #326)",
+      "`Microsoft.OpenApi` von 2.11.0 auf 2.12.2 aktualisiert",
+      "`Scalar.AspNetCore` von 2.17.1 auf 2.17.2 aktualisiert",
+      "`Serilog` von 4.3.0 auf 4.4.0 aktualisiert",
+      "`github/codeql-action` von 4.37.7 auf 4.37.9 aktualisiert (nur CI)"
     ],
     "fixed": [
       "Eine Benachrichtigung, deren empfohlene Aktion Sie ausgeführt hatten, wurde dennoch als verworfen angezeigt, als hätten Sie sie abgelehnt. Quotinator hält jetzt fest, ob eine Benachrichtigung beiseitegelegt oder tatsächlich erledigt wurde, und zeigt sie im zweiten Fall als erledigt an (issue #304)",

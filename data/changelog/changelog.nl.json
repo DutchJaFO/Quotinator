@@ -38,7 +38,11 @@
       "Meldingen hebben een eigen titel gekregen, gestructureerde gegevens die beschrijven waar elke melding over gaat, en een vervaltermijn die nu alleen nog wordt toegepast wanneer een melding daadwerkelijk niet meer getoond hoeft te worden — voorheen verliep elke melding na 30 dagen, ongeacht de inhoud (issue #312)",
       "De pakketversies waarmee Quotinator wordt gebouwd worden nu één keer in één centraal bestand vastgelegd in plaats van herhaald in elk project, zodat een afhankelijkheidsupdate niet langer een deel van de oplossing kan bijwerken en de rest kan overslaan — een wijziging in het bouwgereedschap zonder effect op de applicatie zelf (issue #320)",
       "Het downloaden van quotebronnen krijgt nu tot een minuut om verbinding te maken en tot negentig seconden in totaal, in plaats van tien en dertig seconden. De kortere grenzen maakten van een af en toe trage verbinding vaker een overgeslagen update dan dat ze een echte wachttijd voorkwamen (issues #323, #325)",
-      "Wanneer er niet naar de datamap geschreven kan worden, benoemt de gemelde reden dat nu rechtstreeks en vertelt hoe je het oplost, in plaats van een database-reset voor te stellen — die naar dezelfde map schrijft en dus nooit had kunnen werken (issue #326)"
+      "Wanneer er niet naar de datamap geschreven kan worden, benoemt de gemelde reden dat nu rechtstreeks en vertelt hoe je het oplost, in plaats van een database-reset voor te stellen — die naar dezelfde map schrijft en dus nooit had kunnen werken (issue #326)",
+      "`Microsoft.OpenApi` bijgewerkt van 2.11.0 naar 2.12.2",
+      "`Scalar.AspNetCore` bijgewerkt van 2.17.1 naar 2.17.2",
+      "`Serilog` bijgewerkt van 4.3.0 naar 4.4.0",
+      "`github/codeql-action` bijgewerkt van 4.37.7 naar 4.37.9 (alleen CI)"
     ],
     "fixed": [
       "Een melding waarvan je de aanbevolen actie had uitgevoerd, werd toch getoond als afgewezen, alsof je hem had geweigerd. Quotinator legt nu vast of een melding opzij is gezet of daadwerkelijk is afgehandeld, en toont in het tweede geval dat hij is uitgevoerd (issue #304)",

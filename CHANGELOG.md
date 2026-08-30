@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-30 17:29 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-08-30 21:20 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -32,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - The package versions Quotinator is built from are now declared once in a single central file instead of being repeated in every project, so a dependency update can no longer reach part of the solution and miss the rest — a build-tooling change with no effect on the application itself (issue #320)
 - Quote source downloads now allow up to a minute to establish a connection, and up to ninety seconds in total, instead of ten and thirty seconds. The shorter limits turned an intermittently slow connection into a skipped update more often than they prevented a genuine wait (issues #323, #325)
 - When the data directory cannot be written, the reported reason now names that directly and states how to resolve it, instead of suggesting a database reset — which writes to the same directory and therefore could not have worked (issue #326)
+- `Microsoft.OpenApi` updated from 2.11.0 to 2.12.2
+- `Scalar.AspNetCore` updated from 2.17.1 to 2.17.2
+- `Serilog` updated from 4.3.0 to 4.4.0
+- `github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)
 
 ### Fixed
 - A notification whose recommended action you carried out was still shown as dismissed, as though you had turned it down. Quotinator now records whether a notification was set aside or actually dealt with, and shows it as done in the second case (issue #304)
