@@ -12,6 +12,7 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Core.Entities;
@@ -44,6 +45,9 @@ namespace Quotinator.Core.Database;
 /// <param name="ruleFileOverridePathResolver">Resolves the on-disk path of a conflict-resolution-rule or source-alias override file for a given seed batch.</param>
 /// <param name="sourceFileOverrideRegistry">Tracks which seed source files have a curator-authored override applied, so an override is not silently reapplied or skipped.</param>
 /// <param name="fileResources">Repository used to record each seeded/imported file as a <c>FileResource</c> row.</param>
+/// <param name="notificationReader">Supplies the active notifications trigger 1's dedupe compares against (#304).</param>
+/// <param name="notificationWriter">Writes the reseed recommendation when source content changed under an already-populated database (#304).</param>
+/// <param name="notificationTextSource">Resolves the recommendation's title and body in every language, so the text is stored per language rather than in whatever culture the host defaulted to (#304, #319).</param>
 /// <param name="baseline">Optional consolidated DDL for Quotinator.Core's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
 /// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277). Defaults to a real implementation when omitted.</param>
 public sealed class QuotinatorDatabaseInitializer(
@@ -65,6 +69,9 @@ public sealed class QuotinatorDatabaseInitializer(
     IRuleFileOverridePathResolver ruleFileOverridePathResolver,
     ISourceFileOverrideRegistry sourceFileOverrideRegistry,
     IFileResourceRepository fileResources,
+    INotificationReader notificationReader,
+    INotificationWriter notificationWriter,
+    INotificationTextSource notificationTextSource,
     SchemaBaseline? baseline = null,
     IDiskSpaceProvider? diskSpaceProvider = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, baseline, diskSpaceProvider)
 {
@@ -80,14 +87,78 @@ public sealed class QuotinatorDatabaseInitializer(
     private readonly IRuleFileOverridePathResolver _ruleFileOverridePathResolver = ruleFileOverridePathResolver;
     private readonly ISourceFileOverrideRegistry _sourceFileOverrideRegistry = sourceFileOverrideRegistry;
     private readonly IFileResourceRepository _fileResources = fileResources;
+    private readonly INotificationReader _notificationReader = notificationReader;
+    private readonly INotificationWriter _notificationWriter = notificationWriter;
+    private readonly INotificationTextSource _notificationTextSource = notificationTextSource;
 
     /// <inheritdoc/>
     protected override async Task OnInitialisedAsync(SqliteConnection connection)
     {
-        var effectiveBatches = (await ResolveEffectiveBatchesAsync(forceRefresh: false)).EffectiveBatches;
-        await SeedIfEmptyAsync(connection, effectiveBatches);
-        await ReSeedGenresIfEmptyAsync(connection, effectiveBatches);
+        SourceCacheResolution resolution = await ResolveEffectiveBatchesAsync(forceRefresh: false);
+
+        // Read before seeding: whether this database already held content is what separates "the sources
+        // changed and our copy is now stale" from "the seed just applied those very changes". Neither
+        // SeedIfEmptyAsync nor its internal counterpart reports back whether it did any work, and this is
+        // the same gate SeedIfEmptyInternalAsync applies to itself.
+        int quotesBeforeSeeding = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
+
+        await SeedIfEmptyAsync(connection, resolution.EffectiveBatches);
+        await ReSeedGenresIfEmptyAsync(connection, resolution.EffectiveBatches);
+        await RecommendReseedIfSourceContentChangedAsync(resolution, quotesBeforeSeeding);
         await LogDatabaseStatsAsync(connection);
+    }
+
+    /// <summary>
+    /// #304 trigger 1: when a source file's content actually changed upstream and this database already
+    /// held content, the stored data no longer reflects the sources — so recommend a reseed rather than
+    /// performing one. Reseeding automatically here is explicitly out of the question (developer
+    /// direction on #304): it would discard user content on a background startup path with nothing asked.
+    /// </summary>
+    /// <remarks>
+    /// Written from inside the import/refresh machinery rather than by a <c>Program.cs</c> producer
+    /// reading the resolution afterward, per ADR 018's event-driven system content rule and the
+    /// relocation principle #302/#303 follow.
+    /// </remarks>
+    private async Task RecommendReseedIfSourceContentChangedAsync(SourceCacheResolution resolution, int quotesBeforeSeeding)
+    {
+        // No network check ran, so nothing was compared and nothing can be claimed to have changed.
+        if (!_autoUpdateSources) return;
+
+        // The seed applied whatever changed on this very run.
+        if (quotesBeforeSeeding == 0) return;
+
+        List<string> changedFiles = [.. resolution.Results
+            .Where(result => result.Outcome == SourceRefreshOutcome.Updated)
+            .Select(result => result.Name)
+            .Order(StringComparer.OrdinalIgnoreCase)];
+
+        if (changedFiles.Count == 0) return;
+
+        // Ordered above so the same set of files produces the same identity regardless of the order the
+        // refresh happened to report them in — otherwise a parallel refresh could re-notify for a
+        // condition already active.
+        ReseedRecommendedMetadataDto metadata = new()
+        {
+            Reason = ReseedReason.ContentChanged,
+            ChangedFiles = changedFiles,
+            ReleaseState = NotificationReleaseState.NotApplicable,
+        };
+
+        object[] bodyArgs = [string.Join(", ", changedFiles)];
+
+        await NotificationSeeding.SeedWhileUnresolvedAsync(
+            _notificationReader, _notificationWriter, NotificationType.ActionRequired, metadata,
+            body: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.ReseedContentChangedBody, bodyArgs),
+            // Provenance is left unstated rather than guessed: the initializer runs before the app
+            // version row for this boot is recorded, and inventing one would misattribute the row.
+            appVersionId: null,
+            title: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.ReseedContentChangedTitle),
+            dismissTrigger: NotificationDismissTrigger.Reseed,
+            translations: NotificationTranslations.Build(
+                _notificationTextSource,
+                NotificationMessageKeys.ReseedContentChangedTitle,
+                NotificationMessageKeys.ReseedContentChangedBody,
+                bodyArgs: bodyArgs));
     }
 
     /// <inheritdoc/>

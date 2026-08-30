@@ -121,6 +121,10 @@ public class DatabaseInitializer(
         // ADR 015's revision (from #254) is unchanged and still governs — "unreleased" is not the test,
         // and the next migration in this position gets a new version number, exactly as #254 requires.
         new SchemaMigration { Version = 14, Sql = NotificationTranslationMigrations.BackfillAnnouncementTranslations },
+        // #304: DismissTriggerKey gains 'Reseed' and MetadataKind gains 'ReseedRecommended'. SQLite
+        // cannot widen a CHECK in place, so this is a table rebuild — both widenings share the one
+        // rebuild rather than copying every row twice.
+        new SchemaMigration { Version = 15, Sql = NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -312,7 +316,7 @@ public class DatabaseInitializer(
             IsDismissed       INTEGER NOT NULL DEFAULT 0,
             DismissedAt       TEXT,
             DismissTriggerKey TEXT
-                              CHECK (DismissTriggerKey IS NULL OR DismissTriggerKey IN ('DatabaseReset')),
+                              CHECK (DismissTriggerKey IS NULL OR DismissTriggerKey IN ('DatabaseReset', 'Reseed')),
             DateCreated       TEXT    NOT NULL,
             DateModified      TEXT,
             DateDeleted       TEXT,
@@ -320,7 +324,7 @@ public class DatabaseInitializer(
             Title             TEXT,
             Metadata          TEXT,
             MetadataKind      TEXT
-                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew')),
+                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended')),
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
             OriginalLanguage  TEXT    NOT NULL DEFAULT 'en'
         );

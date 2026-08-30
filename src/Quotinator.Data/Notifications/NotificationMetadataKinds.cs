@@ -26,6 +26,7 @@ public static class NotificationMetadataKinds
         [NotificationMetadataKind.Announcement]          = typeof(AnnouncementMetadataDto),
         [NotificationMetadataKind.SchemaVersionOvershoot] = typeof(SchemaVersionOvershootMetadataDto),
         [NotificationMetadataKind.WhatsNew]               = typeof(WhatsNewMetadataDto),
+        [NotificationMetadataKind.ReseedRecommended]      = typeof(ReseedRecommendedMetadataDto),
     };
 
     // A null-valued property states nothing and leaves the reader to decide what it was supposed to

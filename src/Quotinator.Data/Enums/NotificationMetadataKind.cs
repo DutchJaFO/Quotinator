@@ -38,5 +38,13 @@ public enum NotificationMetadataKind
     /// provenance recorded by the <c>AppVersionId</c> column, which is always the version that wrote
     /// the row.
     /// </summary>
-    WhatsNew
+    WhatsNew,
+
+    /// <summary>
+    /// A recommendation to reseed (#304) — the payload carries why, and for the content-changed case
+    /// which source files changed. Those file names are identifiers the renderer and the action consume,
+    /// not prose: a notification's own text lives in its Title/Body columns, per
+    /// <see cref="Notifications.NotificationMetadataDto"/>'s no-text rule.
+    /// </summary>
+    ReseedRecommended
 }

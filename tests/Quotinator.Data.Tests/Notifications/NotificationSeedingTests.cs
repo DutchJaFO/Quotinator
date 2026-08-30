@@ -8,7 +8,7 @@ using Quotinator.Data.Enums;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 
-using Quotinator.Data.Tests.Repositories;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Notifications;
 
@@ -56,6 +56,9 @@ public class NotificationSeedingTests
         // #319: the language column and the translation table the read projection joins against.
         conn.Execute(NotificationTranslationMigrations.AddOriginalLanguageColumn);
         conn.Execute(NotificationTranslationMigrations.CreateNotificationTranslationTable);
+        // #304: widens the DismissTriggerKey and MetadataKind CHECKs. Without it a Reseed-triggered
+        // notification fails on the constraint rather than on whatever the test is asserting.
+        conn.Execute(NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind);
 
         SqliteConnectionFactory factory = new(_dbPath);
         _writer = new NotificationWriter(factory);
@@ -339,6 +342,100 @@ public class NotificationSeedingTests
         Assert.IsNotNull(second, "The release state is part of the identity — these are two different notifications.");
         Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items);
     }
+
+    /// <summary>
+    /// The same unresolved condition, seen again on a later startup, writes once — the dedupe half
+    /// <see cref="NotificationSeeding.SeedWhileUnresolvedAsync"/> shares with
+    /// <see cref="NotificationSeeding.SeedOnceAsync"/>, and the positive control for the test below.
+    /// </summary>
+    [TestMethod]
+    public async Task SeedWhileUnresolvedAsync_SameIdentityTwice_WritesOnce()
+    {
+        NotificationEntity? first = await SeedWhileUnresolvedAsync("reseed-recommended", "first body");
+        NotificationEntity? second = await SeedWhileUnresolvedAsync("reseed-recommended", "second body");
+
+        Assert.IsNotNull(first, "The first call must write — otherwise the suppression below proves nothing.");
+        Assert.IsNull(second, "The second call must report that it suppressed the write, not silently return an entity.");
+        Assert.HasCount(1, (await _reader.GetPagedAsync(1, 0)).Items);
+    }
+
+    /// <summary>
+    /// A dismissed notification stops suppressing, so the same condition recurring notifies again
+    /// (#304). This is the entire behavioural difference from <see cref="NotificationSeeding.SeedOnceAsync"/>,
+    /// and the property the active-only design rests on: dedupe means "while unresolved", and dismissal
+    /// is what records the resolution.
+    /// </summary>
+    [TestMethod]
+    public async Task SeedWhileUnresolvedAsync_PreviousDismissed_WritesAgain()
+    {
+        NotificationEntity? first = await SeedWhileUnresolvedAsync("reseed-recommended", "first body");
+        Assert.IsNotNull(first);
+        await _writer.DismissAsync(first.Id);
+
+        NotificationEntity? second = await SeedWhileUnresolvedAsync("reseed-recommended", "second body");
+
+        Assert.IsNotNull(second, "A dismissed notification must not suppress — the condition recurred and is unresolved again.");
+        Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items,
+            "Both notifications must remain in the history; the dismissed one is resolved, not deleted.");
+    }
+
+    /// <summary>
+    /// <see cref="NotificationSeeding.SeedOnceAsync"/> keeps comparing against the full history,
+    /// dismissed rows included. #279, #289 and #81 all depend on that: narrowing it to active rows would
+    /// make each of them re-announce itself the first time a user dismissed one and restarted.
+    /// </summary>
+    [TestMethod]
+    public async Task SeedOnceAsync_PreviousDismissed_StillSuppresses()
+    {
+        NotificationEntity? first = await SeedAsync("some-announcement", "first body");
+        Assert.IsNotNull(first);
+        await _writer.DismissAsync(first.Id);
+
+        NotificationEntity? second = await SeedAsync("some-announcement", "second body");
+
+        Assert.IsNull(second, "SeedOnceAsync must still suppress against a dismissed row — that is its whole contract.");
+        Assert.HasCount(1, (await _reader.GetPagedAsync(1, 0)).Items);
+    }
+
+    /// <summary>
+    /// A different set of changed files is a different recommendation, so it writes rather than being
+    /// suppressed by the one already active (#304). Identity is the file set, not merely the reason —
+    /// which matters because both cases carry the same reason.
+    /// </summary>
+    [TestMethod]
+    public async Task SeedWhileUnresolvedAsync_DifferentChangedFiles_WritesAgain()
+    {
+        NotificationEntity? first = await SeedReseedRecommendationAsync("a.json");
+        NotificationEntity? sameAgain = await SeedReseedRecommendationAsync("a.json");
+        NotificationEntity? differentSet = await SeedReseedRecommendationAsync("a.json", "b.json");
+
+        Assert.IsNotNull(first);
+        Assert.IsNull(sameAgain, "The same changed-file set is the same unresolved recommendation.");
+        Assert.IsNotNull(differentSet, "A different changed-file set is a different recommendation and must notify.");
+        Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items);
+    }
+
+    private Task<NotificationEntity?> SeedReseedRecommendationAsync(params string[] changedFiles) =>
+        NotificationSeeding.SeedWhileUnresolvedAsync(
+            _reader, _writer, NotificationType.ActionRequired,
+            new ReseedRecommendedMetadataDto
+            {
+                Reason = ReseedReason.ContentChanged,
+                ChangedFiles = changedFiles,
+                ReleaseState = NotificationReleaseState.NotApplicable,
+            },
+            body: $"Changed: {string.Join(", ", changedFiles)}", appVersionId: null,
+            dismissTrigger: NotificationDismissTrigger.Reseed);
+
+    private Task<NotificationEntity?> SeedWhileUnresolvedAsync(string announcement, string body) =>
+        NotificationSeeding.SeedWhileUnresolvedAsync(
+            _reader, _writer, NotificationType.ActionRequired,
+            new AnnouncementMetadataDto
+            {
+                Announcement = announcement,
+                ReleaseState = NotificationReleaseState.NotApplicable,
+            },
+            body: body, appVersionId: null);
 
     private Task<NotificationEntity?> SeedAsync(string announcement, string body) =>
         NotificationSeeding.SeedOnceAsync(

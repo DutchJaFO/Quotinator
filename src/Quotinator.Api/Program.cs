@@ -588,6 +588,9 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<IRuleFileOverridePathResolver>(),
         sp.GetRequiredService<ISourceFileOverrideRegistry>(),
         sp.GetRequiredService<IFileResourceRepository>(),
+        sp.GetRequiredService<INotificationReader>(),
+        sp.GetRequiredService<INotificationWriter>(),
+        sp.GetRequiredService<INotificationTextSource>(),
         QuotinatorMigrations.Baseline,
         sp.GetRequiredService<IDiskSpaceProvider>());
 });
@@ -622,6 +625,11 @@ builder.Services.AddSingleton<DatabaseHealthGateMiddleware>();
 builder.Services.AddSingleton<StartupWaitMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
+// #304: the same instance under its Quotinator.Data-side contract, so a notification producer in
+// Quotinator.Core can build per-language text without Data depending on Core (ADR 018's dependency
+// edge). Resolved from the registration above rather than constructed again — a second ApiLocalizer
+// would re-read every UI.*.json file and hold a duplicate table for the life of the process.
+builder.Services.AddSingleton<INotificationTextSource>(sp => sp.GetRequiredService<IApiLocalizer>());
 builder.Services.AddI18nText(options =>
 {
     // Use ASP.NET Core's culture (set from the .AspNetCore.Culture cookie by
@@ -1069,7 +1077,7 @@ if (dbHealth.IsHealthy)
             // #319: every language at once. The English above stays the notification's own text — the
             // content hash is taken over it, and the read path falls back to it — so only the other
             // languages become translation rows.
-            translations: Quotinator.Api.Startup.NotificationTranslations.Build(
+            translations: NotificationTranslations.Build(
                 app.Services.GetRequiredService<IApiLocalizer>(),
                 ApiMessages.NotificationOperationIdRenameTitle,
                 ApiMessages.NotificationOperationIdRenameBody));
@@ -1116,14 +1124,14 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
             // #319: both recorded versions are substituted into each language's own template, so the
             // numbers are not embedded in prose written once in English. The structured values stay in
             // the metadata payload above — this is the same pair, rendered.
-            title: Quotinator.Api.Startup.NotificationTranslations.Original(
+            title: NotificationTranslations.Original(
                        localizer, ApiMessages.NotificationSchemaOvershootTitle),
-            body: Quotinator.Api.Startup.NotificationTranslations.Original(
+            body: NotificationTranslations.Original(
                        localizer, ApiMessages.NotificationSchemaOvershootBody,
                        dbInitializer.DataSchemaVersion, dbInitializer.SchemaVersion),
             dismissTrigger: NotificationDismissTrigger.DatabaseReset,
             appVersionId: currentVersion?.Id,
-            translations: Quotinator.Api.Startup.NotificationTranslations.Build(
+            translations: NotificationTranslations.Build(
                 localizer,
                 ApiMessages.NotificationSchemaOvershootTitle,
                 ApiMessages.NotificationSchemaOvershootBody,

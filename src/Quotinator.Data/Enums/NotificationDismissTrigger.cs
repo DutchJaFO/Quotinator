@@ -13,5 +13,18 @@ namespace Quotinator.Data.Enums;
 public enum NotificationDismissTrigger
 {
     /// <summary>Superseded by a successful <c>POST /admin/database/reset</c>.</summary>
-    DatabaseReset
+    DatabaseReset,
+
+    /// <summary>
+    /// Superseded by content arriving: a successful reseed (via the notification action or
+    /// <c>POST /admin/database/reseed</c>), or a successful import that populates content (#304).
+    /// <para>
+    /// Unlike <see cref="DatabaseReset"/>, this marks a <b>recurring condition</b> rather than a
+    /// one-off event, so its producer dedupes against active rows only
+    /// (<c>NotificationSeeding.SeedWhileUnresolvedAsync</c>). Dismissal is therefore load-bearing: every
+    /// path that resolves the condition must dismiss this trigger, or the notification stays active and
+    /// silently suppresses every later occurrence.
+    /// </para>
+    /// </summary>
+    Reseed
 }

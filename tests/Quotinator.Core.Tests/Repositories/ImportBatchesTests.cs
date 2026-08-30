@@ -74,6 +74,7 @@ public class ImportBatchesTests
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             NoOpFileResourceRepository.Instance,
+            NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
             useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 

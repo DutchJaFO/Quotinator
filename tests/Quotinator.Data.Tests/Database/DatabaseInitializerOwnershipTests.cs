@@ -682,6 +682,24 @@ public class DatabaseInitializerOwnershipTests
                 "INSERT INTO System_Notification (Id, Type, Body, DismissTriggerKey, DateCreated) " +
                 "VALUES (@id, 'Information', 'x', 'NotARealTrigger', @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
+
+            // #304 widens both CHECKs in one rebuild. Accepted on both paths...
+            await conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, DismissTriggerKey, DateCreated) " +
+                "VALUES (@id, 'ActionRequired', 'Consider reseeding.', 'Reseed', @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, Metadata, MetadataKind, DateCreated) " +
+                "VALUES (@id, 'ActionRequired', 'Consider reseeding.', '{}', 'ReseedRecommended', @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            // ...and the widened MetadataKind CHECK still rejects a value outside the enum, which is
+            // the half a rebuild is most likely to drop by rewriting the constraint too loosely.
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, Metadata, MetadataKind, DateCreated) " +
+                "VALUES (@id, 'Information', 'x', '{}', 'NotARealKind', @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
         }
     }
 
@@ -725,9 +743,14 @@ public class DatabaseInitializerOwnershipTests
         await conn.OpenAsync(TestContext.CancellationToken);
         int dataRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
 
-        Assert.AreEqual(14, dataRows,
+        // Derived from what actually ran, not a literal: a hardcoded count goes stale the next time any
+        // milestone adds a migration (#304 was the fourth), and the reflex fix is to edit the digit
+        // rather than to check whether the replay still did what this test claims. The claim is "one row
+        // per version", and that is what is asserted.
+        Assert.IsGreaterThan(0, db.DataSchemaVersion,
+            "No Data-owned migration replayed at all, so the equality below would hold at zero and prove nothing.");
+        Assert.AreEqual(db.DataSchemaVersion, dataRows,
             "With no consumer baseline configured, Data's own migrations must still replay incrementally, one row per version");
-        Assert.AreEqual(14, db.DataSchemaVersion);
     }
 
     // ── Ordering proof ────────────────────────────────────────────────────────

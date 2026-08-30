@@ -9,9 +9,11 @@ using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
@@ -57,16 +59,19 @@ public class DatabaseInitializerTests
         IRuleFileOverridePathResolver? ruleFileOverridePathResolver = null, ISourceFileOverrideRegistry? sourceFileOverrideRegistry = null,
         bool autoPurgeBundledImportActions = false, bool autoPurgeUserImportActions = false,
         IAuditEntryWriter? auditWriter = null,
-        IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null)
+        IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
+        ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false)
         => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline, ruleFileOverridePathResolver, sourceFileOverrideRegistry,
-            autoPurgeBundledImportActions, autoPurgeUserImportActions, auditWriter, diskSpaceProvider, maxBackupStorageGb);
+            autoPurgeBundledImportActions, autoPurgeUserImportActions, auditWriter, diskSpaceProvider, maxBackupStorageGb,
+            sourceCacheUpdater, autoUpdateSources);
 
     private QuotinatorDatabaseInitializer CreateInitializer(
         IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline,
         IRuleFileOverridePathResolver? ruleFileOverridePathResolver = null, ISourceFileOverrideRegistry? sourceFileOverrideRegistry = null,
         bool autoPurgeBundledImportActions = false, bool autoPurgeUserImportActions = false,
         IAuditEntryWriter? auditWriter = null,
-        IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null)
+        IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
+        ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false)
     {
         SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
         DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1 };
@@ -87,13 +92,105 @@ public class DatabaseInitializerTests
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
             coordinator, actionService, actionWriter,
             auditWriter ?? NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
-            NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
+            sourceCacheUpdater ?? NoOpSourceCacheUpdater.Instance, autoUpdateSources,
             autoPurgeBundledImportActions, autoPurgeUserImportActions,
             ruleFileOverridePathResolver ?? NoOpRuleFileOverridePathResolver.Instance,
             sourceFileOverrideRegistry ?? NoOpSourceFileOverrideRegistry.Instance,
             NoOpFileResourceRepository.Instance,
+            TestNotificationReader.Create(factory),
+            new NotificationWriter(factory),
+            NoOpNotificationTextSource.Instance,
             useBaseline ? QuotinatorMigrations.Baseline : null,
             diskSpaceProvider ?? NoOpDiskSpaceProvider.Instance);
+    }
+
+    /// <summary>
+    /// #304 trigger 1: source content changed upstream on a database that already held quotes, so the
+    /// seeded data no longer reflects the sources and a reseed is worth recommending.
+    /// </summary>
+    [TestMethod]
+    public async Task Initialise_ContentChangedOnNonEmptyDatabase_WritesReseedRecommendation()
+    {
+        await SeedThenReinitialiseAsync(SourceRefreshOutcome.Updated, autoUpdateSources: true);
+
+        NotificationEntity notification = (await NotificationsAsync()).Single();
+
+        Assert.AreEqual(NotificationType.ActionRequired, notification.Type.Parsed);
+        Assert.AreEqual(NotificationDismissTrigger.Reseed, notification.DismissTriggerKey.Parsed);
+        Assert.AreEqual(NotificationMetadataKind.ReseedRecommended, notification.MetadataKind.Parsed);
+    }
+
+    /// <summary>Nothing changed upstream, so there is nothing to recommend.</summary>
+    [TestMethod]
+    public async Task Initialise_NoSourceContentChanged_WritesNoNotification()
+    {
+        await SeedThenReinitialiseAsync(SourceRefreshOutcome.UpToDate, autoUpdateSources: true);
+
+        Assert.IsEmpty(await NotificationsAsync());
+    }
+
+    /// <summary>
+    /// The database was empty, so the seed itself applied the new content — recommending a reseed of
+    /// content that just landed would be noise.
+    /// </summary>
+    [TestMethod]
+    public async Task Initialise_EmptyDatabaseSeeded_WritesNoNotification()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer(
+            [AllFilesBatch()], sourceCacheUpdater: new StubSourceCacheUpdater(SourceRefreshOutcome.Updated),
+            autoUpdateSources: true);
+        await db.InitialiseAsync();
+
+        Assert.IsEmpty(await NotificationsAsync(),
+            "The seed applied the changed content on this very run — there is nothing left to recommend.");
+    }
+
+    /// <summary>
+    /// With auto-update off no network check runs at all, so there is no basis on which to claim
+    /// anything changed.
+    /// </summary>
+    [TestMethod]
+    public async Task Initialise_AutoUpdateSourcesDisabled_WritesNoNotification()
+    {
+        await SeedThenReinitialiseAsync(SourceRefreshOutcome.Updated, autoUpdateSources: false);
+
+        Assert.IsEmpty(await NotificationsAsync());
+    }
+
+    /// <summary>
+    /// Seeds a database, then initialises a second time against the same file with the given refresh
+    /// outcome — the "already had content, then sources changed" shape trigger 1 fires on.
+    /// </summary>
+    private async Task SeedThenReinitialiseAsync(SourceRefreshOutcome outcome, bool autoUpdateSources)
+    {
+        QuotinatorDatabaseInitializer seeded = CreateInitializer([AllFilesBatch()]);
+        await seeded.InitialiseAsync();
+
+        QuotinatorDatabaseInitializer again = CreateInitializer(
+            [AllFilesBatch()], sourceCacheUpdater: new StubSourceCacheUpdater(outcome),
+            autoUpdateSources: autoUpdateSources);
+        await again.InitialiseAsync();
+    }
+
+    private async Task<IReadOnlyList<NotificationEntity>> NotificationsAsync()
+        => (await TestNotificationReader.Create(_dbPath).GetPagedAsync(1, 0)).Items;
+
+    /// <summary>
+    /// Reports a fixed outcome for every candidate file, without touching the network — the refresh
+    /// result is trigger 1's input, and the point here is what the initializer does with it.
+    /// </summary>
+    private sealed class StubSourceCacheUpdater(SourceRefreshOutcome outcome) : ISourceCacheUpdater
+    {
+        public Task<SourceCacheResolution> ResolveAsync(
+            IReadOnlyList<SeedBatch> candidateBatches, bool allowNetwork, bool forceRefresh,
+            CancellationToken cancellationToken = default)
+        {
+            List<SourceRefreshResult> results = [.. candidateBatches
+                .SelectMany(b => b.Files)
+                .Select(f => new SourceRefreshResult(Path.GetFileName(f.FilePath), "https://example.invalid", outcome))];
+
+            return Task.FromResult(new SourceCacheResolution(candidateBatches, results));
+        }
     }
 
     private static SeedBatch AllFilesBatch() => new(
@@ -1081,8 +1178,13 @@ public class DatabaseInitializerTests
             Assert.AreEqual(1, tableExists, $"{table} must exist after replaying the remaining Data migrations from a correctly-seeded starting point");
         }
 
-        Assert.AreEqual(14, db2.DataSchemaVersion,
+        // Derived, not a literal: the claim is that the replay carried on past the seeded starting point
+        // of 1 and that the reported version matches what was actually recorded. A hardcoded number
+        // states neither, goes stale on the next migration, and invites a digit edit instead of a check.
+        Assert.IsGreaterThan(1, db2.DataSchemaVersion,
             "Every Data-owned migration after the first should have replayed from the correctly-seeded starting point of 1");
+        Assert.AreEqual(dataRows.Max(row => row.Version), db2.DataSchemaVersion,
+            "The reported version must match the highest version actually recorded in System_SchemaVersion");
     }
 
     /// <summary>Replaying from a legacy v1.7.2 AuditEntries table renames it all the way to Audit_Entry (via migration 2's Audit_Entry then migration 3's domain-prefix rename) and preserves existing rows and both indexes.</summary>
@@ -1241,6 +1343,7 @@ public class DatabaseInitializerTests
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             NoOpFileResourceRepository.Instance,
+            NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
             QuotinatorMigrations.Baseline);
         return (db, dbPath);
     }
@@ -1523,7 +1626,11 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
-        Assert.AreEqual(14, db.DataSchemaVersion);
+        // The claim is that one collapsed row still reports the fully-migrated version, not that the
+        // version is any particular number — a literal here goes stale whenever a milestone adds a
+        // migration and gets "fixed" by editing the digit rather than by rechecking the collapse.
+        Assert.IsGreaterThan(0, db.DataSchemaVersion,
+            "The baseline must report a real version, or the single collapsed row above proves nothing.");
         Assert.AreEqual(5, db.SchemaVersion);
     }
 

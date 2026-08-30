@@ -94,6 +94,123 @@ public partial class RepositoryStructureTests
             + $"Directory.Packages.props as a <PackageVersion> entry:\n{string.Join("\n", failures)}");
     }
 
+    /// <summary>
+    /// Quotinator.Data must not reach Quotinator.Core, directly or transitively — ADR 004's
+    /// domain-agnostic invariant, and the edge ADR 018 narrows to "only projects that are already
+    /// domain-agnostic" (#304).
+    /// </summary>
+    /// <remarks>
+    /// Nothing enforced this before #304, which is why it is easy to undo by accident: the moment Data
+    /// needs something that happens to live in Core, adding the reference builds cleanly and the
+    /// invariant is gone with no signal. #304's own INotificationTextSource exists precisely to avoid
+    /// that reference, so the guard belongs alongside it. Walked transitively, since a reference added
+    /// to Quotinator.Changelog or Quotinator.Logging would breach the invariant just as effectively.
+    /// </remarks>
+    [TestMethod]
+    public void QuotinatorData_DoesNotReferenceQuotinatorCore()
+    {
+        string dataProject = Path.Combine(RepoRoot, "src", "Quotinator.Data", "Quotinator.Data.csproj");
+        string coreProject = Path.Combine(RepoRoot, "src", "Quotinator.Core", "Quotinator.Core.csproj");
+        Assert.IsTrue(File.Exists(dataProject), $"Quotinator.Data.csproj not found at {dataProject}.");
+        Assert.IsTrue(File.Exists(coreProject), $"Quotinator.Core.csproj not found at {coreProject}.");
+
+        // Positive controls first: "Data does not reach Core" and "this walk never matches anything"
+        // produce the same result, so the run has to show the instrument finding something. The second
+        // is reachable only by recursion — Core references Changelog through Data, never directly — so
+        // together they prove both that a match is possible and that the transitive walk works.
+        Assert.IsTrue(ReferencesProject(dataProject, "Quotinator.Changelog", []),
+            "Positive control failed: Quotinator.Data references Quotinator.Changelog directly, so the "
+            + "walk should find it. A failure here means the instrument is broken, not that the "
+            + "invariant below holds.");
+        Assert.IsTrue(ReferencesProject(coreProject, "Quotinator.Changelog", []),
+            "Positive control failed: Quotinator.Core reaches Quotinator.Changelog only through "
+            + "Quotinator.Data, so the walk should find it transitively. A failure here means the "
+            + "recursion is broken and the invariant below is untested at depth.");
+
+        List<string> chain = [];
+        Assert.IsFalse(ReferencesProject(dataProject, "Quotinator.Core", chain),
+            "Quotinator.Data reaches Quotinator.Core, which breaks its domain-agnostic invariant "
+            + "(ADR 004) and ADR 018's dependency edge. A Core type Data needs is a signal to invert "
+            + $"the dependency — declare the contract in Data and let Core implement it:\n  {string.Join("\n  → ", chain)}");
+    }
+
+    /// <summary>
+    /// The walk above finds a forbidden reference when one exists, and reports none when it does not —
+    /// proven against project files this test writes itself, since the real repository cannot supply the
+    /// violating case (a Quotinator.Data → Quotinator.Core reference is circular and fails restore
+    /// before any test runs).
+    /// </summary>
+    /// <remarks>
+    /// Without this, <see cref="QuotinatorData_DoesNotReferenceQuotinatorCore"/> is an assertion that
+    /// something is absent with nothing establishing the instrument could have found it — the shape
+    /// `docs/automated-testing/README.md` calls out as passing just as confidently when the mechanism is
+    /// broken. A walker that stopped recursing, or matched nothing at all, fails here and passes there.
+    /// </remarks>
+    [TestMethod]
+    public void ProjectReferenceWalk_FindsAnIndirectReference_AndNotAnUnreferencedProject()
+    {
+        string fixtureDir = Directory.CreateTempSubdirectory("quotinator_projref_walk_").FullName;
+        try
+        {
+            WriteProject(fixtureDir, "Alpha", "Beta");
+            WriteProject(fixtureDir, "Beta", "Gamma");
+            WriteProject(fixtureDir, "Gamma");
+            WriteProject(fixtureDir, "Delta");
+
+            string alpha = Path.Combine(fixtureDir, "Alpha.csproj");
+
+            List<string> chain = [];
+            Assert.IsTrue(ReferencesProject(alpha, "Gamma", chain),
+                "The walk must follow Alpha → Beta → Gamma. A non-recursive walk fails here.");
+            Assert.AreEqual("Alpha → Beta → Gamma", string.Join(" → ", chain),
+                "The reported chain must name the actual path, so a real failure says how the reference is reached.");
+
+            Assert.IsFalse(ReferencesProject(alpha, "Delta", []),
+                "Delta is referenced by nothing. A walk that reports every project as reachable fails here.");
+        }
+        finally
+        {
+            Directory.Delete(fixtureDir, recursive: true);
+        }
+    }
+
+    private static void WriteProject(string dir, string name, params string[] references)
+    {
+        string refs = string.Concat(references.Select(r => $"""    <ProjectReference Include="{r}.csproj" />{Environment.NewLine}"""));
+        File.WriteAllText(Path.Combine(dir, $"{name}.csproj"),
+            $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+            {refs}  </ItemGroup>
+            </Project>
+            """);
+    }
+
+    private static bool ReferencesProject(string projectFile, string targetName, List<string> chain)
+    {
+        chain.Add(Path.GetFileNameWithoutExtension(projectFile));
+
+        if (string.Equals(Path.GetFileNameWithoutExtension(projectFile), targetName, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        string projectDir = Path.GetDirectoryName(projectFile)!;
+        XDocument doc = XDocument.Load(projectFile);
+
+        foreach (XElement reference in doc.Descendants("ProjectReference"))
+        {
+            string? include = reference.Attribute("Include")?.Value;
+            if (include is null)
+                continue;
+
+            string referenced = Path.GetFullPath(Path.Combine(projectDir, include.Replace('\\', Path.DirectorySeparatorChar)));
+            if (File.Exists(referenced) && ReferencesProject(referenced, targetName, chain))
+                return true;
+        }
+
+        chain.RemoveAt(chain.Count - 1);
+        return false;
+    }
+
     /// <summary>Directory.Packages.props must exist at the repo root and switch central package management on.</summary>
     [TestMethod]
     public void DirectoryPackagesProps_ExistsAndEnablesCentralManagement()

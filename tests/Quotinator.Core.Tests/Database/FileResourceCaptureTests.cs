@@ -84,7 +84,9 @@ public class FileResourceCaptureTests
             NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
-            fileResources, QuotinatorMigrations.Baseline);
+            fileResources,
+            NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            QuotinatorMigrations.Baseline);
 
         await db.InitialiseAsync();
     }

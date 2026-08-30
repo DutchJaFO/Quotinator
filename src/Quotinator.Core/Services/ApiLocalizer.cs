@@ -1,11 +1,20 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Quotinator.Data.Notifications;
 
 namespace Quotinator.Core.Services;
 
-/// <summary>Looks up localised API error messages by key, using the current UI culture.</summary>
-public interface IApiLocalizer
+/// <summary>
+/// Looks up localised API error messages by key, using the current UI culture.
+/// <para>
+/// Extends <see cref="INotificationTextSource"/>, which declares <see cref="INotificationTextSource.ForEveryLanguage"/>
+/// on the <c>Quotinator.Data</c> side (#304). The notification text builder lives with the rest of the
+/// notification machinery there, and ADR 018's dependency edge stops it depending on this project — so
+/// the contract is Data's and the implementation is this one.
+/// </para>
+/// </summary>
+public interface IApiLocalizer : INotificationTextSource
 {
     /// <summary>Returns the localised message for <paramref name="key"/>, falling back through the culture hierarchy to the en-GB baseline.</summary>
     string this[string key] { get; }
@@ -23,20 +32,6 @@ public interface IApiLocalizer
     /// </summary>
     string Format(string key, params object[] args);
 
-    /// <summary>
-    /// Returns <paramref name="key"/> resolved in every language that defines it, keyed by ISO 639-1
-    /// code, with <paramref name="args"/> substituted into each language's own template (#319).
-    /// <para>
-    /// Resolves no culture at all, which is the point: a startup producer writing a notification has
-    /// no request culture, and the notification's text is stored per language rather than rendered
-    /// per request. A language whose file lacks the key is absent from the result rather than falling
-    /// back to English — a caller storing translations must be able to tell "this language has no
-    /// text" from "this language's text happens to be the English one".
-    /// </para>
-    /// </summary>
-    /// <param name="key">The message key to resolve.</param>
-    /// <param name="args">Positional <c>{0}</c>/<c>{1}</c> arguments, substituted into every language.</param>
-    IReadOnlyDictionary<string, string> ForEveryLanguage(string key, params object[] args);
 }
 
 /// <summary>

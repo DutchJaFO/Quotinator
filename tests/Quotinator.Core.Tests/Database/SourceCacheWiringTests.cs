@@ -74,7 +74,9 @@ public class SourceCacheWiringTests
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
             spy, autoUpdateSources,
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
-            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance, QuotinatorMigrations.Baseline);
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
+            NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            QuotinatorMigrations.Baseline);
     }
 
     // Row 13: a second POST /reseed call re-evaluates staleness independently of the first — proves
@@ -172,7 +174,9 @@ public class SourceCacheWiringTests
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             new SpySourceCacheUpdater(), autoUpdateSources: false,
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
-            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance, QuotinatorMigrations.Baseline);
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
+            NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
         var preview = await db.PreviewSeedAsync();
@@ -207,7 +211,9 @@ public class SourceCacheWiringTests
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             new SpySourceCacheUpdater(), autoUpdateSources: false,
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
-            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance, QuotinatorMigrations.Baseline);
+            NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
+            NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
         var preview = await db.PreviewSeedAsync();

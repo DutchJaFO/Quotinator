@@ -61,7 +61,89 @@ public static class NotificationSeeding
         // page — the check has to see dismissed and expired rows too, or a dismissed notification
         // would be rewritten on the next restart.
         PagedItems<NotificationEntity> history = await reader.GetPagedAsync(1, 0);
-        if (history.Items.Any(stored => IdentifiesSameNotification(stored, metadata)))
+
+        return await WriteUnlessAlreadyPresentAsync(
+            history.Items, writer, type, metadata, body, appVersionId, title,
+            dismissTrigger, expiresAt, translations);
+    }
+
+    /// <summary>
+    /// Writes a notification unless one identifying the same thing is still <b>active</b> — undismissed,
+    /// unexpired and not soft-deleted. Returns the newly written entity, or <see langword="null"/> when
+    /// an active notification suppressed the write.
+    /// <para>
+    /// The sibling of <see cref="SeedOnceAsync"/>, for a producer describing a <b>condition that can
+    /// recur</b> rather than an event that happened once (#304). Dedupe here means "while unresolved":
+    /// a recommendation stops suppressing the moment it is dismissed, so the same condition arising
+    /// again notifies again. That makes dismissal load-bearing — whatever resolves the condition must
+    /// actually dismiss, or the notification stays active forever and silently swallows every later
+    /// occurrence.
+    /// </para>
+    /// <para>
+    /// Do not "simplify" the two into one helper with a flag. <see cref="SeedOnceAsync"/>'s
+    /// full-history comparison is deliberate and load-bearing for #279, #289 and #81 — each describes
+    /// something that happened once, and narrowing it to active rows would make all three re-announce
+    /// themselves after a user dismissed one and restarted.
+    /// </para>
+    /// </summary>
+    /// <param name="reader">Supplies the active notifications the comparison runs against.</param>
+    /// <param name="writer">Performs the write when nothing matches.</param>
+    /// <param name="type">Severity/kind of the notification.</param>
+    /// <param name="metadata">
+    /// The producer's payload, which both identifies the notification and is stored alongside it. Its
+    /// runtime type is what gets serialized, so a derived type's own properties are preserved.
+    /// </param>
+    /// <param name="body">The message text.</param>
+    /// <param name="appVersionId">
+    /// The <c>System_AppVersion</c> row for the version adding this notification, or
+    /// <see langword="null"/> when it could not be determined.
+    /// </param>
+    /// <param name="title">Optional short headline shown above <paramref name="body"/>.</param>
+    /// <param name="dismissTrigger">Which action, if performed, supersedes this notification.</param>
+    /// <param name="expiresAt">When this notification stops being active. <see langword="null"/> means it never expires.</param>
+    /// <param name="translations">Every non-original language's title and body, passed through to <see cref="INotificationWriter.WriteAsync"/> (#319). Never part of the identity comparison.</param>
+    public static async Task<NotificationEntity?> SeedWhileUnresolvedAsync(
+        INotificationReader reader,
+        INotificationWriter writer,
+        NotificationType type,
+        NotificationMetadataDto metadata,
+        string body,
+        Guid? appVersionId,
+        string? title = null,
+        NotificationDismissTrigger? dismissTrigger = null,
+        DateTime? expiresAt = null,
+        IReadOnlyList<NotificationTranslation>? translations = null)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+
+        // No language: the comparison reads the stored Metadata payload, never the resolved text, so
+        // which language the reader would render is irrelevant here.
+        IReadOnlyList<NotificationEntity> active = await reader.GetActiveNotificationsAsync();
+
+        return await WriteUnlessAlreadyPresentAsync(
+            active, writer, type, metadata, body, appVersionId, title,
+            dismissTrigger, expiresAt, translations);
+    }
+
+    /// <summary>
+    /// The half both helpers share: compare <paramref name="metadata"/> against
+    /// <paramref name="existing"/> and write when nothing matches. Only the set of rows differs between
+    /// the two, so the comparison and the write live here once — otherwise the two could drift apart in
+    /// how they read a stored payload back, which is exactly the bug neither would show in its own test.
+    /// </summary>
+    private static async Task<NotificationEntity?> WriteUnlessAlreadyPresentAsync(
+        IReadOnlyList<NotificationEntity> existing,
+        INotificationWriter writer,
+        NotificationType type,
+        NotificationMetadataDto metadata,
+        string body,
+        Guid? appVersionId,
+        string? title,
+        NotificationDismissTrigger? dismissTrigger,
+        DateTime? expiresAt,
+        IReadOnlyList<NotificationTranslation>? translations)
+    {
+        if (existing.Any(stored => IdentifiesSameNotification(stored, metadata)))
             return null;
 
         // Through the registry that also reads it back, so the write and read halves of the round-trip
