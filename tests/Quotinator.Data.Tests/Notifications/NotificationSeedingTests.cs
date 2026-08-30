@@ -59,6 +59,9 @@ public class NotificationSeedingTests
         // #304: widens the DismissTriggerKey and MetadataKind CHECKs. Without it a Reseed-triggered
         // notification fails on the constraint rather than on whatever the test is asserting.
         conn.Execute(NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind);
+        // #304: the read projection selects DismissReason, so every fixture reading through the real
+        // reader needs the column to exist.
+        conn.Execute(NotificationDismissReasonMigrations.AddDismissReasonColumn);
 
         SqliteConnectionFactory factory = new(_dbPath);
         _writer = new NotificationWriter(factory);

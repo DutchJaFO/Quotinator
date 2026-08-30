@@ -52,6 +52,46 @@ public class NotificationTableTests
         ExpiresAt   = expiresAt is DateTime dt ? SafeDateValue.From(dt) : SafeDateValue.Empty,
     };
 
+    /// <summary>
+    /// #304: a notification whose action was carried out reads as done, not as declined. Found in T1 —
+    /// running the reseed reported "Dismissed", which tells the user the opposite of what they did.
+    /// </summary>
+    [TestMethod]
+    public void GetDisplayStatus_DismissedBecauseResolved_IsResolved()
+    {
+        NotificationEntity notification = Build(isDismissed: true, expiresAt: null);
+        notification.DismissReason = new SafeValue<NotificationDismissReason?>(
+            NotificationDismissReason.Resolved.ToString(), NotificationDismissReason.Resolved);
+
+        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Resolved,
+            NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow));
+    }
+
+    /// <summary>The user's own dismiss still reads as dismissed — the distinction only works if both sides hold.</summary>
+    [TestMethod]
+    public void GetDisplayStatus_DismissedByUser_IsDismissed()
+    {
+        NotificationEntity notification = Build(isDismissed: true, expiresAt: null);
+        notification.DismissReason = new SafeValue<NotificationDismissReason?>(
+            NotificationDismissReason.Dismissed.ToString(), NotificationDismissReason.Dismissed);
+
+        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Dismissed,
+            NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow));
+    }
+
+    /// <summary>
+    /// A row dismissed before #304 added the reason column keeps the original label rather than being
+    /// guessed into one bucket. Claiming such a row was "done" would invent history it does not have.
+    /// </summary>
+    [TestMethod]
+    public void GetDisplayStatus_DismissedWithNoRecordedReason_IsDismissed()
+    {
+        NotificationEntity notification = Build(isDismissed: true, expiresAt: null);
+
+        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Dismissed,
+            NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow));
+    }
+
     [TestMethod]
     public void GetDisplayStatus_NotDismissedNoExpiry_IsActive()
     {

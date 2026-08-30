@@ -96,4 +96,11 @@ public sealed class NotificationEntity : RecordBase
     /// this notification automatically.
     /// </summary>
     public SafeValue<NotificationDismissTrigger?> DismissTriggerKey { get; init; } = SafeValue<NotificationDismissTrigger?>.Empty;
+
+    /// <summary>
+    /// Why this notification stopped being active — see <see cref="Enums.NotificationDismissReason"/>.
+    /// <see langword="null"/> while it is still active, and on rows dismissed before #304 added this
+    /// column, where the reason genuinely is not known rather than being one value or the other.
+    /// </summary>
+    public SafeValue<NotificationDismissReason?> DismissReason { get; set; } = SafeValue<NotificationDismissReason?>.Empty;
 }

@@ -37,6 +37,10 @@ public class NotificationReaderTests
         // #319: the language column and the translation table the read projection joins against.
         conn.Execute(NotificationTranslationMigrations.AddOriginalLanguageColumn);
         conn.Execute(NotificationTranslationMigrations.CreateNotificationTranslationTable);
+        // #304: the CHECK widening, then the column recording why a notification stopped being active —
+        // the read projection selects it, so it has to exist here.
+        conn.Execute(NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind);
+        conn.Execute(NotificationDismissReasonMigrations.AddDismissReasonColumn);
 
         SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
         _reader = TestNotificationReader.Create(factory);

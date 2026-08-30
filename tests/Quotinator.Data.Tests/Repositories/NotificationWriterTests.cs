@@ -40,6 +40,9 @@ public class NotificationWriterTests
         // #319: the language column and the translation table the read projection joins against.
         conn.Execute(NotificationTranslationMigrations.AddOriginalLanguageColumn);
         conn.Execute(NotificationTranslationMigrations.CreateNotificationTranslationTable);
+        // #304: the CHECK widening, then the column recording why a notification stopped being active.
+        conn.Execute(NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind);
+        conn.Execute(NotificationDismissReasonMigrations.AddDismissReasonColumn);
 
         SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
         _writer = new NotificationWriter(factory);
@@ -115,6 +118,47 @@ public class NotificationWriterTests
         conn.Open();
         NotificationEntity persisted = conn.QuerySingle<NotificationEntity>("SELECT * FROM System_Notification WHERE Id = @id;", new { id = entity.Id.ToString("D") });
         Assert.IsTrue(persisted.IsDismissed, "dismissal must be persisted, not just reflected on the in-memory return value");
+        Assert.AreEqual(NotificationDismissReason.Dismissed, persisted.DismissReason.Parsed,
+            "#304: dismissing by id is the user setting it aside, which must be recorded as such rather than as resolved.");
+    }
+
+    /// <summary>
+    /// #304: every caller of the trigger-based dismiss is an action that carried out the work, so the
+    /// row records that it was resolved. Without this the UI can only report it as dismissed, telling a
+    /// user who ran the action that they declined it — which is what T1 found.
+    /// </summary>
+    [TestMethod]
+    public async Task DismissByTriggerAsync_RecordsResolvedRatherThanDismissed()
+    {
+        NotificationEntity entity = await _writer.WriteAsync(
+            NotificationType.ActionRequired, "reseed me", appVersionId: null,
+            dismissTrigger: NotificationDismissTrigger.Reseed);
+
+        int dismissed = await _writer.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
+
+        Assert.AreEqual(1, dismissed);
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        NotificationEntity persisted = conn.QuerySingle<NotificationEntity>(
+            "SELECT * FROM System_Notification WHERE Id = @id;", new { id = entity.Id.ToString("D") });
+
+        Assert.IsTrue(persisted.IsDismissed);
+        Assert.AreEqual(NotificationDismissReason.Resolved, persisted.DismissReason.Parsed);
+    }
+
+    /// <summary>The CHECK rejects a reason outside the enum, per ADR 008.</summary>
+    [TestMethod]
+    public async Task DismissReason_UnknownValue_IsRejectedByTheCheckConstraint()
+    {
+        NotificationEntity entity = await _writer.WriteAsync(NotificationType.Information, "x", appVersionId: null);
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+            "UPDATE System_Notification SET DismissReason = 'NotARealReason' WHERE Id = @id;",
+            new { id = entity.Id.ToString("D") }));
     }
 
     [TestMethod]

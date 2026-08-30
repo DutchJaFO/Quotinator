@@ -50,6 +50,7 @@
   "NotificationsActiveLabel": "Actief",
   "NotificationsExpiredLabel": "Verlopen",
   "NotificationsDismissedLabel": "Afgewezen",
+  "NotificationsResolvedLabel": "Uitgevoerd",
   "NotificationsDismissButton": "Afwijzen",
   "NotificationsRunActionButton": "Uitvoeren",
   "NotificationsConfirmActionButton": "Bevestigen",

@@ -43,6 +43,8 @@ public class ReseedRecommendedMetadataTests
         // #304's own rebuild — without it the CHECK rejects 'ReseedRecommended' and every test here
         // fails on the write rather than on what it is actually asserting.
         conn.Execute(NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind);
+        // #304: the read projection selects DismissReason.
+        conn.Execute(NotificationDismissReasonMigrations.AddDismissReasonColumn);
 
         SqliteConnectionFactory factory = new(_dbPath);
         _writer = new NotificationWriter(factory);

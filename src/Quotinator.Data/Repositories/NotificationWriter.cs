@@ -103,11 +103,17 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
         conn.Open();
 
         SafeValue<DateTime?> now = SafeDateValue.Now;
+        // #304: this is the user setting the notification aside, not the thing being dealt with —
+        // DismissByTriggerAsync below is the one that records a resolution.
+        SafeValue<NotificationDismissReason?> reason =
+            new(NotificationDismissReason.Dismissed.ToString(), NotificationDismissReason.Dismissed);
+
         await conn.ExecuteAsync(Sql.Notifications.UpdateDismissById,
-            new { id, dismissedAt = now.Raw, dateModified = now.Raw });
+            new { id, dismissedAt = now.Raw, dismissReason = reason.Raw, dateModified = now.Raw });
 
         entity.IsDismissed = true;
         entity.DismissedAt = now;
+        entity.DismissReason = reason;
         return entity;
     }
 
@@ -118,7 +124,12 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
         conn.Open();
 
         SafeValue<DateTime?> now = SafeDateValue.Now;
+        // #304: every caller of this is an action that actually carried out the work — a reseed, a
+        // reset, an import. Recording it as Resolved is what stops the UI telling a user who ran the
+        // action that they declined it.
+        string reason = NotificationDismissReason.Resolved.ToString();
+
         return await conn.ExecuteAsync(Sql.Notifications.UpdateDismissByTrigger,
-            new { trigger = trigger.ToString(), dismissedAt = now.Raw, dateModified = now.Raw });
+            new { trigger = trigger.ToString(), dismissedAt = now.Raw, dismissReason = reason, dateModified = now.Raw });
     }
 }

@@ -50,6 +50,7 @@
   "NotificationsActiveLabel": "Active",
   "NotificationsExpiredLabel": "Expired",
   "NotificationsDismissedLabel": "Dismissed",
+  "NotificationsResolvedLabel": "Done",
   "NotificationsDismissButton": "Dismiss",
   "NotificationsRunActionButton": "Run",
   "NotificationsConfirmActionButton": "Confirm",

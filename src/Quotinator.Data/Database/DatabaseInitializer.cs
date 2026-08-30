@@ -125,6 +125,10 @@ public class DatabaseInitializer(
         // cannot widen a CHECK in place, so this is a table rebuild — both widenings share the one
         // rebuild rather than copying every row twice.
         new SchemaMigration { Version = 15, Sql = NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind },
+        // #304: record why a notification stopped being active, so running an action is not reported as
+        // a dismissal. A plain ADD COLUMN with its CHECK inline — no rebuild needed, since nothing
+        // existing is being widened.
+        new SchemaMigration { Version = 16, Sql = NotificationDismissReasonMigrations.AddDismissReasonColumn },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -326,7 +330,9 @@ public class DatabaseInitializer(
             MetadataKind      TEXT
                               CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended')),
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
-            OriginalLanguage  TEXT    NOT NULL DEFAULT 'en'
+            OriginalLanguage  TEXT    NOT NULL DEFAULT 'en',
+            DismissReason     TEXT
+                              CHECK (DismissReason IS NULL OR DismissReason IN ('Dismissed', 'Resolved'))
         );
         CREATE INDEX IF NOT EXISTS IX_System_Notification_Active ON System_Notification (IsDismissed, IsDeleted, ExpiresAt);
         CREATE INDEX IF NOT EXISTS IX_System_Notification_DismissTriggerKey ON System_Notification (DismissTriggerKey);

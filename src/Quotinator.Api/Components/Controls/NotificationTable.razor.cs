@@ -42,7 +42,7 @@ public partial class NotificationTable
     /// Not a persisted column — computed from <see cref="NotificationEntity.IsDismissed"/>/
     /// <see cref="NotificationEntity.ExpiresAt"/> at render time via <see cref="GetDisplayStatus"/>.
     /// </summary>
-    internal enum NotificationDisplayStatus { Active, Expired, Dismissed }
+    internal enum NotificationDisplayStatus { Active, Expired, Dismissed, Resolved }
 
     /// <summary>
     /// Classifies a notification's display status: <see cref="NotificationDisplayStatus.Dismissed"/>
@@ -55,7 +55,14 @@ public partial class NotificationTable
     internal static NotificationDisplayStatus GetDisplayStatus(NotificationEntity notification, DateTime now)
     {
         if (notification.IsDismissed)
-            return NotificationDisplayStatus.Dismissed;
+        {
+            // #304: a notification whose action was actually carried out must not read as one the user
+            // declined. A row dismissed before the reason column existed has no recorded reason, and
+            // keeps the original label rather than being guessed into one bucket or the other.
+            return notification.DismissReason.Parsed == NotificationDismissReason.Resolved
+                ? NotificationDisplayStatus.Resolved
+                : NotificationDisplayStatus.Dismissed;
+        }
         if (notification.ExpiresAt.Parsed is DateTime expiresAt && expiresAt <= now)
             return NotificationDisplayStatus.Expired;
         return NotificationDisplayStatus.Active;

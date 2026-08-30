@@ -29,6 +29,9 @@
                 <td>
                     @switch (GetDisplayStatus(notification, Now))
                     {
+                        case NotificationDisplayStatus.Resolved:
+                            <span class="badge bg-primary">@Text.NotificationsResolvedLabel</span>
+                            break;
                         case NotificationDisplayStatus.Dismissed:
                             <span class="badge bg-secondary">@Text.NotificationsDismissedLabel</span>
                             break;

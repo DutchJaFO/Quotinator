@@ -429,10 +429,22 @@ public class NotificationTranslationTests
         await connection.ExecuteAsync(NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields);
     }
 
+    /// <summary>
+    /// Brings a database at <c>SchemaThroughMigration11</c> up to the current schema.
+    /// <para>
+    /// #319's own two migrations, then the later ones a read through the *current* projection needs:
+    /// `Sql.Notifications.SelectColumns` selects every column the table has today, so a fixture frozen
+    /// at #319 cannot serve a test that reads through the real reader or writer. The frozen array itself
+    /// stays frozen deliberately — it defines "the schema before #319" and must not drift — so the
+    /// catching-up happens here instead (#304).
+    /// </para>
+    /// </summary>
     private static async Task ApplyTranslationSchemaAsync(SqliteConnection connection)
     {
         await connection.ExecuteAsync(NotificationTranslationMigrations.AddOriginalLanguageColumn);
         await connection.ExecuteAsync(NotificationTranslationMigrations.CreateNotificationTranslationTable);
+        await connection.ExecuteAsync(NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind);
+        await connection.ExecuteAsync(NotificationDismissReasonMigrations.AddDismissReasonColumn);
     }
 
     // v1.8.3's announcement exactly as that release wrote it, with #312's migration 8 metadata already

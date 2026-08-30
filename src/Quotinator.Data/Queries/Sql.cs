@@ -593,7 +593,7 @@ internal static class Sql
             "COALESCE(t.Body,  n.Body)  AS Body, " +
             "n.Metadata, n.MetadataKind, " +
             $"{IdClauses.SelectColumn("n.AppVersionId", "AppVersionId")}, " +
-            "n.ExpiresAt, n.IsDismissed, n.DismissedAt, n.DismissTriggerKey, " +
+            "n.ExpiresAt, n.IsDismissed, n.DismissedAt, n.DismissTriggerKey, n.DismissReason, " +
             "n.DateCreated, n.DateModified, n.DateDeleted, n.IsDeleted, n.OriginalLanguage, " +
             "CASE WHEN t.Body IS NOT NULL THEN LOWER(@lang) ELSE n.OriginalLanguage END AS EffectiveLanguage";
 
@@ -627,9 +627,12 @@ internal static class Sql
         internal static readonly string SelectById =
             $"SELECT {SelectColumns} {FromWithTranslation} WHERE {IdClauses.Equals("n.Id", "id")};";
 
-        /// <summary>Marks one notification dismissed by Id. Idempotent — dismissing an already-dismissed row is a no-op in effect, not an error.</summary>
+        /// <summary>
+        /// Marks one notification dismissed by Id, recording why (#304). Idempotent — dismissing an
+        /// already-dismissed row is a no-op in effect, not an error.
+        /// </summary>
         internal static readonly string UpdateDismissById =
-            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DateModified = @dateModified " +
+            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, DateModified = @dateModified " +
             $"WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>
@@ -639,7 +642,7 @@ internal static class Sql
         /// project's project-wide enum-comparison convention.
         /// </summary>
         internal static readonly string UpdateDismissByTrigger =
-            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DateModified = @dateModified " +
+            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, DateModified = @dateModified " +
             $"WHERE IsDismissed = 0 AND IsDeleted = 0 AND {TextClauses.Equals("DismissTriggerKey", "trigger")};";
     }
 
