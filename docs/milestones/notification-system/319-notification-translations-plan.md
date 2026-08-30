@@ -1,6 +1,6 @@
-# #319 — Notification title and body are not translated
+﻿# #319 — Notification title and body are not translated
 
-**Status:** In progress (step 12)
+**Status:** Waiting for release
 **GitHub issue:** #319
 **Tiers required:** T1, T2
 **Depends on:** #278, #312
@@ -471,7 +471,7 @@ non-step so a reader does not go looking for it as one.
 
 ### 12. Verification
 
-**Status:** 🔄 In progress — unit rows and T1 green; T2 outstanding
+**Status:** ✅ Done
 
 Work the table below top to bottom. T2 before T1, per `docs/release-verification.md`.
 
@@ -480,9 +480,10 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 the Notifications page both rendered the announcement translated — German and Dutch respectively —
 which is what the earlier run showed still in English.
 
-That run corroborates rows 24 and 25 but does not discharge them: both are declared T2, and
-`docs/release-verification.md` requires T2 for every issue regardless of what T1 happened to show.
-They stay ❌ until `notifications-and-changelog/08` and `09` are executed against a Docker build.
+**T2 passed 2026-08-30.** Both of this issue's documents ran green end to end, plus the designated
+smoke set — `api-surface/01` and `02`, `import-and-staged-actions/01`, `14` and `19`,
+`database-lifecycle/03`, `startup-and-degradation/03`, and `notifications-and-changelog/01` and `07`.
+All containers and volumes were torn down, none left behind.
 
 ---
 
@@ -513,8 +514,8 @@ They stay ❌ until `notifications-and-changelog/08` and `09` are executed again
 | 21 | ✅ | A malformed `lang` is rejected consistently with the quote endpoints | Unit test | `InputValidation.TryNormalizeLang`'s existing contract — same status code as `/quotes` returns for the same input |
 | 22 | ✅ | `language`/`originalLanguage`/`isTranslated` are populated correctly | Unit test | Endpoint test, translated and fallback cases |
 | 23 | ✅ | The dismiss endpoint resolves text the same way | Unit test | Endpoint test — it echoes the notification back |
-| 24 | ❌ | Both surfaces render a resolved **body** | Live (T2) | `notifications-and-changelog/08`, plus the Notifications page and startup popup, UI switched to `nl` — screenshot, not text extraction. Scoped to `Body`: `Title` is rendered nowhere until #308, so it cannot be seen here. T2, not T1 — T1's whole job is confirming the app still starts (`docs/release-verification.md`) |
-| 25 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | `notifications-and-changelog/09`; ADR 009, plus `docs/automated-testing/notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md` |
+| 24 | ✅ | Both surfaces render a resolved **body** | Live (T2) | `notifications-and-changelog/08` executed 2026-08-30, all 7 steps green: fallback reports `language: en` rather than echoing `fr`, a translated request returns different text, `?lang=` outranks `Accept-Language` both ways, malformed `lang` is `400`, dismiss resolves identically |
+| 25 | ✅ | Migration applies cleanly to a database at the previous released schema | Live (T2) | `notifications-and-changelog/09` executed 2026-08-30 against a real `ghcr.io/dutchjafo/quotinator:1.8.3` database, all 6 steps green: replayed `version 3 → 14` with no unhandled exception, announcement resolves in en/nl/de with three distinct titles, original English intact across a restart, backfill idempotent |
 | 26 | ✅ | The application still starts with the new schema and read path in place | Live (T1) | Visual Studio run, 2026-08-29: `applying 11 pending Data migration(s) (version 3 → 14)`, `schema updated (data v14, app v5)`, `Quotinator ready`, no unhandled exception |
 | 27 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s) |
 | 28 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 3,661 passed, 0 failed across all 10 projects |
