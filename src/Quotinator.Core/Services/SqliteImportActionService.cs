@@ -35,6 +35,7 @@ namespace Quotinator.Core.Services;
 /// <param name="soundCueRepository">Repository used to apply a decided action's resolved fields to a SoundCue entity.</param>
 /// <param name="importBatchRepository">Repository used to look up and update the batch an action belongs to.</param>
 /// <param name="factory">Factory used to open the connection and transaction each apply/discard operation runs in.</param>
+/// <param name="notificationWriter">Dismisses a reseed recommendation once an import has actually populated content (#304).</param>
 public sealed class SqliteImportActionService(
     IImportActionReader actionReader,
     IImportActionCoordinator coordinator,
@@ -49,7 +50,8 @@ public sealed class SqliteImportActionService(
     IRestorableRepository<StageDirectionEntity> stageDirectionRepository,
     IRestorableRepository<SoundCueEntity> soundCueRepository,
     IImportBatchRepository importBatchRepository,
-    IDbConnectionFactory factory) : IImportActionService
+    IDbConnectionFactory factory,
+    INotificationWriter notificationWriter) : IImportActionService
 {
     private readonly IImportActionReader _actionReader = actionReader;
     private readonly IImportActionCoordinator _coordinator = coordinator;
@@ -390,6 +392,14 @@ public sealed class SqliteImportActionService(
         if (pending is null)
         {
             await MarkImportBatchAppliedAsync(batchId);
+
+            // #304: content has just landed, which resolves a reseed recommendation as surely as a
+            // reseed would. Dismissed here rather than at each endpoint because this is the single
+            // choke point both /import/ and /import/actions/apply funnel through — and because the
+            // recommendation dedupes against active rows, one left undismissed would suppress every
+            // later occurrence silently. Inside the success branch on purpose: a batch that left
+            // actions pending closed no gap.
+            await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
 
             // #249: the caller opted in to purging this batch's conflict-resolution data the moment
             // it's no longer needed — mirrors QuotinatorDatabaseInitializer's seeding-path auto-purge,

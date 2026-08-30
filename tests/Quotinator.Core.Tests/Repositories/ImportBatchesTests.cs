@@ -66,7 +66,7 @@ public class ImportBatchesTests
             new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            importBatches, factory);
+            importBatches, factory, NoOpNotificationWriter.Instance);
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
             coordinator, actionService, actionWriter,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,

@@ -221,6 +221,25 @@ public class AdminEndpointsTests
     }
 
     /// <summary>
+    /// #304: a reseed resolves the recommendation however it was triggered, so the plain admin endpoint
+    /// dismisses it too — not only the notification action. Without this the recommendation stays active
+    /// after the operator resolved it by hand, and then silently dedupes every later occurrence.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Success_DismissesReseedRecommendation()
+    {
+        FakeNotificationWriter writer = new();
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, notificationWriter: writer);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reseed", null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(NotificationDismissTrigger.Reseed, writer.DismissByTriggerCalls,
+            "A reseed through the plain endpoint resolves the same condition the notification action does.");
+    }
+
+    /// <summary>
     /// #304 trigger 2: Reset deliberately does not reimport bundled content (#156), so a successful
     /// Reset leaves the database with no quotes and nothing tells the operator. It writes an
     /// ActionRequired recommendation instead of reseeding on their behalf.

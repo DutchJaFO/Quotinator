@@ -58,7 +58,7 @@ public class QuoteImportServiceTests
             new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            importBatches, _factory);
+            importBatches, _factory, NoOpNotificationWriter.Instance);
         var db = new QuotinatorDatabaseInitializer(
             _factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, actionWriter,
@@ -97,7 +97,7 @@ public class QuoteImportServiceTests
             new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            importBatches, _factory);
+            importBatches, _factory, NoOpNotificationWriter.Instance);
         return new SqliteQuoteImportService(
             _factory, importBatches, coordinator, actionService, actionReader,
             converters ?? new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase),

@@ -181,9 +181,14 @@ internal static class AdminEndpoints
 
         // ── Admin-only ────────────────────────────────────────────────────────
 
-        adminGroup.MapPost("/database/reseed", async (IDatabaseInitializer db, bool forceSourceRefresh = false) =>
+        adminGroup.MapPost("/database/reseed", async (IDatabaseInitializer db, INotificationWriter notificationWriter, bool forceSourceRefresh = false) =>
         {
             await db.ReseedAsync(forceSourceRefresh);
+            // #304: a reseed resolves the recommendation whichever route triggered it, so this endpoint
+            // dismisses exactly as the notification action does. Load-bearing rather than tidy: the
+            // recommendation dedupes against *active* rows, so one left undismissed after the operator
+            // resolved it by hand would suppress every later occurrence silently.
+            await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
             return Results.Ok(new DatabaseSeedSummaryResponse
             {
                 Quotes          = db.QuoteCount,

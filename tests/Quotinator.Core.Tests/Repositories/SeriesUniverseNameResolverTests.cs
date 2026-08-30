@@ -46,7 +46,7 @@ public class SeriesUniverseNameResolverTests
             new SqliteRestorableRepository<Quotinator.Core.Entities.ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            importBatches, _factory);
+            importBatches, _factory, NoOpNotificationWriter.Instance);
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, actionWriter, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,

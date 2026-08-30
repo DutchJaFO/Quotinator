@@ -415,6 +415,55 @@ public class NotificationSeedingTests
         Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items);
     }
 
+    /// <summary>
+    /// #304's recurrence case, at the level where it is actually decided. A Reset recommends a reseed;
+    /// the operator reseeds, which dismisses it; a later Reset must recommend again rather than being
+    /// deduped against the resolved one. Fails outright under `SeedOnceAsync`, which is the whole reason
+    /// the sibling helper exists.
+    /// </summary>
+    [TestMethod]
+    public async Task SeedWhileUnresolvedAsync_ConditionResolvedThenRecurs_WritesAgain()
+    {
+        NotificationEntity? afterFirstReset = await SeedAfterResetAsync();
+        Assert.IsNotNull(afterFirstReset);
+
+        // What a reseed or a content-populating import does on its success path.
+        await _writer.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
+
+        NotificationEntity? afterSecondReset = await SeedAfterResetAsync();
+
+        Assert.IsNotNull(afterSecondReset,
+            "The condition recurred after being resolved, so it must notify again — otherwise the operator "
+            + "is told nothing about a database that is once more empty.");
+        Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items);
+    }
+
+    /// <summary>
+    /// The counterpart: without something dismissing it, a recurrence is suppressed. This is what makes
+    /// the dismiss wiring load-bearing rather than tidy — and what the test above would still pass
+    /// against if dedupe had simply been switched off.
+    /// </summary>
+    [TestMethod]
+    public async Task SeedWhileUnresolvedAsync_ConditionRecursWhileUnresolved_DoesNotWriteAgain()
+    {
+        await SeedAfterResetAsync();
+        NotificationEntity? second = await SeedAfterResetAsync();
+
+        Assert.IsNull(second, "Still unresolved, so the same recommendation must not be written twice.");
+        Assert.HasCount(1, (await _reader.GetPagedAsync(1, 0)).Items);
+    }
+
+    private Task<NotificationEntity?> SeedAfterResetAsync() =>
+        NotificationSeeding.SeedWhileUnresolvedAsync(
+            _reader, _writer, NotificationType.ActionRequired,
+            new ReseedRecommendedMetadataDto
+            {
+                Reason = ReseedReason.AfterReset,
+                ReleaseState = NotificationReleaseState.NotApplicable,
+            },
+            body: "The database was reset and holds no quotes.", appVersionId: null,
+            dismissTrigger: NotificationDismissTrigger.Reseed);
+
     private Task<NotificationEntity?> SeedReseedRecommendationAsync(params string[] changedFiles) =>
         NotificationSeeding.SeedWhileUnresolvedAsync(
             _reader, _writer, NotificationType.ActionRequired,

@@ -13,6 +13,7 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
@@ -37,6 +38,34 @@ public class SqliteImportActionServiceTests
     private ImportActionResolutionCoordinator _coordinator = null!;
     private SqliteImportActionService _service = null!;
 
+    private readonly RecordingNotificationWriter _notificationWriter = new();
+
+    /// <summary>
+    /// Records which triggers were dismissed. Local to this class rather than shared: only #304's
+    /// import-side dismiss needs to observe this here, and a helper generalised against one consumer
+    /// tends to be wrong in ways the second one reveals.
+    /// </summary>
+    private sealed class RecordingNotificationWriter : INotificationWriter
+    {
+        public List<NotificationDismissTrigger> DismissByTriggerCalls { get; } = [];
+
+        public Task<NotificationEntity> WriteAsync(
+            NotificationType type, string body, Guid? appVersionId, string? title = null,
+            DateTime? expiresAt = null, NotificationDismissTrigger? dismissTrigger = null,
+            string? metadata = null, NotificationMetadataKind? metadataKind = null,
+            IReadOnlyList<NotificationTranslation>? translations = null)
+            => Task.FromResult(new NotificationEntity { Body = body });
+
+        public Task<NotificationEntity?> DismissAsync(Guid id, string? language = null)
+            => Task.FromResult<NotificationEntity?>(null);
+
+        public Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger)
+        {
+            DismissByTriggerCalls.Add(trigger);
+            return Task.FromResult(0);
+        }
+    }
+
     [TestInitialize]
     public async Task TestInitialize()
     {
@@ -58,7 +87,7 @@ public class SqliteImportActionServiceTests
             new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            importBatches, _factory);
+            importBatches, _factory, _notificationWriter);
 
         var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
             _coordinator, _service, _actionWriter, NoOpAuditEntryWriter.Instance,
@@ -234,6 +263,44 @@ public class SqliteImportActionServiceTests
     }
 
     [TestMethod]
+    public async Task ApplyBatchAsync_Success_DismissesReseedRecommendation()
+    {
+        Guid batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote("41111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
+
+        await _service.ApplyBatchAsync(batchId.ToString("D"), cancellationToken: TestContext.CancellationToken);
+
+        Assert.Contains(NotificationDismissTrigger.Reseed, _notificationWriter.DismissByTriggerCalls,
+            "An import that populates content resolves the recommendation just as a reseed does — without "
+            + "this, an operator who imports rather than reseeds leaves it active, and the next occurrence "
+            + "is silently deduped against it.");
+    }
+
+    /// <summary>
+    /// A batch that could not fully apply leaves actions pending, so the content gap it was meant to
+    /// close is still there and the recommendation must survive. The positive control's counterpart:
+    /// a dismiss wired outside the success path would fire here too.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyBatchAsync_LeavesActionsPending_DoesNotDismissReseedRecommendation()
+    {
+        // An existing quote plus a Review-policy reimport of the same id is what actually leaves an
+        // action undecided — a brand-new quote has nothing to review and applies straight through.
+        const string id = "51111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+
+        Guid batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote(id)], batchId, DuplicateResolutionPolicy.Review);
+
+        ImportActionBatchStatusResponse? pending =
+            await _service.ApplyBatchAsync(batchId.ToString("D"), cancellationToken: TestContext.CancellationToken);
+
+        Assert.IsNotNull(pending, "This batch is staged for review, so it must report pending actions rather than applying.");
+        Assert.IsEmpty(_notificationWriter.DismissByTriggerCalls,
+            "Nothing was applied, so nothing resolved the recommendation.");
+    }
+
+    [TestMethod]
     public async Task ApplyBatchAsync_BrandNewQuote_WritesQuoteAndSourceRows()
     {
         var batchId = Guid.NewGuid();
@@ -382,7 +449,8 @@ public class SqliteImportActionServiceTests
             new SqliteRestorableRepository<ConversationEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance), _factory);
+            new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance), _factory,
+            NoOpNotificationWriter.Instance);
 
         var result = await serviceWithRealAudit.ApplyBatchAsync(batchId, purgeOnSuccess: true, cancellationToken: TestContext.CancellationToken);
         Assert.IsNull(result);

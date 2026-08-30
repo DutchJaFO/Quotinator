@@ -67,7 +67,7 @@ public class SourceCacheWiringTests
             new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            importBatches, factory);
+            importBatches, factory, NoOpNotificationWriter.Instance);
 
         return new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
             coordinator, actionService, actionWriter,
@@ -168,7 +168,7 @@ public class SourceCacheWiringTests
             new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            importBatches, factory);
+            importBatches, factory, NoOpNotificationWriter.Instance);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
             coordinator, actionService, actionWriter,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
@@ -205,7 +205,7 @@ public class SourceCacheWiringTests
             new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            importBatches, factory);
+            importBatches, factory, NoOpNotificationWriter.Instance);
         var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
             coordinator2, actionService2, actionWriter2,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
