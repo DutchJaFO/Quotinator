@@ -1,4 +1,4 @@
-# Notification system — Milestone Overview
+﻿# Notification system — Milestone Overview
 
 **GitHub milestone:** [#14](https://github.com/DutchJaFO/Quotinator/milestone/14)
 **Branch:** `feature/notification-system`
@@ -66,6 +66,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#351](https://github.com/DutchJaFO/Quotinator/issues/351) | `AuditOperation` is a string-constant set where the project's convention is an enum | Planning | T1 ⬜ T2 ⬜ | [351-audit-operation-enum-plan.md](351-audit-operation-enum-plan.md) |
 | [#352](https://github.com/DutchJaFO/Quotinator/issues/352) | Restore a stored backup, refusing one taken ahead of this build | Planning | T1 ⬜ T2 ⬜ | [352-restore-a-stored-backup-plan.md](352-restore-a-stored-backup-plan.md) |
 | [#353](https://github.com/DutchJaFO/Quotinator/issues/353) | Upload a backup file | Planning | T1 ⬜ T2 ⬜ | [353-upload-a-backup-file-plan.md](353-upload-a-backup-file-plan.md) |
+| [#360](https://github.com/DutchJaFO/Quotinator/issues/360) | Migration-generated identifiers are not valid UUIDs; route all id creation through one factory | Planning | T1 ⬜ T2 ⬜ | [360-guid-factory-plan.md](360-guid-factory-plan.md) |
 
 ---
 
@@ -190,6 +191,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
          does *not* back up before restoring: that would bolt a second data-retention decision onto an
          endpoint with one job, feed the quota #348 refuses on, and duplicate a rollback SQLite already
          guarantees — #349's create endpoint is where an operator takes a restore point instead
+#360 ─── (none) — found while reviewing migration 14's own id construction during #319. Blocks nothing,
+         but must land before the end-of-milestone migration consolidation: that pass rewrites this
+         milestone's migrations, and consolidating first would carry the hand-written expression into
+         the collapsed result. Touches NotificationTranslationMigrations, so it is cheaper after #319's
+         T2 than before it
 #353 ─── (none) — the other half of #349's download: a restore point that can leave the container has to
          be able to come back. Its optional-restore flag was rejected for the same side-effect-policy
          reason as #352's pre-restore backup, which also removes any dependency on #352 in either
@@ -247,6 +253,7 @@ step, the other reuses it.
 | 27 | **#351** | `AuditOperation` to an enum with its CHECK constraint. Independent of everything above and slottable anywhere; placed last so #349's own new member is already in place when the conversion runs, and so its table rebuild is written with this milestone's full migration set visible |
 | 28 | **#352** | Restore a stored backup. After #349, whose `{name}` guard and create endpoint it relies on being there — not for compilation, but so the remedy text and the operator's loop are written once |
 | 29 | **#353** | Upload a backup file. Last of the backup cluster: it is the only endpoint that accepts an arbitrary file, and writing it after restore exists means its validation is written against a real consumer rather than a hypothetical one |
+| 30 | **#360** | Identifier generation through one factory, and a SQLite function migrations call instead of hand-writing one. Last, and deliberately before the end-of-milestone migration consolidation: that pass rewrites this milestone's migrations, so the factory has to exist first or the consolidated result bakes in a sixth copy of the expression it replaces |
 
 **Notifications come first from position 11 (developer direction, 2026-08-29).** The safe-start cluster
 (#326, #348, #349) and the backup endpoints grew large enough to crowd out the milestone's own subject:
@@ -265,7 +272,7 @@ only #339's. That is a cross-milestone dependency worth watching rather than dis
 
 ## PR merge plan
 
-All twenty-nine issues are self-contained on top of already-released infrastructure (#278, #80, #154,
+All thirty issues are self-contained on top of already-released infrastructure (#278, #80, #154,
 #156) — none leave anything half-wired if merged independently, except #81 (which genuinely cannot
 merge before #309 and #307), #319 (which cannot merge before #312), #331 (which cannot merge before
 #330), #328 (which cannot merge before #339), and #327 (which cannot merge before #339 for its

@@ -1,4 +1,4 @@
-<Solution>
+﻿<Solution>
   <Folder Name="/.github/">
     <File Path=".github/dependabot.yml" />
     <File Path=".github/workflows/_build-test.yml" />
@@ -313,6 +313,7 @@
     <File Path="docs/milestones/notification-system/351-audit-operation-enum-plan.md" />
     <File Path="docs/milestones/notification-system/352-restore-a-stored-backup-plan.md" />
     <File Path="docs/milestones/notification-system/353-upload-a-backup-file-plan.md" />
+    <File Path="docs/milestones/notification-system/360-guid-factory-plan.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/">
     <File Path="docs/automated-testing/README.md" />
