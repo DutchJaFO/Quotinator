@@ -1,6 +1,6 @@
 # #304 — Notification + action: let the user trigger a reseed
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 8)
 **GitHub issue:** #304
 **Tiers required:** T1, T2
 **Depends on:** #278, #312, #319
@@ -259,6 +259,27 @@ recovery that never happened. This is the concrete shape of correction 3 above.
    translation builder drift, and the drift is invisible until a user reads a half-translated
    notification.
 
+5. **Where do this producer's message keys live, given `Quotinator.Core` cannot reach `ApiMessages`?**
+   (developer decision, 2026-08-30) **`Quotinator.Data.Notifications.NotificationMessageKeys`.** Keys
+   belong with the machinery that emits them, the same reasoning that placed the notification text
+   builder there. The rejected alternative was a `Core → Constants` project reference keeping every key
+   in `ApiMessages`; `Quotinator.Constants` is genuinely dependency-free so nothing prevented it, but
+   adding an edge to the documented project graph to reach four string constants buys less than it
+   costs. Accepted consequence: notification keys now live in two places, split by which project writes
+   the notification rather than by what the text says. Trigger 2's keys follow trigger 1's.
+
+6. **Does the `Quotinator.Data` → `Quotinator.Core` boundary guard belong in this issue?** (developer
+   decision, 2026-08-30) **Yes.** It protects the dependency inversion this issue introduces, so it
+   ships with it rather than as separate follow-up work.
+
+**This question should have been settled during planning and was not.** The plan traced whether the
+Core-side producer could reach `NotificationTranslations` — correction 4, and the reason
+`INotificationTextSource` exists — and stopped one link short of asking the same thing about the message
+keys that helper consumes. Both were answerable at planning time from the project files alone. Recorded
+here because the failure was in the cross-check, not in the work: `process.md`'s Planning step 3 asks
+what prior issues introduced that this issue must extend, and #319 introduced both the helper and its key
+dependency; only one of the two was followed through.
+
 **No open questions remain. This plan is ready to execute.**
 
 ---
@@ -373,13 +394,10 @@ failed rows 11 and 12 specifically, confirmed 2026-08-30 and reverted, so neithe
 for an incidental reason. The changed-file list is ordered before it reaches identity, so the same set of
 files cannot re-notify merely because a refresh reported them in a different order.
 
-**Message keys went to `Quotinator.Data.Notifications.NotificationMessageKeys`, not `ApiMessages`.**
-This producer is the first outside `Quotinator.Api`, and `Quotinator.Core` does not reference
-`Quotinator.Constants` — so reaching `ApiMessages` would have meant a new edge in the documented project
-graph to obtain four string constants. Keys now sit with the machinery that emits them (ADR 018), and the
-strings themselves stay in the same three `UI.*.json` files as everything else. **Raise with the
-developer**: the alternative — a `Core → Constants` reference keeping every key in one place — is
-defensible, and `Quotinator.Constants` is genuinely dependency-free, so nothing prevents it.
+**Message keys went to `Quotinator.Data.Notifications.NotificationMessageKeys`, not `ApiMessages`** —
+decision 5. This producer is the first outside `Quotinator.Api`, and `Quotinator.Core` does not reference
+`Quotinator.Constants`. Keys sit with the machinery that emits them (ADR 018), and the strings themselves
+stay in the same three `UI.*.json` files as everything else.
 
 **Two shared test helpers moved to `Quotinator.Data.Testing`**, which exists for exactly this:
 `TestNotificationReader` (was internal to `Quotinator.Data.Tests`, and `Quotinator.Core.Tests` needed a
@@ -388,15 +406,24 @@ builder in a second test project.
 
 ### 7. Trigger 2 producer — after Reset
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 In `AdminEndpoints.cs`'s reset handler, at the existing `DismissByTriggerAsync(DatabaseReset)` call site
 (`:260`), write the `AfterReset` notification. Reset drops and rebuilds `System_Notification`, so this
 write must come after `ResetAsync` returns — it lands in an empty table.
 
+The handler gains `INotificationReader` and `INotificationTextSource` alongside the `INotificationWriter`
+it already had. It goes through `SeedWhileUnresolvedAsync` like trigger 1 rather than writing directly:
+the dedupe is a no-op here today, since Reset has just emptied the table, but the alternative encodes
+"Reset always wipes notifications" into a second place, and #278's own comment at this call site already
+records that a future non-wiping action would make that assumption wrong.
+
+The refusal case is asserted too, and is not merely symmetry: a producer bolted on after the handler
+rather than inside its success path would recommend a reseed after a reset that never ran.
+
 ### 8. Action
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `NotificationActionExecutor` gains a `Reseed` case: `ReseedAsync()` with its default
 `forceSourceRefresh` (the content is already downloaded by the time trigger 1 fires), then
@@ -482,14 +509,14 @@ a reseed to one file later, but `ReseedAsync` has no per-file overload and addin
 | 10 | ✅ | Nothing is written when no source content changed | Unit test | `DatabaseInitializerTests.Initialise_NoSourceContentChanged_WritesNoNotification` — same fixture, `UpToDate` instead of `Updated` |
 | 11 | ✅ | Nothing is written when the database was empty — the seed already applied the new content | Unit test | `DatabaseInitializerTests.Initialise_EmptyDatabaseSeeded_WritesNoNotification` — the pre-seed count gate; fails when that gate is removed |
 | 12 | ✅ | Nothing is written when `Quotinator:AutoUpdateSources` is disabled | Unit test | `DatabaseInitializerTests.Initialise_AutoUpdateSourcesDisabled_WritesNoNotification` — fails when that gate is removed |
-| 13 | ❌ | A successful Reset writes one `ActionRequired` notification | Unit test | `AdminEndpointsTests.Reset_Success_WritesReseedRecommendation` |
+| 13 | ✅ | A successful Reset writes one `ActionRequired` notification | Unit test | `AdminEndpointsTests.Reset_Success_WritesReseedRecommendation`, with `.Reset_WhenRefused_WritesNoReseedRecommendation` as its negative counterpart — a refused reset left the content in place, so recommending a reseed would be wrong |
 | 14 | ✅ | The same unresolved condition restarting does not add a second notification | Unit test | `NotificationSeedingTests.SeedWhileUnresolvedAsync_SameIdentityTwice_WritesOnce` — real SQLite; asserts the first call *did* write, so the suppression is not vacuous |
 | 15 | ✅ | A different set of changed files is a different notification | Unit test | `NotificationSeedingTests.SeedWhileUnresolvedAsync_DifferentChangedFiles_WritesAgain` — guards identity being the file set, not just the reason; asserts the same set *is* suppressed in the same run, so it cannot pass by writing everything |
 | 16 | ✅ | `SeedWhileUnresolvedAsync` suppresses only against *active* rows — a dismissed one does not suppress | Unit test | `NotificationSeedingTests.SeedWhileUnresolvedAsync_PreviousDismissed_WritesAgain` — real SQLite; the behavioural difference from `SeedOnceAsync` that the whole design rests on, with row 14 as its positive control. Also asserts both rows survive: the dismissed one is resolved, not deleted |
 | 17 | ✅ | `SeedOnceAsync`'s own full-history behaviour is unchanged — a dismissed row still suppresses | Unit test | `NotificationSeedingTests.SeedOnceAsync_PreviousDismissed_StillSuppresses` — regression guard for #279/#289/#81. Asserts the opposite outcome of row 16 through the same shared code path, so a change collapsing the two helpers cannot leave both green |
-| 18 | ❌ | `CanExecute(Reseed)` is true, so `NotificationTable` renders the Run → Confirm control | Unit test | `NotificationActionExecutorTests.CanExecute_Reseed_ReturnsTrue` — a separate branch from `ExecuteAsync`, so it needs its own row |
-| 19 | ❌ | Running the action reseeds and dismisses the notification | Unit test | `NotificationActionExecutorTests.ExecuteAsync_Reseed_CallsReseedAndDismissesMatchingNotifications` |
-| 20 | ❌ | The `Reseed` case does **not** mark health or record an app version, unlike `DatabaseReset` | Unit test | `NotificationActionExecutorTests.ExecuteAsync_Reseed_DoesNotTouchDatabaseHealthOrAppVersion` — the deliberate difference from the case it otherwise mirrors |
+| 18 | ✅ | `CanExecute(Reseed)` is true, so `NotificationTable` renders the Run → Confirm control | Unit test | `NotificationActionExecutorTests.CanExecute_Reseed_ReturnsTrue` — a separate branch from `ExecuteAsync`, so it needs its own row |
+| 19 | ✅ | Running the action reseeds and dismisses the notification | Unit test | `NotificationActionExecutorTests.ExecuteAsync_Reseed_CallsReseedAndDismissesMatchingNotifications` — also asserts `forceSourceRefresh` stays `false`, the one argument the call makes a choice about |
+| 20 | ✅ | The `Reseed` case does **not** mark health or record an app version, unlike `DatabaseReset` | Unit test | `NotificationActionExecutorTests.ExecuteAsync_Reseed_DoesNotTouchDatabaseHealthOrAppVersion` — the deliberate difference from the case it otherwise mirrors, and the copy-paste this catches is the likeliest way to get it wrong |
 | 21 | ❌ | `POST /admin/database/reseed` dismisses it too, not only the notification action | Unit test | `AdminEndpointsTests.Reseed_Success_DismissesReseedRecommendation` |
 | 22 | ❌ | An import that populates content dismisses it | Unit test | `SqliteImportActionServiceTests.ApplyBatchAsync_Success_DismissesReseedRecommendation` — nothing dismisses on import today |
 | 23 | ❌ | A Reset **after** a reseed writes a fresh notification rather than being deduped | Unit test | `AdminEndpointsTests.Reset_AfterAReseed_WritesAFreshRecommendation` — the recurrence case the developer's answer asks for; fails under `SeedOnceAsync` |
