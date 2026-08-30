@@ -58,6 +58,59 @@ public class NotificationTranslationSourceTests
             "A key echoed back means the lookup missed and the notification would show a key to the user.");
     }
 
+    /// <summary>
+    /// #304's two producers resolve their own strings from the same locale files, including the changed
+    /// file list substituted into every language rather than only the English one.
+    /// </summary>
+    [TestMethod]
+    public void ReseedRecommended_TakesTitleAndBodyFromTheLocaleFiles()
+    {
+        ApiLocalizer localizer = new(I18nDir);
+
+        IReadOnlyList<NotificationTranslation> contentChanged = NotificationTranslations.Build(
+            localizer,
+            NotificationMessageKeys.ReseedContentChangedTitle,
+            NotificationMessageKeys.ReseedContentChangedBody,
+            bodyArgs: ["vilaboim_movie-quotes.json"]);
+
+        Assert.AreSequenceEqual(ExpectedTranslatedLanguages, [.. contentChanged.Select(t => t.Language).Order()]);
+
+        foreach (NotificationTranslation translation in contentChanged)
+        {
+            Assert.AreNotEqual(NotificationMessageKeys.ReseedContentChangedTitle, translation.Title,
+                $"A key echoed back for '{translation.Language}' means the lookup missed and the user would see a key.");
+            Assert.Contains("vilaboim_movie-quotes.json", translation.Body,
+                $"The changed file has to be substituted into '{translation.Language}' too, not only English.");
+        }
+
+        IReadOnlyList<NotificationTranslation> afterReset = NotificationTranslations.Build(
+            localizer,
+            NotificationMessageKeys.ReseedAfterResetTitle,
+            NotificationMessageKeys.ReseedAfterResetBody);
+
+        Assert.AreSequenceEqual(ExpectedTranslatedLanguages, [.. afterReset.Select(t => t.Language).Order()]);
+        Assert.AreNotEqual(
+            afterReset.Single(t => t.Language == "nl").Body,
+            contentChanged.Single(t => t.Language == "nl").Body,
+            "The two reasons are different notifications and must not share one body — identical text "
+            + "would mean one of the two keys was never actually looked up.");
+    }
+
+    /// <summary>
+    /// The original stored on the row is English regardless of the host's current culture — a startup
+    /// producer has no request culture, and a stored original in the wrong language would be mislabelled
+    /// by <c>OriginalLanguage</c> rather than translated.
+    /// </summary>
+    [TestMethod]
+    public void ReseedRecommended_OriginalIsEnglish()
+    {
+        ApiLocalizer localizer = new(I18nDir);
+
+        string title = NotificationTranslations.Original(localizer, NotificationMessageKeys.ReseedAfterResetTitle);
+
+        Assert.AreEqual("The database holds no quotes", title);
+    }
+
     // ── #81's producer (rows 14–16) ──────────────────────────────────────────
 
     private static ChangelogDocument DocumentIn(string language, string version, params string[] highlights) => new()
