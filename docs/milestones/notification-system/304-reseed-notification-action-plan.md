@@ -1,13 +1,13 @@
 # #304 — Notification + action: let the user trigger a reseed
 
-**Status:** In progress (step 11)
+**Status:** In progress (step 12)
 **GitHub issue:** #304
 **Tiers required:** T1, T2
 **Depends on:** #278, #312, #319
 
-> **Next action: execute the Steps.** All design questions are answered and #319 — the only thing this
-> issue was sequenced behind — has landed. Design, steps and verification table are complete; nothing
-> here is waiting on a decision.
+> **Next action: T1.** All twelve steps are implemented and every verification row is ✅ except row 29,
+> the developer's own Visual Studio run. Nothing else is outstanding: T2 was executed in full on
+> 2026-08-30, including the migration against a real v1.8.3 database.
 
 ---
 
@@ -507,9 +507,27 @@ non-step so a reader does not go looking for it as one.
 
 ### 12. Verification
 
-**Status:** ⬜ Not started
+**Status:** 🔵 T1 outstanding — every other row ✅
 
 Work the table below top to bottom. T2 before T1, per `docs/release-verification.md`.
+
+Row 29 (T1) is the developer's own Visual Studio run and is the only outstanding item; every other row
+is ✅.
+
+**Three defects in the new T2 document, found by running it rather than by reading it** — recorded in
+the document itself, since each is a trap the suite has hit before:
+
+1. Its readiness gate polled `/health` for a quote count. `/health` returns `{"status":"healthy"}` and
+   nothing else, so the gate could never become true — and it hung rather than failing, exactly the
+   shape `notifications-and-changelog/04` already records. Now reads `/quotes`' own `totalCount`.
+2. `$rec.Count` printed empty for the single-match case, because PowerShell 5.1 unrolls a one-element
+   array on return and a bare `PSCustomObject` has no `Count`. It failed precisely when the test was
+   working, which is the README's own warning about this.
+3. It counted every row carrying the recommendation's kind, including dismissed ones. `GET
+   /notifications` returns full history — resolving the condition dismisses a row, it does not delete
+   it — so the count never fell back to zero and step 3 failed against a correct application. This was
+   the cause-2 case (the expectation was wrong, not the feature): the row read `isDismissed: true` at
+   the moment the count read `1`.
 
 **This issue's relevant T2 set**, per `docs/automated-testing/README.md`'s end-of-issue scope (the
 designated smoke set, plus what this issue touched):
@@ -556,8 +574,8 @@ a reseed to one file later, but `ReseedAsync` has no per-file overload and addin
 | 24 | ✅ | A condition recurring **while still unresolved** does not write again | Unit test | `NotificationSeedingTests.SeedWhileUnresolvedAsync_ConditionRecursWhileUnresolved_DoesNotWriteAgain` — the control for row 23, which would otherwise pass equally well against dedupe being switched off entirely |
 | 25 | ✅ | Title and body resolve in `de`/`nl`, with the changed file substituted into each | Unit test | `NotificationTranslationSourceTests.ReseedRecommended_TakesTitleAndBodyFromTheLocaleFiles` and `.ReseedRecommended_OriginalIsEnglish`. Sensitivity confirmed by removing one `nl` key: both this and the parity guard failed, then restored |
 | 26 | ✅ | Every new locale key exists, non-empty, in all three files | Unit test | `TranslationCompletenessTests.AllLanguageFiles_HaveExactlyTheSameKeysAsBaseline` (existing) |
-| 27 | ❌ | The producer and its Run → Confirm action work in a real container, and the action resolves the condition | Live (T2) | `notifications-and-changelog/10-reseed-recommendation-and-action.md` — new; ends by running the action, then confirming the recommendation is gone and content is back |
-| 28 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | `notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md`, plus ADR 009's own last-released-schema check |
+| 27 | ✅ | The producer and its remedy work in a real container, and running it resolves the condition | Live (T2) | `notifications-and-changelog/10-reseed-recommendation-and-action.md` executed 2026-08-30, all 4 steps green: 799 quotes → reset → 0 quotes + 1 `actionrequired` recommendation → reseed → 799 quotes + 0 active → second reset → recommends afresh |
+| 28 | ✅ | Migration applies cleanly to a database at the previous released schema | Live (T2) | Executed 2026-08-30 against a real `ghcr.io/dutchjafo/quotinator:1.8.3` database (799 quotes): `applying 12 pending Data migration(s) (version 3 → 15)`, `schema updated (data v15, app v5)`, no SQLite error, content intact. Then a Reset on that upgraded database wrote the recommendation — proving the rebuild's widened CHECK accepts `Reseed` on the **incremental** path, which row 4's baseline/incremental parity cannot show on its own |
 | 29 | ❌ | T1 — the notification appears and its Run → Confirm action reseeds | Live (T1) | Developer confirms in Visual Studio |
-| 30 | ❌ | Full build clean | Build | `dotnet build --configuration Release` — 0 Warning(s), 0 Error(s), read from the full build output, never a tail |
-| 31 | ❌ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — every project's own `Passed!` line read and totalled, never inferred from an exit code or a tail |
+| 30 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — output captured in full: zero lines matching `: warning NNNN` or `: error NNNN`, summary `0 Warning(s) / 0 Error(s)` |
+| 31 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 10 `Test Run Successful.` lines, **3,687 passed / 0 failed** (811, 42, 2, 11, 16, 9, 1468, 1307, 5, 16), zero `Test Run Failed`/`Aborted`, zero warning or error lines anywhere in the captured output |

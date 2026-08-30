@@ -7,7 +7,8 @@
 ## Preconditions
 
 **Beyond the profile.** One container of this test's own, `qt-notif-10`, publishing `19510`, on the
-current build. Reset needs an admin key, so the container is created with one.
+current build. Reset and reseed both require `X-Api-Key`, so the container is created with
+`--env Quotinator__AdminApiKey=t2-304` and every admin call below sends that header.
 
 Reset rebuilds the schema and deliberately does not reimport content (#156). Before #304 nothing told
 the operator the database was now empty. This proves the recommendation appears, that running it puts
@@ -24,13 +25,31 @@ than sleeping for a duration.
 depends on which producers are present and what the bundled changelog flags for the running version,
 both of which move every milestone. Every count here filters on `metadataKind` of `reseedRecommended`.
 
+**Count only *active* recommendations, not every row carrying that kind.** `GET /notifications` returns
+the full history, dismissed rows included — resolving the condition dismisses the row, it does not
+delete it. A count that ignores `isDismissed` therefore never falls back to zero, and step 3 fails
+against a working application. Found on this document's first run, where the reseed had correctly
+dismissed the row (`isDismissed: true`) while the count still read `1`.
+
 **Count objects, not matching lines.** These responses are single-line JSON, so a line-based match
 reports `1` however many copies exist. `@(...).Count` over parsed items cannot disagree with the
 response about what a match is.
 
+**Re-wrap in `@(...)` at the call site, not only inside the helper.** PowerShell 5.1 unrolls a
+single-element array on return, so `$rec = Get-ReseedRecommendations` yields a bare `PSCustomObject`
+with no `Count` property, and `$rec.Count` prints empty — for exactly one match, which is this test's
+expected result. Measured here on the first run: step 2 reported an empty count while the notification
+was present and correct.
+
 **Quote counts are read, never predicted.** The number of bundled quotes changes when a source file is
 updated; what this test asserts is that the count is non-zero before the reset, zero after it, and
 non-zero again after the reseed — facts the operation itself establishes.
+
+**The count comes from `/quotes`' own `totalCount`, not from `/health`.** `/health` reports
+`{"status":"healthy"}` and nothing else, so a gate written against a quote count there is never
+satisfied — and it does not fail, it hangs, which is the failure mode
+[`04`](04-upgrade-does-not-duplicate-the-legacy-notification.md) already records for a gate that cannot
+become true. Found here the same way, while first running this document.
 
 ## Steps
 
@@ -38,12 +57,12 @@ non-zero again after the reseed — facts the operation itself establishes.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-10 --port 19510 `
-  --image quotinator:local --admin-key t2-304
+  --image quotinator:local --env Quotinator__AdminApiKey=t2-304
 
-function Get-QuoteCount { (Invoke-RestMethod "http://localhost:19510/api/v1/health").quotes }
+function Get-QuoteCount { (Invoke-RestMethod "http://localhost:19510/api/v1/quotes?page=1&pageSize=1").totalCount }
 function Get-ReseedRecommendations {
   $items = (Invoke-RestMethod "http://localhost:19510/api/v1/notifications?pageSize=0").items
-  @($items | Where-Object { $_.metadataKind -eq 'reseedRecommended' })
+  @($items | Where-Object { $_.metadataKind -eq 'reseedRecommended' -and -not $_.isDismissed })
 }
 
 while ((Get-QuoteCount) -lt 1) { Start-Sleep 2 }
@@ -65,13 +84,13 @@ Invoke-RestMethod -Method Post -Headers $headers `
   "http://localhost:19510/api/v1/admin/database/reset?allowNoBackup=true" | Out-Null
 
 "quotes after reset = $(Get-QuoteCount)"
-$rec = Get-ReseedRecommendations
+$rec = @(Get-ReseedRecommendations)
 "recommendations after reset = $($rec.Count)"
 $rec | Select-Object -First 1 | ForEach-Object { "type=$($_.type) title=$($_.title)" }
 ```
 
 **Expected:** `quotes after reset = 0`, `recommendations after reset = 1`, and that one row reporting
-`type=ActionRequired` with a non-empty title.
+`type=actionrequired` (the API serializes the type in lower case) with a non-empty title.
 
 Both halves matter. A zero quote count alone would also be true if Reset had reseeded and failed; a
 recommendation alone would not prove Reset left the database empty. Together they are the condition
@@ -113,8 +132,23 @@ document that can catch it.
 
 ## Observed effect
 
-Not yet established as a captured record. Step 4 is the load-bearing observation: steps 2 and 3 would
-both pass against a full-history dedupe, and only the second reset distinguishes them.
+Executed 2026-08-30 against `quotinator:local`, all four steps green:
+
+| Step | Observed |
+|---|---|
+| 1 | `quotes seeded = 799`, `recommendations before = 0` |
+| 2 | `quotes after reset = 0`, `recommendations after reset = 1`, `type=actionrequired`, title `The database holds no quotes` |
+| 3 | `quotes after reseed = 799`, `recommendations after reseed = 0` |
+| 4 | `recommendations after second reset = 1` |
+
+Step 4 is the load-bearing observation: steps 2 and 3 would both pass against a full-history dedupe, and
+only the second reset distinguishes them.
+
+A detail worth recording for whoever reads the row counts: after step 4 the *total* number of rows
+carrying this kind is `1`, not `2`. Reset drops and rebuilds `System_Notification` with every other
+table, so the dismissed row from step 3 does not survive it. That is consistent with Reset being a full
+wipe, and it means this document cannot use "a dismissed row is still present" as evidence of anything
+after a reset.
 
 ## Cleanup
 
