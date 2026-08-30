@@ -85,9 +85,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
          message-prefix dedupe onto typed metadata, and its own table changes shape underneath it);
          soft-depends on #308 (renders better once it lands, not blocked by it)
 #304 ─── depends on #278 (notification mechanism), #156 (Reset no longer auto-seeds, which is
-         exactly the gap it fills for the post-Reset trigger), and #312 (hard — needs the relocated
-         dedupe helper for its Core-side trigger, and gains parameterised actions from #312's own
-         metadata-aware INotificationActionExecutor)
+         exactly the gap it fills for the post-Reset trigger), #312 (hard — the relocated dedupe
+         helper its Core-side trigger needs, and parameterised actions from #312's own
+         metadata-aware INotificationActionExecutor), and #319 (hard — it writes new user-facing
+         text, and #319 changes both the shape that text is stored in and where the helper building
+         it has to live)
 #302 ─── depends on #278 and #312 (hard — the relocated dedupe helper, plus opt-in expiry, which
          removes the aging mechanism this issue currently assumes); writes from inside
          QuotinatorDatabaseInitializer's own seeding loop (#221's FileImportReport data, read from the
