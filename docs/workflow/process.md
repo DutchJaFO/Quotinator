@@ -257,6 +257,15 @@ begins once the plan doc's verification checklist exists and the issue's status 
      Write the test as part of the issue if it does not yet exist.
    - **Live test fallback:** if no unit test is possible, document the exact command to run
      and the observable output that confirms the requirement is met.
+   - **Automated (T2) documents are tests and belong in this table, named like any other.** Where a
+     requirement is only reachable live, the `docs/automated-testing/` document *is* its verification —
+     so it is planned here, not written up afterwards, and it is held to the same red-then-green
+     standard as a unit test (see Implementation below).
+   - **Ask what the requirement makes observable, not just what it changes.** A requirement whose result
+     is visible only in rendered HTML cannot be verified live at all, and that is a finding about the
+     design rather than about the test: the value usually needs to reach an API response before the
+     behaviour can be asserted anywhere but a unit test. Found live in #304, where a new notification
+     state was unobservable outside the Blazor page until its response DTO was corrected.
    - **External verification with audit trail:** when a requirement can only be verified by an
      external tool or process (e.g. a cloud session, a deployed HA add-on, a CI run), do not
      simply assert that it was verified. Capture the actual output as proof:
@@ -323,7 +332,13 @@ reason to *delay* writing it until the scope is actually settled, not to write i
 ### Implementation
 
 1. Write every test named in the plan doc's verification checklist first and confirm each one is
-   genuinely red against current code, per the red-before-green rule above.
+   genuinely red against current code, per the red-before-green rule above. **This includes any
+   automated (T2) document the issue adds**: run it against a build from the commit before the work
+   started — `git worktree add` that commit, `docker build` it under a distinct tag, execute the
+   document's own steps, confirm it fails where it should, then remove the container, image and
+   worktree. A document written and then run only against the finished build shows that something
+   happens; it does not show it would have caught the absence it exists for. `docs/testing-policy.md`
+   § "Bug fixes" has the mechanics; they apply to a new feature's document exactly as to a bug's.
 2. Implement. Update each step section's `**Status:**` line as work progresses — this is the per-step
    record; there is no separate "what's left" list to maintain elsewhere.
 3. Before declaring done: re-read **every requirement** in the GitHub issue spec and execute each

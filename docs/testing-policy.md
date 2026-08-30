@@ -101,6 +101,29 @@ This is not the same as showing an assertion *can* fail (the mutation step under
 neither substitutes for the other: mutation proves the test is wired to the behaviour, a positive
 control proves the behaviour is not simply failing everywhere.
 
+## Red first applies to automated tests, not only unit tests
+
+An automated (T2) document added for an issue is a test, and it goes red before it goes green like any
+other. Writing it and then running it against the finished build establishes that something happens; it
+establishes nothing about whether the document would have caught the absence it exists for. Those are
+different claims, and only the second is worth the run.
+
+The mechanics are the canary already described under *Bug fixes* below — `git worktree add` the commit
+before the work started, `docker build` it under a distinct tag, run the document's own steps, confirm
+it fails where it should, then remove the container, image and worktree. **That procedure is not
+bug-specific**: a new feature's document needs it for exactly the same reason, and a new feature is
+where it is easiest to skip, because there is no "before" behaviour anyone remembers wanting to see.
+
+Found live in #304, where a new live document was written, run green, and reported as verification — it
+was only afterwards run against a pre-issue build, which showed the reset producing no notification at
+all and the field one step asserted not existing. That run is what made the document evidence.
+
+**Unit tests stay the first choice**, for the reasons in *Prefer verification that needs no live
+environment* in `docs/automated-testing/README.md`: they run on every build and cost nothing to repeat.
+The live tier covers what genuinely cannot be reached in-process — and when a requirement turns out to
+be unobservable there *too*, that is a finding about the design rather than about the test. A value
+visible only in rendered HTML usually needs to reach an API response before any live test can assert it.
+
 ## A distinction the code makes is a distinction that can be proven
 
 If the application distinguishes two states, the means to reach both exists — so a member, branch or

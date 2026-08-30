@@ -137,6 +137,8 @@ Covers the `In progress` phase — see `process.md` → "Working on an issue" �
 full detail behind each item.
 
 - [ ] Every test named in the plan doc's verification checklist is written first and confirmed red against current code before any production code changes
+- [ ] **Any automated (T2) document the issue adds is confirmed red too** — run against a build from the commit before the work started, then torn down (container, image, worktree). See `process.md` → Implementation, step 1
+- [ ] **Both kinds of test are updated where the issue touches them** — unit tests and `docs/automated-testing/` documents are equally in scope for an issue, never a follow-up
 - [ ] Issue status set to `In progress` in both the plan doc header and `overview.md` (use `In progress (step N)` in the plan doc header while a specific step is active)
 - [ ] Each plan-doc step's `**Status:**` line is updated as work on that step progresses — this is the only place step progress is tracked, no separate list
 - [ ] Implementation makes each red test green, without weakening the test to pass

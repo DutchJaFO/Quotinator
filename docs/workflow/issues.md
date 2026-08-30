@@ -49,10 +49,24 @@ table, not restated as `Definition of done` checkboxes. The `Definition of done`
 completion gate that looks the same on every issue of a given type — if it starts accumulating
 issue-specific content, that content belongs somewhere else in the issue, not there.
 
-**Critical, non-negotiable, and universal across Bug and Enhancement issues: unit tests always go red
+**Critical, non-negotiable, and universal across Bug and Enhancement issues: tests always go red
 before the fix/feature is implemented, and green after.** This is verified by an actual red test run —
 not asserted, not inferred from "the code clearly didn't have this before." See `process.md` §
 "Working on an issue" for the full red-to-green rule.
+
+**Red-first covers automated (T2) tests as well as unit tests, and an issue's test list covers both.**
+A `docs/automated-testing/` document written for an issue and then run against the finished build proves
+that something happens; it does not prove the document would have caught the absence it was written for.
+Proving that means running it against a build from the commit before the work started — see
+`docs/testing-policy.md` § "Bug fixes" for the canary mechanics, which apply to a new feature's document
+exactly as they do to a bug's.
+
+Unit tests remain the first choice, because they run on every build and cost nothing to repeat. But some
+aspects are only reachable live, and where that is true the automated document is the test — so it is
+listed in the issue's table alongside the unit tests, and it is held to the same red-then-green standard.
+Found live in #304: a new live document was written and run, never run red, and separately the state it
+was meant to verify turned out not to be observable outside the UI at all — which no amount of unit
+testing would have surfaced.
 
 ### The live-only variant
 
@@ -133,9 +147,13 @@ This list becomes the basis for the verification checklist in the plan doc (see 
 Tests that must be written and must start red before implementation begins.
 Use this table to make the red-to-green contract explicit.
 
-| Test class | Test method | Starts |
+List automated (T2) documents here too, where the issue needs one — a live document is a test, is held
+to the same red-then-green standard, and is as easy to forget as it is to write after the fact.
+
+| Test class / document | Test method / what it verifies | Starts |
 |---|---|---|
 | ExampleTests | MethodName_Condition_ExpectedResult | ❌ |
+| automated-testing/category/NN-name.md | What the live run establishes that no unit test can | ❌ |
 
 Omit this section only if all verification is via live commands (rare) — and when you do, use the
 live-only `Definition of done` variant above rather than leaving two boxes pointing at a table that
