@@ -480,16 +480,35 @@ Work the table below top to bottom. T2 before T1, per `docs/release-verification
 the Notifications page both rendered the announcement translated — German and Dutch respectively —
 which is what the earlier run showed still in English.
 
-**Three tests rest on a mutation check rather than an observed red run**, and a reader should not treat
-them as red-first evidence: step 3's migration tests, and the two the issue named that were written last
-— `Read_SchemaVersionOvershoot_SubstitutesBothVersionsIntoEachLanguage` and
-`Seed_WhatsNew_TakesTranslationsFromPerLanguageChangelogFiles`. Each was mutated to confirm it is wired
-to the behaviour (removing `bodyArgs`, and passing `translations: null` from `SeedAsync`, both turning
-the relevant test red), but a mutation proves wiring, not that the test would have failed against the
-feature's absence.
+### Proof the defect existed, and that this issue resolves it
 
-The second of those two closed a real gap rather than a naming one: requirement 7's per-language version
-substitution was implemented and had no test of its own until it was written.
+**Established mechanically, 2026-08-30**, by `testing-policy.md`'s canary technique: a `git worktree` at
+`0ac256f6` — the commit immediately before this issue's first implementation commit — built as
+`quotinator:pre319`, with `notifications-and-changelog/08`'s own assertions run against it unchanged.
+
+| Assertion | Pre-fix build | Fixed build |
+|---|---|---|
+| `08` step 2 — `lang` / `originalLanguage` / `isTranslated` | `False` / `False` / `False` | `True` / `True` / `True` |
+| `08` step 4 — `lang` / `translated` / `bodyDiffers` / `titleDiffers` | all `False` | all `True` |
+| Body returned for `?lang=nl` | `Two REST API operation IDs were renamed…` | `Twee REST API-bewerkings-ID's zijn hernoemd…` |
+
+The third row is the defect itself: the pre-fix build answers a Dutch request with English text, which is
+what this issue was filed for. The same commands against the fixed build return Dutch.
+
+That is the red-then-green evidence for the issue as a whole — the problem demonstrably existed, and the
+implementation demonstrably resolves it — and it also proves `08` can distinguish the two, rather than
+passing against anything. The canary image, container and worktree were removed afterwards and the real
+build re-confirmed, per the same policy.
+
+**Three unit tests were nonetheless written after their implementation** — step 3's migration tests, and
+the two the issue named that were added last. Each was additionally mutation-checked. Recorded because
+the ordering is a fact about how they were produced, not because the issue lacks proof: the evidence
+above is what establishes that.
+
+Requirement 7's per-language version substitution had no test of its own until
+`Read_SchemaVersionOvershoot_SubstitutesBothVersionsIntoEachLanguage` was written — a real coverage gap,
+found by checking the issue's `Expected tests` table against what existed rather than by the tests
+themselves.
 
 **T2 passed 2026-08-30.** Both of this issue's documents ran green end to end, plus the designated
 smoke set — `api-surface/01` and `02`, `import-and-staged-actions/01`, `14` and `19`,
