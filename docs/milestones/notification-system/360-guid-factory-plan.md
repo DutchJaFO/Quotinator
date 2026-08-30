@@ -66,22 +66,31 @@ migration executes, which places it earlier than `UNICODE_CONTAINS`'s own regist
 that belongs in the connection factory, in `DapperConfiguration`, or in `DatabaseInitializer`'s own
 setup path decides what the Steps look like, so the Steps are not written until it is settled.
 
-## The red-first sequence this plan is held to
+## This issue must carry proof the defect existed
 
-**Every step writes its tests, runs them, and records them red before any of that step's code exists.**
-Not a restatement of `process.md` for its own sake — it is here because #319 finished with three tests
-that could not honestly tick its first Definition-of-done box, and that box has to be ticked before an
-issue closes. A plan that lets implementation land first produces an issue that permanently reads as
-unfinished, and the ordering cannot be recreated afterwards: `testing-policy.md` is explicit that a
-mutation check validates a test's sensitivity and is *not* a substitute for the red-before-fix run.
+**An issue is closeable only when it can demonstrate that the problem was real and that this change
+resolved it** (developer direction, 2026-08-30). That is what red-first protects, and it is not a
+unit-test convention: an automated T2 check answers it as well as a unit test does, and for a defect
+that only shows through a running container it answers it better.
 
-Two consequences for the Steps below, once written:
+**What that means concretely here.** The identifiers this issue replaces are not valid v4 UUIDs today,
+so the demonstration is available before any code is written: a check that reads a generated id and
+asserts its version and variant nibbles fails against the current build and passes against the new one.
+Write that check first, run it, and record the failing output — that recording is the proof, and
+without it there is nothing to point at when the Definition of done asks for one.
 
-- **Each step's `**Status:**` line does not move to ✅ until its tests were observed red first.** A step
-  whose first test run was green is recorded as such immediately, not discovered at closing time.
+Three consequences for the Steps below, once written:
+
+- **Each step's tests are written and observed failing before that step's code exists**, and the step's
+  `**Status:**` line does not move to ✅ otherwise. A step whose first run was green is recorded as such
+  immediately rather than discovered at closing time.
+- **Where the defect predates this branch**, the demonstration is a build from the commit before the
+  fix — `git worktree add` plus a throwaway image tag, per `testing-policy.md` — with the same checks run
+  unchanged against both. #319 established its own proof that way after the fact; this issue should not
+  need to.
 - **A test named in the issue's `Expected tests` table is written under that exact name**, or the
-  deviation is agreed before the step is closed. #319 reached its verification pass with two named tests
-  that did not exist — one a naming difference, one a genuine untested requirement.
+  deviation is agreed before the step closes. #319 reached its verification pass with two named tests
+  that did not exist — one a naming difference, one a genuinely untested requirement.
 
 ## Steps
 
