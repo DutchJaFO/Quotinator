@@ -41,6 +41,8 @@
       "Kann das Datenverzeichnis nicht beschrieben werden, benennt die gemeldete Ursache dies jetzt direkt und nennt den Lösungsweg, statt ein Zurücksetzen der Datenbank vorzuschlagen — das in dasselbe Verzeichnis schreibt und daher nie hätte funktionieren können (issue #326)"
     ],
     "fixed": [
+      "Eine Benachrichtigung, deren empfohlene Aktion Sie ausgeführt hatten, wurde dennoch als verworfen angezeigt, als hätten Sie sie abgelehnt. Quotinator hält jetzt fest, ob eine Benachrichtigung beiseitegelegt oder tatsächlich erledigt wurde, und zeigt sie im zweiten Fall als erledigt an (issue #304)",
+      "Zeitangaben in der Oberfläche wurden in UTC statt in der lokalen Zeitzone angezeigt, sodass ein Ereignis um 16:17 als 14:17 erschien. Jede Zeitangabe in der Oberfläche entspricht jetzt der Uhr, auf der die Anwendung läuft (issue #304)",
       "Ein Zitat aus Star Wars war in den mitgelieferten Daten The Lord of the Rings zugeordnet; es ist jetzt korrekt zugeordnet, samt ergänzter Figur",
       "Von Quotinator angelegte Sicherungen blieben nach dem Schreiben von der Anwendung gesperrt, sodass sie bis zu einem Neustart weder heruntergeladen noch entfernt werden konnten. Sie werden jetzt unmittelbar nach dem Schreiben freigegeben (issue #349)",
       "Bei einem Upgrade erscheint keine zweite, doppelte Kopie einer Benachrichtigung mehr, die bereits vor dem Upgrade vorhanden war (issue #312)",

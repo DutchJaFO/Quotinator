@@ -41,6 +41,8 @@
       "Wanneer er niet naar de datamap geschreven kan worden, benoemt de gemelde reden dat nu rechtstreeks en vertelt hoe je het oplost, in plaats van een database-reset voor te stellen — die naar dezelfde map schrijft en dus nooit had kunnen werken (issue #326)"
     ],
     "fixed": [
+      "Een melding waarvan je de aanbevolen actie had uitgevoerd, werd toch getoond als afgewezen, alsof je hem had geweigerd. Quotinator legt nu vast of een melding opzij is gezet of daadwerkelijk is afgehandeld, en toont in het tweede geval dat hij is uitgevoerd (issue #304)",
+      "Tijden in de interface werden weergegeven in UTC in plaats van de lokale tijdzone, waardoor iets dat om 16:17 gebeurde als 14:17 verscheen. Elke tijd in de interface komt nu overeen met de klok waarop de applicatie draait (issue #304)",
       "Een citaat uit Star Wars was in de meegeleverde gegevens toegeschreven aan The Lord of the Rings; dat is nu correct toegeschreven, met het personage ingevuld",
       "Back-ups die Quotinator maakte, bleven na het schrijven door de applicatie vergrendeld, waardoor je er geen kon downloaden of verwijderen tot een herstart. Ze worden nu direct na het schrijven vrijgegeven (issue #349)",
       "Bij een upgrade verschijnt niet langer een tweede, dubbele kopie van een melding die al vóór de upgrade bestond (issue #312)",

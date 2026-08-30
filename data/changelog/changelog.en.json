@@ -34,6 +34,8 @@
       "When the data directory cannot be written, the reported reason now names that directly and states how to resolve it, instead of suggesting a database reset — which writes to the same directory and therefore could not have worked (issue #326)"
     ],
     "fixed": [
+      "A notification whose recommended action you carried out was still shown as dismissed, as though you had turned it down. Quotinator now records whether a notification was set aside or actually dealt with, and shows it as done in the second case (issue #304)",
+      "Times shown in the interface were displayed in UTC instead of the local time zone, so something that happened at 16:17 appeared as 14:17. Every time shown in the interface now matches the clock the application is running against (issue #304)",
       "A quote from Star Wars was attributed to The Lord of the Rings in the bundled data, and is now correctly attributed, with its character filled in",
       "Backups taken by Quotinator stayed locked by the application after being written, so one could not be downloaded or removed until a restart. They are released as soon as they are written (issue #349)",
       "Upgrading no longer shows a second, duplicate copy of a notification that already existed before the upgrade (issue #312)",
