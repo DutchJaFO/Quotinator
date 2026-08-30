@@ -1,14 +1,14 @@
 # #304 — Notification + action: let the user trigger a reseed
 
-**Status:** In progress (step 13)
+**Status:** Waiting for release
 **GitHub issue:** #304
 **Tiers required:** T1, T2
 **Depends on:** #278, #312, #319
 
-> **Next action: re-run T1 on step 12's change.** Every step is implemented and all 33 verification rows
-> are ✅, including the original T1 pass. Step 12 was added *because* of that pass and changes what the
-> notifications page displays, so the developer confirming the new *Done* label in Visual Studio is the
-> one thing left before this issue is `Waiting for release`.
+> **Next action: none — this issue is done pending release.** All thirteen steps are implemented and all
+> 36 verification rows are ✅, including T1 (twice), the full T2 pass, and the migration verified against
+> a real v1.8.3 database. It closes once the work ships in a tagged release, per `issue-closure.md`'s
+> two-gate rule.
 
 ---
 
@@ -571,8 +571,25 @@ zone that matters is the host's. A sweep for `ToString("yyyy-MM-dd"`, `ToShortDa
 
 Work the table below top to bottom. T2 before T1, per `docs/release-verification.md`.
 
-Every row is ✅. T1 ran on 2026-08-30 and passed on its own terms — and found the state-label defect that
-became step 12, plus a timestamp defect recorded below.
+Every row is ✅, across two T1 runs on 2026-08-30. The first passed on its own terms and found the
+state-label and timestamp defects that became step 12; the second confirmed both fixes and exercised
+trigger 1 live for the first time.
+
+**The 18:57 run is the more valuable of the two, because nothing before it had observed trigger 1
+outside a test.** Startup refreshed `vilaboim_movie-quotes.json` against an already-populated database
+and the recommendation named exactly that file. Two details make it evidence rather than a screenshot:
+
+- The same startup **failed** to reach `NikhilNamal17_popular-movie-quotes.json` (connect timeout, fell
+  back to the local copy), and that file is correctly absent from the notification. Only
+  `SourceRefreshOutcome.Updated` counts, and a failure is not a change — asserted in unit tests, never
+  seen live until now.
+- The reseed that followed took Sources from 461 → 462 and Characters from 12 → 13. The stored content
+  genuinely did not reflect the refreshed source, so the recommendation was not merely well-formed, it
+  was **right**.
+
+The migration also ran on the developer's own accumulated database — `applying 13 pending Data
+migration(s) (version 3 → 16)`, `schema updated (data v16, app v5)` — which is a different path from
+both the T2 upgrade (a clean v1.8.3 database) and the baseline.
 
 **Two `notification-system` process observations from the T1 pass, both about the guard rails rather
 than the feature:**
@@ -651,10 +668,11 @@ a reseed to one file later, but `ReseedAsync` has no per-file overload and addin
 | 26 | ✅ | Every new locale key exists, non-empty, in all three files | Unit test | `TranslationCompletenessTests.AllLanguageFiles_HaveExactlyTheSameKeysAsBaseline` (existing) |
 | 27 | ✅ | The producer and its remedy work in a real container, and running it resolves the condition | Live (T2) | `notifications-and-changelog/10-reseed-recommendation-and-action.md` — all 5 steps green on a fresh container 2026-08-30: 799 quotes → reset → 0 quotes + 1 `actionrequired` → reseed → 799 + 0 active → `dismissReason=resolved` → second reset → 1 again. **Proven red first** against a `46577c38` (pre-#304) image, where step 2 read `0` and step 4's field did not exist |
 | 28 | ✅ | Migration applies cleanly to a database at the previous released schema | Live (T2) | Executed 2026-08-30 against a real `ghcr.io/dutchjafo/quotinator:1.8.3` database (799 quotes): `applying 12 pending Data migration(s) (version 3 → 15)`, `schema updated (data v15, app v5)`, no SQLite error, content intact. Then a Reset on that upgraded database wrote the recommendation — proving the rebuild's widened CHECK accepts `Reseed` on the **incremental** path, which row 4's baseline/incremental parity cannot show on its own |
-| 29 | ✅ | T1 — the notification appears and its Run → Confirm action reseeds | Live (T1) | Developer's Visual Studio run, 2026-08-30: reset via REST at 16:17:54 wrote the recommendation Active with its Run control; running it reseeded (`reseed requested`, 799 quotes) and the row left the active list. It also found rows 32–33 |
-| 30 | ✅ | A notification resolved by running its action reads as done, not as dismissed | Unit test | `NotificationTableTests.GetDisplayStatus_DismissedBecauseResolved_IsResolved`, with `.GetDisplayStatus_DismissedByUser_IsDismissed` as its counterpart and `.GetDisplayStatus_DismissedWithNoRecordedReason_IsDismissed` for pre-#304 rows. Plus `NotificationWriterTests.DismissByTriggerAsync_RecordsResolvedRatherThanDismissed`, and the reason recorded on the user's own dismiss |
-| 31 | ✅ | The `DismissReason` CHECK rejects a value outside the enum | Unit test | `NotificationWriterTests.DismissReason_UnknownValue_IsRejectedByTheCheckConstraint` — ADR 008's negative half |
-| 32 | ✅ | The resolved state is observable outside the UI, so it can be verified live | Live (T2) | `notifications-and-changelog/10`, step 4 — `dismissReason=resolved` on the `GET /notifications` response. Added because the label was otherwise unit-testable only; the plan had claimed the value reached the response DTO and it did not |
-| 33 | ✅ | Stored UTC timestamps display in the host's time zone | Unit test | `NotificationTableTests.Local_UtcValue_IsRenderedInTheHostTimeZone`, `.Local_UnspecifiedKind_IsTreatedAsUtcNotLocal` (SQLite returns unspecified, and assuming local is right only on a UTC host) and `.Local_Null_RendersEmDash` |
-| 34 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — output captured in full: zero lines matching `: warning NNNN` or `: error NNNN`, summary `0 Warning(s) / 0 Error(s)` |
-| 35 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 10 `Test Run Successful.` lines, **3,695 passed / 0 failed** (817, 42, 2, 11, 16, 9, 1468, 1309, 5, 16), zero `Test Run Failed`/`Aborted`, zero warning or error lines anywhere in the captured output |
+| 29 | ✅ | T1 — the notification appears and its Run → Confirm action reseeds | Live (T1) | Two Visual Studio runs, 2026-08-30. First (16:17): reset via REST wrote the recommendation Active with its Run control; running it reseeded and the row left the active list — and found rows 30–33. Second (18:57), after those fixes: see rows 9 and 30 |
+| 30 | ✅ | **Trigger 1 observed live** — changed source content on a populated database recommends a reseed naming that file | Live (T1) | 18:57 run: `updated vilaboim_movie-quotes.json` against a 799-quote database produced the `ContentChanged` recommendation naming exactly that file. The same startup *failed* to reach NikhilNamal17 (connect timeout, fell back to the local copy) and that file was correctly absent from the notification — only `Updated` counts, and this is the first live proof of it |
+| 31 | ✅ | A notification resolved by running its action reads as done, not as dismissed | Unit test | `NotificationTableTests.GetDisplayStatus_DismissedBecauseResolved_IsResolved`, with `.GetDisplayStatus_DismissedByUser_IsDismissed` as its counterpart and `.GetDisplayStatus_DismissedWithNoRecordedReason_IsDismissed` for pre-#304 rows. Plus `NotificationWriterTests.DismissByTriggerAsync_RecordsResolvedRatherThanDismissed`, and the reason recorded on the user's own dismiss. Confirmed live in the 18:57 T1 run: running the action rendered **Uitgevoerd**, not Afgewezen |
+| 32 | ✅ | The `DismissReason` CHECK rejects a value outside the enum | Unit test | `NotificationWriterTests.DismissReason_UnknownValue_IsRejectedByTheCheckConstraint` — ADR 008's negative half |
+| 33 | ✅ | The resolved state is observable outside the UI, so it can be verified live | Live (T2) | `notifications-and-changelog/10`, step 4 — `dismissReason=resolved` on the `GET /notifications` response. Added because the label was otherwise unit-testable only; the plan had claimed the value reached the response DTO and it did not |
+| 34 | ✅ | Stored UTC timestamps display in the host's time zone | Unit test + Live (T1) | `NotificationTableTests.Local_UtcValue_IsRenderedInTheHostTimeZone`, `.Local_UnspecifiedKind_IsTreatedAsUtcNotLocal` (SQLite returns unspecified, and assuming local is right only on a UTC host) and `.Local_Null_RendersEmDash`. Confirmed live: the 18:57 run's notifications read `18:57`, matching the log, where the previous run showed a two-hour offset |
+| 35 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — output captured in full: zero lines matching `: warning NNNN` or `: error NNNN`, summary `0 Warning(s) / 0 Error(s)` |
+| 36 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 10 `Test Run Successful.` lines, **3,695 passed / 0 failed** (817, 42, 2, 11, 16, 9, 1468, 1309, 5, 16), zero `Test Run Failed`/`Aborted`, zero warning or error lines anywhere in the captured output |
