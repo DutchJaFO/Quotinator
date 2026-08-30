@@ -119,7 +119,23 @@ actually resolves the condition, rather than being advice nobody checked. It als
 wired to the plain endpoint and not only to the notification action — an undismissed recommendation
 would stay active and silently suppress every later occurrence.
 
-### 4. Reset again, and confirm the resolved condition recommends afresh
+### 4. Confirm the resolved recommendation records that it was done, not declined
+
+```powershell
+$all = (Invoke-RestMethod "http://localhost:19510/api/v1/notifications?pageSize=0").items
+@($all | Where-Object { $_.metadataKind -eq 'reseedRecommended' }) |
+  ForEach-Object { "isDismissed=$($_.isDismissed) dismissReason=$($_.dismissReason)" }
+```
+
+**Expected:** `isDismissed=True dismissReason=resolved`.
+
+A notification stops being active for two very different reasons — the user set it aside, or the thing
+it described was actually dealt with — and before #304 both were stored as nothing but `IsDismissed`.
+The page therefore told a user who had just run the reseed that they had dismissed it. `resolved` here
+is what the *Done* label is rendered from; `dismissed` would mean the reason was never recorded and the
+display is back to guessing.
+
+### 5. Reset again, and confirm the resolved condition recommends afresh
 
 ```powershell
 Invoke-RestMethod -Method Post -Headers $headers `
@@ -145,10 +161,19 @@ exactly as written, on a fresh container, after the corrections above:
 | 1 | `quotes seeded = 799`, `recommendations before = 0` |
 | 2 | `quotes after reset = 0`, `recommendations after reset = 1`, `type=actionrequired`, title `The database holds no quotes` |
 | 3 | `quotes after reseed = 799`, `recommendations after reseed = 0` |
-| 4 | `recommendations after second reset = 1` |
+| 4 | `isDismissed=True dismissReason=resolved` |
+| 5 | `recommendations after second reset = 1` |
 
-Step 4 is the load-bearing observation: steps 2 and 3 would both pass against a full-history dedupe, and
+Step 5 is the load-bearing observation: steps 2 and 3 would both pass against a full-history dedupe, and
 only the second reset distinguishes them.
+
+**Proven red before it was proven green.** The same steps were run against a build from the commit
+immediately before #304's first feature commit (`46577c38`, via a throwaway worktree and a
+`quotinator:pre304` image), and the document fails there exactly where it should: the reset empties the
+database — `quotes after reset = 0` — and **`recommendations after reset = 0`** where step 2 requires
+`1`. Step 4's field does not exist on that build at all. Both were then torn down (container, image,
+worktree). Without this the document proves only that something happens, not that it would have caught
+the absence it was written for.
 
 A detail worth recording for whoever reads the row counts: after step 4 the *total* number of rows
 carrying this kind is `1`, not `2`. Reset drops and rebuilds `System_Notification` with every other

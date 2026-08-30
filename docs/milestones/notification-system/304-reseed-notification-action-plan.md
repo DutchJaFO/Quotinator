@@ -547,11 +547,23 @@ would invent history. That is why the enum has no `Unknown` member — `null` al
   step used the word *"having"*, which its `GROUP BY|HAVING` pattern matched, while `Math.Max(`
   elsewhere in the file matched its aggregate pattern. Reworded — but see step 13's note, because a
   guard trippable by English prose is worth knowing about.
-- **Four separate test fixtures hand-replay the notification migration list**, and each needed updating.
-  `NotificationTranslationTests` is the instructive one: its `SchemaThroughMigration11` array is
-  deliberately frozen to define "the schema before #319", so the catching-up belongs in its
-  `ApplyTranslationSchemaAsync` helper — editing the frozen array would have destroyed what it exists to
-  express.
+- **Four separate test fixtures hand-replayed the notification migration list**, and each needed
+  updating twice in this issue, for two different migrations. Hand-listing is a maintained copy of
+  production's sequence and drifts by construction; the failure surfaces as `no such column` in tests
+  unrelated to the change. All four now build their schema by running the real `DatabaseInitializer`
+  (`Quotinator.Data.Testing.Database.CurrentSchema`), which cannot drift because it *is* what the
+  application applies. `NotificationTranslationTests` keeps its frozen `SchemaThroughMigration11` array
+  deliberately — that one defines "the schema before #319" and is testing a migration rather than
+  standing at current schema, so the catching-up belongs in its `ApplyTranslationSchemaAsync` helper
+  instead.
+
+**Also folded in as boyscout cleanup (developer permission, 2026-08-30): every UX timestamp.**
+`NotificationTable` rendered stored UTC values unconverted, so the page showed times an offset away from
+when they happened — 16:17 local as 14:17, found in the same T1 pass. `DatabaseStatsSummary` had the
+identical bug on `LastUpdatedUtc`. Both now use `Quotinator.Api.Formatting.LocalTimestamp`, converted
+server-side exactly as the application's own log timestamps already are — no JS interop, since the time
+zone that matters is the host's. A sweep for `ToString("yyyy-MM-dd"`, `ToShortDateString` and
+`ToShortTimeString` across every `.razor`/`.razor.cs` now returns nothing unconverted.
 
 ### 13. Verification
 
@@ -637,10 +649,12 @@ a reseed to one file later, but `ReseedAsync` has no per-file overload and addin
 | 24 | ✅ | A condition recurring **while still unresolved** does not write again | Unit test | `NotificationSeedingTests.SeedWhileUnresolvedAsync_ConditionRecursWhileUnresolved_DoesNotWriteAgain` — the control for row 23, which would otherwise pass equally well against dedupe being switched off entirely |
 | 25 | ✅ | Title and body resolve in `de`/`nl`, with the changed file substituted into each | Unit test | `NotificationTranslationSourceTests.ReseedRecommended_TakesTitleAndBodyFromTheLocaleFiles` and `.ReseedRecommended_OriginalIsEnglish`. Sensitivity confirmed by removing one `nl` key: both this and the parity guard failed, then restored |
 | 26 | ✅ | Every new locale key exists, non-empty, in all three files | Unit test | `TranslationCompletenessTests.AllLanguageFiles_HaveExactlyTheSameKeysAsBaseline` (existing) |
-| 27 | ✅ | The producer and its remedy work in a real container, and running it resolves the condition | Live (T2) | `notifications-and-changelog/10-reseed-recommendation-and-action.md` — run verbatim on a fresh container 2026-08-30 after its own corrections, all 4 steps green: 799 quotes → reset → 0 quotes + 1 `actionrequired` recommendation → reseed → 799 quotes + 0 active → second reset → 1 again |
+| 27 | ✅ | The producer and its remedy work in a real container, and running it resolves the condition | Live (T2) | `notifications-and-changelog/10-reseed-recommendation-and-action.md` — all 5 steps green on a fresh container 2026-08-30: 799 quotes → reset → 0 quotes + 1 `actionrequired` → reseed → 799 + 0 active → `dismissReason=resolved` → second reset → 1 again. **Proven red first** against a `46577c38` (pre-#304) image, where step 2 read `0` and step 4's field did not exist |
 | 28 | ✅ | Migration applies cleanly to a database at the previous released schema | Live (T2) | Executed 2026-08-30 against a real `ghcr.io/dutchjafo/quotinator:1.8.3` database (799 quotes): `applying 12 pending Data migration(s) (version 3 → 15)`, `schema updated (data v15, app v5)`, no SQLite error, content intact. Then a Reset on that upgraded database wrote the recommendation — proving the rebuild's widened CHECK accepts `Reseed` on the **incremental** path, which row 4's baseline/incremental parity cannot show on its own |
 | 29 | ✅ | T1 — the notification appears and its Run → Confirm action reseeds | Live (T1) | Developer's Visual Studio run, 2026-08-30: reset via REST at 16:17:54 wrote the recommendation Active with its Run control; running it reseeded (`reseed requested`, 799 quotes) and the row left the active list. It also found rows 32–33 |
 | 30 | ✅ | A notification resolved by running its action reads as done, not as dismissed | Unit test | `NotificationTableTests.GetDisplayStatus_DismissedBecauseResolved_IsResolved`, with `.GetDisplayStatus_DismissedByUser_IsDismissed` as its counterpart and `.GetDisplayStatus_DismissedWithNoRecordedReason_IsDismissed` for pre-#304 rows. Plus `NotificationWriterTests.DismissByTriggerAsync_RecordsResolvedRatherThanDismissed`, and the reason recorded on the user's own dismiss |
 | 31 | ✅ | The `DismissReason` CHECK rejects a value outside the enum | Unit test | `NotificationWriterTests.DismissReason_UnknownValue_IsRejectedByTheCheckConstraint` — ADR 008's negative half |
-| 32 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — output captured in full: zero lines matching `: warning NNNN` or `: error NNNN`, summary `0 Warning(s) / 0 Error(s)` |
-| 33 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 10 `Test Run Successful.` lines, **3,692 passed / 0 failed** (814, 42, 2, 11, 16, 9, 1468, 1309, 5, 16), zero `Test Run Failed`/`Aborted`, zero warning or error lines anywhere in the captured output |
+| 32 | ✅ | The resolved state is observable outside the UI, so it can be verified live | Live (T2) | `notifications-and-changelog/10`, step 4 — `dismissReason=resolved` on the `GET /notifications` response. Added because the label was otherwise unit-testable only; the plan had claimed the value reached the response DTO and it did not |
+| 33 | ✅ | Stored UTC timestamps display in the host's time zone | Unit test | `NotificationTableTests.Local_UtcValue_IsRenderedInTheHostTimeZone`, `.Local_UnspecifiedKind_IsTreatedAsUtcNotLocal` (SQLite returns unspecified, and assuming local is right only on a UTC host) and `.Local_Null_RendersEmDash` |
+| 34 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — output captured in full: zero lines matching `: warning NNNN` or `: error NNNN`, summary `0 Warning(s) / 0 Error(s)` |
+| 35 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 10 `Test Run Successful.` lines, **3,695 passed / 0 failed** (817, 42, 2, 11, 16, 9, 1468, 1309, 5, 16), zero `Test Run Failed`/`Aborted`, zero warning or error lines anywhere in the captured output |
