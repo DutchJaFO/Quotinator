@@ -1,6 +1,6 @@
 # #304 — Notification + action: let the user trigger a reseed
 
-**Status:** In progress (step 10)
+**Status:** In progress (step 11)
 **GitHub issue:** #304
 **Tiers required:** T1, T2
 **Depends on:** #278, #312, #319
@@ -456,12 +456,19 @@ standing in for whatever resolved the condition. The endpoint's own half of that
 
 ### 10. Text and translations
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Add the title/body keys to `i18ntext/UI.{en-GB,de,nl}.json` — `ContentChanged`'s body takes the changed
 file list as a `bodyArgs` parameter, `AfterReset`'s is fixed text — and write both notifications through
 `NotificationTranslations` (relocated in step 1) into `SeedWhileUnresolvedAsync`'s `translations`
 parameter. `TranslationCompletenessTests` covers the key-completeness half; row 25 covers resolution.
+
+Four keys, translated the same way every other UI string in this project is — the "never auto-translate"
+rule in CLAUDE.md is scoped to *quote content*, and does not reach UI strings or changelog entries
+(developer confirmation, 2026-08-30, correcting an extra review step this plan had briefly assumed).
+
+Row 25 asserts the substitution reaches every language, not just English: a body template whose `{0}`
+was only ever filled in for the original would still pass a test that checked English alone.
 
 ### 11. Docs
 
@@ -534,8 +541,8 @@ a reseed to one file later, but `ReseedAsync` has no per-file overload and addin
 | 22 | ✅ | An import that populates content dismisses it | Unit test | `SqliteImportActionServiceTests.ApplyBatchAsync_Success_DismissesReseedRecommendation`, with `.ApplyBatchAsync_LeavesActionsPending_DoesNotDismissReseedRecommendation` as its counterpart — a batch that applied nothing closed no gap |
 | 23 | ✅ | A resolved condition recurring writes a fresh notification rather than being deduped | Unit test | `NotificationSeedingTests.SeedWhileUnresolvedAsync_ConditionResolvedThenRecurs_WritesAgain` — real SQLite, asserted where the dedupe decision is actually made rather than through an endpoint whose fakes cannot exercise it. Fails under `SeedOnceAsync` |
 | 24 | ✅ | A condition recurring **while still unresolved** does not write again | Unit test | `NotificationSeedingTests.SeedWhileUnresolvedAsync_ConditionRecursWhileUnresolved_DoesNotWriteAgain` — the control for row 23, which would otherwise pass equally well against dedupe being switched off entirely |
-| 25 | ❌ | Title and body resolve in `de`/`nl`, falling back to `en` when absent | Unit test | `NotificationTranslationSourceTests.ReseedRecommended_TakesTitleAndBodyFromTheLocaleFiles` (built) and `NotificationEndpointsTests.GetNotifications_ReseedRecommendation_ResolvesPerLanguage` (reaches the reader) |
-| 26 | ❌ | Every new locale key exists, non-empty, in all three files | Unit test | `TranslationCompletenessTests` (existing) |
+| 25 | ✅ | Title and body resolve in `de`/`nl`, with the changed file substituted into each | Unit test | `NotificationTranslationSourceTests.ReseedRecommended_TakesTitleAndBodyFromTheLocaleFiles` and `.ReseedRecommended_OriginalIsEnglish`. Sensitivity confirmed by removing one `nl` key: both this and the parity guard failed, then restored |
+| 26 | ✅ | Every new locale key exists, non-empty, in all three files | Unit test | `TranslationCompletenessTests.AllLanguageFiles_HaveExactlyTheSameKeysAsBaseline` (existing) |
 | 27 | ❌ | The producer and its Run → Confirm action work in a real container, and the action resolves the condition | Live (T2) | `notifications-and-changelog/10-reseed-recommendation-and-action.md` — new; ends by running the action, then confirming the recommendation is gone and content is back |
 | 28 | ❌ | Migration applies cleanly to a database at the previous released schema | Live (T2) | `notifications-and-changelog/03-upgrade-from-an-intermediate-schema-version.md`, plus ADR 009's own last-released-schema check |
 | 29 | ❌ | T1 — the notification appears and its Run → Confirm action reseeds | Live (T1) | Developer confirms in Visual Studio |
