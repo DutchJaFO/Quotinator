@@ -45,6 +45,60 @@ public class NotificationActionExecutorTests
         Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.DatabaseReset));
     }
 
+    /// <summary>#304: the Reseed trigger is executable, so `NotificationTable` renders its Run → Confirm control.</summary>
+    [TestMethod]
+    public void CanExecute_Reseed_ReturnsTrue()
+    {
+        NotificationActionExecutor executor = new(
+            new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
+
+        Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.Reseed));
+    }
+
+    /// <summary>#304: running the action reseeds, then clears the recommendation it resolved.</summary>
+    [TestMethod]
+    public async Task ExecuteAsync_Reseed_CallsReseedAndDismissesMatchingNotifications()
+    {
+        SpyDatabaseInitializer dbInitializer = new();
+        FakeNotificationWriter notificationWriter = new();
+        NotificationActionExecutor executor = new(
+            dbInitializer, new DatabaseHealthState(), notificationWriter,
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
+
+        await executor.ExecuteAsync(NotificationDismissTrigger.Reseed);
+
+        Assert.IsTrue(dbInitializer.ReseedCalled);
+        Assert.IsFalse(dbInitializer.ReseedForcedSourceRefresh,
+            "The content is already downloaded by the time the recommendation exists — forcing another "
+            + "network round-trip would be redundant.");
+        Assert.AreSequenceEqual([NotificationDismissTrigger.Reseed], notificationWriter.DismissByTriggerCalls);
+    }
+
+    /// <summary>
+    /// #304: the Reseed case deliberately does *not* copy two steps from the DatabaseReset case beside
+    /// it. A reseed replaces content within an intact schema — it neither degrades health nor empties
+    /// System_AppVersion — so marking healthy or re-recording the version would assert a recovery that
+    /// never happened. The likeliest defect here is copy-paste, which is exactly what this catches.
+    /// </summary>
+    [TestMethod]
+    public async Task ExecuteAsync_Reseed_DoesNotTouchDatabaseHealthOrAppVersion()
+    {
+        DatabaseHealthState health = new();
+        health.MarkFailed("some prior failure");
+        SpyAppVersionTracker appVersionTracker = new();
+        NotificationActionExecutor executor = new(
+            new SpyDatabaseInitializer(), health, new FakeNotificationWriter(),
+            appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
+
+        await executor.ExecuteAsync(NotificationDismissTrigger.Reseed);
+
+        Assert.IsFalse(health.IsHealthy,
+            "A reseed says nothing about whether a prior failure was resolved — only Reset rebuilds the schema.");
+        Assert.IsEmpty(appVersionTracker.Recorded,
+            "A reseed does not wipe System_AppVersion, so there is no history to re-populate.");
+    }
+
     [TestMethod]
     public async Task ExecuteAsync_DatabaseReset_CallsResetAndMarksHealthyAndDismissesMatchingNotifications()
     {
@@ -143,7 +197,16 @@ public class NotificationActionExecutorTests
 
         public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
         public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success("spy-backup.db"));
-        public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
+        public bool ReseedCalled { get; private set; }
+
+        public bool? ReseedForcedSourceRefresh { get; private set; }
+
+        public Task ReseedAsync(bool forceSourceRefresh = false)
+        {
+            ReseedCalled = true;
+            ReseedForcedSourceRefresh = forceSourceRefresh;
+            return Task.CompletedTask;
+        }
 
         public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false)
         {

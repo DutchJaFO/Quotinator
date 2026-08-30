@@ -14,6 +14,7 @@ using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Import;
 
@@ -211,7 +212,7 @@ internal static class AdminEndpoints
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, INotificationWriter notificationWriter, IAppVersionTracker appVersionTracker, IVersionService versionService, IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<Program> logger, bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) =>
+        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, INotificationWriter notificationWriter, INotificationReader notificationReader, INotificationTextSource notificationTextSource, IAppVersionTracker appVersionTracker, IVersionService versionService, IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<Program> logger, bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) =>
         {
             DatabaseOperationResult reset = await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh, allowNoBackup);
 
@@ -258,6 +259,29 @@ internal static class AdminEndpoints
             // (a future action that does *not* wipe the whole database would make it load-bearing),
             // and it's harmless here.
             await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
+            // #304 trigger 2: Reset rebuilds the schema and deliberately does not reimport bundled
+            // content (#156, and CLAUDE.md's endpoint side-effect policy), so the database now holds no
+            // quotes and nothing else says so. Recommend a reseed rather than performing one — the
+            // caller reset in order to decide what goes back in, and choosing for them is the exact
+            // bundled-side-effect that policy forbids.
+            //
+            // After ResetAsync, never before: the reset drops and rebuilds System_Notification with
+            // every other table, so a row written earlier would not survive.
+            await NotificationSeeding.SeedWhileUnresolvedAsync(
+                notificationReader, notificationWriter, NotificationType.ActionRequired,
+                new ReseedRecommendedMetadataDto
+                {
+                    Reason = ReseedReason.AfterReset,
+                    ReleaseState = NotificationReleaseState.NotApplicable,
+                },
+                body: NotificationTranslations.Original(notificationTextSource, NotificationMessageKeys.ReseedAfterResetBody),
+                appVersionId: null,
+                title: NotificationTranslations.Original(notificationTextSource, NotificationMessageKeys.ReseedAfterResetTitle),
+                dismissTrigger: NotificationDismissTrigger.Reseed,
+                translations: NotificationTranslations.Build(
+                    notificationTextSource,
+                    NotificationMessageKeys.ReseedAfterResetTitle,
+                    NotificationMessageKeys.ReseedAfterResetBody));
             // #81: Reset rebuilds System_AppVersion empty like every other table (no protected set) —
             // re-populate it immediately so it stays "always provided with content" rather than only
             // getting a row again on the next full app restart. The version hasn't actually changed

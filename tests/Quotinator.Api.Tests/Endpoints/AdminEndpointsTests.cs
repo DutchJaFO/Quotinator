@@ -220,6 +220,44 @@ public class AdminEndpointsTests
             + "reason tells the operator to resolve by resetting");
     }
 
+    /// <summary>
+    /// #304 trigger 2: Reset deliberately does not reimport bundled content (#156), so a successful
+    /// Reset leaves the database with no quotes and nothing tells the operator. It writes an
+    /// ActionRequired recommendation instead of reseeding on their behalf.
+    /// </summary>
+    [TestMethod]
+    public async Task Reset_Success_WritesReseedRecommendation()
+    {
+        FakeNotificationWriter writer = new();
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, notificationWriter: writer);
+
+        HttpResponseMessage response = await CreateClientWithKey(factory)
+            .PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.ContainsSingle(
+            writer.WrittenMetadata.Where(m => m.Kind == NotificationMetadataKind.ReseedRecommended),
+            "A successful Reset must recommend a reseed exactly once — the database now holds no quote content.");
+    }
+
+    /// <summary>
+    /// A Reset that refused to run leaves the database untouched, so there is nothing to recommend —
+    /// the positive control's counterpart, and the case a producer bolted on after the fact would miss.
+    /// </summary>
+    [TestMethod]
+    public async Task Reset_WhenRefused_WritesNoReseedRecommendation()
+    {
+        FakeNotificationWriter writer = new();
+        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded };
+        using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy, writer);
+
+        await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
+
+        Assert.IsEmpty(
+            writer.WrittenMetadata.Where(m => m.Kind == NotificationMetadataKind.ReseedRecommended),
+            "The reset never ran, so the content is still there and recommending a reseed would be wrong.");
+    }
+
     [TestMethod]
     public async Task ResetDatabase_WhenNoBackupCanBeTaken_DoesNotRebuildTheDatabase()
     {

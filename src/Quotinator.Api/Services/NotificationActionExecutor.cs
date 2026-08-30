@@ -24,6 +24,7 @@ internal sealed class NotificationActionExecutor(
     public bool CanExecute(NotificationDismissTrigger trigger) => trigger switch
     {
         NotificationDismissTrigger.DatabaseReset => true,
+        NotificationDismissTrigger.Reseed         => true,
         _                                         => false,
     };
 
@@ -53,6 +54,20 @@ internal sealed class NotificationActionExecutor(
                 {
                     logger.LogWarning(ex, "[Server] Failed to record the current app version after Reset — non-fatal, the reset itself still succeeded.");
                 }
+                break;
+            // #304. Deliberately not a copy of the case above: a reseed replaces content within an
+            // intact schema, so it neither degrades health nor empties System_AppVersion, and calling
+            // MarkHealthy or RecordCurrentAsync here would assert a recovery that never happened.
+            //
+            // metadata carries which files changed (ReseedRecommendedMetadataDto), and is ignored for
+            // now — IDatabaseInitializer.ReseedAsync has no per-file overload, so there is nothing to
+            // narrow to. The payload reaching this far is what makes adding one later a change to this
+            // case rather than to the contract.
+            case NotificationDismissTrigger.Reseed:
+                // Default forceSourceRefresh: the content that prompted the recommendation is already
+                // downloaded, so another network round-trip would buy nothing.
+                await databaseInitializer.ReseedAsync();
+                await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
                 break;
             default:
                 throw new NotSupportedException($"No executable action is wired up for trigger '{trigger}'.");
