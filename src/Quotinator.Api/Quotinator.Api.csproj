@@ -23,9 +23,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
-    <!-- Microsoft.OpenApi is referenced directly only to override the vulnerable version
-         AspNetCore.OpenApi pulls in transitively; the pin and its rationale are in
-         Directory.Packages.props. -->
+    <!-- Microsoft.OpenApi is referenced directly only to override the version AspNetCore.OpenApi
+         resolves transitively; the pin and its rationale are in Directory.Packages.props. -->
     <PackageReference Include="Microsoft.OpenApi" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" />
     <PackageReference Include="Scalar.AspNetCore" />

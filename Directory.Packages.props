@@ -35,12 +35,16 @@
          SQLitePCLRaw.core at 2.1.11, but this package carries no managed deps so it upgrades
          independently. See src/Quotinator.Data/CVE/archived/CVE-2025-6965.md. -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
-    <!-- Direct override: Microsoft.AspNetCore.OpenApi 10.0.10 transitively pulls in the
-         vulnerable Microsoft.OpenApi 2.0.0 (CVE-2026-49451, GHSA-v5pm-xwqc-g5wc). Forces
-         resolution to the patched version until AspNetCore.OpenApi itself bumps its floor.
-         2.11.0 is the latest 2.x release — the ceiling until AspNetCore.OpenApi's bundled
-         XmlCommentGenerator supports Microsoft.OpenApi 3.x's read-only object model (see
-         dotnet/aspnetcore#64317; src/Quotinator.Api/CVE/archived/CVE-2026-49451.md). -->
+    <!-- Originally a CVE-2026-49451 (GHSA-v5pm-xwqc-g5wc) override, back when
+         Microsoft.AspNetCore.OpenApi 10.0.10 resolved the vulnerable Microsoft.OpenApi 2.0.0
+         transitively. That is no longer what this pin does: AspNetCore.OpenApi 10.0.11 declares
+         [2.7.5, 3.0.0), so it already floors on the patched version by itself. The pin is kept
+         only to hold the latest 2.x (2.12.2) above that 2.7.5 floor.
+         3.x stays blocked: the bundled XmlCommentGenerator still assigns to the now-read-only
+         IOpenApiMediaType.Example, so 3.x fails to compile with CS0200 — reproduced against
+         3.10.2 on 2026-08-30, on top of NU1608 from the range above. dotnet/aspnetcore#64317
+         is closed upstream, but its fix is not in 10.0.11: confirm by building, never by the
+         issue's state. See src/Quotinator.Api/CVE/archived/CVE-2026-49451.md. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
   </ItemGroup>
 
