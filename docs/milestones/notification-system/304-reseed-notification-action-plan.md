@@ -1,13 +1,14 @@
 # #304 — Notification + action: let the user trigger a reseed
 
-**Status:** In progress (step 12)
+**Status:** In progress (step 13)
 **GitHub issue:** #304
 **Tiers required:** T1, T2
 **Depends on:** #278, #312, #319
 
-> **Next action: T1.** All twelve steps are implemented and every verification row is ✅ except row 29,
-> the developer's own Visual Studio run. Nothing else is outstanding: T2 was executed in full on
-> 2026-08-30, including the migration against a real v1.8.3 database.
+> **Next action: re-run T1 on step 12's change.** Every step is implemented and all 33 verification rows
+> are ✅, including the original T1 pass. Step 12 was added *because* of that pass and changes what the
+> notifications page displays, so the developer confirming the new *Done* label in Visual Studio is the
+> one thing left before this issue is `Waiting for release`.
 
 ---
 
@@ -505,14 +506,73 @@ not have.
 happens inside whichever step first opens each file, never batched here at the end. Listed as a
 non-step so a reader does not go looking for it as one.
 
-### 12. Verification
+### 12. Distinguish "resolved by running the action" from "dismissed by the user"
+
+**Status:** ✅ Done
+
+**Found in T1 (2026-08-30).** The developer reset via REST, saw the recommendation Active with its
+Run control, ran it, and the reseed completed — and the row then displayed **Afgewezen** (dismissed),
+which reads as *"I declined to do this"*. The action had in fact been carried out.
+
+The cause is that `System_Notification` records only `IsDismissed` plus `DismissedAt`. There is no record
+of *why* a notification stopped being active, so a user clicking Dismiss and an action completing land in
+the same state and the UI can only render one label for both.
+
+**Not introduced by this issue** — #289's schema-overshoot notification carries the `DatabaseReset`
+action and has behaved this way since #278 shipped. #304 is what makes it routine, since this is the
+first notification whose action a user runs as a matter of course. Folded into this issue by developer
+decision (2026-08-30) rather than filed separately, so the reseed recommendation never ships with a
+state that misreports what the user did.
+
+Work: a `NotificationDismissReason` enum in `Quotinator.Data/Enums/`, an enum-backed column with its
+`CHECK` per ADR 008 — an `ALTER TABLE ... ADD COLUMN` with the constraint inline, which SQLite permits,
+so no table rebuild — the baseline updated to match, the reason set at each dismiss site (the user's own
+dismiss versus the three action-driven ones), the value carried on the response DTO, and a distinct UI
+label in all three locale files.
+
+Landed as migration 16 plus `NotificationDismissReason { Dismissed, Resolved }`. The user's own dismiss
+records `Dismissed`; `DismissByTriggerAsync` — whose every caller is an action that did the work —
+records `Resolved`. The label is *Done* / *Erledigt* / *Uitgevoerd*.
+
+**A dismissed row with no recorded reason keeps the old label rather than being guessed into a bucket.**
+Rows dismissed before this column existed genuinely have an unknown reason, and calling them "Done"
+would invent history. That is why the enum has no `Unknown` member — `null` already means it.
+
+**Three things this step turned up, none of them predicted:**
+
+- `SafeValue<NotificationDismissReason?>` needs its own Dapper type handler, like every other
+  enum-backed column. Without it the insert path throws `NotSupportedException` on *every* notification
+  write, not only a dismissal — so the failure was loud rather than subtle.
+- The CVE-2025-6965 aggregate guard flagged `DatabaseInitializer.cs` because a comment written in this
+  step used the word *"having"*, which its `GROUP BY|HAVING` pattern matched, while `Math.Max(`
+  elsewhere in the file matched its aggregate pattern. Reworded — but see step 13's note, because a
+  guard trippable by English prose is worth knowing about.
+- **Four separate test fixtures hand-replay the notification migration list**, and each needed updating.
+  `NotificationTranslationTests` is the instructive one: its `SchemaThroughMigration11` array is
+  deliberately frozen to define "the schema before #319", so the catching-up belongs in its
+  `ApplyTranslationSchemaAsync` helper — editing the frozen array would have destroyed what it exists to
+  express.
+
+### 13. Verification
 
 **Status:** 🔵 T1 outstanding — every other row ✅
 
 Work the table below top to bottom. T2 before T1, per `docs/release-verification.md`.
 
-Row 29 (T1) is the developer's own Visual Studio run and is the only outstanding item; every other row
-is ✅.
+Every row is ✅. T1 ran on 2026-08-30 and passed on its own terms — and found the state-label defect that
+became step 12, plus a timestamp defect recorded below.
+
+**Two `notification-system` process observations from the T1 pass, both about the guard rails rather
+than the feature:**
+
+- The CVE-2025-6965 aggregate guard scans whole source files, comments included, so English prose can
+  trip it: the word *"having"* in a comment plus an unrelated `Math.Max(` in the same file is enough.
+  The immediate fix is to reword, which is exactly the habit that would devalue the guard if it became
+  routine — a real hit could be "fixed" the same way. Worth its own issue rather than a reword and
+  silence.
+- Four test fixtures hand-replay the notification migration list. Each new migration touching
+  `System_Notification` has to be added to all four by hand, and the failure mode is a `no such column`
+  error in tests unrelated to the change. #304 hit this twice, for two different migrations.
 
 **Three defects in the new T2 document, found by running it rather than by reading it** — recorded in
 the document itself, since each is a trap the suite has hit before:
@@ -579,6 +639,8 @@ a reseed to one file later, but `ReseedAsync` has no per-file overload and addin
 | 26 | ✅ | Every new locale key exists, non-empty, in all three files | Unit test | `TranslationCompletenessTests.AllLanguageFiles_HaveExactlyTheSameKeysAsBaseline` (existing) |
 | 27 | ✅ | The producer and its remedy work in a real container, and running it resolves the condition | Live (T2) | `notifications-and-changelog/10-reseed-recommendation-and-action.md` — run verbatim on a fresh container 2026-08-30 after its own corrections, all 4 steps green: 799 quotes → reset → 0 quotes + 1 `actionrequired` recommendation → reseed → 799 quotes + 0 active → second reset → 1 again |
 | 28 | ✅ | Migration applies cleanly to a database at the previous released schema | Live (T2) | Executed 2026-08-30 against a real `ghcr.io/dutchjafo/quotinator:1.8.3` database (799 quotes): `applying 12 pending Data migration(s) (version 3 → 15)`, `schema updated (data v15, app v5)`, no SQLite error, content intact. Then a Reset on that upgraded database wrote the recommendation — proving the rebuild's widened CHECK accepts `Reseed` on the **incremental** path, which row 4's baseline/incremental parity cannot show on its own |
-| 29 | ❌ | T1 — the notification appears and its Run → Confirm action reseeds | Live (T1) | Developer confirms in Visual Studio |
-| 30 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — output captured in full: zero lines matching `: warning NNNN` or `: error NNNN`, summary `0 Warning(s) / 0 Error(s)` |
-| 31 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 10 `Test Run Successful.` lines, **3,687 passed / 0 failed** (811, 42, 2, 11, 16, 9, 1468, 1307, 5, 16), zero `Test Run Failed`/`Aborted`, zero warning or error lines anywhere in the captured output |
+| 29 | ✅ | T1 — the notification appears and its Run → Confirm action reseeds | Live (T1) | Developer's Visual Studio run, 2026-08-30: reset via REST at 16:17:54 wrote the recommendation Active with its Run control; running it reseeded (`reseed requested`, 799 quotes) and the row left the active list. It also found rows 32–33 |
+| 30 | ✅ | A notification resolved by running its action reads as done, not as dismissed | Unit test | `NotificationTableTests.GetDisplayStatus_DismissedBecauseResolved_IsResolved`, with `.GetDisplayStatus_DismissedByUser_IsDismissed` as its counterpart and `.GetDisplayStatus_DismissedWithNoRecordedReason_IsDismissed` for pre-#304 rows. Plus `NotificationWriterTests.DismissByTriggerAsync_RecordsResolvedRatherThanDismissed`, and the reason recorded on the user's own dismiss |
+| 31 | ✅ | The `DismissReason` CHECK rejects a value outside the enum | Unit test | `NotificationWriterTests.DismissReason_UnknownValue_IsRejectedByTheCheckConstraint` — ADR 008's negative half |
+| 32 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — output captured in full: zero lines matching `: warning NNNN` or `: error NNNN`, summary `0 Warning(s) / 0 Error(s)` |
+| 33 | ✅ | Full test suite green | Build | `dotnet test --configuration Release -m:1` — 10 `Test Run Successful.` lines, **3,692 passed / 0 failed** (814, 42, 2, 11, 16, 9, 1468, 1309, 5, 16), zero `Test Run Failed`/`Aborted`, zero warning or error lines anywhere in the captured output |
