@@ -203,6 +203,12 @@ Every bug fix must be accompanied by tests that close the gap the bug exposed. T
    For a live/T2 smoke-test step: run the *exact same* repro steps against a build from the commit immediately before the fix (e.g. `git worktree add <path> <pre-fix-sha>`, `docker build` from that worktree with a distinct tag), confirm the old/broken behaviour actually appears, then tear down the canary worktree/image/container and re-confirm the real fix's build still shows correct behaviour. This is on top of the red-before-fix run in step 1, not a replacement for it — it validates the *test or smoke-test method's* sensitivity, not the fix's correctness.
 2. **Write the fix.** The test must turn green.
 3. **Check for related coverage gaps.** A bug often reveals an untested code path, not just one missing assertion. Ask: what other inputs or states could trigger the same class of failure? Add tests for those too.
+
+   **And fix every instance of the defect's shape, not only the one observed failing.** Grep the solution for the *expression*, the call pattern, the format string — not just the file the bug was reported in. A defect that appeared once by chance usually exists wherever the same code was written, and the remaining instances tend to *look* correct, because they pass for an accidental reason.
+
+   Two live cases, both in #304 (2026-08-30). A PowerShell `.Count` on an unwrapped single-object result printed empty; the fix went in at the one site that failed, while three others stayed broken — they return `0` correctly for the empty case and only fail when the expected value is exactly one, which is precisely what a well-targeted assertion produces. And a UTC-rendered-as-local timestamp was fixed in `NotificationTable` while `DatabaseStatsSummary` kept the identical bug, found only because the developer asked whether an existing helper had been looked for.
+
+   Where the same expression is repeated across call sites, extract it once rather than fixing it twice: a repeated expression is how the second instance came to exist, and leaving it repeated is how the third will.
 4. **All tests from steps 1–3 must be committed in the same PR as the fix.** A fix without a regression test is incomplete.
 
 The test project for the data layer (`Quotinator.Core.Tests`, `Quotinator.Data.Tests`) uses Dapper directly for test setup — the same reason the production data layer does. Add Dapper as an explicit `PackageReference` in any test project that manipulates SQLite state directly.

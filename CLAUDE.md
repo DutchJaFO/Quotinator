@@ -218,6 +218,33 @@ Routes/        → Quotinator.Constants.Routes     (ApiRoutes, RouteExtensions)
 
 **Razor caveat:** `.razor` files are not always caught by the build when a namespace or component reference changes. A `dotnet build` may report 0 errors while a `.razor` file still references the old namespace at runtime. After any namespace refactor, manually check every `.razor` and `_Imports.razor` file that references the changed namespace and run the app to confirm the Blazor UI loads correctly.
 
+### Before adding a helper, search the whole solution — and relocate rather than duplicate
+
+**Search every project before writing a shared helper, not just the one the call site is in.** Grep by
+*behaviour* as well as by name — the operation, the format string, the type — since the thing already
+written will not be called what you would have called it. Scoping the search to the current project is
+not checking; it is checking one tenth of the places the answer could be.
+
+**When a second consumer appears in another project, move the helper rather than copying it.** This
+happens often here, because a helper is usually written for the first producer that needed it and only
+later turns out to be general:
+
+- `NotificationSeeding` was written in `Quotinator.Api.Startup` and moved to `Quotinator.Data` (#312)
+  once a `Quotinator.Core` producer needed it — Api → Core is one-directional, so a copy was the only
+  alternative.
+- `NotificationTranslations` repeated the same story one issue later (#304), and
+  `TestNotificationReader` moved from a single test project into `Quotinator.Data.Testing` for the same
+  reason.
+
+**Where the dependency runs the wrong way, invert it rather than duplicating.** `NotificationTranslations`
+could not take `Quotinator.Core`'s `IApiLocalizer` with it, since ADR 018 permits `Quotinator.Data` to
+depend only on projects that are already domain-agnostic — so `Quotinator.Data` declares
+`INotificationTextSource` and `IApiLocalizer` extends it. The contract belongs to the project that
+consumes it; the implementation stays where it already was.
+
+Two copies of anything drift, and the drift is invisible until someone reads output that only one of
+them produces correctly.
+
 ### Dependency injection policy
 
 **Default: always use DI registration.** Services, repositories, and infrastructure types must be registered with the DI container and received via constructor injection. Using `new` to instantiate a dependency is a code smell — it bypasses DI, makes testing harder, and prevents lifetime management by the container.
