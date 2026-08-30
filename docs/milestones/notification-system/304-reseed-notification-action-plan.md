@@ -472,7 +472,7 @@ was only ever filled in for the original would still pass a test that checked En
 
 ### 11. Docs
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `docs/api-endpoints.md` — both `POST /admin/database/reset` and `POST /admin/database/reseed` change
 observable behaviour (one now writes a notification, the other now dismisses one), so both descriptions
@@ -486,6 +486,19 @@ control `docs/automated-testing/README.md` requires of any document that provoke
 
 `unreleased` entries in `data/changelog/changelog.{en,nl,de}.json` in lockstep; `[Subsystem - Phase]`
 prefixes on any new log lines.
+
+Done: both endpoint descriptions and their `docs/api-endpoints.md` rows, the new T2 document plus its
+index row and `Quotinator.slnx` entry, and `#304` added to `unreleased.issues` with a highlight and an
+`added` entry in all three languages, `CHANGELOG.md` regenerated.
+
+**No new log lines were added, so no `[Subsystem - Phase]` prefix was needed.** Both producers are
+silent by design: a notification *is* the operator-facing signal here, and logging the same thing beside
+it would say it twice.
+
+The T2 document was not added to the README's second table. That table maps *legacy* numbers so
+references written before the category split still resolve; a document written after it has no legacy
+number, and inventing `44a` for it would both break the plain-integer rule and imply a history it does
+not have.
 
 **`.editorconfig` is not part of this step.** Per CLAUDE.md, a file joins the scoped `IDE0008` list
 *the moment it is first touched*, with its `var` declarations converted in that same commit — so it

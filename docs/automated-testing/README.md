@@ -1063,6 +1063,7 @@ different question in each.
 | 07 | [The changelog is served from its own on-disk database](notifications-and-changelog/07-changelog-served-from-its-own-database.md) | yes |
 | 08 | [A notification's title and body resolve to the requested language](notifications-and-changelog/08-notification-text-resolves-per-language.md) | no |
 | 09 | [Upgrading translates the notification a released build already wrote](notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md) | no |
+| 10 | [A reset recommends a reseed, and running it resolves the condition](notifications-and-changelog/10-reseed-recommendation-and-action.md) | no |
 
 ### `import-and-staged-actions/`
 

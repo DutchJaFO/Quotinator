@@ -10,14 +10,15 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 309, 312, 313, 319, 320, 323, 325, 326, 349],
+    "issues": [81, 304, 309, 312, 313, 319, 320, 323, 325, 326, 349],
     "highlights": [
       "Sicherungen lassen sich jetzt verwalten, ohne die Dateien auf dem Server anzufassen: sehen, welche Sicherungen vorhanden sind und wie viel Platz bleibt, jederzeit selbst eine anlegen, eine herunterladen und sicher aufbewahren sowie alte löschen, um Platz freizugeben. Kann keine Sicherung angelegt werden, benennt Quotinator jetzt das Hindernis und was dagegen zu tun ist, statt ohne Erklärung fehlzuschlagen.",
       "Quotinator startet jetzt auch dann, wenn sein Datenverzeichnis nicht beschreibbar ist — ein schreibgeschütztes Volume oder falsche Berechtigungen. Statt sich zu beenden, startet es in einem eingeschränkten Zustand, benennt klar das Problem und dessen Behebung und hält Seiten und API-Dokumentation erreichbar, damit Sie handeln können.",
       "Beim Aktualisieren von Zitatquellen steht nun deutlich mehr Zeit für den Verbindungsaufbau zur Verfügung, bevor aufgegeben wird, sodass eine langsame oder kurzzeitig nicht erreichbare Verbindung keine Aktualisierung mehr ausfallen lässt. Ist eine Quelle wirklich nicht erreichbar, arbeitet Quotinator mit der bereits vorhandenen Kopie weiter.",
       "Nach einer Aktualisierung teilt Quotinator jetzt mit, was sich geändert hat: Eine Startbenachrichtigung zeigt die Highlights jeder übersprungenen Version, nicht nur der neuesten. Eine Neuinstallation sieht nur die Highlights der aktuellen Version, und es erscheint nichts, wenn eine Version nichts Nennenswertes enthält.",
       "Benachrichtigungen haben jetzt eine eigene kurze Überschrift, getrennt vom Nachrichtentext, wodurch die Benachrichtigungsseite und das Start-Pop-up leichter zu erfassen sind.",
-      "Benachrichtigungen verschwinden nicht mehr standardmäßig nach Ablauf einer Frist. Zuvor lief jede Benachrichtigung nach 30 Tagen ab, auch solche zu einem noch ungelösten Problem; jetzt bleibt eine Benachrichtigung bestehen, bis sie geschlossen wird oder die empfohlene Aktion ausgeführt wurde."
+      "Benachrichtigungen verschwinden nicht mehr standardmäßig nach Ablauf einer Frist. Zuvor lief jede Benachrichtigung nach 30 Tagen ab, auch solche zu einem noch ungelösten Problem; jetzt bleibt eine Benachrichtigung bestehen, bis sie geschlossen wird oder die empfohlene Aktion ausgeführt wurde.",
+      "Quotinator weist jetzt darauf hin, wenn ein erneutes Laden Ihrer Zitate sinnvoll wäre — nachdem ein Zurücksetzen die Datenbank leer hinterlassen hat, oder wenn aktualisierte Inhalte heruntergeladen wurden, die Ihre gespeicherten Zitate noch nicht widerspiegeln. Die Benachrichtigung enthält eine Schaltfläche, die dies für Sie ausführt, sodass dafür kein Aufruf über die Kommandozeile mehr nötig ist. Quotinator lädt nie von selbst neu: es fragt nach, denn das Ersetzen der gespeicherten Inhalte ist Ihre Entscheidung."
     ],
     "audienceHighlights": {
       "notification": [
@@ -28,7 +29,8 @@
     "added": [
       "Sicherungen sind jetzt über die API verwaltbar: auflisten mit Größe und Datum, eine auf Anforderung anlegen, eine herunterladen, damit sie den Container überdauert, und eine entfernen, um Platz freizugeben. Alle antworten auch dann, wenn die Datenbank selbst in einem eingeschränkten Zustand ist (issue #349)",
       "Eine What's-new-Startbenachrichtigung nach einer Aktualisierung, die jede Version abdeckt, die seit der zuletzt tatsächlich ausgeführten Version übersprungen wurde — eine Benachrichtigung pro Version, zuzüglich des noch nicht veröffentlichten Abschnitts, sofern dort etwas markiert ist; eine Neuinstallation sieht nur die aktuelle Version (issue #81)",
-      "Quotinator verzeichnet jetzt, welche Anwendungsversionen die Datenbank verwendet haben, und verknüpft jede Benachrichtigung mit der Version, die sie hinzugefügt hat — die Grundlage dafür, später anzuzeigen, wann eine Benachrichtigung zuerst erschien (issue #312)"
+      "Quotinator verzeichnet jetzt, welche Anwendungsversionen die Datenbank verwendet haben, und verknüpft jede Benachrichtigung mit der Version, die sie hinzugefügt hat — die Grundlage dafür, später anzuzeigen, wann eine Benachrichtigung zuerst erschien (issue #312)",
+      "Eine Benachrichtigung, die das erneute Laden der Zitate empfiehlt, mit einer Schaltfläche, die es ausführt. Sie erscheint, nachdem ein Zurücksetzen die Datenbank ohne Zitate hinterlassen hat, und wenn aktualisierte Quellinhalte heruntergeladen wurden, die die gespeicherten Zitate nicht widerspiegeln. Sie verschwindet, sobald die Zitate auf beliebigem Weg neu geladen oder importiert wurden, und erscheint erneut, wenn die Situation wieder eintritt (issue #304)"
     ],
     "changed": [
       "Benachrichtigungen erscheinen jetzt in der eingestellten Sprache der Oberfläche statt immer auf Englisch. Eine Benachrichtigung behält die Sprache, in der sie verfasst wurde, und Quotinator greift auf dieses Original zurück, sobald für die gelesene Sprache keine Übersetzung vorliegt — so bleibt nie etwas leer oder halb übersetzt. Die API kann zudem eine bestimmte Sprache anfordern und meldet, welche tatsächlich zurückgegeben wurde (Issue #319)",

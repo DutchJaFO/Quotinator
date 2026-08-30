@@ -214,6 +214,8 @@ internal static class AdminEndpoints
             "unless `Quotinator:AutoUpdateSources` is `false`, in which case `forceSourceRefresh` has no effect. " +
             "Returns the row counts and a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) " +
             "after the operation completes (issue #221). " +
+            "On success, dismisses any active notification recommending a reseed (issue #304) — the same " +
+            "recommendation the notification action clears, since either route resolves it. " +
             "Protected by a concurrency-1 limiter — a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
@@ -334,6 +336,9 @@ internal static class AdminEndpoints
             "independent of the database, since nothing gets imported by this call. " +
             "Returns the row counts (all zero immediately after a reset) and a per-file, per-entity-type report (issue #221); " +
             "the report reflects no activity since Reset does not seed. " +
+            "Because no content is reimported, a successful reset writes an `ActionRequired` notification " +
+            "recommending a reseed (issue #304), runnable from the notifications page — it recommends rather " +
+            "than reseeds, since the caller reset in order to decide what goes back in. " +
             "A reset takes a safety backup first, and **refuses with `409 Conflict` if one cannot be taken** (issue #348) — " +
             "the response names which obstacle stopped it (`backupObstacle`) and what can be done about it (`remedies`). " +
             "Pass `allowNoBackup=true` to proceed anyway: this both accepts responsibility for there being no restore point " +

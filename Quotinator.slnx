@@ -361,6 +361,7 @@
     <File Path="docs/automated-testing/notifications-and-changelog/07-changelog-served-from-its-own-database.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/08-notification-text-resolves-per-language.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/10-reseed-recommendation-and-action.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/import-and-staged-actions/">
     <File Path="docs/automated-testing/import-and-staged-actions/01-staged-action-review-workflow.md" />
