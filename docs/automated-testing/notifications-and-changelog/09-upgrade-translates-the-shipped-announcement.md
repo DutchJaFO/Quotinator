@@ -1,4 +1,4 @@
-# Upgrading translates the notification a released build already wrote
+﻿# Upgrading translates the notification a released build already wrote
 
 **Smoke:** no
 **Environment:** Upgraded
@@ -25,6 +25,11 @@ publishes no port and is waited on by its own log, then `qt-notif-09-current` pu
 - **The original English text must survive unchanged.** Each producer's content hash is taken over it,
   so a backfill that rewrote it would leave the notification unrecognisable to the dedupe and it would
   re-announce — a failure that appears one boot later, which is why step 6 restarts.
+- **Every count is scoped to the announcement, never taken over a whole table.** Other producers write
+  their own notifications and their own translations, so an unscoped count answers a different question
+  than the one being asked and grows whenever a producer is added.
+- **Column names differ across the upgrade.** v1.8.3 stores the text in `Message`; #312's rename makes
+  it `Body`. Steps before the upgrade use the first, steps after it use the second.
 - **Never assert a migration number or schema version.** Assert the translations are present and the
   original is unchanged; both survive a migration consolidation, a version number does not.
 - The bind directory is a PowerShell absolute path, so nothing translates it into a different directory
@@ -52,13 +57,17 @@ database in `$dataDir`.
 
 ```powershell
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
-  --sql "SELECT COUNT(*) AS Announcements FROM System_Notification WHERE Body LIKE '%GetAllImportBatches%'"
+  --sql "SELECT COUNT(*) AS Announcements FROM System_Notification WHERE Message LIKE '%GetAllImportBatches%'"
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
-  --sql "SELECT name FROM sqlite_master WHERE type='table' AND name='System_NotificationTranslation'"
+  --sql "SELECT COUNT(*) AS TranslationTable FROM sqlite_master WHERE type='table' AND name='System_NotificationTranslation'"
 ```
 
-**Expected:** `Announcements` is `1`, and the second query returns no rows — the released schema has no
+**Expected:** `Announcements` is `1`, and `TranslationTable` is `0` — the released schema has no
 translation table at all.
+
+**The column is `Message` here, not `Body`.** v1.8.3 predates the rename, so a query naming `Body` fails
+with `no such column` — which reads as a broken step rather than as the schema difference it is. Steps
+after the upgrade use `Body`, because by then the rename has run.
 
 **On failure:** `0` announcements means there is nothing for the upgrade to translate, and every check
 below would pass by doing no work. A translation table already present means the prior image is not the
@@ -116,13 +125,18 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18509/api/v1/h
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
   --sql "SELECT COUNT(*) AS Announcements FROM System_Notification WHERE Body LIKE '%GetAllImportBatches%'"
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
-  --sql "SELECT Language, COUNT(*) AS Rows FROM System_NotificationTranslation GROUP BY Language"
+  --sql "SELECT t.Language, COUNT(*) AS Cnt FROM System_NotificationTranslation t JOIN System_Notification n ON LOWER(n.Id)=LOWER(t.NotificationId) WHERE n.MetadataKind = 'Announcement' GROUP BY t.Language"
 ```
 
-**Expected:** `200`, `Announcements` still `1`, and one row per translated language each with `Rows` = `1`.
+**Expected:** `200`, `Announcements` still `1`, and one row per translated language each with `Cnt` = `1`.
+
+**The count is scoped to the announcement by joining its notification.** Other producers write
+translations of their own — the what's-new notification has a row per language too — so an unscoped
+`GROUP BY Language` over the whole table returns 2 per language on a correct run and reads as the
+backfill having duplicated. Measured: it does exactly that.
 
 **On failure:** a second announcement means the stored English no longer matches what the producer's
-content hash covers, so the dedupe stopped recognising it. A `Rows` above `1` means the backfill appended
+content hash covers, so the dedupe stopped recognising it. A `Cnt` above `1` means the backfill appended
 instead of skipping what it had already written.
 
 ## Observed effect
