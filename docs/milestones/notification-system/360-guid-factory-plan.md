@@ -1,4 +1,4 @@
-# #360 — Migration-generated identifiers are not valid UUIDs; route all id creation through one factory
+﻿# #360 — Migration-generated identifiers are not valid UUIDs; route all id creation through one factory
 
 **Status:** Planning
 **GitHub issue:** #360
@@ -65,6 +65,23 @@ mechanism stops a sixth.
 migration executes, which places it earlier than `UNICODE_CONTAINS`'s own registration point. Whether
 that belongs in the connection factory, in `DapperConfiguration`, or in `DatabaseInitializer`'s own
 setup path decides what the Steps look like, so the Steps are not written until it is settled.
+
+## The red-first sequence this plan is held to
+
+**Every step writes its tests, runs them, and records them red before any of that step's code exists.**
+Not a restatement of `process.md` for its own sake — it is here because #319 finished with three tests
+that could not honestly tick its first Definition-of-done box, and that box has to be ticked before an
+issue closes. A plan that lets implementation land first produces an issue that permanently reads as
+unfinished, and the ordering cannot be recreated afterwards: `testing-policy.md` is explicit that a
+mutation check validates a test's sensitivity and is *not* a substitute for the red-before-fix run.
+
+Two consequences for the Steps below, once written:
+
+- **Each step's `**Status:**` line does not move to ✅ until its tests were observed red first.** A step
+  whose first test run was green is recorded as such immediately, not discovered at closing time.
+- **A test named in the issue's `Expected tests` table is written under that exact name**, or the
+  deviation is agreed before the step is closed. #319 reached its verification pass with two named tests
+  that did not exist — one a naming difference, one a genuine untested requirement.
 
 ## Steps
 
