@@ -1,6 +1,6 @@
 # #304 — Notification + action: let the user trigger a reseed
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 10)
 **GitHub issue:** #304
 **Tiers required:** T1, T2
 **Depends on:** #278, #312, #319
@@ -433,13 +433,26 @@ Run → Confirm control.
 
 ### 9. Dismiss wiring
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `POST /admin/database/reseed` dismisses `Reseed` on success, and `SqliteImportActionService.ApplyBatchAsync`
 dismisses it on its own success path.
 
 This step is what makes step 2's active-only dedupe mean "unresolved" — without it the notification is
 never dismissed, so it stays active forever and dedupes every later occurrence against itself.
+
+`SqliteImportActionService` gains `INotificationWriter`, which meant updating 18 construction sites
+across 13 test files; production resolves it through DI and needed no change. Required rather than an
+optional trailing parameter on purpose: a null-defaulted dependency would let a test construct the
+service and silently skip the dismiss, which is the exact failure this step exists to prevent.
+
+**Rows 23 and 24 moved down a layer from where the plan put them.** They were written as
+`AdminEndpointsTests.Reset_After{AReseed,AnImport}_WritesAFreshRecommendation`, but the endpoint tests
+run against `NoOpDatabaseInitializer` and a fake writer with no reader behind it, so nothing there can
+exercise a dedupe decision — the test would have asserted its own fake. They are now real-SQLite tests
+in `NotificationSeedingTests`, against the helper that actually makes the call, with the dismiss step
+standing in for whatever resolved the condition. The endpoint's own half of that wiring is rows 21 and
+22, which is where an endpoint test can genuinely observe something.
 
 ### 10. Text and translations
 
@@ -517,10 +530,10 @@ a reseed to one file later, but `ReseedAsync` has no per-file overload and addin
 | 18 | ✅ | `CanExecute(Reseed)` is true, so `NotificationTable` renders the Run → Confirm control | Unit test | `NotificationActionExecutorTests.CanExecute_Reseed_ReturnsTrue` — a separate branch from `ExecuteAsync`, so it needs its own row |
 | 19 | ✅ | Running the action reseeds and dismisses the notification | Unit test | `NotificationActionExecutorTests.ExecuteAsync_Reseed_CallsReseedAndDismissesMatchingNotifications` — also asserts `forceSourceRefresh` stays `false`, the one argument the call makes a choice about |
 | 20 | ✅ | The `Reseed` case does **not** mark health or record an app version, unlike `DatabaseReset` | Unit test | `NotificationActionExecutorTests.ExecuteAsync_Reseed_DoesNotTouchDatabaseHealthOrAppVersion` — the deliberate difference from the case it otherwise mirrors, and the copy-paste this catches is the likeliest way to get it wrong |
-| 21 | ❌ | `POST /admin/database/reseed` dismisses it too, not only the notification action | Unit test | `AdminEndpointsTests.Reseed_Success_DismissesReseedRecommendation` |
-| 22 | ❌ | An import that populates content dismisses it | Unit test | `SqliteImportActionServiceTests.ApplyBatchAsync_Success_DismissesReseedRecommendation` — nothing dismisses on import today |
-| 23 | ❌ | A Reset **after** a reseed writes a fresh notification rather than being deduped | Unit test | `AdminEndpointsTests.Reset_AfterAReseed_WritesAFreshRecommendation` — the recurrence case the developer's answer asks for; fails under `SeedOnceAsync` |
-| 24 | ❌ | A Reset **after** an import likewise writes a fresh notification | Unit test | `AdminEndpointsTests.Reset_AfterAnImport_WritesAFreshRecommendation` — via step 9's import-side dismiss, the half that fails if only the reseed dismiss is wired |
+| 21 | ✅ | `POST /admin/database/reseed` dismisses it too, not only the notification action | Unit test | `AdminEndpointsTests.Reseed_Success_DismissesReseedRecommendation` |
+| 22 | ✅ | An import that populates content dismisses it | Unit test | `SqliteImportActionServiceTests.ApplyBatchAsync_Success_DismissesReseedRecommendation`, with `.ApplyBatchAsync_LeavesActionsPending_DoesNotDismissReseedRecommendation` as its counterpart — a batch that applied nothing closed no gap |
+| 23 | ✅ | A resolved condition recurring writes a fresh notification rather than being deduped | Unit test | `NotificationSeedingTests.SeedWhileUnresolvedAsync_ConditionResolvedThenRecurs_WritesAgain` — real SQLite, asserted where the dedupe decision is actually made rather than through an endpoint whose fakes cannot exercise it. Fails under `SeedOnceAsync` |
+| 24 | ✅ | A condition recurring **while still unresolved** does not write again | Unit test | `NotificationSeedingTests.SeedWhileUnresolvedAsync_ConditionRecursWhileUnresolved_DoesNotWriteAgain` — the control for row 23, which would otherwise pass equally well against dedupe being switched off entirely |
 | 25 | ❌ | Title and body resolve in `de`/`nl`, falling back to `en` when absent | Unit test | `NotificationTranslationSourceTests.ReseedRecommended_TakesTitleAndBodyFromTheLocaleFiles` (built) and `NotificationEndpointsTests.GetNotifications_ReseedRecommendation_ResolvesPerLanguage` (reaches the reader) |
 | 26 | ❌ | Every new locale key exists, non-empty, in all three files | Unit test | `TranslationCompletenessTests` (existing) |
 | 27 | ❌ | The producer and its Run → Confirm action work in a real container, and the action resolves the condition | Live (T2) | `notifications-and-changelog/10-reseed-recommendation-and-action.md` — new; ends by running the action, then confirming the recommendation is gone and content is back |
