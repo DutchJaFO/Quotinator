@@ -522,7 +522,10 @@ the document itself, since each is a trap the suite has hit before:
    shape `notifications-and-changelog/04` already records. Now reads `/quotes`' own `totalCount`.
 2. `$rec.Count` printed empty for the single-match case, because PowerShell 5.1 unrolls a one-element
    array on return and a bare `PSCustomObject` has no `Count`. It failed precisely when the test was
-   working, which is the README's own warning about this.
+   working, which is the README's own warning about this. **Fixed once at the observed site and not as
+   a class, which left three more** — the zero case prints `0` from the unwrapped form, so the others
+   looked correct until a clean end-to-end run reached step 4 and it printed empty. All four are
+   wrapped now, and the document says the rule is the wrap rather than the site.
 3. It counted every row carrying the recommendation's kind, including dismissed ones. `GET
    /notifications` returns full history — resolving the condition dismisses a row, it does not delete
    it — so the count never fell back to zero and step 3 failed against a correct application. This was
@@ -574,7 +577,7 @@ a reseed to one file later, but `ReseedAsync` has no per-file overload and addin
 | 24 | ✅ | A condition recurring **while still unresolved** does not write again | Unit test | `NotificationSeedingTests.SeedWhileUnresolvedAsync_ConditionRecursWhileUnresolved_DoesNotWriteAgain` — the control for row 23, which would otherwise pass equally well against dedupe being switched off entirely |
 | 25 | ✅ | Title and body resolve in `de`/`nl`, with the changed file substituted into each | Unit test | `NotificationTranslationSourceTests.ReseedRecommended_TakesTitleAndBodyFromTheLocaleFiles` and `.ReseedRecommended_OriginalIsEnglish`. Sensitivity confirmed by removing one `nl` key: both this and the parity guard failed, then restored |
 | 26 | ✅ | Every new locale key exists, non-empty, in all three files | Unit test | `TranslationCompletenessTests.AllLanguageFiles_HaveExactlyTheSameKeysAsBaseline` (existing) |
-| 27 | ✅ | The producer and its remedy work in a real container, and running it resolves the condition | Live (T2) | `notifications-and-changelog/10-reseed-recommendation-and-action.md` executed 2026-08-30, all 4 steps green: 799 quotes → reset → 0 quotes + 1 `actionrequired` recommendation → reseed → 799 quotes + 0 active → second reset → recommends afresh |
+| 27 | ✅ | The producer and its remedy work in a real container, and running it resolves the condition | Live (T2) | `notifications-and-changelog/10-reseed-recommendation-and-action.md` — run verbatim on a fresh container 2026-08-30 after its own corrections, all 4 steps green: 799 quotes → reset → 0 quotes + 1 `actionrequired` recommendation → reseed → 799 quotes + 0 active → second reset → 1 again |
 | 28 | ✅ | Migration applies cleanly to a database at the previous released schema | Live (T2) | Executed 2026-08-30 against a real `ghcr.io/dutchjafo/quotinator:1.8.3` database (799 quotes): `applying 12 pending Data migration(s) (version 3 → 15)`, `schema updated (data v15, app v5)`, no SQLite error, content intact. Then a Reset on that upgraded database wrote the recommendation — proving the rebuild's widened CHECK accepts `Reseed` on the **incremental** path, which row 4's baseline/incremental parity cannot show on its own |
 | 29 | ❌ | T1 — the notification appears and its Run → Confirm action reseeds | Live (T1) | Developer confirms in Visual Studio |
 | 30 | ✅ | Full build clean | Build | `dotnet build --configuration Release` — output captured in full: zero lines matching `: warning NNNN` or `: error NNNN`, summary `0 Warning(s) / 0 Error(s)` |

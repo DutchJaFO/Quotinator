@@ -41,6 +41,11 @@ with no `Count` property, and `$rec.Count` prints empty — for exactly one matc
 expected result. Measured here on the first run: step 2 reported an empty count while the notification
 was present and correct.
 
+**Every count in this document is wrapped, not just the ones observed failing.** The zero case prints
+`0` from the unwrapped form, so three of the four sites looked fine while being equally broken — step 4
+then reported empty on the first clean run, after step 2 had already been fixed in isolation. The rule
+is the wrap, not the site.
+
 **Quote counts are read, never predicted.** The number of bundled quotes changes when a source file is
 updated; what this test asserts is that the count is non-zero before the reset, zero after it, and
 non-zero again after the reseed — facts the operation itself establishes.
@@ -67,7 +72,7 @@ function Get-ReseedRecommendations {
 
 while ((Get-QuoteCount) -lt 1) { Start-Sleep 2 }
 "quotes seeded = $(Get-QuoteCount)"
-"recommendations before = $((Get-ReseedRecommendations).Count)"
+"recommendations before = $(@(Get-ReseedRecommendations).Count)"
 ```
 
 **Expected:** a non-zero `quotes seeded`, and `recommendations before = 0`. Nothing has recommended a
@@ -104,7 +109,7 @@ Invoke-RestMethod -Method Post -Headers $headers `
   "http://localhost:19510/api/v1/admin/database/reseed" | Out-Null
 
 "quotes after reseed = $(Get-QuoteCount)"
-"recommendations after reseed = $((Get-ReseedRecommendations).Count)"
+"recommendations after reseed = $(@(Get-ReseedRecommendations).Count)"
 ```
 
 **Expected:** a non-zero `quotes after reseed`, and `recommendations after reseed = 0`.
@@ -120,7 +125,7 @@ would stay active and silently suppress every later occurrence.
 Invoke-RestMethod -Method Post -Headers $headers `
   "http://localhost:19510/api/v1/admin/database/reset?allowNoBackup=true" | Out-Null
 
-"recommendations after second reset = $((Get-ReseedRecommendations).Count)"
+"recommendations after second reset = $(@(Get-ReseedRecommendations).Count)"
 ```
 
 **Expected:** `1`.
@@ -132,7 +137,8 @@ document that can catch it.
 
 ## Observed effect
 
-Executed 2026-08-30 against `quotinator:local`, all four steps green:
+Executed 2026-08-30 against `quotinator:local` — the values below come from a clean run of the document
+exactly as written, on a fresh container, after the corrections above:
 
 | Step | Observed |
 |---|---|
