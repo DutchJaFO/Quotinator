@@ -41,7 +41,7 @@
          2.11.0 is the latest 2.x release — the ceiling until AspNetCore.OpenApi's bundled
          XmlCommentGenerator supports Microsoft.OpenApi 3.x's read-only object model (see
          dotnet/aspnetcore#64317; src/Quotinator.Api/CVE/archived/CVE-2026-49451.md). -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.11.0" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
   </ItemGroup>
 
 </Project>
