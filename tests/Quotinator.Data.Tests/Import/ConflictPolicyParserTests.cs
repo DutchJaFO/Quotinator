@@ -6,17 +6,22 @@ namespace Quotinator.Data.Tests.Import;
 [TestClass]
 public class ConflictPolicyParserTests
 {
+    /// <summary>
+    /// #303: an absent or unreadable value falls back to <c>Review</c>, not <c>NewestWins</c>. This is
+    /// the only default a running instance reaches, and the previous one overwrote stored quotes with
+    /// an unmanifested import without saying so.
+    /// </summary>
     [TestMethod]
-    [DataRow(null,           DuplicateResolutionPolicy.NewestWins)]
-    [DataRow("",             DuplicateResolutionPolicy.NewestWins)]
-    [DataRow("garbage",      DuplicateResolutionPolicy.NewestWins)]
+    [DataRow(null,           DuplicateResolutionPolicy.Review)]
+    [DataRow("",             DuplicateResolutionPolicy.Review)]
+    [DataRow("garbage",      DuplicateResolutionPolicy.Review)]
     [DataRow("skip",         DuplicateResolutionPolicy.Skip)]
     [DataRow("SKIP",         DuplicateResolutionPolicy.Skip)]
     [DataRow("newest-wins",  DuplicateResolutionPolicy.NewestWins)]
     [DataRow("merge-ours",   DuplicateResolutionPolicy.MergeOurs)]
     [DataRow("merge-theirs", DuplicateResolutionPolicy.MergeTheirs)]
     [DataRow("review",       DuplicateResolutionPolicy.Review)]
-    public void Parse_FallsBackToNewestWinsOnAbsentOrGarbage(string? value, DuplicateResolutionPolicy expected)
+    public void Parse_FallsBackToReviewOnAbsentOrGarbage(string? value, DuplicateResolutionPolicy expected)
     {
         Assert.AreEqual(expected, ConflictPolicyParser.Parse(value));
     }
