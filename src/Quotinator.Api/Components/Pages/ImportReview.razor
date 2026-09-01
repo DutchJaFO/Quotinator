@@ -1,0 +1,36 @@
+@page "/import-review"
+@rendermode InteractiveServer
+
+<PageTitle>@Text.ImportReviewHeading — Quotinator</PageTitle>
+
+<h1>@Text.ImportReviewHeading</h1>
+<p class="text-muted">@Text.ImportReviewDescription</p>
+
+@if (Actions.Count == 0)
+{
+    <p class="text-muted">@Text.ImportReviewNothingPending</p>
+}
+else
+{
+    <table class="table table-sm align-middle">
+        <thead>
+            <tr>
+                <th>@Text.ImportReviewStatusColumn</th>
+                <th>@Text.ImportReviewEntityColumn</th>
+                <th>@Text.ImportReviewActionColumn</th>
+                <th>@Text.ImportReviewBatchColumn</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var action in Actions)
+            {
+                <tr>
+                    <td><span class="badge bg-warning text-dark">@(action.Status.Parsed?.ToString() ?? action.Status.Raw)</span></td>
+                    <td>@action.EntityType</td>
+                    <td>@(action.ActionType.Parsed?.ToString() ?? action.ActionType.Raw)</td>
+                    <td><code>@action.BatchId</code></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
