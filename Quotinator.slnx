@@ -314,6 +314,7 @@
     <File Path="docs/milestones/notification-system/352-restore-a-stored-backup-plan.md" />
     <File Path="docs/milestones/notification-system/353-upload-a-backup-file-plan.md" />
     <File Path="docs/milestones/notification-system/360-guid-factory-plan.md" />
+    <File Path="docs/milestones/notification-system/367-executing-notification-state-plan.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/">
     <File Path="docs/automated-testing/README.md" />

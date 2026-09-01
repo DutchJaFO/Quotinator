@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-09-01 09:17 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-09-01 10:36 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -25,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A what's-new startup notification after an update, covering every release missed since the last version this instance actually ran — one notification per release, plus the in-development section when it has anything flagged; a fresh install sees only the current version (issue #81)
 - Quotinator now keeps a record of which application versions have used the database, and links each notification to the version that added it — the groundwork for showing when a notification first appeared (issue #312)
 - A notification recommending that quotes be reloaded, with a button that carries it out. It appears after a reset has left the database without quotes, and when updated source content has been downloaded that the stored quotes do not reflect. It clears itself once quotes are reloaded or imported by any route, and reappears if the situation arises again (issue #304)
-- A confirmation notification for each quote file that reloads with nothing left for you to review, listing how many entries of each kind it added or updated. Reloading again with nothing changed does not repeat a confirmation you have not dismissed yet (issue #302)
+- A confirmation notification for each quote file that reloads with nothing left for you to review, listing how many entries of each kind it added or updated, and saying whether the file came bundled with Quotinator or from your own imports folder. Reloading again with nothing changed does not repeat a confirmation you have not dismissed yet (issue #302)
 
 ### Changed
 - Notifications now appear in the language the interface is set to, instead of always in English. A notification keeps the language it was written in, and Quotinator falls back to that original whenever it has no translation for the language you are reading in — so nothing ever appears blank or half-translated. The API can also be asked for a specific language, and reports which one it actually returned (issue #319)

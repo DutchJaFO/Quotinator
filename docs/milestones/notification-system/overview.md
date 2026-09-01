@@ -67,6 +67,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#352](https://github.com/DutchJaFO/Quotinator/issues/352) | Restore a stored backup, refusing one taken ahead of this build | Planning | T1 ⬜ T2 ⬜ | [352-restore-a-stored-backup-plan.md](352-restore-a-stored-backup-plan.md) |
 | [#353](https://github.com/DutchJaFO/Quotinator/issues/353) | Upload a backup file | Planning | T1 ⬜ T2 ⬜ | [353-upload-a-backup-file-plan.md](353-upload-a-backup-file-plan.md) |
 | [#360](https://github.com/DutchJaFO/Quotinator/issues/360) | Migration-generated identifiers are not valid UUIDs; route all id creation through one factory | Planning | T1 ⬜ T2 ⬜ | [360-guid-factory-plan.md](360-guid-factory-plan.md) |
+| [#367](https://github.com/DutchJaFO/Quotinator/issues/367) | Notification actions give no feedback while they run | Planning | T1 ⬜ T2 ⬜ | [367-executing-notification-state-plan.md](367-executing-notification-state-plan.md) |
 
 ---
 
@@ -239,7 +240,7 @@ step, the other reuses it.
 | 11 | **#307** ✅ | Done. All eight verification rows are green: its two documentation-confirmation rows became an assertion in `ChangelogSchemaTests` rather than a human read, and it carries no front-end row — it delivers a data contract and a lookup method, with the rendering of a flagged highlight verified by #308 against #308's own code |
 | 12 | **#319** ✅ | Translated title/body. The gateway to the producers below: every one of them writes new user-facing text, and building any first means building the text twice |
 | 13 | **#304** ✅ | Done. Gave the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path. Its T1 pass also found that a notification resolved by running its action read as *dismissed*, and that every UI timestamp was rendered in UTC — both fixed here, both affecting every notification rather than only this one |
-| 14 | **#302** | Writes from inside the seeding loop (see Dependency map); no dependency on the review page below |
+| 14 | **#302** ✅ | Done. Wrote from inside the seeding loop as planned. Two findings worth carrying into #303, which shares the hook point: the four-variant seeding matrix (no files / bundled / user imports / both) is the only thing that exposed a same-name collision across origins, and the startup modal needs a *restart* after the action to show anything, so it cannot be verified in the run that caused it |
 | 15 | **#303** | Same hook point as #302; adds the one piece of new UI this milestone needs, explicitly scoped smaller than #66's own future side-by-side diff view |
 | 16 | **#308** | Per-type layout across both surfaces. Last of the cluster, because it cannot settle those layouts before the producers above exist — and it owns proving that a flagged changelog highlight actually renders, which its own background already names |
 | 17 | **#350** | Overshoot must degrade, not run healthy. Changes application behaviour, and #327's overshoot document is rewritten against the result. Reverses #289's shipped continue-and-notify design |
@@ -256,6 +257,7 @@ step, the other reuses it.
 | 28 | **#352** | Restore a stored backup. After #349, whose `{name}` guard and create endpoint it relies on being there — not for compilation, but so the remedy text and the operator's loop are written once |
 | 29 | **#353** | Upload a backup file. Last of the backup cluster: it is the only endpoint that accepts an arbitrary file, and writing it after restore exists means its validation is written against a real consumer rather than a hypothetical one |
 | 30 | **#360** | Identifier generation through one factory, and a SQLite function migrations call instead of hand-writing one. Last, and deliberately before the end-of-milestone migration consolidation: that pass rewrites this milestone's migrations, so the factory has to exist first or the consolidated result bakes in a sixth copy of the expression it replaces |
+| 31 | **#367** | An executing state for a running notification action, found in #302's T1. Placed after #308: #308 settles per-type layout across both surfaces, and a new status label is a layout decision it would otherwise have to be revisited for. Not before #303 either — #303 adds the review page, a second surface any new status has to render on |
 
 **Notifications come first from position 11 (developer direction, 2026-08-29).** The safe-start cluster
 (#326, #348, #349) and the backup endpoints grew large enough to crowd out the milestone's own subject:
