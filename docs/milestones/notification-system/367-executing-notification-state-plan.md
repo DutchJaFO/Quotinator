@@ -89,7 +89,7 @@ half). See the research section above for the full comparison.
 
 ### 2. Add the registry
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — rows 1–5 green
 
 `NotificationExecutionState` in `Quotinator.Api.Startup`, registered `AddSingleton` — following
 `DatabaseHealthState`'s precedent exactly (a mutable process-wide state object injected into pages,
@@ -101,7 +101,7 @@ duplicate rule, this moves to `Quotinator.Data` the moment a second project need
 
 ### 3. Add `Executing` to the display status and render it
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — rows 6–10 green
 
 `NotificationDisplayStatus` gains `Executing`. `GetDisplayStatus` takes the executing fact as a
 parameter rather than reaching for the registry itself, staying a pure static testable without bUnit —
@@ -115,18 +115,31 @@ Localised label in all three `UI.*.json` files, same commit.
 
 ### 4. Guard the second execution
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — row 11 green
 
 `ExecuteActionAsync` and `ExecuteChoiceActionAsync` both take the registry before calling the executor
 and release it in a `finally`, so a throwing action cannot strand the id within the process either. A
 refused call returns without executing.
+
+**Deviation from the plan as written, recorded per process.md.** The plan put the claim/release at each
+call site; it went onto `NotificationExecutionState` itself as `RunExclusivelyAsync(id, action)`, and
+the page calls that. The reason is the failure mode: a caller who forgets the `finally` strands the
+notification as permanently executing for the life of the process — no Run control and no way back —
+and there is no way to make "every future caller remembers" testable. Owning the pair inside the type
+removes the possibility instead of documenting it.
+
+Consequence for the table: row 11's verification moved from `NotificationsPageTests` (a class that
+would have had to exist to reach a private page method) to
+`NotificationExecutionStateTests.RunExclusivelyAsync_WhileRunning_DoesNotInvokeTheActionAgain`, and a
+a row 12 was added for the throwing case, which only became reachable once the guard lived in a testable
+place.
 
 The Run control is not offered at all for a row that is executing — refusing after a click is a worse
 answer than not presenting the control, and a second session sees the same thing.
 
 ### 5. Make the executing state actually visible to the caller
 
-**Status:** ⬜ Not started
+**Status:** 🔄 Implemented — awaiting row 13's live proof
 
 **This is the step that satisfies requirement 1, and it is the one most likely to silently not work.**
 Today the handler awaits the executor and only then re-renders, so setting a registry entry changes
@@ -135,7 +148,7 @@ followed by a yield, so the circuit paints the `Executing` row rather than queui
 11-second await.
 
 A unit test can prove the registry and the status; only a live run can prove the row actually repaints
-mid-action. Row 12 is that proof and is not substitutable by a unit test.
+mid-action. Row 13 is that proof and is not substitutable by a unit test.
 
 ---
 
@@ -143,27 +156,28 @@ mid-action. Row 12 is that proof and is not substitutable by a unit test.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | The registry admits the first caller | Unit test | `NotificationExecutionStateTests.TryBegin_FirstCaller_IsAdmitted` |
-| 2 | ❌ | It refuses a second caller while the first holds | Unit test | `NotificationExecutionStateTests.TryBegin_WhileHeld_IsRefused` |
-| 3 | ❌ | It admits again once the first releases | Unit test | `NotificationExecutionStateTests.TryBegin_AfterEnd_IsAdmittedAgain` |
-| 4 | ❌ | Two different notifications do not block each other | Unit test | `NotificationExecutionStateTests.TryBegin_DifferentIds_BothAdmitted` |
-| 5 | ❌ | Concurrent callers produce exactly one winner | Unit test | `NotificationExecutionStateTests.TryBegin_ConcurrentCallers_AdmitsExactlyOne` |
-| 6 | ❌ | An executing active row reads `Executing` | Unit test | `NotificationTableTests.GetDisplayStatus_Executing_ReportsExecuting` |
-| 7 | ❌ | A dismissed row reads its dismiss reason even while still in the registry | Unit test | `NotificationTableTests.GetDisplayStatus_DismissedWhileExecuting_ReportsTheDismissReason` |
-| 8 | ❌ | An expired row still reads `Expired` | Unit test | `NotificationTableTests.GetDisplayStatus_ExpiredWhileExecuting_ReportsExpired` |
-| 9 | ❌ | `Executing` has a non-empty label in all three languages | Unit test | `TranslationCompletenessTests` (existing) + `NotificationTableTests.EveryDisplayStatus_HasATranslationKey` |
-| 10 | ❌ | The Run control is not offered for an executing row | Unit test | `NotificationTableTests.ShowsRunControl_WhileExecuting_IsFalse` |
-| 11 | ❌ | A second execution of the same notification does not reach the executor | Unit test | `NotificationsPageTests.ExecuteAction_WhileExecuting_DoesNotCallTheExecutorAgain` |
-| 12 | ❌ | The row visibly reads `Executing` *during* a real run, not only after | Live (T2) + screenshot | New T2 document: start a reseed from `/notifications`, screenshot the row mid-run |
-| 13 | ❌ | A second click during a run produces exactly one reseed | Live (T2) | same document: the container log holds exactly one `reseed requested` |
-| 14 | ❌ | The row reads `Done`, not `Executing`, once the action completes | Live (T2) | same document, after the run settles |
-| 15 | ❌ | A restart during a run leaves no row reading `Executing` | Live (T2) | same document: restart mid-reseed, then read the page — requirement 4, free by construction, asserted rather than assumed |
-| 16 | ❌ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
-| 17 | ❌ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
+| 1 | ✅ | The registry admits the first caller | Unit test | `NotificationExecutionStateTests.TryBegin_FirstCaller_IsAdmitted` |
+| 2 | ✅ | It refuses a second caller while the first holds | Unit test | `NotificationExecutionStateTests.TryBegin_WhileHeld_IsRefused` |
+| 3 | ✅ | It admits again once the first releases | Unit test | `NotificationExecutionStateTests.TryBegin_AfterEnd_IsAdmittedAgain` |
+| 4 | ✅ | Two different notifications do not block each other | Unit test | `NotificationExecutionStateTests.TryBegin_DifferentIds_BothAdmitted` |
+| 5 | ✅ | Concurrent callers produce exactly one winner | Unit test | `NotificationExecutionStateTests.TryBegin_ConcurrentCallers_AdmitsExactlyOne` |
+| 6 | ✅ | An executing active row reads `Executing` | Unit test | `NotificationTableTests.GetDisplayStatus_Executing_ReportsExecuting` |
+| 7 | ✅ | A dismissed row reads its dismiss reason even while still in the registry | Unit test | `NotificationTableTests.GetDisplayStatus_DismissedWhileExecuting_ReportsTheDismissReason` |
+| 8 | ✅ | An expired row still reads `Expired` | Unit test | `NotificationTableTests.GetDisplayStatus_ExpiredWhileExecuting_ReportsExpired` |
+| 9 | ✅ | `Executing` has a non-empty label in all three languages | Unit test | `TranslationCompletenessTests` (existing) + `NotificationTableTests.EveryDisplayStatus_HasATranslationKey` |
+| 10 | ✅ | The Run control is not offered for an executing row | Unit test | `NotificationTableTests.ShowsRunControl_WhileExecuting_IsFalse` |
+| 11 | ✅ | A second execution of the same notification does not reach the executor | Unit test | `NotificationExecutionStateTests.RunExclusivelyAsync_WhileRunning_DoesNotInvokeTheActionAgain` — moved from `NotificationsPageTests`, see step 4's deviation |
+| 12 | ✅ | A throwing action still releases its claim | Unit test | `NotificationExecutionStateTests.RunExclusivelyAsync_ActionThrows_StillReleasesTheClaim` — added by the same deviation |
+| 13 | ❌ | The row visibly reads `Executing` *during* a real run, not only after | Live (T2) + screenshot | New T2 document: start a reseed from `/notifications`, screenshot the row mid-run |
+| 14 | ❌ | A second click during a run produces exactly one reseed | Live (T2) | same document: the container log holds exactly one `reseed requested` |
+| 15 | ❌ | The row reads `Done`, not `Executing`, once the action completes | Live (T2) | same document, after the run settles |
+| 16 | ❌ | A restart during a run leaves no row reading `Executing` | Live (T2) | same document: restart mid-reseed, then read the page — requirement 4, free by construction, asserted rather than assumed |
+| 17 | ❌ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
+| 18 | ❌ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
 
-**Row 12 is the one that cannot be replaced by a unit test.** Every row above it can pass against an
+**Row 13 is the one that cannot be replaced by a unit test.** Every row above it can pass against an
 implementation whose UI never repaints until the action finishes — which is the exact defect this issue
-was raised for. Absence of a repaint proves nothing; row 12 asserts a positive.
+was raised for. Absence of a repaint proves nothing; row 13 asserts a positive.
 
 **The test list is completed before implementation starts, not during it** — #302's own retrospective
 found its table growing from 22 rows to 29 mid-flight, which is what the Definition of done's

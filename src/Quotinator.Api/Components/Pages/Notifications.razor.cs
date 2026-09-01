@@ -62,6 +62,7 @@ public partial class Notifications
     [Inject] private Quotinator.Api.Startup.DatabaseHealthState DatabaseHealth { get; set; } = default!;
     [Inject] private INotificationWriter NotificationWriter { get; set; } = default!;
     [Inject] private INotificationActionExecutor ActionExecutor { get; set; } = default!;
+    [Inject] private Quotinator.Api.Startup.NotificationExecutionState Executing { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
     private IReadOnlyList<NotificationEntity> AllNotifications = [];
@@ -108,11 +109,30 @@ public partial class Notifications
             NotificationMetadataDto? metadata =
                 NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
 
-            await ActionExecutor.ExecuteAsync(trigger, metadata);
+            await RunActionAsync(id, () => ActionExecutor.ExecuteAsync(trigger, metadata));
         }
 
         await LoadAsync();
     }
+
+    /// <summary>
+    /// #367: claims the notification for the duration of the run, and paints the claim before starting.
+    /// </summary>
+    /// <remarks>
+    /// The repaint is the whole point and is easy to lose: without flushing a render first, the circuit
+    /// stays on the previous frame for the entire action — an ~11-second reseed leaves the row reading
+    /// Active with a live Run button, which is exactly what #367 reports. `StateHasChanged` alone only
+    /// queues the render; the yield is what lets it reach the browser before the long await begins.
+    /// </remarks>
+    /// <param name="id">The notification whose action is running.</param>
+    /// <param name="action">The executor call to make.</param>
+    private async Task RunActionAsync(Guid id, Func<Task> action) =>
+        await Executing.RunExclusivelyAsync(id, async () =>
+        {
+            await InvokeAsync(StateHasChanged);
+            await Task.Yield();
+            await action();
+        });
 
     /// <summary>#303: the same path, for an action whose outcome the operator had to choose between.</summary>
     private async Task ExecuteChoiceActionAsync((Guid Id, FieldResolutionChoice Choice) request)
@@ -123,7 +143,7 @@ public partial class Notifications
             NotificationMetadataDto? metadata =
                 NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
 
-            await ActionExecutor.ExecuteAsync(trigger, metadata, request.Choice);
+            await RunActionAsync(request.Id, () => ActionExecutor.ExecuteAsync(trigger, metadata, request.Choice));
         }
 
         await LoadAsync();

@@ -177,4 +177,82 @@ public class NotificationTableTests
         Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Dismissed, NotificationTable.GetDisplayStatus(Build(isDismissed: true, expiresAt: now.AddHours(-1)), now),
             "Dismissed must take priority over expiry — an already-dismissed row's expiry no longer matters for display.");
     }
+
+    /// <summary>
+    /// #367: an action that is running says so. Without it an ~11-second reseed leaves the row reading
+    /// Active with a live Run button, which reads as "the click did nothing".
+    /// </summary>
+    [TestMethod]
+    public void GetDisplayStatus_Executing_ReportsExecuting()
+    {
+        DateTime now = DateTime.UtcNow;
+
+        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Executing,
+            NotificationTable.GetDisplayStatus(Build(isDismissed: false, expiresAt: null), now, isExecuting: true));
+    }
+
+    /// <summary>
+    /// #367: the window is real, not theoretical — an action dismisses its own notification and only
+    /// then releases the registry, so a row can be both dismissed and still registered. It must read
+    /// what happened to it, not what was happening a moment earlier.
+    /// </summary>
+    [TestMethod]
+    public void GetDisplayStatus_DismissedWhileExecuting_ReportsTheDismissReason()
+    {
+        NotificationEntity notification = Build(isDismissed: true, expiresAt: null);
+        notification.DismissReason = new SafeValue<NotificationDismissReason?>(
+            NotificationDismissReason.Resolved.ToString(), NotificationDismissReason.Resolved);
+
+        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Resolved,
+            NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow, isExecuting: true));
+    }
+
+    /// <summary>#367: expiry outranks executing, the same way it outranks active.</summary>
+    [TestMethod]
+    public void GetDisplayStatus_ExpiredWhileExecuting_ReportsExpired()
+    {
+        DateTime now = DateTime.UtcNow;
+
+        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Expired,
+            NotificationTable.GetDisplayStatus(Build(isDismissed: false, expiresAt: now.AddHours(-1)), now, isExecuting: true));
+    }
+
+    /// <summary>
+    /// #367: every display status needs a label, and a status added without one renders as an empty
+    /// badge. Derived from the enum rather than from a maintained list, so a future member is caught
+    /// by the same test that caught this one.
+    /// </summary>
+    [TestMethod]
+    public void EveryDisplayStatus_HasATranslationKey()
+    {
+        string baseline = Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "src", "Quotinator.Api", "i18ntext", "UI.en-GB.json");
+        Dictionary<string, string> keys =
+            System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(baseline))!;
+
+        foreach (NotificationTable.NotificationDisplayStatus status
+                 in Enum.GetValues<NotificationTable.NotificationDisplayStatus>())
+        {
+            string key = $"Notifications{status}Label";
+            Assert.IsTrue(keys.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value),
+                $"{status} renders with no label — '{key}' is missing or empty in UI.en-GB.json.");
+        }
+    }
+
+    /// <summary>
+    /// #367: the Run control is withdrawn while the action runs, rather than refusing the click after
+    /// the fact. A second session sees the same thing, which is what makes the guard legible instead of
+    /// silent.
+    /// </summary>
+    [TestMethod]
+    public void ShowsRunControl_WhileExecuting_IsFalse()
+    {
+        NotificationEntity notification = Build(isDismissed: false, expiresAt: null);
+
+        Assert.IsTrue(NotificationTable.ShowsRunControl(notification, executorCanRun: true, isExecuting: false));
+        Assert.IsFalse(NotificationTable.ShowsRunControl(notification, executorCanRun: true, isExecuting: true));
+        Assert.IsFalse(NotificationTable.ShowsRunControl(notification, executorCanRun: false, isExecuting: false),
+            "No executable action means no control, executing or not.");
+    }
 }

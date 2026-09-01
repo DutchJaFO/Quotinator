@@ -55,7 +55,7 @@ public partial class NotificationTable
     /// <param name="utc">The stored UTC value, or <see langword="null"/>.</param>
     internal static string Local(DateTime? utc) => LocalTimestamp.Render(utc);
 
-    internal enum NotificationDisplayStatus { Active, Expired, Dismissed, Resolved, Obsolete }
+    internal enum NotificationDisplayStatus { Active, Expired, Dismissed, Resolved, Obsolete, Executing }
 
     /// <summary>
     /// Classifies a notification's display status: <see cref="NotificationDisplayStatus.Dismissed"/>
@@ -65,7 +65,22 @@ public partial class NotificationTable
     /// (<c>IsDismissed = 0 AND (ExpiresAt IS NULL OR ExpiresAt > @now)</c>) so "Active" here always
     /// means the same thing as the startup modals' own active set.
     /// </summary>
-    internal static NotificationDisplayStatus GetDisplayStatus(NotificationEntity notification, DateTime now)
+    /// <summary>
+    /// Whether the Run control is offered for <paramref name="notification"/>.
+    /// </summary>
+    /// <remarks>
+    /// #367: a running action withdraws the control rather than refusing the click afterwards. A second
+    /// session sees the same withdrawal, which is what makes the guard legible instead of silent.
+    /// Static and internal so it can be tested without rendering the component — this project has no
+    /// bUnit.
+    /// </remarks>
+    /// <param name="notification">The row being rendered.</param>
+    /// <param name="executorCanRun">Whether an executable action is wired up for its trigger.</param>
+    /// <param name="isExecuting">Whether this notification's action is running right now.</param>
+    internal static bool ShowsRunControl(NotificationEntity notification, bool executorCanRun, bool isExecuting) =>
+        !notification.IsDismissed && executorCanRun && !isExecuting;
+
+    internal static NotificationDisplayStatus GetDisplayStatus(NotificationEntity notification, DateTime now, bool isExecuting = false)
     {
         if (notification.IsDismissed)
         {
@@ -84,6 +99,11 @@ public partial class NotificationTable
         }
         if (notification.ExpiresAt.Parsed is DateTime expiresAt && expiresAt <= now)
             return NotificationDisplayStatus.Expired;
+        // #367: after Dismissed and Expired on purpose. An action dismisses its own notification and
+        // only then releases the registry, so a row can be both dismissed and still registered — it
+        // must report what happened to it, not what was happening a moment earlier.
+        if (isExecuting)
+            return NotificationDisplayStatus.Executing;
         return NotificationDisplayStatus.Active;
     }
 
@@ -127,6 +147,10 @@ public partial class NotificationTable
     [Inject] private I18nTextService I18nText { get; set; } = default!;
     [Inject] private INotificationActionExecutor ActionExecutor { get; set; } = default!;
 
+    // #367: read-only here. This component renders the executing state and withdraws the Run control
+    // for it; claiming and releasing belong to whichever page actually invokes the executor.
+    [Inject] private Quotinator.Api.Startup.NotificationExecutionState Executing { get; set; } = default!;
+
     private Quotinator.Api.I18nText.UI Text = new();
     private DateTime Now;
 
@@ -136,9 +160,11 @@ public partial class NotificationTable
     private string TypeLabel(NotificationType? type) => TypeLabel(type, Text);
 
     private bool CanExecuteAction(NotificationEntity notification) =>
-        !notification.IsDismissed
-        && notification.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger
-        && ActionExecutor.CanExecute(trigger);
+        ShowsRunControl(
+            notification,
+            executorCanRun: notification.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger
+                            && ActionExecutor.CanExecute(trigger),
+            isExecuting: Executing.IsExecuting(notification.Id));
 
     private async Task ConfirmActionAsync(Guid id)
     {

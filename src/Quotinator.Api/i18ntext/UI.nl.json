@@ -71,6 +71,7 @@
   "NotificationsExpiredLabel": "Verlopen",
   "NotificationsDismissedLabel": "Afgewezen",
   "NotificationsObsoleteLabel": "Niet meer van toepassing",
+  "NotificationsExecutingLabel": "Bezig…",
   "NotificationsResolvedLabel": "Uitgevoerd",
   "NotificationsDismissButton": "Afwijzen",
   "NotificationsRunActionButton": "Uitvoeren",

@@ -71,6 +71,7 @@
   "NotificationsExpiredLabel": "Abgelaufen",
   "NotificationsDismissedLabel": "Verworfen",
   "NotificationsObsoleteLabel": "Nicht mehr zutreffend",
+  "NotificationsExecutingLabel": "Läuft …",
   "NotificationsResolvedLabel": "Erledigt",
   "NotificationsDismissButton": "Verwerfen",
   "NotificationsRunActionButton": "Ausführen",

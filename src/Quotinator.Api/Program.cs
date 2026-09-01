@@ -621,6 +621,11 @@ builder.Services.AddSingleton<Quotinator.Core.Services.IQuoteImportService>(sp =
     sp.GetRequiredService<IFileResourceRepository>()));
 builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.DatabaseHealthState>();
+
+// #367: which notification actions are running right now. Singleton because the answer must be the
+// same for every circuit — a per-circuit flag would show the clicking user that something started
+// while leaving a second session free to start it again.
+builder.Services.AddSingleton<Quotinator.Api.Startup.NotificationExecutionState>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.StartupUxState>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.StartupPhaseState>();
 builder.Services.AddSingleton<DatabaseHealthGateMiddleware>();
