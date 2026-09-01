@@ -72,7 +72,7 @@ and every pattern #302 established was missing.
 
 ### 1. Add the `ImportReviewPending` metadata kind and its payload
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `ImportReviewPendingMetadataDto`, `ImportReviewCountDto`
 
 A new `NotificationMetadataKind.ImportReviewPending`, registered in
 `NotificationMetadataKinds.PayloadTypes`, plus `ImportReviewPendingMetadataDto` carrying `FileName`,
@@ -89,7 +89,7 @@ also what step 5's dismissal matches on.
 
 ### 2. Widen the three CHECK constraints in one migration
 
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress
 
 `MetadataKind` gains `ImportReviewPending`, `DismissTriggerKey` gains step 5's new trigger, and
 `DismissReason` gains `Obsolete` (step 6). All three ride one table rebuild rather than a rebuild each
@@ -217,28 +217,29 @@ deliberately not here — see Scope changes 6.
 | 4 | ❌ | Counts are per `ImportActionStatus`, covering Pending, Blocked and Stale | Unit test | `DatabaseInitializerTests.Reseed_StagedFile_CountsEachReviewableStatus` |
 | 5 | ❌ | A status with no rows is omitted rather than reported as zero | Unit test | `DatabaseInitializerTests.Reseed_StatusWithNoRows_IsAbsentFromTheAlert` |
 | 6 | ❌ | Payload round-trips file name, origin, batch id and counts | Unit test | `ImportReviewPendingMetadataTests.Payload_RoundTripsAllFields` |
-| 7 | ❌ | Two same-named files from different directories are two alerts | Unit test | `ImportReviewPendingMetadataTests.Identity_DiffersByOrigin` |
-| 8 | ❌ | The alert records the app version that wrote it | Unit test | `DatabaseInitializerTests.Reseed_StagedFile_AlertRecordsAppVersionProvenance` |
-| 9 | ❌ | The new kind has a registered payload type | Unit test | `NotificationMetadataKindsTests` (existing guard) |
-| 10 | ❌ | Migration 18 and the baseline accept the same `MetadataKind` and `DismissTriggerKey` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` |
-| 11 | ❌ | Migration 18 and the baseline produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
-| 12 | ❌ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
-| 13 | ❌ | Resolving a batch dismisses that batch's alert, with reason `Resolved` | Unit test | `SqliteImportActionServiceTests.ApplyBatch_WhenFullyResolved_DismissesItsOwnReviewAlert` |
-| 14 | ❌ | Resolving one batch does not dismiss another batch's alert | Unit test | `SqliteImportActionServiceTests.ApplyBatch_DoesNotDismissAnotherBatchesReviewAlert` |
-| 15 | ❌ | Discarding a batch dismisses its alert too | Unit test | `SqliteImportActionServiceTests.DiscardBatch_DismissesItsOwnReviewAlert` |
-| 16 | ❌ | A reseed dismisses every alert whose batch it truncated, with reason `Obsolete` | Unit test | `DatabaseInitializerTests.Reseed_DismissesAlertsForRemovedBatches` |
-| 17 | ❌ | `Obsolete` is distinguishable from `Dismissed` and `Resolved` on a stored row | Unit test | `NotificationWriterTests.DismissedAsObsolete_ReadsBackAsObsolete` |
-| 18 | ❌ | The Status column renders `Obsolete` rather than falling back to "Dismissed" | Unit test | `NotificationTableTests.GetDisplayStatus_ObsoleteReason_ReportsObsolete` |
-| 19 | ❌ | A reseed's new alerts are distinct rows from the previous run's, not updates to them | Unit test | `DatabaseInitializerTests.Reseed_Twice_RaisesNewAlertsRatherThanReusingTheOld` |
-| 20 | ❌ | Alerts do not accumulate across repeated reseeds — only the newest batch's are active | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_LeavesOnlyTheLatestBatchesAlertsActive` |
-| 21 | ❌ | The review page lists every active `Pending`/`Blocked`/`Stale` action across all batches | Unit test | `ImportReviewPageTests.Lists_EveryActiveActionAcrossBatches` |
-| 22 | ❌ | Deciding a row removes it from the active list | Unit test | `ImportReviewPageTests.DecidedRow_LeavesTheActiveList` |
-| 23 | ❌ | The page is exempt in `DatabaseHealthGateMiddleware` | Unit test | `DatabaseHealthGateMiddlewareTests` (alongside the existing `/notifications` case) |
-| 24 | ❌ | All four seeding variants behave correctly against real configuration | Automated (T2) | `automated-testing/import-and-staged-actions/NN-pending-review-alert.md` |
-| 25 | ❌ | The alert reaches `/notifications` and the startup modal, and a clean seed produces none | Automated (T2) | same document — modal asserted after a restart, per #302's step 8 |
-| 26 | ❌ | The page renders during a degraded startup rather than 500 | Automated (T2) | same document, degraded container |
-| 27 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: after a reseed supersedes an earlier alert, the inactive row reads `Obsolete`, not `Dismissed` |
-| 28 | ❌ | The alert, the page and the link render correctly | Live | T1: stage a batch with conflicts, click through from the alert, decide a row |
+| 7 | ✅ | Two same-named files from different directories are two alerts | Unit test | `ImportReviewPendingMetadataTests.Identity_DiffersByOrigin` |
+| 8 | ✅ | A different batch is a different alert, even for the same file and workload | Unit test | `ImportReviewPendingMetadataTests.Identity_DiffersByBatch` |
+| 9 | ❌ | The alert records the app version that wrote it | Unit test | `DatabaseInitializerTests.Reseed_StagedFile_AlertRecordsAppVersionProvenance` |
+| 10 | ✅ | The new kind has a registered payload type | Unit test | `NotificationMetadataKindsTests` (existing guard) |
+| 11 | ❌ | Migration 18 and the baseline accept the same `MetadataKind`, `DismissTriggerKey` and `DismissReason` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` |
+| 12 | ❌ | Migration 18 and the baseline produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
+| 13 | ❌ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
+| 14 | ❌ | Resolving a batch dismisses that batch's alert, with reason `Resolved` | Unit test | `SqliteImportActionServiceTests.ApplyBatch_WhenFullyResolved_DismissesItsOwnReviewAlert` |
+| 15 | ❌ | Resolving one batch does not dismiss another batch's alert | Unit test | `SqliteImportActionServiceTests.ApplyBatch_DoesNotDismissAnotherBatchesReviewAlert` |
+| 16 | ❌ | Discarding a batch dismisses its alert too | Unit test | `SqliteImportActionServiceTests.DiscardBatch_DismissesItsOwnReviewAlert` |
+| 17 | ❌ | A reseed dismisses every alert whose batch it truncated, with reason `Obsolete` | Unit test | `DatabaseInitializerTests.Reseed_DismissesAlertsForRemovedBatches` |
+| 18 | ❌ | `Obsolete` is distinguishable from `Dismissed` and `Resolved` on a stored row | Unit test | `NotificationWriterTests.DismissedAsObsolete_ReadsBackAsObsolete` |
+| 19 | ❌ | The Status column renders `Obsolete` rather than falling back to "Dismissed" | Unit test | `NotificationTableTests.GetDisplayStatus_ObsoleteReason_ReportsObsolete` |
+| 20 | ❌ | A reseed's new alerts are distinct rows from the previous run's, not updates to them | Unit test | `DatabaseInitializerTests.Reseed_Twice_RaisesNewAlertsRatherThanReusingTheOld` |
+| 21 | ❌ | Alerts do not accumulate across repeated reseeds — only the newest batch's are active | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_LeavesOnlyTheLatestBatchesAlertsActive` |
+| 22 | ❌ | The review page lists every active `Pending`/`Blocked`/`Stale` action across all batches | Unit test | `ImportReviewPageTests.Lists_EveryActiveActionAcrossBatches` |
+| 23 | ❌ | Deciding a row removes it from the active list | Unit test | `ImportReviewPageTests.DecidedRow_LeavesTheActiveList` |
+| 24 | ❌ | The page is exempt in `DatabaseHealthGateMiddleware` | Unit test | `DatabaseHealthGateMiddlewareTests` (alongside the existing `/notifications` case) |
+| 25 | ❌ | All four seeding variants behave correctly against real configuration | Automated (T2) | `automated-testing/import-and-staged-actions/NN-pending-review-alert.md` |
+| 26 | ❌ | The alert reaches `/notifications` and the startup modal, and a clean seed produces none | Automated (T2) | same document — modal asserted after a restart, per #302's step 8 |
+| 27 | ❌ | The page renders during a degraded startup rather than 500 | Automated (T2) | same document, degraded container |
+| 28 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: after a reseed supersedes an earlier alert, the inactive row reads `Obsolete`, not `Dismissed` |
+| 29 | ❌ | The alert, the page and the link render correctly | Live | T1: stage a batch with conflicts, click through from the alert, decide a row |
 
 **The four seeding variants (rows 20) are not optional.** #303 writes from the same seeding loop as
 #302, where that matrix found a defect no single-variant test reached — no files, bundled only, user
