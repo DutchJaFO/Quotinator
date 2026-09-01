@@ -49,6 +49,21 @@ was tried once (#196, "T2 not required — no route/schema/startup change") and 
 missed that the change touched `Program.cs`, hitting a trigger below anyway, and it's simply not how this
 project verifies releases regardless of trigger-matching.
 
+**T2 is always both halves, and each half proves both directions** (developer, 2026-09-01). It is not
+"the automated documents" — it is the issue's **unit tests** *and* its **automated tests** together,
+each covering the **positive and negative** aspects of what the issue changed:
+
+| | Positive | Negative |
+|---|---|---|
+| **Unit tests** | the behaviour happens when it should | it does not happen when it should not, and the assertion is wired to the behaviour (mutation — `docs/testing-policy.md`, *Bug fixes*) |
+| **Automated tests** | the document passes on the finished build | the document *fails* on a build from before the work (canary — `docs/testing-policy.md`, *Red first applies to automated tests*) |
+
+**A green run on the finished build is one cell of four.** It establishes that something happens; on
+its own it establishes neither that the opposite is refused nor that the check would have caught the
+absence it exists for. Marking `T2 ✅` on that basis alone is the error this table exists to stop —
+found live in #367 (2026-09-01), where a new automated document was written, run green, and recorded
+as verification with no canary run, exactly as #304 had already done before it.
+
 **What "runs T2" means is scoped, and the scopes are defined in
 [`docs/automated-testing/`](automated-testing/README.md), not here:**
 
