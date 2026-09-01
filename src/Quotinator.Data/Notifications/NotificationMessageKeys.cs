@@ -56,4 +56,26 @@ public static class NotificationMessageKeys
     /// nothing left to review. Same arguments as <see cref="ReseedFileAppliedBundledBody"/>.
     /// </summary>
     public const string ReseedFileAppliedUserBody = "NotificationReseedFileAppliedUserBody";
+
+    /// <summary>Title for the alert that one reseeded file left import actions awaiting review (#303).</summary>
+    public const string ImportReviewPendingTitle = "NotificationImportReviewPendingTitle";
+
+    /// <summary>
+    /// Body for the alert that a <b>bundled</b> file left import actions awaiting review. Takes the
+    /// file name as <c>{0}</c> and how many actions are waiting as <c>{1}</c>.
+    /// </summary>
+    /// <remarks>
+    /// The total rather than a per-status list, for the same reason
+    /// <see cref="ReseedFileAppliedBundledBody"/> carries totals: the number of reviewable states with
+    /// rows varies per file, and a variable-length list cannot be assembled from arguments without
+    /// composing localised words outside the translation files. The per-status breakdown lives in the
+    /// notification's metadata payload, where the review page reads it.
+    /// </remarks>
+    public const string ImportReviewPendingBundledBody = "NotificationImportReviewPendingBundledBody";
+
+    /// <summary>
+    /// Body for the alert that a file from the <b>user imports</b> folder left import actions awaiting
+    /// review. Same arguments as <see cref="ImportReviewPendingBundledBody"/>.
+    /// </summary>
+    public const string ImportReviewPendingUserBody = "NotificationImportReviewPendingUserBody";
 }
