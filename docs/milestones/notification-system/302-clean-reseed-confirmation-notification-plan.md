@@ -177,13 +177,19 @@ Inject `IAppVersionTracker` and `IVersionService` (both reachable — `IVersionS
 `Quotinator.Core.Services`, the same project as this initializer). Take `GetLastActiveAsync()`'s row
 id; if nothing has ever been recorded, call `RecordCurrentAsync` first and use that row.
 
-**Both are optional constructor parameters backed by a real default**, exactly as
-`DatabaseInitializer`'s own `IDiskSpaceProvider? diskSpaceProvider = null` /
-`?? new DiskSpaceProvider()` already does — never null at use, so step 6's guarantee is unaffected.
-Measured before choosing: making them required would change 16 call sites across 13 test files, two of
-which carry 565 and 489 `var` declarations, so the boyscout rule would attach roughly 1,540 unrelated
-conversions to this issue. `Program.cs` still passes both explicitly via `sp.GetRequiredService`, so
-production wiring goes through DI as the policy requires.
+**Both are required constructor parameters, registered in DI and resolved with
+`sp.GetRequiredService`** — never optional, and never backed by a `?? new ...` fallback.
+
+This was first planned the other way, copying `DatabaseInitializer`'s own
+`IDiskSpaceProvider? diskSpaceProvider = null` / `?? new DiskSpaceProvider()`. **Developer correction,
+2026-08-30: that is not a precedent, it is a defect** — the container is what supplies these, and the
+only way one could arrive null is if it were never registered, which the fallback then hides by handing
+out a second unmanaged instance instead of failing. CLAUDE.md's DI policy permits `new` only where the
+container *cannot* supply the value (a computed path, a runtime config value); a registered service
+that the one production call site already resolves is not that. Step 9 fixes the original.
+
+The cost is accepted rather than designed around: 16 call sites across 13 test files, and the boyscout
+rule applies to every one of them (see Test placement).
 
 **This recording must stay on the reseed path and must never move into `OnInitialisedAsync`.**
 `Program.cs` reads `GetLastActiveAsync()` *after* `InitialiseAsync()` and strictly before its own
@@ -231,6 +237,25 @@ This is the one piece of scope here that #302's own behaviour does not require �
 provenance can be asserted rather than assumed, which is the same reasoning #304's T1 pass applied when
 it found a notification state unobservable outside the Blazor page.
 
+### 9. Make `diskSpaceProvider` a required dependency
+
+**Status:** ⬜ Not started
+
+**Developer decision, 2026-08-30.** `DatabaseInitializer`'s `IDiskSpaceProvider? diskSpaceProvider = null`
+/ `?? new DiskSpaceProvider()` is the same defect step 6 was originally about to copy, already shipped.
+It is registered in DI and passed explicitly by the only production call site, so the fallback is
+unreachable in production and exists purely to spare test call sites — which is not the DI policy's
+exception, and is precisely how the bad shape propagates to the next person who reads it as a pattern.
+
+Make the parameter required on both `DatabaseInitializer` and `QuotinatorDatabaseInitializer`'s
+pass-through, and drop the `??`. Measured first: `new DatabaseInitializer(` appears in only four test
+files, all four already converted and already listed in `.editorconfig`, so this half carries no
+boyscout tail of its own.
+
+Deliberately fixed here rather than filed: the call sites are the ones step 6 is already editing, and
+leaving the original in place while adding a correct sibling beside it is what makes the next reader
+pick the wrong one.
+
 ---
 
 ## Test placement
@@ -246,6 +271,14 @@ is reused rather than duplicated for the same reason.
 The T2 document (row 20) is a new file under `docs/automated-testing/notifications-and-changelog/` and
 must be added to `Quotinator.slnx` in the commit that creates it, like every other document in that
 folder — it is not picked up automatically.
+
+**The boyscout `var` conversion travels in its own commit** (developer direction, 2026-08-30). Step 6
+makes two constructor parameters required, which edits 16 call sites across 13 test files; the boyscout
+rule then owes an explicit-type conversion and an `.editorconfig` entry for each. Those go in a
+separate commit from the functional change, so #302's own diff stays reviewable as #302 rather than
+being buried under roughly 1,540 mechanical edits — `ImportActionPlannerTests` (565 `var`) and
+`SqliteImportActionServiceTests` (489) dominate the count. Only `DatabaseInitializerTests` among the 13
+is already converted and listed.
 
 ---
 
@@ -272,5 +305,6 @@ folder — it is not picked up automatically.
 | 17 | ❌ | The new migration and the baseline produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
 | 18 | ❌ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
 | 19 | ❌ | `GET /api/v1/notifications` returns `appVersionId` for a notification that carries one | Unit test | `NotificationEndpointsTests.GetNotifications_ReturnsAppVersionId` |
-| 20 | ❌ | A real reseed against a real database writes one notification per cleanly-applied file, with its breakdown and provenance readable through the API | Automated (T2) | `docs/automated-testing/notifications-and-changelog/11-clean-reseed-confirmation.md` |
-| 21 | ❌ | The notifications render in the startup modal and on `/notifications` after a live reseed | Live | T1: run a reseed from `/notifications`, confirm one `Success` notification per cleanly-applied file in both surfaces |
+| 20 | ❌ | Neither initializer constructor makes a DI-suppliable service dependency optional | Unit test | `RepositoryStructureTests.InitializerConstructors_DoNotMakeAServiceDependencyOptional` |
+| 21 | ❌ | A real reseed against a real database writes one notification per cleanly-applied file, with its breakdown and provenance readable through the API | Automated (T2) | `docs/automated-testing/notifications-and-changelog/11-clean-reseed-confirmation.md` |
+| 22 | ❌ | The notifications render in the startup modal and on `/notifications` after a live reseed | Live | T1: run a reseed from `/notifications`, confirm one `Success` notification per cleanly-applied file in both surfaces |
