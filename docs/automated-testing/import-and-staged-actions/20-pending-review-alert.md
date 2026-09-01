@@ -14,6 +14,13 @@ said so. This proves the alert appears, names the batch it reports, survives to 
 retired when the review is resolved or its batch removed, and that `/import-review` stays reachable
 while the database is degraded.
 
+**`Environment: Fresh` is load-bearing here, not a default.** Against a database that already holds
+quotes, this test's fixture does nothing at all: the files are discovered and a manifest is written for
+them, and then seeding returns early on the non-empty Quotes table without reading them — see
+[#368](https://github.com/DutchJaFO/Quotinator/issues/368). Do not relax the fresh-container
+precondition until that is fixed; a run against a reused container proves nothing and passes its
+zero-state checks for the wrong reason.
+
 ## Determinism
 
 **The bundled content alone cannot produce a conflict, so this test supplies one.** Measured on the

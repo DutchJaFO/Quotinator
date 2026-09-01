@@ -68,6 +68,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#353](https://github.com/DutchJaFO/Quotinator/issues/353) | Upload a backup file | Planning | T1 ⬜ T2 ⬜ | [353-upload-a-backup-file-plan.md](353-upload-a-backup-file-plan.md) |
 | [#360](https://github.com/DutchJaFO/Quotinator/issues/360) | Migration-generated identifiers are not valid UUIDs; route all id creation through one factory | Planning | T1 ⬜ T2 ⬜ | [360-guid-factory-plan.md](360-guid-factory-plan.md) |
 | [#367](https://github.com/DutchJaFO/Quotinator/issues/367) | Notification actions give no feedback while they run | Planning | T1 ⬜ T2 ⬜ | [367-executing-notification-state-plan.md](367-executing-notification-state-plan.md) |
+| [#368](https://github.com/DutchJaFO/Quotinator/issues/368) | New import files are discovered but never imported, and nothing says so | Planning | T1 ⬜ T2 ⬜ | [368-unimported-files-are-discovered-but-never-imported-plan.md](368-unimported-files-are-discovered-but-never-imported-plan.md) |
 
 ---
 
@@ -211,6 +212,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
          this milestone could be trusted, because Api tests asserted before the app finished starting
          (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
+#368 ─── depends on #303 (its /import-review page is where any remedy points) and on #304 (whose reseed
+         action is the destructive path this issue exists to avoid needing). Found during #303's T1:
+         files in imports/ are discovered and a manifest written for them, then never read, because
+         seeding returns early on a non-empty Quotes table. Blocks nothing, but it is why #303's own T2
+         document has to start from a fresh container
 ```
 
 None of #302/#303/#304 depend on each other for their own correctness, but #304 is what makes #302's
@@ -258,6 +264,7 @@ step, the other reuses it.
 | 29 | **#353** | Upload a backup file. Last of the backup cluster: it is the only endpoint that accepts an arbitrary file, and writing it after restore exists means its validation is written against a real consumer rather than a hypothetical one |
 | 30 | **#360** | Identifier generation through one factory, and a SQLite function migrations call instead of hand-writing one. Last, and deliberately before the end-of-milestone migration consolidation: that pass rewrites this milestone's migrations, so the factory has to exist first or the consolidated result bakes in a sixth copy of the expression it replaces |
 | 31 | **#367** | An executing state for a running notification action, found in #302's T1. Placed after #308: #308 settles per-type layout across both surfaces, and a new status label is a layout decision it would otherwise have to be revisited for. Not before #303 either — #303 adds the review page, a second surface any new status has to render on |
+| 32 | **#368** | Import files discovered but never imported, found in #303's T1. Last, because its remedy is a notification with an action and #367 above decides how an action reports that it is running — a non-destructive import is the first action likely to take long enough for that to matter. Its own planning also has to settle whether the remedy is an import path or only a report, which is not a decision to make while #303's page is still being verified |
 
 **Notifications come first from position 11 (developer direction, 2026-08-29).** The safe-start cluster
 (#326, #348, #349) and the backup endpoints grew large enough to crowd out the milestone's own subject:
