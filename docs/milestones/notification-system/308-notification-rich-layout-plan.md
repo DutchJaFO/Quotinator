@@ -87,7 +87,7 @@ it. The decision of *whether* a title element is rendered lives in `Notification
 
 ### 3. Render embedded line breaks in `Body`
 
-**Status:** ⬜ Not started — turns rows 4–5 green
+**Status:** ✅ Done — turns rows 4–5 green
 
 CSS (`white-space: pre-line` on the body cell) rather than a markup or formatting change, so producers
 keep writing a plain string with `\n` separators and no new serialisation concern.
@@ -99,7 +99,7 @@ occupies two client rects.
 
 ### 4. Define the per-type layout across both surfaces
 
-**Status:** ⬜ Not started — turns rows 6–7 green
+**Status:** ✅ Done — turns rows 6–7 green
 
 Each notification type gets a layout decision for the startup/popup dialog and for the
 `/notifications` view. Six kinds exist as of 2026-09-01 — `Announcement`, `SchemaVersionOvershoot`,
@@ -113,7 +113,7 @@ rather than rendering unstyled.
 
 ### 5. Prove no storage change is introduced
 
-**Status:** ⬜ Not started — turns row 8 green
+**Status:** ✅ Done — turns row 8 green
 
 #312 owns the schema; #319 owns the translation shape. This issue consumes both. If a layout need
 appears to require a storage change, that is a finding to raise, not something to add here.
@@ -123,7 +123,7 @@ pinned by name, so a column added here fails a test rather than depending on a r
 
 ### 6. Run the T2 document green, and confirm both call sites
 
-**Status:** ⬜ Not started — turns rows 9–11 green
+**Status:** ✅ Done — turns rows 9–11 green
 
 `NotificationSummary` (the startup modal) and the `/notifications` page both consume
 `NotificationTable`. A change that looks right in one can be wrong in the other — the modal is
@@ -135,21 +135,21 @@ size-constrained in a way the page is not.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A notification with a title renders a title element | Unit test | `NotificationTableTests.ShowsTitle_WithATitle_IsTrue` |
-| 2 | ❌ | A notification with no title renders none | Unit test | `NotificationTableTests.ShowsTitle_WithoutATitle_IsFalse` — `null`, `""` and whitespace, the shape #279/#289 rows have |
-| 3 | ❌ | The title element is not rendered *instead of* the body | Unit test | `NotificationTableTests.ShowsTitle_WithoutATitle_StillRendersTheBody` — positive control, so row 2 cannot pass against a cell that renders nothing at all |
-| 4 | ❌ | Markup and stylesheet agree on the body cell's class | Unit test | `NotificationTableTests.BodyCellClass_IsDefinedInTheStylesheet` — parses `NotificationTable.razor` and `.razor.css`; proves the two halves match, never that the rule applies |
-| 5 | ❌ | A two-line body renders as two lines | Automated (T2) | new `13-notification-layout.md` — asserts computed `white-space: pre-line` **and** `getClientRects().length >= 2`, not the class name |
-| 6 | ❌ | Every `NotificationMetadataKind` has a defined layout | Unit test | `NotificationTableTests.EveryMetadataKind_HasALayout` — derived from the enum, so a kind added later fails here |
-| 7 | ❌ | A row with no metadata kind still has a layout | Unit test | `NotificationTableTests.NoMetadataKind_FallsBackToADefinedLayout` — negative case for row 6; #279/#289 rows carry none |
-| 8 | ❌ | This issue adds no column to `System_Notification` | Unit test | `DatabaseInitializerOwnershipTests.SystemNotification_ColumnSet_IsPinned` — replaces "unchanged in the diff", which nothing re-runs |
-| 9 | ❌ | Title and body render distinctly on `/notifications` | Automated (T2) + screenshot | `13-notification-layout.md` — the title is its own element in the DOM, not a prefix inside the body text |
-| 10 | ❌ | The same holds in the startup modal | Automated (T2) + screenshot | same document — restart required, per #302's finding that the modal shows once per process run |
-| 11 | ❌ | Rendering survives a degraded startup | Automated (T2) | same document — degraded container, parity with `/notifications`'s current behaviour rather than a bare `200` (see #303 row 36) |
+| 1 | ✅ | A notification with a title renders a title element | Unit test | `NotificationTableTests.ShowsTitle_WithATitle_IsTrue` |
+| 2 | ✅ | A notification with no title renders none | Unit test | `NotificationTableTests.ShowsTitle_WithoutATitle_IsFalse` — `null`, `""` and whitespace, the shape #279/#289 rows have |
+| 3 | ✅ | The title element is not rendered *instead of* the body | Unit test | `NotificationTableTests.ShowsTitle_WithoutATitle_StillRendersTheBody` — positive control, so row 2 cannot pass against a cell that renders nothing at all |
+| 4 | ✅ | Markup and stylesheet agree on the body cell's class | Unit test | `NotificationTableTests.BodyCellClass_IsDefinedInTheStylesheet` — parses `NotificationTable.razor` and `.razor.css`; proves the two halves match, never that the rule applies |
+| 5 | ✅ | A two-line body renders as two lines | Automated (T2) | new `13-notification-layout.md` — asserts computed `white-space: pre-line` **and** `getClientRects().length >= 2`, not the class name |
+| 6 | ✅ | Every `NotificationMetadataKind` has a defined layout | Unit test | `NotificationTableTests.EveryMetadataKind_HasALayout` — derived from the enum, so a kind added later fails here |
+| 7 | ✅ | A row with no metadata kind still has a layout | Unit test | `NotificationTableTests.NoMetadataKind_FallsBackToADefinedLayout` — negative case for row 6; #279/#289 rows carry none |
+| 8 | ✅ | This issue adds no column to `System_Notification` | Unit test | `DatabaseInitializerOwnershipTests.SystemNotification_ColumnSet_IsPinned` — replaces "unchanged in the diff", which nothing re-runs |
+| 9 | ✅ | Title and body render distinctly on `/notifications` | Automated (T2) + screenshot | `13-notification-layout.md` — the title is its own element in the DOM, not a prefix inside the body text |
+| 10 | ✅ | The same holds in the startup modal | Automated (T2) + screenshot | same document — restart required, per #302's finding that the modal shows once per process run |
+| 11 | ✅ | Rendering survives a degraded startup | Automated (T2) | same document — degraded container, parity with `/notifications`'s current behaviour rather than a bare `200` (see #303 row 36) |
 | 12 | ✅ | The T2 document goes red before it goes green | Canary run | run at step 1 against `52071f24`, no worktree needed: `bodyCells: 0`, `titleElements: 0`, `whiteSpace: normal`, `lineBoxes: 1` — and step 1 itself failed on a wrong fixture assumption, corrected before implementing |
-| 13 | ❌ | Every unit test above is wired to behaviour | Mutation | each proven red at step 1 by a wrong-body stub, and re-proven by mutation for any that passes on first write |
-| 14 | ❌ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
-| 15 | ❌ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
+| 13 | ✅ | Every unit test above is wired to behaviour | Mutation | proven at step 1 by two opposing stubs: `ShowsTitle => false` fails rows 1, 4, 6, 7; `ShowsTitle => true` fails rows 2 and 3, which assert an absence and cannot fail against the first. Row 8 went red on a wrong column list before going green |
+| 14 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
+| 15 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
 | 16 | ❌ | Every layout renders correctly on the developer's own machine | Live (T1) | one confirmed rendering per type, on both surfaces |
 
 **Rows 5, 9 and 10 cannot be replaced by unit tests.** A unit test can prove the markup and the

@@ -2,6 +2,21 @@
    1rem default — otherwise it stands taller than the label beside it and pushes the row height out.
    Bootstrap's own prefers-reduced-motion rule still applies: it slows the animation to 1.5s rather than
    stopping it, which keeps the "still running" signal for a reader who has asked for less motion. */
+/* #308: the headline #312 split out of the flat message, rendered as its own line rather than as a
+   prefix inside the body text. Weight rather than a heading element — the cell already sits inside a
+   table row, and an <h*> here would put a heading in the middle of a data table. */
+.notification-title {
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+}
+
+/* #308: producers write plain strings with \n separators. Razor HTML-encodes the value, so without
+   this the newlines collapse to whitespace and a multi-fact body reads as one run-on paragraph.
+   pre-line rather than pre-wrap: leading indentation in a body is accidental, line breaks are not. */
+.notification-body {
+    white-space: pre-line;
+}
+
 .badge .spinner-border {
     --bs-spinner-width: 0.75em;
     --bs-spinner-height: 0.75em;

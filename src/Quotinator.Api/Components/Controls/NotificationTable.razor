@@ -24,7 +24,13 @@
             <tr>
                 <td>@Local(notification.DateCreated.Parsed)</td>
                 <td><span class="badge @BadgeClass(notification.Type.Parsed)">@TypeLabel(notification.Type.Parsed)</span></td>
-                <td>@notification.Body</td>
+                <td>
+                    @if (ShowsTitle(notification))
+                    {
+                        <div class="notification-title">@notification.Title</div>
+                    }
+                    <div class="notification-body">@notification.Body</div>
+                </td>
                 <td>@Local(notification.ExpiresAt.Parsed)</td>
                 <td>
                     @switch (GetDisplayStatus(notification, Now, Executing.IsExecuting(notification.Id)))

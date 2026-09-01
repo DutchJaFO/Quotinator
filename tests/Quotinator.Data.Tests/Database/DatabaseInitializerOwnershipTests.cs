@@ -579,6 +579,48 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
+    /// #308: the column set is pinned by name, so a rendering issue cannot quietly add storage.
+    /// </summary>
+    /// <remarks>
+    /// The parity tests above prove the baseline and the incremental path agree with <em>each other</em>
+    /// — they would agree just as happily about a column neither side should have. This pins what the
+    /// table actually holds, which is what #308's "no storage change of its own" claim needs: it
+    /// consumes #312's schema and #319's translation shape rather than extending either. Adding a column
+    /// is still allowed; it just has to be a decision that updates this list, rather than a side effect
+    /// nobody notices in a diff.
+    /// </remarks>
+    [TestMethod]
+    public async Task SystemNotification_ColumnSet_IsPinned()
+    {
+        using TempDatabase temp = new([]);
+        DatabaseInitializer db = CreateBareInitializer(temp.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" });
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new($"Data Source={temp.DbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        List<string> columns = [];
+        using (SqliteCommand cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT name FROM pragma_table_info('System_Notification') ORDER BY name;";
+            using SqliteDataReader reader = await cmd.ExecuteReaderAsync(TestContext.CancellationToken);
+            while (await reader.ReadAsync(TestContext.CancellationToken))
+                columns.Add(reader.GetString(0));
+        }
+
+        string[] expected =
+        [
+            "AppVersionId", "Body", "DateCreated", "DateDeleted", "DateModified", "DismissReason",
+            "DismissTriggerKey", "DismissedAt", "ExpiresAt", "Id", "IsDeleted", "IsDismissed",
+            "Metadata", "MetadataKind", "OriginalLanguage", "Title", "Type",
+        ];
+
+        Assert.AreSequenceEqual(expected, columns,
+            "System_Notification's columns changed. If that was intended, update this list in the same commit; " +
+            "#308 in particular must add none — it renders #312's schema rather than extending it.");
+    }
+
+    /// <summary>
     /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema"/>,
     /// for <c>System_NotificationTranslation</c> (added by #319's Data-owned migration). The parity
     /// test compares column ordinals, which is why a column added by <c>ALTER TABLE … ADD COLUMN</c>

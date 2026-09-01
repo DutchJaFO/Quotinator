@@ -102,13 +102,42 @@ public partial class NotificationTable
     /// <summary>The class the body cell carries, and the stylesheet targets. #308.</summary>
     internal const string BodyCellClass = "notification-body";
 
-    /// <summary>Whether <paramref name="notification"/> renders a title element. #308.</summary>
+    /// <summary>
+    /// Whether <paramref name="notification"/> renders a title element. #308.
+    /// </summary>
+    /// <remarks>
+    /// Whitespace counts as absent, not just <see langword="null"/> and empty: a title of spaces would
+    /// render as a blank line above the body, which reads as a layout fault rather than as a row with
+    /// no headline. <c>Title</c> is nullable in #312's schema, so the absent case is a real shape and
+    /// not a defensive check.
+    /// </remarks>
     /// <param name="notification">The row being rendered.</param>
-    internal static bool ShowsTitle(NotificationEntity notification) => false;
+    internal static bool ShowsTitle(NotificationEntity notification) =>
+        !string.IsNullOrWhiteSpace(notification.Title);
 
-    /// <summary>The layout for <paramref name="kind"/>, or for a row that carries none. #308.</summary>
+    /// <summary>
+    /// The layout for <paramref name="kind"/>, or for a row that carries none. #308.
+    /// </summary>
+    /// <remarks>
+    /// Every member is listed explicitly rather than falling through a <c>_</c> arm, so a kind added
+    /// later fails <c>NotificationTableTests.EveryMetadataKind_HasALayout</c> instead of silently
+    /// inheriting a layout nobody chose for it. A row with no kind at all — #279's and #289's, which
+    /// predate typed metadata — takes the single-line default.
+    /// </remarks>
     /// <param name="kind">The row's own metadata kind, or <see langword="null"/>.</param>
-    internal static NotificationLayout? LayoutFor(NotificationMetadataKind? kind) => null;
+    internal static NotificationLayout LayoutFor(NotificationMetadataKind? kind) => kind switch
+    {
+        // One line per changelog highlight, and one per cleanly-applied or staged file: these producers
+        // write several facts, and collapsing them into a paragraph is what #308 exists to stop.
+        NotificationMetadataKind.WhatsNew            => new NotificationLayout(BodyIsMultiLine: true),
+        NotificationMetadataKind.ReseedFileApplied   => new NotificationLayout(BodyIsMultiLine: true),
+        NotificationMetadataKind.ImportReviewPending => new NotificationLayout(BodyIsMultiLine: true),
+        NotificationMetadataKind.Announcement           => new NotificationLayout(BodyIsMultiLine: false),
+        NotificationMetadataKind.SchemaVersionOvershoot => new NotificationLayout(BodyIsMultiLine: false),
+        NotificationMetadataKind.ReseedRecommended      => new NotificationLayout(BodyIsMultiLine: false),
+        null                                            => new NotificationLayout(BodyIsMultiLine: false),
+        _ => throw new NotSupportedException($"No layout is defined for notification kind '{kind}'."),
+    };
 
     internal static NotificationDisplayStatus GetDisplayStatus(NotificationEntity notification, DateTime now, bool isExecuting = false)
     {
