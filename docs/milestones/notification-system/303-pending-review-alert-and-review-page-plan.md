@@ -122,7 +122,7 @@ the new values.
 
 ### 4. Add the alert's title and body in all three languages
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `ImportReviewPendingTitle`, plus a bundled and a user body
 
 Keys on `NotificationMessageKeys`, strings in `UI.en-GB.json`/`UI.nl.json`/`UI.de.json`, resolved via
 `NotificationTranslations.Original`/`Build`.
@@ -131,11 +131,19 @@ Keys on `NotificationMessageKeys`, strings in `UI.en-GB.json`/`UI.nl.json`/`UI.d
 "bundled"/"your imported" cannot be an argument without rendering in one language for every reader.
 
 The `Obsolete` display status needs its own label in the same three files, alongside the existing
-Active/Expired/Dismissed/Resolved ones.
+Active/Expired/Dismissed/Resolved ones. Delivered in step 1, with the enum member it renders — an enum
+value the page cannot draw is not finished, and `NotificationTable.razor`'s `default` case would have
+shown it as **Active**.
+
+**The body carries the total awaiting review, not the per-status list.** Stated rather than left
+implicit: how many reviewable states actually have rows varies per file, and a variable-length list
+cannot be built from `bodyArgs` without composing localised words outside the translation files — the
+same constraint that split these bodies by origin. The per-status breakdown is in the payload, which is
+where the review page reads it. Say so if the body itself should enumerate the states.
 
 ### 5. Write the alert from the staged branch
 
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress
 
 In the `applyResult is not null` branch, one `ActionRequired` notification per staged file, through
 `SeedWhileUnresolvedAsync`. **Not gated on `isReseed`** — see Scope changes 5.
@@ -242,7 +250,7 @@ deliberately not here — see Scope changes 6.
 | 10 | ✅ | The new kind has a registered payload type | Unit test | `NotificationMetadataKindsTests` (existing guard) |
 | 11 | ✅ | Migration 18 and the baseline accept the same `MetadataKind`, `DismissTriggerKey` and `DismissReason` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` |
 | 12 | ✅ | Migration 18 and the baseline produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
-| 13 | ❌ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
+| 13 | ✅ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
 | 14 | ❌ | Resolving a batch dismisses that batch's alert, with reason `Resolved` | Unit test | `SqliteImportActionServiceTests.ApplyBatch_WhenFullyResolved_DismissesItsOwnReviewAlert` |
 | 15 | ❌ | Resolving one batch does not dismiss another batch's alert | Unit test | `SqliteImportActionServiceTests.ApplyBatch_DoesNotDismissAnotherBatchesReviewAlert` |
 | 16 | ❌ | Discarding a batch dismisses its alert too | Unit test | `SqliteImportActionServiceTests.DiscardBatch_DismissesItsOwnReviewAlert` |
