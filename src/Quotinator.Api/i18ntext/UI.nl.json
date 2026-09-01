@@ -30,6 +30,8 @@
   "NotificationReseedContentChangedBody": "Er is nieuwe inhoud gedownload voor {0}, maar de database bevatte al citaten, dus die is niet toegepast. Voer een reseed uit om de opgeslagen inhoud te vervangen door de bijgewerkte bronnen.",
   "NotificationReseedAfterResetTitle": "De database bevat geen citaten",
   "NotificationReseedAfterResetBody": "De database is teruggezet; daarbij wordt het schema opnieuw opgebouwd zonder inhoud opnieuw te importeren. Voer een reseed uit om de meegeleverde bronnen te laden, of importeer in plaats daarvan uw eigen inhoud.",
+  "NotificationReseedFileAppliedTitle": "Bronbestand foutloos opnieuw geladen",
+  "NotificationReseedFileAppliedBody": "{0} is opnieuw geladen zonder dat er iets te beoordelen overbleef: {1} toegevoegd en {2} bijgewerkt.",
   "NotificationSummaryHeading": "Meldingen",
   "NotificationTypeInformation": "Informatie",
   "NotificationTypeWarning": "Waarschuwing",

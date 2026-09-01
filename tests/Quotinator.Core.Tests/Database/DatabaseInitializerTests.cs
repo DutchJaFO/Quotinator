@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Enums;
 using Quotinator.Core.Models;
+using Quotinator.Core.Helpers;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
@@ -179,6 +180,246 @@ public class DatabaseInitializerTests
     private async Task<IReadOnlyList<NotificationEntity>> NotificationsAsync()
         => (await TestNotificationReader.Create(_dbPath).GetPagedAsync(1, 0)).Items;
 
+    // ── #302: per-file confirmation that a reseed left nothing to review ──────────────────────────
+
+    /// <summary>
+    /// The whole point of the issue: a reseed that applies a file cleanly says so, once per file.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+
+        Assert.HasCount(3, confirmations,
+            "AllFilesBatch carries three files and all three apply cleanly — one confirmation each.");
+        Assert.IsTrue(confirmations.All(n => n.Type.Parsed == NotificationType.Success),
+            "A file that reseeded with nothing left to review is a Success, not an ActionRequired.");
+    }
+
+    /// <summary>
+    /// Cold start already reports aggregate counts through the startup modal's own summary. Repeating
+    /// that per file on a brand-new install would be pure clutter, so the confirmation is reseed-only.
+    /// </summary>
+    [TestMethod]
+    public async Task Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        Assert.IsEmpty((await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied),
+            "The first seed of an empty database is not a reseed, and has nothing to confirm.");
+    }
+
+    /// <summary>
+    /// The negative control for the test above it: a file whose batch did not fully apply has actions
+    /// waiting for review, so confirming it reseeded cleanly would be a lie.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_FileLeftAwaitingReview_WritesNoSuccessNotification()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+
+        // Stated as a precondition rather than branched on: a conditional assertion would pass whichever
+        // way this fixture behaved, and would silently stop testing the awaiting-review path the day the
+        // bundled content stopped producing conflicts.
+        Assert.IsGreaterThan(0, await StagedActionCountAsync(),
+            "This fixture exists to leave actions awaiting review — if it no longer does, it is testing nothing.");
+
+        Assert.IsEmpty(confirmations, "The file left actions awaiting review — there is nothing clean to confirm.");
+    }
+
+    /// <summary>A reseed with no configured sources touches no file, so there is nothing to report.</summary>
+    [TestMethod]
+    public async Task Reseed_NoConfiguredFiles_WritesNoNotification()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        Assert.IsEmpty((await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied),
+            "No files were seeded, so no per-file confirmation exists to write — not even an empty one.");
+    }
+
+    /// <summary>
+    /// Reseeding an unchanged file produces the same result, which is the same confirmation the
+    /// operator is already looking at. Writing it again would make the notification list grow without
+    /// bound, since these deliberately never expire.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_TwiceWithNoChange_DoesNotRewriteTheActiveNotification()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+        await db.ReseedAsync();
+
+        Assert.HasCount(3, (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied).ToList(),
+            "Two reseeds of unchanged content are one confirmation per file, not two.");
+    }
+
+    /// <summary>
+    /// The positive control for the dedupe above: once dismissed, the operator has acted on it, and the
+    /// next reseed is news again. Without this, dedupe-while-active would be indistinguishable from
+    /// write-once-forever.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_AfterDismissal_WritesTheConfirmationAgain()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        NotificationWriter writer = new(new SqliteConnectionFactory(_dbPath));
+        foreach (NotificationEntity confirmation in (await NotificationsAsync())
+                     .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied))
+        {
+            await writer.DismissAsync(confirmation.Id);
+        }
+
+        await db.ReseedAsync();
+
+        Assert.HasCount(6, (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied).ToList(),
+            "Three dismissed confirmations plus three fresh ones — a dismissed notification must not suppress the next occurrence.");
+    }
+
+    /// <summary>
+    /// These never expire and carry no dismiss trigger, so the reseed endpoint's own
+    /// DismissByTriggerAsync(Reseed) call must not sweep away the confirmations that same reseed wrote.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_FileAppliedCleanly_NotificationHasNoExpiryAndSurvivesReseedDismissal()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        NotificationWriter writer = new(new SqliteConnectionFactory(_dbPath));
+        await writer.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
+
+        List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+
+        // Guard before the All() assertions below: both are vacuously true over an empty set, so
+        // without this the test would pass just as happily against a producer that writes nothing.
+        Assert.IsNotEmpty(confirmations, "The reseed must have written confirmations for this test to mean anything.");
+
+        Assert.IsTrue(confirmations.All(n => n.ExpiresAt.Parsed is null),
+            "No expiry: the configured default was removed in #312, and the operator dismisses these instead.");
+        Assert.IsTrue(confirmations.All(n => !n.IsDismissed),
+            "The reseed endpoint dismisses Reseed-triggered rows after ReseedAsync returns — a confirmation " +
+            "carrying that trigger would be wiped out by the very reseed that wrote it.");
+    }
+
+    /// <summary>An already-recorded version is the one stamped on the row, not a second row alongside it.</summary>
+    [TestMethod]
+    public async Task Reseed_WithRecordedVersion_StampsThatVersionOnTheNotification()
+    {
+        SqliteConnectionFactory factory = new(_dbPath);
+        AppVersionTracker tracker = new(factory);
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()], appVersionTracker: tracker);
+        await db.InitialiseAsync();
+
+        AppVersionRecord recorded = await tracker.RecordCurrentAsync("Quotinator.Test", "9.9.9");
+        await db.ReseedAsync();
+
+        List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+
+        Assert.IsNotEmpty(confirmations);
+        Assert.IsTrue(confirmations.All(n => n.AppVersionId == recorded.Id),
+            "Provenance must reference the version that was already recorded, not a newly invented row.");
+    }
+
+    /// <summary>
+    /// With nothing recorded, the initializer records the current version before writing rather than
+    /// stamping null — a notification whose origin cannot be named is what #312 had to repair later.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_WithNoRecordedVersion_RecordsOneBeforeWriting()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+
+        Assert.IsNotEmpty(confirmations);
+        Assert.IsTrue(confirmations.All(n => n.AppVersionId is not null),
+            "No notification may be written with unknown provenance — record the version first instead.");
+    }
+
+    /// <summary>
+    /// The breakdown covers every entity type the file touched. The two counts the clean-apply branch
+    /// already had are quote-only, so a file that added Sources and Characters would otherwise report
+    /// nothing about them.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_FileAddingNonQuoteEntities_CountsThemInTheBreakdown()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        ReseedFileAppliedMetadataDto payload = FirstConfirmationPayload(await NotificationsAsync());
+
+        List<string> countedTypes = [.. payload.Counts.Select(c => c.EntityType)];
+
+        Assert.Contains(ImportActionEntityTypes.Quote, countedTypes,
+            "Quotes are the one type the old counts already covered.");
+        Assert.Contains(ImportActionEntityTypes.Source, countedTypes,
+            "The bundled files add Sources too, and the breakdown exists precisely so those are not invisible.");
+    }
+
+    /// <summary>An entity type the file never touched states nothing, rather than a pair of zeros.</summary>
+    [TestMethod]
+    public async Task Reseed_EntityTypeWithNoChanges_IsAbsentFromTheBreakdown()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        ReseedFileAppliedMetadataDto payload = FirstConfirmationPayload(await NotificationsAsync());
+
+        List<ReseedEntityCountDto> emptyCounts = [.. payload.Counts.Where(c => c.Added == 0 && c.Modified == 0)];
+
+        Assert.IsEmpty(emptyCounts,
+            "A type with nothing added and nothing modified is omitted — a stored zero invites the reader to " +
+            "wonder what it was supposed to mean.");
+    }
+
+    private static ReseedFileAppliedMetadataDto FirstConfirmationPayload(IReadOnlyList<NotificationEntity> notifications)
+    {
+        NotificationEntity confirmation = notifications
+            .First(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied);
+
+        return (ReseedFileAppliedMetadataDto)NotificationMetadataKinds
+            .TryDeserialize(confirmation.MetadataKind.Parsed, confirmation.Metadata)!;
+    }
+
+    private async Task<int> StagedActionCountAsync()
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Import_Action WHERE Status = 'Pending';");
+    }
+
     /// <summary>
     /// Reports a fixed outcome for every candidate file, without touching the network — the refresh
     /// result is trigger 1's input, and the point here is what the initializer does with it.
@@ -202,6 +443,21 @@ public class DatabaseInitializerTests
             new SeedFile(CuratedFile,        null),
             new SeedFile(VilaboimFile,        "https://github.com/vilaboim/movie-quotes"),
             new SeedFile(NikhilNamal17File,   "https://github.com/NikhilNamal17/popular-movie-quotes")
+        ],
+        ManifestPolicy.HardcodedDefault,
+        "bundled sources");
+
+    /// <summary>
+    /// #302: the same file under the same Review policy but with no rule file, so its conflicts have
+    /// nothing to resolve them and stay pending. <see cref="NikhilNamal17WithRuleFileBatch"/> cannot
+    /// serve here — its rule file resolves every conflict, which is exactly what makes it a clean apply.
+    /// </summary>
+    private static SeedBatch NikhilNamal17AwaitingReviewBatch() => new(
+        [
+            new SeedFile(
+                NikhilNamal17File,
+                "https://github.com/NikhilNamal17/popular-movie-quotes",
+                Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))
         ],
         ManifestPolicy.HardcodedDefault,
         "bundled sources");

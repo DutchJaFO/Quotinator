@@ -108,7 +108,7 @@ public sealed class QuotinatorDatabaseInitializer(
         // the same gate SeedIfEmptyInternalAsync applies to itself.
         int quotesBeforeSeeding = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
 
-        await SeedIfEmptyAsync(connection, resolution.EffectiveBatches);
+        await SeedIfEmptyAsync(connection, resolution.EffectiveBatches, isReseed: false);
         await ReSeedGenresIfEmptyAsync(connection, resolution.EffectiveBatches);
         await RecommendReseedIfSourceContentChangedAsync(resolution, quotesBeforeSeeding);
         await LogDatabaseStatsAsync(connection);
@@ -167,6 +167,74 @@ public sealed class QuotinatorDatabaseInitializer(
                 bodyArgs: bodyArgs));
     }
 
+    /// <summary>
+    /// #302: confirms that one file reseeded with nothing left to review, reporting what it actually
+    /// did per entity type. Written from inside the seeding loop rather than reconstructed afterward
+    /// from <see cref="DatabaseInitializer.LastSeedReport"/> — the clean-apply branch is the only place
+    /// that knows both which file and that it left nothing pending.
+    /// </summary>
+    /// <param name="fileName">The seed file that applied cleanly.</param>
+    /// <param name="actions">Every import action the file produced, which is what the breakdown counts.</param>
+    private async Task ConfirmFileAppliedCleanlyAsync(string fileName, IReadOnlyList<ImportActionEntity> actions)
+    {
+        List<ReseedEntityCountDto> counts = [.. actions
+            .GroupBy(action => action.EntityType, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new ReseedEntityCountDto
+            {
+                EntityType = group.Key,
+                Added      = group.Count(a => a.ActionType.Parsed == ImportActionKind.Add),
+                // Matches the batch's own RecordCount rule: an action resolved as Skip or Review changed
+                // nothing, so counting it as modified would report work that never happened.
+                Modified   = group.Count(a => a.ActionType.Parsed == ImportActionKind.Modify
+                                           && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review)),
+            })
+            .Where(count => count.Added > 0 || count.Modified > 0)
+            .OrderBy(count => count.EntityType, StringComparer.OrdinalIgnoreCase)];
+
+        ReseedFileAppliedMetadataDto metadata = new()
+        {
+            FileName     = fileName,
+            Counts       = counts,
+            ReleaseState = NotificationReleaseState.NotApplicable,
+        };
+
+        object[] bodyArgs = [fileName, counts.Sum(c => c.Added), counts.Sum(c => c.Modified)];
+
+        await NotificationSeeding.SeedWhileUnresolvedAsync(
+            _notificationReader, _notificationWriter, NotificationType.Success, metadata,
+            body: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.ReseedFileAppliedBody, bodyArgs),
+            appVersionId: await CurrentAppVersionIdAsync(),
+            title: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.ReseedFileAppliedTitle),
+            // Deliberately no dismissTrigger: POST /admin/database/reseed dismisses every Reseed-triggered
+            // row once ReseedAsync returns, which would wipe out the confirmations that same call wrote.
+            translations: NotificationTranslations.Build(
+                _notificationTextSource,
+                NotificationMessageKeys.ReseedFileAppliedTitle,
+                NotificationMessageKeys.ReseedFileAppliedBody,
+                bodyArgs: bodyArgs));
+    }
+
+    /// <summary>
+    /// The <c>System_AppVersion</c> row a notification written from here is attributed to, recording
+    /// the running version first when nothing has been recorded yet (#302).
+    /// <para>
+    /// Safe to record from the reseed path specifically, and only there: <c>Program.cs</c> reads the
+    /// *previous* version after <c>InitialiseAsync</c> and strictly before its own
+    /// <c>RecordCurrentAsync</c>, because that read is #81's what's-new catch-up lower bound and
+    /// recording first would overwrite it. A reseed happens long after that sequence has finished.
+    /// </para>
+    /// </summary>
+    private async Task<Guid> CurrentAppVersionIdAsync()
+    {
+        AppVersionRecord? lastActive = await _appVersionTracker.GetLastActiveAsync();
+        if (lastActive is not null) return lastActive.Id;
+
+        AppVersionRecord recorded = await _appVersionTracker.RecordCurrentAsync(
+            _versionService.Application, _versionService.Version);
+
+        return recorded.Id;
+    }
+
     /// <inheritdoc/>
     /// <remarks>Mirrors the two count-gates <see cref="OnInitialisedAsync"/> itself runs (#277): <see cref="SeedIfEmptyInternalAsync"/> would do real work whenever Quotes is empty, and <see cref="ReSeedGenresIfEmptyAsync"/> would do real work whenever Genres is empty but Quotes is not.</remarks>
     protected override async Task<bool> HasPendingContentSeedAsync(SqliteConnection connection)
@@ -189,7 +257,7 @@ public sealed class QuotinatorDatabaseInitializer(
         try
         {
             await TruncateDataAsync(connection);
-            await SeedIfEmptyInternalAsync(connection, effectiveBatches);
+            await SeedIfEmptyInternalAsync(connection, effectiveBatches, isReseed: true);
         }
         finally
         {
@@ -340,12 +408,12 @@ public sealed class QuotinatorDatabaseInitializer(
         return await _sourceCacheUpdater.ResolveAsync(_batches, allowNetwork, forceRefresh);
     }
 
-    private async Task SeedIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
+    private async Task SeedIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches, bool isReseed)
     {
         await SharedSeedLock.WaitAsync();
         try
         {
-            await SeedIfEmptyInternalAsync(connection, effectiveBatches);
+            await SeedIfEmptyInternalAsync(connection, effectiveBatches, isReseed);
         }
         finally
         {
@@ -353,7 +421,12 @@ public sealed class QuotinatorDatabaseInitializer(
         }
     }
 
-    private async Task SeedIfEmptyInternalAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
+    /// <param name="isReseed">
+    /// Whether this run is an explicit reseed rather than the first seed of an empty database. Passed
+    /// in rather than inferred: this method is the shared body of both paths, and by the time it runs
+    /// the Quotes table is empty either way, so nothing here can tell them apart (#302).
+    /// </param>
+    private async Task SeedIfEmptyInternalAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches, bool isReseed)
     {
         var count = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
         if (count > 0) return;
@@ -441,6 +514,9 @@ public sealed class QuotinatorDatabaseInitializer(
                             PerformedAt = DateTime.UtcNow,
                         }, connection);
                     }
+
+                    if (isReseed)
+                        await ConfirmFileAppliedCleanlyAsync(fileName, actions);
                 }
                 else
                 {

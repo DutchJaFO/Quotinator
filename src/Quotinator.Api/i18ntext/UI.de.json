@@ -30,6 +30,8 @@
   "NotificationReseedContentChangedBody": "Für {0} wurden neue Inhalte heruntergeladen, aber die Datenbank enthielt bereits Zitate, sodass sie nicht übernommen wurden. Führen Sie ein Reseed aus, um den gespeicherten Inhalt durch die aktualisierten Quellen zu ersetzen.",
   "NotificationReseedAfterResetTitle": "Die Datenbank enthält keine Zitate",
   "NotificationReseedAfterResetBody": "Die Datenbank wurde zurückgesetzt; dabei wird das Schema neu aufgebaut, ohne Inhalte erneut zu importieren. Führen Sie ein Reseed aus, um die mitgelieferten Quellen zu laden, oder importieren Sie stattdessen eigene Inhalte.",
+  "NotificationReseedFileAppliedTitle": "Quelldatei ohne Beanstandungen neu geladen",
+  "NotificationReseedFileAppliedBody": "{0} wurde neu geladen, ohne dass etwas zu prüfen blieb: {1} hinzugefügt und {2} aktualisiert.",
   "NotificationSummaryHeading": "Benachrichtigungen",
   "NotificationTypeInformation": "Information",
   "NotificationTypeWarning": "Warnung",

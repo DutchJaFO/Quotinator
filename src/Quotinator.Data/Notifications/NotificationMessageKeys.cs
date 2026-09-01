@@ -34,4 +34,15 @@ public static class NotificationMessageKeys
 
     /// <summary>Body for a reseed recommended because a Reset left the database with no content.</summary>
     public const string ReseedAfterResetBody = "NotificationReseedAfterResetBody";
+
+    /// <summary>Title for the confirmation that one file reseeded with nothing left to review (#302).</summary>
+    public const string ReseedFileAppliedTitle = "NotificationReseedFileAppliedTitle";
+
+    /// <summary>
+    /// Body for the confirmation that one file reseeded with nothing left to review. Takes the file
+    /// name as <c>{0}</c>, the number of rows added as <c>{1}</c>, and the number modified as
+    /// <c>{2}</c>. The per-entity-type breakdown behind those totals lives in the notification's
+    /// metadata payload, not in this text.
+    /// </summary>
+    public const string ReseedFileAppliedBody = "NotificationReseedFileAppliedBody";
 }
