@@ -15,9 +15,9 @@ confirming and completion. Found in #302's T1 pass (2026-09-01): a reseed took ~
 the row still read `Active` with an enabled **Run** button, and the first visible change was the
 finished result.
 
-**This plan needs refining before it can be executed.** Step 1 is an open design decision — whether the
-executing state is stored or transient — and it decides what the remaining steps and every test look
-like. Until it is answered, this is a plan to refine, not a plan to execute.
+**Step 1 is settled and this plan is ready to execute** (developer, 2026-09-01): the executing state
+lives in a **process-scoped in-memory registry**, not a stored column and not a per-circuit flag. See
+the research section below for the three-way comparison that decision was taken on.
 
 ## Background from #302's T1
 
@@ -78,38 +78,64 @@ a distributed-lock problem that a stored column would not have solved either.
 
 ## Steps
 
-### 1. Decide whether the executing state is stored or transient
+### 1. Decide where the executing state lives
 
-**Status:** ⬜ Not started — **blocks every step below**
+**Status:** ✅ Done — developer decision, 2026-09-01
 
-A transient per-circuit flag is far cheaper, but it is lost on a page refresh, invisible to any other
-session, and therefore does not actually prevent a second execution. A stored marker survives both, at
-the cost of a column and a migration.
+A **process-scoped in-memory registry**. Not a stored column (worse than doing nothing on requirement 4
+— a process killed mid-run strands a row, and the cleanup code cannot be proven without simulating a
+crash) and not a per-circuit flag (invisible across sessions, so it closes none of the double-execution
+half). See the research section above for the full comparison.
 
-The answer decides whether steps 2–4 involve a schema change, and it decides every test name below, so
-it is settled before the verification table is filled in — not during implementation.
-
-### 2. Add the executing state and render it
+### 2. Add the registry
 
 **Status:** ⬜ Not started
 
-A state distinct from `Active`/`Dismissed`/`Resolved`/`Expired`, rendered in `NotificationTable`'s
-Status column with a localised label in all three `UI.*.json` files.
+`NotificationExecutionState` in `Quotinator.Api.Startup`, registered `AddSingleton` — following
+`DatabaseHealthState`'s precedent exactly (a mutable process-wide state object injected into pages,
+`Program.cs:623`). `TryBegin(Guid)` admits the first caller and refuses any other until `End(Guid)`;
+`IsExecuting(Guid)` answers the display. Lock-guarded, since two circuits can call it at once.
 
-### 3. Prevent a second execution while one is in flight
+Kept in `Quotinator.Api` because nothing outside it consumes the state. Per CLAUDE.md's relocate-don't-
+duplicate rule, this moves to `Quotinator.Data` the moment a second project needs it, and not before.
 
-**Status:** ⬜ Not started
-
-Whether this is enforceable at all depends on step 1 — a transient flag cannot enforce it across a
-refresh or a second session.
-
-### 4. Decide what happens when execution fails or the process restarts mid-run
+### 3. Add `Executing` to the display status and render it
 
 **Status:** ⬜ Not started
 
-A notification must not be strandable as permanently "executing". A stored state needs an explicit
-answer here; a transient one gets it for free by disappearing, which is also why it cannot satisfy
-step 3.
+`NotificationDisplayStatus` gains `Executing`. `GetDisplayStatus` takes the executing fact as a
+parameter rather than reaching for the registry itself, staying a pure static testable without bUnit —
+the same shape it has today.
+
+**Precedence is deliberate: Dismissed → Expired → Executing → Active.** A row that finished and
+dismissed itself while still in the registry must read `Resolved`, not `Executing`; the window is real,
+since dismissal happens inside the action and `End` runs after it returns.
+
+Localised label in all three `UI.*.json` files, same commit.
+
+### 4. Guard the second execution
+
+**Status:** ⬜ Not started
+
+`ExecuteActionAsync` and `ExecuteChoiceActionAsync` both take the registry before calling the executor
+and release it in a `finally`, so a throwing action cannot strand the id within the process either. A
+refused call returns without executing.
+
+The Run control is not offered at all for a row that is executing — refusing after a click is a worse
+answer than not presenting the control, and a second session sees the same thing.
+
+### 5. Make the executing state actually visible to the caller
+
+**Status:** ⬜ Not started
+
+**This is the step that satisfies requirement 1, and it is the one most likely to silently not work.**
+Today the handler awaits the executor and only then re-renders, so setting a registry entry changes
+nothing the clicker sees. The render has to be flushed *before* the long call — `StateHasChanged`
+followed by a yield, so the circuit paints the `Executing` row rather than queuing it behind an
+11-second await.
+
+A unit test can prove the registry and the status; only a live run can prove the row actually repaints
+mid-action. Row 12 is that proof and is not substitutable by a unit test.
 
 ---
 
@@ -117,7 +143,27 @@ step 3.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | TBD — every row below is named once step 1 is decided | | |
+| 1 | ❌ | The registry admits the first caller | Unit test | `NotificationExecutionStateTests.TryBegin_FirstCaller_IsAdmitted` |
+| 2 | ❌ | It refuses a second caller while the first holds | Unit test | `NotificationExecutionStateTests.TryBegin_WhileHeld_IsRefused` |
+| 3 | ❌ | It admits again once the first releases | Unit test | `NotificationExecutionStateTests.TryBegin_AfterEnd_IsAdmittedAgain` |
+| 4 | ❌ | Two different notifications do not block each other | Unit test | `NotificationExecutionStateTests.TryBegin_DifferentIds_BothAdmitted` |
+| 5 | ❌ | Concurrent callers produce exactly one winner | Unit test | `NotificationExecutionStateTests.TryBegin_ConcurrentCallers_AdmitsExactlyOne` |
+| 6 | ❌ | An executing active row reads `Executing` | Unit test | `NotificationTableTests.GetDisplayStatus_Executing_ReportsExecuting` |
+| 7 | ❌ | A dismissed row reads its dismiss reason even while still in the registry | Unit test | `NotificationTableTests.GetDisplayStatus_DismissedWhileExecuting_ReportsTheDismissReason` |
+| 8 | ❌ | An expired row still reads `Expired` | Unit test | `NotificationTableTests.GetDisplayStatus_ExpiredWhileExecuting_ReportsExpired` |
+| 9 | ❌ | `Executing` has a non-empty label in all three languages | Unit test | `TranslationCompletenessTests` (existing) + `NotificationTableTests.EveryDisplayStatus_HasATranslationKey` |
+| 10 | ❌ | The Run control is not offered for an executing row | Unit test | `NotificationTableTests.ShowsRunControl_WhileExecuting_IsFalse` |
+| 11 | ❌ | A second execution of the same notification does not reach the executor | Unit test | `NotificationsPageTests.ExecuteAction_WhileExecuting_DoesNotCallTheExecutorAgain` |
+| 12 | ❌ | The row visibly reads `Executing` *during* a real run, not only after | Live (T2) + screenshot | New T2 document: start a reseed from `/notifications`, screenshot the row mid-run |
+| 13 | ❌ | A second click during a run produces exactly one reseed | Live (T2) | same document: the container log holds exactly one `reseed requested` |
+| 14 | ❌ | The row reads `Done`, not `Executing`, once the action completes | Live (T2) | same document, after the run settles |
+| 15 | ❌ | A restart during a run leaves no row reading `Executing` | Live (T2) | same document: restart mid-reseed, then read the page — requirement 4, free by construction, asserted rather than assumed |
+| 16 | ❌ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
+| 17 | ❌ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
+
+**Row 12 is the one that cannot be replaced by a unit test.** Every row above it can pass against an
+implementation whose UI never repaints until the action finishes — which is the exact defect this issue
+was raised for. Absence of a repaint proves nothing; row 12 asserts a positive.
 
 **The test list is completed before implementation starts, not during it** — #302's own retrospective
 found its table growing from 22 rows to 29 mid-flight, which is what the Definition of done's
