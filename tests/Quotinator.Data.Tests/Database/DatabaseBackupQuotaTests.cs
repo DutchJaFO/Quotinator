@@ -264,7 +264,7 @@ public class DatabaseBackupQuotaTests
         int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent, ILogger<DatabaseInitializer>? logger = null)
         => new DatabaseInitializer(new SqliteConnectionFactory(_dbPath), NewOptions(quotaPercent), [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            logger ?? NullLogger<DatabaseInitializer>.Instance);
+            logger ?? NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider());
 
     /// <summary>
     /// Records whether the destructive reset hook actually ran, which is the only way to tell a refusal
@@ -273,7 +273,7 @@ public class DatabaseBackupQuotaTests
     private sealed class RecordingInitializer(DatabaseOptions options, string dbPath)
         : DatabaseInitializer(new SqliteConnectionFactory(dbPath), options, [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            NullLogger<DatabaseInitializer>.Instance)
+            NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider())
     {
         public bool ResetHookRan { get; private set; }
 

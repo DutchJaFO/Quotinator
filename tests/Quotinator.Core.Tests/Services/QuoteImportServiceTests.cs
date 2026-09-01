@@ -68,6 +68,7 @@ public class QuoteImportServiceTests
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            new AppVersionTracker(_factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
             QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
     }

@@ -76,6 +76,7 @@ public class SourceCacheWiringTests
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
             QuotinatorMigrations.Baseline);
     }
 
@@ -176,6 +177,7 @@ public class SourceCacheWiringTests
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
             QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
@@ -213,6 +215,7 @@ public class SourceCacheWiringTests
             autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
             QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 

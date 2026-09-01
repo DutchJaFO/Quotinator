@@ -86,6 +86,7 @@ public class FileResourceCaptureTests
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             fileResources,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
             QuotinatorMigrations.Baseline);
 
         await db.InitialiseAsync();

@@ -75,6 +75,7 @@ public class ImportBatchesTests
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
             useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 

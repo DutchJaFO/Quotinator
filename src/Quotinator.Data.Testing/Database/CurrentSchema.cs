@@ -42,7 +42,8 @@ public static class CurrentSchema
         DatabaseInitializer initializer = new(
             factory, options, migrations: [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            NullLogger<DatabaseInitializer>.Instance);
+            NullLogger<DatabaseInitializer>.Instance,
+            NoOpDiskSpaceProvider.Instance);
 
         await initializer.InitialiseAsync();
     }

@@ -60,10 +60,11 @@ public class DatabaseInitializerTests
         bool autoPurgeBundledImportActions = false, bool autoPurgeUserImportActions = false,
         IAuditEntryWriter? auditWriter = null,
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
-        ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false)
+        ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false,
+        IAppVersionTracker? appVersionTracker = null)
         => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline, ruleFileOverridePathResolver, sourceFileOverrideRegistry,
             autoPurgeBundledImportActions, autoPurgeUserImportActions, auditWriter, diskSpaceProvider, maxBackupStorageGb,
-            sourceCacheUpdater, autoUpdateSources);
+            sourceCacheUpdater, autoUpdateSources, appVersionTracker);
 
     private QuotinatorDatabaseInitializer CreateInitializer(
         IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline,
@@ -71,7 +72,8 @@ public class DatabaseInitializerTests
         bool autoPurgeBundledImportActions = false, bool autoPurgeUserImportActions = false,
         IAuditEntryWriter? auditWriter = null,
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
-        ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false)
+        ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false,
+        IAppVersionTracker? appVersionTracker = null)
     {
         SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
         DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1 };
@@ -100,8 +102,10 @@ public class DatabaseInitializerTests
             TestNotificationReader.Create(factory),
             new NotificationWriter(factory),
             NoOpNotificationTextSource.Instance,
-            useBaseline ? QuotinatorMigrations.Baseline : null,
-            diskSpaceProvider ?? NoOpDiskSpaceProvider.Instance);
+            appVersionTracker ?? new AppVersionTracker(factory),
+            new VersionService(),
+            diskSpaceProvider ?? NoOpDiskSpaceProvider.Instance,
+            useBaseline ? QuotinatorMigrations.Baseline : null);
     }
 
     /// <summary>
@@ -1344,6 +1348,7 @@ public class DatabaseInitializerTests
             NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance,
             NoOpFileResourceRepository.Instance,
             NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+            new AppVersionTracker(factory), new VersionService(), NoOpDiskSpaceProvider.Instance,
             QuotinatorMigrations.Baseline);
         return (db, dbPath);
     }

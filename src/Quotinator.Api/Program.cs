@@ -591,8 +591,10 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<INotificationReader>(),
         sp.GetRequiredService<INotificationWriter>(),
         sp.GetRequiredService<INotificationTextSource>(),
-        QuotinatorMigrations.Baseline,
-        sp.GetRequiredService<IDiskSpaceProvider>());
+        sp.GetRequiredService<IAppVersionTracker>(),
+        sp.GetRequiredService<IVersionService>(),
+        sp.GetRequiredService<IDiskSpaceProvider>(),
+        QuotinatorMigrations.Baseline);
 });
 // #285: resolves a Conversation's per-line quote/stage-direction/sound-cue lookups via
 // JoinQueryRepository/IJoinStrategy per ADR 017.

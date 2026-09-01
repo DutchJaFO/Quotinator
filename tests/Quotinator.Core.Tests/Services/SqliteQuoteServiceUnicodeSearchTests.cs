@@ -97,7 +97,8 @@ public class SqliteQuoteServiceUnicodeSearchTests
                               NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
                               autoPurgeBundledImportActions: false, autoPurgeUserImportActions: false,
                               NoOpRuleFileOverridePathResolver.Instance, NoOpSourceFileOverrideRegistry.Instance, NoOpFileResourceRepository.Instance,
-                              NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance);
+                              NoOpNotificationReader.Instance, NoOpNotificationWriter.Instance, NoOpNotificationTextSource.Instance,
+                              new AppVersionTracker(_factory), new VersionService(), NoOpDiskSpaceProvider.Instance);
         await db.InitialiseAsync();
     }
 

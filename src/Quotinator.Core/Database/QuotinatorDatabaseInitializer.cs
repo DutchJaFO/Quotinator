@@ -48,8 +48,10 @@ namespace Quotinator.Core.Database;
 /// <param name="notificationReader">Supplies the active notifications trigger 1's dedupe compares against (#304).</param>
 /// <param name="notificationWriter">Writes the reseed recommendation when source content changed under an already-populated database (#304).</param>
 /// <param name="notificationTextSource">Resolves the recommendation's title and body in every language, so the text is stored per language rather than in whatever culture the host defaulted to (#304, #319).</param>
+/// <param name="appVersionTracker">Supplies the <c>System_AppVersion</c> row every notification this initializer writes is attributed to, recording one when none exists yet (#302).</param>
+/// <param name="versionService">Names the running application and version, for the row <paramref name="appVersionTracker"/> records when none exists yet (#302).</param>
+/// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277).</param>
 /// <param name="baseline">Optional consolidated DDL for Quotinator.Core's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
-/// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277). Defaults to a real implementation when omitted.</param>
 public sealed class QuotinatorDatabaseInitializer(
     IDbConnectionFactory factory,
     DatabaseOptions options,
@@ -72,8 +74,10 @@ public sealed class QuotinatorDatabaseInitializer(
     INotificationReader notificationReader,
     INotificationWriter notificationWriter,
     INotificationTextSource notificationTextSource,
-    SchemaBaseline? baseline = null,
-    IDiskSpaceProvider? diskSpaceProvider = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, baseline, diskSpaceProvider)
+    IAppVersionTracker appVersionTracker,
+    IVersionService versionService,
+    IDiskSpaceProvider diskSpaceProvider,
+    SchemaBaseline? baseline = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, diskSpaceProvider, baseline)
 {
     private readonly IReadOnlyList<SeedBatch> _batches = batches;
     private readonly IImportBatchRepository _importBatches = importBatches;
@@ -90,6 +94,8 @@ public sealed class QuotinatorDatabaseInitializer(
     private readonly INotificationReader _notificationReader = notificationReader;
     private readonly INotificationWriter _notificationWriter = notificationWriter;
     private readonly INotificationTextSource _notificationTextSource = notificationTextSource;
+    private readonly IAppVersionTracker _appVersionTracker = appVersionTracker;
+    private readonly IVersionService _versionService = versionService;
 
     /// <inheritdoc/>
     protected override async Task OnInitialisedAsync(SqliteConnection connection)

@@ -183,7 +183,7 @@ public class DatabaseBackupOutcomeTests
 
         return new DatabaseInitializer(factory, options, [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            NullLogger<DatabaseInitializer>.Instance, baseline: null, diskSpaceProvider);
+            NullLogger<DatabaseInitializer>.Instance, diskSpaceProvider ?? new DiskSpaceProvider());
     }
 
     private sealed class ZeroFreeSpaceProvider : IDiskSpaceProvider

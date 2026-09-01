@@ -29,7 +29,7 @@ public class DatabaseInitializerOwnershipTests
         };
         return new DatabaseInitializer(factory, options, consumerMigrations,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            NullLogger<DatabaseInitializer>.Instance, baseline);
+            NullLogger<DatabaseInitializer>.Instance, NoOpDiskSpaceProvider.Instance, baseline);
     }
 
     private static async Task<List<string>> DumpTableSchemaAsync(SqliteConnection conn, string table)
@@ -802,7 +802,7 @@ public class DatabaseInitializerOwnershipTests
     // minimal test-only subclass exists purely to exercise that method directly.
     private sealed class ResettableTestInitializer(
         IDbConnectionFactory factory, DatabaseOptions options, IReadOnlyList<SchemaMigration> migrations,
-        IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<DatabaseInitializer> logger) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger)
+        IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<DatabaseInitializer> logger) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, NoOpDiskSpaceProvider.Instance)
     {
         protected override Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
             => DropAndRebuildAsync(connection, preserveSchemaVersion);

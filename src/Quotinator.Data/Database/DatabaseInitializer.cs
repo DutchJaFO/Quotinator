@@ -24,8 +24,8 @@ namespace Quotinator.Data.Database;
 /// <param name="auditWriter">Writes audit entries for reseed and reset operations.</param>
 /// <param name="callerContext">Provides the agent identifier for audit entries.</param>
 /// <param name="logger">Logger for startup diagnostics.</param>
+/// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277).</param>
 /// <param name="baseline">Optional consolidated DDL for the consuming project's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
-/// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277). Defaults to a real <see cref="Database.DiskSpaceProvider"/> when omitted — deliberately trailing after <paramref name="baseline"/> so existing callers that stop there are unaffected.</param>
 public class DatabaseInitializer(
     IDbConnectionFactory factory,
     DatabaseOptions options,
@@ -33,15 +33,10 @@ public class DatabaseInitializer(
     IAuditEntryWriter auditWriter,
     ICallerContext callerContext,
     ILogger<DatabaseInitializer> logger,
-    SchemaBaseline? baseline = null,
-    IDiskSpaceProvider? diskSpaceProvider = null) : IDatabaseInitializer
+    IDiskSpaceProvider diskSpaceProvider,
+    SchemaBaseline? baseline = null) : IDatabaseInitializer
 {
-    // Optional trailing param defaulting to a real instance rather than a required DI-registered
-    // dependency: the ~17 existing call sites across the codebase (production and test) construct
-    // this type positionally up to baseline and have nothing to do with the storage pre-flight check
-    // (#277) — forcing them all to thread a new required parameter through would be pure churn.
-    // Program.cs's own real wiring still resolves IDiskSpaceProvider from DI and passes it explicitly.
-    private readonly IDiskSpaceProvider _diskSpaceProvider = diskSpaceProvider ?? new DiskSpaceProvider();
+    private readonly IDiskSpaceProvider _diskSpaceProvider = diskSpaceProvider;
 
     // Quotinator.Data's own migrations, for its own tables (Audit_Entry/Audit_Change/Import_Conflict/
     // Import_Action/Import_SourceFileOverride currently; any future Import_/Audit_/System_-prefixed
