@@ -68,7 +68,7 @@ exists. Reviewed against the code 2026-08-30.**
 
 ### 1. Tell the seeding loop whether this run is a reseed
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `SeedIfEmptyInternalAsync(..., bool isReseed)`
 
 `SeedIfEmptyInternalAsync` is shared by cold start (`OnInitialisedAsync` → `SeedIfEmptyAsync`) and by
 reseed (`OnReseedAsync`), and nothing in it says which caller invoked it — so the issue's "reseed only,
@@ -128,7 +128,7 @@ which is what keeps a rebuild affordable here rather than something to defer.
 
 ### 4. Add the notification's title and body in all three languages
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `ReseedFileAppliedTitle`/`ReseedFileAppliedBody`
 
 Two new keys on `NotificationMessageKeys` and their strings in `UI.en-GB.json`, `UI.nl.json` and
 `UI.de.json`, resolved at write time through `NotificationTranslations.Original` and
@@ -145,7 +145,7 @@ enumerate the types now.
 
 ### 5. Write the per-file success notification from the clean-apply branch
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `ConfirmFileAppliedCleanlyAsync`
 
 In the `applyResult is null` branch, one `Success` notification per file, gated on step 1's flag.
 
@@ -167,7 +167,7 @@ carrying that trigger would be dismissed by the very reseed that wrote it.
 
 ### 6. Know the version before writing, rather than falling back to null
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `CurrentAppVersionIdAsync`
 
 **Developer direction, 2026-08-30: the app version must be known before any notification is added.**
 `appVersionId: null` is not an acceptable outcome here — the initializer establishes the version, then
@@ -214,7 +214,7 @@ gives #302.
 
 ### 7. Write nothing for a reseed that touches zero files
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — existing early return, now proven
 
 E.g. no configured sources. No notification at all, not an empty one. `SeedIfEmptyInternalAsync`'s
 existing `effectiveBatches.Count == 0` early return already produces this; the step is to prove it
@@ -222,7 +222,7 @@ holds rather than to add code.
 
 ### 8. Expose `AppVersionId` on the notification response
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — response, endpoint description and `api-endpoints.md`
 
 **Developer decision, 2026-08-30.** `NotificationResponse` carries `Metadata`, `MetadataKind`, expiry
 and dismissal, but not provenance — so the guarantee step 6 establishes is currently observable only
@@ -239,7 +239,7 @@ it found a notification state unobservable outside the Blazor page.
 
 ### 9. Make `diskSpaceProvider` a required dependency
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — required on both constructors, guarded by a test
 
 **Developer decision, 2026-08-30.** `DatabaseInitializer`'s `IDiskSpaceProvider? diskSpaceProvider = null`
 / `?? new DiskSpaceProvider()` is the same defect step 6 was originally about to copy, already shipped.
@@ -286,25 +286,32 @@ is already converted and listed.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | One `Success` notification per file that reseeds with nothing left to review | Unit test | `DatabaseInitializerTests.Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile` |
-| 2 | ❌ | No per-file notification on the first empty-database seed | Unit test | `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification` |
-| 3 | ❌ | No per-file notification for a file left awaiting review | Unit test | `DatabaseInitializerTests.Reseed_FileLeftAwaitingReview_WritesNoSuccessNotification` |
-| 4 | ❌ | No notification for a reseed that touches zero files | Unit test | `DatabaseInitializerTests.Reseed_NoConfiguredFiles_WritesNoNotification` |
-| 5 | ❌ | An identical per-file result is not written again while the first notification is still active | Unit test | `DatabaseInitializerTests.Reseed_TwiceWithNoChange_DoesNotRewriteTheActiveNotification` |
-| 6 | ❌ | After the operator dismisses it, the next reseed confirms the same file again | Unit test | `DatabaseInitializerTests.Reseed_AfterDismissal_WritesTheConfirmationAgain` |
-| 7 | ❌ | A file whose added/modified counts changed notifies separately rather than being suppressed | Unit test | `DatabaseInitializerTests.Reseed_WithDifferentCounts_WritesASecondNotification` |
-| 8 | ❌ | The notification has no expiry and is not dismissed by the reseed that wrote it | Unit test | `DatabaseInitializerTests.Reseed_FileAppliedCleanly_NotificationHasNoExpiryAndSurvivesReseedDismissal` |
-| 9 | ❌ | An already-recorded app version is the one stamped on the notification, not a second row | Unit test | `DatabaseInitializerTests.Reseed_WithRecordedVersion_StampsThatVersionOnTheNotification` |
-| 10 | ❌ | With no version ever recorded, one is recorded before the notification is written, and `AppVersionId` is never null | Unit test | `DatabaseInitializerTests.Reseed_WithNoRecordedVersion_RecordsOneBeforeWriting` |
-| 11 | ❌ | The breakdown counts every entity type the file added or modified, not quotes alone | Unit test | `DatabaseInitializerTests.Reseed_FileAddingNonQuoteEntities_CountsThemInTheBreakdown` |
-| 12 | ❌ | An entity type with no added or modified rows is omitted rather than reported as zero | Unit test | `DatabaseInitializerTests.Reseed_EntityTypeWithNoChanges_IsAbsentFromTheBreakdown` |
+| 1 | ✅ | One `Success` notification per file that reseeds with nothing left to review | Unit test | `DatabaseInitializerTests.Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile` |
+| 2 | ✅ | No per-file notification on the first empty-database seed | Unit test | `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification` |
+| 3 | ✅ | No per-file notification for a file left awaiting review | Unit test | `DatabaseInitializerTests.Reseed_FileLeftAwaitingReview_WritesNoSuccessNotification` |
+| 4 | ✅ | No notification for a reseed that touches zero files | Unit test | `DatabaseInitializerTests.Reseed_NoConfiguredFiles_WritesNoNotification` |
+| 5 | ✅ | An identical per-file result is not written again while the first notification is still active | Unit test | `DatabaseInitializerTests.Reseed_TwiceWithNoChange_DoesNotRewriteTheActiveNotification` |
+| 6 | ✅ | After the operator dismisses it, the next reseed confirms the same file again | Unit test | `DatabaseInitializerTests.Reseed_AfterDismissal_WritesTheConfirmationAgain` |
+| 7 | ✅ | A file whose added/modified counts changed notifies separately rather than being suppressed | Unit test | `ReseedFileAppliedMetadataTests.Identity_DiffersByBreakdown_AndIsOrderIndependent` |
+| 8 | ✅ | The notification has no expiry and is not dismissed by the reseed that wrote it | Unit test | `DatabaseInitializerTests.Reseed_FileAppliedCleanly_NotificationHasNoExpiryAndSurvivesReseedDismissal` |
+| 9 | ✅ | An already-recorded app version is the one stamped on the notification, not a second row | Unit test | `DatabaseInitializerTests.Reseed_WithRecordedVersion_StampsThatVersionOnTheNotification` |
+| 10 | ✅ | With no version ever recorded, one is recorded before the notification is written, and `AppVersionId` is never null | Unit test | `DatabaseInitializerTests.Reseed_WithNoRecordedVersion_RecordsOneBeforeWriting` |
+| 11 | ✅ | The breakdown counts every entity type the file added or modified, not quotes alone | Unit test | `DatabaseInitializerTests.Reseed_FileAddingNonQuoteEntities_CountsThemInTheBreakdown` |
+| 12 | ✅ | An entity type with no added or modified rows is omitted rather than reported as zero | Unit test | `DatabaseInitializerTests.Reseed_EntityTypeWithNoChanges_IsAbsentFromTheBreakdown` |
 | 13 | ✅ | Payload round-trips the file name and the per-entity breakdown through the `Metadata` column | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown` |
 | 14 | ✅ | Two different breakdowns produce different identities, and grouping order does not affect identity | Unit test | `ReseedFileAppliedMetadataTests.Identity_DiffersByBreakdown_AndIsOrderIndependent` |
 | 15 | ✅ | The new kind has a registered payload type | Unit test | `NotificationMetadataKindsTests` (existing guard; fails on an unregistered member) |
 | 16 | ✅ | The new migration and the baseline accept the same `MetadataKind` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` |
 | 17 | ✅ | The new migration and the baseline produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
-| 18 | ❌ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
-| 19 | ❌ | `GET /api/v1/notifications` returns `appVersionId` for a notification that carries one | Unit test | `NotificationEndpointsTests.GetNotifications_ReturnsAppVersionId` |
-| 20 | ❌ | Neither initializer constructor makes a DI-suppliable service dependency optional | Unit test | `RepositoryStructureTests.InitializerConstructors_DoNotMakeAServiceDependencyOptional` |
+| 18 | ✅ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
+| 19 | ✅ | `GET /api/v1/notifications` returns `appVersionId` for a notification that carries one | Unit test | `NotificationEndpointsTests.GetNotifications_ReturnsAppVersionId` |
+| 20 | ✅ | Neither initializer constructor makes a DI-suppliable service dependency optional | Unit test | `RepositoryStructureTests.InitializerConstructors_DoNotMakeAServiceDependencyOptional` |
 | 21 | ❌ | A real reseed against a real database writes one notification per cleanly-applied file, with its breakdown and provenance readable through the API | Automated (T2) | `docs/automated-testing/notifications-and-changelog/11-clean-reseed-confirmation.md` |
 | 22 | ❌ | The notifications render in the startup modal and on `/notifications` after a live reseed | Live | T1: run a reseed from `/notifications`, confirm one `Success` notification per cleanly-applied file in both surfaces |
+
+**Row 7 is verified at the payload level, not through a live reseed** — recorded rather than left as a
+silent substitution. The row was planned as `Reseed_WithDifferentCounts_WritesASecondNotification`, but
+a reseed of the same file always produces the same counts (the file's content is what decides them), so
+there is no way to make a real reseed differ without editing bundled content mid-test. The identity test
+proves the same property where it actually lives: a different breakdown is a different identity, which
+is what the dedupe compares.
