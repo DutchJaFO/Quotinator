@@ -1,6 +1,6 @@
 # #303 — Notification + minimal review page: alert when a reseed leaves import actions pending review
 
-**Status:** In progress (step 9)
+**Status:** In progress (step 10)
 **GitHub issue:** #303
 **Tiers required:** T1, T2
 **Depends on:** #278, #302, #304, #312, #319
@@ -214,12 +214,46 @@ Code-behind partial class per CLAUDE.md's Blazor rules — no inline `@code`, no
 
 ### 9. Give each row a basic decide action
 
+**Status:** ✅ Done — `ImportReview.DecisionRows`, keep/take per row
+
+Two controls per row — keep existing, take incoming — each resolving the **whole action**.
+
+**Developer decision, 2026-09-01: they resolve only the fields actually in conflict**, which is the
+degenerate case of the git model this is eventually meant to become: `--ours`/`--theirs` resolve the
+conflicted hunks and leave the rest of the merge alone. The action's own `AmbiguousFields` is that set.
+Deciding every *decidable* field instead would overwrite fields nobody was asked about — including
+nulling one the incoming file simply does not carry.
+
+A `Blocked` action has no ambiguous fields: it is held because it would touch a protected field, not
+because two values disagree. A whole-action decision therefore has nothing to resolve for it, and must
+say so rather than reporting success for a no-op.
+
+The page reads `IImportActionService.GetPagedAsync`, not `IImportActionReader`'s — the service returns
+`ImportActionSummaryResponse`, which carries `AmbiguousFields`/`ExistingFields`/`IncomingFields`. The
+reader returns raw entities, which do not. Step 8 used the reader and is corrected here.
+
+No side-by-side diff view, no per-field control, no bulk actions — all #66's scope.
+
+### 10. Give the notification the same basic options
+
 **Status:** ⬜ Not started
 
-The field-level keep/replace/custom decision `POST /import/actions/{id}/decide` already accepts. No
-side-by-side diff view, no bulk actions, no inline merge editor — all #66's scope.
+**Developer decision, 2026-09-01: the controls live in both places.** The alert carries the coarse,
+whole-batch form of the same two options; the page carries them per action.
 
-### 10. Register the page in navigation and the health gate
+The alert is where an operator first learns of the conflict, so making them navigate before they can
+act on "keep everything as it is" is friction for the common case. The page is where a mixed backlog
+gets cleared one action at a time.
+
+Runs through `INotificationActionExecutor`, the same mechanism #304's Run button uses, with the alert's
+own `BatchId` payload naming what to act on.
+
+**This is the interim shape, not the destination.** The notification will eventually point at an
+item-by-item resolution UX (#66) rather than carrying the decision itself; these two options exist so
+#303 is workable in the meantime, given the expectation that most conflicts are fixed by correcting the
+incoming file and reseeding rather than resolved by hand.
+
+### 11. Register the page in navigation and the health gate
 
 **Status:** ⬜ Not started
 
@@ -227,7 +261,7 @@ side-by-side diff view, no bulk actions, no inline merge editor — all #66's sc
 `"/notifications"`. The page must stay reachable during a degraded startup, which is exactly when an
 operator needs to see what is unresolved.
 
-### 11. Link the notification to the review page
+### 12. Link the notification to the review page
 
 **Status:** ⬜ Not started
 
@@ -265,12 +299,17 @@ deliberately not here — see Scope changes 6.
 | 23 | ✅ | The review page lists every active `Pending`/`Blocked`/`Stale` action across all batches | Unit test | `ImportReviewPageTests.Lists_EveryActiveActionAcrossBatches` |
 | 24 | ✅ | Deciding a row removes it from the active list | Unit test | `ImportReviewPageTests.DecidedRow_LeavesTheActiveList` |
 | 25 | ✅ | A row whose stored status cannot be parsed is not shown as awaiting review | Unit test | `ImportReviewPageTests.UnparseableStatus_IsNotTreatedAsAwaitingReview` |
-| 26 | ❌ | The page is exempt in `DatabaseHealthGateMiddleware` | Unit test | `DatabaseHealthGateMiddlewareTests` (alongside the existing `/notifications` case) |
-| 27 | ❌ | All four seeding variants behave correctly against real configuration | Automated (T2) | `automated-testing/import-and-staged-actions/NN-pending-review-alert.md` |
-| 28 | ❌ | The alert reaches `/notifications` and the startup modal, and a clean seed produces none | Automated (T2) | same document — modal asserted after a restart, per #302's step 8 |
-| 29 | ❌ | The page renders during a degraded startup rather than 500 | Automated (T2) | same document, degraded container |
-| 30 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: after a reseed supersedes an earlier alert, the inactive row reads `Obsolete`, not `Dismissed` |
-| 31 | ❌ | The alert, the page and the link render correctly | Live | T1: stage a batch with conflicts, click through from the alert, decide a row |
+| 26 | ✅ | A whole-action decision covers only the conflicted fields, not every decidable one | Unit test | `ImportReviewPageTests.Decision_CoversOnlyTheAmbiguousFields` |
+| 27 | ✅ | Taking the incoming side sets the opposite choice on the same fields | Unit test | `ImportReviewPageTests.Decision_TakingIncoming_SetsTheOppositeChoice` |
+| 28 | ✅ | An action with nothing in conflict produces no decision rather than an empty success | Unit test | `ImportReviewPageTests.Decision_ActionWithNoAmbiguousFields_ProducesNoRows` |
+| 29 | ❌ | The notification offers the same keep/take options at batch scope | Unit test | `NotificationActionExecutorTests.ImportReviewResolved_KeepExisting_DecidesEveryActionInTheBatch` |
+| 30 | ❌ | The notification's options resolve only conflicted fields, as the page's do | Unit test | `NotificationActionExecutorTests.ImportReviewResolved_DecidesOnlyAmbiguousFields` |
+| 31 | ❌ | The page is exempt in `DatabaseHealthGateMiddleware` | Unit test | `DatabaseHealthGateMiddlewareTests` (alongside the existing `/notifications` case) |
+| 32 | ❌ | All four seeding variants behave correctly against real configuration | Automated (T2) | `automated-testing/import-and-staged-actions/NN-pending-review-alert.md` |
+| 33 | ❌ | The alert reaches `/notifications` and the startup modal, and a clean seed produces none | Automated (T2) | same document — modal asserted after a restart, per #302's step 8 |
+| 34 | ❌ | The page renders during a degraded startup rather than 500 | Automated (T2) | same document, degraded container |
+| 35 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: after a reseed supersedes an earlier alert, the inactive row reads `Obsolete`, not `Dismissed` |
+| 36 | ❌ | The alert, its options, the page and the link render correctly | Live | T1: stage a batch with conflicts, use an option from the alert, click through, decide a row |
 
 **The four seeding variants (rows 20) are not optional.** #303 writes from the same seeding loop as
 #302, where that matrix found a defect no single-variant test reached — no files, bundled only, user
