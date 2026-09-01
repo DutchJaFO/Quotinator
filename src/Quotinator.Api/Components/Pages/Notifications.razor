@@ -26,5 +26,5 @@ else if (FilteredNotifications.Count == 0)
 }
 else
 {
-    <NotificationTable Notifications="FilteredNotifications" ShowDismissAction="true" OnDismiss="DismissAsync" ShowActionColumn="true" OnExecuteAction="ExecuteActionAsync" />
+    <NotificationTable Notifications="FilteredNotifications" ShowDismissAction="true" OnDismiss="DismissAsync" ShowActionColumn="true" OnExecuteAction="ExecuteActionAsync" OnExecuteChoiceAction="ExecuteChoiceActionAsync" />
 }

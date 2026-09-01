@@ -114,6 +114,21 @@ public partial class Notifications
         await LoadAsync();
     }
 
+    /// <summary>#303: the same path, for an action whose outcome the operator had to choose between.</summary>
+    private async Task ExecuteChoiceActionAsync((Guid Id, FieldResolutionChoice Choice) request)
+    {
+        NotificationEntity? notification = AllNotifications.FirstOrDefault(n => n.Id == request.Id);
+        if (notification?.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger)
+        {
+            NotificationMetadataDto? metadata =
+                NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
+
+            await ActionExecutor.ExecuteAsync(trigger, metadata, request.Choice);
+        }
+
+        await LoadAsync();
+    }
+
     private void SetFilter(NotificationFilterMode mode) => Filter = mode;
 
     private string FilterButtonClass(NotificationFilterMode mode) =>

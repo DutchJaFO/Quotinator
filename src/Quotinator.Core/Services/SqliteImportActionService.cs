@@ -128,6 +128,31 @@ public sealed class SqliteImportActionService(
     }
 
     /// <inheritdoc/>
+    public async Task<int> DecideBatchAsync(string batchId, FieldResolutionChoice choice, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<ImportActionEntity> actions = await _actionReader.GetAllForBatchAsync(batchId);
+
+        List<ImportActionFieldRowDto> rows = [.. actions
+            .SelectMany(action => ComputeAmbiguousFields(action)
+                .Select(field => new ImportActionFieldRowDto
+                {
+                    ActionId   = action.Id,
+                    EntityId   = action.EntityId,
+                    EntityType = action.EntityType,
+                    Field      = field,
+                    Decision   = choice,
+                }))];
+
+        // Nothing conflicted means nothing this can settle — a batch of Blocked completeness holds
+        // needs #66's per-item route, and reporting it as decided would be a lie the operator acts on.
+        if (rows.Count == 0) return 0;
+
+        await BulkDecideAsync(batchId, rows, cancellationToken);
+
+        return rows.Select(row => row.ActionId).Distinct().Count();
+    }
+
+    /// <inheritdoc/>
     public async Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRowDto> rows, CancellationToken cancellationToken = default)
     {
         Dictionary<Guid, ImportActionEntity> batchActions = (await _actionReader.GetAllForBatchAsync(batchId)).ToDictionary(a => a.Id);

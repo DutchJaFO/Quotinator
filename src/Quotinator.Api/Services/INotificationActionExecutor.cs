@@ -34,5 +34,11 @@ internal interface INotificationActionExecutor
     /// a database row.
     /// </para>
     /// </param>
-    Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null);
+    /// <param name="choice">
+    /// Which side wins, for a trigger whose action offers more than one outcome (#303's
+    /// <see cref="NotificationDismissTrigger.ImportReviewResolved"/> — keep what is stored, or take what
+    /// the file brought). <see langword="null"/> for every trigger with a single outcome; a trigger that
+    /// needs one and does not get it throws rather than picking a side on the operator's behalf.
+    /// </param>
+    Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null);
 }

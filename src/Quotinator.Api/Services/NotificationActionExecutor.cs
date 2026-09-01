@@ -16,20 +16,23 @@ namespace Quotinator.Api.Services;
 /// <param name="appVersionTracker">Re-populates <c>System_AppVersion</c> after a Reset, matching <c>AdminEndpoints.cs</c>'s own reset-success wiring (#81).</param>
 /// <param name="versionService">Supplies the current version for <paramref name="appVersionTracker"/>.</param>
 /// <param name="logger">Logs a non-fatal warning if <paramref name="appVersionTracker"/>'s write fails.</param>
+/// <param name="importActions">Resolves a staged batch for <see cref="NotificationDismissTrigger.ImportReviewResolved"/> (#303).</param>
 internal sealed class NotificationActionExecutor(
     IDatabaseInitializer databaseInitializer, DatabaseHealthState databaseHealth, INotificationWriter notificationWriter,
-    IAppVersionTracker appVersionTracker, IVersionService versionService, ILogger<NotificationActionExecutor> logger) : INotificationActionExecutor
+    IAppVersionTracker appVersionTracker, IVersionService versionService, ILogger<NotificationActionExecutor> logger,
+    IImportActionService importActions) : INotificationActionExecutor
 {
     /// <inheritdoc/>
     public bool CanExecute(NotificationDismissTrigger trigger) => trigger switch
     {
         NotificationDismissTrigger.DatabaseReset => true,
         NotificationDismissTrigger.Reseed         => true,
+        NotificationDismissTrigger.ImportReviewResolved => true,
         _                                         => false,
     };
 
     /// <inheritdoc/>
-    public async Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null)
+    public async Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null)
     {
         switch (trigger)
         {
@@ -69,6 +72,24 @@ internal sealed class NotificationActionExecutor(
                 await databaseInitializer.ReseedAsync();
                 await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
                 break;
+            // #303: the coarse, whole-batch form of the two options the review page offers per action —
+            // keep everything as stored, or take everything the file brought. Interim by design: the
+            // notification will eventually point at an item-by-item resolution UX (#66) rather than
+            // deciding here, and these exist so the common case (fix the file, reseed) is not the only
+            // route out of a conflict.
+            case NotificationDismissTrigger.ImportReviewResolved:
+            {
+                if (metadata is not ImportReviewPendingMetadataDto review)
+                    throw new InvalidOperationException("An import-review action needs the alert's own payload to know which batch it resolves.");
+
+                // No default side. Choosing one here would silently overwrite the operator's data with
+                // whichever way the code happened to lean.
+                if (choice is not FieldResolutionChoice resolution)
+                    throw new InvalidOperationException("An import-review action needs an explicit choice — keeping and replacing are not interchangeable.");
+
+                await importActions.DecideBatchAsync(review.BatchId, resolution);
+                break;
+            }
             default:
                 throw new NotSupportedException($"No executable action is wired up for trigger '{trigger}'.");
         }

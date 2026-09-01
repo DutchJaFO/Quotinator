@@ -39,6 +39,14 @@ public partial class NotificationTable
     [Parameter] public EventCallback<Guid> OnExecuteAction { get; set; }
 
     /// <summary>
+    /// Raised instead of <see cref="OnExecuteAction"/> for an action with more than one outcome (#303),
+    /// carrying which side the operator chose. Separate rather than folded into the callback above so
+    /// every existing single-outcome action keeps a signature that cannot express a choice it does not
+    /// have.
+    /// </summary>
+    [Parameter] public EventCallback<(Guid Id, FieldResolutionChoice Choice)> OnExecuteChoiceAction { get; set; }
+
+    /// <summary>
     /// The three mutually-exclusive display states a notification's Status column/filter can show.
     /// Not a persisted column — computed from <see cref="NotificationEntity.IsDismissed"/>/
     /// <see cref="NotificationEntity.ExpiresAt"/> at render time via <see cref="GetDisplayStatus"/>.
@@ -136,6 +144,19 @@ public partial class NotificationTable
     {
         ConfirmingActionForId = null;
         await OnExecuteAction.InvokeAsync(id);
+    }
+
+    /// <summary>
+    /// #303: a pending-review alert's action has two outcomes rather than one — keep what is stored, or
+    /// take what the file brought — so its confirm step offers both instead of a single Confirm.
+    /// </summary>
+    private static bool OffersResolutionChoice(NotificationEntity notification) =>
+        notification.DismissTriggerKey.Parsed == NotificationDismissTrigger.ImportReviewResolved;
+
+    private async Task ConfirmChoiceAsync(Guid id, FieldResolutionChoice choice)
+    {
+        ConfirmingActionForId = null;
+        await OnExecuteChoiceAction.InvokeAsync((id, choice));
     }
 
     private void CancelAction() => ConfirmingActionForId = null;

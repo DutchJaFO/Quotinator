@@ -35,12 +35,85 @@ public class NotificationActionExecutorTests
         }
     }
 
+    private static ImportReviewPendingMetadataDto ReviewPayload(string batchId) => new()
+    {
+        FileName     = "curated.json",
+        Origin       = FileResourceOrigin.System,
+        BatchId      = batchId,
+        Counts       = [new ImportReviewCountDto { Status = nameof(ImportActionStatus.Pending), Count = 2 }],
+        ReleaseState = NotificationReleaseState.NotApplicable,
+    };
+
+    /// <summary>
+    /// #303: the alert carries the coarse, whole-batch form of the two options the review page offers
+    /// per action, so the common case does not require navigating first.
+    /// </summary>
+    [TestMethod]
+    public async Task ImportReviewResolved_KeepExisting_DecidesEveryActionInTheBatch()
+    {
+        string batchId = Guid.NewGuid().ToString("D");
+        FakeImportActionService importActions = new();
+        NotificationActionExecutor executor = new(
+            new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions);
+
+        await executor.ExecuteAsync(
+            NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(batchId), FieldResolutionChoice.Keep);
+
+        Assert.Contains((batchId, FieldResolutionChoice.Keep), importActions.DecideBatchCalls,
+            "The alert's own payload names the batch, so the action resolves that batch and no other.");
+    }
+
+    /// <summary>
+    /// No default side. Choosing one on the operator's behalf would silently overwrite their data with
+    /// whichever way the code happened to lean — keeping and replacing are not interchangeable.
+    /// </summary>
+    [TestMethod]
+    public async Task ImportReviewResolved_WithoutAChoice_Throws()
+    {
+        FakeImportActionService importActions = new();
+        NotificationActionExecutor executor = new(
+            new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions);
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(Guid.NewGuid().ToString("D"))));
+
+        Assert.IsEmpty(importActions.DecideBatchCalls, "Nothing may be decided when no side was chosen.");
+    }
+
+    /// <summary>Without the alert's payload there is no batch to act on, and acting on all of them would be worse than refusing.</summary>
+    [TestMethod]
+    public async Task ImportReviewResolved_WithoutItsPayload_Throws()
+    {
+        FakeImportActionService importActions = new();
+        NotificationActionExecutor executor = new(
+            new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions);
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NotificationDismissTrigger.ImportReviewResolved, metadata: null, FieldResolutionChoice.Keep));
+
+        Assert.IsEmpty(importActions.DecideBatchCalls);
+    }
+
+    /// <summary>The trigger is executable, so `NotificationTable` renders its controls.</summary>
+    [TestMethod]
+    public void CanExecute_ImportReviewResolved_ReturnsTrue()
+    {
+        NotificationActionExecutor executor = new(
+            new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
+
+        Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.ImportReviewResolved));
+    }
+
     [TestMethod]
     public void CanExecute_DatabaseReset_ReturnsTrue()
     {
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
 
         Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.DatabaseReset));
     }
@@ -51,7 +124,7 @@ public class NotificationActionExecutorTests
     {
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
 
         Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.Reseed));
     }
@@ -64,7 +137,7 @@ public class NotificationActionExecutorTests
         FakeNotificationWriter notificationWriter = new();
         NotificationActionExecutor executor = new(
             dbInitializer, new DatabaseHealthState(), notificationWriter,
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.Reseed);
 
@@ -89,7 +162,7 @@ public class NotificationActionExecutorTests
         SpyAppVersionTracker appVersionTracker = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), health, new FakeNotificationWriter(),
-            appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
+            appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.Reseed);
 
@@ -108,7 +181,7 @@ public class NotificationActionExecutorTests
         FakeNotificationWriter notificationWriter = new();
         SpyAppVersionTracker appVersionTracker = new();
         NotificationActionExecutor executor = new(
-            dbInitializer, health, notificationWriter, appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
+            dbInitializer, health, notificationWriter, appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
 
@@ -153,7 +226,7 @@ public class NotificationActionExecutorTests
         DatabaseHealthState health = new();
         NotificationActionExecutor executor = new(
             dbInitializer, health, new FakeNotificationWriter(), new SpyAppVersionTracker(),
-            new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance);
+            new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
 
@@ -167,9 +240,13 @@ public class NotificationActionExecutorTests
 
         public bool CanExecute(NotificationDismissTrigger trigger) => true;
 
-        public Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null)
+        /// <summary>The choice the caller passed, for a trigger that offers more than one outcome (#303).</summary>
+        public FieldResolutionChoice? ReceivedChoice { get; private set; }
+
+        public Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null)
         {
             ReceivedMetadata = metadata;
+            ReceivedChoice   = choice;
             return Task.CompletedTask;
         }
     }

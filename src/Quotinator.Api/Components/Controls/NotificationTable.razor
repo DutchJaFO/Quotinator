@@ -53,7 +53,21 @@
                         {
                             @if (ConfirmingActionForId == notification.Id)
                             {
-                                <button type="button" class="btn btn-sm btn-danger" @onclick="() => ConfirmActionAsync(notification.Id)">@Text.NotificationsConfirmActionButton</button>
+                                @if (OffersResolutionChoice(notification))
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-secondary me-1"
+                                            @onclick="() => ConfirmChoiceAsync(notification.Id, FieldResolutionChoice.Keep)">
+                                        @Text.ImportReviewKeepExisting
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger me-1"
+                                            @onclick="() => ConfirmChoiceAsync(notification.Id, FieldResolutionChoice.Replace)">
+                                        @Text.ImportReviewTakeIncoming
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-sm btn-danger" @onclick="() => ConfirmActionAsync(notification.Id)">@Text.NotificationsConfirmActionButton</button>
+                                }
                                 <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelAction">@Text.NotificationsCancelActionButton</button>
                                 <div class="form-text">@Text.NotificationsConfirmActionWarning</div>
                             }

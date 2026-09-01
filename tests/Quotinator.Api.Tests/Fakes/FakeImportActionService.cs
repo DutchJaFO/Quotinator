@@ -37,6 +37,18 @@ internal sealed class FakeImportActionService : IImportActionService
         return Task.FromResult(ReturnExportRows ?? []);
     }
 
+    /// <summary>Records the batch and choice every <see cref="DecideBatchAsync"/> call was made with (#303).</summary>
+    public List<(string BatchId, FieldResolutionChoice Choice)> DecideBatchCalls { get; } = [];
+
+    /// <summary>What <see cref="DecideBatchAsync"/> reports as the number of actions it decided.</summary>
+    public int DecideBatchResult { get; set; }
+
+    public Task<int> DecideBatchAsync(string batchId, FieldResolutionChoice choice, CancellationToken cancellationToken = default)
+    {
+        DecideBatchCalls.Add((batchId, choice));
+        return Task.FromResult(DecideBatchResult);
+    }
+
     public Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRowDto> rows, CancellationToken cancellationToken = default)
     {
         LastBulkDecidedBatchId = batchId;

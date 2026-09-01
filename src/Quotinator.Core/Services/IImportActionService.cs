@@ -47,6 +47,23 @@ public interface IImportActionService
     Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRowDto> rows, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Resolves every still-undecided action in <paramref name="batchId"/> the same way — the coarse,
+    /// whole-batch form of the two options #303's review page offers per action. Returns how many
+    /// actions were decided.
+    /// </summary>
+    /// <remarks>
+    /// Resolves only each action's <b>conflicted</b> fields, exactly as the per-action controls do: the
+    /// degenerate case of git's <c>--ours</c>/<c>--theirs</c>, which settle the conflicted hunks and
+    /// leave the rest of the merge alone. An action held for review without conflicting values — a
+    /// <c>Blocked</c> completeness hold — has nothing for this to settle and is left untouched rather
+    /// than being reported as decided.
+    /// </remarks>
+    /// <param name="batchId">The batch to resolve.</param>
+    /// <param name="choice">Which side wins for every conflicted field in the batch.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
+    Task<int> DecideBatchAsync(string batchId, FieldResolutionChoice choice, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stages a decision for one action of a currently-decidable entity type and <c>ActionType</c>
     /// (today: Quote, and Source Modify — see <see cref="ImportActionNotDecidableException"/>'s own
     /// doc comment for which combination is current, since it changes as more entities gain
