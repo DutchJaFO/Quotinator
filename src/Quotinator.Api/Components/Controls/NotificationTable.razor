@@ -74,6 +74,13 @@
                             else
                             {
                                 <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmingActionForId = notification.Id">@Text.NotificationsRunActionButton</button>
+                                @if (OffersResolutionChoice(notification))
+                                {
+                                    @* #303: the coarse options above settle a whole batch one way. The page is
+                                       where a mixed backlog gets cleared action by action — and where #66's
+                                       item-by-item UX will eventually live. *@
+                                    <a class="btn btn-sm btn-link" href="import-review">@Text.ImportReviewOpenPageLink</a>
+                                }
                             }
                         }
                     </td>

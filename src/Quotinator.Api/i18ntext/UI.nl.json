@@ -42,6 +42,8 @@
   "NotificationTypeError": "Fout",
   "NotificationTypeSuccess": "Succes",
   "NotificationTypeActionRequired": "Actie vereist",
+  "ImportReviewNavLabel": "Importbeoordeling",
+  "ImportReviewOpenPageLink": "Elke wijziging beoordelen",
   "NotificationsNavLabel": "Meldingen",
   "ImportReviewHeading": "Importbeoordeling",
   "ImportReviewDescription": "Geïmporteerde wijzigingen die op jouw beslissing wachten voordat ze kunnen worden toegepast.",

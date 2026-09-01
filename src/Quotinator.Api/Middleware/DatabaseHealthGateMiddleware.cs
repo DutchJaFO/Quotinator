@@ -25,7 +25,9 @@ internal class DatabaseHealthGateMiddleware(DatabaseHealthState health) : IMiddl
         "/api/v1/health", "/api/v1/version", "/api/v1/admin",
         "/openapi", "/scalar",
         "/_framework/", "/_content/", "/lib/",
-        "/_blazor", "/rest-api", "/about", "/stats", "/notifications",
+        // #303: /import-review is exempt for the same reason /notifications is — it is where an operator
+        // sees what is unresolved, which is exactly what they need when the database is degraded.
+        "/_blazor", "/rest-api", "/about", "/stats", "/notifications", "/import-review",
         "/favicon.png",
     ];
 

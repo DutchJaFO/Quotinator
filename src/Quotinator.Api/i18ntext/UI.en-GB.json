@@ -42,6 +42,8 @@
   "NotificationTypeError": "Error",
   "NotificationTypeSuccess": "Success",
   "NotificationTypeActionRequired": "Action required",
+  "ImportReviewNavLabel": "Import review",
+  "ImportReviewOpenPageLink": "Review each change",
   "NotificationsNavLabel": "Notifications",
   "ImportReviewHeading": "Import review",
   "ImportReviewDescription": "Imported changes that need your decision before they can be applied.",

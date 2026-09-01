@@ -87,6 +87,7 @@ public class DatabaseHealthGateMiddlewareTests
     [DataRow("/about")]
     [DataRow("/stats")]
     [DataRow("/notifications")]
+    [DataRow("/import-review")]
     [DataRow("/_blazor")]
     [DataRow("/app.khy4lop6wu.css")]
     [DataRow("/Quotinator.Api.ngd3z69k33.styles.css")]

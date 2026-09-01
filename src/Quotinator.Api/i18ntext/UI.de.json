@@ -42,6 +42,8 @@
   "NotificationTypeError": "Fehler",
   "NotificationTypeSuccess": "Erfolg",
   "NotificationTypeActionRequired": "Aktion erforderlich",
+  "ImportReviewNavLabel": "Importprüfung",
+  "ImportReviewOpenPageLink": "Jede Änderung prüfen",
   "NotificationsNavLabel": "Benachrichtigungen",
   "ImportReviewHeading": "Importprüfung",
   "ImportReviewDescription": "Importierte Änderungen, die auf Ihre Entscheidung warten, bevor sie angewendet werden können.",
