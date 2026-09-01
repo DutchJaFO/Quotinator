@@ -208,9 +208,13 @@ Developer decision, 2026-09-02. Collapsed state shows title plus the one-line bo
 step 9's payload detail. The modal opens the same content in a dialog instead, because a collapse inside
 a size-constrained popup fights the popup.
 
-**Both must work with no JavaScript circuit.** `/notifications` is reachable precisely when the database
-is not (#326's exemption), so an expander that needs a live circuit hides content exactly when an
-operator most needs to read it.
+**A circuit-free expander was considered and rejected as a false requirement** (developer, 2026-09-02).
+The page is `@rendermode InteractiveServer`, so the filter buttons, Dismiss and Run already need the
+circuit — an expander needing it adds nothing. The degraded case argues the other way too: on a
+read-only data directory `/notifications` returns `500` because `InteractiveServer` cannot get
+DataProtection to write `/data/keys`, so there is no page to expand. The original note here confused
+"the database is degraded" with "there is no interactivity"; #326's exemption serves the route, and a
+restricted set of allowed actions is not the same as a lost circuit.
 
 ### 11. Name the actions instead of "Run"
 
@@ -254,7 +258,7 @@ action deliberate; naming the button is not a reason to remove the second step.
 | 21 | ❌ | Each type's layout names which payload parts it renders | Unit test | `NotificationTableTests.LayoutFor_EachKind_NamesItsPayloadParts` — replaces the `BodyIsMultiLine` boolean step 4 delivered |
 | 22 | ❌ | A payload that cannot be deserialised renders the plain body rather than throwing | Unit test | `NotificationTableTests.UnreadablePayload_FallsBackToTheBody` — negative; a row written by an older build must still render |
 | 23 | ❌ | The one-line body is unchanged by payload rendering | Unit test | `NotificationTableTests.PayloadRendering_DoesNotReplaceTheBody` — the API response and the collapsed row both still read `body` |
-| 24 | ❌ | The page collapses, and the expander needs no circuit | Automated (T2) | `13-notification-layout.md` — expand with JavaScript disabled; content reachable either way |
+| 24 | ❌ | The page collapses and expands | Automated (T2) | `13-notification-layout.md` — click the expander, assert the payload detail appears |
 | 25 | ❌ | The modal opens a dialog rather than expanding in place | Automated (T2) + screenshot | same document — restart, then open one notification's detail |
 | 26 | ❌ | Collapsed state shows the title and the one-line body, never the payload detail | Automated (T2) | same document — the detail is absent from the DOM or hidden, asserted before expanding |
 | 27 | ❌ | Each executable trigger's button is named for what it does | Unit test | `NotificationTableTests.ActionLabelFor_EachExecutableTrigger_IsNamed` — derived from `NotificationDismissTrigger`, so a new one fails here |
