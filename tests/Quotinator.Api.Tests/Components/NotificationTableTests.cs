@@ -186,9 +186,15 @@ public class NotificationTableTests
     public void GetDisplayStatus_Executing_ReportsExecuting()
     {
         DateTime now = DateTime.UtcNow;
+        NotificationEntity notification = Build(isDismissed: false, expiresAt: null);
 
         Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Executing,
-            NotificationTable.GetDisplayStatus(Build(isDismissed: false, expiresAt: null), now, isExecuting: true));
+            NotificationTable.GetDisplayStatus(notification, now, isExecuting: true));
+
+        // Positive control on the same row: without it, an implementation that reported Executing
+        // unconditionally would satisfy the assertion above.
+        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Active,
+            NotificationTable.GetDisplayStatus(notification, now, isExecuting: false));
     }
 
     /// <summary>

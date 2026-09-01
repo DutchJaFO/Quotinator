@@ -82,6 +82,25 @@ public class NotificationExecutionStateTests
     }
 
     /// <summary>
+    /// Positive control for the two refusals below: a notification nobody is running does run, reports
+    /// that it ran, and is released afterwards. Without this, both negatives would pass equally well
+    /// against an implementation that never runs anything.
+    /// </summary>
+    [TestMethod]
+    public async Task RunExclusivelyAsync_FreeNotification_RunsTheActionAndReleasesIt()
+    {
+        NotificationExecutionState state = new();
+        Guid id = Guid.NewGuid();
+        bool ran = false;
+
+        bool result = await state.RunExclusivelyAsync(id, () => { ran = true; return Task.CompletedTask; });
+
+        Assert.IsTrue(ran, "The action must actually run.");
+        Assert.IsTrue(result, "A run that happened must report that it happened.");
+        Assert.IsFalse(state.IsExecuting(id), "The claim must be released once the action returns.");
+    }
+
+    /// <summary>
     /// #367's second consequence: a confirmed click during an in-flight reseed must not reach the
     /// executor at all. The first run holds the claim for its whole duration, so the second call is
     /// skipped rather than queued behind it.

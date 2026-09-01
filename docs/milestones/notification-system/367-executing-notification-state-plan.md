@@ -196,6 +196,21 @@ mid-action. Row 13 is that proof and is not substitutable by a unit test.
 | 20 | ✅ | Dismissing during a run cannot mislabel the outcome | Unit test + Live (T2) | `NotificationTableTests.ShowsDismissControl_WhileExecuting_IsFalse`; same document, step 2 — the row offers no controls at all while running, and the action still records `resolved` |
 | 21 | ✅ | The T2 document goes red before it goes green | Canary run | same document's *Canary* section — built `b67292cb` under `quotinator:canary367`: badge `Active`, `0` spinners, `["Run","Dismiss"]` both live, outcome `dismissed`. Every step asserting #367's behaviour failed |
 | 22 | ✅ | Rows 7 and 8 are wired to the precedence, not passing incidentally | Mutation | Moving the `isExecuting` check above the Dismissed/Expired checks fails both `GetDisplayStatus_DismissedWhileExecuting_ReportsTheDismissReason` and `GetDisplayStatus_ExpiredWhileExecuting_ReportsExpired`; restored and green |
+| 23 | ✅ | A free notification's action actually runs — the positive control the two refusals need | Unit test + mutation | `NotificationExecutionStateTests.RunExclusivelyAsync_FreeNotification_RunsTheActionAndReleasesIt`; replacing `await action()` with `await Task.CompletedTask` fails it |
+| 24 | ✅ | The same row reads `Active` when not executing — the control for row 6 | Unit test + mutation | `NotificationTableTests.GetDisplayStatus_Executing_ReportsExecuting`'s second assertion; returning `Executing` unconditionally fails it and two pre-existing Active tests |
+| 25 | ✅ | The label check catches an empty value, not only a missing key | Mutation | Blanking `NotificationsExecutingLabel` in `UI.en-GB.json` fails `EveryDisplayStatus_HasATranslationKey` with *"Executing renders with no label"*; restored |
+| 26 | ✅ | The automated document passes end to end on the current build | Live (T2) | All four steps re-run 2026-09-01 after the Dismiss withdrawal landed — see the run table below |
+
+**Full T2 run, 2026-09-01 — both halves, both directions.** Re-run whole after the Dismiss withdrawal
+landed, since until then no single run had covered the document end to end on one build:
+
+| | Result |
+|---|---|
+| Unit tests, positive + negative | 3,769 passed, 0 failed, 0 skipped (`-m:1`) |
+| Unit tests, wired to behaviour | every #367 assertion proven red — by stub (rows 1–5, 6, 9, 10), by mutation (7, 8, 11, 12, 23, 24, 25), or written red (20) |
+| Automated document, positive | step 1 `1` alert · step 2 `Running…`, `buttonsInRow: []`, spinner `infinite`/`running`/`aria-hidden` · step 3 one `reseed requested`, `resolved`, renders **Done**, `0` spinners left · step 4 restart mid-run → no `Running`, 13 quotes |
+| Automated document, negative | canary on `b67292cb` — every behavioural step failed (see the document's own Canary section) |
+| Build | 0 warnings, 0 errors |
 
 **T1 confirmed, 2026-09-01** (developer, screenshot + startup log). A reset at `22:00:22` followed by a
 reseed run from `/notifications` at `22:00:31` → `22:00:44`: the badge read **Running…** with the
