@@ -71,11 +71,11 @@ public sealed class SqliteImportActionService(
     /// <inheritdoc/>
     public async Task<PagedItems<ImportActionSummaryResponse>> GetPagedAsync(string? batchId, string? status, string? entityType, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var result     = await _actionReader.GetPagedAsync(batchId, status, entityType, page, pageSize);
-        var batchCache = new Dictionary<string, IReadOnlyList<ImportActionEntity>>();
+        PagedItems<ImportActionEntity> result     = await _actionReader.GetPagedAsync(batchId, status, entityType, page, pageSize);
+        Dictionary<string, IReadOnlyList<ImportActionEntity>> batchCache = [];
 
-        var items = new List<ImportActionSummaryResponse>(result.Items.Count);
-        foreach (var action in result.Items)
+        List<ImportActionSummaryResponse> items = new List<ImportActionSummaryResponse>(result.Items.Count);
+        foreach (ImportActionEntity action in result.Items)
             items.Add(await ToSummaryAsync(action, batchCache));
 
         return new PagedItems<ImportActionSummaryResponse>(items, result.Page, result.PageSize, result.TotalCount);
@@ -84,26 +84,26 @@ public sealed class SqliteImportActionService(
     /// <inheritdoc/>
     public async Task<IReadOnlyList<ImportActionFieldRowResponse>> ExportBatchAsync(string batchId, CancellationToken cancellationToken = default)
     {
-        var actions = await _actionReader.GetAllForBatchAsync(batchId);
-        var rows    = new List<ImportActionFieldRowResponse>();
+        IReadOnlyList<ImportActionEntity> actions = await _actionReader.GetAllForBatchAsync(batchId);
+        List<ImportActionFieldRowResponse> rows    = [];
 
-        foreach (var action in actions)
+        foreach (ImportActionEntity action in actions)
         {
             if (action.ActionType.Parsed != ImportActionKind.Modify) continue;
             if (action.Status.Parsed is not (ImportActionStatus.Pending or ImportActionStatus.Decided or ImportActionStatus.Blocked or ImportActionStatus.Stale)) continue;
-            if (!ImportActionFieldRowMapper.DecidableFieldsByEntityType.TryGetValue(action.EntityType, out var fieldNames)) continue;
+            if (!ImportActionFieldRowMapper.DecidableFieldsByEntityType.TryGetValue(action.EntityType, out IReadOnlyList<string>? fieldNames)) continue;
 
-            var existingFields  = BuildFields(action.EntityType, action.ExistingValue) ?? new Dictionary<string, object?>();
-            var incomingFields  = BuildFields(action.EntityType, action.IncomingValue) ?? new Dictionary<string, object?>();
-            var originalDecisions = action.OriginalDecision is not null
+            IReadOnlyDictionary<string, object?> existingFields  = BuildFields(action.EntityType, action.ExistingValue) ?? new Dictionary<string, object?>();
+            IReadOnlyDictionary<string, object?> incomingFields  = BuildFields(action.EntityType, action.IncomingValue) ?? new Dictionary<string, object?>();
+            Dictionary<string, FieldMergeDecision>? originalDecisions = action.OriginalDecision is not null
                 ? JsonSerializer.Deserialize<Dictionary<string, FieldMergeDecision>>(action.OriginalDecision)
                 : null;
 
-            foreach (var field in fieldNames)
+            foreach (string field in fieldNames)
             {
                 FieldResolutionChoice? decision = null;
                 string? customValue = null;
-                if (originalDecisions is not null && originalDecisions.TryGetValue(field, out var stored))
+                if (originalDecisions is not null && originalDecisions.TryGetValue(field, out FieldMergeDecision stored))
                 {
                     decision    = stored.Choice;
                     customValue = stored.Choice == FieldResolutionChoice.Custom ? DecodedCustomValueToPlainString(field, stored.CustomValue) : null;
@@ -130,25 +130,25 @@ public sealed class SqliteImportActionService(
     /// <inheritdoc/>
     public async Task<BulkDecideResponse> BulkDecideAsync(string batchId, IReadOnlyList<ImportActionFieldRowDto> rows, CancellationToken cancellationToken = default)
     {
-        var batchActions = (await _actionReader.GetAllForBatchAsync(batchId)).ToDictionary(a => a.Id);
-        var errors  = new List<BulkDecideRowError>();
-        var decided = 0;
+        Dictionary<Guid, ImportActionEntity> batchActions = (await _actionReader.GetAllForBatchAsync(batchId)).ToDictionary(a => a.Id);
+        List<BulkDecideRowError> errors  = [];
+        int decided = 0;
 
-        foreach (var group in rows.GroupBy(r => r.ActionId))
+        foreach (IGrouping<Guid, ImportActionFieldRowDto> group in rows.GroupBy(r => r.ActionId))
         {
-            var actionId   = group.Key;
-            var groupRows  = group.ToList();
+            Guid actionId   = group.Key;
+            List<ImportActionFieldRowDto> groupRows  = [.. group];
 
             try
             {
-                if (!batchActions.TryGetValue(actionId, out var action))
+                if (!batchActions.TryGetValue(actionId, out ImportActionEntity? action))
                     throw new InvalidOperationException($"Action '{actionId}' is not part of batch '{batchId}'.");
 
-                var mismatched = groupRows.FirstOrDefault(r => r.EntityType != action.EntityType);
+                ImportActionFieldRowDto? mismatched = groupRows.FirstOrDefault(r => r.EntityType != action.EntityType);
                 if (mismatched is not null)
                     throw new InvalidOperationException($"Row EntityType '{mismatched.EntityType}' does not match action '{actionId}''s actual entity type '{action.EntityType}'.");
 
-                var request = ImportActionFieldRowMapper.BuildRequest(action.EntityType, groupRows);
+                ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(action.EntityType, groupRows);
                 await DecideAsync(actionId, request, cancellationToken);
                 decided++;
             }
@@ -183,20 +183,20 @@ public sealed class SqliteImportActionService(
     /// <inheritdoc/>
     public async Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
     {
-        var action = await _actionReader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
+        ImportActionEntity action = await _actionReader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
 
         if (action.EntityType == ImportActionEntityTypes.Source && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.ExistingValue!)!;
-            var incomingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.IncomingValue!)!;
+            SourceActionPayloadDto existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.ExistingValue!)!;
+            SourceActionPayloadDto incomingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.IncomingValue!)!;
 
-            var existingSourceFields = ToFieldMap(existingSourcePayload);
-            var incomingSourceFields = ToFieldMap(incomingSourcePayload);
-            var sourceDecisions      = ToSourceDecisionMap(request);
+            Dictionary<string, object?> existingSourceFields = ToFieldMap(existingSourcePayload);
+            Dictionary<string, object?> incomingSourceFields = ToFieldMap(incomingSourcePayload);
+            Dictionary<string, FieldMergeDecision> sourceDecisions      = ToSourceDecisionMap(request);
 
-            var sourceResult = FieldMergeResolver.ResolveWithDecisions(existingSourceFields, incomingSourceFields, sourceDecisions);
+            FieldMergeResult sourceResult = FieldMergeResolver.ResolveWithDecisions(existingSourceFields, incomingSourceFields, sourceDecisions);
 
-            var resolvedSourcePayload = new SourceActionPayloadDto(
+            SourceActionPayloadDto resolvedSourcePayload = new SourceActionPayloadDto(
                 (string)sourceResult.MergedFields["title"]!,
                 (string)sourceResult.MergedFields["type"]!,
                 (string?)sourceResult.MergedFields["date"],
@@ -208,16 +208,16 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.StageDirection && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.ExistingValue!)!;
-            var incomingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.IncomingValue!)!;
+            StageDirectionActionPayloadDto existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.ExistingValue!)!;
+            StageDirectionActionPayloadDto incomingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.IncomingValue!)!;
 
-            var existingStageDirectionFields = ToFieldMap(existingStageDirectionPayload);
-            var incomingStageDirectionFields = ToFieldMap(incomingStageDirectionPayload);
-            var stageDirectionDecisions      = ToStageDirectionDecisionMap(request);
+            Dictionary<string, object?> existingStageDirectionFields = ToFieldMap(existingStageDirectionPayload);
+            Dictionary<string, object?> incomingStageDirectionFields = ToFieldMap(incomingStageDirectionPayload);
+            Dictionary<string, FieldMergeDecision> stageDirectionDecisions      = ToStageDirectionDecisionMap(request);
 
-            var stageDirectionResult = FieldMergeResolver.ResolveWithDecisions(existingStageDirectionFields, incomingStageDirectionFields, stageDirectionDecisions);
+            FieldMergeResult stageDirectionResult = FieldMergeResolver.ResolveWithDecisions(existingStageDirectionFields, incomingStageDirectionFields, stageDirectionDecisions);
 
-            var resolvedStageDirectionPayload = new StageDirectionActionPayloadDto(
+            StageDirectionActionPayloadDto resolvedStageDirectionPayload = new StageDirectionActionPayloadDto(
                 (string)stageDirectionResult.MergedFields["text"]!,
                 (string?)stageDirectionResult.MergedFields["imageUrl"],
                 existingStageDirectionPayload.Translations);
@@ -228,16 +228,16 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.SoundCue && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.ExistingValue!)!;
-            var incomingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.IncomingValue!)!;
+            SoundCueActionPayloadDto existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.ExistingValue!)!;
+            SoundCueActionPayloadDto incomingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.IncomingValue!)!;
 
-            var existingSoundCueFields = ToFieldMap(existingSoundCuePayload);
-            var incomingSoundCueFields = ToFieldMap(incomingSoundCuePayload);
-            var soundCueDecisions      = ToSoundCueDecisionMap(request);
+            Dictionary<string, object?> existingSoundCueFields = ToFieldMap(existingSoundCuePayload);
+            Dictionary<string, object?> incomingSoundCueFields = ToFieldMap(incomingSoundCuePayload);
+            Dictionary<string, FieldMergeDecision> soundCueDecisions      = ToSoundCueDecisionMap(request);
 
-            var soundCueResult = FieldMergeResolver.ResolveWithDecisions(existingSoundCueFields, incomingSoundCueFields, soundCueDecisions);
+            FieldMergeResult soundCueResult = FieldMergeResolver.ResolveWithDecisions(existingSoundCueFields, incomingSoundCueFields, soundCueDecisions);
 
-            var resolvedSoundCuePayload = new SoundCueActionPayloadDto(
+            SoundCueActionPayloadDto resolvedSoundCuePayload = new SoundCueActionPayloadDto(
                 (string)soundCueResult.MergedFields["text"]!,
                 (string?)soundCueResult.MergedFields["soundFileUrl"],
                 (string?)soundCueResult.MergedFields["imageUrl"],
@@ -249,18 +249,18 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Conversation && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
-            var incomingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
+            ConversationActionPayloadDto existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
+            ConversationActionPayloadDto incomingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
 
-            var existingConversationFields = new Dictionary<string, object?> { ["description"] = existingConversationPayload.Description };
-            var incomingConversationFields = new Dictionary<string, object?> { ["description"] = incomingConversationPayload.Description };
-            var conversationDecisions      = new Dictionary<string, FieldMergeDecision>();
+            Dictionary<string, object?> existingConversationFields = new Dictionary<string, object?> { ["description"] = existingConversationPayload.Description };
+            Dictionary<string, object?> incomingConversationFields = new Dictionary<string, object?> { ["description"] = incomingConversationPayload.Description };
+            Dictionary<string, FieldMergeDecision> conversationDecisions      = [];
             if (request.ConversationDescription is { } cd)
                 conversationDecisions["description"] = new FieldMergeDecision(cd.Choice, cd.Value);
 
-            var conversationResult = FieldMergeResolver.ResolveWithDecisions(existingConversationFields, incomingConversationFields, conversationDecisions);
+            FieldMergeResult conversationResult = FieldMergeResolver.ResolveWithDecisions(existingConversationFields, incomingConversationFields, conversationDecisions);
 
-            var resolvedConversationPayload = new ConversationActionPayloadDto((string?)conversationResult.MergedFields["description"], []);
+            ConversationActionPayloadDto resolvedConversationPayload = new ConversationActionPayloadDto((string?)conversationResult.MergedFields["description"], []);
 
             await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedConversationPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(conversationDecisions));
             return;
@@ -268,16 +268,16 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Person && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.ExistingValue!)!;
-            var incomingPersonPayload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.IncomingValue!)!;
+            PersonActionPayloadDto existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.ExistingValue!)!;
+            PersonActionPayloadDto incomingPersonPayload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.IncomingValue!)!;
 
-            var existingPersonFields = ToFieldMap(existingPersonPayload);
-            var incomingPersonFields = ToFieldMap(incomingPersonPayload);
-            var personDecisions      = ToPersonDecisionMap(request);
+            Dictionary<string, object?> existingPersonFields = ToFieldMap(existingPersonPayload);
+            Dictionary<string, object?> incomingPersonFields = ToFieldMap(incomingPersonPayload);
+            Dictionary<string, FieldMergeDecision> personDecisions      = ToPersonDecisionMap(request);
 
-            var personResult = FieldMergeResolver.ResolveWithDecisions(existingPersonFields, incomingPersonFields, personDecisions);
+            FieldMergeResult personResult = FieldMergeResolver.ResolveWithDecisions(existingPersonFields, incomingPersonFields, personDecisions);
 
-            var resolvedPersonPayload = new PersonActionPayloadDto(
+            PersonActionPayloadDto resolvedPersonPayload = new PersonActionPayloadDto(
                 (string)personResult.MergedFields["name"]!,
                 (string?)personResult.MergedFields["dateOfBirth"],
                 (string?)personResult.MergedFields["dateOfDeath"]);
@@ -288,19 +288,19 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Character && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.ExistingValue!)!;
-            var incomingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.IncomingValue!)!;
+            CharacterActionPayloadDto existingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.ExistingValue!)!;
+            CharacterActionPayloadDto incomingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.IncomingValue!)!;
 
-            var existingCharacterFields = ToFieldMap(existingCharacterPayload);
-            var incomingCharacterFields = ToFieldMap(incomingCharacterPayload);
-            var characterDecisions      = ToCharacterDecisionMap(request);
+            Dictionary<string, object?> existingCharacterFields = ToFieldMap(existingCharacterPayload);
+            Dictionary<string, object?> incomingCharacterFields = ToFieldMap(incomingCharacterPayload);
+            Dictionary<string, FieldMergeDecision> characterDecisions      = ToCharacterDecisionMap(request);
 
-            var characterResult = FieldMergeResolver.ResolveWithDecisions(existingCharacterFields, incomingCharacterFields, characterDecisions);
+            FieldMergeResult characterResult = FieldMergeResolver.ResolveWithDecisions(existingCharacterFields, incomingCharacterFields, characterDecisions);
 
             // #175: SourceId/SourceTitle/SourceType are never Modify-able (ADR 013 Decision 9) — the
             // resolved payload carries the existing row's own values through unchanged, only Name
             // comes from FieldMergeResolver's result.
-            var resolvedCharacterPayload = new CharacterActionPayloadDto(
+            CharacterActionPayloadDto resolvedCharacterPayload = new CharacterActionPayloadDto(
                 existingCharacterPayload.SourceId,
                 (string)characterResult.MergedFields["name"]!,
                 existingCharacterPayload.SourceTitle,
@@ -312,19 +312,19 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Series && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.ExistingValue!)!;
-            var incomingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.IncomingValue!)!;
+            SeriesActionPayloadDto existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.ExistingValue!)!;
+            SeriesActionPayloadDto incomingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.IncomingValue!)!;
 
-            var existingSeriesFields = ToFieldMap(existingSeriesPayload);
-            var incomingSeriesFields = ToFieldMap(incomingSeriesPayload);
-            var seriesDecisions      = ToSeriesDecisionMap(request);
+            Dictionary<string, object?> existingSeriesFields = ToFieldMap(existingSeriesPayload);
+            Dictionary<string, object?> incomingSeriesFields = ToFieldMap(incomingSeriesPayload);
+            Dictionary<string, FieldMergeDecision> seriesDecisions      = ToSeriesDecisionMap(request);
 
-            var seriesResult = FieldMergeResolver.ResolveWithDecisions(existingSeriesFields, incomingSeriesFields, seriesDecisions);
+            FieldMergeResult seriesResult = FieldMergeResolver.ResolveWithDecisions(existingSeriesFields, incomingSeriesFields, seriesDecisions);
 
             // UniverseName only carries through when the resolved universeId is the incoming one — see
             // the matching comment in ImportActionPlanner.PlanSeriesAsync's merge branch.
-            var resolvedSeriesUniverseId = (string?)seriesResult.MergedFields["universeId"];
-            var resolvedSeriesPayload = new SeriesActionPayloadDto(
+            string? resolvedSeriesUniverseId = (string?)seriesResult.MergedFields["universeId"];
+            SeriesActionPayloadDto resolvedSeriesPayload = new SeriesActionPayloadDto(
                 (string)seriesResult.MergedFields["name"]!,
                 resolvedSeriesUniverseId,
                 resolvedSeriesUniverseId == incomingSeriesPayload.UniverseId ? incomingSeriesPayload.UniverseName : null);
@@ -335,16 +335,16 @@ public sealed class SqliteImportActionService(
 
         if (action.EntityType == ImportActionEntityTypes.Universe && action.ActionType.Parsed == ImportActionKind.Modify)
         {
-            var existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.ExistingValue!)!;
-            var incomingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.IncomingValue!)!;
+            UniverseActionPayloadDto existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.ExistingValue!)!;
+            UniverseActionPayloadDto incomingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.IncomingValue!)!;
 
-            var existingUniverseFields = ToFieldMap(existingUniversePayload);
-            var incomingUniverseFields = ToFieldMap(incomingUniversePayload);
-            var universeDecisions      = ToUniverseDecisionMap(request);
+            Dictionary<string, object?> existingUniverseFields = ToFieldMap(existingUniversePayload);
+            Dictionary<string, object?> incomingUniverseFields = ToFieldMap(incomingUniversePayload);
+            Dictionary<string, FieldMergeDecision> universeDecisions      = ToUniverseDecisionMap(request);
 
-            var universeResult = FieldMergeResolver.ResolveWithDecisions(existingUniverseFields, incomingUniverseFields, universeDecisions);
+            FieldMergeResult universeResult = FieldMergeResolver.ResolveWithDecisions(existingUniverseFields, incomingUniverseFields, universeDecisions);
 
-            var resolvedUniversePayload = new UniverseActionPayloadDto((string)universeResult.MergedFields["name"]!);
+            UniverseActionPayloadDto resolvedUniversePayload = new UniverseActionPayloadDto((string)universeResult.MergedFields["name"]!);
 
             await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedUniversePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(universeDecisions));
             return;
@@ -353,20 +353,20 @@ public sealed class SqliteImportActionService(
         if (action.EntityType != ImportActionEntityTypes.Quote)
             throw new ImportActionNotDecidableException(actionId, action.EntityType);
 
-        var existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
-        var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
+        QuoteActionPayloadDto existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
+        QuoteActionPayloadDto incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
 
-        var existing  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
-        var incoming  = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
-        var decisions = ToDecisionMap(request);
+        IReadOnlyDictionary<string, object?> existing  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
+        IReadOnlyDictionary<string, object?> incoming  = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
+        Dictionary<string, FieldMergeDecision> decisions = ToDecisionMap(request);
 
         // Validate immediately — an ambiguous field with no decision must fail here, not silently
         // defer the problem to apply time.
-        var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
 
         // Store the fully resolved payload (not the raw decision request) — apply never needs to
         // re-run FieldMergeResolver or know about policies/decisions at all.
-        var resolvedPayload = new QuoteActionPayloadDto
+        QuoteActionPayloadDto resolvedPayload = new QuoteActionPayloadDto
         {
             Fields      = QuoteFieldMerge.ToDto(result.MergedFields),
             SourceId    = incomingPayload.SourceId,
@@ -386,7 +386,7 @@ public sealed class SqliteImportActionService(
     {
         await ClearStaleAddTargetsAsync(batchId);
 
-        var pending = await _coordinator.TryApplyBatchAsync(
+        IReadOnlyList<Guid>? pending = await _coordinator.TryApplyBatchAsync(
             batchId, (action, conn, tx) => ApplyResolvedActionAsync(action, conn, tx, initiatedByType), cancellationToken);
 
         if (pending is null)
@@ -412,7 +412,7 @@ public sealed class SqliteImportActionService(
             // including the Audit_Entry trace, but decided per-call here rather than via config.
             if (purgeOnSuccess)
             {
-                using var conn = _factory.CreateConnection();
+                using IDbConnection conn = _factory.CreateConnection();
                 conn.Open();
                 await _actionWriter.DeleteForBatchAsync(batchId, conn);
                 await _auditWriter.WriteAsync(new AuditEntryEntity
@@ -439,10 +439,10 @@ public sealed class SqliteImportActionService(
     /// </summary>
     private async Task MarkImportBatchAppliedAsync(string batchId)
     {
-        if (!Guid.TryParse(batchId, out var batchGuid))
+        if (!Guid.TryParse(batchId, out Guid batchGuid))
             return;
 
-        var batch = await _importBatchRepository.GetByIdAsync(batchGuid);
+        ImportBatchEntity? batch = await _importBatchRepository.GetByIdAsync(batchGuid);
         if (batch is null)
             return;
 
@@ -469,8 +469,8 @@ public sealed class SqliteImportActionService(
     /// </summary>
     private async Task ClearStaleAddTargetsAsync(string batchId)
     {
-        var actions = await _actionReader.GetAllForBatchAsync(batchId);
-        var adds    = actions.Where(a => a.ActionType.Parsed == ImportActionKind.Add).ToList();
+        IReadOnlyList<ImportActionEntity> actions = await _actionReader.GetAllForBatchAsync(batchId);
+        List<ImportActionEntity> adds    = [.. actions.Where(a => a.ActionType.Parsed == ImportActionKind.Add)];
 
         // Like Source below, a Quote Add's id can be file-authored (or QuoteIdentity.StableId-derived)
         // rather than always freshly computed the way Character/Series/Universe's always are — it is
@@ -478,9 +478,9 @@ public sealed class SqliteImportActionService(
         // already reliably canonical, but raw SQL (not the Guid-typed repository path) is still used
         // for consistency with Source/Person/Conversation/StageDirection/SoundCue below, all of which
         // share this same file-authored-id shape.
-        using var quoteConn = _factory.CreateConnection();
+        using IDbConnection quoteConn = _factory.CreateConnection();
         quoteConn.Open();
-        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Quote))
+        foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Quote))
         {
             // QuoteGenres/QuoteTranslations both carry a hard FK to Quotes(Id) — a stale Quote's
             // genre rows (written by every Add, per QuoteSeedWriter.InsertGenresAsync) still
@@ -496,7 +496,7 @@ public sealed class SqliteImportActionService(
         // natural-key lookup result — a natural-key match means "already exists", which is a Modify,
         // never an Add), and EntityIdentity.StableId always canonicalizes — safe to use the
         // repository's Guid-typed API here.
-        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Character))
+        foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Character))
         {
             // #179: CharacterSources carries a real FK to Characters(Id) — its link row(s) must be
             // removed first, or the hard-delete below violates the FK (found live via this exact
@@ -510,12 +510,12 @@ public sealed class SqliteImportActionService(
         // — an explicit sources[] entry supplies its own file-authored id, which is not guaranteed to
         // be canonically cased the way EntityIdentity.StableId is. Raw SQL, not the Guid-typed
         // repository path, same reasoning as Conversation/StageDirection/SoundCue below.
-        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Source))
+        foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Source))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Source"), new { id = action.EntityId });
 
         // #173: a people[] entry supplies its own file-authored id, not guaranteed to be canonically
         // cased — raw SQL, not the Guid-typed repository path, same fix #162 made for Source above.
-        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Person))
+        foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Person))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Person"), new { id = action.EntityId });
 
         // #180: Series/Universe entries have no explicit-id file section (matched by Name only, like
@@ -523,10 +523,10 @@ public sealed class SqliteImportActionService(
         // canonical) — the Guid-typed repository path would be safe here too, but raw SQL is used for
         // consistency with Sql.Series/Sql.Universe's own no-repository query set (#183/#187/#188 are
         // where a real IRestorableRepository<SeriesEntity>/<UniverseEntity> gets introduced).
-        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Series))
+        foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Series))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Series"), new { id = action.EntityId });
 
-        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Universe))
+        foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Universe))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Universe"), new { id = action.EntityId });
 
         // #68: Conversation/StageDirection/SoundCue ids are explicit-in-file, like Quote's — not
@@ -534,20 +534,20 @@ public sealed class SqliteImportActionService(
         // casing approach applies here too, not the repository's Guid-typed path. Each clears its
         // own detail rows first (ConversationLines/*Translations), same FK-blocking reason as
         // QuoteGenres/QuoteTranslations above.
-        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Conversation))
+        foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Conversation))
         {
             await quoteConn.ExecuteAsync(Sql.ConversationLines.DeleteForConversation, new { id = action.EntityId });
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Conversation"), new { id = action.EntityId });
         }
 
-        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.StageDirection))
+        foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.StageDirection))
         {
             await quoteConn.ExecuteAsync(Sql.ConversationLines.DeleteForStageDirection, new { id = action.EntityId });
             await quoteConn.ExecuteAsync(Sql.StageDirectionTranslations.DeleteForStageDirection, new { id = action.EntityId });
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_StageDirection"), new { id = action.EntityId });
         }
 
-        foreach (var action in adds.Where(a => a.EntityType == ImportActionEntityTypes.SoundCue))
+        foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.SoundCue))
         {
             await quoteConn.ExecuteAsync(Sql.ConversationLines.DeleteForSoundCue, new { id = action.EntityId });
             await quoteConn.ExecuteAsync(Sql.SoundCueTranslations.DeleteForSoundCue, new { id = action.EntityId });
@@ -570,10 +570,10 @@ public sealed class SqliteImportActionService(
     /// <inheritdoc/>
     public async Task ReverseBatchAsync(string batchId, bool preview = false, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, CancellationToken cancellationToken = default)
     {
-        if (!Guid.TryParse(batchId, out var batchGuid))
+        if (!Guid.TryParse(batchId, out Guid batchGuid))
             throw new ImportBatchNotFoundException(Guid.Empty);
 
-        var batch = await _importBatchRepository.GetByIdAsync(batchGuid) ?? throw new ImportBatchNotFoundException(batchGuid);
+        ImportBatchEntity batch = await _importBatchRepository.GetByIdAsync(batchGuid) ?? throw new ImportBatchNotFoundException(batchGuid);
         if (batch.IsDeleted)
             throw new ImportBatchNotFoundException(batchGuid); // Already reversed — treated as absent, matching every other soft-deleted row in this codebase.
 
@@ -583,15 +583,15 @@ public sealed class SqliteImportActionService(
         // #59 Scope changes decision 7: strict global LIFO stack, not a per-entity overlap check —
         // GetAllAsync is already newest-first, IsDeleted = 0 filtered (Sql.ImportBatches.SelectAll).
         // The first Applied entry in that list is, by definition, the only batch currently reversible.
-        var liveBatches = await _importBatchRepository.GetAllAsync();
-        var topOfStack  = liveBatches.FirstOrDefault(b => b.Status.Parsed == ImportBatchStatus.Applied);
+        IReadOnlyList<ImportBatchEntity> liveBatches = await _importBatchRepository.GetAllAsync();
+        ImportBatchEntity? topOfStack  = liveBatches.FirstOrDefault(b => b.Status.Parsed == ImportBatchStatus.Applied);
         if (topOfStack is null || topOfStack.Id != batchGuid)
         {
-            var blocker = topOfStack is null ? "no batch" : $"'{topOfStack.Name}' ({topOfStack.Id})";
+            string blocker = topOfStack is null ? "no batch" : $"'{topOfStack.Name}' ({topOfStack.Id})";
             throw new ImportBatchStateException(batchId, $"is not the most recently applied batch — {blocker} must be reversed first.");
         }
 
-        var actions = await _actionReader.GetAllForBatchAsync(batchId);
+        IReadOnlyList<ImportActionEntity> actions = await _actionReader.GetAllForBatchAsync(batchId);
         if (actions.Count == 0)
             throw new ImportBatchStateException(batchId, "has no actions and cannot be reversed.");
 
@@ -600,7 +600,7 @@ public sealed class SqliteImportActionService(
         if (preview)
             return;
 
-        var stillApplied = await _coordinator.TryReverseBatchAsync(
+        IReadOnlyList<Guid>? stillApplied = await _coordinator.TryReverseBatchAsync(
             batchId, (actions, conn, tx) => ReverseAppliedActionsAsync(actions, conn, tx, initiatedByType), cancellationToken);
 
         // Defensive only — batch.Status == Applied already guarantees every one of its actions is
@@ -618,14 +618,14 @@ public sealed class SqliteImportActionService(
     /// </summary>
     private async Task ReverseAppliedActionsAsync(IReadOnlyList<ImportActionEntity> actions, IDbConnection connection, IDbTransaction transaction, InitiatorType initiatedByType)
     {
-        var sqliteConnection  = (SqliteConnection)connection;
-        var sqliteTransaction = (SqliteTransaction)transaction;
-        var uow       = new SqliteUnitOfWork(connection, transaction);
-        var now       = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
-        var batchGuid = Guid.Parse(actions[0].BatchId);
-        var changeLog = new QuoteSeedWriter.ChangeLogContext(_changeLogWriter, initiatedByType, actions[0].BatchId);
+        SqliteConnection sqliteConnection  = (SqliteConnection)connection;
+        SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction;
+        SqliteUnitOfWork uow       = new SqliteUnitOfWork(connection, transaction);
+        string now       = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+        Guid batchGuid = Guid.Parse(actions[0].BatchId);
+        QuoteSeedWriter.ChangeLogContext changeLog = new QuoteSeedWriter.ChangeLogContext(_changeLogWriter, initiatedByType, actions[0].BatchId);
 
-        var order = new Dictionary<string, int>
+        Dictionary<string, int> order = new Dictionary<string, int>
         {
             [ImportActionEntityTypes.Quote]        = 0,
             [ImportActionEntityTypes.Conversation] = 0,
@@ -645,7 +645,7 @@ public sealed class SqliteImportActionService(
             [ImportActionEntityTypes.StageDirection] = 4,
             [ImportActionEntityTypes.SoundCue]       = 4,
         };
-        foreach (var action in actions.OrderBy(a => order.GetValueOrDefault(a.EntityType, 3)))
+        foreach (ImportActionEntity? action in actions.OrderBy(a => order.GetValueOrDefault(a.EntityType, 3)))
         {
             switch (action.EntityType)
             {
@@ -659,7 +659,7 @@ public sealed class SqliteImportActionService(
                         // (SourceId/SourceTitle/SourceType are immutable once a Character exists, ADR
                         // 013 Decision 9, so nothing else needs restoring), so no active-reference
                         // check is needed, mirroring Source's own Modify-reversal branch above.
-                        var existingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.ExistingValue!)!;
+                        CharacterActionPayloadDto existingCharacterPayload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Characters.UpdateFieldsById, new
                         {
                             name = existingCharacterPayload.Name,
@@ -669,7 +669,7 @@ public sealed class SqliteImportActionService(
                         await QuoteSeedWriter.LogChangeAsync(changeLog, "character", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingCharacterPayload, sqliteConnection, sqliteTransaction);
                         break;
                     }
-                    var charRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Characters.CountActiveReferences, action.EntityId);
+                    bool charRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Characters.CountActiveReferences, action.EntityId);
                     if (charRefs)
                         break;
                     await _characterRepository.SoftDeleteAsync(Guid.Parse(action.EntityId), uow);
@@ -680,7 +680,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #162: a Modify reversal restores the prior field values — it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
-                        var existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.ExistingValue!)!;
+                        SourceActionPayloadDto existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Sources.UpdateFieldsById, new
                         {
                             title = existingSourcePayload.Title,
@@ -693,7 +693,7 @@ public sealed class SqliteImportActionService(
                         await QuoteSeedWriter.LogChangeAsync(changeLog, "source", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingSourcePayload, sqliteConnection, sqliteTransaction);
                         break;
                     }
-                    var sourceRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Sources.CountActiveReferences, action.EntityId);
+                    bool sourceRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Sources.CountActiveReferences, action.EntityId);
                     if (sourceRefs)
                         break;
                     // #162: raw SQL, not the Guid-typed repository path — see ClearStaleAddTargetsAsync's
@@ -707,7 +707,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #173: a Modify reversal restores the prior field values — it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
-                        var existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.ExistingValue!)!;
+                        PersonActionPayloadDto existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.People.UpdateFieldsById, new
                         {
                             name = existingPersonPayload.Name,
@@ -732,7 +732,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #163: a Modify reversal restores the prior field values — it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
-                        var existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.ExistingValue!)!;
+                        SeriesActionPayloadDto existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Series.UpdateFieldsById, new
                         {
                             name = existingSeriesPayload.Name,
@@ -756,7 +756,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #163: a Modify reversal restores the prior Name — it never deletes anything,
                         // so no active-reference check is needed (unlike an Add reversal).
-                        var existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.ExistingValue!)!;
+                        UniverseActionPayloadDto existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Universe.UpdateFieldsById, new
                         {
                             name = existingUniversePayload.Name,
@@ -778,7 +778,7 @@ public sealed class SqliteImportActionService(
                         // #176: a Modify reversal restores the prior Description only — it never
                         // touches Lines and never deletes anything, so no active-reference check is
                         // needed (unlike an Add reversal).
-                        var existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
+                        ConversationActionPayloadDto existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Conversations.UpdateDescriptionById, new
                         {
                             description = existingConversationPayload.Description,
@@ -802,7 +802,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #171: a Modify reversal restores the prior field values — it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
-                        var existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.ExistingValue!)!;
+                        StageDirectionActionPayloadDto existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.StageDirections.UpdateFieldsById, new
                         {
                             text = existingStageDirectionPayload.Text,
@@ -823,7 +823,7 @@ public sealed class SqliteImportActionService(
                     {
                         // #172: a Modify reversal restores the prior field values — it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
-                        var existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.ExistingValue!)!;
+                        SoundCueActionPayloadDto existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.SoundCues.UpdateFieldsById, new
                         {
                             text = existingSoundCuePayload.Text,
@@ -851,7 +851,7 @@ public sealed class SqliteImportActionService(
     /// <summary>Reverses one Quote action: soft-delete for an Add, field-restore for a genuine Modify, no-op write for a Skip-policy Modify.</summary>
     private static async Task ReverseQuoteActionAsync(ImportActionEntity action, SqliteConnection connection, SqliteTransaction transaction, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
-        var isAdd = action.ActionType.Parsed == ImportActionKind.Add;
+        bool isAdd = action.ActionType.Parsed == ImportActionKind.Add;
 
         if (isAdd)
         {
@@ -867,18 +867,18 @@ public sealed class SqliteImportActionService(
         if (action.AppliedPolicy.Parsed == DuplicateResolutionPolicy.Skip)
             return; // Nothing was ever written for a Skip-policy Modify — its reversal is a no-op write.
 
-        var existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
-        var existingFields  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
+        QuoteActionPayloadDto existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
+        IReadOnlyDictionary<string, object?> existingFields  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
         // Only .Id and .Translations are actually taken from this template (see ApplyMergedFields'
         // own remarks) — QuoteText/Source are required properties but immediately overwritten below.
-        var resolved = QuoteFieldMerge.ApplyMergedFields(existingFields, new SourceQuoteDto { Id = action.EntityId, QuoteText = string.Empty, Source = string.Empty });
+        SourceQuoteDto resolved = QuoteFieldMerge.ApplyMergedFields(existingFields, new SourceQuoteDto { Id = action.EntityId, QuoteText = string.Empty, Source = string.Empty });
 
         // #59 Risk 1: existingPayload.SourceId/CharacterId/PersonId are the *incoming* quote's
         // resolved ids at staging time (see ImportActionPlanner.PlanAsync), not the existing row's
         // actual linkage — invisible when source/character/author text didn't change, wrong the
         // moment it did. Re-resolve from the restored text via the same natural-key lookups the
         // planner itself uses; never trust the stored ids directly.
-        var sourceId = await connection.ExecuteScalarAsync<Guid?>(Sql.Sources.SelectIdByTitleAndType,
+        Guid sourceId = await connection.ExecuteScalarAsync<Guid?>(Sql.Sources.SelectIdByTitleAndType,
             new { title = resolved.Source, type = resolved.Type.ToString() }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Source '{resolved.Source}' ({resolved.Type}) no longer exists.");
         Guid? characterId = null;
         if (!string.IsNullOrWhiteSpace(resolved.Character))
@@ -886,8 +886,8 @@ public sealed class SqliteImportActionService(
             // #174/ADR 013: re-resolve via the same Series-scoped candidate lookup ResolveCharacterAsync
             // itself uses — sourceId is already a real, existing row at this point (checked above), so
             // its own SeriesId (if any) is the correct Series-relatedness signal here too.
-            var resolvedSourceId = sourceId.ToCanonicalId();
-            var seriesId = await connection.ExecuteScalarAsync<string?>(
+            string resolvedSourceId = sourceId.ToCanonicalId();
+            string? seriesId = await connection.ExecuteScalarAsync<string?>(
                 Sql.Sources.SelectSeriesIdById, new { id = resolvedSourceId }, transaction);
             characterId = await connection.ExecuteScalarAsync<Guid?>(Sql.Characters.SelectGlobalCandidateId,
                 new { sourceId = resolvedSourceId, name = resolved.Character, sourceType = resolved.Type.ToString(), seriesId }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Character '{resolved.Character}' no longer exists.");
@@ -938,25 +938,25 @@ public sealed class SqliteImportActionService(
     /// </summary>
     private async Task ApplyResolvedActionAsync(ImportActionEntity action, IDbConnection connection, IDbTransaction transaction, InitiatorType initiatedByType)
     {
-        var sqliteConnection  = (SqliteConnection)connection;
-        var sqliteTransaction = (SqliteTransaction)transaction;
-        var now       = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
-        var batchId   = Guid.Parse(action.BatchId);
-        var changeLog = new QuoteSeedWriter.ChangeLogContext(_changeLogWriter, initiatedByType, action.BatchId);
+        SqliteConnection sqliteConnection  = (SqliteConnection)connection;
+        SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction;
+        string now       = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+        Guid batchId   = Guid.Parse(action.BatchId);
+        QuoteSeedWriter.ChangeLogContext changeLog = new QuoteSeedWriter.ChangeLogContext(_changeLogWriter, initiatedByType, action.BatchId);
 
         switch (action.EntityType)
         {
             case ImportActionEntityTypes.Source:
             {
-                var isSourceAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                    bool isSourceAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isSourceAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.IncomingValue!)!;
+                        SourceActionPayloadDto payload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.IncomingValue!)!;
                     await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Title, payload.Type, batchId, now, changeLog, payload.Date, payload.SeriesId);
                 }
                 else
                 {
-                    var payload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields
+                        SourceActionPayloadDto payload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.Sources.UpdateFieldsById, new
                     {
@@ -976,10 +976,10 @@ public sealed class SqliteImportActionService(
             }
             case ImportActionEntityTypes.Character:
             {
-                var isCharacterAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                    bool isCharacterAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isCharacterAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.IncomingValue!)!;
+                        CharacterActionPayloadDto payload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.IncomingValue!)!;
                     // Defensive: CharacterSources.SourceId (#179) is a real FK, but System_ImportActions
                     // rows apply in whatever order the coordinator returns them — this action's own
                     // Source may not have applied yet. Idempotent, so re-running it here is safe either way.
@@ -988,9 +988,9 @@ public sealed class SqliteImportActionService(
                 }
                 else
                 {
-                    // #175: Modify only ever writes Name — SourceType is immutable once a Character
-                    // exists (ADR 013 Decision 9), so this never touches CharacterSources.
-                    var payload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.MergedFields
+                        // #175: Modify only ever writes Name — SourceType is immutable once a Character
+                        // exists (ADR 013 Decision 9), so this never touches CharacterSources.
+                        CharacterActionPayloadDto payload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.Characters.UpdateFieldsById, new
                     {
@@ -1007,16 +1007,16 @@ public sealed class SqliteImportActionService(
             }
             case ImportActionEntityTypes.Person:
             {
-                var isPersonAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                    bool isPersonAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isPersonAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.IncomingValue!)!;
+                        PersonActionPayloadDto payload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.IncomingValue!)!;
                     await EnsurePersonExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog,
                         payload.DateOfBirth, payload.DateOfDeath);
                 }
                 else
                 {
-                    var payload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.MergedFields
+                        PersonActionPayloadDto payload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.People.UpdateFieldsById, new
                     {
@@ -1035,15 +1035,15 @@ public sealed class SqliteImportActionService(
             }
             case ImportActionEntityTypes.Universe:
             {
-                var isUniverseAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                    bool isUniverseAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isUniverseAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.IncomingValue!)!;
+                        UniverseActionPayloadDto payload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.IncomingValue!)!;
                     await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Name, batchId, now, changeLog);
                 }
                 else
                 {
-                    var payload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.MergedFields
+                        UniverseActionPayloadDto payload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.Universe.UpdateFieldsById, new
                     {
@@ -1060,10 +1060,10 @@ public sealed class SqliteImportActionService(
             }
             case ImportActionEntityTypes.Series:
             {
-                var isSeriesAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                    bool isSeriesAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isSeriesAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.IncomingValue!)!;
+                        SeriesActionPayloadDto payload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.IncomingValue!)!;
                     // Defensive: Series.UniverseId (#179) is a real FK, but System_ImportActions rows
                     // apply in whatever order the coordinator returns them — this action's own Universe
                     // may not have applied yet. Idempotent, so re-running it here is safe either way.
@@ -1076,9 +1076,9 @@ public sealed class SqliteImportActionService(
                 }
                 else
                 {
-                    // #163: Modify writes Name and UniverseId — unlike Character's SourceType, a
-                    // Series' UniverseId is not documented as immutable, so both are correctable.
-                    var payload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.MergedFields
+                        // #163: Modify writes Name and UniverseId — unlike Character's SourceType, a
+                        // Series' UniverseId is not documented as immutable, so both are correctable.
+                        SeriesActionPayloadDto payload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     // Uses payload.UniverseName (the Universe's own name), not payload.Name (the
                     // Series' own name) — see the matching comment in the Add branch above.
@@ -1100,7 +1100,7 @@ public sealed class SqliteImportActionService(
             }
             case ImportActionEntityTypes.Quote:
             {
-                var isAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                    bool isAdd = action.ActionType.Parsed == ImportActionKind.Add;
 
                 // Skip means "existing row wins, untouched" — no write, no changelog, matching #64's
                 // policy exactly (the only difference from #149's model: the action row itself still
@@ -1112,10 +1112,10 @@ public sealed class SqliteImportActionService(
                 if (!isAdd && action.AppliedPolicy.Parsed == DuplicateResolutionPolicy.Skip)
                     break;
 
-                var json  = isAdd ? action.IncomingValue : action.MergedFields;
-                var payload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(json!)
+                    string? json  = isAdd ? action.IncomingValue : action.MergedFields;
+                    QuoteActionPayloadDto payload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(json!)
                               ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload.");
-                var resolved = new SourceQuoteDto
+                    SourceQuoteDto resolved = new SourceQuoteDto
                 {
                     Id               = action.EntityId,
                     QuoteText        = payload.Fields.QuoteText!,
@@ -1185,15 +1185,15 @@ public sealed class SqliteImportActionService(
             }
             case ImportActionEntityTypes.StageDirection:
             {
-                var isStageDirectionAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                    bool isStageDirectionAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isStageDirectionAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.IncomingValue!)!;
+                        StageDirectionActionPayloadDto payload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.IncomingValue!)!;
                     await EnsureStageDirectionExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
                 }
                 else
                 {
-                    var payload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.MergedFields
+                        StageDirectionActionPayloadDto payload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.StageDirections.UpdateFieldsById, new
                     {
@@ -1211,15 +1211,15 @@ public sealed class SqliteImportActionService(
             }
             case ImportActionEntityTypes.SoundCue:
             {
-                var isSoundCueAdd = action.ActionType.Parsed == ImportActionKind.Add;
+                    bool isSoundCueAdd = action.ActionType.Parsed == ImportActionKind.Add;
                 if (isSoundCueAdd)
                 {
-                    var payload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.IncomingValue!)!;
+                        SoundCueActionPayloadDto payload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.IncomingValue!)!;
                     await EnsureSoundCueExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
                 }
                 else
                 {
-                    var payload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.MergedFields
+                        SoundCueActionPayloadDto payload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.SoundCues.UpdateFieldsById, new
                     {
@@ -1240,7 +1240,7 @@ public sealed class SqliteImportActionService(
             {
                 if (action.ActionType.Parsed == ImportActionKind.Modify)
                 {
-                    var modifyPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.MergedFields
+                        ConversationActionPayloadDto modifyPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     await sqliteConnection.ExecuteAsync(Sql.Conversations.UpdateDescriptionById, new
                     {
@@ -1254,16 +1254,16 @@ public sealed class SqliteImportActionService(
                     break;
                 }
 
-                // Trusts its referenced Quote/StageDirection/SoundCue rows already applied — see
-                // PlanAsync's remark on why that ordering is safe to rely on here, unlike
-                // Character/Quote's defensive re-ensure.
-                var payload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
-                var inserted = await sqliteConnection.ExecuteAsync(Sql.Conversations.InsertIfNotExists,
+                    // Trusts its referenced Quote/StageDirection/SoundCue rows already applied — see
+                    // PlanAsync's remark on why that ordering is safe to rely on here, unlike
+                    // Character/Quote's defensive re-ensure.
+                    ConversationActionPayloadDto payload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
+                    int inserted = await sqliteConnection.ExecuteAsync(Sql.Conversations.InsertIfNotExists,
                     new { Id = action.EntityId, payload.Description, ImportBatchId = batchId, DateCreated = now }, sqliteTransaction);
 
                 if (inserted > 0)
                 {
-                    foreach (var line in payload.Lines)
+                    foreach (ConversationLinePayloadDto line in payload.Lines)
                     {
                         await sqliteConnection.ExecuteAsync(Sql.ConversationLines.Insert, new
                         {
@@ -1303,10 +1303,10 @@ public sealed class SqliteImportActionService(
         string selectCompletenessSql, string updateCompletenessSql,
         string id, CompletenessStatus? markCompletenessAs, string now)
     {
-        var row = await connection.QuerySingleAsync<(SafeValue<CompletenessStatus?> CompletenessStatus, IReadOnlyList<string> NoValueKnown)>(
+        (SafeValue<CompletenessStatus?> CompletenessStatus, IReadOnlyList<string> NoValueKnown) row = await connection.QuerySingleAsync<(SafeValue<CompletenessStatus?> CompletenessStatus, IReadOnlyList<string> NoValueKnown)>(
             selectCompletenessSql, new { id }, transaction);
-        var current = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-        var next = markCompletenessAs ?? CompletenessGuard.ComputeNextStatus(current, row.NoValueKnown);
+        CompletenessStatus current = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+        CompletenessStatus next = markCompletenessAs ?? CompletenessGuard.ComputeNextStatus(current, row.NoValueKnown);
 
         if (next != current)
             await connection.ExecuteAsync(updateCompletenessSql, new { completenessStatus = next.ToString(), dateModified = now, id }, transaction);
@@ -1325,7 +1325,7 @@ public sealed class SqliteImportActionService(
         // #180: seriesId defaults to null — every defensive call site (Character/Quote's own "ensure
         // the referenced Source exists" checks) has no Series context of its own; only a genuine
         // Source Add action (which does) passes one.
-        var inserted = await connection.ExecuteAsync(Sql.Sources.InsertIfNotExists,
+        int inserted = await connection.ExecuteAsync(Sql.Sources.InsertIfNotExists,
             new { Id = id, Title = title, Type = type, Date = date, SeriesId = seriesId, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "source", id, ChangeAction.Created,
@@ -1336,7 +1336,7 @@ public sealed class SqliteImportActionService(
         SqliteConnection connection, SqliteTransaction transaction, string id, string name, string? universeId,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
-        var inserted = await connection.ExecuteAsync(Sql.Series.InsertIfNotExists,
+        int inserted = await connection.ExecuteAsync(Sql.Series.InsertIfNotExists,
             new { Id = id, Name = name, UniverseId = universeId, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "series", id, ChangeAction.Created,
@@ -1347,7 +1347,7 @@ public sealed class SqliteImportActionService(
         SqliteConnection connection, SqliteTransaction transaction, string id, string? name,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
-        var inserted = await connection.ExecuteAsync(Sql.Universe.InsertIfNotExists,
+        int inserted = await connection.ExecuteAsync(Sql.Universe.InsertIfNotExists,
             new { Id = id, Name = name, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "universe", id, ChangeAction.Created,
@@ -1362,7 +1362,7 @@ public sealed class SqliteImportActionService(
         // #174/ADR 013: SourceType is only ever written here, on first insert (INSERT OR IGNORE — a
         // no-op against an already-existing row never touches its SourceType again). A Character's
         // Type anchor never changes after creation; only which Sources it links to can grow.
-        var inserted = await connection.ExecuteAsync(Sql.Characters.InsertIfNotExists,
+        int inserted = await connection.ExecuteAsync(Sql.Characters.InsertIfNotExists,
             new { Id = id, Name = name, SourceType = sourceType, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "character", id, ChangeAction.Created,
@@ -1380,7 +1380,7 @@ public sealed class SqliteImportActionService(
         string? dateOfBirth = null, string? dateOfDeath = null)
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
-        var inserted = await connection.ExecuteAsync(Sql.People.InsertIfNotExists,
+        int inserted = await connection.ExecuteAsync(Sql.People.InsertIfNotExists,
             new { Id = id, Name = name, DateOfBirth = dateOfBirth, DateOfDeath = dateOfDeath, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "person", id, ChangeAction.Created,
@@ -1393,11 +1393,11 @@ public sealed class SqliteImportActionService(
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
-        var inserted = await connection.ExecuteAsync(Sql.StageDirections.InsertIfNotExists,
+        int inserted = await connection.ExecuteAsync(Sql.StageDirections.InsertIfNotExists,
             new { Id = id, payload.Text, payload.ImageUrl, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted == 0) return;
 
-        foreach (var (language, translation) in payload.Translations)
+        foreach ((string? language, SourceStageDirectionTranslation? translation) in payload.Translations)
         {
             await connection.ExecuteAsync(Sql.StageDirectionTranslations.Insert, new
             {
@@ -1419,11 +1419,11 @@ public sealed class SqliteImportActionService(
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
-        var inserted = await connection.ExecuteAsync(Sql.SoundCues.InsertIfNotExists,
+        int inserted = await connection.ExecuteAsync(Sql.SoundCues.InsertIfNotExists,
             new { Id = id, payload.Text, payload.SoundFileUrl, payload.ImageUrl, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted == 0) return;
 
-        foreach (var (language, translation) in payload.Translations)
+        foreach ((string? language, SourceSoundCueTranslation? translation) in payload.Translations)
         {
             await connection.ExecuteAsync(Sql.SoundCueTranslations.Insert, new
             {
@@ -1518,8 +1518,8 @@ public sealed class SqliteImportActionService(
         {
             case ImportActionEntityTypes.Quote:
             {
-                var existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
-                var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
+                    QuoteActionPayloadDto existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
+                    QuoteActionPayloadDto incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
                 existing = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
                 incoming = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
                 break;
@@ -1556,8 +1556,8 @@ public sealed class SqliteImportActionService(
             }
             case ImportActionEntityTypes.Conversation:
             {
-                var existingPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
-                var incomingPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
+                    ConversationActionPayloadDto existingPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
+                    ConversationActionPayloadDto incomingPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
                 existing = new Dictionary<string, object?> { ["description"] = existingPayload.Description };
                 incoming = new Dictionary<string, object?> { ["description"] = incomingPayload.Description };
                 break;
@@ -1593,17 +1593,17 @@ public sealed class SqliteImportActionService(
     {
         if (action.EntityType != ImportActionEntityTypes.Quote) return [];
 
-        var json    = action.ActionType.Parsed == ImportActionKind.Add ? action.IncomingValue : (action.MergedFields ?? action.IncomingValue);
-        var payload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(json!)!;
+        string json    = action.ActionType.Parsed == ImportActionKind.Add ? action.IncomingValue : (action.MergedFields ?? action.IncomingValue);
+        QuoteActionPayloadDto payload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(json!)!;
 
-        if (!batchCache.TryGetValue(action.BatchId, out var batchActions))
+        if (!batchCache.TryGetValue(action.BatchId, out IReadOnlyList<ImportActionEntity>? batchActions))
         {
             batchActions = await _actionReader.GetAllForBatchAsync(action.BatchId);
             batchCache[action.BatchId] = batchActions;
         }
 
-        var related = new List<Guid>();
-        foreach (var candidate in batchActions)
+        List<Guid> related = [];
+        foreach (ImportActionEntity candidate in batchActions)
         {
             if (candidate.Id == action.Id) continue;
             if (candidate.EntityType == ImportActionEntityTypes.Source    && candidate.EntityId == payload.SourceId) related.Add(candidate.Id);
@@ -1615,7 +1615,7 @@ public sealed class SqliteImportActionService(
 
     private static Dictionary<string, FieldMergeDecision> ToDecisionMap(ConflictDecisionRequest request)
     {
-        var map = new Dictionary<string, FieldMergeDecision>();
+        Dictionary<string, FieldMergeDecision> map = [];
 
         void Add(string field, FieldDecision? decision)
         {
@@ -1639,7 +1639,7 @@ public sealed class SqliteImportActionService(
 
     private static Dictionary<string, FieldMergeDecision> ToSourceDecisionMap(ConflictDecisionRequest request)
     {
-        var map = new Dictionary<string, FieldMergeDecision>();
+        Dictionary<string, FieldMergeDecision> map = [];
 
         void Add(string field, FieldDecision? decision)
         {
@@ -1657,7 +1657,7 @@ public sealed class SqliteImportActionService(
 
     private static Dictionary<string, FieldMergeDecision> ToPersonDecisionMap(ConflictDecisionRequest request)
     {
-        var map = new Dictionary<string, FieldMergeDecision>();
+        Dictionary<string, FieldMergeDecision> map = [];
 
         void Add(string field, FieldDecision? decision)
         {
@@ -1674,7 +1674,7 @@ public sealed class SqliteImportActionService(
 
     private static Dictionary<string, FieldMergeDecision> ToCharacterDecisionMap(ConflictDecisionRequest request)
     {
-        var map = new Dictionary<string, FieldMergeDecision>();
+        Dictionary<string, FieldMergeDecision> map = [];
 
         void Add(string field, FieldDecision? decision)
         {
@@ -1689,7 +1689,7 @@ public sealed class SqliteImportActionService(
 
     private static Dictionary<string, FieldMergeDecision> ToSeriesDecisionMap(ConflictDecisionRequest request)
     {
-        var map = new Dictionary<string, FieldMergeDecision>();
+        Dictionary<string, FieldMergeDecision> map = [];
 
         void Add(string field, FieldDecision? decision)
         {
@@ -1705,7 +1705,7 @@ public sealed class SqliteImportActionService(
 
     private static Dictionary<string, FieldMergeDecision> ToUniverseDecisionMap(ConflictDecisionRequest request)
     {
-        var map = new Dictionary<string, FieldMergeDecision>();
+        Dictionary<string, FieldMergeDecision> map = [];
 
         void Add(string field, FieldDecision? decision)
         {
@@ -1720,7 +1720,7 @@ public sealed class SqliteImportActionService(
 
     private static Dictionary<string, FieldMergeDecision> ToStageDirectionDecisionMap(ConflictDecisionRequest request)
     {
-        var map = new Dictionary<string, FieldMergeDecision>();
+        Dictionary<string, FieldMergeDecision> map = [];
 
         void Add(string field, FieldDecision? decision)
         {
@@ -1736,7 +1736,7 @@ public sealed class SqliteImportActionService(
 
     private static Dictionary<string, FieldMergeDecision> ToSoundCueDecisionMap(ConflictDecisionRequest request)
     {
-        var map = new Dictionary<string, FieldMergeDecision>();
+        Dictionary<string, FieldMergeDecision> map = [];
 
         void Add(string field, FieldDecision? decision)
         {
