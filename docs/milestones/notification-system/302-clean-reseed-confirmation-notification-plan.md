@@ -1,6 +1,6 @@
 # #302 — Notification: confirm files that reseed cleanly with no review needed
 
-**Status:** Planning
+**Status:** In progress (step 1)
 **GitHub issue:** #302
 **Tiers required:** T1, T2
 **Depends on:** #278, #304, #312, #319
@@ -12,9 +12,6 @@
 A reseed already reports a per-file breakdown, but only in the API response and the log. This issue
 adds the "everything's fine" half of that feedback to the UI: one `Success` notification per file that
 reseeded with nothing left to review.
-
-**This plan is ready to execute.** The design decision the issue deferred here has been answered (see
-Scope changes below), and every step and verification row names something real.
 
 ## Scope revision — where the notification is written from
 
@@ -179,6 +176,14 @@ writes.
 Inject `IAppVersionTracker` and `IVersionService` (both reachable — `IVersionService` lives in
 `Quotinator.Core.Services`, the same project as this initializer). Take `GetLastActiveAsync()`'s row
 id; if nothing has ever been recorded, call `RecordCurrentAsync` first and use that row.
+
+**Both are optional constructor parameters backed by a real default**, exactly as
+`DatabaseInitializer`'s own `IDiskSpaceProvider? diskSpaceProvider = null` /
+`?? new DiskSpaceProvider()` already does — never null at use, so step 6's guarantee is unaffected.
+Measured before choosing: making them required would change 16 call sites across 13 test files, two of
+which carry 565 and 489 `var` declarations, so the boyscout rule would attach roughly 1,540 unrelated
+conversions to this issue. `Program.cs` still passes both explicitly via `sp.GetRequiredService`, so
+production wiring goes through DI as the policy requires.
 
 **This recording must stay on the reseed path and must never move into `OnInitialisedAsync`.**
 `Program.cs` reads `GetLastActiveAsync()` *after* `InitialiseAsync()` and strictly before its own
