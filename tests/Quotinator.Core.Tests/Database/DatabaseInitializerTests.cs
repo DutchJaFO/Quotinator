@@ -480,6 +480,141 @@ public class DatabaseInitializerTests
             .TryDeserialize(confirmation.MetadataKind.Parsed, confirmation.Metadata)!;
     }
 
+    // ── #303: alert when a reseed leaves import actions awaiting review ──────────────────────────
+
+    private static int ReviewAlertCount(IReadOnlyList<NotificationEntity> notifications)
+        => notifications.Count(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending);
+
+    private static ImportReviewPendingMetadataDto FirstReviewAlertPayload(IReadOnlyList<NotificationEntity> notifications)
+        => FirstReviewAlertPayloadOf(notifications
+            .First(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending));
+
+    private static ImportReviewPendingMetadataDto FirstReviewAlertPayloadOf(NotificationEntity alert)
+        => (ImportReviewPendingMetadataDto)NotificationMetadataKinds
+            .TryDeserialize(alert.MetadataKind.Parsed, alert.Metadata)!;
+
+    /// <summary>The <c>Import_Batch</c> rows that still exist — a reseed truncates the table, so a
+    /// batch from an earlier run is gone even though its alert remains until step 7 dismisses it.</summary>
+    private async Task<IReadOnlyList<string>> LiveBatchIdsAsync()
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return [.. await connection.QueryAsync<string>("SELECT Id FROM Import_Batch;")];
+    }
+
+    /// <summary>The issue's whole point: a file that left actions awaiting review says so.</summary>
+    [TestMethod]
+    public async Task Reseed_FileLeftAwaitingReview_WritesPendingReviewAlert()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        Assert.IsGreaterThan(0, await StagedActionCountAsync(),
+            "This fixture exists to leave actions awaiting review — if it no longer does, it is testing nothing.");
+
+        // Counted against the batches that still exist, not against every alert ever written. The first
+        // seed staged one batch and the reseed truncated it in favour of another, so two alerts exist
+        // at this point — dismissing the one whose batch is gone is step 7's job, and rows 20/21 assert
+        // it. Anchoring here on live batches states what step 5 delivers and stays true afterwards.
+        IReadOnlyList<string> liveBatchIds = await LiveBatchIdsAsync();
+        List<NotificationEntity> alerts = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending)];
+        List<NotificationEntity> forLiveBatches = [.. alerts.Where(n =>
+            liveBatchIds.Contains(FirstReviewAlertPayloadOf(n).BatchId, StringComparer.OrdinalIgnoreCase))];
+
+        Assert.HasCount(1, forLiveBatches, "One staged file that still has a batch is one alert.");
+        Assert.AreEqual(NotificationType.ActionRequired, forLiveBatches[0].Type.Parsed,
+            "Something is waiting on the operator, which is what ActionRequired means.");
+    }
+
+    /// <summary>
+    /// The negative control: a file that applied cleanly has nothing to review, and already gets #302's
+    /// Success confirmation instead. Both producers share one branch, so this proves the split holds.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_FileAppliedCleanly_WritesNoPendingReviewAlert()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        IReadOnlyList<NotificationEntity> all = await NotificationsAsync();
+
+        Assert.IsGreaterThan(0, ConfirmationCount(all),
+            "Positive control: the clean-apply branch must have produced its confirmations here.");
+        Assert.AreEqual(0, ReviewAlertCount(all),
+            "Nothing was left to review, so no alert — the two branches are mutually exclusive per file.");
+    }
+
+    /// <summary>
+    /// #303 deliberately differs from #302: a fresh install whose bundled content staged conflicts has
+    /// something to review, and nothing else in the UI says so.
+    /// </summary>
+    [TestMethod]
+    public async Task Initialise_FirstSeedWithConflicts_WritesPendingReviewAlert()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
+        await db.InitialiseAsync();
+
+        Assert.IsGreaterThan(0, await StagedActionCountAsync(),
+            "The first seed has to have staged something for this test to mean anything.");
+        Assert.AreEqual(1, ReviewAlertCount(await NotificationsAsync()),
+            "Unlike #302's confirmation, the alert is not gated on isReseed — a first install can need review too.");
+    }
+
+    /// <summary>The counts describe each reviewable state, not one undifferentiated total.</summary>
+    [TestMethod]
+    public async Task Reseed_StagedFile_CountsEachReviewableStatus()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        ImportReviewPendingMetadataDto payload = FirstReviewAlertPayload(await NotificationsAsync());
+
+        Assert.IsNotEmpty(payload.Counts, "A staged file has at least one reviewable state with rows.");
+        Assert.IsTrue(payload.Counts.All(c => c.Count > 0),
+            "Every entry describes real work; a state with nothing in it is omitted rather than reported as zero.");
+
+        List<string> reviewable = [.. payload.Counts.Select(c => c.Status)];
+        Assert.IsTrue(reviewable.All(s =>
+                s is nameof(ImportActionStatus.Pending) or nameof(ImportActionStatus.Blocked) or nameof(ImportActionStatus.Stale)),
+            $"Only reviewable states belong in the breakdown, but it carried: {string.Join(", ", reviewable)}");
+    }
+
+    /// <summary>The alert names the batch it reports, which is what its dismissal later matches on.</summary>
+    [TestMethod]
+    public async Task Reseed_StagedFile_AlertNamesItsBatchAndFile()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        ImportReviewPendingMetadataDto payload = FirstReviewAlertPayload(await NotificationsAsync());
+
+        Assert.AreEqual(Path.GetFileName(NikhilNamal17File), payload.FileName);
+        Assert.AreEqual(FileResourceOrigin.System, payload.Origin);
+        Assert.IsTrue(Guid.TryParse(payload.BatchId, out _),
+            $"BatchId must be a real batch id — dismissal matches on it. Got: '{payload.BatchId}'");
+    }
+
+    /// <summary>Provenance, on the same terms #302 established: never written without a known version.</summary>
+    [TestMethod]
+    public async Task Reseed_StagedFile_AlertRecordsAppVersionProvenance()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        List<NotificationEntity> alerts = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending)];
+
+        Assert.IsNotEmpty(alerts);
+        Assert.IsTrue(alerts.All(n => n.AppVersionId is not null),
+            "No notification may be written with unknown provenance — record the version first instead.");
+    }
+
     private async Task<int> StagedActionCountAsync()
     {
         using SqliteConnection connection = new($"Data Source={_dbPath}");

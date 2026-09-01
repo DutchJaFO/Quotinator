@@ -225,6 +225,62 @@ public sealed class QuotinatorDatabaseInitializer(
     }
 
     /// <summary>
+    /// #303: reports that one file's import actions are waiting on a decision, so the operator learns
+    /// it without knowing to check <c>/import/actions</c> or read the log.
+    /// </summary>
+    /// <param name="fileName">The seed file whose actions are staged.</param>
+    /// <param name="origin">Which directory the file came from — part of what identifies the alert.</param>
+    /// <param name="batchId">The batch those actions belong to; what the alert's own dismissal matches on.</param>
+    /// <param name="actions">Every import action the file produced, which is what the breakdown counts.</param>
+    private async Task AlertReviewPendingAsync(string fileName, SeedBatchOrigin origin, string batchId, IReadOnlyList<ImportActionEntity> actions)
+    {
+        // Only the states a human can actually act on. An action that is Decided, Applied or Discarded
+        // is not waiting for anyone, and counting it would overstate the work.
+        ImportActionStatus[] reviewable =
+        [
+            ImportActionStatus.Pending,
+            ImportActionStatus.Blocked,
+            ImportActionStatus.Stale,
+        ];
+
+        List<ImportReviewCountDto> counts = [.. actions
+            .Where(action => action.Status.Parsed is ImportActionStatus parsed && reviewable.Contains(parsed))
+            .GroupBy(action => action.Status.Parsed!.Value)
+            .Select(group => new ImportReviewCountDto { Status = group.Key.ToString(), Count = group.Count() })
+            .Where(count => count.Count > 0)
+            .OrderBy(count => count.Status, StringComparer.OrdinalIgnoreCase)];
+
+        if (counts.Count == 0) return;
+
+        ImportReviewPendingMetadataDto metadata = new()
+        {
+            FileName     = fileName,
+            Origin       = origin.ToFileResourceOrigin(),
+            BatchId      = batchId,
+            Counts       = counts,
+            ReleaseState = NotificationReleaseState.NotApplicable,
+        };
+
+        object[] bodyArgs = [fileName, counts.Sum(c => c.Count)];
+
+        string bodyKey = origin == SeedBatchOrigin.UserImports
+            ? NotificationMessageKeys.ImportReviewPendingUserBody
+            : NotificationMessageKeys.ImportReviewPendingBundledBody;
+
+        await NotificationSeeding.SeedWhileUnresolvedAsync(
+            _notificationReader, _notificationWriter, NotificationType.ActionRequired, metadata,
+            body: NotificationTranslations.Original(_notificationTextSource, bodyKey, bodyArgs),
+            appVersionId: await CurrentAppVersionIdAsync(),
+            title: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.ImportReviewPendingTitle),
+            dismissTrigger: NotificationDismissTrigger.ImportReviewResolved,
+            translations: NotificationTranslations.Build(
+                _notificationTextSource,
+                NotificationMessageKeys.ImportReviewPendingTitle,
+                bodyKey,
+                bodyArgs: bodyArgs));
+    }
+
+    /// <summary>
     /// The <c>System_AppVersion</c> row a notification written from here is attributed to, recording
     /// the running version first when nothing has been recorded yet (#302).
     /// <para>
@@ -535,6 +591,11 @@ public sealed class QuotinatorDatabaseInitializer(
                 {
                     stagedFiles.Add(fileName);
                     Logger.LogFileStagedAwaitingReview(fileName, batchIdStr, applyResult.PendingActionIds.Count);
+
+                    // Not gated on isReseed, unlike the confirmation above (#303): a first install whose
+                    // bundled content staged conflicts genuinely has something to review, and the startup
+                    // modal reports aggregate counts rather than that actions are waiting.
+                    await AlertReviewPendingAsync(fileName, batch.Origin, batchIdStr, actions);
                 }
             }
         }
