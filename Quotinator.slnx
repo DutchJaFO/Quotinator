@@ -423,6 +423,7 @@
     <File Path="scripts/testing/execute-sql.csx" />
     <File Path="scripts/testing/http.csx" />
     <File Path="scripts/testing/sqlite-storage-probe.csx" />
+    <File Path="scripts/testing/stage-import-conflict.csx" />
     <File Path="scripts/testing/test-env.csx" />
   </Folder>
   <Folder Name="/scripts/hooks/">

@@ -310,8 +310,21 @@ deliberately not here — see Scope changes 6.
 | 34 | ✅ | The alert reaches `/notifications`, the startup modal after a restart, and the review page | Automated (T2) | same document, steps 3–4 |
 | 35 | ✅ | Resolved and obsolete are distinguishable in one history, and alerts stay bounded | Automated (T2) | same document, steps 5–6 |
 | 36 | ✅ | `/import-review` behaves as `/notifications` does on a degraded container | Automated (T2) | same document, step 7 — both currently `500`, a pre-existing defect recorded below |
-| 37 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: after a reseed supersedes an earlier alert, the inactive row reads `Obsolete`, not `Dismissed` |
-| 38 | ❌ | The alert, its options, the page and the link render correctly | Live | T1: stage a batch with conflicts, use an option from the alert, click through, decide a row |
+| 37 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: with the fixture staged, reseed twice; the inactive rows read `Obsolete` and `Resolved`, not both `Dismissed` |
+| 38 | ❌ | The alert, its options, the page and the link render correctly | Live | T1: `dotnet-script scripts/testing/stage-import-conflict.csx -- --imports src/Quotinator.Api/bin/Debug/net10.0/data/imports`, restart, then use an option from the alert, click through, and decide a row |
+
+**T1 needs a staged conflict, because the bundled files cannot produce one** (developer, 2026-09-01).
+Neither T1 nor T2 can reach this issue's behaviour with bundled content alone: a first seed inserts
+everything as an Add, so nothing disagrees with anything, and `Quotinator__DefaultConflictPolicy=Review`
+does not help because the manifest's per-file policy overrides it.
+
+`scripts/testing/stage-import-conflict.csx` writes a user-imports file re-stating a real bundled quote's
+id with different text under a `review` policy. The user-imports batch seeds after the bundled ones, so
+it meets content already stored — the only shape that stages a decision. Verified against a container
+before being written into these rows: one Pending action, one alert, `origin=User`.
+
+Delete the two files it writes (`conflicting.json`, `manifest.json`) from the imports directory to
+return to a clean seed.
 
 **T2 pass, 2026-09-01 — green, and it found four things no unit test could.**
 

@@ -27,6 +27,10 @@ Step 1 therefore bind-mounts a user-imports file that re-states an already-bundl
 different text, under a `review` policy. The user-imports batch seeds after the bundled ones, so it
 meets content that is already stored — which is the only shape that stages a decision.
 
+`scripts/testing/stage-import-conflict.csx` writes that fixture, rather than this document composing it
+inline. T1 hits the same wall for the same reason and needs the same file, and a fixture defined in two
+places drifts — the copy that is not being run stops matching what the code does.
+
 **Count this alert, never the total number of notifications.** Every count filters on `metadataKind` of
 `importReviewPending`. PowerShell's `-eq` is case-insensitive, which is why this matches the API's
 lower-cased `importreviewpending`.
@@ -47,22 +51,10 @@ was truncated was not reviewed; one whose actions were decided was. A test that 
 ```powershell
 $bind    = Join-Path $env:TEMP "qt-review-20-bind"
 $imports = Join-Path $bind "imports"
-New-Item -ItemType Directory -Force $imports | Out-Null
 
-# Re-states a bundled quote's own id with different text. The id must match a real bundled quote, or
-# this is an Add and stages nothing — read it rather than hardcoding it.
-$bundled = (Get-Content data/sources/quotinator-curated.json -Raw | ConvertFrom-Json)
-$target  = if ($bundled.quotes) { $bundled.quotes[0] } else { $bundled[0] }
-
-@{ quotes = @(@{
-    id = $target.id; quote = "A deliberately different text, to force a decision."
-    originalLanguage = "en"; source = $target.source; date = $target.date
-    character = $target.character; type = $target.type; genres = @("comedy")
-}) } | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $imports "conflicting.json") -Encoding utf8
-
-@{ duplicateResolution = @{ default = "review" }
-   files = @(@{ file = "conflicting.json"; name = "test/conflicting" })
-} | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $imports "manifest.json") -Encoding utf8
+# Writes a user-imports file re-stating a real bundled quote's id with different text, under a `review`
+# policy. Shared with T1, which needs the same fixture for the same reason.
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports $imports
 
 dotnet script scripts/testing/test-env.csx -- create --name qt-review-20 --port 19520 `
   --image quotinator:local --env Quotinator__AdminApiKey=t2-303 --bind $bind
