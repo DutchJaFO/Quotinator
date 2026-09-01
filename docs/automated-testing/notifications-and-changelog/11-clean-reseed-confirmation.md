@@ -154,8 +154,79 @@ later reseed — the failure mode dedupe-while-active exists to avoid.
 A confirmation carrying that trigger would be wiped out by the very reseed that wrote it, and the only
 place that shows is a live call where both run in order.
 
+### 7. Confirm all four seeding variants, from real configuration
+
+Steps 1–6 only ever exercise one of the four states seeding can be in. Which files a reseed sees comes
+from configuration and from what is on disk, and neither is reachable from a unit test — a unit test
+hands the initializer a batch list directly, so it can never prove that
+`Quotinator__IncludeDefaultSources=false` actually produces an empty one, nor that a file dropped in
+`{dataDir}/imports/` becomes a user-imports batch.
+
+Each variant gets its own container, because the state is fixed at startup.
+
+```powershell
+$imports = Join-Path $env:TEMP "qt-notif-11-bind\imports"
+New-Item -ItemType Directory -Force $imports | Out-Null
+Copy-Item data/sources/quotinator-curated.json $imports -Force
+Copy-Item data/sources/manifest.json $imports -Force -ErrorAction SilentlyContinue
+
+function Confirmations($port) {
+  $items = (Invoke-RestMethod "http://localhost:$port/api/v1/notifications?pageSize=0").items
+  @($items | Where-Object { $_.metadataKind -eq 'reseedFileApplied' -and -not $_.isDismissed })
+}
+function ReseedAndCount($name, $port, $extra) {
+  dotnet script scripts/testing/test-env.csx -- create --name $name --port $port `
+    --image quotinator:local --env Quotinator__AdminApiKey=t2-302 @extra
+  Invoke-RestMethod -Method Post -Headers @{ "X-Api-Key" = "t2-302" } `
+    "http://localhost:$port/api/v1/admin/database/reseed" | Out-Null
+  $c = @(Confirmations $port)
+  "$name -> $($c.Count) confirmation(s)"
+  $c | ForEach-Object {
+    $p = $_.metadata | ConvertFrom-Json
+    "    $($p.fileName)  origin=$($p.origin)  counts=$(@($p.counts).Count)"
+  }
+  dotnet script scripts/testing/test-env.csx -- destroy --name $name | Out-Null
+}
+
+ReseedAndCount "qt-notif-11a" 19512 @("--env","Quotinator__IncludeDefaultSources=false")
+ReseedAndCount "qt-notif-11b" 19513 @()
+ReseedAndCount "qt-notif-11c" 19514 @("--env","Quotinator__IncludeDefaultSources=false","--bind","$(Split-Path $imports)")
+ReseedAndCount "qt-notif-11d" 19515 @("--bind","$(Split-Path $imports)")
+```
+
+**Expected:**
+
+| Variant | Container | Confirmations |
+|---|---|---|
+| No files | `11a` | `0`, and `/health` still `healthy` |
+| Bundled only | `11b` | the step 2 count |
+| User imports only | `11c` | one, `origin=User`, naming the file placed in `imports/` |
+| Bundled + user imports | `11d` | the step 2 count plus one |
+
+**`11d` must show the same file name twice, once per origin.** Copying a bundled file into `imports/`
+is the ordinary way a user customises one, so both directories hold `quotinator-curated.json`; the two
+confirmations are told apart by `origin`, not by name. The user copy reports `counts=0` because the
+bundled copy applied that content first — that empty breakdown is kept deliberately, since it still
+shows which sections were used.
+
+**Read `origin` from the payload, not the count alone.** Before `origin` existed, these two rows were
+distinguishable only by their breakdowns happening to differ — two same-named files that both applied
+nothing shared an identity, and the second was silently suppressed. That is the defect this variant
+found, and asserting only the total would not have caught it.
+
+The zero is as load-bearing as the others. A reseed with nothing configured must be a clean no-op that
+still answers `200` — not an error, and not a confirmation reporting that nothing happened. And `11c`
+is what proves the confirmation is not a bundled-content feature: the clean-apply branch it is written
+from sits immediately after an auto-purge step that *does* branch on origin, so origin is live in this
+code path.
+
+**On failure:** if `11c` reports `0`, check the imports directory actually reached `/data/imports`
+inside the container before concluding the producer is origin-gated — a bind mount that did not land
+looks identical from the API.
+
 ## Cleanup
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-11
+Remove-Item -Recurse -Force (Join-Path $env:TEMP "qt-notif-11-bind")
 ```

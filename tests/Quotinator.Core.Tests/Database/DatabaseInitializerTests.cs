@@ -239,17 +239,85 @@ public class DatabaseInitializerTests
         Assert.IsEmpty(confirmations, "The file left actions awaiting review — there is nothing clean to confirm.");
     }
 
-    /// <summary>A reseed with no configured sources touches no file, so there is nothing to report.</summary>
+    /// <summary>
+    /// A reseed with no configured sources touches no file, so there is nothing to report.
+    /// <para>
+    /// Carries its own positive control against the same database rather than asserting emptiness
+    /// alone: "no confirmations" is trivially true of a build where the producer was never wired at
+    /// all, so the first half establishes that this harness does write them before the second half
+    /// shows a fileless reseed adding none.
+    /// </para>
+    /// </summary>
     [TestMethod]
     public async Task Reseed_NoConfiguredFiles_WritesNoNotification()
     {
-        QuotinatorDatabaseInitializer db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer seeded = CreateInitializer([AllFilesBatch()]);
+        await seeded.InitialiseAsync();
+        await seeded.ReseedAsync();
+
+        int afterRealReseed = ConfirmationCount(await NotificationsAsync());
+        Assert.IsGreaterThan(0, afterRealReseed,
+            "Positive control: the producer must be live here, or the emptiness asserted below proves nothing.");
+
+        QuotinatorDatabaseInitializer noFiles = CreateInitializer([]);
+        await noFiles.ReseedAsync();
+
+        Assert.AreEqual(afterRealReseed, ConfirmationCount(await NotificationsAsync()),
+            "No files were seeded, so no per-file confirmation exists to write — not even an empty one.");
+    }
+
+    private static int ConfirmationCount(IReadOnlyList<NotificationEntity> notifications)
+        => notifications.Count(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied);
+
+    /// <summary>
+    /// Third of the four seeding variants: files present, but from the user imports directory rather
+    /// than the bundled one. The confirmation must not be a bundled-content feature — the clean-apply
+    /// branch it is written from sits directly after an auto-purge step that *does* branch on origin
+    /// (<c>_autoPurgeUserImportActions</c> versus <c>_autoPurgeBundledImportActions</c>), so origin is
+    /// live in this code path and needs proving rather than assuming.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_UserImportsOnly_ConfirmsEachFile()
+    {
+        SeedBatch userBatch = new([new SeedFile(CuratedFile, null)],
+            ManifestPolicy.HardcodedDefault, "user imports", SeedBatchOrigin.UserImports);
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([userBatch]);
         await db.InitialiseAsync();
         await db.ReseedAsync();
 
-        Assert.IsEmpty((await NotificationsAsync())
-            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied),
-            "No files were seeded, so no per-file confirmation exists to write — not even an empty one.");
+        Assert.AreEqual(1, ConfirmationCount(await NotificationsAsync()),
+            "One user-import file applied cleanly, so it gets one confirmation — origin does not gate this.");
+    }
+
+    /// <summary>
+    /// Fourth variant: both origins in one reseed. The count is per file across both batches, not per
+    /// batch and not bundled-only — the loop runs over every batch's files, and nothing about the
+    /// confirmation is scoped to a single batch.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_BundledAndUserImports_ConfirmsEveryFileFromBothOrigins()
+    {
+        SeedBatch bundled = new([new SeedFile(VilaboimFile, null)],
+            ManifestPolicy.HardcodedDefault, "bundled sources", SeedBatchOrigin.Bundled);
+        SeedBatch userBatch = new([new SeedFile(CuratedFile, null)],
+            ManifestPolicy.HardcodedDefault, "user imports", SeedBatchOrigin.UserImports);
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([bundled, userBatch]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+
+        Assert.HasCount(2, confirmations, "Two files across two origins is two confirmations.");
+
+        List<string> files = [.. confirmations
+            .Select(n => ((ReseedFileAppliedMetadataDto)NotificationMetadataKinds
+                .TryDeserialize(n.MetadataKind.Parsed, n.Metadata)!).FileName)];
+
+        Assert.Contains(Path.GetFileName(VilaboimFile), files, "The bundled file must be named in its own confirmation.");
+        Assert.Contains(Path.GetFileName(CuratedFile), files, "The user-import file must be named in its own confirmation.");
     }
 
     /// <summary>

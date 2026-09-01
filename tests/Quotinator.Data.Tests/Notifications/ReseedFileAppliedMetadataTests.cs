@@ -56,6 +56,7 @@ public class ReseedFileAppliedMetadataTests
         ReseedFileAppliedMetadataDto written = new()
         {
             FileName = "quotinator-curated.json",
+            Origin = FileResourceOrigin.User,
             Counts =
             [
                 new ReseedEntityCountDto { EntityType = "Quote",  Added = 120, Modified = 3 },
@@ -78,6 +79,7 @@ public class ReseedFileAppliedMetadataTests
 
         ReseedFileAppliedMetadataDto payload = (ReseedFileAppliedMetadataDto)read;
         Assert.AreEqual("quotinator-curated.json", payload.FileName);
+        Assert.AreEqual(FileResourceOrigin.User, payload.Origin, "Origin must survive the column round-trip, or identity cannot use it.");
         Assert.HasCount(2, payload.Counts);
         Assert.AreEqual("Quote", payload.Counts[0].EntityType);
         Assert.AreEqual(120, payload.Counts[0].Added);
@@ -121,9 +123,35 @@ public class ReseedFileAppliedMetadataTests
             "A breakdown covering fewer entity types is a different result.");
     }
 
-    private static ReseedFileAppliedMetadataDto Payload(string fileName, params (string Type, int Added, int Modified)[] counts) => new()
+    /// <summary>
+    /// Two files of the same name from different directories are two files, and must not collapse into
+    /// one notification.
+    /// <para>
+    /// Found live during #302's T2 pass, running the bundled + user-imports variant: a user copy of
+    /// <c>quotinator-curated.json</c> applied after the bundled one had already added everything, so
+    /// its breakdown filtered to empty. Both were written that time only because their breakdowns
+    /// happened to differ — had the bundled copy also been a no-op, the two would have shared an
+    /// identity and the second would have been silently suppressed.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void Identity_DiffersByOrigin_ForTheSameFileNameAndBreakdown()
+    {
+        ReseedFileAppliedMetadataDto bundled = Payload("quotinator-curated.json", FileResourceOrigin.System);
+        ReseedFileAppliedMetadataDto user    = Payload("quotinator-curated.json", FileResourceOrigin.User);
+
+        Assert.IsFalse(bundled.IsSameNotificationAs(user),
+            "Same bare file name, same empty breakdown, different directory — two files, so two confirmations.");
+    }
+
+    private static ReseedFileAppliedMetadataDto Payload(string fileName, params (string Type, int Added, int Modified)[] counts) =>
+        Payload(fileName, FileResourceOrigin.System, counts);
+
+    private static ReseedFileAppliedMetadataDto Payload(
+        string fileName, FileResourceOrigin origin, params (string Type, int Added, int Modified)[] counts) => new()
     {
         FileName = fileName,
+        Origin = origin,
         Counts = [.. counts.Select(c => new ReseedEntityCountDto { EntityType = c.Type, Added = c.Added, Modified = c.Modified })],
         ReleaseState = NotificationReleaseState.NotApplicable,
     };

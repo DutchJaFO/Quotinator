@@ -19,9 +19,26 @@ public sealed class ReseedFileAppliedMetadataDto() : NotificationMetadataDto(Not
     public required string FileName { get; init; }
 
     /// <summary>
-    /// What the file did, one entry per entity type that added or modified at least one row. Empty is a
-    /// legitimate value in the payload's own terms, though the producer never writes one — a file that
-    /// changed nothing still applied cleanly.
+    /// Which directory the file came from — bundled with the image, or the user's own imports folder.
+    /// <para>
+    /// Part of the identity, because <see cref="FileName"/> is a bare name: the bundled sources folder
+    /// and the user imports folder can hold a file of the same name, and a user copying a bundled file
+    /// in order to customise it produces exactly that. Without origin, two such files are one
+    /// notification to the dedupe comparison and indistinguishable to the reader.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("origin")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public required FileResourceOrigin Origin { get; init; }
+
+    /// <summary>
+    /// What the file did, one entry per entity type that added or modified at least one row.
+    /// <para>
+    /// Empty is a real, deliberately kept case, not a theoretical one: a file whose content another
+    /// file already applied reseeds cleanly having changed nothing. The confirmation is still written,
+    /// because it shows which sections were actually used and reminds the reader that their own files
+    /// can be seeded too.
+    /// </para>
     /// </summary>
     [JsonPropertyName("counts")]
     public IReadOnlyList<ReseedEntityCountDto> Counts { get; init; } = [];
@@ -39,6 +56,7 @@ public sealed class ReseedFileAppliedMetadataDto() : NotificationMetadataDto(Not
     protected override IEnumerable<object?> IdentityComponents =>
     [
         FileName,
+        Origin,
         string.Join('\n', Counts
             .OrderBy(c => c.EntityType, StringComparer.OrdinalIgnoreCase)
             .Select(c => $"{c.EntityType}:{c.Added}:{c.Modified}")),

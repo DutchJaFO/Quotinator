@@ -39,10 +39,21 @@ public static class NotificationMessageKeys
     public const string ReseedFileAppliedTitle = "NotificationReseedFileAppliedTitle";
 
     /// <summary>
-    /// Body for the confirmation that one file reseeded with nothing left to review. Takes the file
-    /// name as <c>{0}</c>, the number of rows added as <c>{1}</c>, and the number modified as
-    /// <c>{2}</c>. The per-entity-type breakdown behind those totals lives in the notification's
-    /// metadata payload, not in this text.
+    /// Body for the confirmation that one <b>bundled</b> file reseeded with nothing left to review.
+    /// Takes the file name as <c>{0}</c>, the number of rows added as <c>{1}</c>, and the number
+    /// modified as <c>{2}</c>. The per-entity-type breakdown behind those totals lives in the
+    /// notification's metadata payload, not in this text.
     /// </summary>
-    public const string ReseedFileAppliedBody = "NotificationReseedFileAppliedBody";
+    /// <remarks>
+    /// Split by origin rather than taking the origin as a fourth argument: an argument is a single
+    /// value applied to every language, so a localised "bundled"/"user" would appear in one language
+    /// regardless of which one the reader asked for.
+    /// </remarks>
+    public const string ReseedFileAppliedBundledBody = "NotificationReseedFileAppliedBundledBody";
+
+    /// <summary>
+    /// Body for the confirmation that one file from the <b>user imports</b> folder reseeded with
+    /// nothing left to review. Same arguments as <see cref="ReseedFileAppliedBundledBody"/>.
+    /// </summary>
+    public const string ReseedFileAppliedUserBody = "NotificationReseedFileAppliedUserBody";
 }

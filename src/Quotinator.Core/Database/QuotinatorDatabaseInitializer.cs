@@ -175,8 +175,9 @@ public sealed class QuotinatorDatabaseInitializer(
     /// that knows both which file and that it left nothing pending.
     /// </summary>
     /// <param name="fileName">The seed file that applied cleanly.</param>
+    /// <param name="origin">Which directory the file came from — part of what identifies the confirmation, since <paramref name="fileName"/> is a bare name that both directories can hold.</param>
     /// <param name="actions">Every import action the file produced, which is what the breakdown counts.</param>
-    private async Task ConfirmFileAppliedCleanlyAsync(string fileName, IReadOnlyList<ImportActionEntity> actions)
+    private async Task ConfirmFileAppliedCleanlyAsync(string fileName, SeedBatchOrigin origin, IReadOnlyList<ImportActionEntity> actions)
     {
         List<ReseedEntityCountDto> counts = [.. actions
             .GroupBy(action => action.EntityType, StringComparer.OrdinalIgnoreCase)
@@ -195,15 +196,23 @@ public sealed class QuotinatorDatabaseInitializer(
         ReseedFileAppliedMetadataDto metadata = new()
         {
             FileName     = fileName,
+            Origin       = origin.ToFileResourceOrigin(),
             Counts       = counts,
             ReleaseState = NotificationReleaseState.NotApplicable,
         };
 
         object[] bodyArgs = [fileName, counts.Sum(c => c.Added), counts.Sum(c => c.Modified)];
 
+        // One key per origin rather than an origin word passed as an argument: bodyArgs is a single
+        // array applied to every language, so a localised "bundled"/"user" would render in one
+        // language for every reader.
+        string bodyKey = origin == SeedBatchOrigin.UserImports
+            ? NotificationMessageKeys.ReseedFileAppliedUserBody
+            : NotificationMessageKeys.ReseedFileAppliedBundledBody;
+
         await NotificationSeeding.SeedWhileUnresolvedAsync(
             _notificationReader, _notificationWriter, NotificationType.Success, metadata,
-            body: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.ReseedFileAppliedBody, bodyArgs),
+            body: NotificationTranslations.Original(_notificationTextSource, bodyKey, bodyArgs),
             appVersionId: await CurrentAppVersionIdAsync(),
             title: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.ReseedFileAppliedTitle),
             // Deliberately no dismissTrigger: POST /admin/database/reseed dismisses every Reseed-triggered
@@ -211,7 +220,7 @@ public sealed class QuotinatorDatabaseInitializer(
             translations: NotificationTranslations.Build(
                 _notificationTextSource,
                 NotificationMessageKeys.ReseedFileAppliedTitle,
-                NotificationMessageKeys.ReseedFileAppliedBody,
+                bodyKey,
                 bodyArgs: bodyArgs));
     }
 
@@ -520,7 +529,7 @@ public sealed class QuotinatorDatabaseInitializer(
                     }
 
                     if (isReseed)
-                        await ConfirmFileAppliedCleanlyAsync(fileName, actions);
+                        await ConfirmFileAppliedCleanlyAsync(fileName, batch.Origin, actions);
                 }
                 else
                 {
@@ -621,7 +630,7 @@ public sealed class QuotinatorDatabaseInitializer(
         if (File.Exists(seedFile.FilePath))
         {
             bool isUserImports = seedBatch.Origin == SeedBatchOrigin.UserImports;
-            FileResourceOrigin fileResourceOrigin   = isUserImports ? FileResourceOrigin.User : FileResourceOrigin.System;
+            FileResourceOrigin fileResourceOrigin   = seedBatch.Origin.ToFileResourceOrigin();
             // "sources"/"imports" per #252 — the only two local directories any write path has ever
             // captured from; a future consumer of System/User origin unrelated to quote sources
             // registers its own key without stretching what these two mean.
