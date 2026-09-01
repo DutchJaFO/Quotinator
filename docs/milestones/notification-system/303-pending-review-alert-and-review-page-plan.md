@@ -1,6 +1,6 @@
 # #303 — Notification + minimal review page: alert when a reseed leaves import actions pending review
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 8)
 **GitHub issue:** #303
 **Tiers required:** T1, T2
 **Depends on:** #278, #302, #304, #312, #319
@@ -30,7 +30,7 @@ post-hoc read of `LastSeedReport` from `AdminEndpoints.cs`. The existing `else` 
 (`applyResult is not null` — the batch was staged awaiting review, already logged via
 `Logger.LogFileStagedAwaitingReview`) is the exact hook point.
 
-The review page in steps 7–10 is unaffected by that relocation.
+The review page in steps 8–11 is unaffected by that relocation.
 
 ## Scope changes
 
@@ -63,7 +63,7 @@ and every pattern #302 established was missing.
 
 6. **Developer decision, 2026-09-01: the alert is dismissed when its review is resolved**, and that
    implies a review *action* on the notification in future — the equivalent of #304's Run button,
-   scoped as its own issue rather than folded in here. #303 delivers the link (step 10); the action
+   scoped as its own issue rather than folded in here. #303 delivers the link (step 11); the action
    itself is future work.
 
 ---
@@ -79,7 +79,9 @@ Four members, in one step and before the migration that constrains three of them
 - `NotificationMetadataKind.ImportReviewPending` — the payload shape (step 2).
 - `NotificationDismissTrigger.ImportReviewResolved` — what supersedes the alert (step 6).
 - `NotificationDismissReason.Obsolete` — why a superseded alert went inactive (step 7).
-- `NotificationTable.NotificationDisplayStatus.Obsolete` — how that reads on the page (step 7).
+- `NotificationTable.NotificationDisplayStatus.Obsolete` — how that reads on the page. Delivered here
+  with its own case and label, because `NotificationTable.razor`'s `default` branch renders **Active**:
+  an unmapped member would have shown a superseded alert as active.
 
 **Restructured mid-execution, 2026-09-01 — recorded because it was a planning failure.** These were
 originally spread across steps 1, 5 and 6, with the migration widening all three CHECKs at step 2. That
@@ -104,14 +106,14 @@ name, and the bundled and imports directories can both hold it.
 
 **`BatchId` is part of `IdentityComponents`** (developer decision, 2026-09-01): the batch *is* the set
 of pending reviews the alert describes, so two batches are two alerts even for the same file. It is
-also what step 5's dismissal matches on.
+also what step 6's dismissal matches on.
 
 ### 3. Widen the three CHECK constraints in one migration
 
 **Status:** ✅ Done — migration 18, `NotificationImportReviewMigrations`
 
-`MetadataKind` gains `ImportReviewPending`, `DismissTriggerKey` gains step 5's new trigger, and
-`DismissReason` gains `Obsolete` (step 6). All three ride one table rebuild rather than a rebuild each
+`MetadataKind` gains `ImportReviewPending`, `DismissTriggerKey` gains step 6's trigger, and
+`DismissReason` gains `Obsolete` (step 7). All three ride one table rebuild rather than a rebuild each
 — migration 15's own precedent, for the same reason (constraints on one table, copying every row three
 times for no gain). The next free version in `DatabaseInitializer.DataOwnedMigrations`, **18** as of
 2026-09-01.
@@ -167,7 +169,7 @@ capability on `INotificationWriter`, not an existing one.
 
 ### 7. Dismiss alerts whose batch has been removed
 
-**Status:** 🔄 In progress
+**Status:** ✅ Done — `DismissAlertsForRemovedBatchesAsync`, called before the reseed restages
 
 **Developer decision, 2026-09-01: when a batch is removed, its alerts are dismissed — they describe a
 review that can no longer be applied.** This is not a tidy-up bolted onto step 5; it is what keeps
@@ -255,11 +257,11 @@ deliberately not here — see Scope changes 6.
 | 15 | ✅ | Resolving a batch dismisses that batch's alert, with reason `Resolved` | Unit test | `SqliteImportActionServiceTests.ApplyBatch_WhenFullyResolved_DismissesItsOwnReviewAlert` |
 | 16 | ✅ | Resolving one batch does not dismiss another batch's alert | Unit test | `SqliteImportActionServiceTests.ApplyBatch_DoesNotDismissAnotherBatchesReviewAlert` |
 | 17 | ✅ | Discarding a batch dismisses its alert too | Unit test | `SqliteImportActionServiceTests.DiscardBatch_DismissesItsOwnReviewAlert` |
-| 18 | ❌ | A reseed dismisses every alert whose batch it truncated, with reason `Obsolete` | Unit test | `DatabaseInitializerTests.Reseed_DismissesAlertsForRemovedBatches` |
+| 18 | ✅ | A reseed dismisses every alert whose batch it truncated, with reason `Obsolete` | Unit test | `DatabaseInitializerTests.Reseed_DismissesAlertsForRemovedBatches` |
 | 19 | ✅ | `Obsolete` is distinguishable from `Dismissed` and `Resolved` on a stored row | Unit test | `NotificationWriterTests.DismissedAsObsolete_ReadsBackAsObsolete` |
 | 20 | ✅ | The Status column renders `Obsolete` rather than falling back to "Dismissed" | Unit test | `NotificationTableTests.GetDisplayStatus_ObsoleteReason_ReportsObsolete` |
-| 21 | ❌ | A reseed's new alerts are distinct rows from the previous run's, not updates to them | Unit test | `DatabaseInitializerTests.Reseed_Twice_RaisesNewAlertsRatherThanReusingTheOld` |
-| 22 | ❌ | Alerts do not accumulate across repeated reseeds — only the newest batch's are active | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_LeavesOnlyTheLatestBatchesAlertsActive` |
+| 21 | ✅ | A reseed's new alerts are distinct rows from the previous run's, not updates to them | Unit test | `DatabaseInitializerTests.Reseed_Twice_RaisesNewAlertsRatherThanReusingTheOld` |
+| 22 | ✅ | Alerts do not accumulate across repeated reseeds — only the newest batch's are active | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_LeavesOnlyTheLatestBatchesAlertsActive` |
 | 23 | ❌ | The review page lists every active `Pending`/`Blocked`/`Stale` action across all batches | Unit test | `ImportReviewPageTests.Lists_EveryActiveActionAcrossBatches` |
 | 24 | ❌ | Deciding a row removes it from the active list | Unit test | `ImportReviewPageTests.DecidedRow_LeavesTheActiveList` |
 | 25 | ❌ | The page is exempt in `DatabaseHealthGateMiddleware` | Unit test | `DatabaseHealthGateMiddlewareTests` (alongside the existing `/notifications` case) |
