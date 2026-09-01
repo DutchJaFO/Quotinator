@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-09-01 16:53 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-09-01 19:09 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Highlights
+- A notification whose action takes a while now says it is running, and its button disappears until it finishes — so a long reseed no longer looks like a click that did nothing, and it can no longer be started twice by accident.
 - You can now manage backups without touching the server's files: see what backups exist and how much room is left, make one whenever you want, download one to keep somewhere safe, and delete old ones to free up space. If a backup cannot be made, Quotinator now says which obstacle is in the way and what to do about it, instead of failing without explanation.
 - Quotinator now starts even when its data folder cannot be written to — a read-only volume, or the wrong permissions. Instead of shutting down, it starts in a limited state, says plainly what is wrong and how to fix it, and keeps its pages and API documentation reachable so you can act on it.
 - Quote source updates now allow considerably more time to connect before giving up, so a slow or briefly unavailable connection no longer causes an update to be skipped. When a source genuinely cannot be reached, Quotinator carries on with the copy it already has.

@@ -367,6 +367,7 @@
     <File Path="docs/automated-testing/notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/10-reseed-recommendation-and-action.md" />
     <File Path="docs/automated-testing/notifications-and-changelog/11-clean-reseed-confirmation.md" />
+    <File Path="docs/automated-testing/notifications-and-changelog/12-running-action-state.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/import-and-staged-actions/">
     <File Path="docs/automated-testing/import-and-staged-actions/01-staged-action-review-workflow.md" />

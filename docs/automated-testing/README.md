@@ -1065,6 +1065,7 @@ different question in each.
 | 09 | [Upgrading translates the notification a released build already wrote](notifications-and-changelog/09-upgrade-translates-the-shipped-announcement.md) | no |
 | 10 | [A reset recommends a reseed, and running it resolves the condition](notifications-and-changelog/10-reseed-recommendation-and-action.md) | no |
 | 11 | [A reseed confirms each file that applied cleanly, once per result](notifications-and-changelog/11-clean-reseed-confirmation.md) | no |
+| 12 | [A running notification action says so, and cannot be started twice](notifications-and-changelog/12-running-action-state.md) | no |
 
 ### `import-and-staged-actions/`
 

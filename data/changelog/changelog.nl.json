@@ -10,8 +10,9 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 302, 303, 304, 309, 312, 313, 319, 320, 323, 325, 326, 349],
+    "issues": [81, 302, 303, 304, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367],
     "highlights": [
+      "Een melding waarvan de actie even duurt geeft nu aan dat hij bezig is, en de knop verdwijnt tot hij klaar is — zo lijkt een lange herinlezing niet langer op een klik die niets deed, en kan hij niet meer per ongeluk twee keer worden gestart.",
       "Je kunt back-ups nu beheren zonder de bestanden op de server aan te raken: zien welke back-ups er zijn en hoeveel ruimte er over is, er zelf een maken wanneer je wilt, er een downloaden om veilig te bewaren, en oude verwijderen om ruimte vrij te maken. Als er geen back-up gemaakt kan worden, meldt Quotinator nu welk obstakel in de weg staat en wat je eraan kunt doen, in plaats van zonder uitleg te falen.",
       "Quotinator start nu ook wanneer er niet naar de datamap geschreven kan worden — een alleen-lezen volume, of verkeerde rechten. In plaats van af te sluiten start het in een beperkte toestand, meldt duidelijk wat er mis is en hoe je het oplost, en houdt de pagina's en de API-documentatie bereikbaar zodat je er iets mee kunt.",
       "Het bijwerken van quotebronnen krijgt nu aanzienlijk meer tijd om verbinding te maken voordat het opgeeft, zodat een trage of kortstondig onbereikbare verbinding niet langer een update overslaat. Wanneer een bron echt niet bereikbaar is, gaat Quotinator verder met de kopie die het al heeft.",

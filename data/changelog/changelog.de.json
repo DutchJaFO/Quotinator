@@ -10,8 +10,9 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 302, 303, 304, 309, 312, 313, 319, 320, 323, 325, 326, 349],
+    "issues": [81, 302, 303, 304, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367],
     "highlights": [
+      "Eine Benachrichtigung, deren Aktion länger dauert, zeigt jetzt an, dass sie läuft, und ihre Schaltfläche verschwindet bis zum Abschluss — ein langer Neuaufbau sieht damit nicht mehr wie ein wirkungsloser Klick aus und lässt sich nicht mehr versehentlich zweimal starten.",
       "Sicherungen lassen sich jetzt verwalten, ohne die Dateien auf dem Server anzufassen: sehen, welche Sicherungen vorhanden sind und wie viel Platz bleibt, jederzeit selbst eine anlegen, eine herunterladen und sicher aufbewahren sowie alte löschen, um Platz freizugeben. Kann keine Sicherung angelegt werden, benennt Quotinator jetzt das Hindernis und was dagegen zu tun ist, statt ohne Erklärung fehlzuschlagen.",
       "Quotinator startet jetzt auch dann, wenn sein Datenverzeichnis nicht beschreibbar ist — ein schreibgeschütztes Volume oder falsche Berechtigungen. Statt sich zu beenden, startet es in einem eingeschränkten Zustand, benennt klar das Problem und dessen Behebung und hält Seiten und API-Dokumentation erreichbar, damit Sie handeln können.",
       "Beim Aktualisieren von Zitatquellen steht nun deutlich mehr Zeit für den Verbindungsaufbau zur Verfügung, bevor aufgegeben wird, sodass eine langsame oder kurzzeitig nicht erreichbare Verbindung keine Aktualisierung mehr ausfallen lässt. Ist eine Quelle wirklich nicht erreichbar, arbeitet Quotinator mit der bereits vorhandenen Kopie weiter.",

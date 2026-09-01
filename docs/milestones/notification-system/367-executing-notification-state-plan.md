@@ -1,6 +1,6 @@
 # #367 — Notification actions give no feedback while they run
 
-**Status:** Planning
+**Status:** Waiting for release
 **GitHub issue:** #367
 **Tiers required:** T1, T2
 **Depends on:** #278, #304
@@ -131,7 +131,7 @@ removes the possibility instead of documenting it.
 Consequence for the table: row 11's verification moved from `NotificationsPageTests` (a class that
 would have had to exist to reach a private page method) to
 `NotificationExecutionStateTests.RunExclusivelyAsync_WhileRunning_DoesNotInvokeTheActionAgain`, and a
-a row 12 was added for the throwing case, which only became reachable once the guard lived in a testable
+row 12 was added for the throwing case, which only became reachable once the guard lived in a testable
 place.
 
 The Run control is not offered at all for a row that is executing — refusing after a click is a worse
@@ -139,7 +139,7 @@ answer than not presenting the control, and a second session sees the same thing
 
 ### 5. Make the executing state actually visible to the caller
 
-**Status:** 🔄 Implemented — awaiting row 13's live proof
+**Status:** ✅ Done — rows 13–16 green
 
 **This is the step that satisfies requirement 1, and it is the one most likely to silently not work.**
 Today the handler awaits the executor and only then re-renders, so setting a registry entry changes
@@ -168,12 +168,12 @@ mid-action. Row 13 is that proof and is not substitutable by a unit test.
 | 10 | ✅ | The Run control is not offered for an executing row | Unit test | `NotificationTableTests.ShowsRunControl_WhileExecuting_IsFalse` |
 | 11 | ✅ | A second execution of the same notification does not reach the executor | Unit test | `NotificationExecutionStateTests.RunExclusivelyAsync_WhileRunning_DoesNotInvokeTheActionAgain` — moved from `NotificationsPageTests`, see step 4's deviation |
 | 12 | ✅ | A throwing action still releases its claim | Unit test | `NotificationExecutionStateTests.RunExclusivelyAsync_ActionThrows_StillReleasesTheClaim` — added by the same deviation |
-| 13 | ❌ | The row visibly reads `Executing` *during* a real run, not only after | Live (T2) + screenshot | New T2 document: start a reseed from `/notifications`, screenshot the row mid-run |
-| 14 | ❌ | A second click during a run produces exactly one reseed | Live (T2) | same document: the container log holds exactly one `reseed requested` |
-| 15 | ❌ | The row reads `Done`, not `Executing`, once the action completes | Live (T2) | same document, after the run settles |
-| 16 | ❌ | A restart during a run leaves no row reading `Executing` | Live (T2) | same document: restart mid-reseed, then read the page — requirement 4, free by construction, asserted rather than assumed |
-| 17 | ❌ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
-| 18 | ❌ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
+| 13 | ✅ | The row visibly reads `Executing` *during* a real run, not only after | Live (T2) + screenshot | [12-running-action-state.md](../../automated-testing/notifications-and-changelog/12-running-action-state.md) step 2 — badge reads **Running…**, Run control gone |
+| 14 | ✅ | A second click during a run produces exactly one reseed | Live (T2) | same document, step 3 — `reseed requested` appears exactly once |
+| 15 | ✅ | The row reads `Done`, not `Executing`, once the action completes | Live (T2) | same document, step 3 — `dismissed=True reason=resolved`, rendered **Done** |
+| 16 | ✅ | A restart during a run leaves no row reading `Executing` | Live (T2) | same document, step 4 — restarted mid-run (13 quotes, interrupted), page carries no `Running` |
+| 17 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
+| 18 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
 
 **Row 13 is the one that cannot be replaced by a unit test.** Every row above it can pass against an
 implementation whose UI never repaints until the action finishes — which is the exact defect this issue
