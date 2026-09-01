@@ -310,8 +310,8 @@ deliberately not here — see Scope changes 6.
 | 34 | ✅ | The alert reaches `/notifications`, the startup modal after a restart, and the review page | Automated (T2) | same document, steps 3–4 |
 | 35 | ✅ | Resolved and obsolete are distinguishable in one history, and alerts stay bounded | Automated (T2) | same document, steps 5–6 |
 | 36 | ✅ | `/import-review` behaves as `/notifications` does on a degraded container | Automated (T2) | same document, step 7 — both currently `500`, a pre-existing defect recorded below |
-| 37 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: with the fixture staged, reseed twice; the inactive rows read `Obsolete` and `Resolved`, not both `Dismissed` |
-| 38 | ❌ | The alert, its options, the page and the link render correctly | Live | T1: `dotnet-script scripts/testing/stage-import-conflict.csx -- --imports src/Quotinator.Api/bin/Debug/net10.0/data/imports`, restart, then use an option from the alert, click through, and decide a row |
+| 37 | ✅ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Automated (T2) + screenshot | [20-pending-review-alert.md](../../automated-testing/import-and-staged-actions/20-pending-review-alert.md) step 8 — the two inactive rows render **Done** and **No longer applicable**, not both "Dismissed" |
+| 38 | ✅ | The alert's options and the page's decide control carry a decision through to the data | Automated (T2) + screenshot | same document, step 9 — `Run → Take incoming` on the alert and `Take incoming` on the page each end `Applied` with the alert `resolved`; the stored quote text changes |
 | 39 | ✅ | The page names the file a conflict came from, not its batch id | Unit test | `ImportReviewPageTests.FileNameFor_KnownBatch_ReportsTheFileItWasImportedFrom` |
 | 40 | ✅ | An action whose batch no longer exists still shows something traceable | Unit test | `ImportReviewPageTests.FileNameFor_UnknownBatch_FallsBackToTheId` |
 | 41 | ✅ | The nav entry has an icon, like every other entry | Live | Screenshot, 2026-09-01: the clipboard-check icon renders in the sidebar beside *Import review* |
@@ -441,6 +441,48 @@ conflicting.json         dismissed  Obsolete  c5449117     conflicting.json     
 Exactly the four superseded alerts retired with reason `Obsolete`, the four current ones untouched.
 **Row 37 stays ❌**: it requires `Obsolete` *and* `Resolved` to be distinguishable in one history, and
 only the `Obsolete` half is proven — the `Resolved` half needs an action actually decided.
+
+**Rows 37 and 38 found a real defect, which is why they could not be left parked** (developer,
+2026-09-01: "we cannot close the issue while these tests fail"). Promoted from `Live` to T2 so they are
+verifiable here rather than only on the developer's machine, and run against a container through a real
+browser — which immediately exposed that **both decide controls this issue shipped decided without
+applying**:
+
+- `NotificationActionExecutor`'s `ImportReviewResolved` case called `DecideBatchAsync` and stopped.
+- `ImportReview.DecideAsync` called `BulkDecideAsync` and stopped.
+
+The action reached `Decided` and never `Applied`, so the operator's choice never reached the data —
+measured directly: after `Run → Keep existing`, `pending` fell from 2 to 1 and the batch read `Decided`,
+while the alert stayed **Active**, still asking for the decision just made. The alert is dismissed in
+`ApplyBatchAsync` and `DiscardBatchAsync` only, so nothing retired it. Applying the batch by hand
+(`POST /import/actions/apply?batchId=`) dismissed it as `resolved` immediately, which confirmed the
+diagnosis rather than leaving it inferred.
+
+Both surfaces now apply after deciding. This is the completion of the decision the operator made, not a
+second decision taken for them — the confirmation dialog already says the action cannot be undone, which
+is only true once it has landed. It is also safe per row: `ImportActionResolutionCoordinator.TryApplyBatchAsync`
+returns the outstanding ids and writes **nothing** while any action in the batch is still
+`Pending`/`Blocked`/`Stale`, so applying after each decision no-ops until the last one is settled and is
+atomic when it is.
+
+Proven red first, by assertion rather than by compile failure — `ImportReview.DecideAndApplyAsync` was
+extracted carrying the old decide-only behaviour so the tests failed on `LastAppliedBatchId`:
+
+```
+Failed ImportReviewResolved_AppliesTheBatchSoTheChoiceReachesTheData
+  Assert.AreEqual(batchId, importActions.LastAppliedBatchId)
+Failed DecideAndApply_AppliesTheBatchSoTheChoiceReachesTheData
+  Assert.AreEqual(batchId, service.LastAppliedBatchId)
+```
+
+End-to-end confirmation on a fresh container built from the fix, both surfaces, with the stored value
+checked rather than only the status: `Surely you can't be serious.` → `A deliberately different text
+(1), staged to force a review decision.`, both batches `Applied`, both alerts `resolved`, and the
+notifications page showing no outstanding review.
+
+`ImportReview.DecideAndApplyAsync` is `internal static` for the same stated reason `AwaitingReview` and
+`DecisionRows` already are — this project has no bUnit, so a private page method is unprovable, and
+"if we can distinguish it, we can prove it" applies to the sequence as much as to the predicates.
 
 **The first-chance `UnresolvedFieldConflictException` noise is expected, not a fault.** The T1 log shows
 16 of them after seeding completes: `SqliteImportActionService.ComputeAmbiguousFields` calls

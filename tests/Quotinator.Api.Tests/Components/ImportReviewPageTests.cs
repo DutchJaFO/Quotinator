@@ -1,4 +1,5 @@
 using Quotinator.Api.Components.Pages;
+using Quotinator.Api.Tests.Fakes;
 using Quotinator.Core.Models;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
@@ -177,5 +178,41 @@ public class ImportReviewPageTests
         ImportActionSummaryResponse blocked = Summary(ImportActionStatus.Blocked, Guid.NewGuid().ToString("D"));
 
         Assert.IsEmpty(ImportReview.DecisionRows(blocked, FieldResolutionChoice.Keep));
+    }
+
+    /// <summary>
+    /// Deciding a row applies its batch. Found in T2 (2026-09-01): the page decided and stopped, so the
+    /// action reached <c>Decided</c> and never <c>Applied</c> — the operator's choice never reached the
+    /// data, and the alert asking for that choice stayed active because dismissal is wired to apply.
+    /// </summary>
+    [TestMethod]
+    public async Task DecideAndApply_AppliesTheBatchSoTheChoiceReachesTheData()
+    {
+        string batchId = Guid.NewGuid().ToString("D");
+        ImportActionSummaryResponse action = Summary(ImportActionStatus.Pending, batchId, "Quote", "quoteText");
+        FakeImportActionService service = new();
+
+        await ImportReview.DecideAndApplyAsync(service, action, FieldResolutionChoice.Replace);
+
+        Assert.AreEqual(batchId, service.LastBulkDecidedBatchId, "The conflicted fields must be decided.");
+        Assert.AreEqual(batchId, service.LastAppliedBatchId,
+            "Deciding without applying leaves the choice unwritten and the alert active.");
+    }
+
+    /// <summary>
+    /// An action with nothing in conflict settles nothing, so it must not apply the batch either — a
+    /// Blocked action's whole batch is held, and applying would either no-op or write on the strength of
+    /// a decision nobody made.
+    /// </summary>
+    [TestMethod]
+    public async Task DecideAndApply_ActionWithNoAmbiguousFields_DoesNothing()
+    {
+        ImportActionSummaryResponse blocked = Summary(ImportActionStatus.Blocked, Guid.NewGuid().ToString("D"));
+        FakeImportActionService service = new();
+
+        await ImportReview.DecideAndApplyAsync(service, blocked, FieldResolutionChoice.Keep);
+
+        Assert.IsNull(service.LastBulkDecidedBatchId);
+        Assert.IsNull(service.LastAppliedBatchId);
     }
 }

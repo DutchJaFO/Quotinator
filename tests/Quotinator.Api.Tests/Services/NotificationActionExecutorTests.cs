@@ -65,6 +65,46 @@ public class NotificationActionExecutorTests
     }
 
     /// <summary>
+    /// The alert's remedy applies the batch it decided. Found in T2 (2026-09-01): the executor decided
+    /// and stopped, leaving every action <c>Decided</c> and never <c>Applied</c> — so the operator's
+    /// choice never reached the data, and the alert stayed active telling them to make it again
+    /// (dismissal is wired to <c>ApplyBatchAsync</c>/<c>DiscardBatchAsync</c>, not to deciding).
+    /// </summary>
+    [TestMethod]
+    public async Task ImportReviewResolved_AppliesTheBatchSoTheChoiceReachesTheData()
+    {
+        string batchId = Guid.NewGuid().ToString("D");
+        FakeImportActionService importActions = new();
+        NotificationActionExecutor executor = new(
+            new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions);
+
+        await executor.ExecuteAsync(
+            NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(batchId), FieldResolutionChoice.Replace);
+
+        Assert.AreEqual(batchId, importActions.LastAppliedBatchId,
+            "A decision that is never applied changes nothing and leaves the alert active.");
+    }
+
+    /// <summary>
+    /// Nothing is applied when no choice was given — the throw must happen before any write, or a
+    /// rejected request would still have moved the batch on.
+    /// </summary>
+    [TestMethod]
+    public async Task ImportReviewResolved_WithoutAChoice_AppliesNothing()
+    {
+        FakeImportActionService importActions = new();
+        NotificationActionExecutor executor = new(
+            new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions);
+
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
+            executor.ExecuteAsync(NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(Guid.NewGuid().ToString("D"))));
+
+        Assert.IsNull(importActions.LastAppliedBatchId);
+    }
+
+    /// <summary>
     /// No default side. Choosing one on the operator's behalf would silently overwrite their data with
     /// whichever way the code happened to lean — keeping and replacing are not interchangeable.
     /// </summary>

@@ -150,7 +150,21 @@ public partial class ImportReview
             .ToDictionary(group => group.Key, group => group.First().Name, StringComparer.OrdinalIgnoreCase);
     }
 
-    private async Task DecideAsync(ImportActionSummaryResponse action, FieldResolutionChoice choice)
+    /// <summary>
+    /// Decides <paramref name="action"/>'s conflicted fields and applies its batch.
+    /// </summary>
+    /// <remarks>
+    /// Internal and static so the sequence can be tested without rendering the component — this project
+    /// has no bUnit, the same reason <see cref="AwaitingReview"/> and <see cref="DecisionRows"/> are
+    /// shaped this way.
+    /// </remarks>
+    /// <param name="service">The service both steps go through.</param>
+    /// <param name="action">The action being decided.</param>
+    /// <param name="choice">Which side wins for every conflicted field.</param>
+    internal static async Task DecideAndApplyAsync(
+        IImportActionService service,
+        ImportActionSummaryResponse action,
+        FieldResolutionChoice choice)
     {
         List<ImportActionFieldRowDto> rows = [.. DecisionRows(action, choice)];
 
@@ -158,7 +172,19 @@ public partial class ImportReview
         // completeness hold lifted, which is #66's per-item UX, not a whole-action keep/take.
         if (rows.Count == 0) return;
 
-        await ActionService.BulkDecideAsync(action.BatchId, rows);
+        await service.BulkDecideAsync(action.BatchId, rows);
+
+        // Deciding stages the choice; it does not write it. Applying is the completion of the decision
+        // the operator just made, not a second one taken on their behalf — and it is what dismisses the
+        // alert, which is wired to ApplyBatchAsync rather than to deciding. TryApplyBatchAsync writes
+        // nothing while any action in the batch is still Pending/Blocked/Stale, so calling it after each
+        // row is a no-op until the last one is settled and atomic when it is.
+        await service.ApplyBatchAsync(action.BatchId);
+    }
+
+    private async Task DecideAsync(ImportActionSummaryResponse action, FieldResolutionChoice choice)
+    {
+        await DecideAndApplyAsync(ActionService, action, choice);
         await LoadAsync();
     }
 

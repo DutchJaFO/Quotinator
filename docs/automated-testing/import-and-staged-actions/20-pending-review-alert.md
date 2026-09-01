@@ -214,6 +214,53 @@ when the database is degraded — and when the underlying defect is fixed, both 
 together. A row asserting `200` here would have to be marked failing for a fault #303 did not cause and
 does not own.
 
+### 8. Confirm both dismiss reasons render as words, not as "Dismissed"
+
+**Browser, not `Invoke-WebRequest`.** The status cell is rendered by an interactive circuit and the
+question is what a person reads, so this step is driven and screenshotted rather than string-matched.
+
+Against a container that has one resolved and one obsoleted alert (step 5 resolves one; a reseed while
+the other is still active obsoletes it), open `http://localhost:19520/notifications` and switch the
+filter to **All**.
+
+**Expected:** the two inactive rows read **Done** and **No longer applicable** — different words for
+different outcomes. Both reading "Dismissed" is the failure this step exists to catch: an alert whose
+batch was truncated was never reviewed, and one whose actions were decided was, and an operator must be
+able to tell those apart without opening the audit trail.
+
+### 9. Confirm a decision reaches the data from both surfaces
+
+Two controls can settle a review, and both must carry the decision all the way through. Capture the
+stored value first so the change is proven rather than assumed:
+
+```powershell
+$a = (Invoke-RestMethod "http://localhost:19520/api/v1/import/actions?status=Pending&pageSize=0").items[0]
+"stored   = $((Invoke-RestMethod "http://localhost:19520/api/v1/quotes/$($a.entityId)").quote)"
+"incoming = $($a.incomingFields.quoteText)"
+```
+
+Then, in the browser: on `/notifications` use one alert's **Run → Take incoming**, and on
+`/import-review` use another row's **Take incoming**.
+
+```powershell
+(Invoke-RestMethod "http://localhost:19520/api/v1/import/actions?pageSize=0").items |
+  Select-Object @{n='Batch';e={$_.batchId.Substring(0,8)}}, status
+"stored now = $((Invoke-RestMethod "http://localhost:19520/api/v1/quotes/$($a.entityId)").quote)"
+```
+
+**Expected:** every touched batch reads `Applied` — **not `Decided`** — the stored text now equals what
+was incoming, and each alert is dismissed with reason `resolved`.
+
+**On failure:** a batch left at `Decided` with its alert still `Active` is the defect this step was
+written for (found 2026-09-01). Both controls decided without applying, so the operator's choice never
+reached the data and the alert kept asking for a decision they had already made. Dismissal is wired to
+`ApplyBatchAsync`/`DiscardBatchAsync`, never to deciding, so the stale alert is the visible symptom of
+the unapplied batch — check the status before concluding the notification is at fault.
+
+**Give the page a moment before clicking.** These controls need the Blazor circuit; a click issued
+immediately after navigating is silently swallowed and the row simply stays `Pending`. Re-read the page
+and click again rather than concluding the control is broken — measured here on the first attempt.
+
 ## Cleanup
 
 ```powershell

@@ -88,6 +88,12 @@ internal sealed class NotificationActionExecutor(
                     throw new InvalidOperationException("An import-review action needs an explicit choice — keeping and replacing are not interchangeable.");
 
                 await importActions.DecideBatchAsync(review.BatchId, resolution);
+
+                // Deciding stages the choice; it does not write it. Applying is the completion of the
+                // decision the operator just confirmed — the dialog says the action cannot be undone,
+                // which is only true once it has landed — and it is what dismisses this alert, since
+                // dismissal is wired to ApplyBatchAsync rather than to deciding.
+                await importActions.ApplyBatchAsync(review.BatchId);
                 break;
             }
             default:
