@@ -90,6 +90,17 @@ written, and each of which forced the deviation:
 A defensible ordering, had this been analysed at planning time, is: 2, 3, 6+9, 4, 1+5+7, 8 — with
 1/5/7 as a single step.
 
+**The verification table grew during execution, which is the same failure seen from the test side.** It
+held 22 rows when this issue moved to `In progress` and holds 29 now. Rows 25–28 (the four seeding
+variants and the origin defect), row 29 (the T2 matrix) and rows 23–24 (the startup modal) were all
+added after implementation had started.
+
+The Definition of done's "all expected tests start red before implementation" exists to force exactly
+this to happen at planning time: the tests are *defined and confirmed* before execution, not discovered
+while executing. A plan whose test list grows mid-flight was not complete when it was signed off — the
+same conclusion the step-order deviation above reaches by a different route, and the reason both are
+recorded here rather than smoothed over.
+
 **What the deviation cost, and what it may later explain:**
 
 - **`Status: In progress (step N)` was never truthful after step 3**, because more than one step was in
