@@ -144,8 +144,8 @@ public class NotificationTableTests
     [TestMethod]
     public void GetDisplayStatus_NotDismissedNoExpiry_IsActive()
     {
-        var now = DateTime.UtcNow;
-        var notification = Build(isDismissed: false, expiresAt: null);
+        DateTime now = DateTime.UtcNow;
+        NotificationEntity notification = Build(isDismissed: false, expiresAt: null);
 
         Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Active, NotificationTable.GetDisplayStatus(notification, now));
     }
@@ -153,8 +153,8 @@ public class NotificationTableTests
     [TestMethod]
     public void GetDisplayStatus_NotDismissedFutureExpiry_IsActive()
     {
-        var now = DateTime.UtcNow;
-        var notification = Build(isDismissed: false, expiresAt: now.AddHours(1));
+        DateTime now = DateTime.UtcNow;
+        NotificationEntity notification = Build(isDismissed: false, expiresAt: now.AddHours(1));
 
         Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Active, NotificationTable.GetDisplayStatus(notification, now));
     }
@@ -162,8 +162,8 @@ public class NotificationTableTests
     [TestMethod]
     public void GetDisplayStatus_NotDismissedPastExpiry_IsExpired()
     {
-        var now = DateTime.UtcNow;
-        var notification = Build(isDismissed: false, expiresAt: now.AddHours(-1));
+        DateTime now = DateTime.UtcNow;
+        NotificationEntity notification = Build(isDismissed: false, expiresAt: now.AddHours(-1));
 
         Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Expired, NotificationTable.GetDisplayStatus(notification, now));
     }
@@ -171,7 +171,7 @@ public class NotificationTableTests
     [TestMethod]
     public void GetDisplayStatus_Dismissed_IsDismissedRegardlessOfExpiry()
     {
-        var now = DateTime.UtcNow;
+        DateTime now = DateTime.UtcNow;
 
         Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Dismissed, NotificationTable.GetDisplayStatus(Build(isDismissed: true, expiresAt: null), now));
         Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Dismissed, NotificationTable.GetDisplayStatus(Build(isDismissed: true, expiresAt: now.AddHours(-1)), now),

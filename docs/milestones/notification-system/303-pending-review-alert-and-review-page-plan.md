@@ -70,7 +70,26 @@ and every pattern #302 established was missing.
 
 ## Steps
 
-### 1. Add the `ImportReviewPending` metadata kind and its payload
+### 1. Add every enum member this issue introduces
+
+**Status:** ✅ Done
+
+Four members, in one step and before the migration that constrains three of them:
+
+- `NotificationMetadataKind.ImportReviewPending` — the payload shape (step 2).
+- `NotificationDismissTrigger.ImportReviewResolved` — what supersedes the alert (step 6).
+- `NotificationDismissReason.Obsolete` — why a superseded alert went inactive (step 7).
+- `NotificationTable.NotificationDisplayStatus.Obsolete` — how that reads on the page (step 7).
+
+**Restructured mid-execution, 2026-09-01 — recorded because it was a planning failure.** These were
+originally spread across steps 1, 5 and 6, with the migration widening all three CHECKs at step 2. That
+left the schema accepting values whose C# members did not exist for the entire middle of the plan, and
+it surfaced as a build warning the moment step 1's payload documentation referenced
+`NotificationDismissReason.Obsolete` by cref. Which enums an issue needs is knowable before any code is
+written; discovering it one step at a time is the same completeness gap #302's own deviation section
+records.
+
+### 2. Add the `ImportReviewPending` payload
 
 **Status:** ✅ Done — `ImportReviewPendingMetadataDto`, `ImportReviewCountDto`
 
@@ -87,7 +106,7 @@ name, and the bundled and imports directories can both hold it.
 of pending reviews the alert describes, so two batches are two alerts even for the same file. It is
 also what step 5's dismissal matches on.
 
-### 2. Widen the three CHECK constraints in one migration
+### 3. Widen the three CHECK constraints in one migration
 
 **Status:** ✅ Done — migration 18, `NotificationImportReviewMigrations`
 
@@ -101,9 +120,9 @@ times for no gain). The next free version in `DatabaseInitializer.DataOwnedMigra
 (`...AcceptSameNotificationCheckConstraintValues`, `...ProduceIdenticalSystemNotificationSchema`) gain
 the new values.
 
-### 3. Add the alert's title and body in all three languages
+### 4. Add the alert's title and body in all three languages
 
-**Status:** 🔄 In progress
+**Status:** ⬜ Not started
 
 Keys on `NotificationMessageKeys`, strings in `UI.en-GB.json`/`UI.nl.json`/`UI.de.json`, resolved via
 `NotificationTranslations.Original`/`Build`.
@@ -114,7 +133,7 @@ Keys on `NotificationMessageKeys`, strings in `UI.en-GB.json`/`UI.nl.json`/`UI.d
 The `Obsolete` display status needs its own label in the same three files, alongside the existing
 Active/Expired/Dismissed/Resolved ones.
 
-### 4. Write the alert from the staged branch
+### 5. Write the alert from the staged branch
 
 **Status:** ⬜ Not started
 
@@ -124,7 +143,7 @@ In the `applyResult is not null` branch, one `ActionRequired` notification per s
 Provenance via the existing `CurrentAppVersionIdAsync`, which already records a version when none
 exists rather than writing null.
 
-### 5. Dismiss the alert when its batch is resolved
+### 6. Dismiss the alert when its batch is resolved
 
 **Status:** ⬜ Not started
 
@@ -138,7 +157,7 @@ files each leaving actions to review produce two alerts; resolving one batch wou
 Dismissal has to be scoped to the notification whose payload names *this* `BatchId`, which is a new
 capability on `INotificationWriter`, not an existing one.
 
-### 6. Dismiss alerts whose batch has been removed
+### 7. Dismiss alerts whose batch has been removed
 
 **Status:** ⬜ Not started
 
@@ -173,7 +192,7 @@ from the manifest).
 Its CHECK widening rides migration 18 alongside the other two, and `NotificationDisplayStatus` gains a
 matching member so the Status column reads it rather than falling back to "Dismissed".
 
-### 7. Build the minimal review page
+### 8. Build the minimal review page
 
 **Status:** ⬜ Not started
 
@@ -183,14 +202,14 @@ A new Blazor page listing every currently active (undecided) `Pending`/`Blocked`
 
 Code-behind partial class per CLAUDE.md's Blazor rules — no inline `@code`, no `@inject`.
 
-### 8. Give each row a basic decide action
+### 9. Give each row a basic decide action
 
 **Status:** ⬜ Not started
 
 The field-level keep/replace/custom decision `POST /import/actions/{id}/decide` already accepts. No
 side-by-side diff view, no bulk actions, no inline merge editor — all #66's scope.
 
-### 9. Register the page in navigation and the health gate
+### 10. Register the page in navigation and the health gate
 
 **Status:** ⬜ Not started
 
@@ -198,7 +217,7 @@ side-by-side diff view, no bulk actions, no inline merge editor — all #66's sc
 `"/notifications"`. The page must stay reachable during a degraded startup, which is exactly when an
 operator needs to see what is unresolved.
 
-### 10. Link the notification to the review page
+### 11. Link the notification to the review page
 
 **Status:** ⬜ Not started
 
