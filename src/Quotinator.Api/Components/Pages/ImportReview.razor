@@ -19,7 +19,7 @@ else
                 <th>@Text.ImportReviewStatusColumn</th>
                 <th>@Text.ImportReviewEntityColumn</th>
                 <th>@Text.ImportReviewActionColumn</th>
-                <th>@Text.ImportReviewBatchColumn</th>
+                <th>@Text.ImportReviewFileColumn</th>
                 <th>@Text.ImportReviewConflictsColumn</th>
                 <th>@Text.ImportReviewDecideColumn</th>
             </tr>
@@ -31,7 +31,7 @@ else
                     <td><span class="badge bg-warning text-dark">@action.Status</span></td>
                     <td>@action.EntityType</td>
                     <td>@action.ActionType</td>
-                    <td><code>@action.BatchId</code></td>
+                    <td>@FileNameFor(action.BatchId)</td>
                     <td>
                         @if (action.AmbiguousFields.Count > 0)
                         {

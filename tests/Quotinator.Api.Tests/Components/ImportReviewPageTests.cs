@@ -139,6 +139,34 @@ public class ImportReviewPageTests
     }
 
     /// <summary>
+    /// #303, from T1: the page names the file a conflict came from, not the batch id. A GUID is correct
+    /// and useless — the operator needs to know which file to go and fix.
+    /// </summary>
+    [TestMethod]
+    public void FileNameFor_KnownBatch_ReportsTheFileItWasImportedFrom()
+    {
+        string batchId = Guid.NewGuid().ToString("D");
+        Dictionary<string, string> lookup = new(StringComparer.OrdinalIgnoreCase)
+        {
+            [batchId] = "conflicting.json",
+        };
+
+        Assert.AreEqual("conflicting.json", ImportReview.FileNameFor(lookup, batchId));
+    }
+
+    /// <summary>
+    /// A batch that no longer exists falls back to its id rather than a placeholder — that is an
+    /// anomaly worth showing something traceable for, and an em dash would hide it.
+    /// </summary>
+    [TestMethod]
+    public void FileNameFor_UnknownBatch_FallsBackToTheId()
+    {
+        string batchId = Guid.NewGuid().ToString("D");
+
+        Assert.AreEqual(batchId, ImportReview.FileNameFor(new Dictionary<string, string>(), batchId));
+    }
+
+    /// <summary>
     /// A Blocked action has no ambiguous fields — it is held because it would touch a protected field,
     /// not because two values disagree. It therefore has nothing for a whole-action decision to resolve,
     /// and must not produce an empty decision that silently reports success.

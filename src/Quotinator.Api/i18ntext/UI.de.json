@@ -51,7 +51,7 @@
   "ImportReviewStatusColumn": "Status",
   "ImportReviewEntityColumn": "Entität",
   "ImportReviewActionColumn": "Änderung",
-  "ImportReviewBatchColumn": "Stapel",
+  "ImportReviewFileColumn": "Datei",
   "ImportReviewConflictsColumn": "Widersprüchliche Felder",
   "ImportReviewDecideColumn": "Entscheiden",
   "ImportReviewNoConflictingFields": "Zur Prüfung zurückgehalten, keine widersprüchlichen Werte",

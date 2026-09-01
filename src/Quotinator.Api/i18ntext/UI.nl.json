@@ -51,7 +51,7 @@
   "ImportReviewStatusColumn": "Status",
   "ImportReviewEntityColumn": "Entiteit",
   "ImportReviewActionColumn": "Wijziging",
-  "ImportReviewBatchColumn": "Batch",
+  "ImportReviewFileColumn": "Bestand",
   "ImportReviewConflictsColumn": "Conflicterende velden",
   "ImportReviewDecideColumn": "Beslissen",
   "ImportReviewNoConflictingFields": "Vastgehouden voor beoordeling, geen conflicterende waarden",

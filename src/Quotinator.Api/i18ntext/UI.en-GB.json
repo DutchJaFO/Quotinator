@@ -51,7 +51,7 @@
   "ImportReviewStatusColumn": "Status",
   "ImportReviewEntityColumn": "Entity",
   "ImportReviewActionColumn": "Change",
-  "ImportReviewBatchColumn": "Batch",
+  "ImportReviewFileColumn": "File",
   "ImportReviewConflictsColumn": "Conflicting fields",
   "ImportReviewDecideColumn": "Decide",
   "ImportReviewNoConflictingFields": "Held for review, no conflicting values",

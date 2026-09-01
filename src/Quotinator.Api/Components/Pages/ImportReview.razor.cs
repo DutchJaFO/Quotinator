@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Components;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
+using Quotinator.Data.Repositories;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
 namespace Quotinator.Api.Components.Pages;
@@ -97,10 +100,34 @@ public partial class ImportReview
 
     [Inject] private I18nTextService I18nText { get; set; } = default!;
     [Inject] private IImportActionService ActionService { get; set; } = default!;
+    [Inject] private IImportBatchRepository ImportBatches { get; set; } = default!;
     [Inject] private Quotinator.Api.Startup.DatabaseHealthState DatabaseHealth { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
     private IReadOnlyList<ImportActionSummaryResponse> Actions = [];
+
+    // #303, developer feedback from T1: the batch id is correct and meaningless — an operator cannot act
+    // on a GUID. Import_Batch.Name is the file name the batch was created from, which is what actually
+    // tells them where the conflict came from and which file to go and fix.
+    private Dictionary<string, string> BatchFileNames = [];
+
+    private string FileNameFor(string batchId) => FileNameFor(BatchFileNames, batchId);
+
+    /// <summary>
+    /// The file a batch was imported from, falling back to the batch id when no batch matches.
+    /// </summary>
+    /// <remarks>
+    /// The fallback is deliberately the id rather than a placeholder: an action whose batch has gone is
+    /// an anomaly worth showing something traceable for, and an em dash would hide it. Static and
+    /// internal so the mapping can be tested without rendering the component — this project has no
+    /// bUnit.
+    /// </remarks>
+    /// <param name="fileNamesByBatchId">The page's own batch-id to file-name lookup.</param>
+    /// <param name="batchId">The action's own batch id.</param>
+    internal static string FileNameFor(IReadOnlyDictionary<string, string> fileNamesByBatchId, string batchId) =>
+        fileNamesByBatchId.TryGetValue(batchId, out string? name) && !string.IsNullOrWhiteSpace(name)
+            ? name
+            : batchId;
 
     private async Task LoadAsync()
     {
@@ -114,6 +141,13 @@ public partial class ImportReview
             batchId: null, status: null, entityType: null, page: 1, pageSize: 0);
 
         Actions = [.. AwaitingReview(page.Items)];
+
+        // One read for the whole page rather than one per row — the batch count is small, and a lookup
+        // per action would be an N+1 against a table this page already knows it needs in full.
+        IReadOnlyList<ImportBatchEntity> batches = await ImportBatches.GetAllAsync();
+        BatchFileNames = batches
+            .GroupBy(batch => batch.Id.ToCanonicalId(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Name, StringComparer.OrdinalIgnoreCase);
     }
 
     private async Task DecideAsync(ImportActionSummaryResponse action, FieldResolutionChoice choice)

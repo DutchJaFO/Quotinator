@@ -312,6 +312,9 @@ deliberately not here — see Scope changes 6.
 | 36 | ✅ | `/import-review` behaves as `/notifications` does on a degraded container | Automated (T2) | same document, step 7 — both currently `500`, a pre-existing defect recorded below |
 | 37 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: with the fixture staged, reseed twice; the inactive rows read `Obsolete` and `Resolved`, not both `Dismissed` |
 | 38 | ❌ | The alert, its options, the page and the link render correctly | Live | T1: `dotnet-script scripts/testing/stage-import-conflict.csx -- --imports src/Quotinator.Api/bin/Debug/net10.0/data/imports`, restart, then use an option from the alert, click through, and decide a row |
+| 39 | ✅ | The page names the file a conflict came from, not its batch id | Unit test | `ImportReviewPageTests.FileNameFor_KnownBatch_ReportsTheFileItWasImportedFrom` |
+| 40 | ✅ | An action whose batch no longer exists still shows something traceable | Unit test | `ImportReviewPageTests.FileNameFor_UnknownBatch_FallsBackToTheId` |
+| 41 | ✅ | The nav entry has an icon, like every other entry | Live | Screenshot, 2026-09-01: the clipboard-check icon renders in the sidebar beside *Import review* |
 
 **T1 needs a staged conflict, because the bundled files cannot produce one** (developer, 2026-09-01).
 Neither T1 nor T2 can reach this issue's behaviour with bundled content alone: a first seed inserts
@@ -325,6 +328,19 @@ before being written into these rows: one Pending action, one alert, `origin=Use
 
 Delete the two files it writes (`conflicting.json`, `manifest.json`) from the imports directory to
 return to a clean seed.
+
+**T1 found the page was showing a batch id where a file name belongs** (developer, 2026-09-01). The
+column was correct and useless: an operator cannot act on a GUID, and what they need to know is which
+file to go and fix — which is the whole workflow this issue assumes. `Import_Batch.Name` already holds
+that file name, so the page resolves it in one read for the whole table rather than per row. Rows 39
+and 40 pin both the mapping and the fallback.
+
+**The nav entry also shipped without an icon** (developer, 2026-09-01). Step 11 added the `NavLink`
+with a class name but no matching rule, and every other entry has one — so it rendered as bare text.
+`NavMenu.razor.css` now carries a `bi-clipboard-check` data-URI in the same white 16×16 form as its
+neighbours. Confirmed by screenshot rather than by the class name being present in the markup: the
+class was already there while the icon was missing, which is exactly the failure a text assertion
+cannot see.
 
 **T2 pass, 2026-09-01 — green, and it found four things no unit test could.**
 
