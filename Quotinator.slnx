@@ -385,6 +385,7 @@
     <File Path="docs/automated-testing/import-and-staged-actions/17-source-alias-staleness.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/18-rule-file-override-endpoints.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/19-per-file-import-report.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/20-pending-review-alert.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

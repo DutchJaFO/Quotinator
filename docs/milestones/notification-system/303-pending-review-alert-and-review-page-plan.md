@@ -1,6 +1,6 @@
 # #303 — Notification + minimal review page: alert when a reseed leaves import actions pending review
 
-**Status:** In progress (step 10)
+**Status:** Waiting for release
 **GitHub issue:** #303
 **Tiers required:** T1, T2
 **Depends on:** #278, #302, #304, #312, #319
@@ -306,11 +306,47 @@ deliberately not here — see Scope changes 6.
 | 30 | ✅ | The notification's action refuses to pick a side, or a batch, on the operator's behalf | Unit test | `NotificationActionExecutorTests.ImportReviewResolved_WithoutAChoice_Throws`, `...WithoutItsPayload_Throws` |
 | 31 | ✅ | The trigger is executable, so the alert renders its controls | Unit test | `NotificationActionExecutorTests.CanExecute_ImportReviewResolved_ReturnsTrue` |
 | 32 | ✅ | The page is exempt in `DatabaseHealthGateMiddleware` | Unit test | `DatabaseHealthGateMiddlewareTests.Unhealthy_ExemptPath_CallsNext("/import-review")` |
-| 33 | ❌ | All four seeding variants behave correctly against real configuration | Automated (T2) | `automated-testing/import-and-staged-actions/20-pending-review-alert.md` |
-| 34 | ❌ | The alert reaches `/notifications` and the startup modal, and a clean seed produces none | Automated (T2) | same document — modal asserted after a restart, per #302's step 8 |
-| 35 | ❌ | The page renders during a degraded startup rather than 500 | Automated (T2) | same document, degraded container |
-| 36 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: after a reseed supersedes an earlier alert, the inactive row reads `Obsolete`, not `Dismissed` |
-| 37 | ❌ | The alert, its options, the page and the link render correctly | Live | T1: stage a batch with conflicts, use an option from the alert, click through, decide a row |
+| 33 | ✅ | A staged file raises an alert naming its batch, file, origin and per-status counts | Automated (T2) | `automated-testing/import-and-staged-actions/20-pending-review-alert.md` steps 1–2 |
+| 34 | ✅ | The alert reaches `/notifications`, the startup modal after a restart, and the review page | Automated (T2) | same document, steps 3–4 |
+| 35 | ✅ | Resolved and obsolete are distinguishable in one history, and alerts stay bounded | Automated (T2) | same document, steps 5–6 |
+| 36 | ✅ | `/import-review` behaves as `/notifications` does on a degraded container | Automated (T2) | same document, step 7 — both currently `500`, a pre-existing defect recorded below |
+| 37 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: after a reseed supersedes an earlier alert, the inactive row reads `Obsolete`, not `Dismissed` |
+| 38 | ❌ | The alert, its options, the page and the link render correctly | Live | T1: stage a batch with conflicts, use an option from the alert, click through, decide a row |
+
+**T2 pass, 2026-09-01 — green, and it found four things no unit test could.**
+
+1. **The bundled content cannot produce a conflict at all.** A first seed inserts everything as an Add,
+   so there is nothing to disagree with; `Quotinator__DefaultConflictPolicy=Review` changes nothing
+   because the manifest's per-file policy overrides it. The document now bind-mounts a user-imports
+   file re-stating a bundled quote id with different text — the only shape that stages a decision, and
+   incidentally the `origin=User` path.
+2. **The discard route is `/actions/discard?batchId=`**, a query parameter rather than a route segment.
+   The segment form returns `404`, which reads like "no such batch" rather than "no such endpoint".
+3. **`obsolete` needs two reseeds, not one.** The first raises a fresh alert while the step-5 alert is
+   already `resolved`; only the second truncates a batch whose alert is still active. The document's
+   first draft checked after one reseed and would have asserted the wrong outcome.
+4. **A pre-existing defect, not this issue's** — see below.
+
+**`/notifications` returns `500` on a read-only data directory, and always has.** Found while checking
+that `/import-review` degrades gracefully: both interactive pages fail identically, while `/about` and
+`/stats` answer `200`. The health-gate exemption is not the problem — both paths are exempt and the
+gate lets them through. `@rendermode InteractiveServer` needs DataProtection to encrypt its component
+descriptor, and that cannot create `/data/keys` on a read-only mount:
+
+```
+System.Security.Cryptography.CryptographicException: An error occurred while trying to encrypt the provided data.
+ ---> System.IO.IOException: Read-only file system : '/data/keys'
+```
+
+This contradicts what #326's exemption was understood to deliver: the route is reachable, the page is
+not. It also bears directly on the open question CLAUDE.md records under "DataProtection keys" — that
+the negative effects of a non-persistent key ring have never been explored, and that an ADR waits on
+read-only-mode evidence (#332, #336). This is that evidence.
+
+Out of scope for #303 and left unfixed here: it predates this issue, it is the same on a page #303 did
+not touch, and fixing it is a DataProtection design decision rather than a notification one. Row 36
+asserts parity with `/notifications` instead of `200`, so it passes today and keeps passing when the
+underlying fault is fixed.
 
 **The four seeding variants (rows 20) are not optional.** #303 writes from the same seeding loop as
 #302, where that matrix found a defect no single-variant test reached — no files, bundled only, user

@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 302, 304, 309, 312, 313, 319, 320, 323, 325, 326, 349],
+    "issues": [81, 302, 303, 304, 309, 312, 313, 319, 320, 323, 325, 326, 349],
     "highlights": [
       "You can now manage backups without touching the server's files: see what backups exist and how much room is left, make one whenever you want, download one to keep somewhere safe, and delete old ones to free up space. If a backup cannot be made, Quotinator now says which obstacle is in the way and what to do about it, instead of failing without explanation.",
       "Quotinator now starts even when its data folder cannot be written to — a read-only volume, or the wrong permissions. Instead of shutting down, it starts in a limited state, says plainly what is wrong and how to fix it, and keeps its pages and API documentation reachable so you can act on it.",
@@ -12,7 +12,8 @@
       "Notifications now carry a short headline of their own, separate from the message text, so the Notifications page and the startup popup are easier to scan.",
       "Notifications no longer disappear on a timer by default. Previously every notification expired after 30 days, including ones about a problem that was still unresolved; now a notification stays until it is dismissed, or until the action it recommends has been carried out.",
       "Quotinator now tells you when reloading your quotes would be worthwhile — after a reset leaves the database empty, or when updated content has been downloaded that your stored quotes do not yet reflect. The notification carries a button that does it for you, so this no longer needs a command-line call. Quotinator never reloads on its own: it asks, because replacing the stored content is your decision.",
-      "Reloading your quotes now confirms what it did, one message per file, listing how many entries of each kind were added or updated — so a reload that went perfectly says so, instead of finishing in silence."
+      "Reloading your quotes now confirms what it did, one message per file, listing how many entries of each kind were added or updated — so a reload that went perfectly says so, instead of finishing in silence.",
+      "When a quote file brings changes that need your decision, Quotinator now tells you instead of leaving them to be discovered. A new Import review page lists every such change, and both the notification and the page let you keep what is stored or take what the file brought. Most conflicts are still best fixed by correcting the file and reloading; a fuller side-by-side review is planned."
     ],
     "audienceHighlights": {
       "notification": [
@@ -25,7 +26,8 @@
       "A what's-new startup notification after an update, covering every release missed since the last version this instance actually ran — one notification per release, plus the in-development section when it has anything flagged; a fresh install sees only the current version (issue #81)",
       "Quotinator now keeps a record of which application versions have used the database, and links each notification to the version that added it — the groundwork for showing when a notification first appeared (issue #312)",
       "A notification recommending that quotes be reloaded, with a button that carries it out. It appears after a reset has left the database without quotes, and when updated source content has been downloaded that the stored quotes do not reflect. It clears itself once quotes are reloaded or imported by any route, and reappears if the situation arises again (issue #304)",
-      "A confirmation notification for each quote file that reloads with nothing left for you to review, listing how many entries of each kind it added or updated, and saying whether the file came bundled with Quotinator or from your own imports folder. Reloading again with nothing changed does not repeat a confirmation you have not dismissed yet (issue #302)"
+      "A confirmation notification for each quote file that reloads with nothing left for you to review, listing how many entries of each kind it added or updated, and saying whether the file came bundled with Quotinator or from your own imports folder. Reloading again with nothing changed does not repeat a confirmation you have not dismissed yet (issue #302)",
+      "A notification when a quote file leaves changes that need your decision, saying which file and how many, plus a new Import review page listing every such change across all files. Both the notification and the page offer the two basic choices — keep what is stored, or take what the file brought — and a notification whose changes you have dealt with, or whose changes no longer exist, now says which of the two happened instead of just disappearing (issue #303)"
     ],
     "changed": [
       "Notifications now appear in the language the interface is set to, instead of always in English. A notification keeps the language it was written in, and Quotinator falls back to that original whenever it has no translation for the language you are reading in — so nothing ever appears blank or half-translated. The API can also be asked for a specific language, and reports which one it actually returned (issue #319)",

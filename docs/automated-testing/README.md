@@ -1089,6 +1089,7 @@ different question in each.
 | 17 | [An alias is stale only on a genuine rename](import-and-staged-actions/17-source-alias-staleness.md) | no |
 | 18 | [Rule-file override endpoints and alias candidates](import-and-staged-actions/18-rule-file-override-endpoints.md) | no |
 | 19 | [Every seed and import surface reports per-file counts](import-and-staged-actions/19-per-file-import-report.md) | yes |
+| 20 | [A file left awaiting review raises an alert, and resolving it retires the alert](import-and-staged-actions/20-pending-review-alert.md) | no |
 
 ---
 
