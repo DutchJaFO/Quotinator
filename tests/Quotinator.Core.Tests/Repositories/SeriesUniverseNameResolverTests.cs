@@ -33,12 +33,12 @@ public class SeriesUniverseNameResolverTests
         _dbPath  = Path.Combine(_tempDir, "test.db");
         _factory = new SqliteConnectionFactory(_dbPath);
 
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var actionReader  = new ImportActionReader(_factory);
-        var actionWriter  = new ImportActionWriter(_factory);
-        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
+        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        ImportActionReader actionReader  = new ImportActionReader(_factory);
+        ImportActionWriter actionWriter  = new ImportActionWriter(_factory);
+        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
+        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<Quotinator.Core.Entities.QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -47,7 +47,7 @@ public class SeriesUniverseNameResolverTests
             new SqliteRestorableRepository<Quotinator.Core.Entities.StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<Quotinator.Core.Entities.SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory, NoOpNotificationWriter.Instance);
-        var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
+        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, actionWriter, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
@@ -69,9 +69,9 @@ public class SeriesUniverseNameResolverTests
 
     private async Task SeedSeriesAsync(string name)
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
-        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO Quotinator_Series (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
             new { Id = Guid.NewGuid().ToString("D"), Name = name, now });
@@ -79,9 +79,9 @@ public class SeriesUniverseNameResolverTests
 
     private async Task SeedUniverseAsync(string name)
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
-        var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO Quotinator_Universe (Id, Name, CompletenessStatus, DateCreated) VALUES (@Id, @Name, 'Incomplete', @now)",
             new { Id = Guid.NewGuid().ToString("D"), Name = name, now });
@@ -91,9 +91,9 @@ public class SeriesUniverseNameResolverTests
     public async Task SeriesNameResolver_ExactCasing_ResolvesId()
     {
         await SeedSeriesAsync("The Lord of the Rings");
-        var resolver = new SeriesNameResolver(_factory);
+        SeriesNameResolver resolver = new SeriesNameResolver(_factory);
 
-        var id = await resolver.ResolveIdByNameAsync("The Lord of the Rings");
+        Guid? id = await resolver.ResolveIdByNameAsync("The Lord of the Rings");
 
         Assert.IsNotNull(id);
     }
@@ -103,9 +103,9 @@ public class SeriesUniverseNameResolverTests
     public async Task SeriesNameResolver_DifferingCasing_StillResolvesId()
     {
         await SeedSeriesAsync("The Lord of the Rings");
-        var resolver = new SeriesNameResolver(_factory);
+        SeriesNameResolver resolver = new SeriesNameResolver(_factory);
 
-        var id = await resolver.ResolveIdByNameAsync("the lord of the rings");
+        Guid? id = await resolver.ResolveIdByNameAsync("the lord of the rings");
 
         Assert.IsNotNull(id, "?series=the lord of the rings (lowercase) must still match the stored 'The Lord of the Rings' row");
     }
@@ -113,9 +113,9 @@ public class SeriesUniverseNameResolverTests
     [TestMethod]
     public async Task SeriesNameResolver_NoMatch_ReturnsNull()
     {
-        var resolver = new SeriesNameResolver(_factory);
+        SeriesNameResolver resolver = new SeriesNameResolver(_factory);
 
-        var id = await resolver.ResolveIdByNameAsync("Does Not Exist");
+        Guid? id = await resolver.ResolveIdByNameAsync("Does Not Exist");
 
         Assert.IsNull(id);
     }
@@ -124,9 +124,9 @@ public class SeriesUniverseNameResolverTests
     public async Task UniverseNameResolver_ExactCasing_ResolvesId()
     {
         await SeedUniverseAsync("Middle Earth");
-        var resolver = new UniverseNameResolver(_factory);
+        UniverseNameResolver resolver = new UniverseNameResolver(_factory);
 
-        var id = await resolver.ResolveIdByNameAsync("Middle Earth");
+        Guid? id = await resolver.ResolveIdByNameAsync("Middle Earth");
 
         Assert.IsNotNull(id);
     }
@@ -136,9 +136,9 @@ public class SeriesUniverseNameResolverTests
     public async Task UniverseNameResolver_DifferingCasing_StillResolvesId()
     {
         await SeedUniverseAsync("Middle Earth");
-        var resolver = new UniverseNameResolver(_factory);
+        UniverseNameResolver resolver = new UniverseNameResolver(_factory);
 
-        var id = await resolver.ResolveIdByNameAsync("MIDDLE EARTH");
+        Guid? id = await resolver.ResolveIdByNameAsync("MIDDLE EARTH");
 
         Assert.IsNotNull(id, "?universe=MIDDLE EARTH (uppercase) must still match the stored 'Middle Earth' row");
     }
@@ -146,9 +146,9 @@ public class SeriesUniverseNameResolverTests
     [TestMethod]
     public async Task UniverseNameResolver_NoMatch_ReturnsNull()
     {
-        var resolver = new UniverseNameResolver(_factory);
+        UniverseNameResolver resolver = new UniverseNameResolver(_factory);
 
-        var id = await resolver.ResolveIdByNameAsync("Does Not Exist");
+        Guid? id = await resolver.ResolveIdByNameAsync("Does Not Exist");
 
         Assert.IsNull(id);
     }

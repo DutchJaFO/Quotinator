@@ -66,8 +66,8 @@ public class UserSystemReseedConceptTests
 
     private UserContentTestInitializer CreateInitializer()
     {
-        var factory = new SqliteConnectionFactory(_dbPath);
-        var options = new DatabaseOptions
+        SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
+        DatabaseOptions options = new DatabaseOptions
         {
             DbPath      = _dbPath,
             BackupsPath = Path.Combine(_tempDir, "backups"),
@@ -82,27 +82,27 @@ public class UserSystemReseedConceptTests
     [TestMethod]
     public async Task SeedSystemContentAsync_AfterFreshInitialise_PopulatesUserContentTable()
     {
-        var db = CreateInitializer();
+        UserContentTestInitializer db = CreateInitializer();
 
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM UserContent_ExampleWidget;");
+        int count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM UserContent_ExampleWidget;");
         Assert.AreEqual(1, count, "A consumer-defined system table must be seeded on first-ever install, via the same extension point Quotinator.Data itself uses.");
     }
 
     [TestMethod]
     public async Task SeedSystemContentAsync_AfterReset_RepopulatesUserContentTable()
     {
-        var db = CreateInitializer();
+        UserContentTestInitializer db = CreateInitializer();
         await db.InitialiseAsync();
 
         await db.ResetAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM UserContent_ExampleWidget;");
+        int count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM UserContent_ExampleWidget;");
         Assert.AreEqual(1, count, "A consumer-defined system table's content must be present again after Reset.");
         Assert.AreEqual(2, db.SeedSystemContentCallCount, "Hook must fire once at fresh install and once more at Reset.");
     }
@@ -110,7 +110,7 @@ public class UserSystemReseedConceptTests
     [TestMethod]
     public async Task ReseedEquivalentCall_DoesNotInvokeSeedSystemContentAsync()
     {
-        var db = CreateInitializer();
+        UserContentTestInitializer db = CreateInitializer();
         await db.InitialiseAsync();
         Assert.AreEqual(1, db.SeedSystemContentCallCount);
 

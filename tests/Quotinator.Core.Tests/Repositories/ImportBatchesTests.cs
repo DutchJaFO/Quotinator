@@ -51,14 +51,14 @@ public class ImportBatchesTests
 
     private QuotinatorDatabaseInitializer CreateInitializer(IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline)
     {
-        var factory       = new SqliteConnectionFactory(_dbPath);
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var logger        = NullLogger<DatabaseInitializer>.Instance;
-        var actionReader  = new ImportActionReader(factory);
-        var actionWriter  = new ImportActionWriter(factory);
-        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
+        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        NullLogger<DatabaseInitializer> logger        = NullLogger<DatabaseInitializer>.Instance;
+        ImportActionReader actionReader  = new ImportActionReader(factory);
+        ImportActionWriter actionWriter  = new ImportActionWriter(factory);
+        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
+        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -86,7 +86,7 @@ public class ImportBatchesTests
     // history specifically, not Quotinator.Data's.
     private async Task CreateV2DatabaseAsync()
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         await conn.ExecuteAsync("CREATE TABLE System_ConsumerSchemaVersion (Version INTEGER NOT NULL, AppliedAt TEXT NOT NULL)");
         await conn.ExecuteAsync("INSERT INTO System_ConsumerSchemaVersion VALUES (1, '2025-01-01 00:00:00')");
@@ -129,17 +129,17 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Schema_ImportBatchesTable_HasAllRequiredColumns()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var columns = (await conn.QueryAsync<string>(
-            "SELECT name FROM pragma_table_info('Import_Batch')")).ToHashSet();
+        HashSet<string> columns = [.. (await conn.QueryAsync<string>(
+            "SELECT name FROM pragma_table_info('Import_Batch')"))];
 
-        var expected = new[] { "Id", "Name", "Type", "Url", "ImportedAt", "ImportedById", "RecordCount",
-                                "DateCreated", "DateModified", "DateDeleted", "IsDeleted", "ConflictPolicy" };
-        foreach (var col in expected)
+        string[] expected = [ "Id", "Name", "Type", "Url", "ImportedAt", "ImportedById", "RecordCount",
+                                "DateCreated", "DateModified", "DateDeleted", "IsDeleted", "ConflictPolicy" ];
+        foreach (string? col in expected)
             Assert.Contains(col, columns, $"Column '{col}' missing from Import_Batch");
     }
 
@@ -147,13 +147,13 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Schema_ImportBatchesConflictPolicy_PersistsAppliedPolicy()
     {
-        var batch = new SeedBatch([new SeedFile(CuratedFile, null)], new ManifestPolicy(DuplicateResolutionPolicy.MergeTheirs), "test");
-        var db    = CreateInitializer([batch]);
+        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], new ManifestPolicy(DuplicateResolutionPolicy.MergeTheirs), "test");
+        QuotinatorDatabaseInitializer db    = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var conflictPolicy = await conn.ExecuteScalarAsync<string>(
+        string? conflictPolicy = await conn.ExecuteScalarAsync<string>(
             "SELECT ConflictPolicy FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
 
         Assert.AreEqual(nameof(DuplicateResolutionPolicy.MergeTheirs), conflictPolicy);
@@ -163,15 +163,15 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Schema_EntityTables_HaveNullableImportBatchIdFK()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
 
-        foreach (var table in new[] { "Quotinator_Quote", "Quotinator_Source", "Quotinator_Character", "Quotinator_Person" })
+        foreach (string? table in new[] { "Quotinator_Quote", "Quotinator_Source", "Quotinator_Character", "Quotinator_Person" })
         {
-            var (name, notNull) = await conn.QuerySingleOrDefaultAsync<(string name, int notNull)>(
+            (string? name, int notNull) = await conn.QuerySingleOrDefaultAsync<(string name, int notNull)>(
                 $"SELECT name, [notnull] FROM pragma_table_info('{table}') WHERE name = 'ImportBatchId'");
             Assert.IsNotNull(name, $"ImportBatchId missing from {table}");
             Assert.AreEqual(0, notNull, $"ImportBatchId on {table} must be nullable");
@@ -182,7 +182,7 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
         Assert.AreEqual(5, db.SchemaVersion, "SchemaVersion should be 5: #155's consolidation of migrations 4-11 into one (4), plus #289's consolidation of #150's ImportBatches.ConflictPolicy CHECK constraint migration and #254's domain-prefix rename into one (5)");
@@ -194,25 +194,25 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_TwoSourceFiles_ProduceTwoDistinctBatchesWithCorrectTypes()
     {
-        var curatedFile = new SeedFile(CuratedFile, null);
-        var seedFile    = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
-        var batch       = new SeedBatch([curatedFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
-        var db          = CreateInitializer([batch]);
+        SeedFile curatedFile = new SeedFile(CuratedFile, null);
+        SeedFile seedFile    = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        SeedBatch batch       = new SeedBatch([curatedFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
+        QuotinatorDatabaseInitializer db          = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var rows = (await conn.QueryAsync<(string Name, string Type, string? Url)>(
-            "SELECT Name, Type, Url FROM Import_Batch WHERE IsDeleted = 0")).ToList();
+        List<(string Name, string Type, string? Url)> rows = [.. (await conn.QueryAsync<(string Name, string Type, string? Url)>(
+            "SELECT Name, Type, Url FROM Import_Batch WHERE IsDeleted = 0"))];
 
         Assert.HasCount(2, rows, "One ImportBatch row per source file");
         Assert.HasCount(rows.Count, rows.DistinctBy(r => r.Name), "All batch names are distinct");
 
-        var curatedRow = rows.Single(r => r.Name == Path.GetFileName(CuratedFile));
+        (string Name, string Type, string? Url) curatedRow = rows.Single(r => r.Name == Path.GetFileName(CuratedFile));
         Assert.AreEqual("Seed", curatedRow.Type, "A bundled file without a URL is still Seed content, just internally-authored");
         Assert.IsNull(curatedRow.Url, "File without URL should have Url=NULL");
 
-        var seedRow = rows.Single(r => r.Name == Path.GetFileName(VilaboimFile));
+        (string Name, string Type, string? Url) seedRow = rows.Single(r => r.Name == Path.GetFileName(VilaboimFile));
         Assert.AreEqual("Seed", seedRow.Type, "File with URL should have Type=Seed");
         Assert.AreEqual("https://github.com/vilaboim/movie-quotes", seedRow.Url, "Url should match the manifest URL");
     }
@@ -221,28 +221,28 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_TwoSourceFiles_QuotesLinkToOwningBatchAndRecordCountMatches()
     {
-        var curatedFile = new SeedFile(CuratedFile, null);
-        var seedFile    = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
-        var batch       = new SeedBatch([curatedFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
-        var db         = CreateInitializer([batch]);
+        SeedFile curatedFile = new SeedFile(CuratedFile, null);
+        SeedFile seedFile    = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        SeedBatch batch       = new SeedBatch([curatedFile, seedFile], ManifestPolicy.HardcodedDefault, "test");
+        QuotinatorDatabaseInitializer db         = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
 
-        var batches = (await conn.QueryAsync<(string Id, string Name, int RecordCount)>(
-            "SELECT Id, Name, RecordCount FROM Import_Batch WHERE IsDeleted = 0")).ToList();
-        var (Id, Name, RecordCount) = batches.Single(b => b.Name == Path.GetFileName(CuratedFile));
-        var vilaboimBatch = batches.Single(b => b.Name == Path.GetFileName(VilaboimFile));
+        List<(string Id, string Name, int RecordCount)> batches = [.. (await conn.QueryAsync<(string Id, string Name, int RecordCount)>(
+            "SELECT Id, Name, RecordCount FROM Import_Batch WHERE IsDeleted = 0"))];
+        (string? Id, string? Name, int RecordCount) = batches.Single(b => b.Name == Path.GetFileName(CuratedFile));
+        (string Id, string Name, int RecordCount) vilaboimBatch = batches.Single(b => b.Name == Path.GetFileName(VilaboimFile));
 
-        var quoteBatchIds = (await conn.QueryAsync<string?>("SELECT ImportBatchId FROM Quotinator_Quote")).ToList();
+        List<string?> quoteBatchIds = [.. (await conn.QueryAsync<string?>("SELECT ImportBatchId FROM Quotinator_Quote"))];
 
         Assert.IsTrue(quoteBatchIds.All(id => id is not null), "Every seeded quote must have a non-null ImportBatchId");
         Assert.IsTrue(quoteBatchIds.All(id => id == Id || id == vilaboimBatch.Id),
             "Every seeded quote must be linked to one of the two batches created for this seed run — not a third/unrelated batch");
 
-        var curatedQuoteCount  = quoteBatchIds.Count(id => id == Id);
-        var vilaboimQuoteCount = quoteBatchIds.Count(id => id == vilaboimBatch.Id);
+        int curatedQuoteCount  = quoteBatchIds.Count(id => id == Id);
+        int vilaboimQuoteCount = quoteBatchIds.Count(id => id == vilaboimBatch.Id);
 
         Assert.IsGreaterThan(0, curatedQuoteCount, "Curated batch should own at least one quote");
         Assert.IsGreaterThan(0, vilaboimQuoteCount, "Vilaboim batch should own at least one quote");
@@ -254,23 +254,23 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_EmptyOrInvalidJsonSourceFile_IsSkippedWithoutCrashing()
     {
-        var emptyFile = Path.Combine(_tempDir, "empty.json");
+        string emptyFile = Path.Combine(_tempDir, "empty.json");
         File.WriteAllText(emptyFile, string.Empty);
 
-        var curatedFile = new SeedFile(CuratedFile, null);
-        var emptySeedFile = new SeedFile(emptyFile, null);
-        var batch = new SeedBatch([curatedFile, emptySeedFile], ManifestPolicy.HardcodedDefault, "test");
-        var db = CreateInitializer([batch]);
+        SeedFile curatedFile = new SeedFile(CuratedFile, null);
+        SeedFile emptySeedFile = new SeedFile(emptyFile, null);
+        SeedBatch batch = new SeedBatch([curatedFile, emptySeedFile], ManifestPolicy.HardcodedDefault, "test");
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
 
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
 
-        var quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote");
+        int quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote");
         Assert.IsGreaterThan(0, quoteCount, "Quotes from the valid curated file should still be seeded");
 
-        var (Id, RecordCount) = await conn.QuerySingleAsync<(string Id, int RecordCount)>(
+        (string? Id, int RecordCount) = await conn.QuerySingleAsync<(string Id, int RecordCount)>(
             "SELECT Id, RecordCount FROM Import_Batch WHERE Name = @name", new { name = "empty.json" });
         Assert.AreEqual(0, RecordCount, "The empty/invalid file's batch should record zero quotes, not crash");
     }
@@ -279,14 +279,14 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_UserImportsOriginNoUrl_TypeIsUserSeed()
     {
-        var userFile = new SeedFile(CuratedFile, null);
-        var batch    = new SeedBatch([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
-        var db       = CreateInitializer([batch]);
+        SeedFile userFile = new SeedFile(CuratedFile, null);
+        SeedBatch batch    = new SeedBatch([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
+        QuotinatorDatabaseInitializer db       = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var type = await conn.ExecuteScalarAsync<string>(
+        string? type = await conn.ExecuteScalarAsync<string>(
             "SELECT Type FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(CuratedFile) });
 
         Assert.AreEqual("UserSeed", type, "A file scanned from the user imports folder must be UserSeed regardless of URL absence");
@@ -296,14 +296,14 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Seeding_UserImportsOriginWithUrl_TypeIsStillUserSeed()
     {
-        var userFile = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
-        var batch    = new SeedBatch([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
-        var db       = CreateInitializer([batch]);
+        SeedFile userFile = new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes");
+        SeedBatch batch    = new SeedBatch([userFile], ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.UserImports);
+        QuotinatorDatabaseInitializer db       = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var type = await conn.ExecuteScalarAsync<string>(
+        string? type = await conn.ExecuteScalarAsync<string>(
             "SELECT Type FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
 
         Assert.AreEqual("UserSeed", type, "A user-imports-folder file must stay UserSeed even when it declares its own URL — origin, not URL presence, decides the type");
@@ -315,25 +315,25 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task ImportBatches_TypeCheckConstraint_AcceptsUserSeedAlongsideExistingSeedRow()
     {
-        var seedBatch = new SeedBatch([new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes")],
+        SeedBatch seedBatch = new SeedBatch([new SeedFile(VilaboimFile, "https://github.com/vilaboim/movie-quotes")],
             ManifestPolicy.HardcodedDefault, "test", SeedBatchOrigin.Bundled);
-        var db = CreateInitializer([seedBatch]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([seedBatch]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var existingRow = await conn.QuerySingleAsync<(string Id, string Type)>(
+        (string Id, string Type) existingRow = await conn.QuerySingleAsync<(string Id, string Type)>(
             "SELECT Id, Type FROM Import_Batch WHERE Name = @name", new { name = Path.GetFileName(VilaboimFile) });
 
         Assert.AreEqual("Seed", existingRow.Type, "Pre-existing row must retain its original Type");
 
-        var newId = Guid.NewGuid().ToString();
-        var now   = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        string newId = Guid.NewGuid().ToString();
+        string now   = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync(
             "INSERT INTO Import_Batch (Id, Name, Type, ImportedAt, RecordCount, DateCreated, IsDeleted) VALUES (@id, 'manual-user-seed.json', 'UserSeed', @now, 0, @now, 0)",
             new { id = newId, now });
 
-        var insertedType = await conn.ExecuteScalarAsync<string>(
+        string? insertedType = await conn.ExecuteScalarAsync<string>(
             "SELECT Type FROM Import_Batch WHERE Id = @id", new { id = newId });
         Assert.AreEqual("UserSeed", insertedType, "The widened CHECK constraint must accept 'UserSeed'");
     }
@@ -344,13 +344,13 @@ public class ImportBatchesTests
     {
         await CreateV2DatabaseAsync();
 
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var seedBatches = (await conn.QueryAsync<string>(
-            "SELECT Name FROM Import_Batch WHERE Type = 'Seed' AND IsDeleted = 0")).ToList();
+        List<string> seedBatches = [.. (await conn.QueryAsync<string>(
+            "SELECT Name FROM Import_Batch WHERE Type = 'Seed' AND IsDeleted = 0"))];
 
         Assert.HasCount(2, seedBatches, "Two pre-seed batch rows expected after migration");
         Assert.Contains(n => n.Contains("vilaboim"), seedBatches, "vilaboim batch row missing");
@@ -363,12 +363,12 @@ public class ImportBatchesTests
     {
         await CreateV2DatabaseAsync();
 
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
-        var importBatchId = await conn.ExecuteScalarAsync<string?>(
+        string? importBatchId = await conn.ExecuteScalarAsync<string?>(
             "SELECT ImportBatchId FROM Quotinator_Quote WHERE Id = 'TEST-QUOTE-ID'");
 
         Assert.IsNull(importBatchId, "Pre-migration records must have NULL ImportBatchId");
@@ -393,15 +393,15 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Migration_RenameImportedByToImportedById_ColumnRenamedAndDataPreserved()
     {
-        var batchId = Guid.NewGuid().ToString();
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        string batchId = Guid.NewGuid().ToString();
+        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration002_ReseedGenres);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration003_ImportBatches);
 
-            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
             await conn.ExecuteAsync(
                 "INSERT INTO ImportBatches (Id, Name, Type, ImportedAt, ImportedBy, RecordCount, DateCreated, IsDeleted) " +
                 "VALUES (@id, 'pre-rename.json', 'Import', @now, '22222222-2222-4222-8222-222222222222', 0, @now, 0);",
@@ -413,18 +413,18 @@ public class ImportBatchesTests
                 new { now });
         }
 
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         await verifyConn.OpenAsync(TestContext.CancellationToken);
 
-        var columns = (await verifyConn.QueryAsync<string>(
+        HashSet<string> columns = (await verifyConn.QueryAsync<string>(
             "SELECT name FROM pragma_table_info('Import_Batch')")).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Assert.Contains("ImportedById", columns, "ImportedById column must exist after Migration010");
         Assert.DoesNotContain("ImportedBy", columns, "ImportedBy must no longer exist after the rename");
 
-        var preservedValue = await verifyConn.ExecuteScalarAsync<string>(
+        string? preservedValue = await verifyConn.ExecuteScalarAsync<string>(
             "SELECT ImportedById FROM Import_Batch WHERE Id = @id;", new { id = batchId });
         Assert.AreEqual("22222222-2222-4222-8222-222222222222", preservedValue,
             "The pre-existing value must survive the rename unchanged");
@@ -441,8 +441,8 @@ public class ImportBatchesTests
     [TestMethod]
     public async Task Migration_ImportBatchConflictPolicyCheckConstraint_NormalisesLegacyLowercaseDefault()
     {
-        var batchId = Guid.NewGuid().ToString();
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        string batchId = Guid.NewGuid().ToString();
+        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
@@ -450,7 +450,7 @@ public class ImportBatchesTests
             await conn.ExecuteAsync(QuotinatorMigrations.Migration003_ImportBatches);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration004_ConsolidatedSinceV172Core + QuotinatorMigrations.CharacterGlobalIdentityMerge);
 
-            var now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
             // Simulates a row that predates migration 4's ConflictPolicy column: its value is the
             // literal SQL DEFAULT 'skip', never touched by application code (which always writes
@@ -466,13 +466,13 @@ public class ImportBatchesTests
                 new { now });
         }
 
-        var db = CreateInitializer([]);
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using var verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
         await verifyConn.OpenAsync(TestContext.CancellationToken);
 
-        var normalisedValue = await verifyConn.ExecuteScalarAsync<string>(
+        string? normalisedValue = await verifyConn.ExecuteScalarAsync<string>(
             "SELECT ConflictPolicy FROM Import_Batch WHERE Id = @id;", new { id = batchId });
         Assert.AreEqual("Skip", normalisedValue,
             "The legacy lowercase 'skip' default must be normalised to 'Skip' to satisfy the new CHECK constraint");

@@ -51,15 +51,15 @@ public class SourceCacheWiringTests
 
     private QuotinatorDatabaseInitializer CreateInitializer(SpySourceCacheUpdater spy, bool autoUpdateSources)
     {
-        var factory       = new SqliteConnectionFactory(_dbPath);
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var logger        = NullLogger<DatabaseInitializer>.Instance;
-        var batch         = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "bundled sources");
-        var actionReader  = new ImportActionReader(factory);
-        var actionWriter  = new ImportActionWriter(factory);
-        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
+        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        NullLogger<DatabaseInitializer> logger        = NullLogger<DatabaseInitializer>.Instance;
+        SeedBatch batch         = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "bundled sources");
+        ImportActionReader actionReader  = new ImportActionReader(factory);
+        ImportActionWriter actionWriter  = new ImportActionWriter(factory);
+        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
+        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -86,8 +86,8 @@ public class SourceCacheWiringTests
     [TestMethod]
     public async Task ReseedAsync_CalledTwice_InvokesUpdaterIndependentlyEachTime()
     {
-        var spy = new SpySourceCacheUpdater();
-        var db  = CreateInitializer(spy, autoUpdateSources: true);
+        SpySourceCacheUpdater spy = new SpySourceCacheUpdater();
+        QuotinatorDatabaseInitializer db  = CreateInitializer(spy, autoUpdateSources: true);
         await db.InitialiseAsync();
         spy.Calls.Clear();
 
@@ -101,8 +101,8 @@ public class SourceCacheWiringTests
     [TestMethod]
     public async Task ResetAsync_ForceSourceRefreshTrue_ThreadsThroughToUpdaterSameAsReseed()
     {
-        var spy = new SpySourceCacheUpdater();
-        var db  = CreateInitializer(spy, autoUpdateSources: true);
+        SpySourceCacheUpdater spy = new SpySourceCacheUpdater();
+        QuotinatorDatabaseInitializer db  = CreateInitializer(spy, autoUpdateSources: true);
         await db.InitialiseAsync();
         spy.Calls.Clear();
 
@@ -116,8 +116,8 @@ public class SourceCacheWiringTests
     [TestMethod]
     public async Task ReseedAsync_ForceSourceRefreshTrue_ThreadsThroughToUpdater()
     {
-        var spy = new SpySourceCacheUpdater();
-        var db  = CreateInitializer(spy, autoUpdateSources: true);
+        SpySourceCacheUpdater spy = new SpySourceCacheUpdater();
+        QuotinatorDatabaseInitializer db  = CreateInitializer(spy, autoUpdateSources: true);
         await db.InitialiseAsync();
         spy.Calls.Clear();
 
@@ -132,8 +132,8 @@ public class SourceCacheWiringTests
     [TestMethod]
     public async Task PreviewSeedAsync_AutoUpdateSourcesTrue_NeverAllowsNetwork()
     {
-        var spy = new SpySourceCacheUpdater();
-        var db  = CreateInitializer(spy, autoUpdateSources: true);
+        SpySourceCacheUpdater spy = new SpySourceCacheUpdater();
+        QuotinatorDatabaseInitializer db  = CreateInitializer(spy, autoUpdateSources: true);
         await db.InitialiseAsync();
         spy.Calls.Clear();
 
@@ -149,19 +149,19 @@ public class SourceCacheWiringTests
     [TestMethod]
     public async Task PreviewSeedAsync_MalformedFile_ReportsInvalidJsonIssue()
     {
-        var malformedPath = Path.Combine(_tempDir, "malformed.json");
+        string malformedPath = Path.Combine(_tempDir, "malformed.json");
         File.WriteAllText(malformedPath, "{ this is not valid json");
 
-        var factory       = new SqliteConnectionFactory(_dbPath);
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var batch = new SeedBatch(
+        SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
+        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SeedBatch batch = new SeedBatch(
             [new SeedFile(CuratedFile, null), new SeedFile(malformedPath, null)],
             ManifestPolicy.HardcodedDefault, "bundled sources");
-        var actionReader  = new ImportActionReader(factory);
-        var actionWriter  = new ImportActionWriter(factory);
-        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        ImportActionReader actionReader  = new ImportActionReader(factory);
+        ImportActionWriter actionWriter  = new ImportActionWriter(factory);
+        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
+        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -170,7 +170,7 @@ public class SourceCacheWiringTests
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory, NoOpNotificationWriter.Instance);
-        var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
+        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
             coordinator, actionService, actionWriter,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             new SpySourceCacheUpdater(), autoUpdateSources: false,
@@ -181,7 +181,7 @@ public class SourceCacheWiringTests
             QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
-        var preview = await db.PreviewSeedAsync();
+        SeedPreviewResult preview = await db.PreviewSeedAsync();
 
         Assert.IsNull(preview.Files.Single(f => f.FileName == "quotinator-curated.json").Issue);
         Assert.AreEqual(SeedFileIssue.InvalidJson, preview.Files.Single(f => f.FileName == "malformed.json").Issue);
@@ -190,16 +190,16 @@ public class SourceCacheWiringTests
     [TestMethod]
     public async Task PreviewSeedAsync_MissingFile_ReportsMissingIssue()
     {
-        var missingPath = Path.Combine(_tempDir, "does-not-exist.json");
+        string missingPath = Path.Combine(_tempDir, "does-not-exist.json");
 
-        var factory       = new SqliteConnectionFactory(_dbPath);
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var batch = new SeedBatch([new SeedFile(missingPath, null)], ManifestPolicy.HardcodedDefault, "bundled sources");
-        var actionReader2  = new ImportActionReader(factory);
-        var actionWriter2  = new ImportActionWriter(factory);
-        var coordinator2   = new ImportActionResolutionCoordinator(actionReader2, actionWriter2, factory);
-        var actionService2 = new SqliteImportActionService(actionReader2, coordinator2, actionWriter2, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
+        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SeedBatch batch = new SeedBatch([new SeedFile(missingPath, null)], ManifestPolicy.HardcodedDefault, "bundled sources");
+        ImportActionReader actionReader2  = new ImportActionReader(factory);
+        ImportActionWriter actionWriter2  = new ImportActionWriter(factory);
+        ImportActionResolutionCoordinator coordinator2   = new ImportActionResolutionCoordinator(actionReader2, actionWriter2, factory);
+        SqliteImportActionService actionService2 = new SqliteImportActionService(actionReader2, coordinator2, actionWriter2, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -208,7 +208,7 @@ public class SourceCacheWiringTests
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory, NoOpNotificationWriter.Instance);
-        var db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
+        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [batch], importBatches,
             coordinator2, actionService2, actionWriter2,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             new SpySourceCacheUpdater(), autoUpdateSources: false,
@@ -219,7 +219,7 @@ public class SourceCacheWiringTests
             QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
-        var preview = await db.PreviewSeedAsync();
+        SeedPreviewResult preview = await db.PreviewSeedAsync();
 
         Assert.AreEqual(SeedFileIssue.Missing, preview.Files.Single(f => f.FileName == "does-not-exist.json").Issue);
     }
@@ -229,13 +229,13 @@ public class SourceCacheWiringTests
     [TestMethod]
     public async Task RefreshSourcesAsync_DoesNotAffectRowCountsOrTouchDatabase()
     {
-        var spy = new SpySourceCacheUpdater();
-        var db  = CreateInitializer(spy, autoUpdateSources: true);
+        SpySourceCacheUpdater spy = new SpySourceCacheUpdater();
+        QuotinatorDatabaseInitializer db  = CreateInitializer(spy, autoUpdateSources: true);
         await db.InitialiseAsync();
-        var quoteCountBefore = db.QuoteCount;
+        int quoteCountBefore = db.QuoteCount;
         spy.Calls.Clear();
 
-        var resolution = await db.RefreshSourcesAsync(force: true);
+        SourceCacheResolution resolution = await db.RefreshSourcesAsync(force: true);
 
         Assert.HasCount(1, spy.Calls);
         Assert.IsTrue(spy.Calls[0].AllowNetwork);
@@ -250,17 +250,17 @@ public class SourceCacheWiringTests
     [TestMethod]
     public async Task PreviewSeedAsync_AttachesRefreshOutcomeAndTimestampFromResolution()
     {
-        var lastRefreshedAtUtc = DateTime.UtcNow.AddHours(-3);
-        var spy = new SpySourceCacheUpdater
+        DateTime lastRefreshedAtUtc = DateTime.UtcNow.AddHours(-3);
+        SpySourceCacheUpdater spy = new SpySourceCacheUpdater
         {
             ResultsToReturn = [new SourceRefreshResult("quotinator-curated.json", "https://example.com/x", SourceRefreshOutcome.Failed, "boom", lastRefreshedAtUtc)]
         };
-        var db = CreateInitializer(spy, autoUpdateSources: true);
+        QuotinatorDatabaseInitializer db = CreateInitializer(spy, autoUpdateSources: true);
         await db.InitialiseAsync();
 
-        var preview = await db.PreviewSeedAsync();
+        SeedPreviewResult preview = await db.PreviewSeedAsync();
 
-        var filePreview = preview.Files.Single(f => f.FileName == "quotinator-curated.json");
+        SeedFilePreview filePreview = preview.Files.Single(f => f.FileName == "quotinator-curated.json");
         Assert.AreEqual(SourceRefreshOutcome.Failed, filePreview.RefreshOutcome);
         Assert.AreEqual(lastRefreshedAtUtc, filePreview.LastRefreshedAtUtc);
     }

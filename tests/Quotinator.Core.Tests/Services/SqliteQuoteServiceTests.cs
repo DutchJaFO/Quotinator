@@ -45,12 +45,12 @@ public class SqliteQuoteServiceTests
             new JoinQueryRepository<StageDirectionLineRow>(_factory, new StageDirectionLineStrategy()),
             new JoinQueryRepository<SoundCueLineRow>(_factory, new SoundCueLineStrategy()));
 
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var actionReader   = new ImportActionReader(_factory);
-        var actionWriter   = new ImportActionWriter(_factory);
-        var coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        var actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, new ChangeWriter(_factory),
+        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
+        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        ImportActionReader actionReader   = new ImportActionReader(_factory);
+        ImportActionWriter actionWriter   = new ImportActionWriter(_factory);
+        ImportActionResolutionCoordinator coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
+        SqliteImportActionService actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, new ChangeWriter(_factory),
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -60,7 +60,7 @@ public class SqliteQuoteServiceTests
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory, NoOpNotificationWriter.Instance);
 
-        var db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
+        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, actionWriter, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
@@ -71,8 +71,8 @@ public class SqliteQuoteServiceTests
             QuotinatorMigrations.Baseline);
         await db.InitialiseAsync();
 
-        var sourceRepo = new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var source = new SourceEntity
+        SqliteRestorableRepository<SourceEntity> sourceRepo = new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SourceEntity source = new SourceEntity
         {
             Title = "Test Source",
             Type = new SafeValue<QuoteType?>(nameof(QuoteType.Movie), QuoteType.Movie),
@@ -80,8 +80,8 @@ public class SqliteQuoteServiceTests
         };
         await sourceRepo.InsertAsync(source);
 
-        var quoteRepo = new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        for (var i = 0; i < 5; i++)
+        SqliteRestorableRepository<QuoteEntity> quoteRepo = new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        for (int i = 0; i < 5; i++)
             await quoteRepo.InsertAsync(new QuoteEntity
             {
                 QuoteText = $"Quote {i}",
@@ -101,7 +101,7 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetAll_PageSizeZero_ReturnsEveryRowNotZeroRows()
     {
-        var result = await _service.GetAll(1, 0);
+        PagedResult<QuoteResponse> result = await _service.GetAll(1, 0);
 
         Assert.HasCount(5, result.Items, "pageSize = 0 must reach SQLite as LIMIT -1, not a literal LIMIT 0");
         Assert.AreEqual(5, result.TotalCount);
@@ -110,7 +110,7 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetAll_PageSizeZero_ReportsEffectivePageSize()
     {
-        var result = await _service.GetAll(1, 0);
+        PagedResult<QuoteResponse> result = await _service.GetAll(1, 0);
 
         Assert.AreEqual(5, result.PageSize, "PageSize must report the effective count actually returned, not the literal 0 requested");
     }
@@ -118,7 +118,7 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetAll_PageSizeNonZero_StillPaginatesNormally()
     {
-        var result = await _service.GetAll(1, 2);
+        PagedResult<QuoteResponse> result = await _service.GetAll(1, 2);
 
         Assert.HasCount(2, result.Items);
         Assert.AreEqual(5, result.TotalCount);
@@ -129,8 +129,8 @@ public class SqliteQuoteServiceTests
 
     private async Task<UniverseEntity> InsertUniverseAsync(string name)
     {
-        var repo = new SqliteRestorableRepository<UniverseEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var universe = new UniverseEntity
+        SqliteRestorableRepository<UniverseEntity> repo = new SqliteRestorableRepository<UniverseEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        UniverseEntity universe = new UniverseEntity
         {
             Name = name,
             CompletenessStatus = new SafeValue<CompletenessStatus?>(nameof(CompletenessStatus.Incomplete), CompletenessStatus.Incomplete),
@@ -141,8 +141,8 @@ public class SqliteQuoteServiceTests
 
     private async Task<SeriesEntity> InsertSeriesAsync(string name, Guid? universeId = null)
     {
-        var repo = new SqliteRestorableRepository<SeriesEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var series = new SeriesEntity
+        SqliteRestorableRepository<SeriesEntity> repo = new SqliteRestorableRepository<SeriesEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SeriesEntity series = new SeriesEntity
         {
             Name = name,
             UniverseId = universeId,
@@ -154,8 +154,8 @@ public class SqliteQuoteServiceTests
 
     private async Task<SourceEntity> InsertSourceAsync(string title, Guid? seriesId = null)
     {
-        var repo = new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var source = new SourceEntity
+        SqliteRestorableRepository<SourceEntity> repo = new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SourceEntity source = new SourceEntity
         {
             Title = title,
             Type = new SafeValue<QuoteType?>(nameof(QuoteType.Movie), QuoteType.Movie),
@@ -168,8 +168,8 @@ public class SqliteQuoteServiceTests
 
     private async Task<QuoteEntity> InsertQuoteAsync(Guid sourceId, string text)
     {
-        var repo = new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var quote = new QuoteEntity
+        SqliteRestorableRepository<QuoteEntity> repo = new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        QuoteEntity quote = new QuoteEntity
         {
             QuoteText = text,
             SourceId = sourceId,
@@ -181,7 +181,7 @@ public class SqliteQuoteServiceTests
 
     private async Task InsertQuoteTranslationAsync(Guid quoteId, string language, string quoteText)
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
         await conn.ExecuteAsync(Sql.QuoteTranslations.Insert, new
         {
@@ -202,11 +202,11 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetById_UppercaseLang_StillMatchesLowercaseStoredTranslation()
     {
-        var source = await InsertSourceAsync("A Film With A Dutch Translation");
-        var quote  = await InsertQuoteAsync(source.Id, "Original English text.");
+        SourceEntity source = await InsertSourceAsync("A Film With A Dutch Translation");
+        QuoteEntity quote  = await InsertQuoteAsync(source.Id, "Original English text.");
         await InsertQuoteTranslationAsync(quote.Id, "nl", "Nederlandse tekst.");
 
-        var result = await _service.GetById(quote.Id.ToString("D"), lang: "NL");
+        QuoteResponse? result = await _service.GetById(quote.Id.ToString("D"), lang: "NL");
 
         Assert.IsNotNull(result);
         Assert.AreEqual("Nederlandse tekst.", result.Quote, "Uppercase ?lang=NL must still resolve the lowercase-stored 'nl' translation");
@@ -217,12 +217,12 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetById_SourceInSeriesWithUniverse_ResponseCarriesBoth()
     {
-        var universe = await InsertUniverseAsync("Middle Earth");
-        var series   = await InsertSeriesAsync("The Lord of the Rings", universe.Id);
-        var source   = await InsertSourceAsync("The Fellowship of the Ring", series.Id);
-        var quote    = await InsertQuoteAsync(source.Id, "One does not simply walk into Mordor.");
+        UniverseEntity universe = await InsertUniverseAsync("Middle Earth");
+        SeriesEntity series   = await InsertSeriesAsync("The Lord of the Rings", universe.Id);
+        SourceEntity source   = await InsertSourceAsync("The Fellowship of the Ring", series.Id);
+        QuoteEntity quote    = await InsertQuoteAsync(source.Id, "One does not simply walk into Mordor.");
 
-        var result = await _service.GetById(quote.Id.ToString("D"));
+        QuoteResponse? result = await _service.GetById(quote.Id.ToString("D"));
 
         Assert.IsNotNull(result);
         Assert.IsNotNull(result.Series);
@@ -235,8 +235,8 @@ public class SqliteQuoteServiceTests
     public async Task GetById_SourceWithNoSeries_ReturnsQuoteWithNullSeriesAndUniverse()
     {
         // TestInitialize's "Test Source" has no SeriesId.
-        var result = (await _service.GetAll(1, 1)).Items[0];
-        var byId   = await _service.GetById(result.Id);
+        QuoteResponse result = (await _service.GetAll(1, 1)).Items[0];
+        QuoteResponse? byId   = await _service.GetById(result.Id);
 
         Assert.IsNotNull(byId);
         Assert.IsNull(byId!.Series);
@@ -246,11 +246,11 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetById_SeriesWithNoUniverse_ReturnsSeriesWithNullUniverse()
     {
-        var series = await InsertSeriesAsync("Standalone Series", universeId: null);
-        var source = await InsertSourceAsync("A Standalone Film", series.Id);
-        var quote  = await InsertQuoteAsync(source.Id, "A quote with a series but no universe.");
+        SeriesEntity series = await InsertSeriesAsync("Standalone Series", universeId: null);
+        SourceEntity source = await InsertSourceAsync("A Standalone Film", series.Id);
+        QuoteEntity quote  = await InsertQuoteAsync(source.Id, "A quote with a series but no universe.");
 
-        var result = await _service.GetById(quote.Id.ToString("D"));
+        QuoteResponse? result = await _service.GetById(quote.Id.ToString("D"));
 
         Assert.IsNotNull(result);
         Assert.IsNotNull(result.Series);
@@ -261,14 +261,14 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetById_SeriesSoftDeleted_ReturnsNullSeriesAndUniverse()
     {
-        var series = await InsertSeriesAsync("Soon To Be Deleted Series");
-        var source = await InsertSourceAsync("A Film In A Deleted Series", series.Id);
-        var quote  = await InsertQuoteAsync(source.Id, "A quote whose series gets soft-deleted.");
+        SeriesEntity series = await InsertSeriesAsync("Soon To Be Deleted Series");
+        SourceEntity source = await InsertSourceAsync("A Film In A Deleted Series", series.Id);
+        QuoteEntity quote  = await InsertQuoteAsync(source.Id, "A quote whose series gets soft-deleted.");
 
-        var seriesRepo = new SqliteRestorableRepository<SeriesEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SqliteRestorableRepository<SeriesEntity> seriesRepo = new SqliteRestorableRepository<SeriesEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         await seriesRepo.SoftDeleteAsync(series.Id);
 
-        var result = await _service.GetById(quote.Id.ToString("D"));
+        QuoteResponse? result = await _service.GetById(quote.Id.ToString("D"));
 
         Assert.IsNotNull(result);
         Assert.IsNull(result!.Series, "A soft-deleted Series must never leak through as a dangling reference.");
@@ -288,10 +288,10 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetById_UppercaseUrlIdAgainstLowercaseStoredQuote_StillResolves()
     {
-        var source      = await InsertSourceAsync("A Film With A Lowercase-Stored Quote Id");
-        var lowercaseId = Guid.NewGuid().ToString("D");
+        SourceEntity source      = await InsertSourceAsync("A Film With A Lowercase-Stored Quote Id");
+        string lowercaseId = Guid.NewGuid().ToString("D");
 
-        using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection connection = new SqliteConnection($"Data Source={_dbPath}");
         connection.Open();
         await connection.ExecuteAsync(Sql.Quotes.Insert, new
         {
@@ -305,7 +305,7 @@ public class SqliteQuoteServiceTests
             DateCreated      = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
         });
 
-        var result = await _service.GetById(lowercaseId.ToUpperInvariant());
+        QuoteResponse? result = await _service.GetById(lowercaseId.ToUpperInvariant());
 
         Assert.IsNotNull(result,
             "GET /quotes/{id} must resolve regardless of URL casing (#210) — the previously fully-unmitigated gap.");
@@ -314,11 +314,11 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetAll_SeriesFilter_ReturnsOnlyThatSeriesQuotes()
     {
-        var series      = await InsertSeriesAsync("The Filtered Series");
-        var source      = await InsertSourceAsync("A Film In The Filtered Series", series.Id);
-        var quote       = await InsertQuoteAsync(source.Id, "The only quote that should match.");
+        SeriesEntity series      = await InsertSeriesAsync("The Filtered Series");
+        SourceEntity source      = await InsertSourceAsync("A Film In The Filtered Series", series.Id);
+        QuoteEntity quote       = await InsertQuoteAsync(source.Id, "The only quote that should match.");
 
-        var result = await _service.GetAll(1, 10, seriesId: series.Id);
+        PagedResult<QuoteResponse> result = await _service.GetAll(1, 10, seriesId: series.Id);
 
         Assert.HasCount(1, result.Items);
         Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
@@ -327,17 +327,17 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetAll_UniverseFilter_ReturnsQuotesAcrossEverySeriesInThatUniverse()
     {
-        var universe = await InsertUniverseAsync("A Shared Universe");
-        var seriesA  = await InsertSeriesAsync("Series A", universe.Id);
-        var seriesB  = await InsertSeriesAsync("Series B", universe.Id);
-        var sourceA  = await InsertSourceAsync("Film A", seriesA.Id);
-        var sourceB  = await InsertSourceAsync("Film B", seriesB.Id);
-        var quoteA   = await InsertQuoteAsync(sourceA.Id, "Quote from Series A.");
-        var quoteB   = await InsertQuoteAsync(sourceB.Id, "Quote from Series B.");
+        UniverseEntity universe = await InsertUniverseAsync("A Shared Universe");
+        SeriesEntity seriesA  = await InsertSeriesAsync("Series A", universe.Id);
+        SeriesEntity seriesB  = await InsertSeriesAsync("Series B", universe.Id);
+        SourceEntity sourceA  = await InsertSourceAsync("Film A", seriesA.Id);
+        SourceEntity sourceB  = await InsertSourceAsync("Film B", seriesB.Id);
+        QuoteEntity quoteA   = await InsertQuoteAsync(sourceA.Id, "Quote from Series A.");
+        QuoteEntity quoteB   = await InsertQuoteAsync(sourceB.Id, "Quote from Series B.");
 
-        var result = await _service.GetAll(1, 10, universeId: universe.Id);
+        PagedResult<QuoteResponse> result = await _service.GetAll(1, 10, universeId: universe.Id);
 
-        var ids = result.Items.Select(i => i.Id).ToList();
+        List<string> ids = [.. result.Items.Select(i => i.Id)];
         Assert.Contains(quoteA.Id.ToString("D"), ids);
         Assert.Contains(quoteB.Id.ToString("D"), ids);
     }
@@ -354,13 +354,13 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetAll_LangRequested_ReturnsTranslatedContent()
     {
-        var source = await InsertSourceAsync("A Film With A Dutch Translation");
-        var quote  = await InsertQuoteAsync(source.Id, "Original English text.");
+        SourceEntity source = await InsertSourceAsync("A Film With A Dutch Translation");
+        QuoteEntity quote  = await InsertQuoteAsync(source.Id, "Original English text.");
         await InsertQuoteTranslationAsync(quote.Id, "nl", "Nederlandse tekst.");
 
-        var result = await _service.GetAll(1, 10, lang: "nl");
+        PagedResult<QuoteResponse> result = await _service.GetAll(1, 10, lang: "nl");
 
-        var item = result.Items.Single(i => i.Id == quote.Id.ToString("D"));
+        QuoteResponse item = result.Items.Single(i => i.Id == quote.Id.ToString("D"));
         Assert.AreEqual("Nederlandse tekst.", item.Quote);
         Assert.AreEqual("nl", item.Language);
         Assert.IsTrue(item.IsTranslated);
@@ -369,11 +369,11 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetRandom_SeriesFilter_ReturnsOnlyThatSeriesQuotes()
     {
-        var series = await InsertSeriesAsync("The Random-Filtered Series");
-        var source = await InsertSourceAsync("A Film In The Random-Filtered Series", series.Id);
-        var quote  = await InsertQuoteAsync(source.Id, "The only quote random selection can pick.");
+        SeriesEntity series = await InsertSeriesAsync("The Random-Filtered Series");
+        SourceEntity source = await InsertSourceAsync("A Film In The Random-Filtered Series", series.Id);
+        QuoteEntity quote  = await InsertQuoteAsync(source.Id, "The only quote random selection can pick.");
 
-        var result = await _service.GetRandom(10, seriesId: series.Id);
+        FilteredQuoteResult<QuoteResponse> result = await _service.GetRandom(10, seriesId: series.Id);
 
         Assert.HasCount(1, result.Items);
         Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
@@ -382,12 +382,12 @@ public class SqliteQuoteServiceTests
     [TestMethod]
     public async Task GetRandom_UniverseFilter_ReturnsOnlyThatUniverseQuotes()
     {
-        var universe = await InsertUniverseAsync("The Random-Filtered Universe");
-        var series   = await InsertSeriesAsync("A Series In It", universe.Id);
-        var source   = await InsertSourceAsync("A Film In It", series.Id);
-        var quote    = await InsertQuoteAsync(source.Id, "The only quote random selection can pick.");
+        UniverseEntity universe = await InsertUniverseAsync("The Random-Filtered Universe");
+        SeriesEntity series   = await InsertSeriesAsync("A Series In It", universe.Id);
+        SourceEntity source   = await InsertSourceAsync("A Film In It", series.Id);
+        QuoteEntity quote    = await InsertQuoteAsync(source.Id, "The only quote random selection can pick.");
 
-        var result = await _service.GetRandom(10, universeId: universe.Id);
+        FilteredQuoteResult<QuoteResponse> result = await _service.GetRandom(10, universeId: universe.Id);
 
         Assert.HasCount(1, result.Items);
         Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);

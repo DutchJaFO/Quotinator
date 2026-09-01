@@ -19,6 +19,7 @@ using Quotinator.Core.Entities;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Queries;
 using Quotinator.Core.Services;
+using Quotinator.Core.Enums;
 
 namespace Quotinator.Core.Database;
 
@@ -239,18 +240,18 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <remarks>Mirrors the two count-gates <see cref="OnInitialisedAsync"/> itself runs (#277): <see cref="SeedIfEmptyInternalAsync"/> would do real work whenever Quotes is empty, and <see cref="ReSeedGenresIfEmptyAsync"/> would do real work whenever Genres is empty but Quotes is not.</remarks>
     protected override async Task<bool> HasPendingContentSeedAsync(SqliteConnection connection)
     {
-        var quoteCount = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
+        int quoteCount = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
         if (quoteCount == 0) return true;
 
-        var genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
+        int genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
         return genreCount == 0;
     }
 
     /// <inheritdoc/>
     protected override async Task OnReseedAsync(SqliteConnection connection, bool forceSourceRefresh)
     {
-        var effectiveBatches = (await ResolveEffectiveBatchesAsync(forceSourceRefresh)).EffectiveBatches;
-        var totalFiles = effectiveBatches.Sum(b => b.Files.Count);
+        IReadOnlyList<SeedBatch> effectiveBatches = (await ResolveEffectiveBatchesAsync(forceSourceRefresh)).EffectiveBatches;
+        int totalFiles = effectiveBatches.Sum(b => b.Files.Count);
         Logger.LogReseedRequested(totalFiles);
 
         await SharedSeedLock.WaitAsync();
@@ -352,31 +353,31 @@ public sealed class QuotinatorDatabaseInitializer(
     {
         // Preview reflects whatever is already cached on disk — it never triggers a network call,
         // even when Quotinator__AutoUpdateSources is true, so calling it has no side effects.
-        var resolution       = await ResolveEffectiveBatchesAsync(forceRefresh: false, allowNetworkOverride: false);
-        var effectiveBatches = resolution.EffectiveBatches;
-        var resultsByName    = resolution.Results.ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
+        SourceCacheResolution resolution       = await ResolveEffectiveBatchesAsync(forceRefresh: false, allowNetworkOverride: false);
+        IReadOnlyList<SeedBatch> effectiveBatches = resolution.EffectiveBatches;
+        Dictionary<string, SourceRefreshResult> resultsByName    = resolution.Results.ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
 
-        var filePreviews = new List<Quotinator.Data.Import.SeedFilePreview>();
-        var reports      = new List<FileImportReport>();
+        List<Data.Import.SeedFilePreview> filePreviews = [];
+        List<FileImportReport> reports      = [];
 
-        using var connection = CreateConnection();
+        using SqliteConnection connection = CreateConnection();
         await connection.OpenAsync();
 
-        foreach (var batch in effectiveBatches)
+        foreach (SeedBatch batch in effectiveBatches)
         {
-            foreach (var seedFile in batch.Files)
+            foreach (SeedFile seedFile in batch.Files)
             {
-                var fileName    = Path.GetFileName(seedFile.FilePath);
-                var (parsed, issue) = LoadSourceFileAsync(seedFile.FilePath);
-                var quotes      = parsed.Quotes;
-                var refreshResult = resultsByName.GetValueOrDefault(fileName);
-                var filePolicy  = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
+                string fileName    = Path.GetFileName(seedFile.FilePath);
+                (ParsedSourceFileDto? parsed, SeedFileIssue? issue) = LoadSourceFileAsync(seedFile.FilePath);
+                IReadOnlyList<SourceQuoteDto> quotes      = parsed.Quotes;
+                SourceRefreshResult? refreshResult = resultsByName.GetValueOrDefault(fileName);
+                ManifestPolicy filePolicy  = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
                 filePreviews.Add(new Quotinator.Data.Import.SeedFilePreview(fileName, quotes.Count, refreshResult?.Outcome, refreshResult?.LastRefreshedAtUtc, issue));
 
-                var conflictRules = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
-                var sourceAliases = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
+                ConflictRuleLookup conflictRules = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
+                SourceAliasLookup sourceAliases = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
 
-                var actions = await ImportActionPlanner.PlanAsync(connection, quotes, Guid.NewGuid(), filePolicy.ForQuotes, transaction: null,
+                IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(connection, quotes, Guid.NewGuid(), filePolicy.ForQuotes, transaction: null,
                     parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
                     parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases);
 
@@ -404,7 +405,7 @@ public sealed class QuotinatorDatabaseInitializer(
     /// </param>
     private async Task<SourceCacheResolution> ResolveEffectiveBatchesAsync(bool forceRefresh, bool? allowNetworkOverride = null)
     {
-        var allowNetwork = allowNetworkOverride ?? _autoUpdateSources;
+        bool allowNetwork = allowNetworkOverride ?? _autoUpdateSources;
         return await _sourceCacheUpdater.ResolveAsync(_batches, allowNetwork, forceRefresh);
     }
 
@@ -431,7 +432,7 @@ public sealed class QuotinatorDatabaseInitializer(
     /// </param>
     private async Task SeedIfEmptyInternalAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches, bool isReseed)
     {
-        var count = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
+        int count = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
         if (count > 0) return;
 
         if (effectiveBatches.Count == 0)
@@ -442,28 +443,28 @@ public sealed class QuotinatorDatabaseInitializer(
 
         LastSeedReport = [];
 
-        var reports     = new List<FileImportReport>();
-        var stagedFiles = new List<string>();
+        List<FileImportReport> reports     = [];
+        List<string> stagedFiles = [];
 
-        foreach (var batch in effectiveBatches)
+        foreach (SeedBatch batch in effectiveBatches)
         {
-            foreach (var seedFile in batch.Files)
+            foreach (SeedFile seedFile in batch.Files)
             {
-                var fileName        = Path.GetFileName(seedFile.FilePath);
-                var (parsed, _)     = LoadSourceFileAsync(seedFile.FilePath);
-                var quotes          = parsed.Quotes;
-                var filePolicy      = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
-                var policy          = filePolicy.ForQuotes;
-                var conflictRules   = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
-                var sourceAliases   = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
+                string fileName        = Path.GetFileName(seedFile.FilePath);
+                (ParsedSourceFileDto? parsed, SeedFileIssue? _) = LoadSourceFileAsync(seedFile.FilePath);
+                IReadOnlyList<SourceQuoteDto> quotes          = parsed.Quotes;
+                ManifestPolicy filePolicy      = ManifestPolicy.Resolve(seedFile.Policy, batch.Policy);
+                DuplicateResolutionPolicy policy          = filePolicy.ForQuotes;
+                ConflictRuleLookup conflictRules   = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
+                SourceAliasLookup sourceAliases   = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
 
                 Logger.LogImportingQuotes(quotes.Count, fileName, batch.Label);
 
-                var importBatch = await CreateImportBatchAsync(batch, seedFile, filePolicy);
-                var batchIdStr  = importBatch.Id.ToCanonicalId();
+                ImportBatchEntity importBatch = await CreateImportBatchAsync(batch, seedFile, filePolicy);
+                string batchIdStr  = importBatch.Id.ToCanonicalId();
 
                 IReadOnlyList<ImportActionEntity> actions;
-                using (var tx = connection.BeginTransaction())
+                using (SqliteTransaction tx = connection.BeginTransaction())
                 {
                     actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx,
                         parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
@@ -472,16 +473,16 @@ public sealed class QuotinatorDatabaseInitializer(
                     tx.Commit();
                 }
 
-                var report = ImportActionReportBuilder.Build(fileName, actions);
+                FileImportReport report = ImportActionReportBuilder.Build(fileName, actions);
                 reports.Add(report);
                 if (Logger.IsEnabled(LogLevel.Information))
                     Logger.LogFileReport(fileName, FormatReport(report));
 
-                var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Seed);
+                ImportActionBatchStatusResponse? applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Seed);
                 if (applyResult is null)
                 {
-                    var imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
-                    var updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
+                    int imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
+                    int updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                                    && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
 
                     importBatch.Status      = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Applied.ToString(), ImportBatchStatus.Applied);
@@ -502,7 +503,7 @@ public sealed class QuotinatorDatabaseInitializer(
                     // served their purpose (resolving this import). Purge them when the relevant
                     // per-origin setting allows it; a temporary developer investigation of a specific
                     // source flips that one setting off first, so this stays a no-op for it.
-                    var autoPurge = batch.Origin == SeedBatchOrigin.UserImports
+                    bool autoPurge = batch.Origin == SeedBatchOrigin.UserImports
                         ? _autoPurgeUserImportActions
                         : _autoPurgeBundledImportActions;
                     if (autoPurge)
@@ -539,10 +540,10 @@ public sealed class QuotinatorDatabaseInitializer(
 
     private async Task ReSeedGenresIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
     {
-        var genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
+        int genreCount = await connection.ExecuteScalarAsync<int>(Sql.QuoteGenres.CountAll);
         if (genreCount > 0) return;
 
-        var quoteCount = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
+        int quoteCount = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
         if (quoteCount == 0) return;
 
         if (effectiveBatches.Count == 0)
@@ -553,19 +554,19 @@ public sealed class QuotinatorDatabaseInitializer(
 
         Logger.LogInformation("[Database - Seed] re-seeding genres from source files...");
 
-        var now      = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
-        var inserted = 0;
+        string now      = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+        int inserted = 0;
 
-        foreach (var batch in effectiveBatches)
+        foreach (SeedBatch batch in effectiveBatches)
         {
-            foreach (var seedFile in batch.Files)
+            foreach (SeedFile seedFile in batch.Files)
             {
-                var (quotes, _) = LoadQuotesFromFile(seedFile.FilePath);
-                foreach (var q in quotes)
+                (List<SourceQuoteDto>? quotes, SeedFileIssue? _) = LoadQuotesFromFile(seedFile.FilePath);
+                foreach (SourceQuoteDto q in quotes)
                 {
-                    foreach (var genre in q.Genres)
+                    foreach (string genre in q.Genres)
                     {
-                        if (QuoteSeedWriter.TryNormaliseGenre(genre, out var g))
+                        if (QuoteSeedWriter.TryNormaliseGenre(genre, out Genre g))
                         {
                             await connection.ExecuteAsync(
                                 Sql.QuoteGenres.InsertWithExistsGuard,
@@ -599,9 +600,9 @@ public sealed class QuotinatorDatabaseInitializer(
 
     private async Task<ImportBatchEntity> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile, ManifestPolicy filePolicy)
     {
-        var type   = DetermineType(seedBatch.Origin);
-        var policy = filePolicy.ForQuotes;
-        var batch = new ImportBatchEntity
+        ImportBatchType type   = DetermineType(seedBatch.Origin);
+        DuplicateResolutionPolicy policy = filePolicy.ForQuotes;
+        ImportBatchEntity batch = new ImportBatchEntity
         {
             Name           = Path.GetFileName(seedFile.FilePath),
             Type           = new SafeValue<ImportBatchType?>(type.ToString(), type),
@@ -619,13 +620,13 @@ public sealed class QuotinatorDatabaseInitializer(
         // already wraps this whole hook in, the same as any other seeding failure.
         if (File.Exists(seedFile.FilePath))
         {
-            var isUserImports = seedBatch.Origin == SeedBatchOrigin.UserImports;
-            var fileResourceOrigin   = isUserImports ? FileResourceOrigin.User : FileResourceOrigin.System;
+            bool isUserImports = seedBatch.Origin == SeedBatchOrigin.UserImports;
+            FileResourceOrigin fileResourceOrigin   = isUserImports ? FileResourceOrigin.User : FileResourceOrigin.System;
             // "sources"/"imports" per #252 — the only two local directories any write path has ever
             // captured from; a future consumer of System/User origin unrelated to quote sources
             // registers its own key without stretching what these two mean.
-            var homeDirectoryKey     = isUserImports ? "imports" : "sources";
-            var content = await File.ReadAllTextAsync(seedFile.FilePath);
+            string homeDirectoryKey     = isUserImports ? "imports" : "sources";
+            string content = await File.ReadAllTextAsync(seedFile.FilePath);
             // OriginalFolderPath is null here — today's directory scan is flat (no subfolders under
             // data/sources/ or {dataDir}/imports/), confirmed via ManifestSeedPlanner's own
             // non-recursive Directory.GetFiles call, so there is no folder segment to record yet.
@@ -640,11 +641,11 @@ public sealed class QuotinatorDatabaseInitializer(
             // rather than seedFile.FilePath's own directory — ISourceCacheUpdater rewrites a downloaded
             // file's FilePath to a separate cache directory that never contains manifest.json, which
             // would silently miss the link for every downloaded source otherwise (found live in a T2 pass).
-            var manifestDir  = seedBatch.SourceDirectory ?? Path.GetDirectoryName(seedFile.FilePath)!;
-            var manifestPath = Path.Combine(manifestDir, ManifestSeedPlanner.ManifestFileName);
+            string manifestDir  = seedBatch.SourceDirectory ?? Path.GetDirectoryName(seedFile.FilePath)!;
+            string manifestPath = Path.Combine(manifestDir, ManifestSeedPlanner.ManifestFileName);
             if (File.Exists(manifestPath))
             {
-                var manifestContent = await File.ReadAllTextAsync(manifestPath);
+                string manifestContent = await File.ReadAllTextAsync(manifestPath);
                 await _fileResources.WriteAsync(
                     ManifestSeedPlanner.ManifestFileName, originalFolderPath: null, fileResourceOrigin, manifestContent, batch.Id,
                     homeDirectoryKey: homeDirectoryKey);
@@ -668,7 +669,7 @@ public sealed class QuotinatorDatabaseInitializer(
 
     private (List<SourceQuoteDto> Quotes, SeedFileIssue? Issue) LoadQuotesFromFile(string filePath)
     {
-        var (parsed, issue) = LoadSourceFileAsync(filePath);
+        (ParsedSourceFileDto? parsed, SeedFileIssue? issue) = LoadSourceFileAsync(filePath);
         return (parsed.Quotes.ToList(), issue);
     }
 
@@ -682,8 +683,8 @@ public sealed class QuotinatorDatabaseInitializer(
     {
         if (!File.Exists(filePath)) return (new ParsedSourceFileDto { Quotes = [] }, SeedFileIssue.Missing);
 
-        var json = File.ReadAllText(filePath);
-        if (SourceQuoteFileReader.TryParseExtended(json, out var parsed)) return (parsed!, null);
+        string json = File.ReadAllText(filePath);
+        if (SourceQuoteFileReader.TryParseExtended(json, out ParsedSourceFileDto? parsed)) return (parsed!, null);
 
         Logger.LogWarning("[Database - Seed] {File} is empty or not valid JSON — skipping", Path.GetFileName(filePath));
         return (new ParsedSourceFileDto { Quotes = [] }, SeedFileIssue.InvalidJson);
@@ -709,7 +710,7 @@ public sealed class QuotinatorDatabaseInitializer(
     {
         if (ruleFilePath is null) return ConflictRuleLookup.Empty;
 
-        var effectivePath = await EffectiveRuleFileResolver.ResolveEffectivePathAsync(
+        string effectivePath = await EffectiveRuleFileResolver.ResolveEffectivePathAsync(
             ruleFilePath, origin, _ruleFileOverridePathResolver, _sourceFileOverrideRegistry, Logger);
 
         if (!File.Exists(effectivePath))
@@ -721,8 +722,8 @@ public sealed class QuotinatorDatabaseInitializer(
 
         try
         {
-            var json     = await File.ReadAllTextAsync(effectivePath);
-            var ruleFile = JsonSerializer.Deserialize<ConflictResolutionRuleFileDto>(json, ConflictRuleReadOptions);
+            string json     = await File.ReadAllTextAsync(effectivePath);
+            ConflictResolutionRuleFileDto? ruleFile = JsonSerializer.Deserialize<ConflictResolutionRuleFileDto>(json, ConflictRuleReadOptions);
             return new ConflictRuleLookup(ruleFile?.Rules ?? []);
         }
         catch (JsonException ex)
@@ -744,7 +745,7 @@ public sealed class QuotinatorDatabaseInitializer(
     {
         if (sourceAliasFilePath is null) return SourceAliasLookup.Empty;
 
-        var effectivePath = await EffectiveRuleFileResolver.ResolveEffectivePathAsync(
+        string effectivePath = await EffectiveRuleFileResolver.ResolveEffectivePathAsync(
             sourceAliasFilePath, origin, _ruleFileOverridePathResolver, _sourceFileOverrideRegistry, Logger);
 
         if (!File.Exists(effectivePath))
@@ -756,8 +757,8 @@ public sealed class QuotinatorDatabaseInitializer(
 
         try
         {
-            var json      = await File.ReadAllTextAsync(effectivePath);
-            var aliasFile = JsonSerializer.Deserialize<SourceAliasRuleFileDto>(json, ConflictRuleReadOptions);
+            string json      = await File.ReadAllTextAsync(effectivePath);
+            SourceAliasRuleFileDto? aliasFile = JsonSerializer.Deserialize<SourceAliasRuleFileDto>(json, ConflictRuleReadOptions);
             return new SourceAliasLookup(aliasFile?.Aliases ?? []);
         }
         catch (JsonException ex)

@@ -75,14 +75,14 @@ public class SqliteQuoteServiceUnicodeSearchTests
         }));
 
         _factory = new SqliteConnectionFactory(_dbPath);
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var logger        = NullLogger<DatabaseInitializer>.Instance;
-        var batch         = new SeedBatch([new SeedFile(_fixture, null)], ManifestPolicy.HardcodedDefault, "unicode-search-fixture");
-        var actionReader  = new ImportActionReader(_factory);
-        var actionWriter  = new ImportActionWriter(_factory);
-        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        NullLogger<DatabaseInitializer> logger        = NullLogger<DatabaseInitializer>.Instance;
+        SeedBatch batch         = new SeedBatch([new SeedFile(_fixture, null)], ManifestPolicy.HardcodedDefault, "unicode-search-fixture");
+        ImportActionReader actionReader  = new ImportActionReader(_factory);
+        ImportActionWriter actionWriter  = new ImportActionWriter(_factory);
+        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
+        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -91,7 +91,7 @@ public class SqliteQuoteServiceUnicodeSearchTests
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory, NoOpNotificationWriter.Instance);
-        var db            = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
+        QuotinatorDatabaseInitializer db            = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
                               coordinator, actionService, actionWriter,
                               NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
                               NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
@@ -126,12 +126,12 @@ public class SqliteQuoteServiceUnicodeSearchTests
     [TestMethod]
     public void RawSqliteLike_AccentedCharacters_IsCaseSensitive()
     {
-        using var connection = (SqliteConnection)_factory.CreateConnection();
+        using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
         connection.Open();
 
-        using var command = connection.CreateCommand();
+        using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT 1 WHERE 'café' LIKE '%CAFÉ%';";
-        var result = command.ExecuteScalar();
+        object? result = command.ExecuteScalar();
 
         Assert.IsNull(result, "SQLite's own LIKE is documented as ASCII-only case-insensitive — " +
             "'café' should NOT match '%CAFÉ%'. If this now matches, SQLite's default behaviour " +
@@ -143,12 +143,12 @@ public class SqliteQuoteServiceUnicodeSearchTests
     [TestMethod]
     public void UnicodeContains_MatchesAccentedCaseVariant()
     {
-        using var connection = (SqliteConnection)_factory.CreateConnection();
+        using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
         connection.Open();
 
-        using var command = connection.CreateCommand();
+        using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT UNICODE_CONTAINS('café', 'CAFÉ');";
-        var result = (long)command.ExecuteScalar()!;
+        long result = (long)command.ExecuteScalar()!;
 
         Assert.AreEqual(1L, result);
     }
@@ -161,18 +161,18 @@ public class SqliteQuoteServiceUnicodeSearchTests
     [TestMethod]
     public void UnicodeContains_RegisteredOnEveryConnection()
     {
-        using (var first = (SqliteConnection)_factory.CreateConnection())
+        using (SqliteConnection first = (SqliteConnection)_factory.CreateConnection())
         {
             first.Open();
-            using var command = first.CreateCommand();
+            using SqliteCommand command = first.CreateCommand();
             command.CommandText = "SELECT UNICODE_CONTAINS('café', 'CAFÉ');";
             Assert.AreEqual(1L, (long)command.ExecuteScalar()!);
         }
 
-        using (var second = (SqliteConnection)_factory.CreateConnection())
+        using (SqliteConnection second = (SqliteConnection)_factory.CreateConnection())
         {
             second.Open();
-            using var command = second.CreateCommand();
+            using SqliteCommand command = second.CreateCommand();
             command.CommandText = "SELECT UNICODE_CONTAINS('café', 'CAFÉ');";
             Assert.AreEqual(1L, (long)command.ExecuteScalar()!,
                 "UNICODE_CONTAINS must be registered on every connection the factory creates, not just the first.");
@@ -195,7 +195,7 @@ public class SqliteQuoteServiceUnicodeSearchTests
     public async Task Search_MatchesAccentedCaseVariant_OnlyWhenFlagOn(
         string? field, string query, bool unicodeAware, bool expectMatch, string? expectedFieldValue)
     {
-        var result = await CreateService(unicodeAware).Search(query, 10, field: field);
+        FilteredQuoteResult<QuoteResponse> result = await CreateService(unicodeAware).Search(query, 10, field: field);
 
         Assert.AreEqual(expectMatch ? FilteredResultStatus.Ok : FilteredResultStatus.NoResults, result.Status);
         if (!expectMatch) return;
@@ -203,7 +203,7 @@ public class SqliteQuoteServiceUnicodeSearchTests
         Assert.AreEqual(1, result.TotalMatching);
         if (expectedFieldValue is null) return;
 
-        var actual = field switch
+        string? actual = field switch
         {
             "source"    => result.Items[0].Source,
             "character" => result.Items[0].Character,
@@ -225,8 +225,8 @@ public class SqliteQuoteServiceUnicodeSearchTests
     public async Task GetRandom_FuzzyFilterMatchesAccentedCaseVariant_OnlyWhenFlagOn(
         string filter, string term, bool unicodeAware, bool expectMatch)
     {
-        var service = CreateService(unicodeAware);
-        var result = filter switch
+        SqliteQuoteService service = CreateService(unicodeAware);
+        FilteredQuoteResult<QuoteResponse> result = filter switch
         {
             "character" => await service.GetRandom(10, character: term),
             "author"    => await service.GetRandom(10, author: term),

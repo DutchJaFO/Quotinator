@@ -47,8 +47,8 @@ public class SystemReseedConceptTests
 
     private static SystemContentTestInitializer CreateInitializer(string dbPath)
     {
-        var factory = new SqliteConnectionFactory(dbPath);
-        var options = new DatabaseOptions
+        SqliteConnectionFactory factory = new SqliteConnectionFactory(dbPath);
+        DatabaseOptions options = new DatabaseOptions
         {
             DbPath      = dbPath,
             BackupsPath = Path.Combine(Path.GetDirectoryName(dbPath)!, "backups"),
@@ -63,29 +63,29 @@ public class SystemReseedConceptTests
     [TestMethod]
     public async Task SeedSystemContentAsync_AfterFreshInitialise_PopulatesSystemContentTable()
     {
-        using var temp = new TempDatabase([]);
-        var db = CreateInitializer(temp.DbPath);
+        using TempDatabase temp = new TempDatabase([]);
+        SystemContentTestInitializer db = CreateInitializer(temp.DbPath);
 
         await db.InitialiseAsync();
 
-        using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM SystemContent_ExampleSetting;");
+        int count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM SystemContent_ExampleSetting;");
         Assert.AreEqual(1, count, "System content must be seeded on first-ever install.");
     }
 
     [TestMethod]
     public async Task SeedSystemContentAsync_AfterReset_RepopulatesSystemContentTable()
     {
-        using var temp = new TempDatabase([]);
-        var db = CreateInitializer(temp.DbPath);
+        using TempDatabase temp = new TempDatabase([]);
+        SystemContentTestInitializer db = CreateInitializer(temp.DbPath);
         await db.InitialiseAsync();
 
         await db.ResetAsync();
 
-        using var conn = new SqliteConnection($"Data Source={temp.DbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={temp.DbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-        var count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM SystemContent_ExampleSetting;");
+        int count = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM SystemContent_ExampleSetting;");
         Assert.AreEqual(1, count,
             "System content must be present again after Reset — the whole point of #156's 'after any reset' requirement.");
         Assert.AreEqual(2, db.SeedSystemContentCallCount, "Hook must fire once at fresh install and once more at Reset.");
@@ -94,8 +94,8 @@ public class SystemReseedConceptTests
     [TestMethod]
     public async Task ReseedEquivalentCall_DoesNotInvokeSeedSystemContentAsync()
     {
-        using var temp = new TempDatabase([]);
-        var db = CreateInitializer(temp.DbPath);
+        using TempDatabase temp = new TempDatabase([]);
+        SystemContentTestInitializer db = CreateInitializer(temp.DbPath);
         await db.InitialiseAsync();
         Assert.AreEqual(1, db.SeedSystemContentCallCount);
 

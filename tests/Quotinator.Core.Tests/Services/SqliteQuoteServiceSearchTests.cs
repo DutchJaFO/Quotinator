@@ -87,14 +87,14 @@ public class SqliteQuoteServiceSearchTests
         }));
 
         _factory = new SqliteConnectionFactory(_dbPath);
-        var options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        var importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        var logger        = NullLogger<DatabaseInitializer>.Instance;
-        var batch         = new SeedBatch([new SeedFile(_fixture, null)], ManifestPolicy.HardcodedDefault, "search-fixture");
-        var actionReader  = new ImportActionReader(_factory);
-        var actionWriter  = new ImportActionWriter(_factory);
-        var coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        var actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        NullLogger<DatabaseInitializer> logger        = NullLogger<DatabaseInitializer>.Instance;
+        SeedBatch batch         = new SeedBatch([new SeedFile(_fixture, null)], ManifestPolicy.HardcodedDefault, "search-fixture");
+        ImportActionReader actionReader  = new ImportActionReader(_factory);
+        ImportActionWriter actionWriter  = new ImportActionWriter(_factory);
+        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
+        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -103,7 +103,7 @@ public class SqliteQuoteServiceSearchTests
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory, NoOpNotificationWriter.Instance);
-        var db            = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
+        QuotinatorDatabaseInitializer db            = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [batch], importBatches,
                               coordinator, actionService, actionWriter,
                               NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
                               NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
@@ -131,7 +131,7 @@ public class SqliteQuoteServiceSearchTests
 
     private async Task InsertQuoteTranslationAsync(string quoteId, string language, string quoteText)
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync();
         await conn.ExecuteAsync(Sql.QuoteTranslations.Insert, new
         {
@@ -149,7 +149,7 @@ public class SqliteQuoteServiceSearchTests
     [TestMethod]
     public async Task Search_FieldQuote_WithMatch_ReturnsOk()
     {
-        var result = await CreateService().Search("serious", 10, field: "quote");
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("serious", 10, field: "quote");
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -160,7 +160,7 @@ public class SqliteQuoteServiceSearchTests
     [TestMethod]
     public async Task Search_FieldQuote_NoMatch_ReturnsNoResults()
     {
-        var result = await CreateService().Search("xyzzy_no_match", 10, field: "quote");
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("xyzzy_no_match", 10, field: "quote");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.AreEqual(0, result.TotalMatching);
@@ -173,7 +173,7 @@ public class SqliteQuoteServiceSearchTests
     [TestMethod]
     public async Task Search_FieldSource_WithMatch_ReturnsOk()
     {
-        var result = await CreateService().Search("Airplane", 10, field: "source");
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("Airplane", 10, field: "source");
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -186,7 +186,7 @@ public class SqliteQuoteServiceSearchTests
     [TestMethod]
     public async Task Search_FieldCharacter_WithCharacterData_ReturnsOk()
     {
-        var result = await CreateService().Search("Striker", 10, field: "character");
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("Striker", 10, field: "character");
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -197,7 +197,7 @@ public class SqliteQuoteServiceSearchTests
     [TestMethod]
     public async Task Search_FieldCharacter_NoMatch_ReturnsNoResults()
     {
-        var result = await CreateService().Search("Gandalf", 10, field: "character");
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("Gandalf", 10, field: "character");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.IsEmpty(result.Items);
@@ -212,7 +212,7 @@ public class SqliteQuoteServiceSearchTests
     {
         // The "We shall fight" and "Elementary" quotes have no character — searching for anything
         // via field=character should not match them even if the term appears elsewhere.
-        var result = await CreateService().Search("Churchill", 10, field: "character");
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("Churchill", 10, field: "character");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.IsEmpty(result.Items);
@@ -224,7 +224,7 @@ public class SqliteQuoteServiceSearchTests
     [TestMethod]
     public async Task Search_FieldAuthor_WithAuthorData_ReturnsOk()
     {
-        var result = await CreateService().Search("Churchill", 10, field: "author");
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("Churchill", 10, field: "author");
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -235,7 +235,7 @@ public class SqliteQuoteServiceSearchTests
     [TestMethod]
     public async Task Search_FieldAuthor_NoMatch_ReturnsNoResults()
     {
-        var result = await CreateService().Search("Tolkien", 10, field: "author");
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("Tolkien", 10, field: "author");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.IsEmpty(result.Items);
@@ -250,7 +250,7 @@ public class SqliteQuoteServiceSearchTests
     {
         // "Surely you can't be serious" has no author — searching any term via field=author
         // must not match it even if the term appears in the quote text.
-        var result = await CreateService().Search("serious", 10, field: "author");
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("serious", 10, field: "author");
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.IsEmpty(result.Items);
@@ -262,7 +262,7 @@ public class SqliteQuoteServiceSearchTests
     [TestMethod]
     public async Task Search_TypePerson_ReturnsPerson()
     {
-        var result = await CreateService().Search("fight", 10, types: ["person"]);
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("fight", 10, types: ["person"]);
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -273,7 +273,7 @@ public class SqliteQuoteServiceSearchTests
     [TestMethod]
     public async Task Search_TypeAnime_NoAnimeData_ReturnsNoResults()
     {
-        var result = await CreateService().Search("the", 10, types: ["anime"]);
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("the", 10, types: ["anime"]);
 
         Assert.AreEqual(FilteredResultStatus.NoResults, result.Status);
         Assert.IsEmpty(result.Items);
@@ -285,7 +285,7 @@ public class SqliteQuoteServiceSearchTests
     [TestMethod]
     public async Task Search_AllFields_MatchesAcrossQuoteAndSource()
     {
-        var result = await CreateService().Search("Airplane", 10);
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("Airplane", 10);
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(1, result.TotalMatching);
@@ -297,7 +297,7 @@ public class SqliteQuoteServiceSearchTests
     public async Task Search_LimitCapsResults()
     {
         // All 3 quotes in the fixture match "the" somewhere — limit to 2
-        var result = await CreateService().Search("e", 2);
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("e", 2);
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual(2, result.TotalMatching);
@@ -319,7 +319,7 @@ public class SqliteQuoteServiceSearchTests
         await InsertQuoteTranslationAsync(
             "ffffffff-0000-0000-0000-000000000001", "nl", "Natuurlijk kun je niet serieus zijn.");
 
-        var result = await CreateService().Search("Airplane", 10, lang: "nl");
+        FilteredQuoteResult<QuoteResponse> result = await CreateService().Search("Airplane", 10, lang: "nl");
 
         Assert.AreEqual(FilteredResultStatus.Ok, result.Status);
         Assert.AreEqual("Natuurlijk kun je niet serieus zijn.", result.Items[0].Quote);
