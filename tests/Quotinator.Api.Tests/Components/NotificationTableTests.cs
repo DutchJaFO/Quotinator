@@ -255,4 +255,24 @@ public class NotificationTableTests
         Assert.IsFalse(NotificationTable.ShowsRunControl(notification, executorCanRun: false, isExecuting: false),
             "No executable action means no control, executing or not.");
     }
+
+    /// <summary>
+    /// #367, found in T1: Dismiss stayed live while the action ran, and clicking it corrupted the
+    /// recorded outcome. Blazor serialises circuit events, so the click queues behind the running
+    /// handler and is applied <em>after</em> the action has set <c>Resolved</c> — overwriting it with
+    /// <c>Dismissed</c>. Reproduced against a container with a negative control: the same run without
+    /// the click records <c>resolved</c>, with it records <c>dismissed</c>, and the reseed completes
+    /// either way. A carried-out action must never read as one the user declined (#304).
+    /// </summary>
+    [TestMethod]
+    public void ShowsDismissControl_WhileExecuting_IsFalse()
+    {
+        NotificationEntity notification = Build(isDismissed: false, expiresAt: null);
+
+        Assert.IsTrue(NotificationTable.ShowsDismissControl(notification, isExecuting: false));
+        Assert.IsFalse(NotificationTable.ShowsDismissControl(notification, isExecuting: true),
+            "There is nothing to dismiss while the action runs, and the click would overwrite its outcome.");
+        Assert.IsFalse(NotificationTable.ShowsDismissControl(Build(isDismissed: true, expiresAt: null), isExecuting: false),
+            "An already-dismissed row has no dismiss control — the pre-existing rule, unchanged.");
+    }
 }

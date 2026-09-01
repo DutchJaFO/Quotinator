@@ -96,7 +96,7 @@
                 @if (ShowDismissAction)
                 {
                     <td>
-                        @if (!notification.IsDismissed)
+                        @if (ShowsDismissControl(notification, Executing.IsExecuting(notification.Id)))
                         {
                             <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => OnDismiss.InvokeAsync(notification.Id)">@Text.NotificationsDismissButton</button>
                         }

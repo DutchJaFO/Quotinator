@@ -137,6 +137,24 @@ place.
 The Run control is not offered at all for a row that is executing — refusing after a click is a worse
 answer than not presenting the control, and a second session sees the same thing.
 
+**Dismiss is withdrawn too, and that was a T1 finding rather than part of the plan** (developer,
+2026-09-01: *"dismiss action is enabled while running… Is there anything to dismiss?"*). The answer is
+no, and leaving it live was not merely redundant — it corrupted the recorded outcome. Blazor serialises
+circuit events, so a Dismiss clicked during the run queues behind the running handler and is applied
+*after* the action has recorded `Resolved`, overwriting it with `Dismissed`. A carried-out action then
+reads as one the user declined, which is exactly what #304's reason column exists to prevent.
+
+Reproduced against a container with a negative control before anything was changed:
+
+| Sequence | Reseed completed | Recorded reason |
+|---|---|---|
+| Run → Confirm, no Dismiss | yes | `resolved` |
+| Run → Confirm → Dismiss while the badge reads **Running…** | yes (799 quotes) | `dismissed` |
+
+Both controls are now withdrawn together, so an executing row offers nothing at all — confirmed live:
+`buttonsInRow: []` while the badge reads `Running…`, and the run still records `resolved`. The status
+badge and its spinner carry the feedback that the controls no longer need to.
+
 ### 5. Make the executing state actually visible to the caller
 
 **Status:** ✅ Done — rows 13–16 green
@@ -175,6 +193,7 @@ mid-action. Row 13 is that proof and is not substitutable by a unit test.
 | 17 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
 | 18 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
 | 19 | ✅ | The running badge carries a spinner that is actually animating | Live (T2) + screenshot | [12-running-action-state.md](../../automated-testing/notifications-and-changelog/12-running-action-state.md) step 2 — `animationName: spinner-border`, `iteration: infinite`, `playState: running`, and none present once the run settles |
+| 20 | ✅ | Dismissing during a run cannot mislabel the outcome | Unit test + Live (T2) | `NotificationTableTests.ShowsDismissControl_WhileExecuting_IsFalse`; same document, step 2 — the row offers no controls at all while running, and the action still records `resolved` |
 
 **Row 13 is the one that cannot be replaced by a unit test.** Every row above it can pass against an
 implementation whose UI never repaints until the action finishes — which is the exact defect this issue

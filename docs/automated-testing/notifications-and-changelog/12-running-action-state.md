@@ -58,8 +58,21 @@ In the browser: open `http://localhost:19367/notifications`, click **Run**, then
 screenshot immediately — within the same round trip if the tooling allows, since the window is about
 11 seconds.
 
-**Expected:** the Status badge reads **Running…** with a spinning icon, and the row's **Run** control is
-gone, leaving only **Dismiss**.
+**Expected:** the Status badge reads **Running…** with a spinning icon, and the row offers **no controls
+at all** — neither Run nor Dismiss:
+
+```js
+({ badge: document.querySelector('.badge.bg-info')?.textContent.trim(),
+   buttonsInRow: [...document.querySelectorAll('tbody button')].map(b => b.textContent.trim()) })
+```
+
+**Expected:** `Running…` and `[]`.
+
+**Dismiss must be gone, not merely inert.** Leaving it live corrupts the recorded outcome: Blazor
+serialises circuit events, so the click queues behind the running handler and is applied *after* the
+action has recorded `Resolved`, overwriting it with `Dismissed`. The action still completes, so the row
+ends up claiming the user declined something that ran — the defect #304's reason column exists to
+prevent. Verify the reason in step 3, not just the button's absence here.
 
 **A screenshot cannot tell a spinning icon from a static arc**, so assert the animation itself rather
 than trusting the picture:

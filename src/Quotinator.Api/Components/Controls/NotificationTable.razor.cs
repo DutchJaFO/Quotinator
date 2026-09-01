@@ -80,6 +80,21 @@ public partial class NotificationTable
     internal static bool ShowsRunControl(NotificationEntity notification, bool executorCanRun, bool isExecuting) =>
         !notification.IsDismissed && executorCanRun && !isExecuting;
 
+    /// <summary>
+    /// Whether the Dismiss control is offered for <paramref name="notification"/>.
+    /// </summary>
+    /// <remarks>
+    /// #367, found in T1: withdrawn while the action runs. There is nothing to dismiss — the operator
+    /// already chose to act — and the click does not merely do nothing. Blazor serialises circuit
+    /// events, so it queues behind the running handler and is applied <em>after</em> the action has
+    /// recorded <c>Resolved</c>, overwriting it with <c>Dismissed</c>: a carried-out action then reads
+    /// as one the user declined, which is the defect #304 exists to prevent.
+    /// </remarks>
+    /// <param name="notification">The row being rendered.</param>
+    /// <param name="isExecuting">Whether this notification's action is running right now.</param>
+    internal static bool ShowsDismissControl(NotificationEntity notification, bool isExecuting) =>
+        !notification.IsDismissed && !isExecuting;
+
     internal static NotificationDisplayStatus GetDisplayStatus(NotificationEntity notification, DateTime now, bool isExecuting = false)
     {
         if (notification.IsDismissed)
