@@ -10,7 +10,8 @@
 //   * A first seed inserts everything as an Add. A conflict needs *existing* data that disagrees with
 //     what is arriving, and on a fresh database there is nothing yet to disagree with.
 //   * Quotinator__DefaultConflictPolicy=Review does not help: the manifest's own per-file policy takes
-//     precedence, so the flag never reaches the bundled files.
+//     precedence, so the flag never reaches the bundled files. (data/sources/manifest.json sets `skip`
+//     at its top level and `review` per file — neither of which governs the imports directory.)
 //
 // The file this writes re-states a real bundled quote's id with different text under a `review` policy.
 // The user-imports batch seeds after the bundled ones, so it meets content that is already stored —
@@ -27,11 +28,12 @@
 // Then start (or restart) the app: the seed stages one Pending action and raises the pending-review
 // alert. Remove the two files it writes to go back to a clean seed.
 //
-// Do not add further files to that directory by hand. The manifest this writes lists exactly what it
-// created, and a file it does not name gets the configuration default — `skip` — so it stages nothing.
-// Worse, deleting the manifest makes the application auto-create one, and an auto-created manifest
-// carries no duplicateResolution at all, so *every* file falls back to `skip` and the whole fixture
-// goes quiet with no error. Use --count for more than one conflicting file instead.
+// Do not add further files to that directory by hand, and do not delete the manifest. A file the
+// manifest does not name — and every file, once the manifest is gone and the application auto-creates
+// one with no duplicateResolution at all — falls back to the configuration default, which is
+// `newest-wins` (ManifestPolicy.HardcodedDefault). That does not merely stage nothing: it applies the
+// incoming value over the stored one without asking. The fixture goes quiet and the data changes.
+// Use --count for more than one conflicting file instead.
 //
 // Options:
 //   --imports <path>   The imports directory to write into; created when missing (required)
@@ -115,9 +117,10 @@ for (int i = 0; i < count; i++)
     stagedIds.Add(id);
 }
 
-// `review` is the whole point: any other policy resolves the conflict silently and stages nothing. An
-// auto-created manifest carries no policy at all, which is why this one must name every file written —
-// a file it does not list falls back to the configuration default and goes quiet.
+// `review` is the whole point: the default (`newest-wins`) resolves the conflict silently by applying
+// the incoming value. An auto-created manifest carries no policy at all, which is why this one must
+// name every file written — a file it does not list falls back to that default and overwrites instead
+// of asking.
 var manifest = new
 {
     duplicateResolution = new { @default = "review" },

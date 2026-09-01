@@ -347,10 +347,17 @@ What the T1 run actually hit was two traps in the fixture, both now closed by
   quote produce one conflict, not two: the first file's change is applied, and the second then agrees
   with what is now stored. Each conflicting file needs a different target quote.
 - **A missing manifest is worse than it looks.** `ManifestSeedPlanner.TryWriteAutoManifest` writes an
-  auto-manifest with *no* `duplicateResolution`, so every file silently falls back to the configuration
-  default — `skip` — and stages nothing at all. The T1 log shows exactly this: "auto-created
-  manifest.json listing 2 file(s)", then `pending=0` for both. No error, no alert, and nothing to
-  indicate the fixture had stopped working.
+  auto-manifest with *no* `duplicateResolution`, so every file falls back to the configuration default
+  — `newest-wins` (`ManifestPolicy.HardcodedDefault`, and `ConflictPolicyParser.Parse(null)`). That
+  does not stage nothing; it **applies the incoming value over the stored one without asking**. The T1
+  log shows exactly this: "auto-created manifest.json listing 2 file(s)", then
+  `Quote[new=0 modified=1 … pending=0]` for both — `modified=1` is the change landing, not being
+  skipped. No error, no alert, and the data quietly different.
+
+  Recorded because it was got wrong twice while writing this section: `skip` is what
+  `data/sources/manifest.json` sets at *its own* top level, for the bundled directory. It has never
+  governed the imports directory, and the difference is not cosmetic — one discards the incoming value,
+  the other keeps it.
 
 **The nav entry also shipped without an icon** (developer, 2026-09-01). Step 11 added the `NavLink`
 with a class name but no matching rule, and every other entry has one — so it rendered as bare text.
