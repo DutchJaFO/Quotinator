@@ -261,6 +261,24 @@ the unapplied batch — check the status before concluding the notification is a
 immediately after navigating is silently swallowed and the row simply stays `Pending`. Re-read the page
 and click again rather than concluding the control is broken — measured here on the first attempt.
 
+## Canary — run red against the build before #303
+
+Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Run against
+`2f30f15d` (#303's last commit before its first `feat`) via `git worktree add` and
+`docker build -t quotinator:canary303`, 2026-09-01:
+
+| Step | Assertion | Pre-work result |
+|---|---|---|
+| 1 | `pending actions = 1` | passes — staging predates #303, correctly insensitive |
+| 1 | `active alerts = 1` | **fails** — `0`, the alert is this issue's contribution |
+| 4 | `/import-review` answers `200` | **fails** — `404`, the page does not exist |
+
+The split within step 1 is the useful part: the fixture half proves the conflict was staged, which was
+already true before this issue, while the alert half is what #303 added. A document that only checked
+`pending actions` would pass unchanged on a build with no notification at all.
+
+Container, image, bind mount and worktree removed afterwards.
+
 ## Cleanup
 
 ```powershell

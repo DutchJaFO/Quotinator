@@ -316,6 +316,9 @@ deliberately not here — see Scope changes 6.
 | 40 | ✅ | An action whose batch no longer exists still shows something traceable | Unit test | `ImportReviewPageTests.FileNameFor_UnknownBatch_FallsBackToTheId` |
 | 41 | ✅ | The nav entry has an icon, like every other entry | Live | Screenshot, 2026-09-01: the clipboard-check icon renders in the sidebar beside *Import review* |
 | 42 | ✅ | Two staged files raise two alerts, each naming its own file | Automated (T2) | `stage-import-conflict.csx --count 2` against a container: `pending actions = 2`, `active alerts = 2`, `conflicting-1.json` and `conflicting-2.json` |
+| 43 | ✅ | The document goes red before it goes green | Canary run | `20-pending-review-alert.md`'s *Canary* section — built `2f30f15d` under `quotinator:canary303`: `active alerts = 0` and `/import-review -> 404`, while `pending actions = 1` correctly stays insensitive |
+| 44 | ✅ | Row 18's `Obsolete` reason is wired, not incidental | Mutation | Changing the truncate-path dismissal to `NotificationDismissReason.Dismissed` fails `DatabaseInitializerTests.Reseed_DismissesAlertsForRemovedBatches` |
+| 45 | ✅ | Row 16's per-batch scoping is wired | Mutation | Replacing `DismissByTriggerAndBatchAsync` with the trigger-wide `DismissByTriggerAsync` fails both `ApplyBatch_DoesNotDismissAnotherBatchesReviewAlert` and `ApplyBatch_WhenFullyResolved_DismissesItsOwnReviewAlert` |
 
 **T1 needs a staged conflict, because the bundled files cannot produce one** (developer, 2026-09-01).
 Neither T1 nor T2 can reach this issue's behaviour with bundled content alone: a first seed inserts

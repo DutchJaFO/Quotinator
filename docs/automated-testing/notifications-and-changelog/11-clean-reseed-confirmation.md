@@ -266,6 +266,26 @@ appear somewhere else in the markup.
 **On failure:** check `/notifications` first. If the confirmations are there but not in the modal, the
 fault is in the modal's own active-notification query, not in this issue's producer.
 
+## Canary — run red against the build before #302
+
+Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Run against
+`aed54b2d` (#302's last commit before its first `feat`) via `git worktree add` and
+`docker build -t quotinator:canary302`, 2026-09-01:
+
+| Step | Assertion | Pre-work result |
+|---|---|---|
+| 1 | `confirmations after first seed = 0` | **passes — and that is a weakness, see below** |
+| 2 | `confirmations after reseed >= 1` | **fails** — `0`, no producer exists |
+
+**Step 1 passes on a build with no feature at all, because it asserts an absence.** It cannot
+distinguish "correctly suppressed on the first seed" from "this was never built", so on its own it is
+not evidence of anything — the same trap `docs/testing-policy.md` records for negative/absence
+assertions generally. Step 2 is what gives step 1 its meaning: only once confirmations are known to
+appear on a reseed does their absence on a first seed say something. **Do not reorder or drop step 2**
+believing step 1 covers the behaviour.
+
+Container, image and worktree removed afterwards.
+
 ## Cleanup
 
 ```powershell
