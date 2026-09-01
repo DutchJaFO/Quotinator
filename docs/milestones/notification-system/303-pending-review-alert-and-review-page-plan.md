@@ -1,6 +1,6 @@
 # #303 — Notification + minimal review page: alert when a reseed leaves import actions pending review
 
-**Status:** In progress (step 1)
+**Status:** In progress (step 3)
 **GitHub issue:** #303
 **Tiers required:** T1, T2
 **Depends on:** #278, #302, #304, #312, #319
@@ -89,7 +89,7 @@ also what step 5's dismissal matches on.
 
 ### 2. Widen the three CHECK constraints in one migration
 
-**Status:** 🔄 In progress
+**Status:** ✅ Done — migration 18, `NotificationImportReviewMigrations`
 
 `MetadataKind` gains `ImportReviewPending`, `DismissTriggerKey` gains step 5's new trigger, and
 `DismissReason` gains `Obsolete` (step 6). All three ride one table rebuild rather than a rebuild each
@@ -103,7 +103,7 @@ the new values.
 
 ### 3. Add the alert's title and body in all three languages
 
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress
 
 Keys on `NotificationMessageKeys`, strings in `UI.en-GB.json`/`UI.nl.json`/`UI.de.json`, resolved via
 `NotificationTranslations.Original`/`Build`.
@@ -216,13 +216,13 @@ deliberately not here — see Scope changes 6.
 | 3 | ❌ | The alert fires on the first empty-database seed, not only on a reseed | Unit test | `DatabaseInitializerTests.Initialise_FirstSeedWithConflicts_WritesPendingReviewAlert` |
 | 4 | ❌ | Counts are per `ImportActionStatus`, covering Pending, Blocked and Stale | Unit test | `DatabaseInitializerTests.Reseed_StagedFile_CountsEachReviewableStatus` |
 | 5 | ❌ | A status with no rows is omitted rather than reported as zero | Unit test | `DatabaseInitializerTests.Reseed_StatusWithNoRows_IsAbsentFromTheAlert` |
-| 6 | ❌ | Payload round-trips file name, origin, batch id and counts | Unit test | `ImportReviewPendingMetadataTests.Payload_RoundTripsAllFields` |
+| 6 | ✅ | Payload round-trips file name, origin, batch id and counts | Unit test | `ImportReviewPendingMetadataTests.Payload_RoundTripsAllFields` |
 | 7 | ✅ | Two same-named files from different directories are two alerts | Unit test | `ImportReviewPendingMetadataTests.Identity_DiffersByOrigin` |
 | 8 | ✅ | A different batch is a different alert, even for the same file and workload | Unit test | `ImportReviewPendingMetadataTests.Identity_DiffersByBatch` |
 | 9 | ❌ | The alert records the app version that wrote it | Unit test | `DatabaseInitializerTests.Reseed_StagedFile_AlertRecordsAppVersionProvenance` |
 | 10 | ✅ | The new kind has a registered payload type | Unit test | `NotificationMetadataKindsTests` (existing guard) |
-| 11 | ❌ | Migration 18 and the baseline accept the same `MetadataKind`, `DismissTriggerKey` and `DismissReason` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` |
-| 12 | ❌ | Migration 18 and the baseline produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
+| 11 | ✅ | Migration 18 and the baseline accept the same `MetadataKind`, `DismissTriggerKey` and `DismissReason` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` |
+| 12 | ✅ | Migration 18 and the baseline produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
 | 13 | ❌ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
 | 14 | ❌ | Resolving a batch dismisses that batch's alert, with reason `Resolved` | Unit test | `SqliteImportActionServiceTests.ApplyBatch_WhenFullyResolved_DismissesItsOwnReviewAlert` |
 | 15 | ❌ | Resolving one batch does not dismiss another batch's alert | Unit test | `SqliteImportActionServiceTests.ApplyBatch_DoesNotDismissAnotherBatchesReviewAlert` |
