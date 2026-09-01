@@ -371,11 +371,12 @@ is already converted and listed.
 | 21 | ✅ | A real reseed against a real database writes one notification per cleanly-applied file, with its breakdown and provenance readable through the API | Automated (T2) | `docs/automated-testing/notifications-and-changelog/11-clean-reseed-confirmation.md` |
 | 22 | ✅ | The notifications render on `/notifications` after a live reseed | Live | T1 (developer, 2026-09-01): reseed run from `/notifications`, one `Success` confirmation per cleanly-applied file, in Dutch, each naming its file and counts |
 | 23 | ✅ | The same confirmations appear in the startup modal after a restart | Live | T1 (developer, 2026-09-01): reseed at 12:15–12:16, restart at 12:16:18, all four confirmations listed in the modal as `Actief` with no expiry |
-| 24 | ✅ | A user-imports file is confirmed exactly as a bundled one — origin does not gate the producer | Unit test | `DatabaseInitializerTests.Reseed_UserImportsOnly_ConfirmsEachFile` |
-| 25 | ✅ | Both origins in one reseed confirm every file across both, named individually | Unit test | `DatabaseInitializerTests.Reseed_BundledAndUserImports_ConfirmsEveryFileFromBothOrigins` |
-| 26 | ✅ | Two files with the same bare name from different directories are two confirmations, not one | Unit test | `ReseedFileAppliedMetadataTests.Identity_DiffersByOrigin_ForTheSameFileNameAndBreakdown` |
-| 27 | ✅ | Origin survives the `Metadata` column round-trip | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown` |
-| 28 | ✅ | All four seeding variants behave correctly against real configuration | Automated (T2) | `11-clean-reseed-confirmation.md` step 7 |
+| 24 | ✅ | The startup modal carries the confirmations after a restart, and a never-reseeded install shows none | Automated (T2) | `11-clean-reseed-confirmation.md` step 8 |
+| 25 | ✅ | A user-imports file is confirmed exactly as a bundled one — origin does not gate the producer | Unit test | `DatabaseInitializerTests.Reseed_UserImportsOnly_ConfirmsEachFile` |
+| 26 | ✅ | Both origins in one reseed confirm every file across both, named individually | Unit test | `DatabaseInitializerTests.Reseed_BundledAndUserImports_ConfirmsEveryFileFromBothOrigins` |
+| 27 | ✅ | Two files with the same bare name from different directories are two confirmations, not one | Unit test | `ReseedFileAppliedMetadataTests.Identity_DiffersByOrigin_ForTheSameFileNameAndBreakdown` |
+| 28 | ✅ | Origin survives the `Metadata` column round-trip | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown` |
+| 29 | ✅ | All four seeding variants behave correctly against real configuration | Automated (T2) | `11-clean-reseed-confirmation.md` step 7 |
 
 **The two surfaces need different sequences, which row 22 originally ran together as one step.**
 `StartupSuccessModal` is shown once per process run after a healthy startup, so a reseed — which
@@ -394,8 +395,8 @@ a reset, because the reset meant Universes and Series had to be recreated as wel
 different result produced its own confirmation rather than being suppressed as a duplicate.
 
 **The four seeding variants are proven at both levels** (developer direction, 2026-08-30: positive and
-negative proof requires testing seeding with and without files in each folder). Rows 4, 1, 24 and 25
-cover no-files / bundled-only / user-only / both as unit tests; row 28 covers the same matrix at T2,
+negative proof requires testing seeding with and without files in each folder). Rows 4, 1, 25 and 26
+cover no-files / bundled-only / user-only / both as unit tests; row 29 covers the same matrix at T2,
 where the batch list comes from real configuration rather than being handed to the initializer.
 
 **The T2 pass found a real defect, in step 7's four-variant matrix.** The bundled + user-imports variant

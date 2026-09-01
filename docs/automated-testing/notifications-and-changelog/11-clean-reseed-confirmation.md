@@ -224,6 +224,48 @@ code path.
 inside the container before concluding the producer is origin-gated — a bind mount that did not land
 looks identical from the API.
 
+### 8. Confirm they reach the startup modal after a restart
+
+`/notifications` is only one of the two surfaces an active notification appears on. The other is the
+startup popup on the home page, which is shown once per process run — so a reseed cannot populate it in
+the run that performed the reseed, and this step needs a restart.
+
+The modal is server-rendered, so its content is in the HTML of `/` and needs no browser automation.
+
+```powershell
+docker restart qt-notif-11 | Out-Null
+foreach ($i in 1..30) {
+  try { if ((Invoke-RestMethod "http://localhost:19511/api/v1/health").status -eq 'healthy') { break } }
+  catch { Start-Sleep 2 }
+}
+
+$html = (Invoke-WebRequest "http://localhost:19511/" -UseBasicParsing).Content
+"confirmation text in modal: $($html.Contains('reseeded with nothing left to review'))"
+foreach ($f in 'quotinator-curated.json','vilaboim_movie-quotes.json',
+               'NikhilNamal17_popular-movie-quotes.json','quotinator-series-universe.json') {
+  "  $f -> $($html.Contains($f))"
+}
+```
+
+**Expected:** `confirmation text in modal: True`, and every bundled file name present.
+
+**Negative control — run this against a container that has never reseeded:**
+
+```powershell
+dotnet script scripts/testing/test-env.csx -- create --name qt-notif-11n --port 19517 `
+  --image quotinator:local --env Quotinator__AdminApiKey=t2-302
+$fresh = (Invoke-WebRequest "http://localhost:19517/" -UseBasicParsing).Content
+"fresh install shows confirmations: $($fresh.Contains('reseeded with nothing left to review'))"
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-11n
+```
+
+**Expected:** `False`. Without this half, the positive assertion above would pass just as happily
+against a page that renders every notification ever written, or against a substring that happens to
+appear somewhere else in the markup.
+
+**On failure:** check `/notifications` first. If the confirmations are there but not in the modal, the
+fault is in the modal's own active-notification query, not in this issue's producer.
+
 ## Cleanup
 
 ```powershell
