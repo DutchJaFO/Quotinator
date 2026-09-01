@@ -153,7 +153,7 @@ exists rather than writing null.
 
 ### 6. Dismiss the alert when its batch is resolved
 
-**Status:** 🔄 In progress
+**Status:** ✅ Done — `INotificationWriter.DismissByTriggerAndBatchAsync`, wired at apply and discard
 
 `SqliteImportActionService.ApplyBatchAsync`'s `pending is null` branch is the hook: it is already the
 single choke point `/import/` and `/import/actions/apply` both funnel through, and #304 dismisses its
@@ -167,7 +167,7 @@ capability on `INotificationWriter`, not an existing one.
 
 ### 7. Dismiss alerts whose batch has been removed
 
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress
 
 **Developer decision, 2026-09-01: when a batch is removed, its alerts are dismissed — they describe a
 review that can no longer be applied.** This is not a tidy-up bolted onto step 5; it is what keeps
@@ -252,11 +252,11 @@ deliberately not here — see Scope changes 6.
 | 12 | ✅ | Migration 18 and the baseline accept the same `MetadataKind`, `DismissTriggerKey` and `DismissReason` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` |
 | 13 | ✅ | Migration 18 and the baseline produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
 | 14 | ✅ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
-| 15 | ❌ | Resolving a batch dismisses that batch's alert, with reason `Resolved` | Unit test | `SqliteImportActionServiceTests.ApplyBatch_WhenFullyResolved_DismissesItsOwnReviewAlert` |
-| 16 | ❌ | Resolving one batch does not dismiss another batch's alert | Unit test | `SqliteImportActionServiceTests.ApplyBatch_DoesNotDismissAnotherBatchesReviewAlert` |
-| 17 | ❌ | Discarding a batch dismisses its alert too | Unit test | `SqliteImportActionServiceTests.DiscardBatch_DismissesItsOwnReviewAlert` |
+| 15 | ✅ | Resolving a batch dismisses that batch's alert, with reason `Resolved` | Unit test | `SqliteImportActionServiceTests.ApplyBatch_WhenFullyResolved_DismissesItsOwnReviewAlert` |
+| 16 | ✅ | Resolving one batch does not dismiss another batch's alert | Unit test | `SqliteImportActionServiceTests.ApplyBatch_DoesNotDismissAnotherBatchesReviewAlert` |
+| 17 | ✅ | Discarding a batch dismisses its alert too | Unit test | `SqliteImportActionServiceTests.DiscardBatch_DismissesItsOwnReviewAlert` |
 | 18 | ❌ | A reseed dismisses every alert whose batch it truncated, with reason `Obsolete` | Unit test | `DatabaseInitializerTests.Reseed_DismissesAlertsForRemovedBatches` |
-| 19 | ❌ | `Obsolete` is distinguishable from `Dismissed` and `Resolved` on a stored row | Unit test | `NotificationWriterTests.DismissedAsObsolete_ReadsBackAsObsolete` |
+| 19 | ✅ | `Obsolete` is distinguishable from `Dismissed` and `Resolved` on a stored row | Unit test | `NotificationWriterTests.DismissedAsObsolete_ReadsBackAsObsolete` |
 | 20 | ✅ | The Status column renders `Obsolete` rather than falling back to "Dismissed" | Unit test | `NotificationTableTests.GetDisplayStatus_ObsoleteReason_ReportsObsolete` |
 | 21 | ❌ | A reseed's new alerts are distinct rows from the previous run's, not updates to them | Unit test | `DatabaseInitializerTests.Reseed_Twice_RaisesNewAlertsRatherThanReusingTheOld` |
 | 22 | ❌ | Alerts do not accumulate across repeated reseeds — only the newest batch's are active | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_LeavesOnlyTheLatestBatchesAlertsActive` |
