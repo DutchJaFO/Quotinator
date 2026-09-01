@@ -315,6 +315,7 @@ deliberately not here — see Scope changes 6.
 | 39 | ✅ | The page names the file a conflict came from, not its batch id | Unit test | `ImportReviewPageTests.FileNameFor_KnownBatch_ReportsTheFileItWasImportedFrom` |
 | 40 | ✅ | An action whose batch no longer exists still shows something traceable | Unit test | `ImportReviewPageTests.FileNameFor_UnknownBatch_FallsBackToTheId` |
 | 41 | ✅ | The nav entry has an icon, like every other entry | Live | Screenshot, 2026-09-01: the clipboard-check icon renders in the sidebar beside *Import review* |
+| 42 | ✅ | Two staged files raise two alerts, each naming its own file | Automated (T2) | `stage-import-conflict.csx --count 2` against a container: `pending actions = 2`, `active alerts = 2`, `conflicting-1.json` and `conflicting-2.json` |
 
 **T1 needs a staged conflict, because the bundled files cannot produce one** (developer, 2026-09-01).
 Neither T1 nor T2 can reach this issue's behaviour with bundled content alone: a first seed inserts
@@ -334,6 +335,22 @@ column was correct and useless: an operator cannot act on a GUID, and what they 
 file to go and fix — which is the whole workflow this issue assumes. `Import_Batch.Name` already holds
 that file name, so the page resolves it in one read for the whole table rather than per row. Rows 39
 and 40 pin both the mapping and the fallback.
+
+**"Two files to import, but only one is mentioned" — the fixture, not the producer** (developer,
+2026-09-01). One alert per staged file is the design, and row 42 now proves it: two files staged
+against two different bundled quotes raise two alerts, each naming its own file.
+
+What the T1 run actually hit was two traps in the fixture, both now closed by
+`stage-import-conflict.csx --count`:
+
+- **A hand-added second copy of the file does not stage anything.** Two files pointing at the *same*
+  quote produce one conflict, not two: the first file's change is applied, and the second then agrees
+  with what is now stored. Each conflicting file needs a different target quote.
+- **A missing manifest is worse than it looks.** `ManifestSeedPlanner.TryWriteAutoManifest` writes an
+  auto-manifest with *no* `duplicateResolution`, so every file silently falls back to the configuration
+  default — `skip` — and stages nothing at all. The T1 log shows exactly this: "auto-created
+  manifest.json listing 2 file(s)", then `pending=0` for both. No error, no alert, and nothing to
+  indicate the fixture had stopped working.
 
 **The nav entry also shipped without an icon** (developer, 2026-09-01). Step 11 added the `NavLink`
 with a class name but no matching rule, and every other entry has one — so it rendered as bare text.

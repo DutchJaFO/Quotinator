@@ -27,9 +27,17 @@
 // Then start (or restart) the app: the seed stages one Pending action and raises the pending-review
 // alert. Remove the two files it writes to go back to a clean seed.
 //
+// Do not add further files to that directory by hand. The manifest this writes lists exactly what it
+// created, and a file it does not name gets the configuration default — `skip` — so it stages nothing.
+// Worse, deleting the manifest makes the application auto-create one, and an auto-created manifest
+// carries no duplicateResolution at all, so *every* file falls back to `skip` and the whole fixture
+// goes quiet with no error. Use --count for more than one conflicting file instead.
+//
 // Options:
 //   --imports <path>   The imports directory to write into; created when missing (required)
-//   --source  <path>   The bundled file to take a real quote id from
+//   --count   <n>      How many conflicting files to write, each against a different bundled quote
+//                      (default: 1). One alert is raised per file that stages a decision.
+//   --source  <path>   The bundled file to take real quote ids from
 //                      (default: data/sources/quotinator-curated.json)
 
 using System.Text.Json;
@@ -61,41 +69,65 @@ if (!File.Exists(sourcePath))
 JsonNode root = JsonNode.Parse(File.ReadAllText(sourcePath))!;
 JsonArray quotes = root is JsonArray bare ? bare : root["quotes"]!.AsArray();
 
-JsonNode target = quotes[0]!;
-string id = target["id"]!.GetValue<string>();
-
-// Same id, different text. The id is what makes this a Modify rather than an Add, and the differing
-// text is what makes it ambiguous rather than an unchanged re-import.
-var conflicting = new
+int count = int.TryParse(Value("--count"), out int requested) ? requested : 1;
+if (count < 1 || count > quotes.Count)
 {
-    quotes = new[]
-    {
-        new
-        {
-            id,
-            quote            = "A deliberately different text, staged to force a review decision.",
-            originalLanguage = "en",
-            source           = target["source"]?.GetValue<string>(),
-            date             = target["date"]?.GetValue<string>(),
-            type             = target["type"]?.GetValue<string>(),
-            genres           = Array.Empty<string>(),
-        },
-    },
-};
-
-// `review` is the whole point: any other policy resolves the conflict silently and stages nothing.
-var manifest = new
-{
-    duplicateResolution = new { @default = "review" },
-    files = new[] { new { file = "conflicting.json", name = "test/conflicting" } },
-};
+    Console.Error.WriteLine($"--count must be between 1 and {quotes.Count} (the number of quotes in {sourcePath}).");
+    return 1;
+}
 
 Directory.CreateDirectory(importsDir);
 
-JsonSerializerOptions options = new() { WriteIndented = true };
-File.WriteAllText(Path.Combine(importsDir, "conflicting.json"), JsonSerializer.Serialize(conflicting, options));
-File.WriteAllText(Path.Combine(importsDir, "manifest.json"), JsonSerializer.Serialize(manifest, options));
+List<object> manifestFiles = [];
+List<string> stagedIds = [];
 
-Console.WriteLine($"Staged a conflict against quote {id} in {Path.GetFullPath(importsDir)}");
-Console.WriteLine("Restart the application to seed it — one Pending action and one pending-review alert.");
+for (int i = 0; i < count; i++)
+{
+    // A different quote per file. Pointing two files at the same quote does not produce two conflicts:
+    // the first one's change is applied, and the second then agrees with what is now stored.
+    JsonNode target = quotes[i]!;
+    string id = target["id"]!.GetValue<string>();
+    string fileName = count == 1 ? "conflicting.json" : $"conflicting-{i + 1}.json";
+
+    // Same id, different text. The id is what makes this a Modify rather than an Add, and the differing
+    // text is what makes it ambiguous rather than an unchanged re-import.
+    var conflicting = new
+    {
+        quotes = new[]
+        {
+            new
+            {
+                id,
+                quote            = $"A deliberately different text ({i + 1}), staged to force a review decision.",
+                originalLanguage = "en",
+                source           = target["source"]?.GetValue<string>(),
+                date             = target["date"]?.GetValue<string>(),
+                type             = target["type"]?.GetValue<string>(),
+                genres           = Array.Empty<string>(),
+            },
+        },
+    };
+
+    File.WriteAllText(Path.Combine(importsDir, fileName),
+        JsonSerializer.Serialize(conflicting, new JsonSerializerOptions { WriteIndented = true }));
+
+    manifestFiles.Add(new { file = fileName, name = $"test/{Path.GetFileNameWithoutExtension(fileName)}" });
+    stagedIds.Add(id);
+}
+
+// `review` is the whole point: any other policy resolves the conflict silently and stages nothing. An
+// auto-created manifest carries no policy at all, which is why this one must name every file written —
+// a file it does not list falls back to the configuration default and goes quiet.
+var manifest = new
+{
+    duplicateResolution = new { @default = "review" },
+    files = manifestFiles,
+};
+
+File.WriteAllText(Path.Combine(importsDir, "manifest.json"),
+    JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+
+Console.WriteLine($"Staged {count} conflict(s) in {Path.GetFullPath(importsDir)}:");
+foreach (string stagedId in stagedIds) Console.WriteLine($"  against quote {stagedId}");
+Console.WriteLine($"Restart the application to seed them — {count} Pending action(s), {count} pending-review alert(s).");
 return 0;
