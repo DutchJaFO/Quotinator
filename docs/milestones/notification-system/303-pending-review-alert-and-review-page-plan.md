@@ -1,6 +1,6 @@
 # #303 — Notification + minimal review page: alert when a reseed leaves import actions pending review
 
-**Status:** Planning
+**Status:** In progress (step 1)
 **GitHub issue:** #303
 **Tiers required:** T1, T2
 **Depends on:** #278, #302, #304, #312, #319
@@ -21,7 +21,6 @@ in-app way to act on it.
 side-by-side diff/merge editor #66 (Blazor: Import UI milestone) envisions. That stays #66's own,
 separately-scoped work.
 
-**This plan is ready to execute.**
 
 ## Scope revision — where the notification is written from
 
