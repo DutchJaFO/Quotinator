@@ -4,6 +4,7 @@
 **GitHub issue:** #367
 **Tiers required:** T1, T2
 **Depends on:** #278, #304
+**Order:** moved up to 16, ahead of #308 (developer, 2026-09-01)
 
 ---
 
@@ -27,6 +28,51 @@ window after confirming.
 only then calls `LoadAsync`, so nothing is signalled to the UI in between. It also calls the executor
 **in-process**, which means the `admin` concurrency-1 rate-limit policy never applies — a second
 confirmed click during the run queues on `SharedSeedLock` and performs a second full reseed.
+
+## Research, 2026-09-01 — two facts that reshape step 1
+
+**The Status column is already derived, not stored.** `NotificationTable.GetDisplayStatus(notification,
+now)` computes `NotificationDisplayStatus { Active, Expired, Dismissed, Resolved, Obsolete }` at render
+time from `IsDismissed`, `DismissReason` and `ExpiresAt`. There is no status column to extend, so
+adding an `Executing` member is a display-layer change by default — a schema change is only needed if
+the *fact* of executing has to be persisted, which is a separate question from where the label lives.
+
+**`SharedSeedLock` is process-wide, not per-request.** `DatabaseInitializer.SeedLock` is a
+`static SemaphoreSlim(1, 1)`, so a second reseed does not run concurrently — it queues and then performs
+a second full reseed once the first releases. The issue's consequence (2) is accurate, and it is a
+*sequencing* fault rather than a concurrency one.
+
+Together these separate the two requirements the issue bundles:
+
+- **Requirement 1 (tell the user it started)** is satisfied by anything the clicking circuit can see.
+- **Requirement 2 (prevent a second execution)** needs a fact shared across circuits and sessions — but
+  not necessarily a durable one.
+
+That opens a third option the issue's binary framing does not name: a **process-scoped in-memory
+registry** of notification ids currently executing, registered as a singleton. `GetDisplayStatus` takes
+it as a parameter (staying a pure static, testable without bUnit, exactly as it is now), the executor
+consults it before starting, and a second session sees the row as `Executing` with no Run control
+rather than being refused after clicking.
+
+Its properties against the issue's own four requirements:
+
+| | Per-circuit flag | Process registry | Stored column |
+|---|---|---|---|
+| 1. Shows it started | ✅ | ✅ | ✅ |
+| 2. Blocks a second run | ❌ invisible across sessions | ✅ | ✅ |
+| 4. Cannot strand after a restart | ✅ free | ✅ free | ❌ needs explicit startup cleanup |
+| Cost | none | a singleton | column + migration + CHECK (ADR 008) |
+
+The stored column is the only option that is *worse* on requirement 4 than doing nothing: a process
+killed mid-reseed leaves a row marked executing with nothing running, and clearing it needs startup
+code whose correctness is itself untestable without simulating a crash. The registry gets requirement 4
+by construction — the fact dies with the process that owned it, which is exactly right, because the
+execution died with it too.
+
+**Boundary condition, stated rather than assumed:** a process registry is correct only while Quotinator
+is one process. It is — single container by design, and the HA supervisor runs single-container add-ons
+(see CLAUDE.md's "Why Quotinator.Api hosts the Blazor UI"). If that ever stops being true, this becomes
+a distributed-lock problem that a stored column would not have solved either.
 
 ---
 
