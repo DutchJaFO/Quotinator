@@ -76,7 +76,7 @@ internal sealed class FakeNotificationWriter : INotificationWriter
         return Task.FromResult<NotificationEntity?>(entity);
     }
 
-    public Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason)
+    public Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason, NotificationResolution? resolution = null)
     {
         DismissByTriggerAndBatchCalls.Add((trigger, batchId, reason));
         return Task.FromResult(0);

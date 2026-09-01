@@ -134,7 +134,7 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
     }
 
     /// <inheritdoc/>
-    public async Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason)
+    public async Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason, NotificationResolution? resolution = null)
     {
         using IDbConnection conn = Factory.CreateConnection();
         conn.Open();

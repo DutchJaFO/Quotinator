@@ -163,7 +163,7 @@ size-constrained in a way the page is not.
 
 ### 7. Write the tests for findings 1–4, and run them red
 
-**Status:** ⬜ Not started — **no implementation may start until this step's exit condition is met**
+**Status:** ✅ Done — nine tests red across two opposing-stub runs
 
 Same exit condition and the same two mechanics as step 1: every unit test fails on its own assertion,
 and the T2 document's new steps fail against the current build. The document already exists, so this
@@ -174,6 +174,19 @@ is free.
 went red against `ShowsTitle => false` while the two asserting an absence needed `=> true`. Expect the
 same split here and plan two runs rather than reporting the first as complete.
 
+
+**Row 23 was removed as untestable, 2026-09-02.** It asserted that payload rendering does not replace
+the one-line body. `NotificationEntity.Body` is `init`-only, so the compiler already guarantees it —
+the test could never go red, and a test that cannot fail is not evidence. The guarantee is structural,
+which is better than a test; recorded here so nobody re-adds it looking for the missing coverage.
+
+**A storage-backed test cannot reach its assertion before its column exists** — recorded 2026-09-02
+as a limit of step 1's mechanic. `DismissedAsResolved_RecordsTheResolution` and
+`DismissedByUser_RecordsNoResolution` fail with *"table System_Notification has no column named
+Resolution"*, not on an `Assert`. That is a genuine red — the behaviour is absent — but it is weaker
+than an assertion failure, because it would look identical for a test asserting the opposite. Both
+therefore need a mutation once the column lands: the negative especially, since it passes the moment
+nothing writes the field.
 ### 8. Record how an action was resolved
 
 **Status:** ⬜ Not started — finding 1; turns rows 17–20 green

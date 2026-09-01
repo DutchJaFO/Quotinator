@@ -168,6 +168,55 @@ public class NotificationWriterTests
             "The other batch is still genuinely awaiting review — scoping is the point of this method.");
     }
 
+    /// <summary>
+    /// #308: a notification carried to completion by its own action records <em>which</em> resolution
+    /// settled it, not only that it settled. Found in T1 — a resolved review alert read `Done` while its
+    /// body still asked for a decision, because the body is frozen at write time and the choice was
+    /// discarded.
+    /// </summary>
+    [TestMethod]
+    public async Task DismissedAsResolved_RecordsTheResolution()
+    {
+        string batchId = Guid.NewGuid().ToString("D");
+        NotificationEntity alert = await WriteReviewAlertAsync(batchId);
+
+        await _writer.DismissByTriggerAndBatchAsync(
+            NotificationDismissTrigger.ImportReviewResolved, batchId, NotificationDismissReason.Resolved,
+            NotificationResolution.TookIncoming);
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        NotificationEntity persisted = conn.QuerySingle<NotificationEntity>(
+            "SELECT * FROM System_Notification WHERE Id = @id;", new { id = alert.Id.ToString("D") });
+
+        Assert.AreEqual(NotificationDismissReason.Resolved, persisted.DismissReason.Parsed);
+        Assert.AreEqual(NotificationResolution.TookIncoming, persisted.Resolution.Parsed,
+            "Which side won is what the row has to be able to say afterwards.");
+    }
+
+    /// <summary>
+    /// The negative case: `Resolution` means "how the action settled it", not "how it went inactive".
+    /// A notification the operator simply dismissed had no action run, so it records none — otherwise
+    /// the field would claim an outcome nobody chose.
+    /// </summary>
+    [TestMethod]
+    public async Task DismissedByUser_RecordsNoResolution()
+    {
+        string batchId = Guid.NewGuid().ToString("D");
+        NotificationEntity alert = await WriteReviewAlertAsync(batchId);
+
+        await _writer.DismissAsync(alert.Id);
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        NotificationEntity persisted = conn.QuerySingle<NotificationEntity>(
+            "SELECT * FROM System_Notification WHERE Id = @id;", new { id = alert.Id.ToString("D") });
+
+        Assert.IsTrue(persisted.IsDismissed, "Positive control: the dismissal itself must have happened.");
+        Assert.IsNull(persisted.Resolution.Parsed,
+            "No action ran, so there is no resolution to record.");
+    }
+
     private async Task<NotificationEntity> WriteReviewAlertAsync(string batchId)
     {
         ImportReviewPendingMetadataDto metadata = new()

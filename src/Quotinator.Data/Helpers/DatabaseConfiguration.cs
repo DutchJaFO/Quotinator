@@ -69,6 +69,7 @@ public abstract class DatabaseConfiguration
         // NotificationDismissReason (#304) backs System_Notification.DismissReason — the same category
         // again: an enum-backed, CHECK-constrained column that has to round-trip through SafeValue.
         RegisterEnumHandler<NotificationDismissReason>();
+        RegisterEnumHandler<NotificationResolution>();
         // ChangelogLineKind (#309) backs ChangelogLine.Kind in the separate changelog database — same
         // category, a closed set this project's own changelog importer assigns.
         RegisterEnumHandler<ChangelogLineKind>();

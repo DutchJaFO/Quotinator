@@ -284,7 +284,7 @@ public class NotificationTableTests
 
     #region #308 — title/body layout
 
-    private static NotificationEntity WithTitle(string? title)
+    private static NotificationEntity WithTitle(string? title, string? metadata = null)
     {
         NotificationEntity notification = Build(isDismissed: false, expiresAt: null);
         return new NotificationEntity
@@ -292,6 +292,7 @@ public class NotificationTableTests
             Type        = notification.Type,
             Title       = title,
             Body        = notification.Body,
+            Metadata    = metadata,
             IsDismissed = notification.IsDismissed,
             ExpiresAt   = notification.ExpiresAt,
         };
@@ -374,6 +375,101 @@ public class NotificationTableTests
     public void NoMetadataKind_FallsBackToADefinedLayout()
         => Assert.IsNotNull(NotificationTable.LayoutFor(null),
             "A row with no metadata kind still renders, so it still needs a layout.");
+
+    /// <summary>
+    /// #308 finding 1: every resolution reads as words, derived from the enum so a member added later
+    /// fails here rather than rendering as its C# name.
+    /// </summary>
+    [TestMethod]
+    public void EveryResolution_HasATranslationKey()
+    {
+        Dictionary<string, string> keys = BaselineStrings();
+
+        foreach (NotificationResolution resolution in Enum.GetValues<NotificationResolution>())
+        {
+            string key = $"NotificationResolution{resolution}";
+            Assert.IsTrue(keys.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value),
+                $"{resolution} has no label — '{key}' is missing or empty in UI.en-GB.json.");
+        }
+    }
+
+    /// <summary>
+    /// #308 finding 2: a layout says which parts of the payload its type renders. The boolean the first
+    /// pass delivered said only whether the body wraps, which is not a layout.
+    /// </summary>
+    [TestMethod]
+    public void LayoutFor_EachKind_NamesItsPayloadParts()
+    {
+        foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
+        {
+            NotificationTable.NotificationLayout layout = NotificationTable.LayoutFor(kind)!;
+            Assert.IsNotEmpty(layout.PayloadParts,
+                $"{kind} renders no part of its payload — it would show only the frozen sentence.");
+        }
+    }
+
+    /// <summary>
+    /// Negative case for the row above: a row whose payload cannot be read still renders. Rows written
+    /// by an older build, or with metadata this build does not recognise, must degrade to the body
+    /// rather than throwing a whole page away.
+    /// </summary>
+    [TestMethod]
+    public void UnreadablePayload_FallsBackToTheBody()
+    {
+        NotificationEntity notification = WithTitle("Source file needs review", metadata: "{ not json at all");
+
+        Assert.IsEmpty(NotificationTable.PayloadLines(notification),
+            "An unreadable payload contributes no detail lines, and must not throw.");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(notification.Body),
+            "Positive control: the body is still there to fall back to.");
+    }
+
+    /// <summary>
+    /// #308 finding 4: every executable trigger's button says what it will do. Derived from the enum,
+    /// so a new executable trigger fails here rather than falling back to a generic "Run".
+    /// </summary>
+    [TestMethod]
+    public void ActionLabelFor_EachExecutableTrigger_IsNamed()
+    {
+        Dictionary<string, string> keys = BaselineStrings();
+
+        foreach (NotificationDismissTrigger trigger in (NotificationDismissTrigger[])
+                 [NotificationDismissTrigger.DatabaseReset, NotificationDismissTrigger.Reseed,
+                  NotificationDismissTrigger.ImportReviewResolved])
+        {
+            string key = NotificationTable.ActionLabelKeyFor(trigger);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(key), $"{trigger} has no action label key.");
+            Assert.IsTrue(keys.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value),
+                $"{trigger}'s label key '{key}' is missing or empty in UI.en-GB.json.");
+            Assert.AreNotEqual("Run", value, $"{trigger}'s button still says 'Run', which says nothing.");
+        }
+    }
+
+    /// <summary>
+    /// #308 finding 4: an action with two outcomes offers both, rather than hiding them behind a
+    /// generic button that has to be clicked first to discover what it does.
+    /// </summary>
+    [TestMethod]
+    public void ImportReviewResolved_OffersBothChoicesDirectly()
+    {
+        IReadOnlyList<FieldResolutionChoice> choices =
+            NotificationTable.ChoicesFor(NotificationDismissTrigger.ImportReviewResolved);
+
+        Assert.HasCount(2, choices);
+        Assert.Contains(FieldResolutionChoice.Keep, choices);
+        Assert.Contains(FieldResolutionChoice.Replace, choices);
+
+        Assert.IsEmpty(NotificationTable.ChoicesFor(NotificationDismissTrigger.Reseed),
+            "A single-outcome action offers no choice — it would be a control with one option.");
+    }
+
+    private static Dictionary<string, string> BaselineStrings()
+    {
+        string baseline = Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "src", "Quotinator.Api", "i18ntext", "UI.en-GB.json");
+        return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(baseline))!;
+    }
 
     #endregion
 }

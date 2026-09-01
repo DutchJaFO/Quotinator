@@ -39,6 +39,6 @@ public sealed class NoOpNotificationWriter : INotificationWriter
         => Task.FromResult(0);
 
     /// <inheritdoc/>
-    public Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason)
+    public Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason, NotificationResolution? resolution = null)
         => Task.FromResult(0);
 }

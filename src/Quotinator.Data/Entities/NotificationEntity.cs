@@ -103,4 +103,11 @@ public sealed class NotificationEntity : RecordBase
     /// column, where the reason genuinely is not known rather than being one value or the other.
     /// </summary>
     public SafeValue<NotificationDismissReason?> DismissReason { get; set; } = SafeValue<NotificationDismissReason?>.Empty;
+
+    /// <summary>
+    /// How this notification's own action settled it (#308) — see <see cref="Enums.NotificationResolution"/>.
+    /// <see langword="null"/> whenever no action ran: while still active, when the operator dismissed it
+    /// by hand, and when a reseed superseded it.
+    /// </summary>
+    public SafeValue<NotificationResolution?> Resolution { get; set; } = SafeValue<NotificationResolution?>.Empty;
 }

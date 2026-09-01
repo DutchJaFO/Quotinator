@@ -95,9 +95,22 @@ public partial class NotificationTable
     internal static bool ShowsDismissControl(NotificationEntity notification, bool isExecuting) =>
         !notification.IsDismissed && !isExecuting;
 
-    /// <summary>How a notification's body is laid out. #308.</summary>
+    /// <summary>How a notification's body is laid out, and which payload parts it renders. #308.</summary>
     /// <param name="BodyIsMultiLine">Whether the body is expected to carry embedded line breaks.</param>
-    internal sealed record NotificationLayout(bool BodyIsMultiLine);
+    /// <param name="PayloadParts">The payload fields this type shows as detail, beyond the one-line body.</param>
+    internal sealed record NotificationLayout(bool BodyIsMultiLine, IReadOnlyList<string> PayloadParts);
+
+    /// <summary>The detail lines rendered from a notification's stored payload. #308.</summary>
+    /// <param name="notification">The row being rendered.</param>
+    internal static IReadOnlyList<string> PayloadLines(NotificationEntity notification) => [];
+
+    /// <summary>The translation key for the button that runs <paramref name="trigger"/>'s action. #308.</summary>
+    /// <param name="trigger">The trigger the row carries.</param>
+    internal static string ActionLabelKeyFor(NotificationDismissTrigger trigger) => "NotificationsRunActionButton";
+
+    /// <summary>The outcomes <paramref name="trigger"/>'s action can be run with. #308.</summary>
+    /// <param name="trigger">The trigger the row carries.</param>
+    internal static IReadOnlyList<FieldResolutionChoice> ChoicesFor(NotificationDismissTrigger trigger) => [];
 
     /// <summary>The class the body cell carries, and the stylesheet targets. #308.</summary>
     internal const string BodyCellClass = "notification-body";
@@ -129,13 +142,13 @@ public partial class NotificationTable
     {
         // One line per changelog highlight, and one per cleanly-applied or staged file: these producers
         // write several facts, and collapsing them into a paragraph is what #308 exists to stop.
-        NotificationMetadataKind.WhatsNew            => new NotificationLayout(BodyIsMultiLine: true),
-        NotificationMetadataKind.ReseedFileApplied   => new NotificationLayout(BodyIsMultiLine: true),
-        NotificationMetadataKind.ImportReviewPending => new NotificationLayout(BodyIsMultiLine: true),
-        NotificationMetadataKind.Announcement           => new NotificationLayout(BodyIsMultiLine: false),
-        NotificationMetadataKind.SchemaVersionOvershoot => new NotificationLayout(BodyIsMultiLine: false),
-        NotificationMetadataKind.ReseedRecommended      => new NotificationLayout(BodyIsMultiLine: false),
-        null                                            => new NotificationLayout(BodyIsMultiLine: false),
+        NotificationMetadataKind.WhatsNew            => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
+        NotificationMetadataKind.ReseedFileApplied   => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
+        NotificationMetadataKind.ImportReviewPending => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
+        NotificationMetadataKind.Announcement           => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
+        NotificationMetadataKind.SchemaVersionOvershoot => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
+        NotificationMetadataKind.ReseedRecommended      => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
+        null                                            => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
         _ => throw new NotSupportedException($"No layout is defined for notification kind '{kind}'."),
     };
 

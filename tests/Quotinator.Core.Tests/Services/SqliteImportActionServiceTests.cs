@@ -68,7 +68,7 @@ public class SqliteImportActionServiceTests
         /// <summary>Records every batch-scoped dismissal, which is what #303's per-batch alerts depend on.</summary>
         public List<(NotificationDismissTrigger Trigger, string BatchId, NotificationDismissReason Reason)> DismissByTriggerAndBatchCalls { get; } = [];
 
-        public Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason)
+        public Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason, NotificationResolution? resolution = null)
         {
             DismissByTriggerAndBatchCalls.Add((trigger, batchId, reason));
             return Task.FromResult(0);

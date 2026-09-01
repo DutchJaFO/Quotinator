@@ -72,5 +72,5 @@ public interface INotificationWriter
     /// <param name="trigger">The trigger the notification must carry.</param>
     /// <param name="batchId">The import batch named in the notification's own payload.</param>
     /// <param name="reason">Why it stopped being active — resolved by the review, or obsolete because the batch is gone.</param>
-    Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason);
+    Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason, NotificationResolution? resolution = null);
 }
