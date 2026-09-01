@@ -319,6 +319,8 @@ deliberately not here — see Scope changes 6.
 | 43 | ✅ | The document goes red before it goes green | Canary run | `20-pending-review-alert.md`'s *Canary* section — built `2f30f15d` under `quotinator:canary303`: `active alerts = 0` and `/import-review -> 404`, while `pending actions = 1` correctly stays insensitive |
 | 44 | ✅ | Row 18's `Obsolete` reason is wired, not incidental | Mutation | Changing the truncate-path dismissal to `NotificationDismissReason.Dismissed` fails `DatabaseInitializerTests.Reseed_DismissesAlertsForRemovedBatches` |
 | 45 | ✅ | Row 16's per-batch scoping is wired | Mutation | Replacing `DismissByTriggerAndBatchAsync` with the trigger-wide `DismissByTriggerAsync` fails both `ApplyBatch_DoesNotDismissAnotherBatchesReviewAlert` and `ApplyBatch_WhenFullyResolved_DismissesItsOwnReviewAlert` |
+| 46 | ✅ | Every named test is wired to behaviour, not passing incidentally | Mutation sweep | All 42 #303-referenced tests swept 2026-09-01 — disabling `AlertReviewPendingAsync` fails 8; the rest by targeted mutation (page statics in two opposing passes, executor guard/CanExecute/decide call, identity components, wire names, dismiss reason, Obsolete display mapping, baseline CHECK and structural drift) |
+| 47 | ✅ | The stored JSON keeps its wire property names, `batchId` included | Unit test | `ImportReviewPendingMetadataTests.Payload_RoundTripsAllFields`'s `AssertWireNames` — `batchId` is read back in SQL via `json_extract(Metadata, '$.batchId')`, so a rename breaks per-batch dismissal with no C# test noticing |
 
 **T1 needs a staged conflict, because the bundled files cannot produce one** (developer, 2026-09-01).
 Neither T1 nor T2 can reach this issue's behaviour with bundled content alone: a first seed inserts

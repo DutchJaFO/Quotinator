@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
@@ -90,6 +91,38 @@ public class ReseedFileAppliedMetadataTests
 
         Assert.IsTrue(written.IsSameNotificationAs(payload),
             "A stored payload must read back as the same identity, or dedupe compares against something it can never match.");
+
+        AssertWireNames(stored.Metadata!);
+    }
+
+    /// <summary>
+    /// Pins the property names actually written to the <c>Metadata</c> column.
+    /// </summary>
+    /// <remarks>
+    /// The round-trip assertions above cannot do this: they write and read with the same DTO, so
+    /// renaming a <c>[JsonPropertyName]</c> changes both sides identically and every one of them still
+    /// passes — measured, 2026-09-01. What that proves is that serialization is self-consistent, which
+    /// was never in doubt.
+    /// <para>
+    /// The wire names are a real contract because the column outlives the build that wrote it: a rename
+    /// silently stops a new build from reading rows an old one stored, which is the exact class of
+    /// change <c>NotificationLegacyMetadataMigrations</c> exists to repair. Changing a name here is
+    /// allowed — it just has to be a decision, with the backfill that goes with it, rather than a
+    /// refactor nothing notices.
+    /// </para>
+    /// </remarks>
+    /// <param name="metadata">The stored JSON.</param>
+    private static void AssertWireNames(string metadata)
+    {
+        using JsonDocument document = JsonDocument.Parse(metadata);
+        List<string> top = [.. document.RootElement.EnumerateObject().Select(p => p.Name)];
+
+        foreach (string expected in (string[])["fileName", "origin", "counts"])
+            Assert.Contains(expected, top, $"'{expected}' is the stored wire name and rows already carry it.");
+
+        List<string> perCount = [.. document.RootElement.GetProperty("counts")[0].EnumerateObject().Select(p => p.Name)];
+        foreach (string expected in (string[])["entityType", "added", "modified"])
+            Assert.Contains(expected, perCount, $"'{expected}' is the stored wire name inside each count.");
     }
 
     /// <summary>

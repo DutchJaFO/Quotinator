@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
@@ -87,6 +88,34 @@ public class ImportReviewPendingMetadataTests
 
         Assert.IsTrue(written.IsSameNotificationAs(payload),
             "A stored payload must read back as the same identity, or dedupe compares against something it can never match.");
+
+        AssertWireNames(stored.Metadata!);
+    }
+
+    /// <summary>
+    /// Pins the property names actually written to the <c>Metadata</c> column.
+    /// </summary>
+    /// <remarks>
+    /// Every assertion above writes and reads with the same DTO, so a renamed
+    /// <c>[JsonPropertyName]</c> changes both sides identically and they all still pass — measured,
+    /// 2026-09-01. The stored names are a contract because the column outlives the build that wrote it,
+    /// and <c>batchId</c> especially: it is what
+    /// <c>Sql.Notifications.UpdateDismissByTriggerAndBatch</c> reads back out with
+    /// <c>json_extract(Metadata, '$.batchId')</c>, so a rename here breaks per-batch dismissal in SQL
+    /// that no C# test would notice.
+    /// </remarks>
+    /// <param name="metadata">The stored JSON.</param>
+    private static void AssertWireNames(string metadata)
+    {
+        using JsonDocument document = JsonDocument.Parse(metadata);
+        List<string> top = [.. document.RootElement.EnumerateObject().Select(p => p.Name)];
+
+        foreach (string expected in (string[])["fileName", "origin", "batchId", "counts"])
+            Assert.Contains(expected, top, $"'{expected}' is the stored wire name and rows already carry it.");
+
+        List<string> perCount = [.. document.RootElement.GetProperty("counts")[0].EnumerateObject().Select(p => p.Name)];
+        foreach (string expected in (string[])["status", "count"])
+            Assert.Contains(expected, perCount, $"'{expected}' is the stored wire name inside each count.");
     }
 
     /// <summary>
