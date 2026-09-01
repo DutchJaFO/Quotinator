@@ -134,6 +134,28 @@ that owned the run — the notification is now permanently unrunnable, with no R
 back. That is the failure mode a stored column would have had, and this step is what keeps the
 in-memory choice honest if anyone later persists it.
 
+## Canary — this document was run red before it was run green
+
+Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*: run against
+the finished build, this document establishes that something happens, not that it would have caught the
+absence it exists for. It was therefore run against `b67292cb` — #367's plan commit, before any
+implementation — via `git worktree add`, `docker build -t quotinator:canary367`, and the same steps.
+
+Measured on the pre-work build, 2026-09-01:
+
+| Step | Assertion | Pre-work result |
+|---|---|---|
+| 1 | a runnable reseed alert exists | passes — setup only, correctly insensitive |
+| 2 | badge reads `Running…` | **fails** — reads `Active` |
+| 2 | a spinner is present | **fails** — `spinner-border` count `0` |
+| 2 | the row offers no controls | **fails** — `["Run", "Dismiss"]`, both live |
+| 3 | the outcome records `resolved` | **fails** — records `dismissed`, with the reseed completed (799 quotes) |
+
+Step 1 passing on the pre-work build is the correct outcome, not a weakness: it stages the fixture and
+is meant to be insensitive to this issue's change. Every step that asserts #367's own behaviour failed.
+
+Container, image and worktree were removed afterwards.
+
 ## Cleanup
 
 ```powershell
