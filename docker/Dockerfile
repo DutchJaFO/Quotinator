@@ -42,6 +42,13 @@ EXPOSE 8080 8099
 # For HA add-on deployments, addon/config.yaml overrides this with 8099 for ingress.
 ENV ASPNETCORE_HTTP_PORTS=""
 
+# #303: a duplicate that disagrees with stored content is held for review rather than resolved
+# silently. Without this the container takes the code default, `newest-wins`, under which anything
+# dropped in /data/imports/ overwrites stored quotes with no notification and no record — the exact
+# outcome the pending-review alert exists to prevent. `skip` is never an acceptable default here
+# either: it discards the incoming content just as quietly.
+ENV Quotinator__DefaultConflictPolicy="review"
+
 COPY --from=build /app/publish .
 
 # data/sources/ is included in the publish output (CopyToPublishDirectory=PreserveNewest).
