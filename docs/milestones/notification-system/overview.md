@@ -108,8 +108,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
          importer abstraction existing conceptually (not a hard build-order dependency — #307's schema
          field addition doesn't itself need System_Changelog to exist yet)
 #308 ─── depends on #278 (extends its shipped NotificationTable component) and #312 (hard — renders
-         the Title/Body split #312 introduces; #308's own body still claims a rendering-only fix with
-         no storage change, which #312 supersedes). Also soft-depends on #302/#303/#304 — each adds a
+         the Title/Body split #312 introduces). **Corrected 2026-09-01:** this entry claimed #308's own
+         body still described a rendering-only fix. It does not — the body carries its own
+         "Revised (2026-08-15)" section recording the #312 dependency, so the stale text was here, not
+         there. Also soft-depends on #302/#303/#304 — each adds a
          notification type with its own payload, and #308 defines the per-type layout for both the
          startup/popup dialogs and the notifications view, which cannot be settled before those types
          exist. Sequenced last for that reason (see Order of operations)
@@ -259,7 +261,7 @@ step, the other reuses it.
 | 14 | **#302** ✅ | Done. Wrote from inside the seeding loop as planned. Two findings worth carrying into #303, which shares the hook point: the four-variant seeding matrix (no files / bundled / user imports / both) is the only thing that exposed a same-name collision across origins, and the startup modal needs a *restart* after the action to show anything, so it cannot be verified in the run that caused it |
 | 15 | **#303** ✅ | Done, `Waiting for release` — T1 outstanding, the developer's own. Two findings for whoever picks up #66: the basic keep/take options landed on *both* the alert and the page, resolving only each action's conflicted fields (git's `--ours`/`--theirs` on conflicted hunks), and its T2 pass found that `/notifications` has always returned `500` on a read-only data directory — the health-gate exemption works, but `InteractiveServer`'s DataProtection cannot write `/data/keys` |
 | 16 | **#367** ✅ | Done, `Waiting for release` — T1 outstanding, the developer's own. **Moved up from 31 (developer, 2026-09-01)** so #308 designs its per-type layout against the finished status set rather than revisiting it. Its own research found the Status column was already derived rather than stored, which turned the issue's stored-vs-transient question into a third option — a process registry — with no migration and no way to strand a row |
-| 17 | **#308** | Per-type layout across both surfaces. Last of the cluster, because it cannot settle those layouts before the producers above exist — and it owns proving that a flagged changelog highlight actually renders, which its own background already names |
+| 17 | **#308** | Per-type layout across both surfaces. Now also renders the `Executing` status #367 added, which is why #367 moved ahead of it. Last of the cluster, because it cannot settle those layouts before the producers above exist — and it owns proving that a flagged changelog highlight actually renders, which its own background already names |
 | 17 | **#350** | Overshoot must degrade, not run healthy. Changes application behaviour, and #327's overshoot document is rewritten against the result. Reverses #289's shipped continue-and-notify design |
 | 18 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. Unblocked: #326 is done, #348's refusal behaviour is in, and #339 has already delivered the structure these documents are authored into. The overshoot document and its in-process test belong to #350 |
 | 19 | **#328** | Bundled-import and live-endpoint smoke coverage; authors into the same delivered structure |
