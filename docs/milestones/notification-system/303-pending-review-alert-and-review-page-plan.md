@@ -1,6 +1,6 @@
 # #303 — Notification + minimal review page: alert when a reseed leaves import actions pending review
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 **GitHub issue:** #303
 **Tiers required:** T1, T2
 **Depends on:** #278, #302, #304, #312, #319
@@ -248,7 +248,7 @@ deliberately not here — see Scope changes 6.
 | 16 | ❌ | Discarding a batch dismisses its alert too | Unit test | `SqliteImportActionServiceTests.DiscardBatch_DismissesItsOwnReviewAlert` |
 | 17 | ❌ | A reseed dismisses every alert whose batch it truncated, with reason `Obsolete` | Unit test | `DatabaseInitializerTests.Reseed_DismissesAlertsForRemovedBatches` |
 | 18 | ❌ | `Obsolete` is distinguishable from `Dismissed` and `Resolved` on a stored row | Unit test | `NotificationWriterTests.DismissedAsObsolete_ReadsBackAsObsolete` |
-| 19 | ❌ | The Status column renders `Obsolete` rather than falling back to "Dismissed" | Unit test | `NotificationTableTests.GetDisplayStatus_ObsoleteReason_ReportsObsolete` |
+| 19 | ✅ | The Status column renders `Obsolete` rather than falling back to "Dismissed" | Unit test | `NotificationTableTests.GetDisplayStatus_ObsoleteReason_ReportsObsolete` |
 | 20 | ❌ | A reseed's new alerts are distinct rows from the previous run's, not updates to them | Unit test | `DatabaseInitializerTests.Reseed_Twice_RaisesNewAlertsRatherThanReusingTheOld` |
 | 21 | ❌ | Alerts do not accumulate across repeated reseeds — only the newest batch's are active | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_LeavesOnlyTheLatestBatchesAlertsActive` |
 | 22 | ❌ | The review page lists every active `Pending`/`Blocked`/`Stale` action across all batches | Unit test | `ImportReviewPageTests.Lists_EveryActiveActionAcrossBatches` |
