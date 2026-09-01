@@ -81,7 +81,7 @@ after the loop is exactly the reconstruction that revision rejected.
 
 ### 2. Add the `ReseedFileApplied` metadata kind and its payload
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 A new `NotificationMetadataKind.ReseedFileApplied` member, registered in
 `NotificationMetadataKinds.PayloadTypes`, plus `ReseedFileAppliedMetadataDto` carrying the file name
@@ -113,7 +113,7 @@ step 4.
 
 ### 3. Widen the `MetadataKind` CHECK, the baseline, and the drift tests
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — migration 17, `NotificationReseedFileAppliedMigrations`
 
 SQLite cannot widen a CHECK in place, so this is a table rebuild — the next free version in
 `DatabaseInitializer.DataOwnedMigrations`, following migration 15's own precedent and structure. That
@@ -298,11 +298,11 @@ is already converted and listed.
 | 10 | ❌ | With no version ever recorded, one is recorded before the notification is written, and `AppVersionId` is never null | Unit test | `DatabaseInitializerTests.Reseed_WithNoRecordedVersion_RecordsOneBeforeWriting` |
 | 11 | ❌ | The breakdown counts every entity type the file added or modified, not quotes alone | Unit test | `DatabaseInitializerTests.Reseed_FileAddingNonQuoteEntities_CountsThemInTheBreakdown` |
 | 12 | ❌ | An entity type with no added or modified rows is omitted rather than reported as zero | Unit test | `DatabaseInitializerTests.Reseed_EntityTypeWithNoChanges_IsAbsentFromTheBreakdown` |
-| 13 | ❌ | Payload round-trips the file name and the per-entity breakdown through the `Metadata` column | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown` |
-| 14 | ❌ | Two different breakdowns produce different identities, and grouping order does not affect identity | Unit test | `ReseedFileAppliedMetadataTests.Identity_DiffersByBreakdown_AndIsOrderIndependent` |
-| 15 | ❌ | The new kind has a registered payload type | Unit test | `NotificationMetadataKindsTests` (existing guard; fails on an unregistered member) |
-| 16 | ❌ | The new migration and the baseline accept the same `MetadataKind` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` |
-| 17 | ❌ | The new migration and the baseline produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
+| 13 | ✅ | Payload round-trips the file name and the per-entity breakdown through the `Metadata` column | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown` |
+| 14 | ✅ | Two different breakdowns produce different identities, and grouping order does not affect identity | Unit test | `ReseedFileAppliedMetadataTests.Identity_DiffersByBreakdown_AndIsOrderIndependent` |
+| 15 | ✅ | The new kind has a registered payload type | Unit test | `NotificationMetadataKindsTests` (existing guard; fails on an unregistered member) |
+| 16 | ✅ | The new migration and the baseline accept the same `MetadataKind` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` |
+| 17 | ✅ | The new migration and the baseline produce an identical `System_Notification` schema | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
 | 18 | ❌ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
 | 19 | ❌ | `GET /api/v1/notifications` returns `appVersionId` for a notification that carries one | Unit test | `NotificationEndpointsTests.GetNotifications_ReturnsAppVersionId` |
 | 20 | ❌ | Neither initializer constructor makes a DI-suppliable service dependency optional | Unit test | `RepositoryStructureTests.InitializerConstructors_DoNotMakeAServiceDependencyOptional` |

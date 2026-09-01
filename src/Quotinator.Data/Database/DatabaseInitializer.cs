@@ -129,6 +129,9 @@ public class DatabaseInitializer(
         // a dismissal. A plain ADD COLUMN with its CHECK inline — no rebuild needed, since nothing
         // existing is being widened.
         new SchemaMigration { Version = 16, Sql = NotificationDismissReasonMigrations.AddDismissReasonColumn },
+        // #302: MetadataKind gains 'ReseedFileApplied' for the per-file reseed confirmation. A rebuild
+        // again, for the same reason migration 15 needed one — SQLite cannot widen a CHECK in place.
+        new SchemaMigration { Version = 17, Sql = NotificationReseedFileAppliedMigrations.WidenMetadataKindForFileApplied },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -328,7 +331,7 @@ public class DatabaseInitializer(
             Title             TEXT,
             Metadata          TEXT,
             MetadataKind      TEXT
-                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended')),
+                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied')),
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
             OriginalLanguage  TEXT    NOT NULL DEFAULT 'en',
             DismissReason     TEXT

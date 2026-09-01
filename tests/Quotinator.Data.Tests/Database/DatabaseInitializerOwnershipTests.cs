@@ -694,6 +694,12 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'ActionRequired', 'Consider reseeding.', '{}', 'ReseedRecommended', @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
+            // #302 widens MetadataKind again, for the per-file reseed confirmation.
+            await conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, Metadata, MetadataKind, DateCreated) " +
+                "VALUES (@id, 'Success', 'quotinator-curated.json reseeded cleanly.', '{}', 'ReseedFileApplied', @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
             // ...and the widened MetadataKind CHECK still rejects a value outside the enum, which is
             // the half a rebuild is most likely to drop by rewriting the constraint too loosely.
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(

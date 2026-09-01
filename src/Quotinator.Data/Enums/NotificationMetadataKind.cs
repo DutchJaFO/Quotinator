@@ -46,5 +46,16 @@ public enum NotificationMetadataKind
     /// not prose: a notification's own text lives in its Title/Body columns, per
     /// <see cref="Notifications.NotificationMetadataDto"/>'s no-text rule.
     /// </summary>
-    ReseedRecommended
+    ReseedRecommended,
+
+    /// <summary>
+    /// A confirmation that one source file reseeded with nothing left to review (#302) — the payload
+    /// carries the file name and how many rows of each entity type it added or modified.
+    /// <para>
+    /// Distinct from <see cref="ReseedRecommended"/>, which asks for a reseed that has not happened:
+    /// this reports one that has, per file. The breakdown is what identifies it, so the same file
+    /// producing a different result notifies separately rather than being suppressed as a duplicate.
+    /// </para>
+    /// </summary>
+    ReseedFileApplied
 }
