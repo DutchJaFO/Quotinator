@@ -61,7 +61,7 @@ named rows green. No implementation step precedes its own test.
 
 ### 1. Write every test first, and run them red
 
-**Status:** ⬜ Not started — **no implementation may start until this step's exit condition is met**
+**Status:** ✅ Done — six unit tests red, T2 document written and run red
 
 Exit condition: every unit test in the table below exists and **fails on its own assertion**, and the
 new T2 document has been run against the current build and failed.
@@ -78,7 +78,7 @@ new T2 document has been run against the current build and failed.
 
 ### 2. Render `Title` as a distinct element with `Body` beneath it
 
-**Status:** ⬜ Not started — turns rows 1–3 green
+**Status:** 🔄 In progress — turns rows 1–3 green
 
 Its own heading or emphasis, not one undifferentiated cell. A notification with no title still renders
 correctly — `Title` is nullable in #312's schema, and the two shipped producers (#279, #289) predate
@@ -146,7 +146,7 @@ size-constrained in a way the page is not.
 | 9 | ❌ | Title and body render distinctly on `/notifications` | Automated (T2) + screenshot | `13-notification-layout.md` — the title is its own element in the DOM, not a prefix inside the body text |
 | 10 | ❌ | The same holds in the startup modal | Automated (T2) + screenshot | same document — restart required, per #302's finding that the modal shows once per process run |
 | 11 | ❌ | Rendering survives a degraded startup | Automated (T2) | same document — degraded container, parity with `/notifications`'s current behaviour rather than a bare `200` (see #303 row 36) |
-| 12 | ❌ | The T2 document goes red before it goes green | Canary run | run at step 1 against `HEAD`-before-implementation, which needs no worktree — recorded in the document's own *Canary* section |
+| 12 | ✅ | The T2 document goes red before it goes green | Canary run | run at step 1 against `52071f24`, no worktree needed: `bodyCells: 0`, `titleElements: 0`, `whiteSpace: normal`, `lineBoxes: 1` — and step 1 itself failed on a wrong fixture assumption, corrected before implementing |
 | 13 | ❌ | Every unit test above is wired to behaviour | Mutation | each proven red at step 1 by a wrong-body stub, and re-proven by mutation for any that passes on first write |
 | 14 | ❌ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
 | 15 | ❌ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |

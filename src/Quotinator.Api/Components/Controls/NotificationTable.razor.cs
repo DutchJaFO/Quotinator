@@ -95,6 +95,21 @@ public partial class NotificationTable
     internal static bool ShowsDismissControl(NotificationEntity notification, bool isExecuting) =>
         !notification.IsDismissed && !isExecuting;
 
+    /// <summary>How a notification's body is laid out. #308.</summary>
+    /// <param name="BodyIsMultiLine">Whether the body is expected to carry embedded line breaks.</param>
+    internal sealed record NotificationLayout(bool BodyIsMultiLine);
+
+    /// <summary>The class the body cell carries, and the stylesheet targets. #308.</summary>
+    internal const string BodyCellClass = "notification-body";
+
+    /// <summary>Whether <paramref name="notification"/> renders a title element. #308.</summary>
+    /// <param name="notification">The row being rendered.</param>
+    internal static bool ShowsTitle(NotificationEntity notification) => false;
+
+    /// <summary>The layout for <paramref name="kind"/>, or for a row that carries none. #308.</summary>
+    /// <param name="kind">The row's own metadata kind, or <see langword="null"/>.</param>
+    internal static NotificationLayout? LayoutFor(NotificationMetadataKind? kind) => null;
+
     internal static NotificationDisplayStatus GetDisplayStatus(NotificationEntity notification, DateTime now, bool isExecuting = false)
     {
         if (notification.IsDismissed)

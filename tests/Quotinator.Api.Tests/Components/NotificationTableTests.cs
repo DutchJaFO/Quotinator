@@ -281,4 +281,99 @@ public class NotificationTableTests
         Assert.IsFalse(NotificationTable.ShowsDismissControl(Build(isDismissed: true, expiresAt: null), isExecuting: false),
             "An already-dismissed row has no dismiss control — the pre-existing rule, unchanged.");
     }
+
+    #region #308 — title/body layout
+
+    private static NotificationEntity WithTitle(string? title)
+    {
+        NotificationEntity notification = Build(isDismissed: false, expiresAt: null);
+        return new NotificationEntity
+        {
+            Type        = notification.Type,
+            Title       = title,
+            Body        = notification.Body,
+            IsDismissed = notification.IsDismissed,
+            ExpiresAt   = notification.ExpiresAt,
+        };
+    }
+
+    /// <summary>#308: a notification that has a headline gets one rendered as its own element.</summary>
+    [TestMethod]
+    public void ShowsTitle_WithATitle_IsTrue()
+        => Assert.IsTrue(NotificationTable.ShowsTitle(WithTitle("Source file needs review")));
+
+    /// <summary>
+    /// #308: <c>Title</c> is nullable in #312's schema and the two producers that shipped before it
+    /// (#279, #289) carry none, so an absent title must render nothing rather than an empty element.
+    /// Whitespace counts as absent — a title of spaces would render as a blank line above the body.
+    /// </summary>
+    [TestMethod]
+    [DataRow(null)]
+    [DataRow("")]
+    [DataRow("   ")]
+    public void ShowsTitle_WithoutATitle_IsFalse(string? title)
+        => Assert.IsFalse(NotificationTable.ShowsTitle(WithTitle(title)));
+
+    /// <summary>
+    /// Positive control for the row above. Without it, a cell that rendered nothing at all would
+    /// satisfy "no title element" perfectly — the same trap `11-clean-reseed-confirmation.md`'s canary
+    /// found in its own first step.
+    /// </summary>
+    [TestMethod]
+    public void ShowsTitle_WithoutATitle_StillRendersTheBody()
+    {
+        NotificationEntity untitled = WithTitle(null);
+
+        Assert.IsFalse(NotificationTable.ShowsTitle(untitled));
+        Assert.IsFalse(string.IsNullOrWhiteSpace(untitled.Body),
+            "A row with no title still has a body, and the body is what the operator reads.");
+    }
+
+    /// <summary>
+    /// #308: the markup and the stylesheet must name the same class for the body cell.
+    /// </summary>
+    /// <remarks>
+    /// This proves the two halves agree — never that the rule reaches the element. #303's nav entry is
+    /// the standing example: the class was present the whole time the icon was missing. The rendered
+    /// proof is the T2 document's computed-style assertion.
+    /// </remarks>
+    [TestMethod]
+    public void BodyCellClass_IsDefinedInTheStylesheet()
+    {
+        string componentDir = Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "src", "Quotinator.Api", "Components", "Controls");
+
+        string markup = File.ReadAllText(Path.Combine(componentDir, "NotificationTable.razor"));
+        string css    = File.ReadAllText(Path.Combine(componentDir, "NotificationTable.razor.css"));
+
+        Assert.Contains(NotificationTable.BodyCellClass, markup,
+            "The body cell must carry the class the stylesheet targets.");
+        Assert.Contains($".{NotificationTable.BodyCellClass}", css,
+            "The stylesheet must define a rule for it, or the class is decoration.");
+        Assert.Contains("pre-line", css,
+            "Line breaks are rendered by white-space: pre-line, not by markup — see step 3.");
+    }
+
+    /// <summary>
+    /// #308: every notification type has a layout decision. Derived from the enum rather than a
+    /// maintained list, so a kind added later fails here instead of rendering unstyled.
+    /// </summary>
+    [TestMethod]
+    public void EveryMetadataKind_HasALayout()
+    {
+        foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
+            Assert.IsNotNull(NotificationTable.LayoutFor(kind), $"{kind} has no defined layout.");
+    }
+
+    /// <summary>
+    /// The negative case for the row above: #279's and #289's rows carry no metadata kind at all, so
+    /// the absent case needs a layout too rather than falling through to nothing.
+    /// </summary>
+    [TestMethod]
+    public void NoMetadataKind_FallsBackToADefinedLayout()
+        => Assert.IsNotNull(NotificationTable.LayoutFor(null),
+            "A row with no metadata kind still renders, so it still needs a layout.");
+
+    #endregion
 }
