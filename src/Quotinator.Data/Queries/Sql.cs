@@ -209,6 +209,18 @@ internal static class Sql
 
         internal const string DeleteAll = "DELETE FROM Import_Batch;";
 
+        /// <summary>
+        /// Every batch id, read before a reseed truncates the table so the pending-review alerts naming
+        /// those batches can be dismissed once they are gone (#303).
+        /// <para>
+        /// Deliberately unfiltered by <c>IsDeleted</c>, unlike the selects above:
+        /// <see cref="DeleteAll"/> is a hard delete, so a soft-deleted batch is about to vanish exactly
+        /// as an active one is, and its alert would be left behind just the same.
+        /// </para>
+        /// </summary>
+        internal static readonly string SelectAllIds =
+            $"SELECT {IdClauses.SelectColumn("Id", "Id")} FROM Import_Batch;";
+
         // COUNT base — shared by CountPaged factory method below.
         private const string CountPagedBase = "SELECT COUNT(*) FROM Import_Batch WHERE IsDeleted = 0";
 

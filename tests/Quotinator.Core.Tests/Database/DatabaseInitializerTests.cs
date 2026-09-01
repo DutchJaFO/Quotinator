@@ -615,6 +615,81 @@ public class DatabaseInitializerTests
             "No notification may be written with unknown provenance — record the version first instead.");
     }
 
+    /// <summary>
+    /// #303: a reseed truncates `Import_Batch`, so any alert describing one of those batches now points
+    /// at a review that can no longer be performed. It is dismissed as `Obsolete` — neither carried out
+    /// nor declined.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_DismissesAlertsForRemovedBatches()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
+        await db.InitialiseAsync();
+
+        List<NotificationEntity> afterFirstSeed = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending)];
+        Assert.HasCount(1, afterFirstSeed, "The first seed must have raised an alert for this to test anything.");
+        Guid originalAlertId = afterFirstSeed[0].Id;
+
+        await db.ReseedAsync();
+
+        NotificationEntity original = (await NotificationsAsync()).Single(n => n.Id == originalAlertId);
+
+        Assert.IsTrue(original.IsDismissed,
+            "Its batch was truncated by the reseed, so the review it reports cannot be performed any more.");
+        Assert.AreEqual(NotificationDismissReason.Obsolete, original.DismissReason.Parsed,
+            "Neither resolved nor dismissed — the reader has to see what actually happened without an audit.");
+    }
+
+    /// <summary>
+    /// The new batch gets its own alert rather than the old one being reused. `ImportBatchEntity.Id` is
+    /// a fresh Guid per construction, so a reseed can never reproduce a batch id — this pins that the
+    /// identity actually follows it.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Twice_RaisesNewAlertsRatherThanReusingTheOld()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        List<NotificationEntity> alerts = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending)];
+
+        Assert.HasCount(2, alerts, "One alert per staged batch, and the reseed staged a second batch.");
+
+        List<string> distinctBatchIds = [.. alerts
+            .Select(n => FirstReviewAlertPayloadOf(n).BatchId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+        Assert.HasCount(2, distinctBatchIds,
+            "Two alerts naming the same batch would mean the identity is not following the batch at all.");
+    }
+
+    /// <summary>
+    /// The property that makes batch-scoped identity safe: repeated reseeds do not pile up active
+    /// alerts, because each one dismisses the batches it removed. Without this, the design leaks.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_LeavesOnlyTheLatestBatchesAlertsActive()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+        await db.ReseedAsync();
+        await db.ReseedAsync();
+
+        List<NotificationEntity> active = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending && !n.IsDismissed)];
+
+        Assert.HasCount(1, active,
+            "Four seeding runs, but only the surviving batch still has a review to perform.");
+
+        IReadOnlyList<string> liveBatchIds = await LiveBatchIdsAsync();
+        Assert.Contains(FirstReviewAlertPayloadOf(active[0]).BatchId, liveBatchIds, StringComparer.OrdinalIgnoreCase,
+            "The one active alert must name a batch that still exists.");
+    }
+
     private async Task<int> StagedActionCountAsync()
     {
         using SqliteConnection connection = new($"Data Source={_dbPath}");

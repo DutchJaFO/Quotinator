@@ -322,7 +322,14 @@ public sealed class QuotinatorDatabaseInitializer(
         await SharedSeedLock.WaitAsync();
         try
         {
+            // #303: read the batches before truncation removes them. Every review alert naming one of
+            // these is about to describe a batch that no longer exists, and an alert asking the operator
+            // to review actions that are gone is worse than no alert at all.
+            IReadOnlyList<string> removedBatchIds = await BatchIdsAsync(connection);
+
             await TruncateDataAsync(connection);
+            await DismissAlertsForRemovedBatchesAsync(removedBatchIds);
+
             await SeedIfEmptyInternalAsync(connection, effectiveBatches, isReseed: true);
         }
         finally
@@ -380,6 +387,38 @@ public sealed class QuotinatorDatabaseInitializer(
             PerformedAt = DateTime.UtcNow,
         });
         Logger.LogInformation("[Database - Init] reset complete");
+    }
+
+    /// <summary>
+    /// The <c>Import_Batch</c> ids that exist right now (#303) — read before a truncation so the alerts
+    /// describing them can be dismissed once they are gone.
+    /// </summary>
+    /// <param name="connection">Open connection to the database being reseeded.</param>
+    private static async Task<IReadOnlyList<string>> BatchIdsAsync(SqliteConnection connection)
+        => [.. await connection.QueryAsync<string>(Quotinator.Data.Queries.Sql.ImportBatches.SelectAllIds)];
+
+    /// <summary>
+    /// #303: marks every pending-review alert naming one of <paramref name="removedBatchIds"/> as
+    /// <see cref="NotificationDismissReason.Obsolete"/>.
+    /// </summary>
+    /// <remarks>
+    /// Obsolete rather than Resolved: nobody reviewed these actions, they were discarded wholesale by a
+    /// reseed. Claiming they were resolved would tell the reader the work was done, which is the class
+    /// of untruth <see cref="NotificationDismissReason"/> exists to prevent.
+    /// <para>
+    /// This is also what bounds the alert count. Because a batch id is part of an alert's identity and
+    /// <c>ImportBatchEntity.Id</c> is a fresh GUID per construction, every reseed necessarily raises new
+    /// alerts; without this, each run would leave its predecessors active forever.
+    /// </para>
+    /// </remarks>
+    /// <param name="removedBatchIds">The batch ids that existed before the truncation.</param>
+    private async Task DismissAlertsForRemovedBatchesAsync(IReadOnlyList<string> removedBatchIds)
+    {
+        foreach (string batchId in removedBatchIds)
+        {
+            await _notificationWriter.DismissByTriggerAndBatchAsync(
+                NotificationDismissTrigger.ImportReviewResolved, batchId, NotificationDismissReason.Obsolete);
+        }
     }
 
     /// <summary>Truncates all Quotinator domain data tables. Called during reseed/reset.</summary>
