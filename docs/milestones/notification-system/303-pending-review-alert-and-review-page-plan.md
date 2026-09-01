@@ -1,6 +1,6 @@
 # #303 — Notification + minimal review page: alert when a reseed leaves import actions pending review
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 9)
 **GitHub issue:** #303
 **Tiers required:** T1, T2
 **Depends on:** #278, #302, #304, #312, #319
@@ -204,7 +204,7 @@ matching member so the Status column reads it rather than falling back to "Dismi
 
 ### 8. Build the minimal review page
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `/import-review`, selection in `ImportReview.AwaitingReview`
 
 A new Blazor page listing every currently active (undecided) `Pending`/`Blocked`/`Stale`
 `ImportAction` row across all batches — not scoped to one notification's file. Injects
@@ -262,14 +262,15 @@ deliberately not here — see Scope changes 6.
 | 20 | ✅ | The Status column renders `Obsolete` rather than falling back to "Dismissed" | Unit test | `NotificationTableTests.GetDisplayStatus_ObsoleteReason_ReportsObsolete` |
 | 21 | ✅ | A reseed's new alerts are distinct rows from the previous run's, not updates to them | Unit test | `DatabaseInitializerTests.Reseed_Twice_RaisesNewAlertsRatherThanReusingTheOld` |
 | 22 | ✅ | Alerts do not accumulate across repeated reseeds — only the newest batch's are active | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_LeavesOnlyTheLatestBatchesAlertsActive` |
-| 23 | ❌ | The review page lists every active `Pending`/`Blocked`/`Stale` action across all batches | Unit test | `ImportReviewPageTests.Lists_EveryActiveActionAcrossBatches` |
-| 24 | ❌ | Deciding a row removes it from the active list | Unit test | `ImportReviewPageTests.DecidedRow_LeavesTheActiveList` |
-| 25 | ❌ | The page is exempt in `DatabaseHealthGateMiddleware` | Unit test | `DatabaseHealthGateMiddlewareTests` (alongside the existing `/notifications` case) |
-| 26 | ❌ | All four seeding variants behave correctly against real configuration | Automated (T2) | `automated-testing/import-and-staged-actions/NN-pending-review-alert.md` |
-| 27 | ❌ | The alert reaches `/notifications` and the startup modal, and a clean seed produces none | Automated (T2) | same document — modal asserted after a restart, per #302's step 8 |
-| 28 | ❌ | The page renders during a degraded startup rather than 500 | Automated (T2) | same document, degraded container |
-| 29 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: after a reseed supersedes an earlier alert, the inactive row reads `Obsolete`, not `Dismissed` |
-| 30 | ❌ | The alert, the page and the link render correctly | Live | T1: stage a batch with conflicts, click through from the alert, decide a row |
+| 23 | ✅ | The review page lists every active `Pending`/`Blocked`/`Stale` action across all batches | Unit test | `ImportReviewPageTests.Lists_EveryActiveActionAcrossBatches` |
+| 24 | ✅ | Deciding a row removes it from the active list | Unit test | `ImportReviewPageTests.DecidedRow_LeavesTheActiveList` |
+| 25 | ✅ | A row whose stored status cannot be parsed is not shown as awaiting review | Unit test | `ImportReviewPageTests.UnparseableStatus_IsNotTreatedAsAwaitingReview` |
+| 26 | ❌ | The page is exempt in `DatabaseHealthGateMiddleware` | Unit test | `DatabaseHealthGateMiddlewareTests` (alongside the existing `/notifications` case) |
+| 27 | ❌ | All four seeding variants behave correctly against real configuration | Automated (T2) | `automated-testing/import-and-staged-actions/NN-pending-review-alert.md` |
+| 28 | ❌ | The alert reaches `/notifications` and the startup modal, and a clean seed produces none | Automated (T2) | same document — modal asserted after a restart, per #302's step 8 |
+| 29 | ❌ | The page renders during a degraded startup rather than 500 | Automated (T2) | same document, degraded container |
+| 30 | ❌ | Every dismiss reason is visible on the notifications page without consulting the audit trail | Live | T1: after a reseed supersedes an earlier alert, the inactive row reads `Obsolete`, not `Dismissed` |
+| 31 | ❌ | The alert, the page and the link render correctly | Live | T1: stage a batch with conflicts, click through from the alert, decide a row |
 
 **The four seeding variants (rows 20) are not optional.** #303 writes from the same seeding loop as
 #302, where that matrix found a defect no single-variant test reached — no files, bundled only, user
