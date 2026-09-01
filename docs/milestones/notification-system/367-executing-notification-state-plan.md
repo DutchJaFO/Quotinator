@@ -195,6 +195,13 @@ mid-action. Row 13 is that proof and is not substitutable by a unit test.
 | 19 | ✅ | The running badge carries a spinner that is actually animating | Live (T2) + screenshot | [12-running-action-state.md](../../automated-testing/notifications-and-changelog/12-running-action-state.md) step 2 — `animationName: spinner-border`, `iteration: infinite`, `playState: running`, and none present once the run settles |
 | 20 | ✅ | Dismissing during a run cannot mislabel the outcome | Unit test + Live (T2) | `NotificationTableTests.ShowsDismissControl_WhileExecuting_IsFalse`; same document, step 2 — the row offers no controls at all while running, and the action still records `resolved` |
 
+**T1 confirmed, 2026-09-01** (developer, screenshot + startup log). A reset at `22:00:22` followed by a
+reseed run from `/notifications` at `22:00:31` → `22:00:44`: the badge read **Running…** with the
+spinner, the Action column was **empty** for the duration, and the log carries exactly one
+`reseed requested` with four files staged for review. That covers rows 13, 14, 19 and 20 on the
+developer's own machine; rows 15 and 16 (settles to `Done`, and a mid-run restart stranding nothing)
+remain T2-only, since both need a state transition the screenshot does not span.
+
 **Row 13 is the one that cannot be replaced by a unit test.** Every row above it can pass against an
 implementation whose UI never repaints until the action finishes — which is the exact defect this issue
 was raised for. Absence of a repaint proves nothing; row 13 asserts a positive.
