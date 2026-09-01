@@ -64,6 +64,53 @@ exists. Reviewed against the code 2026-08-30.**
 
 ---
 
+## Deviation from the planned step order
+
+**The steps below were not executed in their numbered order.** Recorded here because the order is the
+plan's substance, not its presentation: steps are discrete because each supplies something the next one
+needs, so a deviation after the planning phase means the planning pass failed to analyse the plan for
+completeness. If a bug surfaces in this issue's code, this section is the first place to look.
+
+**Planned:** 1 → 9.
+**Actual:** 2, 3, 6, 9, 1, 4, 5, 6, 7, 8, 9. Only 2 → 3 ran in sequence; step 1 ran fifth.
+
+**What the planning pass missed** — three ordering facts that were knowable before any code was
+written, and each of which forced the deviation:
+
+1. **Step 6's constructor injection is a compile prerequisite for steps 1, 5 and 7's tests.** None of
+   those tests can compile until `QuotinatorDatabaseInitializer` takes `IAppVersionTracker` and
+   `IVersionService`. Step 6 therefore belonged before step 1, not sixth.
+2. **Step 9 edits the same two constructors as step 6.** Placed last, it forced those call sites to be
+   rewritten twice, so it was pulled forward to sit beside step 6 rather than being done in its
+   numbered position.
+3. **Steps 1, 5 and 7 are one code path, not three.** The reseed-only gate, the write, and the
+   zero-files case all live in `SeedIfEmptyInternalAsync` and its clean-apply branch, and share one
+   test batch. Three separate numbers implied three separately observable steps, which they are not.
+
+A defensible ordering, had this been analysed at planning time, is: 2, 3, 6+9, 4, 1+5+7, 8 — with
+1/5/7 as a single step.
+
+**What the deviation cost, and what it may later explain:**
+
+- **`Status: In progress (step N)` was never truthful after step 3**, because more than one step was in
+  flight. That is what produced the visible symptom: step 1 read `Not started` while 2 and 3 read
+  `Done`, which was accurate — step 1 genuinely had not been started, fifth in line.
+- **Red-first collapsed from per-step to per-cluster.** Verification rows 1–12 went red together and
+  green together in one pass, so no individual row was observed failing for its own reason. If one of
+  them later turns out to pass for an accidental reason, this is why it was not caught here.
+- **Step 7's row (row 4, zero configured files) was never observed genuinely red.** It passed vacuously
+  in the red run — nothing wrote a notification yet, so "no notification" was trivially true — and only
+  became meaningful once the producer existed. The same vacuous-pass risk was spotted and guarded for
+  row 8 during that batch, but row 4 was left unguarded, which is the per-cluster review missing what a
+  per-step one would have caught on its own step.
+
+  **Closed while writing this section.** The test now carries its own positive control: it reseeds with
+  files against the same database and asserts confirmations appear, before showing that a fileless
+  reseed adds none. Proven by disabling the producer — the old form still passed, the new form fails on
+  the control.
+
+---
+
 ## Steps
 
 ### 1. Tell the seeding loop whether this run is a reseed
@@ -96,10 +143,25 @@ report "0 added, 0 modified" and read as a no-op. The counts are taken from the 
 grouped by `EntityType`, with the existing two locals left untouched (they feed
 `Import_Batch.RecordCount`, a separate contract).
 
-Shape: `FileName`, plus a list of `ReseedEntityCountDto` (`EntityType`, `Added`, `Modified`), one entry
-per type that has a non-zero count — an all-zero type states nothing, matching the payload's own
-omit-what-is-unset rule. Entity type values come from `ImportActionEntityTypes`, never a second set of
-literals.
+Shape: `FileName`, `Origin`, plus a list of `ReseedEntityCountDto` (`EntityType`, `Added`, `Modified`),
+one entry per type that has a non-zero count — an all-zero type states nothing, matching the payload's
+own omit-what-is-unset rule. Entity type values come from `ImportActionEntityTypes`, never a second set
+of literals.
+
+**`Origin` was added after the T2 pass, not planned** (developer decision, 2026-08-30). The bundled +
+user-imports variant produced two confirmations both named `quotinator-curated.json`, because
+`FileName` is a bare name and both directories can hold the same one — a user copying a bundled file to
+customise it produces exactly that. They were both written that run only because their breakdowns
+happened to differ; had both been no-ops they would have shared an identity and the second would have
+been silently suppressed. `Origin` is `FileResourceOrigin`, the application's existing provenance
+vocabulary, mapped from `SeedBatchOrigin` through `SeedBatchOriginExtensions.ToFileResourceOrigin` —
+extracted from the inline copy in this initializer's own file-resource capture (#251) rather than
+written a second time.
+
+**An empty breakdown is written, not skipped.** Considered and rejected (developer decision,
+2026-08-30): a confirmation reporting that a file added nothing is not useless — it shows which
+sections were actually used, and reminds the reader that they can seed their own files. The producer's
+own comment previously claimed it "never writes one"; that was false as written and is corrected.
 
 `IdentityComponents` is the file name plus the flattened breakdown, and it is load-bearing: step 5
 dedupes against it, so this is what decides whether a reseed's result is "the same confirmation the
@@ -307,7 +369,40 @@ is already converted and listed.
 | 19 | ✅ | `GET /api/v1/notifications` returns `appVersionId` for a notification that carries one | Unit test | `NotificationEndpointsTests.GetNotifications_ReturnsAppVersionId` |
 | 20 | ✅ | Neither initializer constructor makes a DI-suppliable service dependency optional | Unit test | `RepositoryStructureTests.InitializerConstructors_DoNotMakeAServiceDependencyOptional` |
 | 21 | ✅ | A real reseed against a real database writes one notification per cleanly-applied file, with its breakdown and provenance readable through the API | Automated (T2) | `docs/automated-testing/notifications-and-changelog/11-clean-reseed-confirmation.md` |
-| 22 | ❌ | The notifications render in the startup modal and on `/notifications` after a live reseed | Live | T1: run a reseed from `/notifications`, confirm one `Success` notification per cleanly-applied file in both surfaces |
+| 22 | ✅ | The notifications render on `/notifications` after a live reseed | Live | T1 (developer, 2026-09-01): reseed run from `/notifications`, one `Success` confirmation per cleanly-applied file, in Dutch, each naming its file and counts |
+| 23 | ✅ | The same confirmations appear in the startup modal after a restart | Live | T1 (developer, 2026-09-01): reseed at 12:15–12:16, restart at 12:16:18, all four confirmations listed in the modal as `Actief` with no expiry |
+| 24 | ✅ | A user-imports file is confirmed exactly as a bundled one — origin does not gate the producer | Unit test | `DatabaseInitializerTests.Reseed_UserImportsOnly_ConfirmsEachFile` |
+| 25 | ✅ | Both origins in one reseed confirm every file across both, named individually | Unit test | `DatabaseInitializerTests.Reseed_BundledAndUserImports_ConfirmsEveryFileFromBothOrigins` |
+| 26 | ✅ | Two files with the same bare name from different directories are two confirmations, not one | Unit test | `ReseedFileAppliedMetadataTests.Identity_DiffersByOrigin_ForTheSameFileNameAndBreakdown` |
+| 27 | ✅ | Origin survives the `Metadata` column round-trip | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown` |
+| 28 | ✅ | All four seeding variants behave correctly against real configuration | Automated (T2) | `11-clean-reseed-confirmation.md` step 7 |
+
+**The two surfaces need different sequences, which row 22 originally ran together as one step.**
+`StartupSuccessModal` is shown once per process run after a healthy startup, so a reseed — which
+happens long afterwards — cannot populate it in that same run. The modal half needs a **restart after
+the reseed**, with the confirmations still undismissed. Split into rows 22 and 23 so a later T1 run
+does not read the single row, try both in one sitting, and conclude the modal is broken.
+
+Recorded because it was got wrong twice while writing this plan: first as a single row implying one
+sequence, then by concluding the modal half was unachievable and scoping it out. Both were assumptions
+about a component this issue does not own; the developer's T1 settled it by restarting and observing.
+
+**T1 also confirmed row 7 live, which unit tests could only prove at payload level.**
+`quotinator-series-universe.json` read *69 toegevoegd* on the first reseed and *106* on a reseed after
+a reset, because the reset meant Universes and Series had to be recreated as well
+(`Universe[new=7] Series[new=30] Source[new=69]` in the startup log). The same file with a genuinely
+different result produced its own confirmation rather than being suppressed as a duplicate.
+
+**The four seeding variants are proven at both levels** (developer direction, 2026-08-30: positive and
+negative proof requires testing seeding with and without files in each folder). Rows 4, 1, 24 and 25
+cover no-files / bundled-only / user-only / both as unit tests; row 28 covers the same matrix at T2,
+where the batch list comes from real configuration rather than being handed to the initializer.
+
+**The T2 pass found a real defect, in step 7's four-variant matrix.** The bundled + user-imports variant
+wrote two confirmations both named `quotinator-curated.json` with no way to tell them apart, and only
+their differing breakdowns kept them from collapsing into one. Fixed by adding `Origin` to the payload
+and its identity — see step 2. The matrix existed because positive proof alone is not proof; steps 1–6
+would never have reached this state.
 
 **T2 pass, 2026-08-30, all six steps green** — four bundled files confirmed, each with real
 provenance, dedupe holding across a second reseed, and confirmations reappearing after dismissal. Two
