@@ -1,0 +1,10 @@
+/* #367: the spinner sits inside a badge, so it takes the badge's own text size rather than Bootstrap's
+   1rem default — otherwise it stands taller than the label beside it and pushes the row height out.
+   Bootstrap's own prefers-reduced-motion rule still applies: it slows the animation to 1.5s rather than
+   stopping it, which keeps the "still running" signal for a reader who has asked for less motion. */
+.badge .spinner-border {
+    --bs-spinner-width: 0.75em;
+    --bs-spinner-height: 0.75em;
+    --bs-spinner-border-width: 0.15em;
+    vertical-align: -0.05em;
+}

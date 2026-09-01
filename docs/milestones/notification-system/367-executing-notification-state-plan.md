@@ -174,6 +174,7 @@ mid-action. Row 13 is that proof and is not substitutable by a unit test.
 | 16 | ✅ | A restart during a run leaves no row reading `Executing` | Live (T2) | same document, step 4 — restarted mid-run (13 quotes, interrupted), page carries no `Running` |
 | 17 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
 | 18 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
+| 19 | ✅ | The running badge carries a spinner that is actually animating | Live (T2) + screenshot | [12-running-action-state.md](../../automated-testing/notifications-and-changelog/12-running-action-state.md) step 2 — `animationName: spinner-border`, `iteration: infinite`, `playState: running`, and none present once the run settles |
 
 **Row 13 is the one that cannot be replaced by a unit test.** Every row above it can pass against an
 implementation whose UI never repaints until the action finishes — which is the exact defect this issue

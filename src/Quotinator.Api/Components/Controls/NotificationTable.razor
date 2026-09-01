@@ -30,7 +30,12 @@
                     @switch (GetDisplayStatus(notification, Now, Executing.IsExecuting(notification.Id)))
                     {
                         case NotificationDisplayStatus.Executing:
-                            <span class="badge bg-info">@Text.NotificationsExecutingLabel</span>
+                            @* aria-hidden: the badge's own text already says it is running, so the
+                               spinner is decoration and must not be announced a second time. *@
+                            <span class="badge bg-info">
+                                <span class="spinner-border" aria-hidden="true"></span>
+                                @Text.NotificationsExecutingLabel
+                            </span>
                             break;
                         case NotificationDisplayStatus.Resolved:
                             <span class="badge bg-primary">@Text.NotificationsResolvedLabel</span>

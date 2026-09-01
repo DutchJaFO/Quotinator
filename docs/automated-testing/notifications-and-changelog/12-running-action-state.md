@@ -58,8 +58,23 @@ In the browser: open `http://localhost:19367/notifications`, click **Run**, then
 screenshot immediately — within the same round trip if the tooling allows, since the window is about
 11 seconds.
 
-**Expected:** the Status badge reads **Running…**, and the row's **Run** control is gone, leaving only
-**Dismiss**.
+**Expected:** the Status badge reads **Running…** with a spinning icon, and the row's **Run** control is
+gone, leaving only **Dismiss**.
+
+**A screenshot cannot tell a spinning icon from a static arc**, so assert the animation itself rather
+than trusting the picture:
+
+```js
+const s = document.querySelector('.badge .spinner-border');
+const cs = getComputedStyle(s);
+({ animationName: cs.animationName, iteration: cs.animationIterationCount,
+   playState: s.getAnimations()[0]?.playState, ariaHidden: s.getAttribute('aria-hidden') })
+```
+
+**Expected:** `spinner-border`, `infinite`, `running`, and `aria-hidden="true"` — the badge's own text
+already says it is running, so the icon must not be announced a second time. After the run settles,
+`document.querySelectorAll('.spinner-border').length` is `0`: an animation left spinning on a finished
+row says the opposite of the truth.
 
 **On failure:** a row still reading `Active` with a live Run button is the original defect. Check that
 the handler flushes a render *before* awaiting the executor — `StateHasChanged` alone only queues one,
