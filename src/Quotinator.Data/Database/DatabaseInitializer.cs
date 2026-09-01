@@ -127,6 +127,11 @@ public class DatabaseInitializer(
         // #302: MetadataKind gains 'ReseedFileApplied' for the per-file reseed confirmation. A rebuild
         // again, for the same reason migration 15 needed one — SQLite cannot widen a CHECK in place.
         new SchemaMigration { Version = 17, Sql = NotificationReseedFileAppliedMigrations.WidenMetadataKindForFileApplied },
+        // #303: MetadataKind gains 'ImportReviewPending', DismissTriggerKey gains 'ImportReviewResolved',
+        // and DismissReason gains 'Obsolete'. All three widenings share one rebuild — migration 15's
+        // precedent, for the same reason: constraints on one table, and separate migrations would copy
+        // every row three times.
+        new SchemaMigration { Version = 18, Sql = NotificationImportReviewMigrations.WidenForImportReview },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -318,7 +323,7 @@ public class DatabaseInitializer(
             IsDismissed       INTEGER NOT NULL DEFAULT 0,
             DismissedAt       TEXT,
             DismissTriggerKey TEXT
-                              CHECK (DismissTriggerKey IS NULL OR DismissTriggerKey IN ('DatabaseReset', 'Reseed')),
+                              CHECK (DismissTriggerKey IS NULL OR DismissTriggerKey IN ('DatabaseReset', 'Reseed', 'ImportReviewResolved')),
             DateCreated       TEXT    NOT NULL,
             DateModified      TEXT,
             DateDeleted       TEXT,
@@ -326,11 +331,11 @@ public class DatabaseInitializer(
             Title             TEXT,
             Metadata          TEXT,
             MetadataKind      TEXT
-                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied')),
+                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending')),
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
             OriginalLanguage  TEXT    NOT NULL DEFAULT 'en',
             DismissReason     TEXT
-                              CHECK (DismissReason IS NULL OR DismissReason IN ('Dismissed', 'Resolved'))
+                              CHECK (DismissReason IS NULL OR DismissReason IN ('Dismissed', 'Resolved', 'Obsolete'))
         );
         CREATE INDEX IF NOT EXISTS IX_System_Notification_Active ON System_Notification (IsDismissed, IsDeleted, ExpiresAt);
         CREATE INDEX IF NOT EXISTS IX_System_Notification_DismissTriggerKey ON System_Notification (DismissTriggerKey);

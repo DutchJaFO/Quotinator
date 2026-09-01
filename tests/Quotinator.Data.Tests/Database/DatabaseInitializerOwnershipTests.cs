@@ -700,6 +700,23 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'Success', 'quotinator-curated.json reseeded cleanly.', '{}', 'ReseedFileApplied', @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
+            // #303 widens all three at once: a new kind, a new dismiss trigger, and a new dismiss reason.
+            await conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, Metadata, MetadataKind, DismissTriggerKey, DateCreated) " +
+                "VALUES (@id, 'ActionRequired', 'Four actions await review.', '{}', 'ImportReviewPending', 'ImportReviewResolved', @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, DismissReason, DateCreated) " +
+                "VALUES (@id, 'ActionRequired', 'Its batch was removed.', 'Obsolete', @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            // ...and the widened DismissReason CHECK still rejects a value outside the enum.
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, DismissReason, DateCreated) " +
+                "VALUES (@id, 'Information', 'x', 'NotARealReason', @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+
             // ...and the widened MetadataKind CHECK still rejects a value outside the enum, which is
             // the half a rebuild is most likely to drop by rewriting the constraint too loosely.
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
