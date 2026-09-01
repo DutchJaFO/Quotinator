@@ -55,10 +55,12 @@ public class NotificationEndpointsTests
         return client;
     }
 
-    private static NotificationEntity BuildNotification(NotificationType type = NotificationType.Information, string message = "test message") => new()
+    private static NotificationEntity BuildNotification(
+        NotificationType type = NotificationType.Information, string message = "test message", Guid? appVersionId = null) => new()
     {
-        Type    = new SafeValue<NotificationType?>(type.ToString(), type),
-        Body    = message,
+        Type         = new SafeValue<NotificationType?>(type.ToString(), type),
+        Body         = message,
+        AppVersionId = appVersionId,
     };
 
     // ── GET /notifications — list ────────────────────────────────────────────
@@ -92,6 +94,31 @@ public class NotificationEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(2, doc.RootElement.GetProperty("items").GetArrayLength(), "the list endpoint returns full history, not just active notifications");
+    }
+
+    /// <summary>
+    /// #302: provenance is stored on every notification but was not exposed anywhere, so nothing
+    /// outside the database could tell an attributed notification from an unattributed one.
+    /// </summary>
+    [TestMethod]
+    public async Task GetNotifications_ReturnsAppVersionId()
+    {
+        Guid appVersionId = Guid.NewGuid();
+        FakeNotificationReader reader = new FakeNotificationReader();
+        NotificationEntity attributed = BuildNotification(message: "written by a known version", appVersionId: appVersionId);
+        reader.Seed(attributed);
+
+        using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader);
+        HttpResponseMessage response = await factory.CreateClient().GetAsync("/api/v1/notifications", TestContext.CancellationToken);
+        JsonDocument doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+
+        JsonElement item = doc.RootElement.GetProperty("items")[0];
+        Assert.IsTrue(item.TryGetProperty("appVersionId", out JsonElement stored),
+            "Provenance has to reach the response, or step 6's guarantee cannot be checked from outside the database.");
+        Assert.AreEqual(appVersionId.ToCanonicalId(), stored.GetString(),
+            "Rendered as a canonical lowercase id, like every other id on this response.");
     }
 
     // ── Pagination contract (#183's 8-case matrix) ───────────────────────────

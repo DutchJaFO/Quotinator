@@ -421,6 +421,9 @@ public sealed class QuotinatorDatabaseInitializer(
         }
     }
 
+    /// <summary>The shared seeding body behind both the cold-start path and an explicit reseed.</summary>
+    /// <param name="connection">Open connection to the database being seeded.</param>
+    /// <param name="effectiveBatches">The seed batches to apply, already resolved against the source cache.</param>
     /// <param name="isReseed">
     /// Whether this run is an explicit reseed rather than the first seed of an empty database. Passed
     /// in rather than inferred: this method is the shared body of both paths, and by the time it runs

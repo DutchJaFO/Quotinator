@@ -27,6 +27,16 @@ public sealed class NotificationResponse
     /// <summary>Names the shape of <see cref="Metadata"/> (e.g. <c>whatsnew</c>), or <see langword="null"/> when there is no metadata.</summary>
     public string? MetadataKind { get; init; }
 
+    /// <summary>
+    /// The <c>System_AppVersion</c> row for the application version that wrote this notification, or
+    /// <see langword="null"/> for a row whose provenance could not be determined (#302).
+    /// <para>
+    /// Exposed so provenance can be asserted from outside the database rather than taken on trust —
+    /// it was previously stored but unobservable through any endpoint or UI.
+    /// </para>
+    /// </summary>
+    public string? AppVersionId { get; init; }
+
     /// <summary>UTC timestamp when this notification was created.</summary>
     public DateTime? CreatedAt { get; init; }
 

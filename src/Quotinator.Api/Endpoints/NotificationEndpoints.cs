@@ -66,7 +66,8 @@ internal static class NotificationEndpoints
         .WithDescription(
             "Returns a paginated list of the full notification history (#278) — including dismissed " +
             "and expired notifications, newest first. See `GET /api/v1/health`/the startup modals for " +
-            "the active-only subset. Maximum `pageSize` is 500.");
+            "the active-only subset. Maximum `pageSize` is 500. Each item carries `appVersionId`, the " +
+            "application version that wrote it, or `null` where provenance could not be determined.");
 
         adminGroup.MapPost("/{id}/dismiss", async (
             string id,
@@ -105,6 +106,7 @@ internal static class NotificationEndpoints
         Metadata          = entity.Metadata,
         MetadataKind      = entity.MetadataKind.Parsed?.ToString().ToLowerInvariant()
                             ?? (entity.MetadataKind.Raw.Length > 0 ? entity.MetadataKind.Raw : null),
+        AppVersionId      = entity.AppVersionId?.ToCanonicalId(),
         CreatedAt         = entity.DateCreated.Parsed,
         ExpiresAt         = entity.ExpiresAt.Parsed,
         IsDismissed       = entity.IsDismissed,

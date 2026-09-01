@@ -1,5 +1,8 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Xml.Linq;
+using Quotinator.Core.Database;
+using Quotinator.Data.Database;
 using Json.Schema;
 using Quotinator.Converters.BasicJsonArray;
 using Quotinator.Converters.RegexArray;
@@ -1013,6 +1016,50 @@ public partial class RepositoryStructureTests
         {
             Directory.Delete(tempDir, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// #302: neither initializer may make a DI-suppliable service dependency optional. A
+    /// <c>IService? dep = null</c> parameter backed by <c>?? new Service()</c> turns "nobody registered
+    /// this" into "here is a second, unmanaged instance" — silently, and only in whichever environment
+    /// forgot to register it.
+    /// <para>
+    /// Found by the developer while reviewing this issue's own plan, which had proposed copying exactly
+    /// that shape from <c>DatabaseInitializer</c>'s shipped <c>diskSpaceProvider</c>. A comment on the
+    /// original explained why it was convenient; nothing stopped the next person reading it as a
+    /// pattern, which is what this test is for.
+    /// </para>
+    /// <para>
+    /// Deliberately scoped to constructors. Optional interface-typed <b>method</b> parameters
+    /// (<c>IUnitOfWork? unitOfWork = null</c>, <c>IDbTransaction? transaction = null</c>) are ambient
+    /// context a caller may legitimately omit, not injected dependencies — 78 of them exist and all are
+    /// correct.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void InitializerConstructors_DoNotMakeAServiceDependencyOptional()
+    {
+        Type[] initializers = [typeof(DatabaseInitializer), typeof(QuotinatorDatabaseInitializer)];
+
+        List<string> offenders = [];
+
+        foreach (Type initializer in initializers)
+        {
+            foreach (ConstructorInfo constructor in initializer.GetConstructors())
+            {
+                foreach (ParameterInfo parameter in constructor.GetParameters())
+                {
+                    if (!parameter.IsOptional) continue;
+                    if (!parameter.ParameterType.IsInterface) continue;
+
+                    offenders.Add($"{initializer.Name}.{parameter.Name} ({parameter.ParameterType.Name})");
+                }
+            }
+        }
+
+        Assert.IsEmpty(offenders,
+            "These constructor parameters are interface-typed and optional, so a missing DI registration " +
+            "produces a silent fallback instead of a startup failure:\n" + string.Join("\n", offenders));
     }
 
     public TestContext TestContext { get; set; }
