@@ -28,6 +28,7 @@ public static class NotificationMetadataKinds
         [NotificationMetadataKind.WhatsNew]               = typeof(WhatsNewMetadataDto),
         [NotificationMetadataKind.ReseedRecommended]      = typeof(ReseedRecommendedMetadataDto),
         [NotificationMetadataKind.ReseedFileApplied]      = typeof(ReseedFileAppliedMetadataDto),
+        [NotificationMetadataKind.ImportReviewPending]    = typeof(ImportReviewPendingMetadataDto),
     };
 
     // A null-valued property states nothing and leaves the reader to decide what it was supposed to

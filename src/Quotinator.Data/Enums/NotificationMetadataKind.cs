@@ -57,5 +57,16 @@ public enum NotificationMetadataKind
     /// producing a different result notifies separately rather than being suppressed as a duplicate.
     /// </para>
     /// </summary>
-    ReseedFileApplied
+    ReseedFileApplied,
+
+    /// <summary>
+    /// One reseeded file left import actions awaiting review (#303) — the payload carries the file, the
+    /// batch those actions belong to, and how many are in each reviewable state.
+    /// <para>
+    /// The counterpart to <see cref="ReseedFileApplied"/>: same seeding loop, opposite outcome. The
+    /// batch id is part of what identifies it, because the batch *is* the set of reviews being
+    /// reported — a later reseed stages a different batch, which is a different thing to review.
+    /// </para>
+    /// </summary>
+    ImportReviewPending
 }
