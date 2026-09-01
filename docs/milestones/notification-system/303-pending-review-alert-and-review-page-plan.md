@@ -484,8 +484,17 @@ notifications page showing no outstanding review.
 `DecisionRows` already are — this project has no bUnit, so a private page method is unprovable, and
 "if we can distinguish it, we can prove it" applies to the sequence as much as to the predicates.
 
-**The first-chance `UnresolvedFieldConflictException` noise is expected, not a fault.** The T1 log shows
-16 of them after seeding completes: `SqliteImportActionService.ComputeAmbiguousFields` calls
-`FieldMergeResolver` and catches its throw to learn which fields conflict, so the page costs one per row
-per render (8 rows × 2). Control flow by exception, predating this issue, visible only under a debugger,
-and it changes no behaviour — recorded rather than chased, per CLAUDE.md's "establish impact first".
+**The first-chance `UnresolvedFieldConflictException` noise is [#370](https://github.com/DutchJaFO/Quotinator/issues/370),
+and the first triage of it here was wrong.** `SqliteImportActionService.ComputeAmbiguousFields` calls
+`FieldMergeResolver` and catches its throw to learn which fields conflict, so `/import-review` throws
+twice per conflicted row per visit — 4 rows produced 8, 8 rows produced 16.
+
+This was first recorded as "expected, not a fault … recorded rather than chased", on the grounds that
+the application still functions. The application does still function; "it changes no behaviour" was
+asserted without measuring, and CLAUDE.md's triage rule is explicit that a warning whose impact you
+cannot determine is not harmless by default. Determining it was the skipped step. The impact is that
+break-on-thrown-exceptions — the normal setting while investigating anything else — stops on every one:
+the same T1 log shows a single file's seeding spanning 54 seconds (19:59:03 → 19:59:57) for that reason.
+
+Still out of scope for #303 (it predates this issue and lives in `Quotinator.Data`), but filed rather
+than dismissed.

@@ -70,6 +70,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#367](https://github.com/DutchJaFO/Quotinator/issues/367) | Notification actions give no feedback while they run | Planning | T1 ⬜ T2 ⬜ | [367-executing-notification-state-plan.md](367-executing-notification-state-plan.md) |
 | [#368](https://github.com/DutchJaFO/Quotinator/issues/368) | New import files are discovered but never imported, and nothing says so | Planning | T1 ⬜ T2 ⬜ | [368-unimported-files-are-discovered-but-never-imported-plan.md](368-unimported-files-are-discovered-but-never-imported-plan.md) |
 | [#369](https://github.com/DutchJaFO/Quotinator/issues/369) | A review row whose batch is gone offers decisions that cannot be carried out | Planning | T1 ⬜ T2 ⬜ | [369-orphaned-review-rows-plan.md](369-orphaned-review-rows-plan.md) |
+| [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | Planning | T1 ⬜ T2 ⬜ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
 
 ---
 
@@ -213,6 +214,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
          this milestone could be trusted, because Api tests asserted before the app finished starting
          (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
+#370 ─── (none) — FieldMergeResolver predates this milestone. Sequenced next to #369 only because both
+         touch /import-review, and doing them together means one T2 pass over that page rather than two.
+         Its own first step is checking what the existing tests assert, since several of them pin the
+         throw this issue removes
 #369 ─── depends on #303 — it corrects that page, and reads the file name from the notification metadata
          #303 defined. Found in the same T1 run as #368 but a different defect: reseed deletes
          Import_Batch and keeps Import_Action, so actions outlive their parent and are still offered as
@@ -270,7 +275,8 @@ step, the other reuses it.
 | 30 | **#360** | Identifier generation through one factory, and a SQLite function migrations call instead of hand-writing one. Last, and deliberately before the end-of-milestone migration consolidation: that pass rewrites this milestone's migrations, so the factory has to exist first or the consolidated result bakes in a sixth copy of the expression it replaces |
 | 31 | **#367** | An executing state for a running notification action, found in #302's T1. Placed after #308: #308 settles per-type layout across both surfaces, and a new status label is a layout decision it would otherwise have to be revisited for. Not before #303 either — #303 adds the review page, a second surface any new status has to render on |
 | 32 | **#369** | Orphaned review rows, found in #303's T1. Straight after #303 rather than at the end: it is a correction to a page that just shipped, and every extra reseed run between now and then adds more undecidable rows to whatever database is being used to verify the issues above it |
-| 33 | **#368** | Import files discovered but never imported, found in #303's T1. Last, because its remedy is a notification with an action and #367 above decides how an action reports that it is running — a non-destructive import is the first action likely to take long enough for that to matter. Its own planning also has to settle whether the remedy is an import path or only a report, which is not a decision to make while #303's page is still being verified |
+| 33 | **#370** | Expected conflicts signalled by throwing. Straight after #369 so one T2 pass covers both `/import-review` changes, and because #369 changes which rows that page renders — settling that first means this issue's "zero throws for N rows" count is measured against the row set the page will actually keep |
+| 34 | **#368** | Import files discovered but never imported, found in #303's T1. Last, because its remedy is a notification with an action and #367 above decides how an action reports that it is running — a non-destructive import is the first action likely to take long enough for that to matter. Its own planning also has to settle whether the remedy is an import path or only a report, which is not a decision to make while #303's page is still being verified |
 
 **Notifications come first from position 11 (developer direction, 2026-08-29).** The safe-start cluster
 (#326, #348, #349) and the backup endpoints grew large enough to crowd out the milestone's own subject:
