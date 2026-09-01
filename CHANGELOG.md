@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-08-30 21:20 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-09-01 09:17 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -18,12 +18,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Notifications now carry a short headline of their own, separate from the message text, so the Notifications page and the startup popup are easier to scan.
 - Notifications no longer disappear on a timer by default. Previously every notification expired after 30 days, including ones about a problem that was still unresolved; now a notification stays until it is dismissed, or until the action it recommends has been carried out.
 - Quotinator now tells you when reloading your quotes would be worthwhile — after a reset leaves the database empty, or when updated content has been downloaded that your stored quotes do not yet reflect. The notification carries a button that does it for you, so this no longer needs a command-line call. Quotinator never reloads on its own: it asks, because replacing the stored content is your decision.
+- Reloading your quotes now confirms what it did, one message per file, listing how many entries of each kind were added or updated — so a reload that went perfectly says so, instead of finishing in silence.
 
 ### Added
 - Backups can now be managed from the API: list what exists with sizes and dates, take one on demand, download one so it survives the container, and remove one to free space. Each answers even when the database itself is in a limited state (issue #349)
 - A what's-new startup notification after an update, covering every release missed since the last version this instance actually ran — one notification per release, plus the in-development section when it has anything flagged; a fresh install sees only the current version (issue #81)
 - Quotinator now keeps a record of which application versions have used the database, and links each notification to the version that added it — the groundwork for showing when a notification first appeared (issue #312)
 - A notification recommending that quotes be reloaded, with a button that carries it out. It appears after a reset has left the database without quotes, and when updated source content has been downloaded that the stored quotes do not reflect. It clears itself once quotes are reloaded or imported by any route, and reappears if the situation arises again (issue #304)
+- A confirmation notification for each quote file that reloads with nothing left for you to review, listing how many entries of each kind it added or updated. Reloading again with nothing changed does not repeat a confirmation you have not dismissed yet (issue #302)
 
 ### Changed
 - Notifications now appear in the language the interface is set to, instead of always in English. A notification keeps the language it was written in, and Quotinator falls back to that original whenever it has no translation for the language you are reading in — so nothing ever appears blank or half-translated. The API can also be asked for a specific language, and reports which one it actually returned (issue #319)

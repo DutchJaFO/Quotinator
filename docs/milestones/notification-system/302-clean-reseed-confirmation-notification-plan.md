@@ -1,6 +1,6 @@
 # #302 — Notification: confirm files that reseed cleanly with no review needed
 
-**Status:** In progress (step 1)
+**Status:** Waiting for release
 **GitHub issue:** #302
 **Tiers required:** T1, T2
 **Depends on:** #278, #304, #312, #319
@@ -306,8 +306,20 @@ is already converted and listed.
 | 18 | ✅ | Title and body exist non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
 | 19 | ✅ | `GET /api/v1/notifications` returns `appVersionId` for a notification that carries one | Unit test | `NotificationEndpointsTests.GetNotifications_ReturnsAppVersionId` |
 | 20 | ✅ | Neither initializer constructor makes a DI-suppliable service dependency optional | Unit test | `RepositoryStructureTests.InitializerConstructors_DoNotMakeAServiceDependencyOptional` |
-| 21 | ❌ | A real reseed against a real database writes one notification per cleanly-applied file, with its breakdown and provenance readable through the API | Automated (T2) | `docs/automated-testing/notifications-and-changelog/11-clean-reseed-confirmation.md` |
+| 21 | ✅ | A real reseed against a real database writes one notification per cleanly-applied file, with its breakdown and provenance readable through the API | Automated (T2) | `docs/automated-testing/notifications-and-changelog/11-clean-reseed-confirmation.md` |
 | 22 | ❌ | The notifications render in the startup modal and on `/notifications` after a live reseed | Live | T1: run a reseed from `/notifications`, confirm one `Success` notification per cleanly-applied file in both surfaces |
+
+**T2 pass, 2026-08-30, all six steps green** — four bundled files confirmed, each with real
+provenance, dedupe holding across a second reseed, and confirmations reappearing after dismissal. Two
+things the run established that no unit test had:
+
+- `quotinator-series-universe.json` reports `Source: added=69` and **no `Quote` line at all**. Under the
+  quote-only counts this issue replaced, that file would have confirmed itself as "0 added, 0 updated" —
+  a silent no-op report for a file that had just added 69 Sources. The strongest evidence for the
+  per-entity decision, and it only shows against real bundled content.
+- The document's own Cleanup step named a `remove` verb the harness does not have (it is `destroy`),
+  and its step 3 required a `Quote` line on every file, which the fourth file does not have. Both were
+  found by running it and are fixed in the document.
 
 **Row 7 is verified at the payload level, not through a live reseed** — recorded rather than left as a
 silent substitution. The row was planned as `Reseed_WithDifferentCounts_WritesASecondNotification`, but

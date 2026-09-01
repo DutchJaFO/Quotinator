@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 304, 309, 312, 313, 319, 320, 323, 325, 326, 349],
+    "issues": [81, 302, 304, 309, 312, 313, 319, 320, 323, 325, 326, 349],
     "highlights": [
       "Je kunt back-ups nu beheren zonder de bestanden op de server aan te raken: zien welke back-ups er zijn en hoeveel ruimte er over is, er zelf een maken wanneer je wilt, er een downloaden om veilig te bewaren, en oude verwijderen om ruimte vrij te maken. Als er geen back-up gemaakt kan worden, meldt Quotinator nu welk obstakel in de weg staat en wat je eraan kunt doen, in plaats van zonder uitleg te falen.",
       "Quotinator start nu ook wanneer er niet naar de datamap geschreven kan worden — een alleen-lezen volume, of verkeerde rechten. In plaats van af te sluiten start het in een beperkte toestand, meldt duidelijk wat er mis is en hoe je het oplost, en houdt de pagina's en de API-documentatie bereikbaar zodat je er iets mee kunt.",
@@ -18,7 +18,8 @@
       "Na een update vertelt Quotinator nu wat er is veranderd: een opstartmelding toont de hoogtepunten van elke versie die je hebt overgeslagen, niet alleen van de nieuwste. Een nieuwe installatie ziet alleen de hoogtepunten van de huidige versie, en er verschijnt niets wanneer een versie niets noemenswaardigs bevat.",
       "Meldingen hebben nu een eigen korte kop, los van de berichttekst, waardoor de Meldingen-pagina en de opstartmelding makkelijker te overzien zijn.",
       "Meldingen verdwijnen niet langer standaard na verloop van tijd. Voorheen verliep elke melding na 30 dagen, ook meldingen over een probleem dat nog niet was opgelost; nu blijft een melding staan totdat je hem sluit, of totdat de aanbevolen actie is uitgevoerd.",
-      "Quotinator laat nu weten wanneer het opnieuw laden van je citaten zinvol is — nadat een reset de database leeg heeft achtergelaten, of wanneer er bijgewerkte inhoud is gedownload die je opgeslagen citaten nog niet weerspiegelen. De melding bevat een knop die het voor je uitvoert, dus hiervoor is geen opdracht op de commandoregel meer nodig. Quotinator laadt nooit uit zichzelf opnieuw: het vraagt het, omdat het vervangen van de opgeslagen inhoud jouw beslissing is."
+      "Quotinator laat nu weten wanneer het opnieuw laden van je citaten zinvol is — nadat een reset de database leeg heeft achtergelaten, of wanneer er bijgewerkte inhoud is gedownload die je opgeslagen citaten nog niet weerspiegelen. De melding bevat een knop die het voor je uitvoert, dus hiervoor is geen opdracht op de commandoregel meer nodig. Quotinator laadt nooit uit zichzelf opnieuw: het vraagt het, omdat het vervangen van de opgeslagen inhoud jouw beslissing is.",
+      "Het opnieuw laden van je citaten bevestigt nu wat er is gebeurd, met één bericht per bestand en per soort hoeveel vermeldingen zijn toegevoegd of bijgewerkt — zodat een foutloze herlaadbeurt dat ook meldt, in plaats van in stilte te eindigen."
     ],
     "audienceHighlights": {
       "notification": [
@@ -30,7 +31,8 @@
       "Back-ups zijn nu via de API te beheren: bekijk welke er zijn met grootte en datum, maak er direct een, download er een zodat die de container overleeft, en verwijder er een om ruimte vrij te maken. Elk hiervan blijft werken, ook wanneer de database zelf in een beperkte toestand verkeert (issue #349)",
       "Een what's-new-opstartmelding na een update, met elke versie die is gemist sinds de laatste versie die deze installatie daadwerkelijk heeft gedraaid — één melding per versie, plus het nog-niet-uitgebrachte gedeelte wanneer daar iets voor is aangemerkt; een nieuwe installatie ziet alleen de huidige versie (issue #81)",
       "Quotinator houdt nu bij welke applicatieversies de database hebben gebruikt en koppelt elke melding aan de versie die hem heeft toegevoegd — de basis om later te tonen wanneer een melding voor het eerst verscheen (issue #312)",
-      "Een melding die aanbeveelt de citaten opnieuw te laden, met een knop die dat uitvoert. Hij verschijnt nadat een reset de database zonder citaten heeft achtergelaten, en wanneer er bijgewerkte broninhoud is gedownload die de opgeslagen citaten niet weerspiegelen. Hij verdwijnt zodra de citaten via welke route dan ook opnieuw zijn geladen of geïmporteerd, en verschijnt opnieuw als de situatie zich weer voordoet (issue #304)"
+      "Een melding die aanbeveelt de citaten opnieuw te laden, met een knop die dat uitvoert. Hij verschijnt nadat een reset de database zonder citaten heeft achtergelaten, en wanneer er bijgewerkte broninhoud is gedownload die de opgeslagen citaten niet weerspiegelen. Hij verdwijnt zodra de citaten via welke route dan ook opnieuw zijn geladen of geïmporteerd, en verschijnt opnieuw als de situatie zich weer voordoet (issue #304)",
+      "Een bevestigingsmelding voor elk citatenbestand dat opnieuw wordt geladen zonder dat er iets te beoordelen overblijft, met per soort hoeveel vermeldingen zijn toegevoegd of bijgewerkt. Opnieuw laden zonder wijzigingen herhaalt een bevestiging die je nog niet hebt weggeklikt niet (issue #302)"
     ],
     "changed": [
       "Meldingen verschijnen nu in de taal waarop de interface staat, in plaats van altijd in het Engels. Een melding behoudt de taal waarin hij is geschreven, en Quotinator valt terug op dat origineel zodra er geen vertaling is voor de taal die je leest — zo blijft er nooit iets leeg of half vertaald. De API kan ook om een specifieke taal vragen en meldt welke taal daadwerkelijk is teruggegeven (issue #319)",
