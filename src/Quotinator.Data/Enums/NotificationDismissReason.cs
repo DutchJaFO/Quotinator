@@ -26,5 +26,23 @@ public enum NotificationDismissReason
     /// carried out the same work (a reseed through the admin endpoint, an import that populated content).
     /// The user is not being told they declined something they in fact did.
     /// </summary>
-    Resolved
+    Resolved,
+
+    /// <summary>
+    /// The condition the notification described no longer exists, so it could neither be acted on nor
+    /// be said to have been carried out (#303) — a pending-review alert whose import batch was removed
+    /// by a later reseed is the first case.
+    /// <para>
+    /// A third member rather than reusing either of the two above, because an inactive notification has
+    /// to explain itself without anyone reading the audit trail to work out what happened.
+    /// <see cref="Resolved"/> would claim the review was carried out; <see cref="Dismissed"/> would
+    /// claim the user set it aside. Both are untrue here, and telling the reader something untrue is
+    /// the exact defect this enum was introduced to fix.
+    /// </para>
+    /// <para>
+    /// Named for the state, not the cause: <c>Superseded</c> would imply something replaced it, which
+    /// holds when the file is reseeded but not when it is dropped from the manifest entirely.
+    /// </para>
+    /// </summary>
+    Obsolete
 }

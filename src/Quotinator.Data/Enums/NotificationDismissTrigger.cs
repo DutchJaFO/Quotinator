@@ -26,5 +26,17 @@ public enum NotificationDismissTrigger
     /// silently suppresses every later occurrence.
     /// </para>
     /// </summary>
-    Reseed
+    Reseed,
+
+    /// <summary>
+    /// Superseded by the staged import actions it reported being resolved — decided and applied, or
+    /// discarded (#303).
+    /// <para>
+    /// Unlike <see cref="Reseed"/>, this trigger classifies *what kind* of resolution supersedes the
+    /// notification but cannot on its own select which one to dismiss: several files can each leave a
+    /// batch awaiting review, so resolving one must not clear the others. The selector is the batch id
+    /// carried in the notification's own payload.
+    /// </para>
+    /// </summary>
+    ImportReviewResolved
 }

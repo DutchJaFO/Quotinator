@@ -47,7 +47,7 @@ public partial class NotificationTable
     /// <param name="utc">The stored UTC value, or <see langword="null"/>.</param>
     internal static string Local(DateTime? utc) => LocalTimestamp.Render(utc);
 
-    internal enum NotificationDisplayStatus { Active, Expired, Dismissed, Resolved }
+    internal enum NotificationDisplayStatus { Active, Expired, Dismissed, Resolved, Obsolete }
 
     /// <summary>
     /// Classifies a notification's display status: <see cref="NotificationDisplayStatus.Dismissed"/>
@@ -64,9 +64,15 @@ public partial class NotificationTable
             // #304: a notification whose action was actually carried out must not read as one the user
             // declined. A row dismissed before the reason column existed has no recorded reason, and
             // keeps the original label rather than being guessed into one bucket or the other.
-            return notification.DismissReason.Parsed == NotificationDismissReason.Resolved
-                ? NotificationDisplayStatus.Resolved
-                : NotificationDisplayStatus.Dismissed;
+            // #303: a notification whose subject no longer exists is neither carried out nor declined,
+            // and reporting it as either would misstate what happened — the same defect #304's reason
+            // column exists to prevent, one case further on.
+            return notification.DismissReason.Parsed switch
+            {
+                NotificationDismissReason.Resolved => NotificationDisplayStatus.Resolved,
+                NotificationDismissReason.Obsolete => NotificationDisplayStatus.Obsolete,
+                _                                  => NotificationDisplayStatus.Dismissed,
+            };
         }
         if (notification.ExpiresAt.Parsed is DateTime expiresAt && expiresAt <= now)
             return NotificationDisplayStatus.Expired;

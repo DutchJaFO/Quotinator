@@ -100,6 +100,22 @@ public class NotificationTableTests
             NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow));
     }
 
+    /// <summary>
+    /// #303: an alert whose import batch was removed was neither carried out nor declined. Reporting
+    /// it as either misstates what happened, and the page is where that has to be readable without
+    /// anyone consulting the audit trail.
+    /// </summary>
+    [TestMethod]
+    public void GetDisplayStatus_ObsoleteReason_ReportsObsolete()
+    {
+        NotificationEntity notification = Build(isDismissed: true, expiresAt: null);
+        notification.DismissReason = new SafeValue<NotificationDismissReason?>(
+            NotificationDismissReason.Obsolete.ToString(), NotificationDismissReason.Obsolete);
+
+        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Obsolete,
+            NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow));
+    }
+
     /// <summary>The user's own dismiss still reads as dismissed — the distinction only works if both sides hold.</summary>
     [TestMethod]
     public void GetDisplayStatus_DismissedByUser_IsDismissed()
