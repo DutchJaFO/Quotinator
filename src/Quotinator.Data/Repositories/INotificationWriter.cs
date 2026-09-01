@@ -57,4 +57,20 @@ public interface INotificationWriter
     /// <c>0</c> when nothing matched (a deliberate no-op, not an error).
     /// </summary>
     Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger);
+
+    /// <summary>
+    /// Marks dismissed every active notification carrying <paramref name="trigger"/> whose metadata
+    /// payload names <paramref name="batchId"/> (#303). Returns the number of rows dismissed; <c>0</c>
+    /// when nothing matched, which is a deliberate no-op rather than an error.
+    /// </summary>
+    /// <remarks>
+    /// The narrow sibling of <see cref="DismissByTriggerAsync"/>, and not a convenience: several files
+    /// can each leave a batch awaiting review at once, so the trigger alone selects too much —
+    /// resolving one batch would dismiss every other file's alert as well. The trigger says *what kind*
+    /// of resolution applies; the batch id says *which* notification it resolved.
+    /// </remarks>
+    /// <param name="trigger">The trigger the notification must carry.</param>
+    /// <param name="batchId">The import batch named in the notification's own payload.</param>
+    /// <param name="reason">Why it stopped being active — resolved by the review, or obsolete because the batch is gone.</param>
+    Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason);
 }

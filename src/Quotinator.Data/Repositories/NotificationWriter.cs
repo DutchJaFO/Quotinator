@@ -132,4 +132,26 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
         return await conn.ExecuteAsync(Sql.Notifications.UpdateDismissByTrigger,
             new { trigger = trigger.ToString(), dismissedAt = now.Raw, dismissReason = reason, dateModified = now.Raw });
     }
+
+    /// <inheritdoc/>
+    public async Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason)
+    {
+        using IDbConnection conn = Factory.CreateConnection();
+        conn.Open();
+
+        SafeValue<DateTime?> now = SafeDateValue.Now;
+
+        // The reason is the caller's to state, unlike DismissByTriggerAsync above where every caller
+        // had carried the work out. Here a batch can leave the review behind two ways — it was decided,
+        // or it was removed — and only the caller knows which.
+        return await conn.ExecuteAsync(Sql.Notifications.UpdateDismissByTriggerAndBatch,
+            new
+            {
+                trigger       = trigger.ToString(),
+                batchId,
+                dismissedAt   = now.Raw,
+                dismissReason = reason.ToString(),
+                dateModified  = now.Raw,
+            });
+    }
 }

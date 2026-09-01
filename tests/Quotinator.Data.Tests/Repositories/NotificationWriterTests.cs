@@ -133,6 +133,59 @@ public class NotificationWriterTests
         Assert.AreEqual(NotificationDismissReason.Resolved, persisted.DismissReason.Parsed);
     }
 
+    /// <summary>
+    /// #303: a batch-scoped dismissal reaches only the notification naming that batch, and records the
+    /// caller's own reason. Both halves matter — a trigger-wide dismissal would clear every file's alert,
+    /// and a hardcoded `Resolved` would claim a removed batch had been reviewed.
+    /// </summary>
+    [TestMethod]
+    public async Task DismissedAsObsolete_ReadsBackAsObsolete()
+    {
+        string targetBatch = Guid.NewGuid().ToString("D");
+        string otherBatch  = Guid.NewGuid().ToString("D");
+
+        NotificationEntity target = await WriteReviewAlertAsync(targetBatch);
+        NotificationEntity other  = await WriteReviewAlertAsync(otherBatch);
+
+        int dismissed = await _writer.DismissByTriggerAndBatchAsync(
+            NotificationDismissTrigger.ImportReviewResolved, targetBatch, NotificationDismissReason.Obsolete);
+
+        Assert.AreEqual(1, dismissed, "Exactly the one alert naming that batch — not both, and not none.");
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+
+        NotificationEntity persistedTarget = conn.QuerySingle<NotificationEntity>(
+            "SELECT * FROM System_Notification WHERE Id = @id;", new { id = target.Id.ToString("D") });
+        NotificationEntity persistedOther = conn.QuerySingle<NotificationEntity>(
+            "SELECT * FROM System_Notification WHERE Id = @id;", new { id = other.Id.ToString("D") });
+
+        Assert.IsTrue(persistedTarget.IsDismissed);
+        Assert.AreEqual(NotificationDismissReason.Obsolete, persistedTarget.DismissReason.Parsed,
+            "An inactive notification has to say what happened to it without anyone reading the audit trail.");
+
+        Assert.IsFalse(persistedOther.IsDismissed,
+            "The other batch is still genuinely awaiting review — scoping is the point of this method.");
+    }
+
+    private async Task<NotificationEntity> WriteReviewAlertAsync(string batchId)
+    {
+        ImportReviewPendingMetadataDto metadata = new()
+        {
+            FileName     = "curated.json",
+            Origin       = FileResourceOrigin.System,
+            BatchId      = batchId,
+            Counts       = [new ImportReviewCountDto { Status = "Pending", Count = 1 }],
+            ReleaseState = NotificationReleaseState.NotApplicable,
+        };
+
+        return await _writer.WriteAsync(
+            NotificationType.ActionRequired, "review me", appVersionId: null,
+            dismissTrigger: NotificationDismissTrigger.ImportReviewResolved,
+            metadata: NotificationMetadataKinds.Serialize(metadata),
+            metadataKind: NotificationMetadataKind.ImportReviewPending);
+    }
+
     /// <summary>The CHECK rejects a reason outside the enum, per ADR 008.</summary>
     [TestMethod]
     public async Task DismissReason_UnknownValue_IsRejectedByTheCheckConstraint()

@@ -14,6 +14,9 @@ internal sealed class FakeNotificationWriter : INotificationWriter
     /// <summary>Records the trigger every <see cref="DismissByTriggerAsync"/> call was made with — lets a wiring test confirm the caller passed the right value without depending on database side effects.</summary>
     public List<NotificationDismissTrigger> DismissByTriggerCalls { get; } = [];
 
+    /// <summary>Records every <see cref="DismissByTriggerAndBatchAsync"/> call, so a test can prove the caller scoped the dismissal to one batch rather than clearing the trigger wholesale (#303).</summary>
+    public List<(NotificationDismissTrigger Trigger, string BatchId, NotificationDismissReason Reason)> DismissByTriggerAndBatchCalls { get; } = [];
+
     /// <summary>Records every message passed to <see cref="WriteAsync"/> — lets a test confirm whether a write actually happened without depending on database side effects.</summary>
     public List<string> WrittenMessages { get; } = [];
 
@@ -73,6 +76,13 @@ internal sealed class FakeNotificationWriter : INotificationWriter
         return Task.FromResult<NotificationEntity?>(entity);
     }
 
+    public Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason)
+    {
+        DismissByTriggerAndBatchCalls.Add((trigger, batchId, reason));
+        return Task.FromResult(0);
+    }
+
+    /// <inheritdoc/>
     public Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger)
     {
         DismissByTriggerCalls.Add(trigger);

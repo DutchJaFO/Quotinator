@@ -401,6 +401,12 @@ public sealed class SqliteImportActionService(
             // actions pending closed no gap.
             await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
 
+            // #303: this batch's own review is over, so the alert reporting it is resolved. Scoped to
+            // this batch rather than the trigger alone — several files can each be awaiting review at
+            // once, and clearing the trigger wholesale would dismiss alerts for batches nobody touched.
+            await notificationWriter.DismissByTriggerAndBatchAsync(
+                NotificationDismissTrigger.ImportReviewResolved, batchId, NotificationDismissReason.Resolved);
+
             // #249: the caller opted in to purging this batch's conflict-resolution data the moment
             // it's no longer needed — mirrors QuotinatorDatabaseInitializer's seeding-path auto-purge,
             // including the Audit_Entry trace, but decided per-call here rather than via config.
@@ -551,7 +557,15 @@ public sealed class SqliteImportActionService(
 
     /// <inheritdoc/>
     public async Task DiscardBatchAsync(string batchId, CancellationToken cancellationToken = default)
-        => await _coordinator.DiscardBatchAsync(batchId, cancellationToken);
+    {
+        await _coordinator.DiscardBatchAsync(batchId, cancellationToken);
+
+        // #303: discarding resolves the review as surely as deciding it does — the operator dealt with
+        // the batch, choosing to keep none of it. Leaving the alert active would ask them to review
+        // actions they have already thrown away.
+        await notificationWriter.DismissByTriggerAndBatchAsync(
+            NotificationDismissTrigger.ImportReviewResolved, batchId, NotificationDismissReason.Resolved);
+    }
 
     /// <inheritdoc/>
     public async Task ReverseBatchAsync(string batchId, bool preview = false, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, CancellationToken cancellationToken = default)

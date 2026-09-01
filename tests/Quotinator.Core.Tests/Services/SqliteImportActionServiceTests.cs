@@ -64,6 +64,15 @@ public class SqliteImportActionServiceTests
             DismissByTriggerCalls.Add(trigger);
             return Task.FromResult(0);
         }
+
+        /// <summary>Records every batch-scoped dismissal, which is what #303's per-batch alerts depend on.</summary>
+        public List<(NotificationDismissTrigger Trigger, string BatchId, NotificationDismissReason Reason)> DismissByTriggerAndBatchCalls { get; } = [];
+
+        public Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason)
+        {
+            DismissByTriggerAndBatchCalls.Add((trigger, batchId, reason));
+            return Task.FromResult(0);
+        }
     }
 
     [TestInitialize]
@@ -299,6 +308,69 @@ public class SqliteImportActionServiceTests
         Assert.IsNotNull(pending, "This batch is staged for review, so it must report pending actions rather than applying.");
         Assert.IsEmpty(_notificationWriter.DismissByTriggerCalls,
             "Nothing was applied, so nothing resolved the recommendation.");
+    }
+
+    /// <summary>
+    /// #303: applying the batch ends the review it was reported for, so that alert is resolved — and
+    /// scoped to this batch, because the trigger alone would clear every file's alert at once.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyBatch_WhenFullyResolved_DismissesItsOwnReviewAlert()
+    {
+        Guid batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote("61111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
+
+        await _service.ApplyBatchAsync(batchId.ToString("D"), cancellationToken: TestContext.CancellationToken);
+
+        Assert.Contains(
+            (NotificationDismissTrigger.ImportReviewResolved, batchId.ToString("D"), NotificationDismissReason.Resolved),
+            _notificationWriter.DismissByTriggerAndBatchCalls,
+            "The review this batch was reported for is over, and the alert has to say it was resolved rather than dismissed.");
+    }
+
+    /// <summary>
+    /// The control that makes the scoping real: another batch's alert must survive. Without it, a
+    /// trigger-wide dismissal would satisfy the test above while silently clearing unrelated alerts.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyBatch_DoesNotDismissAnotherBatchesReviewAlert()
+    {
+        Guid applied = Guid.NewGuid();
+        Guid untouched = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote("71111111-1111-4111-8111-111111111111")], applied, DuplicateResolutionPolicy.NewestWins);
+
+        await _service.ApplyBatchAsync(applied.ToString("D"), cancellationToken: TestContext.CancellationToken);
+
+        // Positive control first: without it, "the untouched batch was not dismissed" is trivially true
+        // of a build that dismisses nothing at all, and the test would pass against the very defect it
+        // exists to catch.
+        Assert.IsNotEmpty(
+            _notificationWriter.DismissByTriggerAndBatchCalls.Where(c =>
+                string.Equals(c.BatchId, applied.ToString("D"), StringComparison.OrdinalIgnoreCase)),
+            "The applied batch's own alert must have been dismissed, or this test proves nothing about scoping.");
+
+        Assert.IsEmpty(
+            _notificationWriter.DismissByTriggerAndBatchCalls.Where(c =>
+                string.Equals(c.BatchId, untouched.ToString("D"), StringComparison.OrdinalIgnoreCase)),
+            "Only the applied batch's alert may be dismissed — another batch is still genuinely awaiting review.");
+    }
+
+    /// <summary>
+    /// #303: discarding resolves the review too. The operator dealt with the batch by keeping none of
+    /// it, and leaving the alert active would ask them to review actions already thrown away.
+    /// </summary>
+    [TestMethod]
+    public async Task DiscardBatch_DismissesItsOwnReviewAlert()
+    {
+        Guid batchId = Guid.NewGuid();
+        await PlanAndStageAsync([BuildQuote("81111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
+
+        await _service.DiscardBatchAsync(batchId.ToString("D"), TestContext.CancellationToken);
+
+        Assert.Contains(
+            (NotificationDismissTrigger.ImportReviewResolved, batchId.ToString("D"), NotificationDismissReason.Resolved),
+            _notificationWriter.DismissByTriggerAndBatchCalls,
+            "A discarded batch has no review left to perform.");
     }
 
     [TestMethod]

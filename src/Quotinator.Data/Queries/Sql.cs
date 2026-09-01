@@ -644,6 +644,27 @@ internal static class Sql
         internal static readonly string UpdateDismissByTrigger =
             $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, DateModified = @dateModified " +
             $"WHERE IsDismissed = 0 AND IsDeleted = 0 AND {TextClauses.Equals("DismissTriggerKey", "trigger")};";
+
+        /// <summary>
+        /// Dismisses only those active notifications that carry <c>DismissTriggerKey</c> <b>and</b> name
+        /// a specific batch in their own metadata payload (#303).
+        /// <para>
+        /// The trigger alone cannot select here, which is the whole reason this query exists:
+        /// <see cref="UpdateDismissByTrigger"/> clears every row carrying the trigger, so with two files
+        /// each leaving a batch awaiting review, resolving one batch would wipe the other's alert too.
+        /// The batch id in the payload is the selector; the trigger stays the classifier.
+        /// </para>
+        /// <para>
+        /// <c>json_extract</c> rather than a <c>LIKE</c> over the raw column: the payload is JSON this
+        /// project writes and reads through typed DTOs, and a substring match would also hit a batch id
+        /// that merely appeared inside some other field. The comparison is case-insensitive per this
+        /// project's id-comparison convention.
+        /// </para>
+        /// </summary>
+        internal static readonly string UpdateDismissByTriggerAndBatch =
+            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, DateModified = @dateModified " +
+            $"WHERE IsDismissed = 0 AND IsDeleted = 0 AND {TextClauses.Equals("DismissTriggerKey", "trigger")} " +
+            $"AND {IdClauses.Equals("json_extract(Metadata, '$.batchId')", "batchId")};";
     }
 
     /// <summary>
