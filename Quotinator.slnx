@@ -316,6 +316,7 @@
     <File Path="docs/milestones/notification-system/360-guid-factory-plan.md" />
     <File Path="docs/milestones/notification-system/367-executing-notification-state-plan.md" />
     <File Path="docs/milestones/notification-system/368-unimported-files-are-discovered-but-never-imported-plan.md" />
+    <File Path="docs/milestones/notification-system/369-orphaned-review-rows-plan.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/">
     <File Path="docs/automated-testing/README.md" />

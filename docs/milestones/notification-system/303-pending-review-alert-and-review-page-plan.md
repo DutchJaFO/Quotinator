@@ -404,3 +404,46 @@ underlying fault is fixed.
 **The four seeding variants (rows 20) are not optional.** #303 writes from the same seeding loop as
 #302, where that matrix found a defect no single-variant test reached — no files, bundled only, user
 imports only, both.
+
+**Row 40's requirement is wrong, and [#369](https://github.com/DutchJaFO/Quotinator/issues/369)
+replaces it** (developer, 2026-09-01). It asserts that an action whose batch has gone "still shows
+something traceable", and `FileNameFor` satisfies it by falling back to the batch id. The T1 run showed
+why that is the wrong answer: after two reseeds the page listed eight rows, four of them actions whose
+`Import_Batch` row had been truncated, each rendering a GUID and each still offering **Keep existing**
+and **Take incoming** — decisions that cannot be carried out, since the batch and the data they would
+apply against are both gone. Confirmed by query:
+
+```
+055c95c5-…  1 action  ORPHAN         5916365c-…  1 action  conflicting.json
+46b6aab9-…  1 action  ORPHAN         a0b1209c-…  1 action  conflicting-1.json
+bcd9ba25-…  1 action  ORPHAN         aaed69d1-…  1 action  conflicting-2.json
+c5449117-…  1 action  ORPHAN         e0ae51fd-…  1 action  conflicting - Copy.json
+```
+
+Reseed deletes `Import_Batch` (`TruncateDataAsync`) and keeps `Import_Action`, so actions outlive their
+parent. This predates #303 — `Sql.SystemImportActions` has no join to `Import_Batch`, so
+`GET /import/actions?status=Pending` has always returned them too. The page made it legible; it did not
+cause it. Row 40 stays ✅ because the fallback does behave as written, and the *requirement* is what
+#369 corrects: a row whose batch is gone offers only dismiss, and takes its file name from the
+notification metadata (`ImportReviewPendingMetadataDto.FileName`, which survives the reseed) rather
+than from a batch row that does not exist.
+
+**Step 7's dismissal is confirmed correct by the same run.** The contrast is what identified the defect
+above — the alerts knew the batches had gone while the actions did not:
+
+```
+conflicting - Copy.json  dismissed  Obsolete  055c95c5     conflicting - Copy.json  active  —  e0ae51fd
+conflicting-1.json       dismissed  Obsolete  46b6aab9     conflicting-1.json       active  —  a0b1209c
+conflicting-2.json       dismissed  Obsolete  bcd9ba25     conflicting-2.json       active  —  aaed69d1
+conflicting.json         dismissed  Obsolete  c5449117     conflicting.json         active  —  5916365c
+```
+
+Exactly the four superseded alerts retired with reason `Obsolete`, the four current ones untouched.
+**Row 37 stays ❌**: it requires `Obsolete` *and* `Resolved` to be distinguishable in one history, and
+only the `Obsolete` half is proven — the `Resolved` half needs an action actually decided.
+
+**The first-chance `UnresolvedFieldConflictException` noise is expected, not a fault.** The T1 log shows
+16 of them after seeding completes: `SqliteImportActionService.ComputeAmbiguousFields` calls
+`FieldMergeResolver` and catches its throw to learn which fields conflict, so the page costs one per row
+per render (8 rows × 2). Control flow by exception, predating this issue, visible only under a debugger,
+and it changes no behaviour — recorded rather than chased, per CLAUDE.md's "establish impact first".
