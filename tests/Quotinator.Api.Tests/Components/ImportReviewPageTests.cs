@@ -1,27 +1,35 @@
 using Quotinator.Api.Components.Pages;
-using Quotinator.Data.Entities;
+using Quotinator.Core.Models;
 using Quotinator.Data.Enums;
-using Quotinator.Data.Models;
+using Quotinator.Data.Import;
 
 namespace Quotinator.Api.Tests.Components;
 
 /// <summary>
-/// Exercises <see cref="ImportReview"/>'s selection rule (#303) — which staged actions belong on the
-/// review page. This project has no Blazor component-rendering test infrastructure (no bUnit), so the
-/// pure selection method is unit-tested directly rather than via a rendered component, matching
-/// <see cref="NotificationTableTests"/>'s own approach.
+/// Exercises <see cref="ImportReview"/>'s selection and decision rules (#303) — which staged actions
+/// belong on the review page, and what a whole-action decision actually decides. This project has no
+/// Blazor component-rendering test infrastructure (no bUnit), so these pure methods are unit-tested
+/// directly rather than via a rendered component, matching <see cref="NotificationTableTests"/>.
 /// </summary>
 [TestClass]
 public class ImportReviewPageTests
 {
-    private static ImportActionEntity Action(ImportActionStatus status, string batchId, string entityType = "Quote") => new()
-    {
-        BatchId    = batchId,
-        EntityType = entityType,
-        EntityId   = Guid.NewGuid().ToString("D"),
-        ActionType = new SafeValue<ImportActionKind?>(nameof(ImportActionKind.Modify), ImportActionKind.Modify),
-        Status     = new SafeValue<ImportActionStatus?>(status.ToString(), status),
-    };
+    private static ImportActionSummaryResponse Summary(
+        ImportActionStatus status,
+        string batchId,
+        string entityType = "Quote",
+        params string[] ambiguousFields) => new()
+        {
+            Id              = Guid.NewGuid(),
+            BatchId         = batchId,
+            ActionType      = nameof(ImportActionKind.Modify),
+            EntityType      = entityType,
+            EntityId        = Guid.NewGuid().ToString("D"),
+            Status          = status.ToString(),
+            DetectedAt      = DateTime.UtcNow,
+            IncomingFields  = new Dictionary<string, object?>(),
+            AmbiguousFields = ambiguousFields,
+        };
 
     /// <summary>
     /// Everything a human can still act on, from every batch — the page is not scoped to one
@@ -33,14 +41,14 @@ public class ImportReviewPageTests
         string batchA = Guid.NewGuid().ToString("D");
         string batchB = Guid.NewGuid().ToString("D");
 
-        List<ImportActionEntity> all =
+        List<ImportActionSummaryResponse> all =
         [
-            Action(ImportActionStatus.Pending, batchA),
-            Action(ImportActionStatus.Blocked, batchA),
-            Action(ImportActionStatus.Stale,   batchB),
+            Summary(ImportActionStatus.Pending, batchA),
+            Summary(ImportActionStatus.Blocked, batchA),
+            Summary(ImportActionStatus.Stale,   batchB),
         ];
 
-        List<ImportActionEntity> awaiting = [.. ImportReview.AwaitingReview(all)];
+        List<ImportActionSummaryResponse> awaiting = [.. ImportReview.AwaitingReview(all)];
 
         Assert.HasCount(3, awaiting, "Pending, Blocked and Stale are all awaiting a human decision.");
         Assert.HasCount(2, awaiting.Select(a => a.BatchId).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
@@ -57,18 +65,18 @@ public class ImportReviewPageTests
     {
         string batchId = Guid.NewGuid().ToString("D");
 
-        List<ImportActionEntity> all =
+        List<ImportActionSummaryResponse> all =
         [
-            Action(ImportActionStatus.Pending,   batchId),
-            Action(ImportActionStatus.Decided,   batchId),
-            Action(ImportActionStatus.Applied,   batchId),
-            Action(ImportActionStatus.Discarded, batchId),
+            Summary(ImportActionStatus.Pending,   batchId),
+            Summary(ImportActionStatus.Decided,   batchId),
+            Summary(ImportActionStatus.Applied,   batchId),
+            Summary(ImportActionStatus.Discarded, batchId),
         ];
 
-        List<ImportActionEntity> awaiting = [.. ImportReview.AwaitingReview(all)];
+        List<ImportActionSummaryResponse> awaiting = [.. ImportReview.AwaitingReview(all)];
 
         Assert.HasCount(1, awaiting, "Only the Pending action still needs a decision.");
-        Assert.AreEqual(ImportActionStatus.Pending, awaiting[0].Status.Parsed);
+        Assert.AreEqual(nameof(ImportActionStatus.Pending), awaiting[0].Status);
     }
 
     /// <summary>
@@ -78,15 +86,68 @@ public class ImportReviewPageTests
     [TestMethod]
     public void UnparseableStatus_IsNotTreatedAsAwaitingReview()
     {
-        ImportActionEntity unknown = new()
+        ImportActionSummaryResponse unknown = Summary(ImportActionStatus.Pending, Guid.NewGuid().ToString("D"));
+        ImportActionSummaryResponse broken = new()
         {
-            BatchId    = Guid.NewGuid().ToString("D"),
-            EntityType = "Quote",
-            EntityId   = Guid.NewGuid().ToString("D"),
-            ActionType = new SafeValue<ImportActionKind?>(nameof(ImportActionKind.Modify), ImportActionKind.Modify),
-            Status     = new SafeValue<ImportActionStatus?>("NotARealStatus", null),
+            Id             = unknown.Id,
+            BatchId        = unknown.BatchId,
+            ActionType     = unknown.ActionType,
+            EntityType     = unknown.EntityType,
+            EntityId       = unknown.EntityId,
+            Status         = "NotARealStatus",
+            DetectedAt     = unknown.DetectedAt,
+            IncomingFields = unknown.IncomingFields,
         };
 
-        Assert.IsEmpty(ImportReview.AwaitingReview([unknown]));
+        Assert.IsEmpty(ImportReview.AwaitingReview([broken]));
+    }
+
+    /// <summary>
+    /// The whole-action decision resolves exactly the conflicted fields, and nothing else — the
+    /// degenerate case of git's own <c>--ours</c>/<c>--theirs</c>, which resolve the conflicted hunks
+    /// and leave the rest of the merge alone.
+    /// <para>
+    /// Deciding every decidable field instead would silently overwrite fields nobody was asked about,
+    /// including nulling one the incoming file simply does not carry.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void Decision_CoversOnlyTheAmbiguousFields()
+    {
+        ImportActionSummaryResponse conflicted = Summary(
+            ImportActionStatus.Pending, Guid.NewGuid().ToString("D"), "Quote", "quoteText");
+
+        List<ImportActionFieldRowDto> rows = [.. ImportReview.DecisionRows(conflicted, FieldResolutionChoice.Keep)];
+
+        Assert.HasCount(1, rows, "One conflicted field is one decision — the other decidable fields were never in question.");
+        Assert.AreEqual("quoteText", rows[0].Field);
+        Assert.AreEqual(FieldResolutionChoice.Keep, rows[0].Decision);
+        Assert.AreEqual(conflicted.Id, rows[0].ActionId);
+    }
+
+    /// <summary>Taking the incoming side is the same shape with the opposite choice — git's <c>--theirs</c>.</summary>
+    [TestMethod]
+    public void Decision_TakingIncoming_SetsTheOppositeChoice()
+    {
+        ImportActionSummaryResponse conflicted = Summary(
+            ImportActionStatus.Pending, Guid.NewGuid().ToString("D"), "Quote", "quoteText", "source");
+
+        List<ImportActionFieldRowDto> rows = [.. ImportReview.DecisionRows(conflicted, FieldResolutionChoice.Replace)];
+
+        Assert.HasCount(2, rows);
+        Assert.IsTrue(rows.All(r => r.Decision == FieldResolutionChoice.Replace));
+    }
+
+    /// <summary>
+    /// A Blocked action has no ambiguous fields — it is held because it would touch a protected field,
+    /// not because two values disagree. It therefore has nothing for a whole-action decision to resolve,
+    /// and must not produce an empty decision that silently reports success.
+    /// </summary>
+    [TestMethod]
+    public void Decision_ActionWithNoAmbiguousFields_ProducesNoRows()
+    {
+        ImportActionSummaryResponse blocked = Summary(ImportActionStatus.Blocked, Guid.NewGuid().ToString("D"));
+
+        Assert.IsEmpty(ImportReview.DecisionRows(blocked, FieldResolutionChoice.Keep));
     }
 }

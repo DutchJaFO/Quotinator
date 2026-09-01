@@ -1,5 +1,6 @@
 @page "/import-review"
 @rendermode InteractiveServer
+@using Quotinator.Data.Enums
 
 <PageTitle>@Text.ImportReviewHeading — Quotinator</PageTitle>
 
@@ -19,16 +20,41 @@ else
                 <th>@Text.ImportReviewEntityColumn</th>
                 <th>@Text.ImportReviewActionColumn</th>
                 <th>@Text.ImportReviewBatchColumn</th>
+                <th>@Text.ImportReviewConflictsColumn</th>
+                <th>@Text.ImportReviewDecideColumn</th>
             </tr>
         </thead>
         <tbody>
             @foreach (var action in Actions)
             {
                 <tr>
-                    <td><span class="badge bg-warning text-dark">@(action.Status.Parsed?.ToString() ?? action.Status.Raw)</span></td>
+                    <td><span class="badge bg-warning text-dark">@action.Status</span></td>
                     <td>@action.EntityType</td>
-                    <td>@(action.ActionType.Parsed?.ToString() ?? action.ActionType.Raw)</td>
+                    <td>@action.ActionType</td>
                     <td><code>@action.BatchId</code></td>
+                    <td>
+                        @if (action.AmbiguousFields.Count > 0)
+                        {
+                            <code>@string.Join(", ", action.AmbiguousFields)</code>
+                        }
+                        else
+                        {
+                            <span class="text-muted">@Text.ImportReviewNoConflictingFields</span>
+                        }
+                    </td>
+                    <td>
+                        @if (action.AmbiguousFields.Count > 0)
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-secondary me-1"
+                                    @onclick="() => DecideAsync(action, FieldResolutionChoice.Keep)">
+                                @Text.ImportReviewKeepExisting
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                    @onclick="() => DecideAsync(action, FieldResolutionChoice.Replace)">
+                                @Text.ImportReviewTakeIncoming
+                            </button>
+                        }
+                    </td>
                 </tr>
             }
         </tbody>

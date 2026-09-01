@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Components;
-using Quotinator.Data.Entities;
+using Quotinator.Core.Models;
+using Quotinator.Core.Services;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Import;
 using Quotinator.Data.Models;
-using Quotinator.Data.Repositories;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
 namespace Quotinator.Api.Components.Pages;
@@ -16,9 +17,9 @@ namespace Quotinator.Api.Components.Pages;
 /// so an operator can clear a backlog without reaching for curl.
 /// </para>
 /// <para>
-/// Calls <see cref="IImportActionReader"/> directly — server-side Blazor, same process — matching
+/// Calls <see cref="IImportActionService"/> directly — server-side Blazor, same process — matching
 /// <see cref="Notifications"/>'s own precedent of sourcing data directly rather than round-tripping
-/// through this project's REST endpoints. The decide control arrives with step 9.
+/// through this project's REST endpoints.
 /// </para>
 /// </summary>
 public partial class ImportReview
@@ -36,10 +37,38 @@ public partial class ImportReview
     /// this application did not write, and guessing would put phantom work on the page.
     /// </remarks>
     /// <param name="actions">Every action to consider.</param>
-    public static IEnumerable<ImportActionEntity> AwaitingReview(IEnumerable<ImportActionEntity> actions) =>
-        actions.Where(action => action.Status.Parsed is ImportActionStatus.Pending
-                                                     or ImportActionStatus.Blocked
-                                                     or ImportActionStatus.Stale);
+    public static IEnumerable<ImportActionSummaryResponse> AwaitingReview(IEnumerable<ImportActionSummaryResponse> actions) =>
+        actions.Where(action =>
+            Enum.TryParse(action.Status, out ImportActionStatus status)
+            && status is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale);
+
+    /// <summary>
+    /// The field-level rows a whole-action decision resolves — one per field actually in conflict, all
+    /// carrying <paramref name="choice"/>.
+    /// </summary>
+    /// <remarks>
+    /// Only <see cref="ImportActionSummaryResponse.AmbiguousFields"/>, never every decidable field. This
+    /// is the degenerate case of the git model this page is eventually meant to become: <c>--ours</c>
+    /// and <c>--theirs</c> resolve the conflicted hunks and leave the rest of the merge alone. Deciding
+    /// every field would overwrite ones nobody was asked about, including nulling a field the incoming
+    /// file simply does not carry.
+    /// <para>
+    /// Returns nothing for an action with no ambiguous fields — a <c>Blocked</c> action is held because
+    /// it would touch a protected field, not because two values disagree, so a whole-action decision has
+    /// nothing to resolve for it.
+    /// </para>
+    /// </remarks>
+    /// <param name="action">The action being decided.</param>
+    /// <param name="choice">Which side wins for every conflicted field.</param>
+    public static IEnumerable<ImportActionFieldRowDto> DecisionRows(ImportActionSummaryResponse action, FieldResolutionChoice choice) =>
+        action.AmbiguousFields.Select(field => new ImportActionFieldRowDto
+        {
+            ActionId   = action.Id,
+            EntityId   = action.EntityId,
+            EntityType = action.EntityType,
+            Field      = field,
+            Decision   = choice,
+        });
 
     #endregion
 
@@ -67,21 +96,36 @@ public partial class ImportReview
     #region Private
 
     [Inject] private I18nTextService I18nText { get; set; } = default!;
-    [Inject] private IImportActionReader ActionReader { get; set; } = default!;
+    [Inject] private IImportActionService ActionService { get; set; } = default!;
     [Inject] private Quotinator.Api.Startup.DatabaseHealthState DatabaseHealth { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
-    private IReadOnlyList<ImportActionEntity> Actions = [];
+    private IReadOnlyList<ImportActionSummaryResponse> Actions = [];
 
     private async Task LoadAsync()
     {
+        // The service, not IImportActionReader: the summary it returns carries AmbiguousFields, which is
+        // what a whole-action decision resolves. The reader returns raw entities, which do not.
+        //
         // pageSize 0 is this project's "every matching row as a single page" contract, not an empty
         // page — a review backlog is bounded by what an operator has left undecided, and paging it here
         // would hide rows behind a control this minimal page deliberately does not have.
-        PagedItems<ImportActionEntity> page = await ActionReader.GetPagedAsync(
+        PagedItems<ImportActionSummaryResponse> page = await ActionService.GetPagedAsync(
             batchId: null, status: null, entityType: null, page: 1, pageSize: 0);
 
         Actions = [.. AwaitingReview(page.Items)];
+    }
+
+    private async Task DecideAsync(ImportActionSummaryResponse action, FieldResolutionChoice choice)
+    {
+        List<ImportActionFieldRowDto> rows = [.. DecisionRows(action, choice)];
+
+        // Nothing in conflict means nothing this control can settle — a Blocked action needs its
+        // completeness hold lifted, which is #66's per-item UX, not a whole-action keep/take.
+        if (rows.Count == 0) return;
+
+        await ActionService.BulkDecideAsync(action.BatchId, rows);
+        await LoadAsync();
     }
 
     #endregion
