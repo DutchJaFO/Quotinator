@@ -109,7 +109,7 @@ public sealed class QuotinatorDatabaseInitializer(
         // the same gate SeedIfEmptyInternalAsync applies to itself.
         int quotesBeforeSeeding = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
 
-        await SeedIfEmptyAsync(connection, resolution.EffectiveBatches, isReseed: false);
+        await SeedIfEmptyAsync(connection, resolution.EffectiveBatches);
         await ReSeedGenresIfEmptyAsync(connection, resolution.EffectiveBatches);
         await RecommendReseedIfSourceContentChangedAsync(resolution, quotesBeforeSeeding);
         await LogDatabaseStatsAsync(connection);
@@ -330,7 +330,7 @@ public sealed class QuotinatorDatabaseInitializer(
             await TruncateDataAsync(connection);
             await DismissAlertsForRemovedBatchesAsync(removedBatchIds);
 
-            await SeedIfEmptyInternalAsync(connection, effectiveBatches, isReseed: true);
+            await SeedIfEmptyInternalAsync(connection, effectiveBatches);
         }
         finally
         {
@@ -513,12 +513,12 @@ public sealed class QuotinatorDatabaseInitializer(
         return await _sourceCacheUpdater.ResolveAsync(_batches, allowNetwork, forceRefresh);
     }
 
-    private async Task SeedIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches, bool isReseed)
+    private async Task SeedIfEmptyAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
     {
         await SharedSeedLock.WaitAsync();
         try
         {
-            await SeedIfEmptyInternalAsync(connection, effectiveBatches, isReseed);
+            await SeedIfEmptyInternalAsync(connection, effectiveBatches);
         }
         finally
         {
@@ -529,12 +529,12 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <summary>The shared seeding body behind both the cold-start path and an explicit reseed.</summary>
     /// <param name="connection">Open connection to the database being seeded.</param>
     /// <param name="effectiveBatches">The seed batches to apply, already resolved against the source cache.</param>
-    /// <param name="isReseed">
-    /// Whether this run is an explicit reseed rather than the first seed of an empty database. Passed
-    /// in rather than inferred: this method is the shared body of both paths, and by the time it runs
-    /// the Quotes table is empty either way, so nothing here can tell them apart (#302).
-    /// </param>
-    private async Task SeedIfEmptyInternalAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches, bool isReseed)
+    /// <remarks>
+    /// Nothing here distinguishes the two callers, and since #302's reopening nothing needs to: both
+    /// paths apply the same files and report the same result. An <c>isReseed</c> flag was threaded
+    /// through both call sites for exactly one read — the confirmation gate — and was removed with it.
+    /// </remarks>
+    private async Task SeedIfEmptyInternalAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
     {
         int count = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
         if (count > 0) return;
@@ -623,15 +623,19 @@ public sealed class QuotinatorDatabaseInitializer(
                         }, connection);
                     }
 
-                    if (isReseed)
-                        await ConfirmFileAppliedCleanlyAsync(fileName, batch.Origin, actions);
+                    // Ungated on which caller began the seed. It was reseed-only until #302 was reopened
+                    // (2026-09-02): the same four files applying identically produced four confirmations
+                    // from the UI and none at startup, and the suppression rested on the startup modal's
+                    // aggregate summary already covering a first install — which carries no file names,
+                    // no origin, and no added-versus-updated split.
+                    await ConfirmFileAppliedCleanlyAsync(fileName, batch.Origin, actions);
                 }
                 else
                 {
                     stagedFiles.Add(fileName);
                     Logger.LogFileStagedAwaitingReview(fileName, batchIdStr, applyResult.PendingActionIds.Count);
 
-                    // Not gated on isReseed, unlike the confirmation above (#303): a first install whose
+                    // Ungated for the same reason as the confirmation above (#303): a first install whose
                     // bundled content staged conflicts genuinely has something to review, and the startup
                     // modal reports aggregate counts rather than that actions are waiting.
                     await AlertReviewPendingAsync(fileName, batch.Origin, batchIdStr, actions);

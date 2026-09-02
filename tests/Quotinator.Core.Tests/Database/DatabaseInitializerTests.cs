@@ -118,20 +118,31 @@ public class DatabaseInitializerTests
     {
         await SeedThenReinitialiseAsync(SourceRefreshOutcome.Updated, autoUpdateSources: true);
 
-        NotificationEntity notification = (await NotificationsAsync()).Single();
+        NotificationEntity notification = (await NotificationsAsync())
+            .Single(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedRecommended);
 
         Assert.AreEqual(NotificationType.ActionRequired, notification.Type.Parsed);
         Assert.AreEqual(NotificationDismissTrigger.Reseed, notification.DismissTriggerKey.Parsed);
         Assert.AreEqual(NotificationMetadataKind.ReseedRecommended, notification.MetadataKind.Parsed);
     }
 
-    /// <summary>Nothing changed upstream, so there is nothing to recommend.</summary>
+    /// <summary>
+    /// Nothing changed upstream, so there is nothing to recommend.
+    /// <para>
+    /// Scoped to <see cref="NotificationMetadataKind.ReseedRecommended"/> on 2026-09-02. It previously
+    /// asserted the whole notification set was empty, which was far broader than its own name and
+    /// summary claim, and held only because cold start wrote nothing at the time. #302's reopening
+    /// makes cold start confirm each file it applies, so the broad form now fails on notifications this
+    /// test was never about.
+    /// </para>
+    /// </summary>
     [TestMethod]
     public async Task Initialise_NoSourceContentChanged_WritesNoNotification()
     {
         await SeedThenReinitialiseAsync(SourceRefreshOutcome.UpToDate, autoUpdateSources: true);
 
-        Assert.IsEmpty(await NotificationsAsync());
+        Assert.IsEmpty((await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedRecommended));
     }
 
     /// <summary>
@@ -146,8 +157,10 @@ public class DatabaseInitializerTests
             autoUpdateSources: true);
         await db.InitialiseAsync();
 
-        Assert.IsEmpty(await NotificationsAsync(),
-            "The seed applied the changed content on this very run — there is nothing left to recommend.");
+        Assert.IsEmpty((await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedRecommended),
+            "The seed applied the changed content on this very run — there is nothing left to recommend. "
+            + "Scoped to the recommendation on 2026-09-02: the same run now also confirms each file it applied.");
     }
 
     /// <summary>
@@ -159,7 +172,8 @@ public class DatabaseInitializerTests
     {
         await SeedThenReinitialiseAsync(SourceRefreshOutcome.Updated, autoUpdateSources: false);
 
-        Assert.IsEmpty(await NotificationsAsync());
+        Assert.IsEmpty((await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedRecommended));
     }
 
     /// <summary>
@@ -202,18 +216,67 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// Cold start already reports aggregate counts through the startup modal's own summary. Repeating
-    /// that per file on a brand-new install would be pure clutter, so the confirmation is reseed-only.
+    /// #302, reopened 2026-09-02: reverses `Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification`.
+    /// The suppression rested on the startup modal's aggregate summary already covering cold start; it
+    /// does not — no file names, no origin, no added-versus-updated split. Replaced rather than edited
+    /// in place: a test that asserted an absence and now asserts a presence fails for different reasons.
     /// </summary>
     [TestMethod]
-    public async Task Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification()
+    public async Task Initialise_FirstEmptyDatabaseSeed_WritesAPerFileNotification()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        Assert.IsEmpty((await NotificationsAsync())
+        Assert.IsNotEmpty((await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied),
-            "The first seed of an empty database is not a reseed, and has nothing to confirm.");
+            "A first seed applies files exactly as a reseed does, and has the same result to report.");
+    }
+
+    /// <summary>
+    /// The count, not merely the presence. A loop that confirmed the run rather than each file would
+    /// satisfy the test above with a single notification, which is the defect that test cannot see.
+    /// </summary>
+    [TestMethod]
+    public async Task Initialise_FirstEmptyDatabaseSeed_WritesOnePerFile()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+
+        Assert.HasCount(3, confirmations,
+            "AllFilesBatch carries three files and all three apply cleanly — one confirmation each, "
+            + "exactly as Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile asserts for the other path.");
+    }
+
+    /// <summary>
+    /// The finding itself, asserted directly rather than inferred from two tests that happen to agree.
+    /// Found in T1 2026-09-02: the same action against the same empty database produced four
+    /// confirmations from the UI and none at startup, differing only in which caller began it.
+    /// </summary>
+    [TestMethod]
+    public async Task ReseedAndColdStart_ProduceTheSameNotifications()
+    {
+        QuotinatorDatabaseInitializer coldStart = CreateInitializer([AllFilesBatch()]);
+        await coldStart.InitialiseAsync();
+        List<string> fromColdStart = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)
+            .Select(n => n.Metadata ?? string.Empty)
+            .Order(StringComparer.Ordinal)];
+
+        // The same database, reseeded: dedupe means an identical result writes nothing further, so the
+        // set after the reseed is what both paths agree on rather than the sum of two runs.
+        await coldStart.ReseedAsync();
+        List<string> afterReseed = [.. (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)
+            .Select(n => n.Metadata ?? string.Empty)
+            .Order(StringComparer.Ordinal)];
+
+        Assert.IsNotEmpty(fromColdStart,
+            "The positive control: without it, two empty sets would satisfy the comparison below.");
+        Assert.AreSequenceEqual(fromColdStart, afterReseed,
+            "A reseed after a cold start has nothing new to say — if the two paths disagree, one of them is gated.");
     }
 
     /// <summary>
@@ -402,11 +465,23 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()], appVersionTracker: tracker);
         await db.InitialiseAsync();
 
+        // #302's reopening makes the cold start above write confirmations of its own, stamped with
+        // whatever version existed then. Dedupe would suppress the reseed's rewrite — the result is
+        // identical, so there is genuinely nothing new to report — and the test would assert against
+        // rows the reseed never touched. Dismissing them first is what leaves the reseed something to
+        // write, and mirrors what step 2 of 11-clean-reseed-confirmation.md now does for the same reason.
+        NotificationWriter dismisser = new(new SqliteConnectionFactory(_dbPath));
+        foreach (NotificationEntity existing in (await NotificationsAsync())
+                     .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied))
+        {
+            await dismisser.DismissAsync(existing.Id);
+        }
+
         AppVersionRecord recorded = await tracker.RecordCurrentAsync("Quotinator.Test", "9.9.9");
         await db.ReseedAsync();
 
         List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
-            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed)];
 
         Assert.IsNotEmpty(confirmations);
         Assert.IsTrue(confirmations.All(n => n.AppVersionId == recorded.Id),
