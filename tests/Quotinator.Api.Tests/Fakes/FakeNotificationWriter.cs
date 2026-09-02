@@ -14,8 +14,20 @@ internal sealed class FakeNotificationWriter : INotificationWriter
     /// <summary>Records the trigger every <see cref="DismissByTriggerAsync"/> call was made with — lets a wiring test confirm the caller passed the right value without depending on database side effects.</summary>
     public List<NotificationDismissTrigger> DismissByTriggerCalls { get; } = [];
 
-    /// <summary>Records every <see cref="DismissByTriggerAndBatchAsync"/> call, so a test can prove the caller scoped the dismissal to one batch rather than clearing the trigger wholesale (#303).</summary>
-    public List<(NotificationDismissTrigger Trigger, string BatchId, NotificationDismissReason Reason)> DismissByTriggerAndBatchCalls { get; } = [];
+    /// <summary>
+    /// Records the resolution each <see cref="DismissByTriggerAsync"/> call carried, index-aligned with
+    /// <see cref="DismissByTriggerCalls"/> because both are appended in the same call.
+    /// <para>
+    /// #308: the parameter existed here and was dropped on the floor, so every assertion above could
+    /// pass while the caller sent <c>null</c> — which is precisely the defect T2 found and no unit test
+    /// could have. A fake that accepts a parameter and records only some of it reports a partial call
+    /// as a complete one.
+    /// </para>
+    /// </summary>
+    public List<NotificationResolution?> DismissByTriggerResolutions { get; } = [];
+
+    /// <summary>Records every <see cref="DismissByTriggerAndBatchAsync"/> call, so a test can prove the caller scoped the dismissal to one batch rather than clearing the trigger wholesale (#303), and carried the resolution that settled it (#308).</summary>
+    public List<(NotificationDismissTrigger Trigger, string BatchId, NotificationDismissReason Reason, NotificationResolution? Resolution)> DismissByTriggerAndBatchCalls { get; } = [];
 
     /// <summary>Records every message passed to <see cref="WriteAsync"/> — lets a test confirm whether a write actually happened without depending on database side effects.</summary>
     public List<string> WrittenMessages { get; } = [];
@@ -78,7 +90,7 @@ internal sealed class FakeNotificationWriter : INotificationWriter
 
     public Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason, NotificationResolution? resolution = null)
     {
-        DismissByTriggerAndBatchCalls.Add((trigger, batchId, reason));
+        DismissByTriggerAndBatchCalls.Add((trigger, batchId, reason, resolution));
         return Task.FromResult(0);
     }
 
@@ -86,6 +98,7 @@ internal sealed class FakeNotificationWriter : INotificationWriter
     public Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger, NotificationResolution? resolution = null)
     {
         DismissByTriggerCalls.Add(trigger);
+        DismissByTriggerResolutions.Add(resolution);
         return Task.FromResult(0);
     }
 }

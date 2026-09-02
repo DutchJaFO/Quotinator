@@ -227,6 +227,27 @@ public class NotificationWriterTests
     }
 
     /// <summary>
+    /// #308, the second defect found in T2: the value was stored correctly and every consumer saw
+    /// null, because the read query's explicit column list did not name <c>Resolution</c>. The two
+    /// tests above could not catch it — both read with a raw <c>SELECT *</c>, which no consumer uses.
+    /// A stored value nothing can read is indistinguishable from a value never written.
+    /// </summary>
+    [TestMethod]
+    public async Task DismissedAsResolved_TheResolutionSurvivesTheReadPath()
+    {
+        NotificationEntity written = await _writer.WriteAsync(
+            NotificationType.ActionRequired, "The database holds no quotes.", appVersionId: null,
+            dismissTrigger: NotificationDismissTrigger.Reseed);
+
+        await _writer.DismissByTriggerAsync(NotificationDismissTrigger.Reseed, NotificationResolution.Reseeded);
+
+        NotificationEntity read = (await _reader.GetPagedAsync(1, 0)).Items.Single(n => n.Id == written.Id);
+
+        Assert.AreEqual(NotificationResolution.Reseeded, read.Resolution.Parsed,
+            "The reader must return the stored resolution — a column the read query omits is invisible to every consumer.");
+    }
+
+    /// <summary>
     /// The negative case: `Resolution` means "how the action settled it", not "how it went inactive".
     /// A notification the operator simply dismissed had no action run, so it records none — otherwise
     /// the field would claim an outcome nobody chose.

@@ -186,6 +186,12 @@ public class NotificationActionExecutorTests
             "The content is already downloaded by the time the recommendation exists — forcing another "
             + "network round-trip would be redundant.");
         Assert.AreSequenceEqual([NotificationDismissTrigger.Reseed], notificationWriter.DismissByTriggerCalls);
+
+        // #308, the third defect T2 found: the dismissal happened and carried no resolution, so the row
+        // read Done while saying nothing about what settled it. Asserting the trigger alone passed
+        // throughout — the fake was discarding the resolution argument entirely.
+        Assert.AreSequenceEqual([NotificationResolution.Reseeded], notificationWriter.DismissByTriggerResolutions,
+            "A reseed run from its own notification must record that a reseed is what resolved it.");
     }
 
     /// <summary>
@@ -229,6 +235,8 @@ public class NotificationActionExecutorTests
         Assert.IsTrue(health.IsHealthy);
         Assert.HasCount(1, notificationWriter.DismissByTriggerCalls);
         Assert.AreEqual(NotificationDismissTrigger.DatabaseReset, notificationWriter.DismissByTriggerCalls[0]);
+        Assert.AreSequenceEqual([NotificationResolution.Reset], notificationWriter.DismissByTriggerResolutions,
+            "A reset run from its own notification must record that a reset is what resolved it (#308).");
         Assert.AreSequenceEqual([("Quotinator.Api", "1.8.3")], appVersionTracker.Recorded,
             "Reset must re-populate System_AppVersion immediately, matching AdminEndpoints.cs's own wiring.");
     }

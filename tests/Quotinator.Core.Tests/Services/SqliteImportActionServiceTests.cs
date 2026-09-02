@@ -65,12 +65,17 @@ public class SqliteImportActionServiceTests
             return Task.FromResult(0);
         }
 
-        /// <summary>Records every batch-scoped dismissal, which is what #303's per-batch alerts depend on.</summary>
-        public List<(NotificationDismissTrigger Trigger, string BatchId, NotificationDismissReason Reason)> DismissByTriggerAndBatchCalls { get; } = [];
+        /// <summary>
+        /// Records every batch-scoped dismissal, which is what #303's per-batch alerts depend on —
+        /// including the resolution that settled it, which #308 added and this fake originally dropped.
+        /// A fake that accepts a parameter and records only some of it reports a partial call as a
+        /// complete one, and no assertion above it can tell the difference.
+        /// </summary>
+        public List<(NotificationDismissTrigger Trigger, string BatchId, NotificationDismissReason Reason, NotificationResolution? Resolution)> DismissByTriggerAndBatchCalls { get; } = [];
 
         public Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason, NotificationResolution? resolution = null)
         {
-            DismissByTriggerAndBatchCalls.Add((trigger, batchId, reason));
+            DismissByTriggerAndBatchCalls.Add((trigger, batchId, reason, resolution));
             return Task.FromResult(0);
         }
     }
@@ -323,9 +328,10 @@ public class SqliteImportActionServiceTests
         await _service.ApplyBatchAsync(batchId.ToString("D"), cancellationToken: TestContext.CancellationToken);
 
         Assert.Contains(
-            (NotificationDismissTrigger.ImportReviewResolved, batchId.ToString("D"), NotificationDismissReason.Resolved),
+            (NotificationDismissTrigger.ImportReviewResolved, batchId.ToString("D"), NotificationDismissReason.Resolved, (NotificationResolution?)null),
             _notificationWriter.DismissByTriggerAndBatchCalls,
-            "The review this batch was reported for is over, and the alert has to say it was resolved rather than dismissed.");
+            "The review this batch was reported for is over, and the alert has to say it was resolved rather than dismissed. "
+            + "The resolution is null here deliberately: the REST path decides per field, so it has no single answer to state (#308).");
     }
 
     /// <summary>
@@ -368,9 +374,9 @@ public class SqliteImportActionServiceTests
         await _service.DiscardBatchAsync(batchId.ToString("D"), TestContext.CancellationToken);
 
         Assert.Contains(
-            (NotificationDismissTrigger.ImportReviewResolved, batchId.ToString("D"), NotificationDismissReason.Resolved),
+            (NotificationDismissTrigger.ImportReviewResolved, batchId.ToString("D"), NotificationDismissReason.Resolved, (NotificationResolution?)null),
             _notificationWriter.DismissByTriggerAndBatchCalls,
-            "A discarded batch has no review left to perform.");
+            "A discarded batch has no review left to perform, and no side was chosen — so it states no resolution.");
     }
 
     [TestMethod]
