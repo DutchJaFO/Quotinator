@@ -87,6 +87,20 @@ Reviewing it live produced four findings, all accepted as this issue's own work 
    button label, look for the name the operation already has** — an endpoint summary, a column heading,
    an existing UI key.
 
+**A shared `ModalDialog` control, extracted after building the same shell three times** (developer,
+2026-09-02: *"this implies you did not use a control despite having at least 2 situations where a modal
+popup dialog was needed"*). `StartupSuccessModal`, `StartupErrorModal` and the notification detail popup
+each hand-rolled a backdrop, a centred dialog, and a header/body/footer layout.
+
+The cost was already measurable before the point was made: the two startup modals were given a 95vh cap
+in one commit, and the detail popup needed the identical fix **one message later**, because each copy
+had to be found and corrected separately — precisely the drift CLAUDE.md's duplication rule describes.
+The third copy is what made it obvious; the second should have.
+
+`ModalDialog` now owns the backdrop, the cap and the scroll region, and the cap is deliberately **not**
+a parameter: a dialog taller than the viewport puts its own footer off-screen, which on the startup
+modal means Continue cannot be reached at all. No caller has a reason to opt out.
+
 **Step 4 was delivered thinly, and findings 2 and 3 are the consequence.** Step 4 says "define the
 per-type layout across both surfaces". What it produced was `LayoutFor(kind) → BodyIsMultiLine`, a
 line-wrapping boolean — the minimum that satisfied its own test. A per-type layout is what decides
@@ -302,6 +316,39 @@ every consumer; and the first fix set the resolution *after* `ReseedAsync`, by w
 `ApplyBatchAsync` had already dismissed the row. Rows 17–18 missed all three because both read with raw
 `SELECT *` and both exercised only the by-batch path.
 
+**All three were fixed at the time and none got a test, which is its own finding** (2026-09-02). The
+plan recorded them in prose and moved on, so nothing re-ran to catch a regression — against
+`docs/testing-policy.md`'s rule that a bug fix ships with the test that would have caught it. Rows
+34–36 close that, each proven red by reproducing the original defect: the resolution argument dropped,
+and `n.Resolution` removed from the read query.
+
+**The root cause of the third was in the test doubles, not the executor.** `FakeNotificationWriter` and
+`SqliteImportActionServiceTests`' own recording writer both accepted `NotificationResolution?` and
+recorded only the trigger — so *every* assertion about a dismissal passed while the caller sent
+nothing. A fake that accepts a parameter and stores only part of it reports a partial call as a
+complete one; both now record the whole call.
+
+### 13. Extract the modal shell all three surfaces were duplicating
+
+**Status:** ✅ Done — rows 33–34 green
+
+Developer instruction, 2026-09-02. Not a refactor found by looking: this issue's own detail popup was
+the third hand-built copy of the same backdrop-plus-centred-dialog, and the second and third had each
+been given the `95vh` cap separately, one message apart.
+
+`ModalDialog` owns the backdrop, the cap and the scroll region; `StartupSuccessModal`,
+`StartupErrorModal` and the detail popup pass content into it. **The cap is not a parameter** — a
+dialog taller than the viewport puts its own footer off-screen, which on the startup modal means
+Continue cannot be reached, so no caller has a reason to opt out.
+
+**Row 34 is the part that lasts.** Row 33 proves the cap holds today; a fourth modal built by copying
+the markup would satisfy it while being the same defect, so row 34 asserts the copied class names are
+absent instead.
+
+**This step is recorded after the fact, and that is the finding.** The extraction has no red-first test
+sequence of its own because it was not planned — it was the third copy being noticed. Step 4's
+under-delivery is the same shape one layer up: both are the plan's steps describing an outcome without
+naming the structure that produces it.
 
 ## Verification checklist
 
@@ -332,7 +379,6 @@ every consumer; and the first fix set the resolution *after* `ReseedAsync`, by w
 | 23 | ✅ | Whether a type has structured detail beneath the summary varies | Unit test | `NotificationTableTests.LayoutFor_AcrossKinds_PayloadDetailVaries` — two types have detail (`ReseedFileApplied`, `ImportReviewPending`), four do not, decided on the measured body-vs-payload comparison rather than by preference |
 | 24 | ✅ | The page opens payload detail in a dialog | Automated (T2) + screenshot | `13-notification-layout.md` step 7 — `expandersOnPage: 0`, `openButtonsOnPage: 4`; the dialog carries the table. **Swapped 2026-09-02**: the page originally collapsed and the popup opened a dialog |
 | 25 | ✅ | The startup popup expands detail in place | Automated (T2) | same document step 8 — `expandersInModal: 4`, `openButtonsInModal: 0`, `collapsedByDefault: true` |
-| 33 | ✅ | The startup popup never grows past the viewport | Automated (T2) + screenshot | same document step 8 — capped at `95vh` with `modal-dialog-scrollable`; with all four rows expanded, `664` against a `720` viewport, body scrolling, footer reachable. **Found in T1 (developer, 2026-09-02)**: expandable detail made the list long enough to push the dialog past the bottom, leaving no way to reach Continue |
 | 26 | ✅ | Detail renders as a table, never a list | Automated (T2) | same document step 7 — headings `Entity / Added / Updated` over `Quote \| 63 \| 0`; `listsAnywhere: 0` guards the regression |
 | 27 | ✅ | Each executable trigger's button is named for what it does | Unit test | `NotificationTableTests.ActionLabelFor_EachExecutableTrigger_IsNamed` — derived from `NotificationDismissTrigger`, so a new one fails here. Confirmed live: the button reads *Reseed the database* — the endpoint summary verbatim. **Corrected twice on 2026-09-02**: *Reload the quotes*, then *Run a reseed*, both invented while the operation already had a name |
 | 28 | ✅ | A multi-outcome action offers both choices without an intermediate click | Unit test | `NotificationTableTests.ImportReviewResolved_OffersBothChoicesDirectly` |
@@ -340,6 +386,11 @@ every consumer; and the first fix set the resolution *after* `ReseedAsync`, by w
 | 30 | ✅ | Every layout renders on both surfaces | Automated (T2) + screenshot | same document steps 7–10, run whole on the current build; screenshot of the modal dialog over the startup popup |
 | 31 | ✅ | The new T2 steps go red before they go green | Canary run | `quotinator:canary308b` at `7bc5bacc`: `0` expanders, `0` open buttons, a button reading `Run`, `0` resolution lines. Step 9 needed an actionable row first — it passed vacuously without one |
 | 32 | ✅ | A resolved notification says how it was resolved | Automated (T2) | same document step 10 — the resolved row reads *Database reseeded*, and `GET /notifications` returns `resolution: reseeded` |
+| 33 | ✅ | No modal grows past the viewport, on any surface | Automated (T2) + screenshot | same document steps 7 and 8 — every modal renders through `ModalDialog`, capped at `95vh` with a scrolling body. Measured on a deliberately short `420px` viewport: detail popup `364`, startup popup `364`, both scrolling with header and footer reachable. **Found twice in T1 (developer, 2026-09-02)**: once on the startup popup, then again on the detail popup — which is what forced the shared control |
+| 34 | ✅ | The reseed and reset paths record their resolution, not only their trigger | Unit test | `NotificationActionExecutorTests.ExecuteAsync_Reseed_...` and `..._DatabaseReset_...` — proven by mutation: dropping the resolution argument, as the shipped code originally did, fails both. **Added 2026-09-02** to close the gap step 12 exposed |
+| 35 | ✅ | The stored resolution survives the read path | Unit test | `NotificationWriterTests.DismissedAsResolved_TheResolutionSurvivesTheReadPath` — reads through `NotificationReader`, not `SELECT *`. Proven by mutation: removing `n.Resolution` from the read query's column list fails it |
+| 36 | ✅ | The by-trigger dismissal writes the resolution, not only the by-batch one | Unit test | `NotificationWriterTests.DismissedByTrigger_RecordsTheResolution` — the path reseed and reset actually take, which rows 17–18 did not exercise |
+| 37 | ✅ | A fourth modal cannot reintroduce the duplication unnoticed | Automated (T2) | same document step 7 — `usesOldBespokeMarkup: false`, asserting the copied class names absent. **A regression guard, not a proven-red row**: the markup it forbids existed while the assertion did not, so unlike row 31 it has no canary run behind it, and the document says so |
 
 **Rows 5, 9 and 10 cannot be replaced by unit tests.** A unit test can prove the markup and the
 stylesheet name the same class; only a rendered page proves the rule reaches the element. #303's nav
