@@ -271,6 +271,38 @@ internal static class ImportActionPlanner
             var effectiveChanged = new HashSet<string>(
                 existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
 
+            // #373: the row arrived and already matches. Reported as Unchanged rather than Modify,
+            // which claims a write that never happens, and rather than nothing at all, which leaves a
+            // reader unable to tell it from a row the file never mentioned.
+            //
+            // Compared incoming-against-stored, NOT via effectiveChanged. Those differ under Skip:
+            // `resolved` is deliberately set to the existing values there, so effectiveChanged is
+            // empty for every Skip whether or not the content actually matches. This issue's plan
+            // named effectiveChanged and was wrong about it — the question is whether the file agrees
+            // with the database, which no policy changes the answer to.
+            bool contentIsIdentical = existingFields.Keys
+                .Union(incomingFields.Keys)
+                .All(field => FieldMergeResolver.ValuesEqual(
+                    existingFields.GetValueOrDefault(field), incomingFields.GetValueOrDefault(field)));
+
+            if (contentIsIdentical)
+            {
+                actions.Add(new ImportActionEntity
+                {
+                    BatchId = batchIdStr,
+                    ExistingBatchId = existingBatchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Unchanged.ToString(), ImportActionKind.Unchanged),
+                    EntityType = ImportActionEntityTypes.Quote,
+                    EntityId = q.Id,
+                    ExistingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                    IncomingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                    // Terminal: nothing to decide, nothing to write, nothing to reverse.
+                    Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Applied.ToString(), ImportActionStatus.Applied),
+                    DetectedAt = now,
+                });
+                continue;
+            }
+
             if (CompletenessGuard.ShouldBlock(existing.Value.CompletenessStatus, effectiveChanged))
             {
                 actions.Add(new ImportActionEntity
@@ -397,6 +429,32 @@ internal static class ImportActionPlanner
         return actions;
     }
 
+    /// <summary>
+    /// #373: one action recording that an entity arrived and already matched what is stored.
+    /// <para>
+    /// Terminal by construction — <c>Applied</c>, with no <c>ExistingValue</c>, because there is
+    /// nothing to decide, write or reverse and the two sides are the same value. Shared so every
+    /// resolver reports it identically; a per-resolver copy is how <c>Series</c> and <c>Universe</c>
+    /// would quietly end up shaped differently from <c>Source</c>.
+    /// </para>
+    /// </summary>
+    /// <param name="batchId">The batch this planning pass belongs to.</param>
+    /// <param name="entityType">Which entity type arrived unchanged.</param>
+    /// <param name="entityId">The id of the row it matched.</param>
+    /// <param name="payload">The incoming value, serialised as the action's own record of what arrived.</param>
+    /// <param name="now">Detection timestamp for the action.</param>
+    private static ImportActionEntity UnchangedAction(
+        string batchId, string entityType, string entityId, object payload, DateTime now) => new()
+    {
+        BatchId = batchId,
+        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Unchanged.ToString(), ImportActionKind.Unchanged),
+        EntityType = entityType,
+        EntityId = entityId,
+        IncomingValue = JsonSerializer.Serialize(payload, payload.GetType()),
+        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Applied.ToString(), ImportActionStatus.Applied),
+        DetectedAt = now,
+    };
+
     private static async Task<string> ResolveSourceAsync(
         SqliteConnection connection, SourceQuoteDto q, Dictionary<string, string> index,
         string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
@@ -456,6 +514,15 @@ internal static class ImportActionPlanner
                         DetectedAt = now,
                     });
             }
+            else
+            {
+                // #373: the Source arrived and already matches. Emitted once per distinct Source, on
+                // the database lookup rather than on every quote referencing it — the index above is
+                // what makes that "once", exactly as it does for the Add below.
+                actions.Add(UnchangedAction(
+                    batchId, ImportActionEntityTypes.Source, row.Id,
+                    new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId), now));
+            }
 
             return row.Id;
         }
@@ -500,6 +567,10 @@ internal static class ImportActionPlanner
         {
             var idStr = foundId.ToCanonicalId();
             index[key] = idStr;
+            // #373: arrived and already matches — reported once per distinct Character, not per quote.
+            actions.Add(UnchangedAction(
+                batchId, ImportActionEntityTypes.Character, idStr,
+                new CharacterActionPayloadDto(sourceId, q.Character, q.Source, sourceTypeStr), now));
             return idStr;
         }
 
@@ -534,6 +605,8 @@ internal static class ImportActionPlanner
         {
             var idStr = foundId.ToCanonicalId();
             index[q.Author] = idStr;
+            // #373: arrived and already matches — reported once per distinct Person, not per quote.
+            actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Person, idStr, new PersonActionPayloadDto(q.Author), now));
             return idStr;
         }
 
@@ -653,7 +726,13 @@ internal static class ImportActionPlanner
 
                 // #153: a stale rule must still be surfaced even when nothing else changed — never
                 // silently skipped just because the raw fields themselves happen to already agree.
-                if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule) continue; // Unchanged — silent reuse, same as a natural-key match.
+                // #373: and when nothing changed, the row is reported as Unchanged rather than skipped
+                // — "silent reuse" is exactly what left a whole entity type absent from the report.
+                if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule)
+                {
+                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Source, matchedId, incomingPayload, now));
+                    continue;
+                }
 
                 var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -783,7 +862,12 @@ internal static class ImportActionPlanner
                 }
 
                 // #153: a stale rule must still be surfaced even when nothing else changed.
-                if (changedFields.Count == 0 && keyRuleDecisions.Count == 0 && !keyHasStaleRule) continue; // Unchanged — silent reuse, same as the explicit-id branch above.
+                // #373: reported as Unchanged rather than silently reused.
+                if (changedFields.Count == 0 && keyRuleDecisions.Count == 0 && !keyHasStaleRule)
+                {
+                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Source, keyRow.Id, keyIncomingPayload, now));
+                    continue;
+                }
 
                 // #190 drive-by fix: this branch previously never consulted FieldMergeResolver.Resolve
                 // for MergeOurs/MergeTheirs at all — it always took keyIncomingPayload for any policy
@@ -949,7 +1033,12 @@ internal static class ImportActionPlanner
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
-                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+                // #373: reported as Unchanged rather than silently reused.
+                if (changedFields.Count == 0)
+                {
+                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Person, canonicalId, incomingPayload, now));
+                    continue;
+                }
 
                 var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -1153,7 +1242,12 @@ internal static class ImportActionPlanner
 
             var changedFields = new HashSet<string>(
                 existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
-            if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+            // #373: reported as Unchanged rather than silently reused.
+            if (changedFields.Count == 0)
+            {
+                actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Character, matchedId, incomingPayload, now));
+                continue;
+            }
 
             var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
             var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -1266,7 +1360,12 @@ internal static class ImportActionPlanner
                 }
 
                 // #153: a stale rule must still be surfaced even when nothing else changed.
-                if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule) continue; // Unchanged — silent reuse, same as a natural-key match.
+                // #373: reported as Unchanged rather than silently reused.
+                if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule)
+                {
+                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Universe, matchedId, incomingPayload, now));
+                    continue;
+                }
 
                 var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -1440,7 +1539,12 @@ internal static class ImportActionPlanner
                 }
 
                 // #153: a stale rule must still be surfaced even when nothing else changed.
-                if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule) continue; // Unchanged — silent reuse, same as a natural-key match.
+                // #373: reported as Unchanged rather than silently reused.
+                if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule)
+                {
+                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Series, matchedId, incomingPayload, now));
+                    continue;
+                }
 
                 var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -1585,7 +1689,12 @@ internal static class ImportActionPlanner
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
-                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+                // #373: reported as Unchanged rather than silently reused.
+                if (changedFields.Count == 0)
+                {
+                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.StageDirection, canonicalId, incomingPayload, now));
+                    continue;
+                }
 
                 var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -1678,7 +1787,12 @@ internal static class ImportActionPlanner
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
-                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+                // #373: reported as Unchanged rather than silently reused.
+                if (changedFields.Count == 0)
+                {
+                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.SoundCue, canonicalId, incomingPayload, now));
+                    continue;
+                }
 
                 var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
@@ -1781,7 +1895,12 @@ internal static class ImportActionPlanner
 
                 var changedFields = new HashSet<string>(
                     existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
-                if (changedFields.Count == 0) continue; // Unchanged — silent reuse, same as a natural-key match.
+                // #373: reported as Unchanged rather than silently reused.
+                if (changedFields.Count == 0)
+                {
+                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Conversation, canonicalId, incomingPayload, now));
+                    continue;
+                }
 
                 var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
                 var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;

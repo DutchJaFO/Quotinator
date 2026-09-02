@@ -149,9 +149,14 @@ public class ImportActionPlannerTests
         SourceQuoteDto quote = BuildQuote("31111111-1111-4111-8111-111111111111", author: "Someone");
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.HasCount(1, actions, "Only the Quote is new — Source/Character/Person all already exist");
-        ImportActionEntity quoteAction = actions.Single();
-        Assert.AreEqual("Quote", quoteAction.EntityType);
+        // #373: four actions now, not one. The Quote is the only Add; Source, Character and Person each
+        // report that they arrived and already matched. The test's own claim — "only the Quote is new" —
+        // is unchanged and is what this asserts; "nothing else is reported at all" was never its point.
+        Assert.HasCount(1, actions.Where(a => a.ActionType.Parsed == ImportActionKind.Add).ToList(),
+            "Only the Quote is new — Source/Character/Person all already exist");
+        Assert.HasCount(3, actions.Where(a => a.ActionType.Parsed == ImportActionKind.Unchanged).ToList(),
+            "…and each of those three says so, rather than vanishing from the report.");
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
 
         QuoteActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         // GuidExtensions.ToCanonicalId (and GuidHandler, given RemoveTypeMap) render every Guid column
@@ -193,7 +198,11 @@ public class ImportActionPlannerTests
         SourceQuoteDto quote = BuildQuote("e1111111-1111-4111-8111-111111111111", source: "Existing Film", character: "Gandalf");
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "Already linked to this exact Source — silently reused, no Add staged");
+        // #373: scoped to Add, which is what this test's own message claims. It previously asserted no
+        // Character action of any kind — true only because an existing entity produced nothing at all,
+        // and now false because it produces an Unchanged saying it arrived and matched.
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character" && a.ActionType.Parsed == ImportActionKind.Add),
+            "Already linked to this exact Source — reused, no Add staged");
         ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
         QuoteActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(existingCharacterId, payload.CharacterId);
@@ -212,7 +221,9 @@ public class ImportActionPlannerTests
         SourceQuoteDto quote = BuildQuote("e2111111-1111-4111-8111-111111111111", source: "The Two Towers", character: "Gandalf");
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "A Series-scoped cross-Source match is reused directly, like the same-Source case");
+        // #373: scoped to Add — reuse means no new Character, not that nothing is reported.
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character" && a.ActionType.Parsed == ImportActionKind.Add),
+            "A Series-scoped cross-Source match is reused directly, like the same-Source case");
         ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
         QuoteActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(existingCharacterId, payload.CharacterId, "Must resolve to the existing global Character, not stage a duplicate");
@@ -257,7 +268,9 @@ public class ImportActionPlannerTests
         SourceQuoteDto quote = BuildQuote("e5111111-1111-4111-8111-111111111111", source: "Existing Film", character: "GANDALF");
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "Name matching is case-insensitive — storage keeps original casing, comparison does not");
+        // #373: scoped to Add — a case-insensitive match reuses the row, and now says it did.
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character" && a.ActionType.Parsed == ImportActionKind.Add),
+            "Name matching is case-insensitive — storage keeps original casing, comparison does not");
         ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
         QuoteActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(existingCharacterId, payload.CharacterId);
@@ -521,7 +534,10 @@ public class ImportActionPlannerTests
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
 
-        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must resolve to the already-existing canonical Source — no new SourceEntity Add should be staged");
+        // #373: scoped to Add, which is what "no new SourceEntity Add" already said.
+        Assert.DoesNotContain(
+            a => a.EntityType == "Source" && a.ActionType.Parsed == ImportActionKind.Add, actions,
+            "The alias must resolve to the already-existing canonical Source — no new SourceEntity Add should be staged");
         ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
         QuoteActionPayloadDto payload     = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.IncomingValue!)!;
         Assert.AreEqual(canonicalSourceId, payload.SourceId, "The quote must link to the existing canonical Source, not a spurious alias-derived one");
@@ -549,7 +565,10 @@ public class ImportActionPlannerTests
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
 
-        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "The alias must normalise type before Source resolution runs — no spurious anime-typed Source should ever be staged");
+        // #373: scoped to Add — "no spurious Source created" is about creation, not about reporting.
+        Assert.DoesNotContain(
+            a => a.EntityType == "Source" && a.ActionType.Parsed == ImportActionKind.Add, actions,
+            "The alias must normalise type before Source resolution runs — no spurious anime-typed Source should ever be staged");
         ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed);
         QuoteActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(quoteAction.MergedFields!)!;
@@ -750,7 +769,11 @@ public class ImportActionPlannerTests
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        Assert.DoesNotContain(a => a.EntityType == "Source", actions, "An already-dated Source must never be touched by a later, differently-dated quote — first-found-wins, no invented conflict logic");
+        // #373: "never touched" means no Add and no Modify. An Unchanged action touches nothing — it
+        // records that the Source arrived and matched, which is the reporting this issue adds.
+        Assert.DoesNotContain(
+            a => a.EntityType == "Source" && a.ActionType.Parsed != ImportActionKind.Unchanged, actions,
+            "An already-dated Source must never be touched by a later, differently-dated quote — first-found-wins, no invented conflict logic");
     }
 
     [TestMethod]
@@ -793,6 +816,214 @@ public class ImportActionPlannerTests
         string sourceId1 = actions1.Single(a => a.EntityType == "Source").EntityId;
         string sourceId2 = actions2.Single(a => a.EntityType == "Source").EntityId;
         Assert.AreEqual(sourceId1, sourceId2, "Same title+type must always produce the same stable id, across independent PlanAsync calls");
+    }
+
+    /// <summary>
+    /// #373: seeds the Source, Character and Quote exactly as <see cref="BuildQuote"/> describes them,
+    /// so re-planning that same quote finds nothing to change.
+    /// <para>
+    /// Distinct from <see cref="SeedExistingQuoteAsync"/>, which stores <c>'Original text'</c> — a
+    /// deliberate mismatch that produces a Modify. Identical content is the case that had no fixture
+    /// at all, which is why nothing caught it reporting as modified.
+    /// </para>
+    /// </summary>
+    private static async Task SeedIdenticalQuoteAsync(SqliteConnection conn, string id)
+    {
+        string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        Guid sourceId    = Guid.NewGuid();
+        Guid characterId = Guid.NewGuid();
+
+        await conn.ExecuteAsync(
+            "INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
+            new { Id = sourceId, now });
+        await conn.ExecuteAsync(
+            "INSERT INTO Quotinator_Character (Id, Name, SourceType, DateCreated) VALUES (@Id, 'Rick Blaine', 'Movie', @now)",
+            new { Id = characterId, now });
+        await conn.ExecuteAsync(
+            "INSERT INTO Quotinator_CharacterSource (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+            new { Id = Guid.NewGuid(), CharacterId = characterId, SourceId = sourceId, now });
+        await conn.ExecuteAsync(
+            """
+            INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, CharacterId, DateCreated)
+            VALUES (@Id, 'Here''s looking at you, kid.', 'en', @SourceId, @CharacterId, @now);
+            """,
+            new { Id = id, SourceId = sourceId, CharacterId = characterId, now });
+    }
+
+    // ── #373: every incoming item is accounted for, and identical content is not a modification ────
+
+    /// <summary>
+    /// The issue's core: re-importing a quote that exactly matches what is stored is not a
+    /// modification. `effectiveChanged` is already empty in this case; the planner ignores that.
+    /// </summary>
+    [TestMethod]
+    public async Task ReimportingIdenticalContent_ReportsUnchangedNotModified()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "a1111111-1111-4111-8111-111111111111";
+        await SeedIdenticalQuoteAsync(conn, id);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionKind.Unchanged, quoteAction.ActionType.Parsed,
+            "Nothing would be written for this row, so calling it a modification is a false report.");
+    }
+
+    /// <summary>
+    /// The control the test above needs: a planner reporting nothing at all would satisfy it. This
+    /// asserts real actions, naming real entity types.
+    /// </summary>
+    [TestMethod]
+    public async Task ReimportingIdenticalContent_StillAccountsForEveryIncomingItem()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "a2111111-1111-4111-8111-111111111111";
+        await SeedIdenticalQuoteAsync(conn, id);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.IsNotEmpty(actions, "An import that accounts for nothing is not an import that changed nothing.");
+        Assert.Contains("Quote", [.. actions.Select(a => a.EntityType)]);
+    }
+
+    /// <summary>
+    /// An unchanged row is terminal — nobody is waiting on a decision about content that matches.
+    /// </summary>
+    [TestMethod]
+    public async Task ReimportingIdenticalContent_LeavesNothingPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "a3111111-1111-4111-8111-111111111111";
+        await SeedIdenticalQuoteAsync(conn, id);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+
+        Assert.IsEmpty(actions.Where(a => a.Status.Parsed == ImportActionStatus.Pending),
+            "Review policy decides genuine disagreements. Identical content is not one, even under Review.");
+    }
+
+    /// <summary>
+    /// The sharpest control: a planner classifying everything as unchanged would pass every test above.
+    /// </summary>
+    [TestMethod]
+    public async Task ChangedContent_StillReportsModified()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "a4111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(conn, id);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [BuildQuote(id, source: "Casablanca")], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionKind.Modify, quoteAction.ActionType.Parsed,
+            "The stored text differs from the incoming text — this one really is a modification.");
+    }
+
+    /// <summary>
+    /// The other of the two nothings. Content absent from the database is new, and must never be
+    /// confused with content that was already correct.
+    /// </summary>
+    [TestMethod]
+    public async Task AbsentContent_ReportsNewNotUnchanged()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [BuildQuote("a5111111-1111-4111-8111-111111111111")], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionKind.Add, quoteAction.ActionType.Parsed);
+        Assert.IsEmpty(actions.Where(a => a.ActionType.Parsed == ImportActionKind.Unchanged),
+            "Nothing here existed beforehand, so nothing can be unchanged.");
+    }
+
+    /// <summary>
+    /// #373's second half: an already-existing Source, Character or Person produces no action at all
+    /// today, so it vanishes from the report entirely — a reader cannot tell it arrived and was
+    /// already correct from a file that never mentioned it.
+    /// </summary>
+    [TestMethod]
+    public async Task ExistingReferencedEntities_AreReportedUnchanged()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        Guid sourceId    = Guid.NewGuid();
+        Guid characterId = Guid.NewGuid();
+
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @now)",
+            new { Id = sourceId, now });
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Character (Id, Name, SourceType, DateCreated) VALUES (@Id, 'Rick Blaine', 'Movie', @now)",
+            new { Id = characterId, now });
+        await conn.ExecuteAsync("INSERT INTO Quotinator_CharacterSource (Id, CharacterId, SourceId, DateCreated) VALUES (@Id, @CharacterId, @SourceId, @now)",
+            new { Id = Guid.NewGuid(), CharacterId = characterId, SourceId = sourceId, now });
+        await conn.ExecuteAsync("INSERT INTO Quotinator_Person (Id, Name, DateCreated) VALUES (@Id, 'Someone', @now)",
+            new { Id = Guid.NewGuid(), now });
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [BuildQuote("a6111111-1111-4111-8111-111111111111", author: "Someone")], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        List<string> unchangedTypes = [.. actions
+            .Where(a => a.ActionType.Parsed == ImportActionKind.Unchanged)
+            .Select(a => a.EntityType)];
+
+        foreach (string entityType in (string[])["Source", "Character", "Person"])
+        {
+            Assert.Contains(entityType, unchangedTypes,
+                $"{entityType} arrived and was already correct — saying nothing about it reads as work that never happened.");
+        }
+    }
+
+    /// <summary>
+    /// The control for the test above: reporting existing entities must not stop the planner creating
+    /// absent ones, which is its original job.
+    /// </summary>
+    [TestMethod]
+    public async Task AbsentReferencedEntities_AreStillAdded()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [BuildQuote("a7111111-1111-4111-8111-111111111111", author: "Someone")], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        List<string> addedTypes = [.. actions
+            .Where(a => a.ActionType.Parsed == ImportActionKind.Add)
+            .Select(a => a.EntityType)];
+
+        foreach (string entityType in (string[])["Source", "Character", "Person"])
+        {
+            Assert.Contains(entityType, addedTypes,
+                $"{entityType} does not exist yet and must still be created.");
+        }
+    }
+
+    /// <summary>
+    /// #373: the composite entities are planned by their own branch, not as references from a quote,
+    /// so they are covered separately rather than assumed to follow from
+    /// <see cref="ExistingReferencedEntities_AreReportedUnchanged"/>. Today an id match with nothing
+    /// differing is silent reuse — the row arrived, matched, and left no trace.
+    /// </summary>
+    [TestMethod]
+    public async Task ExistingCompositeEntities_AreReportedUnchanged()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "a8111111-1111-4111-8111-111111111111";
+        await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.", imageUrl: "https://example.com/still.jpg");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            stageDirections: [BuildStageDirectionEntry(id, text: "A shot rings out.", imageUrl: "https://example.com/still.jpg")]);
+
+        // Counted before it is read: with no action at all, Single() would throw and the failure would
+        // look identical to a test asserting the opposite (#372's own step-1 lesson).
+        List<ImportActionEntity> stageDirections = [.. actions.Where(a => a.EntityType == "StageDirection")];
+        Assert.HasCount(1, stageDirections,
+            "It arrived and matched. Silent reuse leaves a reader unable to tell that from a file that never mentioned it.");
+        Assert.AreEqual(ImportActionKind.Unchanged, stageDirections[0].ActionType.Parsed);
     }
 
     private static async Task SeedExistingQuoteAsync(SqliteConnection conn, string id, string completenessStatus = "Incomplete")
@@ -887,7 +1118,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             universe: [BuildUniverseEntry("Middle Earth")]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Universe"), "Already exists by name — silently reused, no action staged");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Universe" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Already exists by name — silently reused, no action staged");
     }
 
     /// <summary>
@@ -904,7 +1135,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             universe: [BuildUniverseEntry("MIDDLE EARTH")]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Universe"), "Differing casing must still match the existing row by natural key, not stage a duplicate Add");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Universe" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Differing casing must still match the existing row by natural key, not stage a duplicate Add");
     }
 
     /// <summary>#163: Universe's own two-shape widening — explicit id present, matched by that id, name differs.</summary>
@@ -1007,7 +1238,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             series: [BuildSeriesEntry("THE LORD OF THE RINGS")]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Series"), "Differing casing must still match the existing row by natural key, not stage a duplicate Add");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Series" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Differing casing must still match the existing row by natural key, not stage a duplicate Add");
     }
 
     /// <summary>#163: Series' own two-shape widening — explicit id present, matched by that id, name differs.</summary>
@@ -1220,7 +1451,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: null)]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Nothing to enrich and nothing to correct — unchanged from #162's own natural-key behaviour");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Nothing to enrich and nothing to correct — unchanged from #162's own natural-key behaviour");
     }
 
     /// <summary>
@@ -1238,7 +1469,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [BuildEnrichmentEntry(title: "CASABLANCA", type: Core.Enums.QuoteType.Movie, seriesName: null)]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Differing casing must still match the existing row by natural key, not stage a duplicate Add");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Differing casing must still match the existing row by natural key, not stage a duplicate Add");
     }
 
     [TestMethod]
@@ -1251,7 +1482,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
             sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "The Hobbit")]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Already points at this Series — a true no-op, nothing staged even under Review");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Already points at this Series — a true no-op, nothing staged even under Review");
     }
 
     [TestMethod]
@@ -1365,7 +1596,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [BuildSourceEntry(id, title: "Casablanca", type: Core.Enums.QuoteType.Movie, date: "1942")]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Nothing differs — silent reuse, no action staged");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Nothing differs — silent reuse, no action staged");
     }
 
     [TestMethod]
@@ -1385,7 +1616,8 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [BuildSourceEntry(newFileId, title: "Casablanca", type: Core.Enums.QuoteType.Movie, date: null)]);
 
-        Assert.IsEmpty(actions, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#162 scope boundary)");
+        Assert.IsEmpty(actions.Where(a => a.ActionType.Parsed != ImportActionKind.Unchanged),
+            "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#162 scope boundary)");
     }
 
     [TestMethod]
@@ -1493,7 +1725,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             stageDirections: [BuildStageDirectionEntry(id, text: "A shot rings out.", imageUrl: "https://example.com/still.jpg")]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "StageDirection"), "Nothing differs — silent reuse, no action staged");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "StageDirection" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Nothing differs — silent reuse, no action staged");
     }
 
     [TestMethod]
@@ -1569,7 +1801,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             soundCues: [BuildSoundCueEntry(id, text: "Distant thunder.", soundFileUrl: "https://example.com/thunder.mp3")]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "SoundCue"), "Nothing differs — silent reuse, no action staged");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "SoundCue" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Nothing differs — silent reuse, no action staged");
     }
 
     [TestMethod]
@@ -1645,7 +1877,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [BuildPersonEntry(id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27")]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Person"), "Nothing differs — silent reuse, no action staged");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Person" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Nothing differs — silent reuse, no action staged");
     }
 
     [TestMethod]
@@ -1661,7 +1893,8 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [BuildPersonEntry(newFileId, name: "Ada Lovelace")]);
 
-        Assert.IsEmpty(actions, "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#173 scope boundary, same as #162's)");
+        Assert.IsEmpty(actions.Where(a => a.ActionType.Parsed != ImportActionKind.Unchanged),
+            "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#173 scope boundary, same as #162's)");
     }
 
     /// <summary>
@@ -1681,7 +1914,8 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [BuildPersonEntry(newFileId, name: "ADA LOVELACE")]);
 
-        Assert.IsEmpty(actions, "Differing casing must still match the existing row via natural key, not stage a duplicate Add");
+        Assert.IsEmpty(actions.Where(a => a.ActionType.Parsed != ImportActionKind.Unchanged),
+            "Differing casing must still match the existing row via natural key, not stage a duplicate Add");
     }
 
     [TestMethod]
@@ -1749,7 +1983,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             characters: [BuildCharacterEntry(characterId, name: "Gandalf")]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "Nothing differs — silent reuse, no action staged");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Nothing differs — silent reuse, no action staged");
     }
 
     [TestMethod]
@@ -1763,7 +1997,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             characters: [BuildCharacterEntry(bogusId, name: "Gandalf", sourceTitle: "Existing Film", sourceType: Core.Enums.QuoteType.Movie)]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "A declared id that matches nothing must fall back to ADR 013's real matching algorithm, same as PlanSourcesAsync's own id-not-found fallback");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character" && a.ActionType.Parsed != ImportActionKind.Unchanged), "A declared id that matches nothing must fall back to ADR 013's real matching algorithm, same as PlanSourcesAsync's own id-not-found fallback");
     }
 
     [TestMethod]
@@ -1778,7 +2012,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             characters: [BuildCharacterEntry(null, name: "Aragorn", sourceTitle: "The Two Towers", sourceType: Core.Enums.QuoteType.Movie)]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character"), "A Series-scoped cross-Source candidate must be reused directly, matching ResolveCharacterAsync's own behaviour");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Character" && a.ActionType.Parsed != ImportActionKind.Unchanged), "A Series-scoped cross-Source candidate must be reused directly, matching ResolveCharacterAsync's own behaviour");
     }
 
     [TestMethod]
@@ -1882,7 +2116,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             conversations: [BuildConversationEntry(id, description: "A tense standoff.")]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Conversation"), "Nothing differs — silent reuse, no action staged");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Conversation" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Nothing differs — silent reuse, no action staged");
     }
 
     [TestMethod]
@@ -2094,7 +2328,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "An omitted 'date' must never be treated as a change, under any policy");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source" && a.ActionType.Parsed != ImportActionKind.Unchanged), "An omitted 'date' must never be treated as a change, under any policy");
     }
 
     [TestMethod]
@@ -2126,7 +2360,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "An omitted 'seriesName' must never be treated as a change, under any policy — same bug as Date, found on the same DTO one field over (#190 scope-expansion finding)");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source" && a.ActionType.Parsed != ImportActionKind.Unchanged), "An omitted 'seriesName' must never be treated as a change, under any policy — same bug as Date, found on the same DTO one field over (#190 scope-expansion finding)");
     }
 
     [TestMethod]
@@ -2196,7 +2430,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [entry]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Person"), "An omitted 'dateOfBirth' must never be treated as a change, under any policy");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Person" && a.ActionType.Parsed != ImportActionKind.Unchanged), "An omitted 'dateOfBirth' must never be treated as a change, under any policy");
     }
 
     [TestMethod]
@@ -2227,7 +2461,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             stageDirections: [entry]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "StageDirection"), "An omitted 'imageUrl' must never be treated as a change, under any policy — must preserve a real existing value, not just null-matches-null");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "StageDirection" && a.ActionType.Parsed != ImportActionKind.Unchanged), "An omitted 'imageUrl' must never be treated as a change, under any policy — must preserve a real existing value, not just null-matches-null");
     }
 
     [TestMethod]
@@ -2241,7 +2475,7 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             soundCues: [entry]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "SoundCue"), "An omitted 'soundFileUrl' must never be treated as a change, under any policy — must preserve a real existing value, not just null-matches-null");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "SoundCue" && a.ActionType.Parsed != ImportActionKind.Unchanged), "An omitted 'soundFileUrl' must never be treated as a change, under any policy — must preserve a real existing value, not just null-matches-null");
     }
 
     [TestMethod]
@@ -2255,6 +2489,6 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             conversations: [entry]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Conversation"), "An omitted 'description' must never be treated as a change, under any policy");
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Conversation" && a.ActionType.Parsed != ImportActionKind.Unchanged), "An omitted 'description' must never be treated as a change, under any policy");
     }
 }

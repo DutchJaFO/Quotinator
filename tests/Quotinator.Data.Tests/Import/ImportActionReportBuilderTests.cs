@@ -106,6 +106,71 @@ public class ImportActionReportBuilderTests
         Assert.AreEqual(1, report.EntityTypes["Quote"].Stale);
     }
 
+    // ── #373: unchanged is its own outcome, and every incoming item is accounted for ───────────────
+
+    /// <summary>An unchanged action is neither new nor modified — it is its own bucket.</summary>
+    [TestMethod]
+    public void Build_UnchangedApplied_CountsAsUnchanged()
+    {
+        var report = ImportActionReportBuilder.Build("file.json", [Action("Quote", ImportActionKind.Unchanged, ImportActionStatus.Applied)]);
+
+        var counts = report.EntityTypes["Quote"];
+        Assert.AreEqual(1, counts.Unchanged);
+        Assert.AreEqual(0, counts.New);
+        Assert.AreEqual(0, counts.Modified, "Reporting it as modified is the defect this issue exists for.");
+    }
+
+    /// <summary>
+    /// #373: `Incoming` is every action for the entity type, so it must equal the sum of the outcome
+    /// buckets. That identity is the point — the builder has two `_ => counts` fall-through arms that
+    /// discard an action matching neither, and a total that no longer adds up is the only thing that
+    /// makes such a row observable.
+    /// </summary>
+    [TestMethod]
+    public void Incoming_EqualsTheSumOfEveryOutcome()
+    {
+        var report = ImportActionReportBuilder.Build("file.json",
+        [
+            Action("Quote", ImportActionKind.Add,       ImportActionStatus.Decided),
+            Action("Quote", ImportActionKind.Modify,    ImportActionStatus.Applied),
+            Action("Quote", ImportActionKind.Unchanged, ImportActionStatus.Applied),
+            Action("Quote", ImportActionKind.Modify,    ImportActionStatus.Pending),
+            Action("Quote", ImportActionKind.Modify,    ImportActionStatus.Blocked),
+            Action("Quote", ImportActionKind.Modify,    ImportActionStatus.Discarded),
+            Action("Quote", ImportActionKind.Add,       ImportActionStatus.Stale),
+        ]);
+
+        var counts = report.EntityTypes["Quote"];
+        Assert.AreEqual(7, counts.Incoming, "Seven actions arrived for this entity type.");
+        Assert.AreEqual(
+            counts.New + counts.Modified + counts.Unchanged + counts.Blocked + counts.Discarded + counts.Pending + counts.Stale,
+            counts.Incoming,
+            "Every incoming action lands in exactly one bucket. A shortfall means the builder silently dropped one.");
+    }
+
+    /// <summary>
+    /// The row the identity above exists to catch: an action whose status matches no arm is discarded
+    /// today rather than counted, so nothing reports that it arrived at all.
+    /// </summary>
+    [TestMethod]
+    public void Build_ActionMatchingNoOutcomeArm_IsStillCountedAsIncoming()
+    {
+        // A Decided action with no parsable kind reaches the inner switch and falls through its
+        // `_ => counts` arm — the shape a future ImportActionKind member would have before the builder
+        // learned about it.
+        ImportActionEntity unmatched = new()
+        {
+            EntityType = "Quote",
+            ActionType = new SafeValue<ImportActionKind?>("SomethingTheBuilderDoesNotKnow", null),
+            Status     = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+        };
+
+        var counts = ImportActionReportBuilder.Build("file.json", [unmatched]).EntityTypes["Quote"];
+
+        Assert.AreEqual(1, counts.Incoming,
+            "It arrived. Falling through every outcome arm is a reason to report it, not to forget it.");
+    }
+
     [TestMethod]
     public void Build_MultipleEntityTypes_EachGetsOwnIndependentCounts()
     {

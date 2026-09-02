@@ -184,13 +184,30 @@ public sealed class QuotinatorDatabaseInitializer(
             .Select(group => new ReseedEntityCountDto
             {
                 EntityType = group.Key,
+                // #373: how many of this type the file carried, whatever became of them — so the
+                // confirmation can say "13 incoming, 0 new, 13 already stored" rather than leaving the
+                // reader to infer it from three zeroes.
+                Incoming   = group.Count(),
                 Added      = group.Count(a => a.ActionType.Parsed == ImportActionKind.Add),
+                Unchanged  = group.Count(a => a.ActionType.Parsed == ImportActionKind.Unchanged),
                 // Matches the batch's own RecordCount rule: an action resolved as Skip or Review changed
                 // nothing, so counting it as modified would report work that never happened.
                 Modified   = group.Count(a => a.ActionType.Parsed == ImportActionKind.Modify
                                            && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review)),
+                // #373: every remaining outcome, recorded whether or not it can occur on this branch.
+                // A confirmation is written from the clean-apply path, so these are normally zero — and
+                // a non-zero one is precisely the thing worth finding quickly, which is why they are
+                // stated rather than assumed absent. "Any information that tells us what happened during
+                // an import/reseed is valuable" (developer, 2026-09-02).
+                Blocked    = group.Count(a => a.Status.Parsed == ImportActionStatus.Blocked),
+                Pending    = group.Count(a => a.Status.Parsed == ImportActionStatus.Pending),
+                Discarded  = group.Count(a => a.Status.Parsed == ImportActionStatus.Discarded),
+                Stale      = group.Count(a => a.Status.Parsed == ImportActionStatus.Stale),
             })
-            .Where(count => count.Added > 0 || count.Modified > 0)
+            // #373: every entity type that arrived is kept, whatever became of it. Filtering on the
+            // outcome buckets would drop exactly the rows this issue exists to surface — an
+            // unchanged-only breakdown, or one whose entire content was blocked.
+            .Where(count => count.Incoming > 0)
             .OrderBy(count => count.EntityType, StringComparer.OrdinalIgnoreCase)];
 
         ReseedFileAppliedMetadataDto metadata = new()
@@ -201,7 +218,16 @@ public sealed class QuotinatorDatabaseInitializer(
             ReleaseState = NotificationReleaseState.NotApplicable,
         };
 
-        object[] bodyArgs = [fileName, counts.Sum(c => c.Added), counts.Sum(c => c.Modified)];
+        // #373: what arrived leads, then what became of it — the shape the body template now states,
+        // so "0 added, 0 updated" is no longer the whole story a reader gets.
+        object[] bodyArgs =
+        [
+            fileName,
+            counts.Sum(c => c.Incoming),
+            counts.Sum(c => c.Added),
+            counts.Sum(c => c.Modified),
+            counts.Sum(c => c.Unchanged),
+        ];
 
         // One key per origin rather than an origin word passed as an argument: bodyArgs is a single
         // array applied to every language, so a localised "bundled"/"user" would render in one
@@ -780,10 +806,18 @@ public sealed class QuotinatorDatabaseInitializer(
         return (new ParsedSourceFileDto { Quotes = [] }, SeedFileIssue.InvalidJson);
     }
 
-    /// <summary>Single-line, grep-friendly rendering of a <see cref="FileImportReport"/> for the seed log (#221).</summary>
-    private static string FormatReport(FileImportReport report)
+    /// <summary>
+    /// Single-line, grep-friendly rendering of a <see cref="FileImportReport"/> for the seed log (#221).
+    /// <para>
+    /// `internal` rather than `private` so the line itself can be asserted (#373) — it is a hand-written
+    /// format string listing every count by name, which is exactly the shape that silently omits a
+    /// count added later. Same reasoning as `NotificationTable`'s `internal static` layout helpers.
+    /// </para>
+    /// </summary>
+    /// <param name="report">The per-file report to render.</param>
+    internal static string FormatReport(FileImportReport report)
         => string.Join(" ", report.EntityTypes.Select(kv =>
-            $"{kv.Key}[new={kv.Value.New} modified={kv.Value.Modified} blocked={kv.Value.Blocked} discarded={kv.Value.Discarded} pending={kv.Value.Pending} stale={kv.Value.Stale}]"));
+            $"{kv.Key}[incoming={kv.Value.Incoming} new={kv.Value.New} unchanged={kv.Value.Unchanged} modified={kv.Value.Modified} blocked={kv.Value.Blocked} discarded={kv.Value.Discarded} pending={kv.Value.Pending} stale={kv.Value.Stale}]"));
 
     private static readonly JsonSerializerOptions ConflictRuleReadOptions = new() { PropertyNameCaseInsensitive = true };
 

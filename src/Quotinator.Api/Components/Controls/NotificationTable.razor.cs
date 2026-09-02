@@ -154,7 +154,13 @@ public partial class NotificationTable
                 [text?.NotificationsDetailEntityColumn ?? "Entity",
                  text?.NotificationsDetailAddedColumn  ?? "Added",
                  text?.NotificationsDetailUpdatedColumn ?? "Updated"],
-                [.. applied.Counts.Select(IReadOnlyList<string> (c) =>
+                // #373: the payload now also carries Incoming and Unchanged, and keeps them — it is the
+                // complete record the API, the log and any audit read. This table stays a view of what
+                // *changed*, so a row that only arrived and matched is omitted rather than rendered as
+                // "0  0", which states nothing and reads as a fault. The body carries those totals.
+                [.. applied.Counts
+                    .Where(c => c.Added > 0 || c.Modified > 0)
+                    .Select(IReadOnlyList<string> (c) =>
                     [c.EntityType,
                      c.Added.ToString(CultureInfo.CurrentCulture),
                      c.Modified.ToString(CultureInfo.CurrentCulture)])]),

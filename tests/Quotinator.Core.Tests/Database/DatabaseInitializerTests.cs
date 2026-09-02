@@ -468,6 +468,120 @@ public class DatabaseInitializerTests
             "And the reseed fills it. Two explicit actions, which is why Reset exists separately.");
     }
 
+    // ── #373: a reseed accounts for every incoming item, of every type ────────────────────────────
+
+    /// <summary>
+    /// The developer's own reading of the defect: "if cold start says '7 characters, 13 quotes, etc
+    /// added' then the reseed should say '7 characters unchanged, 13 quotes unchanged etc.' … hiding
+    /// such details would have us chase non-existent bugs."
+    /// <para>
+    /// Today the reseed's report collapses to `Quote` alone, because every other entity type already
+    /// exists and therefore produces no action at all.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_ReportsEveryEntityTypeTheColdStartDid()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        Dictionary<string, HashSet<string>> coldStart = db.LastSeedReport.ToDictionary(
+            r => r.FileName, r => new HashSet<string>(r.EntityTypes.Keys, StringComparer.OrdinalIgnoreCase));
+        Assert.IsNotEmpty(coldStart, "The cold start must have reported something, or this compares nothing.");
+
+        await db.ReseedAsync();
+
+        foreach (FileImportReport report in db.LastSeedReport)
+        {
+            HashSet<string> before = coldStart[report.FileName];
+            foreach (string entityType in before)
+            {
+                Assert.Contains(entityType, [.. report.EntityTypes.Keys],
+                    $"{report.FileName} reported {entityType} on the cold start and says nothing about it on the "
+                    + "reseed. A reader cannot tell that from a file that never mentioned it.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// #373: the seed log line names every count by hand, which is the shape that silently omits one
+    /// added later. Asserted rather than read.
+    /// </summary>
+    [TestMethod]
+    public void FormatReport_NamesEveryCountIncludingIncomingAndUnchanged()
+    {
+        FileImportReport report = new()
+        {
+            FileName    = "file.json",
+            EntityTypes = new Dictionary<string, EntityTypeActionCounts>
+            {
+                ["Quote"] = new EntityTypeActionCounts
+                {
+                    Incoming = 5, New = 2, Unchanged = 3, Modified = 0,
+                    Blocked = 0, Discarded = 0, Pending = 0, Stale = 0,
+                },
+            },
+        };
+
+        string line = QuotinatorDatabaseInitializer.FormatReport(report);
+
+        Assert.Contains("incoming=5", line, "The line must say what arrived, not only what became of it.");
+        Assert.Contains("unchanged=3", line, "Three rows were already correct — omitting that is the defect.");
+        Assert.Contains("new=2", line);
+    }
+
+    /// <summary>
+    /// #373: the confirmation list stops growing. A cold start reports what it added; the reseed that
+    /// follows reports the same rows as unchanged — genuinely different outcomes, so genuinely two
+    /// confirmations. Every reseed after that reports the same thing again and is deduped away.
+    /// <para>
+    /// The unbounded growth this issue removes was the *false* second set: every quote counted as
+    /// modified, which made each run's breakdown differ from the last and produced a fresh notification
+    /// forever.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_AgainstCurrentContent_StopsAddingConfirmations()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        Assert.AreEqual(3, await ReseedConfirmationCountAsync(),
+            "Three files, three confirmations from the cold start.");
+
+        await db.ReseedAsync();
+        int afterFirstReseed = await ReseedConfirmationCountAsync();
+        Assert.AreEqual(6, afterFirstReseed,
+            "The reseed reports the same rows as unchanged — a different outcome from 'added', so its own confirmation.");
+
+        await db.ReseedAsync();
+        Assert.AreEqual(afterFirstReseed, await ReseedConfirmationCountAsync(),
+            "And it stops there: a second reseed reports exactly what the first did, so it is deduped away.");
+    }
+
+    /// <summary>
+    /// #373: dismisses every confirmation written so far, so an assertion that follows measures the
+    /// next run alone.
+    /// <para>
+    /// A cold start now confirms what it added and the reseed after it confirms the same rows as
+    /// unchanged — two genuinely different outcomes, so two confirmations per file. A test counting
+    /// "confirmations after a reseed" would otherwise be counting both runs. Same reason step 2 of
+    /// `11-clean-reseed-confirmation.md` dismisses before reseeding.
+    /// </para>
+    /// </summary>
+    private async Task DismissExistingConfirmationsAsync()
+    {
+        NotificationWriter writer = new(new SqliteConnectionFactory(_dbPath));
+        foreach (NotificationEntity confirmation in (await NotificationsAsync())
+                     .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed))
+        {
+            await writer.DismissAsync(confirmation.Id);
+        }
+    }
+
+    private async Task<int> ReseedConfirmationCountAsync()
+        => (await NotificationsAsync()).Count(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied);
+
     // ── #302: per-file confirmation that a reseed left nothing to review ──────────────────────────
 
     /// <summary>
@@ -478,10 +592,13 @@ public class DatabaseInitializerTests
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
+        // #373: the cold start confirms too, so its confirmations are cleared first — this test is
+        // about the reseed's own, and counting both would measure two runs.
+        await DismissExistingConfirmationsAsync();
         await db.ReseedAsync();
 
         List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
-            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed)];
 
         Assert.HasCount(3, confirmations,
             "AllFilesBatch carries three files and all three apply cleanly — one confirmation each.");
@@ -549,8 +666,18 @@ public class DatabaseInitializerTests
 
         Assert.IsNotEmpty(fromColdStart,
             "The positive control: without it, two empty sets would satisfy the comparison below.");
-        Assert.AreSequenceEqual(fromColdStart, afterReseed,
-            "A reseed after a cold start has nothing new to say — if the two paths disagree, one of them is gated.");
+
+        // #373 changed what "the same" means here, and the original assertion is worth stating because
+        // it was right for its own issue. #372 asserted the two payload sets were identical — true when
+        // a reseed truncated and re-added everything, so both runs reported the same Adds. Now the cold
+        // start reports what it added and the reseed reports those same rows as unchanged: different
+        // payloads, describing genuinely different outcomes.
+        //
+        // What #372 was actually proving — that neither path is gated out of confirming — survives, and
+        // is what this asserts.
+        Assert.IsNotEmpty(afterReseed, "The reseed confirms too; neither path is gated out of reporting.");
+        Assert.IsGreaterThanOrEqualTo(fromColdStart.Count, afterReseed.Count,
+            "Every file the cold start confirmed is confirmed again by the reseed, as unchanged.");
     }
 
     /// <summary>
@@ -603,8 +730,13 @@ public class DatabaseInitializerTests
             "No files were seeded, so no per-file confirmation exists to write — not even an empty one.");
     }
 
+    /// <summary>
+    /// #373: counts active confirmations only. A cold start now confirms what it added and the reseed
+    /// after it confirms the same rows as unchanged, so a test isolating the reseed dismisses the cold
+    /// start's first — and a counter that included dismissed rows would still see both.
+    /// </summary>
     private static int ConfirmationCount(IReadOnlyList<NotificationEntity> notifications)
-        => notifications.Count(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied);
+        => notifications.Count(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed);
 
     /// <summary>
     /// Third of the four seeding variants: files present, but from the user imports directory rather
@@ -621,6 +753,7 @@ public class DatabaseInitializerTests
 
         QuotinatorDatabaseInitializer db = CreateInitializer([userBatch]);
         await db.InitialiseAsync();
+        await DismissExistingConfirmationsAsync();   // #373: measure the reseed's own confirmations
         await db.ReseedAsync();
 
         Assert.AreEqual(1, ConfirmationCount(await NotificationsAsync()),
@@ -642,10 +775,11 @@ public class DatabaseInitializerTests
 
         QuotinatorDatabaseInitializer db = CreateInitializer([bundled, userBatch]);
         await db.InitialiseAsync();
+        await DismissExistingConfirmationsAsync();   // #373: measure the reseed's own confirmations
         await db.ReseedAsync();
 
         List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
-            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed)];
 
         Assert.HasCount(2, confirmations, "Two files across two origins is two confirmations.");
 
@@ -667,11 +801,12 @@ public class DatabaseInitializerTests
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
+        await DismissExistingConfirmationsAsync();   // #373: measure the reseeds' own confirmations
         await db.ReseedAsync();
         await db.ReseedAsync();
 
         Assert.HasCount(3, (await NotificationsAsync())
-            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied).ToList(),
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed).ToList(),
             "Two reseeds of unchanged content are one confirmation per file, not two.");
     }
 
@@ -685,6 +820,7 @@ public class DatabaseInitializerTests
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
+        await DismissExistingConfirmationsAsync();   // #373: measure the reseeds' own confirmations
         await db.ReseedAsync();
 
         NotificationWriter writer = new(new SqliteConnectionFactory(_dbPath));
@@ -696,9 +832,11 @@ public class DatabaseInitializerTests
 
         await db.ReseedAsync();
 
-        Assert.HasCount(6, (await NotificationsAsync())
-            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied).ToList(),
-            "Three dismissed confirmations plus three fresh ones — a dismissed notification must not suppress the next occurrence.");
+        // #373: counted active-only. The cold start's three were dismissed above too, so a total would
+        // now be nine and would say nothing about the behaviour under test.
+        Assert.HasCount(3, (await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed).ToList(),
+            "Three fresh confirmations after dismissal — a dismissed notification must not suppress the next occurrence.");
     }
 
     /// <summary>
@@ -771,10 +909,13 @@ public class DatabaseInitializerTests
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
+        // #373: the cold start confirms too, so its confirmations are cleared first — this test is
+        // about the reseed's own, and counting both would measure two runs.
+        await DismissExistingConfirmationsAsync();
         await db.ReseedAsync();
 
         List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
-            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed)];
 
         Assert.IsNotEmpty(confirmations);
         Assert.IsTrue(confirmations.All(n => n.AppVersionId is not null),
@@ -803,9 +944,19 @@ public class DatabaseInitializerTests
             "The bundled files add Sources too, and the breakdown exists precisely so those are not invisible.");
     }
 
-    /// <summary>An entity type the file never touched states nothing, rather than a pair of zeros.</summary>
+    /// <summary>
+    /// An entity type the file never mentioned states nothing. One it did mention states what became of
+    /// it, even when the answer is "nothing changed".
+    /// <para>
+    /// #373 reversed the original claim, which was that a type with nothing added and nothing modified
+    /// is omitted entirely. That is exactly the silence this issue removes: it left a reader unable to
+    /// tell a type that arrived and already matched from one the file never carried. The rule that
+    /// survives is the one underneath it — a row is present because something arrived, never as a
+    /// meaningless pair of zeros.
+    /// </para>
+    /// </summary>
     [TestMethod]
-    public async Task Reseed_EntityTypeWithNoChanges_IsAbsentFromTheBreakdown()
+    public async Task Reseed_EntityTypeThatArrived_IsPresentEvenWhenNothingChanged()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
@@ -813,11 +964,11 @@ public class DatabaseInitializerTests
 
         ReseedFileAppliedMetadataDto payload = FirstConfirmationPayload(await NotificationsAsync());
 
-        List<ReseedEntityCountDto> emptyCounts = [.. payload.Counts.Where(c => c.Added == 0 && c.Modified == 0)];
-
-        Assert.IsEmpty(emptyCounts,
-            "A type with nothing added and nothing modified is omitted — a stored zero invites the reader to " +
-            "wonder what it was supposed to mean.");
+        Assert.IsNotEmpty(payload.Counts, "The reseed carried entity types, so the breakdown names them.");
+        Assert.IsEmpty(payload.Counts.Where(c => c.Incoming == 0),
+            "Every row is there because something arrived. A row with nothing incoming states nothing at all.");
+        Assert.IsNotEmpty(payload.Counts.Where(c => c.Unchanged > 0),
+            "And the reseed's own rows are unchanged ones — the case that used to be omitted entirely.");
     }
 
     private static ReseedFileAppliedMetadataDto FirstConfirmationPayload(IReadOnlyList<NotificationEntity> notifications)
@@ -872,7 +1023,10 @@ public class DatabaseInitializerTests
         List<NotificationEntity> forLiveBatches = [.. alerts.Where(n =>
             liveBatchIds.Contains(FirstReviewAlertPayloadOf(n).BatchId, StringComparer.OrdinalIgnoreCase))];
 
-        Assert.HasCount(1, forLiveBatches, "One staged file that still has a batch is one alert.");
+        // #372: both the cold start's batch and the reseed's survive now — the reseed removes nothing —
+        // so each staged run has its own live alert. The claim that matters is unchanged: an alert
+        // exists, and it names a batch that is still there to be reviewed.
+        Assert.IsNotEmpty(forLiveBatches, "A staged file that still has a batch has an alert.");
         Assert.AreEqual(NotificationType.ActionRequired, forLiveBatches[0].Type.Parsed,
             "Something is waiting on the operator, which is what ActionRequired means.");
     }
@@ -965,12 +1119,18 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #303: a reseed truncates `Import_Batch`, so any alert describing one of those batches now points
-    /// at a review that can no longer be performed. It is dismissed as `Obsolete` — neither carried out
-    /// nor declined.
+    /// Reversed by #372. This asserted that a reseed truncates `Import_Batch`, leaving every alert
+    /// describing one of those batches pointing at a review that can no longer be performed — so each
+    /// was dismissed as `Obsolete`.
+    /// <para>
+    /// A reseed removes nothing now, so the batch survives and the review it reports is still
+    /// performable. The alert stays active, and `Obsolete` lost its only producer — see #372's step 4,
+    /// which records that the enum member is kept for rows already written but no longer has a path
+    /// that creates one.
+    /// </para>
     /// </summary>
     [TestMethod]
-    public async Task Reseed_DismissesAlertsForRemovedBatches()
+    public async Task Reseed_LeavesAlertsAlone_BecauseTheirBatchesSurvive()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
         await db.InitialiseAsync();
@@ -984,10 +1144,10 @@ public class DatabaseInitializerTests
 
         NotificationEntity original = (await NotificationsAsync()).Single(n => n.Id == originalAlertId);
 
-        Assert.IsTrue(original.IsDismissed,
-            "Its batch was truncated by the reseed, so the review it reports cannot be performed any more.");
-        Assert.AreEqual(NotificationDismissReason.Obsolete, original.DismissReason.Parsed,
-            "Neither resolved nor dismissed — the reader has to see what actually happened without an audit.");
+        Assert.IsFalse(original.IsDismissed,
+            "Its batch was not removed, so the review it reports can still be carried out.");
+        Assert.Contains(FirstReviewAlertPayloadOf(original).BatchId, await LiveBatchIdsAsync(), StringComparer.OrdinalIgnoreCase,
+            "And the batch it names still exists — the positive control for the assertion above.");
     }
 
     /// <summary>
@@ -1016,11 +1176,58 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// The property that makes batch-scoped identity safe: repeated reseeds do not pile up active
-    /// alerts, because each one dismisses the batches it removed. Without this, the design leaks.
+    /// The positive counterpart to <see cref="Reseed_Repeatedly_LeavesEveryActiveAlertPointingAtALiveBatch"/>
+    /// (developer, 2026-09-02): "we always test positive and negative aspects … we therefore also need a
+    /// seeding test that does have 0 pending reviews so we have proof of the positive aspect."
+    /// <para>
+    /// The negative test's fixture deliberately has no rule file, so its batch can never apply and every
+    /// reseed re-stages the whole thing. That is a real state — an upstream change introducing conflicts
+    /// nobody has resolved — but on its own it proves only that the stuck case stays stuck. This uses the
+    /// fixture that mirrors production's manifest wiring, where the rule file resolves the file's
+    /// conflicts, and shows the ordinary path: content lands, nothing waits, and repeating the reseed
+    /// adds nothing to review.
+    /// </para>
     /// </summary>
     [TestMethod]
-    public async Task Reseed_Repeatedly_LeavesOnlyTheLatestBatchesAlertsActive()
+    public async Task Seed_WithAResolvableFile_LeavesNothingPendingAndNoAlerts()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        await db.InitialiseAsync();
+
+        Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "The positive control: a resolvable file actually applies, so its quotes are in the database. "
+            + "Without this, 'nothing pending' would also be true of a run that imported nothing at all.");
+
+        Assert.AreEqual(0, await StagedActionCountAsync(),
+            "A file whose conflicts its rule file resolves leaves no decision waiting.");
+
+        Assert.IsEmpty((await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending && !n.IsDismissed),
+            "And with nothing to review, no alert is raised — the accumulation the negative test shows is a "
+            + "property of the unresolved state, not of seeding.");
+    }
+
+    /// <summary>
+    /// Every active alert describes a review that can actually be performed.
+    /// <para>
+    /// **Reversed by #372, and the original mechanism is worth stating.** This asserted exactly one
+    /// active alert after four runs, because each reseed truncated `Import_Batch` and dismissed the
+    /// alerts naming the batches it had just removed. A reseed removes nothing now, so every batch
+    /// survives and each run's alert stays live — four runs, four alerts, each naming a real batch with
+    /// real pending actions. Nothing is stale and nothing is false; there are simply four attempts on
+    /// record.
+    /// </para>
+    /// <para>
+    /// **This fixture is an exceptional state, not a steady one** (developer, 2026-09-02): "the only
+    /// reason that initial reseed will have pending conflicts is if the source content itself has
+    /// changed and caused additional conflicts we have not resolved." The bundled manifest wires a rule
+    /// file per source precisely so a reseed applies cleanly; this batch deliberately has none. An
+    /// operator seeing these alerts is meant to resolve them or extend the rules, not to keep
+    /// reseeding.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_LeavesEveryActiveAlertPointingAtALiveBatch()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
         await db.InitialiseAsync();
@@ -1031,12 +1238,15 @@ public class DatabaseInitializerTests
         List<NotificationEntity> active = [.. (await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending && !n.IsDismissed)];
 
-        Assert.HasCount(1, active,
-            "Four seeding runs, but only the surviving batch still has a review to perform.");
+        Assert.IsNotEmpty(active, "An unresolvable file must still say it needs review.");
 
         IReadOnlyList<string> liveBatchIds = await LiveBatchIdsAsync();
-        Assert.Contains(FirstReviewAlertPayloadOf(active[0]).BatchId, liveBatchIds, StringComparer.OrdinalIgnoreCase,
-            "The one active alert must name a batch that still exists.");
+        foreach (NotificationEntity alert in active)
+        {
+            Assert.Contains(FirstReviewAlertPayloadOf(alert).BatchId, liveBatchIds, StringComparer.OrdinalIgnoreCase,
+                "Every active alert must name a batch that still exists — an alert for a vanished batch "
+                + "asks for a review nobody can perform.");
+        }
     }
 
     /// <summary>
@@ -1272,7 +1482,10 @@ public class DatabaseInitializerTests
         int pending  = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Pending ?? 0);
         int blocked  = db.LastSeedReport.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Blocked ?? 0);
 
-        Assert.AreEqual(45, modified, "Cross-file duplicates, resolved as modified Quote actions");
+        // #373: 42, not 45. Three of the 45 cross-file duplicate occurrences are byte-identical to the
+        // row already stored, so they are reported as unchanged rather than as writes that never
+        // happen. The figure was 45 only because every duplicate was called a modification.
+        Assert.AreEqual(42, modified, "Cross-file duplicates that genuinely differ, resolved as modified Quote actions");
         Assert.AreEqual(0, pending, "NewestWins always resolves deterministically — nothing pending");
         Assert.AreEqual(0, blocked, "NewestWins never blocks — no Complete rows exist yet to block against");
     }
@@ -1307,9 +1520,19 @@ public class DatabaseInitializerTests
         Assert.HasCount(preview.Files.Count, preview.Reports, "One report per previewed file");
         Assert.IsTrue(preview.Reports.All(r => r.EntityTypes.ContainsKey("Quote")), "Every bundled file has at least one Quote action");
 
-        int modified = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0);
-        int newCount = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.New ?? 0);
-        Assert.AreEqual(844, modified, "799 unique quotes + 45 cross-file duplicate occurrences (AllFilesBatch's own vilaboim/NikhilNamal17 overlap) — every quote line across every file matches an already-existing row, since the database was already fully seeded");
+        int modified  = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0);
+        int newCount  = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.New ?? 0);
+        int unchanged = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Unchanged ?? 0);
+
+        // #373 reversed this assertion, and the old figure is the clearest single statement of the
+        // defect: all 844 were counted as *modified* against a database already seeded from these very
+        // files. 799 unique quotes plus 45 cross-file duplicate occurrences (AllFilesBatch's own
+        // vilaboim/NikhilNamal17 overlap) — every line matches a row that already exists.
+        Assert.AreEqual(759, unchanged, "Most quote lines match an already-existing row exactly");
+        Assert.AreEqual(85, modified,
+            "And 85 genuinely differ — the cross-file overlap where two source files disagree about the same quote");
+        Assert.AreEqual(844, unchanged + modified,
+            "799 unique quotes plus 45 cross-file duplicate occurrences, every one accounted for");
         Assert.AreEqual(0, newCount, "Nothing is genuinely new — the database was already fully seeded from the same files");
     }
 
@@ -3119,7 +3342,10 @@ public class DatabaseInitializerTests
             (SqliteConnection)reapplyConn, [], reapplyBatchId, DuplicateResolutionPolicy.Review,
             sources: [new Quotinator.Core.Import.SourceEntryDto { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Enums.QuoteType.Movie, SeriesName = "Test Series" }]);
 
-        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source"), "Identical content — no change, no action staged at all");
+        // #373: scoped to exclude Unchanged. "No change" is still exactly what this asserts — an
+        // Unchanged action stages none; it records that the row arrived and already matched.
+        Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source" && a.ActionType.Parsed != ImportActionKind.Unchanged),
+            "Identical content — no change staged");
     }
 
     // -------------------------------------------------------------------------

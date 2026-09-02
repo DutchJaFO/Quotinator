@@ -448,6 +448,18 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Pending', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
+            // #373: ActionType gains 'Unchanged' — a record the import would leave exactly as it is.
+            // Both paths must accept it, which is what a table-rebuild migration is easy to get wrong.
+            await conn.ExecuteAsync(
+                "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'Unchanged', 'Widget', @id, '{}', 'Applied', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'NotARealActionType', 'Widget', @id, '{}', 'Pending', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
                 "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'NotARealStatus', @now, @now);",

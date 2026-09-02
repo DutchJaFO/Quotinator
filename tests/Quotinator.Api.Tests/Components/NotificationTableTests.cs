@@ -284,7 +284,7 @@ public class NotificationTableTests
 
     #region #308 — title/body layout
 
-    private static NotificationEntity WithTitle(string? title, string? metadata = null)
+    private static NotificationEntity WithTitle(string? title, string? metadata = null, NotificationMetadataKind? metadataKind = null)
     {
         NotificationEntity notification = Build(isDismissed: false, expiresAt: null);
         return new NotificationEntity
@@ -293,9 +293,101 @@ public class NotificationTableTests
             Title       = title,
             Body        = notification.Body,
             Metadata    = metadata,
+            // #373: previously never set, so PayloadDetail — which dispatches on it — returned an empty
+            // table for every fixture, and every assertion over that table held vacuously.
+            MetadataKind = new SafeValue<NotificationMetadataKind?>(metadataKind?.ToString() ?? string.Empty, metadataKind),
             IsDismissed = notification.IsDismissed,
             ExpiresAt   = notification.ExpiresAt,
         };
+    }
+
+    /// <summary>
+    /// #373: which kinds render structured detail, declared once. Derived from the enum by the tests
+    /// below, so a kind added later fails until it is listed here — the same guarantee
+    /// <c>NotificationMetadataKinds.PayloadTypes</c> gives for payload types, applied to what each kind
+    /// actually renders.
+    /// </summary>
+    private static readonly Dictionary<NotificationMetadataKind, bool> RendersDetail = new()
+    {
+        [NotificationMetadataKind.Announcement]           = false,
+        [NotificationMetadataKind.SchemaVersionOvershoot] = false,
+        [NotificationMetadataKind.WhatsNew]               = false,
+        [NotificationMetadataKind.ReseedRecommended]      = false,
+        [NotificationMetadataKind.ReseedFileApplied]      = true,
+        [NotificationMetadataKind.ImportReviewPending]    = true,
+    };
+
+    /// <summary>
+    /// Every kind is declared above. Without this, a new member would simply be absent from the map and
+    /// the tests below would skip it silently — which is the failure this whole group exists to prevent.
+    /// </summary>
+    [TestMethod]
+    public void EveryMetadataKind_DeclaresWhetherItRendersDetail()
+    {
+        foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
+        {
+            Assert.IsTrue(RendersDetail.ContainsKey(kind),
+                $"{kind} has no declared rendering expectation. A new kind must say whether it shows detail.");
+        }
+    }
+
+    /// <summary>
+    /// The positive direction, per kind: a kind declared to render detail produces rows, and one
+    /// declared not to produces none — both against its own valid payload.
+    /// </summary>
+    [TestMethod]
+    public void EveryMetadataKind_WithItsOwnPayload_RendersWhatItDeclares()
+    {
+        foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
+        {
+            NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+                WithTitle("A headline", metadata: MetadataFor(kind), metadataKind: kind));
+
+            if (RendersDetail[kind])
+            {
+                Assert.IsNotEmpty(detail.Rows, $"{kind} declares structured detail and produced none.");
+                Assert.IsNotEmpty(detail.Headers, $"{kind} produced rows with no column headings.");
+                foreach (IReadOnlyList<string> row in detail.Rows)
+                    Assert.HasCount(detail.Headers.Count, row, $"{kind} has a row whose cells do not match its headings.");
+            }
+            else
+            {
+                Assert.IsEmpty(detail.Rows, $"{kind} declares no structured detail and produced some.");
+                Assert.IsEmpty(detail.Headers, $"{kind} claims columns for a table it has no rows for.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// The negative direction, per kind: an unreadable payload renders nothing and throws nothing,
+    /// whichever kind claims it. A row written by an older build must never take a page down.
+    /// </summary>
+    [TestMethod]
+    public void EveryMetadataKind_WithAnUnreadablePayload_RendersNothingAndDoesNotThrow()
+    {
+        foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
+        {
+            NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+                WithTitle("A headline", metadata: "{ not json at all", metadataKind: kind));
+
+            Assert.IsEmpty(detail.Rows, $"{kind} rendered rows from a payload that cannot be parsed.");
+        }
+    }
+
+    /// <summary>
+    /// The other negative: a notification carrying no payload at all. Distinct from an unreadable one —
+    /// #279's and #289's rows predate typed metadata entirely and have none.
+    /// </summary>
+    [TestMethod]
+    public void EveryMetadataKind_WithNoPayload_RendersNothing()
+    {
+        foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
+        {
+            NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+                WithTitle("A headline", metadata: null, metadataKind: kind));
+
+            Assert.IsEmpty(detail.Rows, $"{kind} rendered rows for a notification with no metadata.");
+        }
     }
 
     /// <summary>#308: a notification that has a headline gets one rendered as its own element.</summary>
@@ -409,8 +501,8 @@ public class NotificationTableTests
     {
         foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
         {
-            NotificationTable.PayloadTable detail =
-                NotificationTable.PayloadDetail(WithTitle("A headline", metadata: MetadataFor(kind)));
+            NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+                WithTitle("A headline", metadata: MetadataFor(kind), metadataKind: kind));
 
             Assert.AreEqual(detail.Rows.Count > 0, detail.Headers.Count > 0,
                 $"{kind} has {detail.Rows.Count} row(s) and {detail.Headers.Count} column heading(s) — " +
@@ -440,14 +532,47 @@ public class NotificationTableTests
             "structured detail worth showing and some do not.");
     }
 
+    /// <summary>
+    /// A valid, deserializable payload per kind.
+    /// <para>
+    /// #373: every one of these previously omitted <c>releaseState</c>, which
+    /// <c>NotificationMetadataDto</c> declares <c>required</c> — so deserialization threw,
+    /// <c>TryDeserialize</c> swallowed it, and every fixture yielded an empty table. Combined with
+    /// <see cref="WithTitle"/> never setting the kind, that made two independent reasons for the same
+    /// vacuum, and one test that could not fail.
+    /// </para>
+    /// </summary>
     private static string MetadataFor(NotificationMetadataKind kind) => kind switch
     {
         NotificationMetadataKind.ReseedFileApplied =>
-            """{"fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","added":2,"modified":1}]}""",
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","added":2,"modified":1}]}""",
         NotificationMetadataKind.ImportReviewPending =>
-            """{"fileName":"a.json","origin":"User","batchId":"b","counts":[{"status":"Pending","count":1}]}""",
-        _ => "{}",
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"User","batchId":"b","counts":[{"status":"Pending","count":1}]}""",
+        _ => """{"releaseState":"NotApplicable"}""",
     };
+
+    /// <summary>
+    /// #373: a payload written before this issue added its fields still renders, reading the absent
+    /// ones as zero. Distinct from the unreadable case below — this payload is perfectly valid, just
+    /// older.
+    /// </summary>
+    [TestMethod]
+    public void PayloadWrittenBeforeUnchangedExisted_StillRenders()
+    {
+        // The exact shape #302 has been persisting since it shipped: entityType, added, modified, and
+        // nothing else. These rows exist on the developer's own database, so a payload change that
+        // cannot read them is a regression in reading history rather than a compatibility nicety.
+        const string olderPayload =
+            """{"releaseState":"NotApplicable","fileName":"quotinator-curated.json","origin":"System","counts":[{"entityType":"Quote","added":13,"modified":0}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: olderPayload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.IsNotEmpty(detail.Rows, "An older payload still describes real work and must still render.");
+        Assert.HasCount(detail.Headers.Count, detail.Rows[0],
+            "Whatever layout #373 settles on, every row still matches its headers (#308's own contract).");
+    }
 
     /// <summary>
     /// Negative case for the row above: a row whose payload cannot be read still renders. Rows written

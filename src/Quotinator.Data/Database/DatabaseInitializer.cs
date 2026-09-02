@@ -136,6 +136,10 @@ public class DatabaseInitializer(
         // only that it settled. An added column with an inline CHECK, not a rebuild — migration 16's
         // precedent, since nothing existing is being widened.
         new SchemaMigration { Version = 19, Sql = NotificationResolutionMigrations.AddResolutionColumn },
+        // #373: ActionType gains 'Unchanged' — an import that would leave a record exactly as it is.
+        // A rebuild, for the same reason migrations 15, 17 and 18 needed one: SQLite cannot widen an
+        // inline CHECK. Nothing about existing rows changes; only the constraint admits one more value.
+        new SchemaMigration { Version = 20, Sql = ImportActionUnchangedMigrations.WidenActionTypeForUnchanged },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -205,7 +209,7 @@ public class DatabaseInitializer(
             Id                 TEXT    NOT NULL PRIMARY KEY,
             BatchId            TEXT    NOT NULL,
             ActionType         TEXT    NOT NULL
-                               CHECK (ActionType IN ('Add', 'Modify')),
+                               CHECK (ActionType IN ('Add', 'Modify', 'Unchanged')),
             EntityType         TEXT    NOT NULL,
             EntityId           TEXT    NOT NULL,
             ExistingBatchId    TEXT,

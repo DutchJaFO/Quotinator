@@ -16,8 +16,24 @@ namespace Quotinator.Data.Import;
 /// </summary>
 public sealed class EntityTypeActionCounts
 {
+    /// <summary>
+    /// Every action that arrived for this entity type (#373) — the sum of every bucket below.
+    /// <para>
+    /// Reported rather than derived by the reader, so a file's own story reads whole: "5 quotes
+    /// incoming, 2 new, 3 already stored". It is also the only way a row that falls through every
+    /// outcome arm becomes observable — the total stops adding up.
+    /// </para>
+    /// </summary>
+    public required int Incoming { get; init; }
+
     /// <summary>Add actions that resolved cleanly.</summary>
     public required int New { get; init; }
+
+    /// <summary>
+    /// Actions for a record the import would leave exactly as it is (#373). Distinct from a zero
+    /// <see cref="New"/>, which says only that nothing was added — not whether anything arrived.
+    /// </summary>
+    public required int Unchanged { get; init; }
 
     /// <summary>Modify actions that resolved cleanly.</summary>
     public required int Modified { get; init; }

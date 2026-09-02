@@ -66,7 +66,7 @@ internal static class AdminEndpoints
         .Produces<SeedPreviewResponse>(StatusCodes.Status200OK)
         .WithDescription(
             "Scans all configured source files without writing anything to the database. " +
-            "Returns the quote count per file, plus a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale " +
+            "Returns the quote count per file, plus a per-file, per-entity-type report (incoming/new/unchanged/modified/blocked/discarded/pending/stale " +
             "counts) computed by running the real import action planner read-only against the current database state (issue #221). " +
             "For a file with a `downloadUrl`, also returns `refreshOutcome` (`updated`, `uptodate`, `failed`, or `skippedcollision`) and " +
             "`lastRefreshedAtUtc` (the cached copy's own last-write time, not \"now\") — both omitted for a file with no `downloadUrl`. " +
@@ -213,7 +213,7 @@ internal static class AdminEndpoints
             "The schema version history is preserved — no migrations are re-applied. " +
             "Auto-updated sources are refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
             "unless `Quotinator:AutoUpdateSources` is `false`, in which case `forceSourceRefresh` has no effect. " +
-            "Returns the row counts and a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) " +
+            "Returns the row counts and a per-file, per-entity-type report (incoming/new/unchanged/modified/blocked/discarded/pending/stale counts) " +
             "after the operation completes (issue #221). " +
             "On success, dismisses any active notification recommending a reseed (issue #304) — the same " +
             "recommendation the notification action clears, since either route resolves it. " +

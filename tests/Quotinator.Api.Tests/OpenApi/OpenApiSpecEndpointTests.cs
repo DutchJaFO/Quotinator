@@ -172,5 +172,45 @@ public class OpenApiSpecEndpointTests
         Assert.IsEmpty(failures, string.Join("\n", failures));
     }
 
+    /// <summary>
+    /// #373: an endpoint describing the per-entity-type report lists its counts by hand, which is the
+    /// shape that keeps describing the old set after a new count is added. Asserted against the live
+    /// spec rather than the source, so it holds whichever attribute produced the text.
+    /// </summary>
+    [TestMethod]
+    public async Task EveryEndpointDescribingTheBreakdown_NamesEveryCountItReturns()
+    {
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client = factory.CreateClient();
+
+        JsonDocument? doc = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
+
+        List<string> describingTheBreakdown =
+        [
+            .. doc!.RootElement.GetProperty("paths").EnumerateObject()
+                .SelectMany(path => path.Value.EnumerateObject())
+                // Only descriptions that actually enumerate the counts, matched on the enumeration's own
+                // slash-joined tail. Two narrower markers were tried and both over-matched:
+                // "per-entity-type" also catches the reset endpoint (which mentions the report without
+                // listing its buckets) and /import's policy overrides; "blocked" also catches the reset
+                // endpoint's "reset blocked only by that quota".
+                .Where(operation => operation.Value.TryGetProperty("description", out JsonElement d)
+                                    && d.GetString() is string text
+                                    && text.Contains("pending/stale", StringComparison.OrdinalIgnoreCase))
+                .Select(operation => operation.Value.GetProperty("description").GetString()!)
+        ];
+
+        Assert.IsNotEmpty(describingTheBreakdown,
+            "No endpoint describes the per-entity-type report at all — this asserts nothing without one.");
+
+        foreach (string description in describingTheBreakdown)
+        {
+            Assert.Contains("unchanged", description, StringComparison.OrdinalIgnoreCase,
+                "A description listing what the report returns must list the unchanged count too.");
+            Assert.Contains("incoming", description, StringComparison.OrdinalIgnoreCase,
+                "…and how many items arrived, which is what the outcome counts are measured against.");
+        }
+    }
+
     public TestContext TestContext { get; set; }
 }
