@@ -1,6 +1,6 @@
 # #308 — Notification: multi-line/rich message layout
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #308
 **Tiers required:** T1, T2
 **Depends on:** #312, #302, #303, #304, #367
@@ -238,7 +238,7 @@ shape, and a stored English string would be unreadable for a Dutch or German rea
 
 ### 9. Render the payload rather than only the frozen sentence
 
-**Status:** ⬜ Not started — finding 2; turns rows 21–23 green
+**Status:** ✅ Done — rows 21–23 green
 
 `LayoutFor` grows from a boolean into a per-type description of *which parts of the payload that type
 shows* — the per-entity breakdown for `ReseedFileApplied`, the per-status counts and batch for
@@ -250,7 +250,7 @@ translated, and replacing it would break every consumer reading `body`. The payl
 
 ### 10. Collapse on the page, dialog in the modal
 
-**Status:** ⬜ Not started — finding 3; turns rows 24–26 green
+**Status:** ✅ Done — rows 24–26 green
 
 Developer decision, 2026-09-02. Collapsed state shows title plus the one-line body; expanded shows
 step 9's payload detail. The modal opens the same content in a dialog instead, because a collapse inside
@@ -266,7 +266,7 @@ restricted set of allowed actions is not the same as a lost circuit.
 
 ### 11. Name the actions instead of "Run"
 
-**Status:** ⬜ Not started — finding 4; turns rows 27–29 green
+**Status:** ✅ Done — rows 27–29 green
 
 A per-trigger label — reseed, reset — and for a multi-outcome action, both choices offered directly
 rather than behind a generic button. Labels are translated keys in all three files.
@@ -276,7 +276,14 @@ action deliberate; naming the button is not a reason to remove the second step.
 
 ### 12. Run the T2 document green across both surfaces
 
-**Status:** ⬜ Not started — turns rows 30–31 green
+**Status:** ✅ Done — rows 30–32 green
+
+**Running it found three defects the unit tests had all passed over**, each recorded in the document:
+`Reseeded`/`Reset` were defined, translated and never written (only the by-batch dismissal was wired);
+the read query's explicit column list omitted `Resolution`, so the value was stored and invisible to
+every consumer; and the first fix set the resolution *after* `ReseedAsync`, by which point
+`ApplyBatchAsync` had already dismissed the row. Rows 17–18 missed all three because both read with raw
+`SELECT *` and both exercised only the by-batch path.
 
 
 ## Verification checklist
@@ -303,17 +310,18 @@ action deliberate; naming the button is not a reason to remove the second step.
 | 18 | ✅ | A notification dismissed by the user records no resolution | Unit test | `NotificationWriterTests.DismissedByUser_RecordsNoResolution` — negative; the field means "how the action settled it", not "how it went inactive". Wired via `Sql.Notifications.UpdateDismissById`: the by-batch mutation does **not** reach this path, so proving it needed the by-id query mutated instead |
 | 19 | ✅ | The migration and the baseline accept the same `Resolution` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` — extended with all four members and a rejected value, on both paths |
 | 20 | ✅ | Every `NotificationResolution` member has a label in all three locales | Unit test | `NotificationTableTests.EveryResolution_HasATranslationKey` — derived from the enum, like `EveryDisplayStatus_HasATranslationKey`; `TranslationCompletenessTests` covers the other two locales |
-| 21 | ❌ | Every type leads with its body, with no exception | Unit test | `NotificationTableTests.ContentLines_ForEveryKind_LeadWithTheBody` — the body is the summary of the payload, so detail never replaces it |
-| 22 | ❌ | A payload that cannot be deserialised renders the plain body rather than throwing | Unit test | `NotificationTableTests.UnreadablePayload_FallsBackToTheBody` — negative; a row written by an older build must still render. **Passes today for the wrong reason** — the stub returns no lines for any payload — so it stays ❌ until step 9 renders one, proven by the opposing stub |
-| 23 | ❌ | Whether a type has structured detail beneath the summary varies | Unit test | `NotificationTableTests.LayoutFor_AcrossKinds_PayloadDetailVaries` — if every type answers alike, `LayoutFor` is still the line-wrapping boolean under a longer name |
-| 24 | ❌ | The page collapses and expands | Automated (T2) | `13-notification-layout.md` — click the expander, assert the payload detail appears |
-| 25 | ❌ | The modal opens a dialog rather than expanding in place | Automated (T2) + screenshot | same document — restart, then open one notification's detail |
-| 26 | ❌ | Collapsed state shows the title and the one-line body, never the payload detail | Automated (T2) | same document — the detail is absent from the DOM or hidden, asserted before expanding |
-| 27 | ❌ | Each executable trigger's button is named for what it does | Unit test | `NotificationTableTests.ActionLabelFor_EachExecutableTrigger_IsNamed` — derived from `NotificationDismissTrigger`, so a new one fails here |
-| 28 | ❌ | A multi-outcome action offers both choices without an intermediate click | Unit test | `NotificationTableTests.ImportReviewResolved_OffersBothChoicesDirectly` |
-| 29 | ❌ | The confirmation step still stands | Automated (T2) | same document — a named button still requires confirming before it executes, per #367's T1 |
-| 30 | ❌ | Every layout renders on both surfaces | Automated (T2) + screenshot | same document, run whole after implementation |
-| 31 | ❌ | The new T2 steps go red before they go green | Canary run | run at step 7 against the pre-implementation build, recorded in the document's *Canary* section |
+| 21 | ✅ | Every type leads with its body, with no exception | Unit test | `NotificationTableTests.ContentLines_ForEveryKind_LeadWithTheBody` — the body is the summary of the payload, so detail never replaces it |
+| 22 | ✅ | A payload that cannot be deserialised renders the plain body rather than throwing | Unit test | `NotificationTableTests.UnreadablePayload_FallsBackToTheBody` — negative; a row written by an older build must still render. Proven by mutation: making the fall-through arm return a line fails it |
+| 23 | ✅ | Whether a type has structured detail beneath the summary varies | Unit test | `NotificationTableTests.LayoutFor_AcrossKinds_PayloadDetailVaries` — two types have detail (`ReseedFileApplied`, `ImportReviewPending`), four do not, decided on the measured body-vs-payload comparison rather than by preference |
+| 24 | ✅ | The page collapses and expands | Automated (T2) | `13-notification-layout.md` step 7 — `collapsedByDefault: true`, hidden while collapsed (via `checkVisibility()`, since `getClientRects()` reports a collapsed element as visible), `2` lines when opened |
+| 25 | ✅ | The modal opens a dialog rather than expanding in place | Automated (T2) + screenshot | same document step 8 — `expandersInModal: 0`, `openButtons: 4`; opening yields the per-entity breakdown, and Close returns the modal intact |
+| 26 | ✅ | Collapsed state shows the title and the one-line body, never the payload detail | Automated (T2) | same document step 7 — `detailVisibleWhileCollapsed: false`, and `bodyComesFirst: true` |
+| 27 | ✅ | Each executable trigger's button is named for what it does | Unit test | `NotificationTableTests.ActionLabelFor_EachExecutableTrigger_IsNamed` — derived from `NotificationDismissTrigger`, so a new one fails here. Confirmed live: the button reads *Reload the quotes* |
+| 28 | ✅ | A multi-outcome action offers both choices without an intermediate click | Unit test | `NotificationTableTests.ImportReviewResolved_OffersBothChoicesDirectly` |
+| 29 | ✅ | The confirmation step still stands | Automated (T2) | same document step 9 — clicking the named button yields `Confirm`/`Cancel`, and nothing runs until Confirm |
+| 30 | ✅ | Every layout renders on both surfaces | Automated (T2) + screenshot | same document steps 7–10, run whole on the current build; screenshot of the modal dialog over the startup popup |
+| 31 | ✅ | The new T2 steps go red before they go green | Canary run | `quotinator:canary308b` at `7bc5bacc`: `0` expanders, `0` open buttons, a button reading `Run`, `0` resolution lines. Step 9 needed an actionable row first — it passed vacuously without one |
+| 32 | ✅ | A resolved notification says how it was resolved | Automated (T2) | same document step 10 — the resolved row reads *Reloaded the quotes*, and `GET /notifications` returns `resolution: reseeded` |
 
 **Rows 5, 9 and 10 cannot be replaced by unit tests.** A unit test can prove the markup and the
 stylesheet name the same class; only a rendered page proves the rule reaches the element. #303's nav
