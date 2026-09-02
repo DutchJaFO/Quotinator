@@ -45,7 +45,7 @@ that recorded number rather than a literal.
 
 ## Steps
 
-### 1. Seed a fresh database and confirm cold start says nothing per file
+### 1. Seed a fresh database and confirm cold start confirms each file
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-11 --port 19511 `
@@ -60,18 +60,39 @@ function Get-Confirmations {
 while ((Get-QuoteCount) -lt 1) { Start-Sleep 2 }
 "quotes seeded = $(Get-QuoteCount)"
 "confirmations after first seed = $(@(Get-Confirmations).Count)"
+@(Get-Confirmations) | ForEach-Object { "  $($_.title) — $($_.body)" }
 ```
 
-**Expected:** a non-zero `quotes seeded`, and `confirmations after first seed = 0`.
+**Expected:** a non-zero `quotes seeded`, and one confirmation per bundled file that applied cleanly,
+each naming its own file.
 
-The zero is the point, not a formality: the startup modal already reports aggregate counts on a fresh
-install, and repeating that per file would be clutter. A non-zero count here also means step 2 could
-not attribute what it sees to the reseed. Stop if it is not zero.
+**Inverted 2026-09-02, and the step got stronger for it.** It previously expected
+`confirmations after first seed = 0`, on the grounds that the startup modal's aggregate summary already
+covered a fresh install. It does not — that summary carries no file names, no origin, and no
+added-versus-updated split, and it is shown after a reseed too, where the confirmations are written
+anyway. The finding that forced this: two runs against an empty database, identical per-file reports,
+four confirmations from the UI and none at startup.
+
+**The old form could not fail for the right reason**, which this document's own *Canary* section already
+recorded: `= 0` passes against a build with no producer at all, so it proved nothing on its own and
+depended on step 2 to give it meaning. A presence assertion cannot pass that way.
+
+**Step 2 changes with it.** Confirmations now already exist when it runs, and dedupe means an
+unchanged reseed adds none — so "at least 1" would be satisfied by this step's own rows. Step 2
+therefore dismisses them before reseeding, which is what keeps its count attributable to the reseed.
 
 ### 2. Reseed, and confirm each cleanly-applied file
 
 ```powershell
 $headers = @{ "X-Api-Key" = "t2-302" }
+
+# Dismiss what the cold start wrote, so what appears next is attributable to the reseed alone.
+@(Get-Confirmations) | ForEach-Object {
+  Invoke-RestMethod -Method Post -Headers $headers `
+    "http://localhost:19511/api/v1/notifications/$($_.id)/dismiss" | Out-Null
+}
+"confirmations after dismissing cold start's = $(@(Get-Confirmations).Count)"
+
 Invoke-RestMethod -Method Post -Headers $headers `
   "http://localhost:19511/api/v1/admin/database/reseed" | Out-Null
 
@@ -81,8 +102,16 @@ $expected = $confirmations.Count
 $confirmations | ForEach-Object { "type=$($_.type) appVersionId=$($_.appVersionId) title=$($_.title)" }
 ```
 
-**Expected:** `confirmations after reseed` is at least 1, every row reporting `type=success` (the API
-serializes the type in lower case), a non-empty `appVersionId`, and a non-empty title.
+**Expected:** `confirmations after dismissing cold start's = 0`, then `confirmations after reseed` at
+least 1, every row reporting `type=success` (the API serializes the type in lower case), a non-empty
+`appVersionId`, and a non-empty title.
+
+**The dismissal is what keeps this step meaningful, and it was added 2026-09-02 with step 1's
+inversion.** Once cold start writes confirmations too, `at least 1` is satisfied by rows step 1 already
+produced — so a build whose reseed path wrote nothing at all would still pass. Clearing them first
+means the count can only come from the reseed. This is the same behaviour
+`DatabaseInitializerTests.Reseed_AfterDismissal_WritesTheConfirmationAgain` asserts at unit level,
+exercised here against a real reseed.
 
 `appVersionId` is not decoration here. Provenance was stored but exposed nowhere before this issue, so
 an unattributed notification was indistinguishable from an attributed one from outside the database. An
@@ -164,11 +193,21 @@ hands the initializer a batch list directly, so it can never prove that
 
 Each variant gets its own container, because the state is fixed at startup.
 
+**Each variant needs its own bind directory, not just its own container.** `destroy` deliberately
+leaves a bind directory in place — *"Its bind directory is this test's own to delete"* — so two
+variants pointed at one directory share a **database**, and the second starts with the first's quotes
+and notifications already in it. That is the opposite of what this step is for.
+
 ```powershell
-$imports = Join-Path $env:TEMP "qt-notif-11-bind\imports"
-New-Item -ItemType Directory -Force $imports | Out-Null
-Copy-Item data/sources/quotinator-curated.json $imports -Force
-Copy-Item data/sources/manifest.json $imports -Force -ErrorAction SilentlyContinue
+function New-BindRoot($name) {
+  $root = Join-Path $env:TEMP "qt-notif-11-bind-$name"
+  Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+  $imports = Join-Path $root "imports"
+  New-Item -ItemType Directory -Force $imports | Out-Null
+  Copy-Item data/sources/quotinator-curated.json $imports -Force
+  Copy-Item data/sources/manifest.json $imports -Force -ErrorAction SilentlyContinue
+  $root
+}
 
 function Confirmations($port) {
   $items = (Invoke-RestMethod "http://localhost:$port/api/v1/notifications?pageSize=0").items
@@ -190,8 +229,8 @@ function ReseedAndCount($name, $port, $extra) {
 
 ReseedAndCount "qt-notif-11a" 19512 @("--env","Quotinator__IncludeDefaultSources=false")
 ReseedAndCount "qt-notif-11b" 19513 @()
-ReseedAndCount "qt-notif-11c" 19514 @("--env","Quotinator__IncludeDefaultSources=false","--bind","$(Split-Path $imports)")
-ReseedAndCount "qt-notif-11d" 19515 @("--bind","$(Split-Path $imports)")
+ReseedAndCount "qt-notif-11c" 19514 @("--env","Quotinator__IncludeDefaultSources=false","--bind",(New-BindRoot "c"))
+ReseedAndCount "qt-notif-11d" 19515 @("--bind",(New-BindRoot "d"))
 ```
 
 **Expected:**
@@ -224,6 +263,15 @@ code path.
 inside the container before concluding the producer is origin-gated — a bind mount that did not land
 looks identical from the API.
 
+**If `11d` reports six rather than five, check the bind directory before anything else.** Found
+2026-09-02 while re-running this document for #302's reopening: `11c` and `11d` shared one bind
+directory, so `11d` inherited `11c`'s database — it started with quotes already present, skipped
+cold-start seeding entirely, and its reseed's five landed on top of `11c`'s one. The symptom is a
+sixth row, `quotinator-curated.json origin=User counts=7`, which no single run produces; the
+container log confirms it by showing a reseed with no cold-start seeding before it. The product was
+correct throughout. This was latent before the reopening for the same reason step 1 was weak — with
+cold start silent there was simply less to leak.
+
 ### 8. Confirm they reach the startup modal after a restart
 
 `/notifications` is only one of the two surfaces an active notification appears on. The other is the
@@ -249,19 +297,31 @@ foreach ($f in 'quotinator-curated.json','vilaboim_movie-quotes.json',
 
 **Expected:** `confirmation text in modal: True`, and every bundled file name present.
 
-**Negative control — run this against a container that has never reseeded:**
+**Negative control — dismiss every confirmation, restart, and confirm the modal drops them:**
 
 ```powershell
-dotnet script scripts/testing/test-env.csx -- create --name qt-notif-11n --port 19517 `
-  --image quotinator:local --env Quotinator__AdminApiKey=t2-302
-$fresh = (Invoke-WebRequest "http://localhost:19517/" -UseBasicParsing).Content
-"fresh install shows confirmations: $($fresh.Contains('reseeded with nothing left to review'))"
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-11n
+@(Get-Confirmations) | ForEach-Object {
+  Invoke-RestMethod -Method Post -Headers $headers `
+    "http://localhost:19511/api/v1/notifications/$($_.id)/dismiss" | Out-Null
+}
+docker restart qt-notif-11 | Out-Null
+foreach ($i in 1..30) {
+  try { if ((Invoke-RestMethod "http://localhost:19511/api/v1/health").status -eq 'healthy') { break } }
+  catch { Start-Sleep 2 }
+}
+$dismissed = (Invoke-WebRequest "http://localhost:19511/" -UseBasicParsing).Content
+"modal shows dismissed confirmations: $($dismissed.Contains('reseeded with nothing left to review'))"
 ```
 
 **Expected:** `False`. Without this half, the positive assertion above would pass just as happily
 against a page that renders every notification ever written, or against a substring that happens to
 appear somewhere else in the markup.
+
+**The control was "a container that has never reseeded" until 2026-09-02, and #302's reopening
+invalidated it** — a fresh install now confirms each file it seeds, so that container is no longer in
+the state the control needed. Dismissal produces that state instead, and targets the named failure mode
+more directly: an active-only query that is not actually filtering is exactly what shows a dismissed
+row. Note the restart — the modal renders once per process run, so the dismissal must precede one.
 
 **On failure:** check `/notifications` first. If the confirmations are there but not in the modal, the
 fault is in the modal's own active-notification query, not in this issue's producer.
@@ -285,6 +345,18 @@ appear on a reseed does their absence on a first seed say something. **Do not re
 believing step 1 covers the behaviour.
 
 Container, image and worktree removed afterwards.
+
+### Step 1's own canary, after the 2026-09-02 inversion
+
+The weakness above was resolved by removing the behaviour, not by strengthening the assertion around
+it. Step 1 now asserts a presence, so it has a red of its own — and unlike the original it needed no
+worktree, because the gate was still in place on `HEAD` at the moment the inverted step was written:
+
+| Step | Assertion | Result against the gated build |
+|---|---|---|
+| 1 | one confirmation per cleanly-applied file at cold start | **fails** — `quotes seeded = 799`, `confirmations after first seed = 0` |
+
+That is the T1 finding reproduced exactly: the seeding ran, four files applied, and nothing was said.
 
 ## Cleanup
 

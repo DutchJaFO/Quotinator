@@ -1,9 +1,9 @@
 # #302 — Notification: confirm files that reseed cleanly with no review needed
 
-**Status:** Waiting for release
+**Status:** In progress (step 12) — blocked on [#372](https://github.com/DutchJaFO/Quotinator/issues/372); steps 10 and 11 are done
 **GitHub issue:** #302
 **Tiers required:** T1, T2
-**Depends on:** #278, #304, #312, #319
+**Depends on:** #278, #304, #312, #319, #372
 
 ---
 
@@ -355,12 +355,100 @@ is already converted and listed.
 
 ---
 
+## Reopened, 2026-09-02 — the cold-start gate is removed
+
+**The finding:** two runs, both against an empty database, both importing the same four bundled files
+with identical per-file reports. Reseed from `/notifications` wrote four confirmations; startup wrote
+none. **The same action produced different results depending only on when it was run** (developer,
+2026-09-02). That is the finding — not the volume, and not the wording.
+
+**Item 2 of the issue body is the gate, and its justification does not survive contact.** It argued
+the cold-start path was already covered because "the startup modal's existing `DatabaseStatsSummary`
+already covers cold start with aggregate counts". It does not cover the same ground: it reports the
+database's end state, with no file names, no origin, and no added-versus-updated split, and it cannot
+tell bundled content from a user's own import. It is also shown after a UI reseed, where the
+confirmations are written anyway — so the argument would rule them out in both places or neither.
+
+A second premise was wrong too. The gate assumed a first seed has nothing interesting to report
+because every row is new. The live run shows otherwise: `Source[new=348 modified=61]` and
+`Quote[new=63 modified=36]` appear on the cold-start path as well, because files later in the order
+modify rows earlier ones created.
+
+**This makes four of the issue body's five items superseded** — items 1, 3 and 4 in *Scope changes*
+above, and now item 2. The body is not the authority for this issue; this plan is.
+
+**Volume is not the objection it looks like, and the answer was already recorded.** *Scope changes*
+item 3 settled that these notifications carry no expiry and rely on
+`NotificationSeeding.SeedWhileUnresolvedAsync` for dedupe, so at most one live row exists per distinct
+per-file result. Removing the gate therefore adds four dismissible rows to a first install, not a
+stream. Re-checked before reopening rather than re-litigated.
+
+### 10. Invert the tests, and run them red
+
+**Status:** ⬜ Not started
+
+Exit condition: every unit test below exists and **fails on its own assertion**, and the T2 document's
+step 1 has been re-run against the current build and failed.
+
+`Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification` is not edited into its own opposite in
+place — it is replaced, because a test that asserted an absence and now asserts a presence is a
+different test with a different failure mode. Row 31's mutation goes with it: it proved a behaviour
+being removed.
+
+**The T2 document's step 1 gets stronger, not merely different.** Its own canary section already
+records the weakness — it *passed* against the pre-work build, because "no confirmations" is satisfied
+by a feature that does not exist. Inverted, it asserts a presence and can only pass against a build
+that produces one.
+
+### 11. Remove the gate and the flag it reads
+
+**Status:** ⬜ Not started — turns rows 35–37 green
+
+`if (isReseed)` at the clean-apply branch goes. Nothing else reads the flag — confirmed by grep, six
+occurrences in `src/`, one of them a read — so `isReseed` is removed from
+`SeedIfEmptyInternalAsync` and `SeedIfEmptyAsync` along with both call sites' arguments, rather than
+left as a parameter nothing consults.
+
+**One comment goes stale in the same edit.** The review-alert branch beside it explains itself as
+"Not gated on isReseed, unlike the confirmation above" — a contrast that stops existing. Both branches
+are then ungated for the same reason, which is what the comment should say.
+
+### 12. Re-run T2, and re-verify T1
+
+**Status:** 🚧 Blocked on [#372](https://github.com/DutchJaFO/Quotinator/issues/372) — turns rows 38–39 green
+
+Both marks revert to unverified: the behaviour under test changed, so neither the prior T1 pass
+(2026-09-01) nor the prior T2 run still describes what ships. T1 is the developer's own.
+
+**Steps 1–8 of the document were run green on 2026-09-02 and two of them found defects — but the
+final pass waits for #372.** Under #372 a reseed stops deleting, so a reseed against a populated
+database imports nothing new and its per-file confirmations report what actually changed rather than a
+re-import of everything. Step 2 measures exactly that. Verifying now would certify a reseed that is
+about to stop existing in this form.
+
+**What the run established, and what it cost.** Steps 1 and 8's negative control both had to be
+inverted — each asserted an absence that this issue removes — and step 8's replacement asserts a
+dismissed confirmation is dropped from the modal, which targets the stated failure mode (an
+active-only query that is not filtering) more directly than the original did. Two defects surfaced,
+neither in this issue's code:
+
+1. **The document shared one bind directory across step 7's variants `11c` and `11d`**, so `11d`
+   inherited `11c`'s database — it started with quotes present, skipped cold-start seeding, and
+   reported six confirmations instead of five. `destroy` deliberately leaves bind directories in
+   place. Fixed here: each variant builds its own.
+
+2. **A reseed does not delete Series, Universe or `CharacterSource`**, so the same file reports three
+   entity types at cold start and one on reseed — two identities, no dedupe, one file confirmed twice.
+   That is [#372](https://github.com/DutchJaFO/Quotinator/issues/372), and it is why this step waits.
+   The gate removal did not cause it; it made it observable, exactly as it made the cold-start
+   suppression observable in the first place.
+
 ## Verification checklist
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | One `Success` notification per file that reseeds with nothing left to review | Unit test | `DatabaseInitializerTests.Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile` |
-| 2 | ✅ | No per-file notification on the first empty-database seed | Unit test | `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification` |
+| 2 | ⬜ | ~~No per-file notification on the first empty-database seed~~ **Reversed 2026-09-02** — see rows 35–37 | Unit test | ~~`DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification`~~ deleted with the gate it guarded |
 | 3 | ✅ | No per-file notification for a file left awaiting review | Unit test | `DatabaseInitializerTests.Reseed_FileLeftAwaitingReview_WritesNoSuccessNotification` |
 | 4 | ✅ | No notification for a reseed that touches zero files | Unit test | `DatabaseInitializerTests.Reseed_NoConfiguredFiles_WritesNoNotification` |
 | 5 | ✅ | An identical per-file result is not written again while the first notification is still active | Unit test | `DatabaseInitializerTests.Reseed_TwiceWithNoChange_DoesNotRewriteTheActiveNotification` |
@@ -389,10 +477,15 @@ is already converted and listed.
 | 28 | ✅ | Origin survives the `Metadata` column round-trip | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown` |
 | 29 | ✅ | All four seeding variants behave correctly against real configuration | Automated (T2) | `11-clean-reseed-confirmation.md` step 7 |
 | 30 | ✅ | The document goes red before it goes green | Canary run | `11-clean-reseed-confirmation.md`'s *Canary* section — built `aed54b2d` under `quotinator:canary302`: step 2 fails (`0` confirmations after a reseed). Step 1 passes on a build with no producer, so it proves nothing alone — recorded there |
-| 31 | ✅ | Row 2's first-seed suppression is wired, not incidental | Mutation | Replacing the `if (isReseed)` gate with `if (true)` fails `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification` |
+| 31 | ⬜ | ~~Row 2's first-seed suppression is wired, not incidental~~ **Retired 2026-09-02** — it proved the gate was wired, and the gate is gone | Mutation | ~~Replacing the `if (isReseed)` gate with `if (true)`~~ |
 | 32 | ✅ | Row 27's per-origin identity is wired | Mutation | Removing `Origin` from `ReseedFileAppliedMetadataDto.IdentityComponents` fails `ReseedFileAppliedMetadataTests.Identity_DiffersByOrigin_ForTheSameFileNameAndBreakdown` |
 | 33 | ✅ | Every named test is wired to behaviour, not passing incidentally | Mutation sweep | All 29 #302-referenced tests swept 2026-09-01 — disabling `ConfirmFileAppliedCleanlyAsync` fails 12; the rest by targeted mutation (first-seed gate, staged-branch confirm, identity components, wire names, response field, constructor optionality, baseline CHECK and structural drift) |
 | 34 | ✅ | The stored JSON keeps its wire property names | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown`'s `AssertWireNames` — added 2026-09-01 after the round-trip assertions were measured to survive renaming `[JsonPropertyName]` on both sides |
+| 35 | ⬜ | The first seed of an empty database confirms each file that applied cleanly | Unit test | `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesAPerFileNotification` — replaces row 2, which asserted the opposite |
+| 36 | ⬜ | It writes one confirmation per file, not one for the run | Unit test | `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesOnePerFile` — presence and count fail for different reasons, and the count is what catches a loop confirming four files once |
+| 37 | ⬜ | Cold start and reseed produce the same confirmations | Unit test | `DatabaseInitializerTests.ReseedAndColdStart_ProduceTheSameNotifications` — the finding asserted directly, rather than inferred from two tests that happen to agree |
+| 38 | 🚧 | A cold start with no database shows the same confirmations a UI reseed does | Automated (T2) | `11-clean-reseed-confirmation.md` step 1, inverted — **run green 2026-09-02**: `quotes seeded = 799`, four confirmations naming each bundled file, against a red run of `0` on the gated build. Held open pending [#372](https://github.com/DutchJaFO/Quotinator/issues/372), which changes what step 2 measures |
+| 39 | 🚧 | Every layout still renders correctly on the developer's own machine | Live (T1) | reverted from ✅ — rows 22 and 23 describe behaviour that has changed. Blocked on #372 for the same reason: T1 should see the reseed that ships, not this intermediate one |
 
 **The two surfaces need different sequences, which row 22 originally ran together as one step.**
 `StartupSuccessModal` is shown once per process run after a healthy startup, so a reseed — which
