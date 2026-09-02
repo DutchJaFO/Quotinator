@@ -17,6 +17,31 @@
     white-space: pre-line;
 }
 
+/* #308: how the action settled it, where the body above still asks for the decision that was made.
+   Muted rather than emphasised — it is a footnote on a finished row, not the row's headline. */
+.notification-resolution {
+    font-size: 0.875em;
+    opacity: 0.75;
+    margin-top: 0.15rem;
+}
+
+/* #308: payload detail, collapsed on the page. <details> rather than a component — it works with no
+   circuit and keeps no state of ours, so a row cannot be left half-expanded by a reconnect. */
+.notification-detail {
+    margin-top: 0.25rem;
+    font-size: 0.875em;
+}
+
+.notification-detail > summary {
+    cursor: pointer;
+    opacity: 0.75;
+}
+
+.notification-detail ul {
+    margin: 0.25rem 0 0;
+    padding-left: 1.25rem;
+}
+
 .badge .spinner-border {
     --bs-spinner-width: 0.75em;
     --bs-spinner-height: 0.75em;

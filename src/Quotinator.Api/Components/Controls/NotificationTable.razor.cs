@@ -1,8 +1,10 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Quotinator.Api.Formatting;
 using Quotinator.Api.Services;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Notifications;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
 namespace Quotinator.Api.Components.Controls;
@@ -106,21 +108,86 @@ public partial class NotificationTable
     /// <param name="PayloadParts">The payload fields shown as detail beneath the body. Empty for a type with no structured detail worth showing.</param>
     internal sealed record NotificationLayout(bool BodyIsMultiLine, IReadOnlyList<string> PayloadParts);
 
-    /// <summary>The lines a notification renders: its body, then any payload detail. #308.</summary>
+    /// <summary>
+    /// The lines a notification renders: its body, then any payload detail. #308.
+    /// </summary>
+    /// <remarks>
+    /// The body always leads, for every type — it is the summary of the payload wherever there is one,
+    /// so detail is never an alternative to it.
+    /// </remarks>
     /// <param name="notification">The row being rendered.</param>
-    internal static IReadOnlyList<string> ContentLines(NotificationEntity notification) => [];
+    /// <param name="text">The resolved UI strings, for the detail templates.</param>
+    internal static IReadOnlyList<string> ContentLines(NotificationEntity notification, Quotinator.Api.I18nText.UI? text = null) =>
+        [notification.Body, .. PayloadLines(notification, text)];
 
-    /// <summary>The detail lines rendered from a notification's stored payload. #308.</summary>
+    /// <summary>
+    /// The detail lines rendered from a notification's stored payload, empty when it has none. #308.
+    /// </summary>
+    /// <remarks>
+    /// Only the two types whose payload holds something their body does not: `ReseedFileApplied`'s
+    /// per-entity-type breakdown (the body states the totals) and `ImportReviewPending`'s per-status
+    /// counts (the body states the sum). The other four were measured against their own body templates
+    /// and add nothing — `WhatsNew`'s payload has no properties at all.
+    /// <para>
+    /// A payload that cannot be read yields no lines rather than throwing: a row written by an older
+    /// build must still render its body.
+    /// </para>
+    /// </remarks>
     /// <param name="notification">The row being rendered.</param>
-    internal static IReadOnlyList<string> PayloadLines(NotificationEntity notification) => [];
+    /// <param name="text">The resolved UI strings, for the detail templates.</param>
+    internal static IReadOnlyList<string> PayloadLines(NotificationEntity notification, Quotinator.Api.I18nText.UI? text = null)
+    {
+        NotificationMetadataDto? payload =
+            NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
 
-    /// <summary>The translation key for the button that runs <paramref name="trigger"/>'s action. #308.</summary>
-    /// <param name="trigger">The trigger the row carries.</param>
-    internal static string ActionLabelKeyFor(NotificationDismissTrigger trigger) => "NotificationsRunActionButton";
+        return payload switch
+        {
+            ReseedFileAppliedMetadataDto applied => [.. applied.Counts.Select(c =>
+                string.Format(CultureInfo.CurrentCulture,
+                    text?.NotificationDetailEntityCount ?? "{0}: {1} added, {2} updated",
+                    c.EntityType, c.Added, c.Modified))],
 
-    /// <summary>The outcomes <paramref name="trigger"/>'s action can be run with. #308.</summary>
+            ImportReviewPendingMetadataDto review => [.. review.Counts.Select(c =>
+                string.Format(CultureInfo.CurrentCulture,
+                    text?.NotificationDetailStatusCount ?? "{0}: {1}",
+                    c.Status, c.Count))],
+
+            _ => [],
+        };
+    }
+
+    /// <summary>
+    /// The translation key for the button that runs <paramref name="trigger"/>'s action. #308.
+    /// </summary>
+    /// <remarks>
+    /// Found in T1: a generic "Run" says nothing about what is about to happen, and for an irreversible
+    /// action that is the one thing the button has to say. Every executable trigger is listed
+    /// explicitly, so a new one fails `ActionLabelFor_EachExecutableTrigger_IsNamed` rather than
+    /// silently inheriting a label that describes nothing.
+    /// </remarks>
     /// <param name="trigger">The trigger the row carries.</param>
-    internal static IReadOnlyList<FieldResolutionChoice> ChoicesFor(NotificationDismissTrigger trigger) => [];
+    internal static string ActionLabelKeyFor(NotificationDismissTrigger trigger) => trigger switch
+    {
+        NotificationDismissTrigger.DatabaseReset        => "NotificationsResetActionButton",
+        NotificationDismissTrigger.Reseed               => "NotificationsReseedActionButton",
+        NotificationDismissTrigger.ImportReviewResolved => "NotificationsReviewActionButton",
+        _ => "NotificationsRunActionButton",
+    };
+
+    /// <summary>
+    /// The outcomes <paramref name="trigger"/>'s action can be run with, empty for a single-outcome
+    /// action. #308.
+    /// </summary>
+    /// <remarks>
+    /// An import review has two, and hiding them behind a generic button meant the operator had to
+    /// click to discover what the choices even were. A single-outcome action returns none rather than
+    /// one — a control offering a single option is a button, not a choice.
+    /// </remarks>
+    /// <param name="trigger">The trigger the row carries.</param>
+    internal static IReadOnlyList<FieldResolutionChoice> ChoicesFor(NotificationDismissTrigger trigger) =>
+        trigger is NotificationDismissTrigger.ImportReviewResolved
+            ? [FieldResolutionChoice.Keep, FieldResolutionChoice.Replace]
+            : [];
 
     /// <summary>The class the body cell carries, and the stylesheet targets. #308.</summary>
     internal const string BodyCellClass = "notification-body";
@@ -152,9 +219,13 @@ public partial class NotificationTable
     {
         // One line per changelog highlight, and one per cleanly-applied or staged file: these producers
         // write several facts, and collapsing them into a paragraph is what #308 exists to stop.
+        // Measured against each type's own body template, 2026-09-02 — the payload earns a line only
+        // where it holds something the sentence does not. WhatsNew's DTO has no properties at all.
         NotificationMetadataKind.WhatsNew            => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
-        NotificationMetadataKind.ReseedFileApplied   => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
-        NotificationMetadataKind.ImportReviewPending => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
+        // The body states the totals ("1077 added and 61 updated"); the payload has the per-entity split.
+        NotificationMetadataKind.ReseedFileApplied   => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: ["counts"]),
+        // The body states the sum ("1 changes need your decision"); the payload says which statuses.
+        NotificationMetadataKind.ImportReviewPending => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: ["counts"]),
         NotificationMetadataKind.Announcement           => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
         NotificationMetadataKind.SchemaVersionOvershoot => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
         NotificationMetadataKind.ReseedRecommended      => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
@@ -240,6 +311,30 @@ public partial class NotificationTable
     private Guid? ConfirmingActionForId;
 
     private string TypeLabel(NotificationType? type) => TypeLabel(type, Text);
+
+    /// <summary>#308: the localised button label for a row's own action.</summary>
+    /// <param name="notification">The row being rendered.</param>
+    private string ActionLabel(NotificationEntity notification) =>
+        notification.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger
+            ? ActionLabelKeyFor(trigger) switch
+            {
+                "NotificationsResetActionButton"  => Text.NotificationsResetActionButton,
+                "NotificationsReseedActionButton" => Text.NotificationsReseedActionButton,
+                "NotificationsReviewActionButton" => Text.NotificationsReviewActionButton,
+                _                                 => Text.NotificationsRunActionButton,
+            }
+            : Text.NotificationsRunActionButton;
+
+    /// <summary>#308: the localised label for how an action settled a notification.</summary>
+    /// <param name="resolution">The recorded resolution.</param>
+    private string ResolutionLabel(NotificationResolution resolution) => resolution switch
+    {
+        NotificationResolution.KeptExisting => Text.NotificationResolutionKeptExisting,
+        NotificationResolution.TookIncoming => Text.NotificationResolutionTookIncoming,
+        NotificationResolution.Reseeded     => Text.NotificationResolutionReseeded,
+        NotificationResolution.Reset        => Text.NotificationResolutionReset,
+        _ => resolution.ToString(),
+    };
 
     private bool CanExecuteAction(NotificationEntity notification) =>
         ShowsRunControl(

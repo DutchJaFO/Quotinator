@@ -30,6 +30,33 @@
                         <div class="notification-title">@notification.Title</div>
                     }
                     <div class="notification-body">@notification.Body</div>
+                    @{
+                        var detail = PayloadLines(notification, Text);
+                        var resolution = notification.Resolution.Parsed;
+                    }
+                    @if (resolution is not null)
+                    {
+                        @* #308: what the action actually did. The body is frozen at write time and
+                           still asks for the decision that has since been made. *@
+                        <div class="notification-resolution">@ResolutionLabel(resolution.Value)</div>
+                    }
+                    @if (detail.Count > 0)
+                    {
+                        @* Collapsed by default on the page: the summary above is what a scan needs, and
+                           the detail is what a reader who stopped on this row wants. A native disclosure
+                           element rather than a JS component — no circuit and no state of our own.
+                           Do not name the element inside this comment: a literal tag in a Razor comment
+                           is parsed as markup, which broke real startup here (#308, 2026-09-02). *@
+                        <details class="notification-detail">
+                            <summary>@Text.NotificationsDetailToggle</summary>
+                            <ul>
+                                @foreach (string line in detail)
+                                {
+                                    <li>@line</li>
+                                }
+                            </ul>
+                        </details>
+                    }
                 </td>
                 <td>@Local(notification.ExpiresAt.Parsed)</td>
                 <td>
@@ -87,7 +114,9 @@
                             }
                             else
                             {
-                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmingActionForId = notification.Id">@Text.NotificationsRunActionButton</button>
+                                @* #308: named for what it does. A generic "Run" says nothing, and for an
+                                   irreversible action that is exactly what the button has to say. *@
+                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmingActionForId = notification.Id">@ActionLabel(notification)</button>
                                 @if (OffersResolutionChoice(notification))
                                 {
                                     @* #303: the coarse options above settle a whole batch one way. The page is
