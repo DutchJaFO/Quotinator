@@ -35,7 +35,7 @@ public sealed class NoOpNotificationWriter : INotificationWriter
         => Task.FromResult<NotificationEntity?>(null);
 
     /// <inheritdoc/>
-    public Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger)
+    public Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger, NotificationResolution? resolution = null)
         => Task.FromResult(0);
 
     /// <inheritdoc/>

@@ -59,7 +59,7 @@ public class SqliteImportActionServiceTests
         public Task<NotificationEntity?> DismissAsync(Guid id, string? language = null)
             => Task.FromResult<NotificationEntity?>(null);
 
-        public Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger)
+        public Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger, NotificationResolution? resolution = null)
         {
             DismissByTriggerCalls.Add(trigger);
             return Task.FromResult(0);

@@ -118,7 +118,7 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
     }
 
     /// <inheritdoc/>
-    public async Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger)
+    public async Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger, NotificationResolution? resolution = null)
     {
         using IDbConnection conn = Factory.CreateConnection();
         conn.Open();
@@ -129,8 +129,11 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
         // action that they declined it.
         string reason = NotificationDismissReason.Resolved.ToString();
 
+        // #308: and which action it was. Found in T2 — the reseed and reset paths dismiss through this
+        // method, not the by-batch one, so wiring only that one left NotificationResolution.Reseeded
+        // and .Reset defined, translated, and never written.
         return await conn.ExecuteAsync(Sql.Notifications.UpdateDismissByTrigger,
-            new { trigger = trigger.ToString(), dismissedAt = now.Raw, dismissReason = reason, dateModified = now.Raw });
+            new { trigger = trigger.ToString(), dismissedAt = now.Raw, dismissReason = reason, resolution = resolution?.ToString(), dateModified = now.Raw });
     }
 
     /// <inheritdoc/>

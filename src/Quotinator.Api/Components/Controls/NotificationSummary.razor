@@ -1,5 +1,7 @@
 @if (Notifications.Count > 0)
 {
     <h2 class="h5">@Text.NotificationSummaryHeading</h2>
-    <NotificationTable Notifications="Notifications" />
+    @* #308: DetailAsDialog — this surface is a size-constrained popup, so payload detail opens over it
+       rather than expanding a row and pushing the rest of the list out of view. *@
+    <NotificationTable Notifications="Notifications" DetailAsDialog="true" />
 }

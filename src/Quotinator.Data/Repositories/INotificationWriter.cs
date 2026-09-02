@@ -56,7 +56,9 @@ public interface INotificationWriter
     /// <see cref="NotificationDismissTrigger.DatabaseReset"/>. Returns the number of rows dismissed;
     /// <c>0</c> when nothing matched (a deliberate no-op, not an error).
     /// </summary>
-    Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger);
+    /// <param name="trigger">The trigger the notifications must carry.</param>
+    /// <param name="resolution">#308: how the action settled them. <see langword="null"/> when the caller is clearing notifications rather than completing their action.</param>
+    Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger, NotificationResolution? resolution = null);
 
     /// <summary>
     /// Marks dismissed every active notification carrying <paramref name="trigger"/> whose metadata

@@ -44,7 +44,8 @@ internal sealed class NotificationActionExecutor(
             case NotificationDismissTrigger.DatabaseReset:
                 await databaseInitializer.ResetAsync();
                 databaseHealth.MarkHealthy();
-                await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
+                await notificationWriter.DismissByTriggerAsync(
+                    NotificationDismissTrigger.DatabaseReset, NotificationResolution.Reset);
                 // #81: matches AdminEndpoints.cs's own POST /admin/database/reset wiring — Reset
                 // rebuilds System_AppVersion empty like every other table, so re-populate it
                 // immediately rather than leaving it empty until the next full app restart.
@@ -70,7 +71,8 @@ internal sealed class NotificationActionExecutor(
                 // Default forceSourceRefresh: the content that prompted the recommendation is already
                 // downloaded, so another network round-trip would buy nothing.
                 await databaseInitializer.ReseedAsync();
-                await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
+                await notificationWriter.DismissByTriggerAsync(
+                    NotificationDismissTrigger.Reseed, NotificationResolution.Reseeded);
                 break;
             // #303: the coarse, whole-batch form of the two options the review page offers per action —
             // keep everything as stored, or take everything the file brought. Interim by design: the

@@ -605,7 +605,7 @@ internal static class Sql
             "COALESCE(t.Body,  n.Body)  AS Body, " +
             "n.Metadata, n.MetadataKind, " +
             $"{IdClauses.SelectColumn("n.AppVersionId", "AppVersionId")}, " +
-            "n.ExpiresAt, n.IsDismissed, n.DismissedAt, n.DismissTriggerKey, n.DismissReason, " +
+            "n.ExpiresAt, n.IsDismissed, n.DismissedAt, n.DismissTriggerKey, n.DismissReason, n.Resolution, " +
             "n.DateCreated, n.DateModified, n.DateDeleted, n.IsDeleted, n.OriginalLanguage, " +
             "CASE WHEN t.Body IS NOT NULL THEN LOWER(@lang) ELSE n.OriginalLanguage END AS EffectiveLanguage";
 
@@ -654,7 +654,7 @@ internal static class Sql
         /// project's project-wide enum-comparison convention.
         /// </summary>
         internal static readonly string UpdateDismissByTrigger =
-            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, DateModified = @dateModified " +
+            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, Resolution = @resolution, DateModified = @dateModified " +
             $"WHERE IsDismissed = 0 AND IsDeleted = 0 AND {TextClauses.Equals("DismissTriggerKey", "trigger")};";
 
         /// <summary>

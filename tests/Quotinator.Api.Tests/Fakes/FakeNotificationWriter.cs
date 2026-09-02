@@ -83,7 +83,7 @@ internal sealed class FakeNotificationWriter : INotificationWriter
     }
 
     /// <inheritdoc/>
-    public Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger)
+    public Task<int> DismissByTriggerAsync(NotificationDismissTrigger trigger, NotificationResolution? resolution = null)
     {
         DismissByTriggerCalls.Add(trigger);
         return Task.FromResult(0);

@@ -61,6 +61,19 @@ public sealed class NotificationResponse
     public string? DismissReason { get; init; }
 
     /// <summary>
+    /// How this notification's own action settled it (#308) — <c>keptexisting</c>, <c>tookincoming</c>,
+    /// <c>reseeded</c> or <c>reset</c>. <see langword="null"/> whenever no action ran: while still
+    /// active, when the user dismissed it by hand, when a reseed superseded it, and on every row
+    /// written before this was recorded.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="DismissReason"/>, which says only *that* it stopped being active. A
+    /// consumer showing history needs both: `resolved` alone cannot say which way a two-outcome review
+    /// went.
+    /// </remarks>
+    public string? Resolution { get; init; }
+
+    /// <summary>
     /// The language <see cref="Title"/> and <see cref="Body"/> are actually returned in (#319) — the
     /// requested one when a translation existed, <see cref="OriginalLanguage"/> when it did not.
     /// </summary>

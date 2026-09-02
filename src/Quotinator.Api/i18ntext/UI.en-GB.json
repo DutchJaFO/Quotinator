@@ -73,6 +73,7 @@
   "NotificationsObsoleteLabel": "No longer applicable",
   "NotificationsExecutingLabel": "Running…",
   "NotificationsDetailToggle": "Details",
+  "NotificationsCloseDetailButton": "Close",
   "NotificationsResetActionButton": "Rebuild the database",
   "NotificationsReseedActionButton": "Reload the quotes",
   "NotificationsReviewActionButton": "Resolve this file",

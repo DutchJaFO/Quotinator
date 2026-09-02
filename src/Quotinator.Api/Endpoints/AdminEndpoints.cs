@@ -188,7 +188,8 @@ internal static class AdminEndpoints
             // dismisses exactly as the notification action does. Load-bearing rather than tidy: the
             // recommendation dedupes against *active* rows, so one left undismissed after the operator
             // resolved it by hand would suppress every later occurrence silently.
-            await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
+            await notificationWriter.DismissByTriggerAsync(
+                NotificationDismissTrigger.Reseed, NotificationResolution.Reseeded);
             return Results.Ok(new DatabaseSeedSummaryResponse
             {
                 Quotes          = db.QuoteCount,
@@ -265,7 +266,8 @@ internal static class AdminEndpoints
             // explicit wiring instruction: it's the correct call site for the general mechanism
             // (a future action that does *not* wipe the whole database would make it load-bearing),
             // and it's harmless here.
-            await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.DatabaseReset);
+            await notificationWriter.DismissByTriggerAsync(
+                NotificationDismissTrigger.DatabaseReset, NotificationResolution.Reset);
             // #304 trigger 2: Reset rebuilds the schema and deliberately does not reimport bundled
             // content (#156, and CLAUDE.md's endpoint side-effect policy), so the database now holds no
             // quotes and nothing else says so. Recommend a reseed rather than performing one — the

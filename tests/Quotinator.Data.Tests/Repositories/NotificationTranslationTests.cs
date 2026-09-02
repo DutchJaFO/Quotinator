@@ -175,7 +175,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_RequestedLanguageHasTranslation_ReturnsTranslatedTitleAndBody()
     {
-        using TempDatabase temp = new(SchemaThroughMigration11);
+        using TempDatabase temp = new([]);
         NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
 
         PagedItems<NotificationEntity> page = await reader.GetPagedAsync(1, 10, "nl");
@@ -189,7 +189,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_RequestedLanguageHasNoTranslation_FallsBackToOriginalLanguage()
     {
-        using TempDatabase temp = new(SchemaThroughMigration11);
+        using TempDatabase temp = new([]);
         NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
 
         PagedItems<NotificationEntity> page = await reader.GetPagedAsync(1, 10, "fr");
@@ -205,9 +205,9 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_LegacyRowWithNoTranslations_ReturnsStoredEnglishText()
     {
-        using TempDatabase temp = new(SchemaThroughMigration11);
+        using TempDatabase temp = new([]);
+        await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
-        await ApplyTranslationSchemaAsync(connection);
         await InsertNotificationAsync(connection, "English headline", "English body.");
 
         NotificationReader reader = CreateReader(temp);
@@ -225,9 +225,9 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_TranslationHasBodyButNoTitle_FallsBackToOriginalTitleOnly()
     {
-        using TempDatabase temp = new(SchemaThroughMigration11);
+        using TempDatabase temp = new([]);
+        await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
-        await ApplyTranslationSchemaAsync(connection);
         Guid id = await InsertNotificationAsync(connection, "English headline", "English body.");
         await InsertTranslationAsync(connection, id, "nl", title: null, body: "Nederlandse tekst.");
 
@@ -242,7 +242,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_RequestedLanguageDiffersInCase_StillResolvesTheTranslation()
     {
-        using TempDatabase temp = new(SchemaThroughMigration11);
+        using TempDatabase temp = new([]);
         NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
 
         NotificationEntity row = (await reader.GetPagedAsync(1, 10, "NL")).Items.Single();
@@ -258,7 +258,7 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_ActiveQuery_ResolvesTranslationsToo()
     {
-        using TempDatabase temp = new(SchemaThroughMigration11);
+        using TempDatabase temp = new([]);
         NotificationReader reader = await SeedTranslatedNotificationAsync(temp);
 
         IReadOnlyList<NotificationEntity> active = await reader.GetActiveNotificationsAsync("nl");
@@ -273,9 +273,9 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Read_ByIdQueryViaDismiss_ResolvesTranslationsToo()
     {
-        using TempDatabase temp = new(SchemaThroughMigration11);
+        using TempDatabase temp = new([]);
+        await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
-        await ApplyTranslationSchemaAsync(connection);
         Guid id = await InsertNotificationAsync(connection, "English headline", "English body.");
         await InsertTranslationAsync(connection, id, "nl", "Nederlandse kop", "Nederlandse tekst.");
 
@@ -381,10 +381,21 @@ public class NotificationTranslationTests
             "The suppressed seed must not append a second translation row either.");
     }
 
+    /// <summary>
+    /// Seeds a translated notification into a database carrying the **current** Data schema.
+    /// </summary>
+    /// <remarks>
+    /// Not `SchemaThroughMigration11`: these are read tests, and they drive the live
+    /// `NotificationReader`, whose SELECT names every column the current schema has. Pinning them to an
+    /// old schema meant any Data-owned column added later broke them — which happened twice, first when
+    /// #308 added `Resolution` to the writer and again when it was added to the read query. The pin
+    /// belongs to the migration tests, whose subject genuinely is "the schema before #319".
+    /// </remarks>
+    /// <param name="temp">A database created with no schema of its own.</param>
     private static async Task<NotificationReader> SeedTranslatedNotificationAsync(TempDatabase temp)
     {
+        await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
-        await ApplyTranslationSchemaAsync(connection);
         Guid id = await InsertNotificationAsync(connection, "English headline", "English body.");
         await InsertTranslationAsync(connection, id, "nl", "Nederlandse kop", "Nederlandse tekst.");
         return CreateReader(temp);

@@ -73,6 +73,7 @@
   "NotificationsObsoleteLabel": "Niet meer van toepassing",
   "NotificationsExecutingLabel": "Bezig…",
   "NotificationsDetailToggle": "Details",
+  "NotificationsCloseDetailButton": "Sluiten",
   "NotificationsResetActionButton": "Database opnieuw opbouwen",
   "NotificationsReseedActionButton": "Citaten opnieuw laden",
   "NotificationsReviewActionButton": "Dit bestand afhandelen",

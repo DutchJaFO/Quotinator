@@ -40,7 +40,7 @@
                            still asks for the decision that has since been made. *@
                         <div class="notification-resolution">@ResolutionLabel(resolution.Value)</div>
                     }
-                    @if (detail.Count > 0)
+                    @if (detail.Count > 0 && !DetailAsDialog)
                     {
                         @* Collapsed by default on the page: the summary above is what a scan needs, and
                            the detail is what a reader who stopped on this row wants. A native disclosure
@@ -56,6 +56,13 @@
                                 }
                             </ul>
                         </details>
+                    }
+                    @if (detail.Count > 0 && DetailAsDialog)
+                    {
+                        @* In the startup modal instead: an expander inside a size-constrained popup
+                           pushes the rest of the list out of view, so the detail opens over it. *@
+                        <button type="button" class="btn btn-link btn-sm notification-detail-open"
+                                @onclick="() => DetailDialogForId = notification.Id">@Text.NotificationsDetailToggle</button>
                     }
                 </td>
                 <td>@Local(notification.ExpiresAt.Parsed)</td>
@@ -141,3 +148,23 @@
         }
     </tbody>
 </table>
+
+@if (DetailDialogForId is Guid openId && Notifications.FirstOrDefault(n => n.Id == openId) is { } open)
+{
+    @* Rendered outside the table so it overlays the modal rather than stretching a cell. Plain Blazor
+       state, no JS interop: the startup modal already runs on a circuit, so a second mechanism would
+       buy nothing and could leave the panel stuck open if interop failed. *@
+    <div class="notification-detail-backdrop" @onclick="() => DetailDialogForId = null">
+        <div class="notification-detail-dialog" @onclick:stopPropagation="true">
+            <div class="notification-detail-dialog-title">@(open.Title ?? Text.NotificationsDetailToggle)</div>
+            <ul>
+                @foreach (string line in PayloadLines(open, Text))
+                {
+                    <li>@line</li>
+                }
+            </ul>
+            <button type="button" class="btn btn-sm btn-secondary"
+                    @onclick="() => DetailDialogForId = null">@Text.NotificationsCloseDetailButton</button>
+        </div>
+    </div>
+}

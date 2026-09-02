@@ -192,6 +192,38 @@ public class NotificationWriterTests
         Assert.AreEqual(NotificationDismissReason.Resolved, persisted.DismissReason.Parsed);
         Assert.AreEqual(NotificationResolution.TookIncoming, persisted.Resolution.Parsed,
             "Which side won is what the row has to be able to say afterwards.");
+
+        // Read it back the way the application does, not just with SELECT *. Found in T2: the write
+        // was correct and the read query's explicit column list omitted Resolution, so every consumer
+        // saw null while the database held the value. A raw-SQL assertion cannot see that.
+        NotificationEntity throughReader = (await _reader.GetPagedAsync(1, 0)).Items
+            .Single(n => n.Id == alert.Id);
+        Assert.AreEqual(NotificationResolution.TookIncoming, throughReader.Resolution.Parsed,
+            "The read path must select the column, or the value is stored and invisible.");
+    }
+
+    /// <summary>
+    /// #308, found in T2: the reseed and reset actions dismiss through `DismissByTriggerAsync`, not the
+    /// by-batch method. Wiring only the latter left `Reseeded` and `Reset` defined, translated, and
+    /// never written — and rows 17/18 did not catch it, because both only exercised the by-batch path.
+    /// </summary>
+    [TestMethod]
+    public async Task DismissedByTrigger_RecordsTheResolution()
+    {
+        NotificationEntity written = await _writer.WriteAsync(
+            NotificationType.ActionRequired, "The database holds no quotes.", appVersionId: null,
+            dismissTrigger: NotificationDismissTrigger.Reseed);
+
+        await _writer.DismissByTriggerAsync(NotificationDismissTrigger.Reseed, NotificationResolution.Reseeded);
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        conn.Open();
+        NotificationEntity persisted = conn.QuerySingle<NotificationEntity>(
+            "SELECT * FROM System_Notification WHERE Id = @id;", new { id = written.Id.ToString("D") });
+
+        Assert.AreEqual(NotificationDismissReason.Resolved, persisted.DismissReason.Parsed);
+        Assert.AreEqual(NotificationResolution.Reseeded, persisted.Resolution.Parsed,
+            "A reseed run from its own notification must say so, not merely that it is done.");
     }
 
     /// <summary>

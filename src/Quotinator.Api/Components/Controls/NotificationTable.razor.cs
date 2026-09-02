@@ -31,6 +31,16 @@ public partial class NotificationTable
     /// <summary>Whether to render a Dismiss button per undismissed row.</summary>
     [Parameter] public bool ShowDismissAction { get; set; }
 
+    /// <summary>
+    /// #308: whether payload detail opens in a dialog over this surface rather than expanding in place.
+    /// </summary>
+    /// <remarks>
+    /// <see langword="true"/> for the startup modal only (developer decision, 2026-09-02). Expanding a
+    /// row in place inside a size-constrained popup pushes the rest of the list out of view; the
+    /// `/notifications` page has the room and uses a disclosure element instead.
+    /// </remarks>
+    [Parameter] public bool DetailAsDialog { get; set; }
+
     /// <summary>Invoked with a notification's Id when its Dismiss button is clicked. Ignored when <see cref="ShowDismissAction"/> is <see langword="false"/>.</summary>
     [Parameter] public EventCallback<Guid> OnDismiss { get; set; }
 
@@ -309,6 +319,10 @@ public partial class NotificationTable
 
     /// <summary>The Id of the row currently showing its Confirm/Cancel pair, or <see langword="null"/> if none.</summary>
     private Guid? ConfirmingActionForId;
+
+    // #308: which row's payload detail is open in the dialog, when DetailAsDialog is set. One at a
+    // time — the dialog covers the surface, so a second would be invisible behind the first.
+    private Guid? DetailDialogForId;
 
     private string TypeLabel(NotificationType? type) => TypeLabel(type, Text);
 

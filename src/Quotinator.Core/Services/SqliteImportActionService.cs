@@ -424,7 +424,12 @@ public sealed class SqliteImportActionService(
             // recommendation dedupes against active rows, one left undismissed would suppress every
             // later occurrence silently. Inside the success branch on purpose: a batch that left
             // actions pending closed no gap.
-            await notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.Reseed);
+            // #308: `Reseeded` names what resolved it, not who asked — content landing is a reseed
+            // whether the operator ran it from the notification or from the admin endpoint. Set here
+            // rather than by the caller because this dismissal happens *during* the reseed, so a
+            // caller's own later call finds the row already inactive and updates nothing.
+            await notificationWriter.DismissByTriggerAsync(
+                NotificationDismissTrigger.Reseed, NotificationResolution.Reseeded);
 
             // #303: this batch's own review is over, so the alert reporting it is resolved. Scoped to
             // this batch rather than the trigger alone — several files can each be awaiting review at

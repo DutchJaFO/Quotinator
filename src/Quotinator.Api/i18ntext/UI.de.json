@@ -73,6 +73,7 @@
   "NotificationsObsoleteLabel": "Nicht mehr zutreffend",
   "NotificationsExecutingLabel": "Läuft …",
   "NotificationsDetailToggle": "Details",
+  "NotificationsCloseDetailButton": "Schließen",
   "NotificationsResetActionButton": "Datenbank neu aufbauen",
   "NotificationsReseedActionButton": "Zitate neu laden",
   "NotificationsReviewActionButton": "Diese Datei erledigen",
