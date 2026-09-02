@@ -141,15 +141,20 @@ from `NotificationMetadataKind` itself, mirroring
 `NotificationTableTests.EveryDisplayStatus_HasATranslationKey`, so a kind added later fails this test
 rather than rendering unstyled.
 
-### 5. Prove no storage change is introduced
+### 5. Pin the column set, so storage changes only by decision
 
-**Status:** ✅ Done — turns row 8 green
+**Status:** ✅ Done — turns row 8 green. **Retitled 2026-09-02**; see below.
 
-#312 owns the schema; #319 owns the translation shape. This issue consumes both. If a layout need
-appears to require a storage change, that is a finding to raise, not something to add here.
+`System_Notification`'s column set is pinned by name, replacing a diff-reading instruction with an
+assertion that re-runs.
 
-**Row 8 replaces a diff-reading instruction with an assertion.** `System_Notification`'s column set is
-pinned by name, so a column added here fails a test rather than depending on a reviewer noticing.
+**This step originally read "Prove no storage change is introduced", and the reopening reversed it.**
+Finding 1 cannot be rendered without storing the resolving choice, so the issue now adds exactly one
+column (step 8). The pin did its job at that moment: adding `Resolution` failed row 8 until the list
+was updated in the migration's own commit, which is the difference between a decision and a drift.
+
+#312 still owns the schema and #319 the translation shape; this issue consumes both and extends
+neither beyond that single column. A second column would be a finding to raise, not something to add.
 
 ### 6. Run the T2 document green, and confirm both call sites
 
@@ -163,7 +168,7 @@ size-constrained in a way the page is not.
 
 ### 7. Write the tests for findings 1–4, and run them red
 
-**Status:** ✅ Done — nine tests red across two opposing-stub runs
+**Status:** ✅ Done — eight tests red across two opposing-stub runs
 
 Same exit condition and the same two mechanics as step 1: every unit test fails on its own assertion,
 and the T2 document's new steps fail against the current build. The document already exists, so this
@@ -202,9 +207,24 @@ Resolution"*, not on an `Assert`. That is a genuine red — the behaviour is abs
 than an assertion failure, because it would look identical for a test asserting the opposite. Both
 therefore need a mutation once the column lands: the negative especially, since it passes the moment
 nothing writes the field.
+
 ### 8. Record how an action was resolved
 
-**Status:** ⬜ Not started — finding 1; turns rows 17–20 green
+**Status:** 🔄 Storage landed early — row 19 green; rows 17, 18 and 20 outstanding
+
+**The schema half was pulled forward out of order, and that is a correction to step 7's mechanic rather
+than a shortcut** (2026-09-02). Step 7 added `NotificationEntity.Resolution` as though it were a stub.
+It is not: `ReflectedColumnMetadata` builds every INSERT's column list from the entity's properties, so
+the property without its column broke **76 tests** — every notification write in the solution, not the
+two this row is about. An entity property is a schema contract, so the column, the baseline, the two
+drift tests and the pinned column list all landed with it.
+
+What remains is the behaviour: `NotificationWriter` storing the value, and `NotificationActionExecutor`
+passing the `FieldResolutionChoice` it currently drops after `DecideBatchAsync`. A reseed and a reset
+each supply their own member.
+
+**The rendered line is a translated key, never a stored sentence** — #319 owns the translation shape,
+and a stored English string would be unreadable for a Dutch or German reader.
 
 A nullable, enum-backed `Resolution` column on `System_Notification`, written alongside `DismissReason`
 whenever a notification is dismissed as `Resolved`. Enum-backed means a `CHECK` constraint in the same
@@ -270,7 +290,7 @@ action deliberate; naming the button is not a reason to remove the second step.
 | 5 | ✅ | A two-line body renders as two lines | Automated (T2) | new `13-notification-layout.md` — asserts computed `white-space: pre-line` **and** `getClientRects().length >= 2`, not the class name |
 | 6 | ✅ | Every `NotificationMetadataKind` has a defined layout | Unit test | `NotificationTableTests.EveryMetadataKind_HasALayout` — derived from the enum, so a kind added later fails here |
 | 7 | ✅ | A row with no metadata kind still has a layout | Unit test | `NotificationTableTests.NoMetadataKind_FallsBackToADefinedLayout` — negative case for row 6; #279/#289 rows carry none |
-| 8 | ✅ | This issue adds no column to `System_Notification` | Unit test | `DatabaseInitializerOwnershipTests.SystemNotification_ColumnSet_IsPinned` — replaces "unchanged in the diff", which nothing re-runs |
+| 8 | ✅ | `System_Notification`'s column set changes only by decision | Unit test | `DatabaseInitializerOwnershipTests.SystemNotification_ColumnSet_IsPinned` — replaces "unchanged in the diff", which nothing re-runs. **Requirement revised 2026-09-02**: it read "adds no column", which the step 5 reversal overturned. The list now includes `Resolution` and was updated in the migration's own commit, which is what makes the addition deliberate |
 | 9 | ✅ | Title and body render distinctly on `/notifications` | Automated (T2) + screenshot | `13-notification-layout.md` — the title is its own element in the DOM, not a prefix inside the body text |
 | 10 | ✅ | The same holds in the startup modal | Automated (T2) + screenshot | same document — restart required, per #302's finding that the modal shows once per process run |
 | 11 | ✅ | Rendering survives a degraded startup | Automated (T2) | same document — degraded container, parity with `/notifications`'s current behaviour rather than a bare `200` (see #303 row 36) |
@@ -280,11 +300,11 @@ action deliberate; naming the button is not a reason to remove the second step.
 | 15 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
 | 16 | ❌ | Every layout renders correctly on the developer's own machine | Live (T1) | one confirmed rendering per type, on both surfaces |
 | 17 | ❌ | A notification resolved by an action records which resolution it was | Unit test | `NotificationWriterTests.DismissedAsResolved_RecordsTheResolution` |
-| 18 | ❌ | A notification dismissed by the user records no resolution | Unit test | `NotificationWriterTests.DismissedByUser_RecordsNoResolution` — negative; the field means "how the action settled it", not "how it went inactive" |
-| 19 | ❌ | The migration and the baseline accept the same `Resolution` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` (extended) |
+| 18 | ❌ | A notification dismissed by the user records no resolution | Unit test | `NotificationWriterTests.DismissedByUser_RecordsNoResolution` — negative; the field means "how the action settled it", not "how it went inactive". **Passes today for the wrong reason** — nothing writes the field yet — so it stays ❌ until step 8's writer lands and a mutation proves it wired |
+| 19 | ✅ | The migration and the baseline accept the same `Resolution` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` — extended with all four members and a rejected value, on both paths |
 | 20 | ❌ | Every `NotificationResolution` member has a label in all three locales | Unit test | `NotificationTableTests.EveryResolution_HasATranslationKey` — derived from the enum, like `EveryDisplayStatus_HasATranslationKey` |
 | 21 | ❌ | Every type leads with its body, with no exception | Unit test | `NotificationTableTests.ContentLines_ForEveryKind_LeadWithTheBody` — the body is the summary of the payload, so detail never replaces it |
-| 22 | ❌ | A payload that cannot be deserialised renders the plain body rather than throwing | Unit test | `NotificationTableTests.UnreadablePayload_FallsBackToTheBody` — negative; a row written by an older build must still render |
+| 22 | ❌ | A payload that cannot be deserialised renders the plain body rather than throwing | Unit test | `NotificationTableTests.UnreadablePayload_FallsBackToTheBody` — negative; a row written by an older build must still render. **Passes today for the wrong reason** — the stub returns no lines for any payload — so it stays ❌ until step 9 renders one, proven by the opposing stub |
 | 23 | ❌ | Whether a type has structured detail beneath the summary varies | Unit test | `NotificationTableTests.LayoutFor_AcrossKinds_PayloadDetailVaries` — if every type answers alike, `LayoutFor` is still the line-wrapping boolean under a longer name |
 | 24 | ❌ | The page collapses and expands | Automated (T2) | `13-notification-layout.md` — click the expander, assert the payload detail appears |
 | 25 | ❌ | The modal opens a dialog rather than expanding in place | Automated (T2) + screenshot | same document — restart, then open one notification's detail |
