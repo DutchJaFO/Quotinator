@@ -31,8 +31,8 @@
                     }
                     <div class="notification-body">@notification.Body</div>
                     @{
-                        var detail = PayloadLines(notification, Text);
-                        var resolution = notification.Resolution.Parsed;
+                        NotificationTable.PayloadTable detail = PayloadDetail(notification, Text);
+                        NotificationResolution? resolution = notification.Resolution.Parsed;
                     }
                     @if (resolution is not null)
                     {
@@ -40,27 +40,39 @@
                            still asks for the decision that has since been made. *@
                         <div class="notification-resolution">@ResolutionLabel(resolution.Value)</div>
                     }
-                    @if (detail.Count > 0 && !DetailAsDialog)
+                    @if (detail.Rows.Count > 0 && !DetailAsDialog)
                     {
-                        @* Collapsed by default on the page: the summary above is what a scan needs, and
-                           the detail is what a reader who stopped on this row wants. A native disclosure
-                           element rather than a JS component — no circuit and no state of our own.
+                        @* Collapsed in place. A native disclosure element rather than a JS component —
+                           no circuit and no state of our own.
                            Do not name the element inside this comment: a literal tag in a Razor comment
                            is parsed as markup, which broke real startup here (#308, 2026-09-02). *@
                         <details class="notification-detail">
                             <summary>@Text.NotificationsDetailToggle</summary>
-                            <ul>
-                                @foreach (string line in detail)
-                                {
-                                    <li>@line</li>
-                                }
-                            </ul>
+                            <table class="notification-detail-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (string header in detail.Headers)
+                                        {
+                                            <th scope="col">@header</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (IReadOnlyList<string> cells in detail.Rows)
+                                    {
+                                        <tr>
+                                            @foreach (string cell in cells)
+                                            {
+                                                <td>@cell</td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
                         </details>
                     }
-                    @if (detail.Count > 0 && DetailAsDialog)
+                    @if (detail.Rows.Count > 0 && DetailAsDialog)
                     {
-                        @* In the startup modal instead: an expander inside a size-constrained popup
-                           pushes the rest of the list out of view, so the detail opens over it. *@
                         <button type="button" class="btn btn-link btn-sm notification-detail-open"
                                 @onclick="() => DetailDialogForId = notification.Id">@Text.NotificationsDetailToggle</button>
                     }
@@ -157,12 +169,30 @@
     <div class="notification-detail-backdrop" @onclick="() => DetailDialogForId = null">
         <div class="notification-detail-dialog" @onclick:stopPropagation="true">
             <div class="notification-detail-dialog-title">@(open.Title ?? Text.NotificationsDetailToggle)</div>
-            <ul>
-                @foreach (string line in PayloadLines(open, Text))
-                {
-                    <li>@line</li>
-                }
-            </ul>
+            @{
+                NotificationTable.PayloadTable openDetail = PayloadDetail(open, Text);
+            }
+            <table class="notification-detail-table">
+                <thead>
+                    <tr>
+                        @foreach (string header in openDetail.Headers)
+                        {
+                            <th scope="col">@header</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (IReadOnlyList<string> cells in openDetail.Rows)
+                    {
+                        <tr>
+                            @foreach (string cell in cells)
+                            {
+                                <td>@cell</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
             <button type="button" class="btn btn-sm btn-secondary"
                     @onclick="() => DetailDialogForId = null">@Text.NotificationsCloseDetailButton</button>
         </div>

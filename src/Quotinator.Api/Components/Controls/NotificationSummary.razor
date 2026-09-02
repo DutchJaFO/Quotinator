@@ -1,7 +1,8 @@
 @if (Notifications.Count > 0)
 {
     <h2 class="h5">@Text.NotificationSummaryHeading</h2>
-    @* #308: DetailAsDialog — this surface is a size-constrained popup, so payload detail opens over it
-       rather than expanding a row and pushing the rest of the list out of view. *@
-    <NotificationTable Notifications="Notifications" DetailAsDialog="true" />
+    @* #308: the startup popup expands detail in place (developer, 2026-09-02). A dialog opening over a
+       popup is a modal on a modal; the popup already has the reader's full attention, so the row can
+       simply grow. The `/notifications` page takes the dialog instead. *@
+    <NotificationTable Notifications="Notifications" />
 }

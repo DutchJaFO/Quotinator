@@ -26,5 +26,8 @@ else if (FilteredNotifications.Count == 0)
 }
 else
 {
-    <NotificationTable Notifications="FilteredNotifications" ShowDismissAction="true" OnDismiss="DismissAsync" ShowActionColumn="true" OnExecuteAction="ExecuteActionAsync" OnExecuteChoiceAction="ExecuteChoiceActionAsync" />
+    @* #308: DetailAsDialog — this page is a long scannable history, so expanding rows in place pushes
+       the rest of the list around as the reader opens and closes them. The detail opens over it
+       instead; the startup popup expands in place, since it is already the reader's whole focus. *@
+    <NotificationTable Notifications="FilteredNotifications" DetailAsDialog="true" ShowDismissAction="true" OnDismiss="DismissAsync" ShowActionColumn="true" OnExecuteAction="ExecuteActionAsync" OnExecuteChoiceAction="ExecuteChoiceActionAsync" />
 }

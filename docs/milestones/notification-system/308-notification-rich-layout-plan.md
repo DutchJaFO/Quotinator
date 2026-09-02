@@ -64,11 +64,19 @@ Reviewing it live produced four findings, all accepted as this issue's own work 
 2. **The metadata is stored and never rendered.** `Metadata` carries `fileName`, `origin`, `counts` and
    `batchId`; the body is a separately-composed sentence with those values baked in as arguments at
    write time. The structured payload is used only for identity and dismissal matching.
-3. **The bodies are too long for a flat table row.** Presentation: **collapsible on the
-   `/notifications` page, dialog in the startup modal** — each surface gets what suits it, rather than
-   a modal inside a modal or an accordion inside a size-constrained popup.
+3. **The bodies are too long for a flat table row.** Presentation: **dialog on the `/notifications`
+   page, collapsible in the startup popup** — the page is a long scannable history where rows growing
+   and shrinking move everything below them, while the popup already has the reader's whole attention
+   and a dialog over it would be a modal on a modal. **Revised 2026-09-02**: the first answer was the
+   other way round, and was built and shipped that way before being swapped.
+   Detail renders as a **table**, not a list — every entry has the same shape, so columns line the
+   numbers up where a bulleted sentence per row does not.
 4. **`Run` does not say what it will do**, and for a multi-outcome action the choices are hidden behind
-   it. The available actions should be named on their own buttons.
+   it. The available actions should be named on their own buttons — **using the domain's own words**.
+   The first attempt labelled the reseed action *Reload the quotes* while the body in that very row
+   read "Run a reseed to load the bundled sources"; a button that invents a synonym for the word the
+   rest of the UI uses makes the reader wonder whether it is a different operation. It now reads
+   *Run a reseed*, and the resolution line *Reseeded*.
 
 **Step 4 was delivered thinly, and findings 2 and 3 are the consequence.** Step 4 says "define the
 per-type layout across both surfaces". What it produced was `LayoutFor(kind) → BodyIsMultiLine`, a
@@ -310,18 +318,18 @@ every consumer; and the first fix set the resolution *after* `ReseedAsync`, by w
 | 18 | ✅ | A notification dismissed by the user records no resolution | Unit test | `NotificationWriterTests.DismissedByUser_RecordsNoResolution` — negative; the field means "how the action settled it", not "how it went inactive". Wired via `Sql.Notifications.UpdateDismissById`: the by-batch mutation does **not** reach this path, so proving it needed the by-id query mutated instead |
 | 19 | ✅ | The migration and the baseline accept the same `Resolution` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` — extended with all four members and a rejected value, on both paths |
 | 20 | ✅ | Every `NotificationResolution` member has a label in all three locales | Unit test | `NotificationTableTests.EveryResolution_HasATranslationKey` — derived from the enum, like `EveryDisplayStatus_HasATranslationKey`; `TranslationCompletenessTests` covers the other two locales |
-| 21 | ✅ | Every type leads with its body, with no exception | Unit test | `NotificationTableTests.ContentLines_ForEveryKind_LeadWithTheBody` — the body is the summary of the payload, so detail never replaces it |
+| 21 | ✅ | A type that renders detail also names its columns | Unit test | `NotificationTableTests.PayloadDetail_ForEveryKind_IsSelfDescribing` — headers exist exactly when rows do, and every row's cell count matches. Replaced `ContentLines_ForEveryKind_LeadWithTheBody` when detail became a table: the body is now unconditional markup, so its precedence is proven by the T2 document, not by a unit assertion that cannot fail |
 | 22 | ✅ | A payload that cannot be deserialised renders the plain body rather than throwing | Unit test | `NotificationTableTests.UnreadablePayload_FallsBackToTheBody` — negative; a row written by an older build must still render. Proven by mutation: making the fall-through arm return a line fails it |
 | 23 | ✅ | Whether a type has structured detail beneath the summary varies | Unit test | `NotificationTableTests.LayoutFor_AcrossKinds_PayloadDetailVaries` — two types have detail (`ReseedFileApplied`, `ImportReviewPending`), four do not, decided on the measured body-vs-payload comparison rather than by preference |
-| 24 | ✅ | The page collapses and expands | Automated (T2) | `13-notification-layout.md` step 7 — `collapsedByDefault: true`, hidden while collapsed (via `checkVisibility()`, since `getClientRects()` reports a collapsed element as visible), `2` lines when opened |
-| 25 | ✅ | The modal opens a dialog rather than expanding in place | Automated (T2) + screenshot | same document step 8 — `expandersInModal: 0`, `openButtons: 4`; opening yields the per-entity breakdown, and Close returns the modal intact |
-| 26 | ✅ | Collapsed state shows the title and the one-line body, never the payload detail | Automated (T2) | same document step 7 — `detailVisibleWhileCollapsed: false`, and `bodyComesFirst: true` |
-| 27 | ✅ | Each executable trigger's button is named for what it does | Unit test | `NotificationTableTests.ActionLabelFor_EachExecutableTrigger_IsNamed` — derived from `NotificationDismissTrigger`, so a new one fails here. Confirmed live: the button reads *Reload the quotes* |
+| 24 | ✅ | The page opens payload detail in a dialog | Automated (T2) + screenshot | `13-notification-layout.md` step 7 — `expandersOnPage: 0`, `openButtonsOnPage: 4`; the dialog carries the table. **Swapped 2026-09-02**: the page originally collapsed and the popup opened a dialog |
+| 25 | ✅ | The startup popup expands detail in place | Automated (T2) | same document step 8 — `expandersInModal: 4`, `openButtonsInModal: 0`, `collapsedByDefault: true` |
+| 26 | ✅ | Detail renders as a table, never a list | Automated (T2) | same document step 7 — headings `Entity / Added / Updated` over `Quote \| 63 \| 0`; `listsAnywhere: 0` guards the regression |
+| 27 | ✅ | Each executable trigger's button is named for what it does | Unit test | `NotificationTableTests.ActionLabelFor_EachExecutableTrigger_IsNamed` — derived from `NotificationDismissTrigger`, so a new one fails here. Confirmed live: the button reads *Run a reseed*. **Corrected 2026-09-02** from *Reload the quotes* — the body in that very row says "Run a reseed to load the bundled sources", so the button invented a synonym for the domain's own word |
 | 28 | ✅ | A multi-outcome action offers both choices without an intermediate click | Unit test | `NotificationTableTests.ImportReviewResolved_OffersBothChoicesDirectly` |
 | 29 | ✅ | The confirmation step still stands | Automated (T2) | same document step 9 — clicking the named button yields `Confirm`/`Cancel`, and nothing runs until Confirm |
 | 30 | ✅ | Every layout renders on both surfaces | Automated (T2) + screenshot | same document steps 7–10, run whole on the current build; screenshot of the modal dialog over the startup popup |
 | 31 | ✅ | The new T2 steps go red before they go green | Canary run | `quotinator:canary308b` at `7bc5bacc`: `0` expanders, `0` open buttons, a button reading `Run`, `0` resolution lines. Step 9 needed an actionable row first — it passed vacuously without one |
-| 32 | ✅ | A resolved notification says how it was resolved | Automated (T2) | same document step 10 — the resolved row reads *Reloaded the quotes*, and `GET /notifications` returns `resolution: reseeded` |
+| 32 | ✅ | A resolved notification says how it was resolved | Automated (T2) | same document step 10 — the resolved row reads *Reseeded*, and `GET /notifications` returns `resolution: reseeded` |
 
 **Rows 5, 9 and 10 cannot be replaced by unit tests.** A unit test can prove the markup and the
 stylesheet name the same class; only a rendered page proves the rule reaches the element. #303's nav

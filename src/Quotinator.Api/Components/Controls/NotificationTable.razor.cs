@@ -118,51 +118,54 @@ public partial class NotificationTable
     /// <param name="PayloadParts">The payload fields shown as detail beneath the body. Empty for a type with no structured detail worth showing.</param>
     internal sealed record NotificationLayout(bool BodyIsMultiLine, IReadOnlyList<string> PayloadParts);
 
-    /// <summary>
-    /// The lines a notification renders: its body, then any payload detail. #308.
-    /// </summary>
-    /// <remarks>
-    /// The body always leads, for every type — it is the summary of the payload wherever there is one,
-    /// so detail is never an alternative to it.
-    /// </remarks>
-    /// <param name="notification">The row being rendered.</param>
-    /// <param name="text">The resolved UI strings, for the detail templates.</param>
-    internal static IReadOnlyList<string> ContentLines(NotificationEntity notification, Quotinator.Api.I18nText.UI? text = null) =>
-        [notification.Body, .. PayloadLines(notification, text)];
+    /// <summary>A notification's payload detail as a table. #308.</summary>
+    /// <param name="Headers">Column headings, already localised.</param>
+    /// <param name="Rows">One row per payload entry, cells in the same order as <paramref name="Headers"/>.</param>
+    internal sealed record PayloadTable(IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyList<string>> Rows);
 
     /// <summary>
-    /// The detail lines rendered from a notification's stored payload, empty when it has none. #308.
+    /// The payload detail rendered as a table, with no rows when the type has none. #308.
     /// </summary>
     /// <remarks>
-    /// Only the two types whose payload holds something their body does not: `ReseedFileApplied`'s
-    /// per-entity-type breakdown (the body states the totals) and `ImportReviewPending`'s per-status
-    /// counts (the body states the sum). The other four were measured against their own body templates
-    /// and add nothing — `WhatsNew`'s payload has no properties at all.
+    /// A table rather than a list (developer, 2026-09-02): every entry has the same shape — an entity or
+    /// a status, then its counts — so columns line the numbers up and a bulleted sentence per row does
+    /// not.
     /// <para>
-    /// A payload that cannot be read yields no lines rather than throwing: a row written by an older
+    /// Only the two types whose payload holds something their body does not: `ReseedFileApplied`'s
+    /// per-entity-type breakdown (the body states only the totals) and `ImportReviewPending`'s
+    /// per-status counts (the body states only the sum). The other four were measured against their own
+    /// body templates and add nothing — `WhatsNew`'s payload has no properties at all.
+    /// </para>
+    /// <para>
+    /// A payload that cannot be read yields no rows rather than throwing: a row written by an older
     /// build must still render its body.
     /// </para>
     /// </remarks>
     /// <param name="notification">The row being rendered.</param>
-    /// <param name="text">The resolved UI strings, for the detail templates.</param>
-    internal static IReadOnlyList<string> PayloadLines(NotificationEntity notification, Quotinator.Api.I18nText.UI? text = null)
+    /// <param name="text">The resolved UI strings, for the column headings.</param>
+    internal static PayloadTable PayloadDetail(NotificationEntity notification, Quotinator.Api.I18nText.UI? text = null)
     {
         NotificationMetadataDto? payload =
             NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
 
         return payload switch
         {
-            ReseedFileAppliedMetadataDto applied => [.. applied.Counts.Select(c =>
-                string.Format(CultureInfo.CurrentCulture,
-                    text?.NotificationDetailEntityCount ?? "{0}: {1} added, {2} updated",
-                    c.EntityType, c.Added, c.Modified))],
+            ReseedFileAppliedMetadataDto applied => new PayloadTable(
+                [text?.NotificationsDetailEntityColumn ?? "Entity",
+                 text?.NotificationsDetailAddedColumn  ?? "Added",
+                 text?.NotificationsDetailUpdatedColumn ?? "Updated"],
+                [.. applied.Counts.Select(IReadOnlyList<string> (c) =>
+                    [c.EntityType,
+                     c.Added.ToString(CultureInfo.CurrentCulture),
+                     c.Modified.ToString(CultureInfo.CurrentCulture)])]),
 
-            ImportReviewPendingMetadataDto review => [.. review.Counts.Select(c =>
-                string.Format(CultureInfo.CurrentCulture,
-                    text?.NotificationDetailStatusCount ?? "{0}: {1}",
-                    c.Status, c.Count))],
+            ImportReviewPendingMetadataDto review => new PayloadTable(
+                [text?.NotificationsDetailStatusColumn ?? "Status",
+                 text?.NotificationsDetailCountColumn  ?? "Count"],
+                [.. review.Counts.Select(IReadOnlyList<string> (c) =>
+                    [c.Status, c.Count.ToString(CultureInfo.CurrentCulture)])]),
 
-            _ => [],
+            _ => new PayloadTable([], []),
         };
     }
 

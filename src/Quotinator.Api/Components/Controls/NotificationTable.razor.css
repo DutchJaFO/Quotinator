@@ -37,9 +37,31 @@
     opacity: 0.75;
 }
 
-.notification-detail ul {
-    margin: 0.25rem 0 0;
-    padding-left: 1.25rem;
+/* #308: a table rather than a list — every entry has the same shape, so the numbers line up in
+   columns instead of trailing a sentence each. Auto width so it sits under the body rather than
+   stretching the message column. */
+.notification-detail-table {
+    margin: 0.35rem 0 0;
+    width: auto;
+    border-collapse: collapse;
+}
+
+.notification-detail-table th,
+.notification-detail-table td {
+    padding: 0.1rem 0.75rem 0.1rem 0;
+    text-align: left;
+}
+
+.notification-detail-table th {
+    font-weight: 600;
+    opacity: 0.75;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+}
+
+/* Counts read as columns of figures, so right-aligning them lets the eye compare magnitudes. */
+.notification-detail-table td:not(:first-child),
+.notification-detail-table th:not(:first-child) {
+    text-align: right;
 }
 
 /* #308: the startup modal's detail overlay. Fixed rather than absolute so it covers the popup it sits

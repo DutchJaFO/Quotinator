@@ -401,19 +401,24 @@ public class NotificationTableTests
     /// The body leads for every type, with no exception (developer, 2026-09-02) — it is the summary of
     /// the payload wherever there is one, so structured detail is never an alternative to it. A draft
     /// of this row allowed a `PayloadOnly` type; it was rejected, and this asserts the rule that
-    /// replaced it.
+    /// replaced it: a type that renders detail must also name the columns for it, so detail can never
+    /// be a bare replacement for the sentence above it.
     /// </remarks>
     [TestMethod]
-    public void ContentLines_ForEveryKind_LeadWithTheBody()
+    public void PayloadDetail_ForEveryKind_IsSelfDescribing()
     {
         foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
         {
-            NotificationEntity notification = WithTitle("A headline", metadata: MetadataFor(kind));
-            IReadOnlyList<string> lines = NotificationTable.ContentLines(notification);
+            NotificationTable.PayloadTable detail =
+                NotificationTable.PayloadDetail(WithTitle("A headline", metadata: MetadataFor(kind)));
 
-            Assert.IsNotEmpty(lines, $"{kind} renders nothing at all.");
-            Assert.AreEqual(notification.Body, lines[0],
-                $"{kind} does not lead with its body — the summary must never be replaced by its own detail.");
+            Assert.AreEqual(detail.Rows.Count > 0, detail.Headers.Count > 0,
+                $"{kind} has {detail.Rows.Count} row(s) and {detail.Headers.Count} column heading(s) — " +
+                "a table with rows must name its columns, and one with no rows must claim none.");
+
+            foreach (IReadOnlyList<string> row in detail.Rows)
+                Assert.HasCount(detail.Headers.Count, row,
+                    $"{kind} has a row whose cell count does not match its headings.");
         }
     }
 
@@ -454,8 +459,8 @@ public class NotificationTableTests
     {
         NotificationEntity notification = WithTitle("Source file needs review", metadata: "{ not json at all");
 
-        Assert.IsEmpty(NotificationTable.PayloadLines(notification),
-            "An unreadable payload contributes no detail lines, and must not throw.");
+        Assert.IsEmpty(NotificationTable.PayloadDetail(notification).Rows,
+            "An unreadable payload contributes no detail rows, and must not throw.");
         Assert.IsFalse(string.IsNullOrWhiteSpace(notification.Body),
             "Positive control: the body is still there to fall back to.");
     }
