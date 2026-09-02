@@ -1,10 +1,11 @@
 # #373 — An import that re-states identical content reports it as modified
 
-**Status:** Planning — the plan below is complete; execute it in order
+**Status:** In progress (step 9) — steps 1–8 done; the T2 runs wait on [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
 **GitHub issue:** #373
 **Tiers required:** T1, T2
 **Depends on:** [#372](https://github.com/DutchJaFO/Quotinator/issues/372) for reproduction — a reseed
-that truncates first can never reach this path. **Blocks #372's step 6**, and #302 behind it
+that truncates first can never reach this path — and [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
+for the T2 runs, which reseed real content. **Blocks #372's step 6**, and #302 behind it
 
 ---
 
@@ -99,14 +100,67 @@ non-zero counts and real entity types.
 
 ### 1. Write every test first, and run them red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 13 unit tests red on their own assertions, 4 controls green by design, T2 canary red
+
+**Red:** rows 1 (CHECK constraint), 3 (`ReportsUnchangedNotModified`), 7 (`LeavesNothingPending`),
+8 (`ExistingReferencedEntities`), 9 (`ExistingCompositeEntities`), 11–13 (report builder), 14
+(`FormatReport`), 15–16 (reseed reporting), 20 (endpoint descriptions), plus the T2 document.
+
+**Green by design:** rows 2, 4, 5, 6, 10 and 17 — controls and guards asserting what must *not* change.
+Row 17 in particular: an older payload renders correctly today, because the new DTO fields default to
+zero. It guards a regression rather than proving a fix.
+
+**Row 1's red is an exception, and that is correct here** — `CHECK constraint failed: ActionType IN
+('Add', 'Modify')`. The test asserts an INSERT succeeds; the exception names the constraint being
+widened. Unlike #372's `no such column: Text`, it is not masking a wrong test.
+
+**Row 9's first red *was* the wrong kind and was corrected.** `Single()` on an empty sequence throws
+`InvalidOperationException`, which looks identical for a test asserting the opposite. Rewritten to
+count first, then read.
+
+**T2 canary, against the post-#372, pre-#373 build.** Both halves of the defect in one output:
+`quotinator-curated.json` reports `Quote incoming=0 new=0 modified=13 unchanged=0` and nothing else —
+one entity type where its cold start reported seven, and thirteen unchanged quotes counted as modified.
+Recorded in the document's own *Canary* section.
 
 Exit condition: every unit test in the verification table exists and **fails on its own assertion**,
 and `21-reseed-preserves-existing-data.md`'s unchanged assertions have been run and failed.
 
+**A defect in #308's own test surfaced here, and closing it is part of this step** (developer,
+2026-09-02). `NotificationTableTests.PayloadDetail_ForEveryKind_IsSelfDescribing` — #308's verification
+row 21 — cannot fail. `PayloadDetail` dispatches on `notification.MetadataKind.Parsed`, and the
+`WithTitle` helper never sets it, so `TryDeserialize(null, json)` returns null for every kind and the
+table is always empty. The assertion is `Assert.AreEqual(rows > 0, headers > 0)`, which with both zero
+is `false == false`. Proven by passing a real, valid `ReseedFileApplied` payload through the helper and
+getting zero rows.
+
+**The remedy is full coverage per kind, not a one-line fix to the helper** (developer, 2026-09-02):
+"given that we know what metadata kinds we have and which classes are associated we should have
+positive and negative tests for these … we need full test coverage for all known variants, because that
+will show us red the moment we introduce a new variant that has not been covered."
+
+So each `NotificationMetadataKind` gets both directions, and the set is derived from the enum rather
+than listed, so a member added later fails until it is covered. `NotificationMetadataKinds.PayloadTypes`
+already holds one entry per member and is itself guarded — the same shape applied one layer up, to what
+each kind *renders* rather than to what it deserializes into.
+
 ### 2. Add the enum member and its migration
 
-**Status:** ⬜ Not started — turns rows 1–2 green
+**Status:** ✅ Done — rows 1–2 green
+
+**Start of step:** row 1 red on `CHECK constraint failed: ActionType IN ('Add', 'Modify')`.
+**End of step:** both green; the whole `Quotinator.Data.Tests` suite passes apart from rows 11–13,
+which are step 5's.
+
+Migration 20, `ImportActionUnchangedMigrations.WidenActionTypeForUnchanged` — a full table rebuild of
+`Import_Action`, since SQLite cannot widen an inline CHECK, matching what migrations 15, 17 and 18 did
+for the same reason. The copy carries every column straight across and rewrites no value: only the
+constraint admits one more member, so every row valid before is valid after. The baseline's own
+`CREATE TABLE` was widened in the same commit, which is what rows 1 and 2 hold it to.
+
+**The enum member itself landed in step 1**, not here — the tests naming it could not compile without
+it, and a compile error is not a red test. Adding the member alone was safe because nothing wrote
+`Unchanged` until step 3; the CHECK would have rejected it if anything had.
 
 `ImportActionKind.Unchanged`, with the ADR 008 checklist in one commit: a table-rebuild migration
 widening `CHECK (ActionType IN ('Add', 'Modify', 'Unchanged'))`, the baseline updated to match, and
@@ -119,14 +173,52 @@ with this row", which is true. It is not `Pending` — nobody is waiting on anyt
 
 ### 3. Classify an unchanged quote
 
-**Status:** ⬜ Not started — turns rows 3–7 green
+**Status:** ✅ Done — rows 3–7 green
 
-Where `effectiveChanged` is empty, the action is `Unchanged` rather than `Modify`. The comparison
-already exists; only the classification changes.
+**Start of step:** rows 3, 7 red on their assertions; 4, 5, 6 green as controls.
+**End of step:** all five green, with 121 existing planner tests unaffected.
+
+**This step's own instruction was wrong, and the code says so where it matters.** It read "where
+`effectiveChanged` is empty" — but under `Skip`, `resolved` is deliberately set to the *existing*
+values, so `effectiveChanged` is empty for every Skip regardless of whether the content matches. Gating
+on it would report a genuine disagreement the operator chose to skip as though the file agreed with the
+database.
+
+The classification compares **incoming against stored**, over the union of both field sets, through the
+same `FieldMergeResolver.ValuesEqual` the Review branch already uses. Whether the file agrees with the
+database is not a question any policy changes the answer to.
+
+An unchanged action's status is `Applied`: terminal, nothing to decide, nothing to write, nothing to
+reverse.
 
 ### 4. Account for every other entity type, which today emits nothing
 
-**Status:** ⬜ Not started — turns rows 8–10 green
+**Status:** ✅ Done — rows 8–10 green, all 123 planner tests passing
+
+**Start of step:** rows 8 and 9 red on their assertions; row 10 green as its control.
+**End of step:** all three green.
+
+**Nine sites, and the code had already named the defect at every one of them.** Each carried the
+comment *"Unchanged — silent reuse, same as a natural-key match"* — the behaviour was described
+accurately and simply never reported. Source (two branches), Person, Character, Universe, Series,
+StageDirection, SoundCue and Conversation, plus the three reference resolvers
+(`ResolveSourceAsync`/`ResolveCharacterAsync`/`ResolvePersonAsync`), which emit on the database lookup
+rather than per referencing quote — the existing index is what makes that "once per distinct entity",
+exactly as it already did for `Add`.
+
+`UnchangedAction` is shared rather than copied per site: nine hand-written copies is how `Series` and
+`Universe` would quietly end up shaped differently from `Source`.
+
+**The blast radius was 18 existing tests, not the 8 this section first estimated.** Every
+`*_NoActionStaged` / `*_NothingChanged` test in the planner suite asserted "no action of any kind" for
+an entity that arrived and matched — true only because such an entity produced nothing at all. Each is
+now scoped to exclude `Unchanged`, which preserves exactly what it was written to prove: an `Unchanged`
+action stages no change. The assertion reads as its own explanation
+(`ActionType.Parsed != ImportActionKind.Unchanged`).
+
+**Estimating it at 8 was the error, and the estimate came from grepping rather than running.** The
+eight were the ones failing at the time I looked, which was before the composite planners were
+converted.
 
 Source, Character, Person, Series, Universe, StageDirection, SoundCue and Conversation each produce an
 action only when they do **not** already exist. An incoming row that matches what is stored is
@@ -149,9 +241,48 @@ the rows do not accumulate indefinitely.
 that apply-time relies on — a Conversation's lines reference StageDirections and SoundCues planned
 before it.
 
+**Eight existing tests assert the behaviour being replaced and change with it** — one more than the two
+this section originally named, the rest found by running the suite after the resolvers changed:
+
+`PlanAsync_ExistingSourceCharacterPerson_ReusesRealIds_NoAddActionsForThem`,
+`ResolveCharacterAsync_ExistingGlobalCharacter_ReusesRealId`,
+`ResolveCharacterAsync_SeriesScopedCrossSourceMatch_ReusesExistingCharacter`,
+`ResolveCharacterAsync_ExistingGlobalCharacter_CaseInsensitiveNameMatch_ReusesRealId`,
+`PlanAsync_SourceAliasMatches_ResolvesToExistingCanonicalSource_NoSpuriousSourceAdd`,
+`PlanAsync_ModifyPathWithTypeMismatch_AliasAppliedBeforeSourceResolution_NoSpuriousSourceCreated`,
+`ResolveSourceAsync_ExistingDatedSource_QuoteWithDifferentDate_NoActionStaged`, and
+`PlanStageDirectionsAsync_IdMatchFound_NothingChanged_NoActionStaged`.
+
+**Each is scoped, not loosened, and the distinction matters.** Most are named for what they actually
+guard — *no spurious Source **Add***, *reuses the real id* — while asserting the far broader "no action
+of any kind". That was only ever true because an existing entity produced nothing at all. Scoping each
+assertion to the kind its own name claims restores what it was written to prove; it does not weaken it.
+
+
+
+`ImportActionPlannerTests.PlanStageDirectionsAsync_IdMatchFound_NothingChanged_NoActionStaged` asserts
+`0` StageDirection actions, with the message *"Nothing differs — silent reuse, no action staged"*. That
+silent reuse is precisely the defect: the row arrived, matched, and left no trace. It becomes one
+`Unchanged` action.
+
+
+`ImportActionPlannerTests.PlanAsync_ExistingSourceCharacterPerson_ReusesRealIds_NoAddActionsForThem`
+asserts `HasCount(1, actions)` — "Only the Quote is new". Under this step it becomes four: the Quote
+plus an `Unchanged` for each of Source, Character and Person. Its other half — that the resolved
+payload carries the *real* existing ids rather than freshly generated ones — is unaffected and stays.
+Named here so the change is a planned consequence rather than a surprise during execution.
+
 ### 5. Report what arrived and what became of it
 
-**Status:** ⬜ Not started — turns rows 11–14 green
+**Status:** ✅ Done — rows 11–14 green
+
+**Start of step:** rows 11–14 red on their own assertions.
+**End of step:** all four green.
+
+`Incoming` is counted **before** the outcome switch, not derived after it. That placement is the whole
+value: an action reaching neither `_ => counts` arm is still counted as having arrived, so the identity
+row 12 asserts stops holding and the dropped row becomes visible. Counting it inside the switch would
+have reproduced the same blind spot one line lower.
 
 `EntityTypeActionCounts` gains `Incoming` and `Unchanged`. `Incoming` is every action for that entity
 type, so it equals the sum of the outcome buckets — asserted as an identity, which is what exposes the
@@ -160,7 +291,7 @@ hand.
 
 ### 6. Say it in the notification's own words, and lay its detail out for the new shape
 
-**Status:** ⬜ Not started — turns rows 15–19 green
+**Status:** ✅ Done — rows 15–19 green
 
 **The message text and the detail layout are both in scope** (developer, 2026-09-02): an unchanged
 result is a third thing to display, and neither the sentence nor the table was written with it in mind.
@@ -170,11 +301,36 @@ result is a third thing to display, and neither the sentence nor the table was w
 a body assembled in English would render half-translated for a Dutch or German reader, which is
 exactly what #319 exists to prevent.
 
-**The detail layout is a decision to make here, not one already made.** The constraint is given — no
-third column (developer, 2026-09-02: "we have metadata for that kind of content") — but that rules out
-one answer rather than choosing among the rest. The table is `Entity / Added / Updated` today, and the
-honest options are to leave it and let the body carry the whole summary, or to restructure it around
-what arrived. Settle it against the real payload once step 5 produces one, and record which and why.
+**Settled 2026-09-02: the metadata changes, the table does not** (developer). "It is the metadata we
+use that would have to be changed, not the notification table."
+
+**No count is ever derived from another.** A proposal to render `Entity / Incoming / Added / Updated`
+and leave unchanged as a subtraction was rejected outright, and the reason generalises: "5 incoming, 3
+added does not mean 2 are unchanged. It only means 3 were added. The 'missing' 2 could have been errors
+in the import that could not be resolved." Blocked, stale, discarded, pending and failed rows all live
+in that gap. Every outcome is counted explicitly or it is not reported at all.
+
+So `ReseedEntityCountDto` carries every outcome as an independent figure — `Incoming`, `Added`,
+`Modified`, `Unchanged`, `Blocked`, `Pending`, `Discarded` and `Stale` — and
+`NotificationTable.PayloadDetail` keeps its `Entity / Added / Updated` columns untouched.
+
+**The last four are recorded even though this branch should never produce them** (developer,
+2026-09-02: "any information that tells us what happened during an import/reseed is valuable and helps
+us find issues that happen during those actions faster"). A confirmation is written from the clean-apply
+path, so `Blocked`/`Pending`/`Discarded`/`Stale` are normally zero — and a non-zero one is exactly the
+thing worth finding quickly. Stating them costs four integers; assuming them absent costs a
+reader working out why the numbers do not add up.
+
+**The row filter is `Incoming > 0`, not a test over the outcome buckets.** Filtering on outcomes would
+drop precisely the rows this issue exists to surface: an unchanged-only breakdown, or one whose entire
+content was blocked.
+
+**One consequence has to be handled rather than inherited.** Step 5's filter now admits an
+unchanged-only breakdown, which against the unchanged table renders `Quote | 0 | 0` — a row of zeros
+that states nothing and reads as a bug. Those rows are omitted from the *rendered table* while
+remaining in the *payload*, which is exactly the split this decision draws: the metadata is the
+complete record for the API, the log and any audit; the table is a view of what changed; the body
+states the totals, unchanged among them.
 
 `ReseedEntityCountDto` gains the fields, and the confirmation's body reads as *N incoming, X new, Y
 already stored* rather than *X added and Y updated*. **No new column** in the rendered table — the
@@ -188,7 +344,13 @@ this issue's whole point is to report it.
 
 ### 7. Update the documented shape
 
-**Status:** ⬜ Not started — turns row 20 green
+**Status:** ✅ Done — row 20 green
+
+**Row 20's own selector was wrong twice, and each attempt over-matched.** "per-entity-type" also
+catches the reset endpoint, which mentions the report without listing its buckets, and `/import`, which
+uses the phrase for policy overrides. "blocked" also catches the reset endpoint's "reset blocked only
+by that quota". The enumeration's own slash-joined tail — `pending/stale` — appears nowhere else, and a
+future description listing the old set still matches it and still fails.
 
 `docs/api-endpoints.md` (both occurrences) and the endpoint `[Description]` attributes, same commit.
 
@@ -201,7 +363,18 @@ what is now true, stating whether the old form was over-broad or the behaviour c
 
 ### 9. Run the T2 documents green
 
-**Status:** ⬜ Not started — turns rows 22–24 green
+**Status:** 🚧 Blocked on [#374](https://github.com/DutchJaFO/Quotinator/issues/374) — turns rows 22–24 green
+
+**A reseed of the bundled content leaves 22 pending reviews, and that is #374's.** Both documents
+reseed real content, so neither can pass end to end until a rule can recognise its own outcome as
+already applied. Measured with the fixture that mirrors the bundled manifest: cold start `0` pending,
+one reseed `22`, a second `44`.
+
+**Found by writing the positive test the developer asked for** (2026-09-02): "we always test positive
+and negative aspects … we therefore also need a seeding test that does have 0 pending reviews so we
+have proof of the positive aspect." The negative fixture has no rule file and can never apply, so it
+only ever proved the stuck case stays stuck. The positive one — `Seed_WithAResolvableFile_...`, which
+does pass — is what exposed that the ordinary path breaks on the *second* run.
 
 `21-reseed-preserves-existing-data.md` and #302's `11-clean-reseed-confirmation.md`, whose
 `**Fully green after:**` headers both name this issue — delete those lines when they pass. T1 is the

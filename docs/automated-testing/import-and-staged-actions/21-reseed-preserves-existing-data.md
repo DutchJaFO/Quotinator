@@ -144,6 +144,28 @@ Invoke-RestMethod -Method Post -Headers $headers `
 so there is nothing to do. A reseed that reported work here would be re-adding content it had just
 removed.
 
+**Then confirm the report says so, rather than claiming a rewrite (#373).**
+
+```powershell
+$reports = (Invoke-RestMethod -Method Post -Headers $headers `
+  "http://localhost:19522/api/v1/admin/database/reseed").reports
+foreach ($r in $reports) {
+  "$($r.fileName):"
+  $r.entityTypes.PSObject.Properties | ForEach-Object {
+    $c = $_.Value
+    "   $($_.Name)  incoming=$($c.incoming) new=$($c.new) modified=$($c.modified) unchanged=$($c.unchanged)"
+  }
+}
+```
+
+**Expected:** every entity type the file contains is listed — not `Quote` alone — with `incoming`
+matching the number that arrived, `unchanged` accounting for them, and `modified` at `0`.
+
+**Two failures hide here, and the second is the one that costs time.** A quote already stored is
+reported as *modified*, which claims a write that never happened. Every other entity type produces no
+action at all and vanishes from the report entirely — so a reader comparing this against the cold start
+sees seven entity types become one, and goes looking for a bug in entity handling that does not exist.
+
 ### 5. Remove a bundled quote and confirm the reseed repairs only that
 
 ```powershell
@@ -190,6 +212,25 @@ Run 2026-09-02 against `quotinator:local` at `3e9bb19c`, in container `qt-reseed
 |---|---|---|
 | 3 | `local quote survived reseed: True` | **fails** — `False`; `799` quotes after the reseed, having been `800` before it, and `0` search hits |
 | 6 | import batches survive | **fails** — `5` before, `4` after |
+
+**Step 4's report assertions, run 2026-09-02 against the post-#372, pre-#373 build.** Both failures
+visible in one output:
+
+```
+quotinator-curated.json:
+   Quote  incoming=0 new=0 modified=13 unchanged=0
+quotinator-series-universe.json:
+   Source  incoming=0 new=0 modified=0 unchanged=0
+NikhilNamal17_popular-movie-quotes.json:
+   Quote  incoming=0 new=0 modified=707 unchanged=0
+vilaboim_movie-quotes.json:
+   Quote  incoming=0 new=0 modified=99 unchanged=0
+```
+
+`quotinator-curated.json` reported seven entity types on its cold start and reports one here — the
+Characters, People, Sources, Conversations, StageDirections and SoundCues all arrived and matched, and
+say nothing. The thirteen quotes that changed nothing are counted as modified. `incoming` and
+`unchanged` read `0` throughout because #373 has not populated them yet.
 
 **Steps 1, 2, 4 and 5 are not expected to fail on the pre-work build.** Step 1 establishes a baseline
 and step 2 creates the fixture. Steps 4 and 5 assert counts, and truncate-and-reimport lands on exactly
