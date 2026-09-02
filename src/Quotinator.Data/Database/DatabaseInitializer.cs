@@ -132,6 +132,10 @@ public class DatabaseInitializer(
         // precedent, for the same reason: constraints on one table, and separate migrations would copy
         // every row three times.
         new SchemaMigration { Version = 18, Sql = NotificationImportReviewMigrations.WidenForImportReview },
+        // #308: Resolution records how a notification's own action settled it, where DismissReason says
+        // only that it settled. An added column with an inline CHECK, not a rebuild — migration 16's
+        // precedent, since nothing existing is being widened.
+        new SchemaMigration { Version = 19, Sql = NotificationResolutionMigrations.AddResolutionColumn },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -335,7 +339,9 @@ public class DatabaseInitializer(
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
             OriginalLanguage  TEXT    NOT NULL DEFAULT 'en',
             DismissReason     TEXT
-                              CHECK (DismissReason IS NULL OR DismissReason IN ('Dismissed', 'Resolved', 'Obsolete'))
+                              CHECK (DismissReason IS NULL OR DismissReason IN ('Dismissed', 'Resolved', 'Obsolete')),
+            Resolution        TEXT
+                              CHECK (Resolution IS NULL OR Resolution IN ('KeptExisting', 'TookIncoming', 'Reseeded', 'Reset'))
         );
         CREATE INDEX IF NOT EXISTS IX_System_Notification_Active ON System_Notification (IsDismissed, IsDeleted, ExpiresAt);
         CREATE INDEX IF NOT EXISTS IX_System_Notification_DismissTriggerKey ON System_Notification (DismissTriggerKey);

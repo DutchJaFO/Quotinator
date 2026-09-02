@@ -612,7 +612,7 @@ public class DatabaseInitializerOwnershipTests
         [
             "AppVersionId", "Body", "DateCreated", "DateDeleted", "DateModified", "DismissReason",
             "DismissTriggerKey", "DismissedAt", "ExpiresAt", "Id", "IsDeleted", "IsDismissed",
-            "Metadata", "MetadataKind", "OriginalLanguage", "Title", "Type",
+            "Metadata", "MetadataKind", "OriginalLanguage", "Resolution", "Title", "Type",
         ];
 
         Assert.AreSequenceEqual(expected, columns,
@@ -757,6 +757,21 @@ public class DatabaseInitializerOwnershipTests
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
                 "INSERT INTO System_Notification (Id, Type, Body, DismissReason, DateCreated) " +
                 "VALUES (@id, 'Information', 'x', 'NotARealReason', @now);",
+                new { id = Guid.NewGuid().ToString(), now }));
+
+            // #308: every NotificationResolution member is accepted...
+            foreach (string resolution in (string[])["KeptExisting", "TookIncoming", "Reseeded", "Reset"])
+            {
+                await conn.ExecuteAsync(
+                    "INSERT INTO System_Notification (Id, Type, Body, DismissReason, Resolution, DateCreated) " +
+                    "VALUES (@id, 'ActionRequired', 'Settled by its own action.', 'Resolved', @resolution, @now);",
+                    new { id = Guid.NewGuid().ToString(), resolution, now });
+            }
+
+            // ...and anything outside the enum is rejected, on both paths.
+            await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, Resolution, DateCreated) " +
+                "VALUES (@id, 'Information', 'x', 'NotARealResolution', @now);",
                 new { id = Guid.NewGuid().ToString(), now }));
 
             // ...and the widened MetadataKind CHECK still rejects a value outside the enum, which is

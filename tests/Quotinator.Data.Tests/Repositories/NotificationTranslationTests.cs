@@ -6,6 +6,7 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Models;
+using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.Database;
 
@@ -291,14 +292,20 @@ public class NotificationTranslationTests
     }
 
     // ── Write side (step 6) ──────────────────────────────────────────────────
+    //
+    // These use the *current* Data schema, not SchemaThroughMigration11 above. The pinned list exists
+    // so the migration tests keep meaning "the schema before #319"; a write test does not want that —
+    // it drives the live NotificationWriter, whose INSERT names every column the entity has. Pinning it
+    // to migration 11 meant any Data-owned column added afterwards broke these three, which is exactly
+    // what happened when #308 added `Resolution` (2026-09-02). Only the migration tests pin.
 
     /// <summary>A producer supplies every language in one call, and each becomes its own row.</summary>
     [TestMethod]
     public async Task Write_WithTranslations_PersistsOneRowPerLanguage()
     {
-        using TempDatabase temp = new(SchemaThroughMigration11);
+        using TempDatabase temp = new([]);
+        await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
-        await ApplyTranslationSchemaAsync(connection);
 
         SqliteConnectionFactory factory = new(temp.DbPath);
         NotificationWriter writer = new(factory);
@@ -324,9 +331,9 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Write_WithoutTranslations_PersistsNoTranslationRows()
     {
-        using TempDatabase temp = new(SchemaThroughMigration11);
+        using TempDatabase temp = new([]);
+        await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
-        await ApplyTranslationSchemaAsync(connection);
 
         NotificationWriter writer = new(new SqliteConnectionFactory(temp.DbPath));
         await writer.WriteAsync(NotificationType.Warning, "English body.", appVersionId: null);
@@ -344,9 +351,9 @@ public class NotificationTranslationTests
     [TestMethod]
     public async Task Seed_SameNotificationWithDifferentTranslations_IsStillSuppressed()
     {
-        using TempDatabase temp = new(SchemaThroughMigration11);
+        using TempDatabase temp = new([]);
+        await CurrentSchema.ApplyDataSchemaAsync(temp.DbPath);
         using SqliteConnection connection = await OpenAsync(temp);
-        await ApplyTranslationSchemaAsync(connection);
 
         SqliteConnectionFactory factory = new(temp.DbPath);
         NotificationReader reader = TestNotificationReader.Create(factory);

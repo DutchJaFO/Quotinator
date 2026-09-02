@@ -390,9 +390,9 @@ is already converted and listed.
 | 29 | ✅ | All four seeding variants behave correctly against real configuration | Automated (T2) | `11-clean-reseed-confirmation.md` step 7 |
 | 30 | ✅ | The document goes red before it goes green | Canary run | `11-clean-reseed-confirmation.md`'s *Canary* section — built `aed54b2d` under `quotinator:canary302`: step 2 fails (`0` confirmations after a reseed). Step 1 passes on a build with no producer, so it proves nothing alone — recorded there |
 | 31 | ✅ | Row 2's first-seed suppression is wired, not incidental | Mutation | Replacing the `if (isReseed)` gate with `if (true)` fails `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification` |
+| 32 | ✅ | Row 27's per-origin identity is wired | Mutation | Removing `Origin` from `ReseedFileAppliedMetadataDto.IdentityComponents` fails `ReseedFileAppliedMetadataTests.Identity_DiffersByOrigin_ForTheSameFileNameAndBreakdown` |
 | 33 | ✅ | Every named test is wired to behaviour, not passing incidentally | Mutation sweep | All 29 #302-referenced tests swept 2026-09-01 — disabling `ConfirmFileAppliedCleanlyAsync` fails 12; the rest by targeted mutation (first-seed gate, staged-branch confirm, identity components, wire names, response field, constructor optionality, baseline CHECK and structural drift) |
 | 34 | ✅ | The stored JSON keeps its wire property names | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown`'s `AssertWireNames` — added 2026-09-01 after the round-trip assertions were measured to survive renaming `[JsonPropertyName]` on both sides |
-| 32 | ✅ | Row 27's per-origin identity is wired | Mutation | Removing `Origin` from `ReseedFileAppliedMetadataDto.IdentityComponents` fails `ReseedFileAppliedMetadataTests.Identity_DiffersByOrigin_ForTheSameFileNameAndBreakdown` |
 
 **The two surfaces need different sequences, which row 22 originally ran together as one step.**
 `StartupSuccessModal` is shown once per process run after a healthy startup, so a reseed — which
