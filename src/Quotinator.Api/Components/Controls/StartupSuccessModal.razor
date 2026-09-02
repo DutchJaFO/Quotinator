@@ -1,28 +1,17 @@
 @if (!StartupUx.SummaryDismissed)
 {
-    <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-        @* #308: modal-dialog-scrollable plus a 95vh cap. The notification list grew when payload
-           detail became expandable, and without this the dialog runs past the bottom of the viewport
-           with no way to reach the footer — the whole page scrolls behind a fixed overlay instead.
-           Scrollable keeps the header and footer in place and scrolls the body alone. *@
-        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 80vw; max-height: 95vh;">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h1 class="modal-title fs-5">
-                        @Text.StartupSummaryHeading
-                        <span class="badge bg-secondary ms-2 fs-6 align-middle">v@(Version)</span>
-                    </h1>
-                    <button type="button" class="btn-close" aria-label="Close" @onclick="Dismiss"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="text-muted">@Text.StartupSummaryDescription</p>
-                    <NotificationSummary />
-                    <DatabaseStatsSummary />
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" @onclick="Dismiss">@Text.StartupSummaryContinueButton</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <ModalDialog OnClose="Dismiss" CloseAriaLabel="@Text.NotificationsCloseDetailButton">
+        <Title>
+            @Text.StartupSummaryHeading
+            <span class="badge bg-secondary ms-2 fs-6 align-middle">v@(Version)</span>
+        </Title>
+        <ChildContent>
+            <p class="text-muted">@Text.StartupSummaryDescription</p>
+            <NotificationSummary />
+            <DatabaseStatsSummary />
+        </ChildContent>
+        <Footer>
+            <button type="button" class="btn btn-primary" @onclick="Dismiss">@Text.StartupSummaryContinueButton</button>
+        </Footer>
+    </ModalDialog>
 }

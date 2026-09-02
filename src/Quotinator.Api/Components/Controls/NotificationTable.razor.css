@@ -64,33 +64,9 @@
     text-align: right;
 }
 
-/* #308: the startup modal's detail overlay. Fixed rather than absolute so it covers the popup it sits
-   inside, and a high z-index because the popup itself is already layered above the page. */
-.notification-detail-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1080;
-}
-
-.notification-detail-dialog {
-    background: var(--bs-body-bg, #fff);
-    color: var(--bs-body-color, #212529);
-    border-radius: 0.375rem;
-    padding: 1rem 1.25rem;
-    max-width: min(32rem, 90vw);
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.3);
-}
-
-.notification-detail-dialog-title {
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-}
+/* #308: the detail popup's own backdrop, dialog, title and scroll region all lived here until the
+   third modal made the duplication obvious. `ModalDialog` owns that shell now — including the 95vh cap
+   these rules had to be given separately, one message after the startup modals got theirs. */
 
 .notification-detail-open {
     padding: 0;

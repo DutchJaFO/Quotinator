@@ -1,24 +1,19 @@
-<div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-    @* #308: same 95vh cap as StartupSuccessModal. This one carries a failure reason and a recovery
-       route, so a dialog running past the viewport would hide exactly the text the operator needs. *@
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 80vw; max-height: 95vh;">
-        <div class="modal-content border-danger">
-            <div class="modal-header border-danger">
-                <h1 class="modal-title fs-5 text-danger">
-                    @Text.StartupErrorHeading
-                    <span class="badge bg-secondary ms-2 fs-6 align-middle">v@(Version)</span>
-                </h1>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted">@FailureReason</p>
+@* No close button: this modal reports a startup failure, and its Continue button is the acknowledgement.
+   A header X would let the operator dismiss the reason without reading the recovery route. *@
+<ModalDialog ShowCloseButton="false" ContentClass="border-danger" HeaderClass="border-danger"
+             TitleClass="text-danger" FooterClass="border-danger">
+    <Title>
+        @Text.StartupErrorHeading
+        <span class="badge bg-secondary ms-2 fs-6 align-middle">v@(Version)</span>
+    </Title>
+    <ChildContent>
+        <p class="text-muted">@FailureReason</p>
 
-                <p>@Text.StartupErrorLastKnownGood</p>
-                <NotificationSummary />
-                <DatabaseStatsSummary />
-            </div>
-            <div class="modal-footer border-danger">
-                <button type="button" class="btn btn-outline-danger" @onclick="OnContinue">@Text.StartupErrorContinueButton</button>
-            </div>
-        </div>
-    </div>
-</div>
+        <p>@Text.StartupErrorLastKnownGood</p>
+        <NotificationSummary />
+        <DatabaseStatsSummary />
+    </ChildContent>
+    <Footer>
+        <button type="button" class="btn btn-outline-danger" @onclick="OnContinue">@Text.StartupErrorContinueButton</button>
+    </Footer>
+</ModalDialog>

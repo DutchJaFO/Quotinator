@@ -1,0 +1,32 @@
+@* The one modal-dialog shell (#308). Backdrop, centred dialog, 95vh cap, scrollable body, and a
+   header/body/footer layout that keeps the title and the buttons in place while only the body scrolls.
+
+   Extracted after building the same thing three times: two startup modals and the notification detail
+   popup. The cost was already visible — the startup modals gained the 95vh cap in one commit, and the
+   detail popup needed the identical fix separately a message later, because they were separate copies.
+   Anything needing a modal uses this; nothing hand-rolls a backdrop again. *@
+<div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);"
+     @onclick="HandleBackdropClick">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+         style="max-width: @MaxWidth; max-height: 95vh;"
+         @onclick:stopPropagation="true">
+        <div class="modal-content @ContentClass">
+            <div class="modal-header @HeaderClass">
+                <h1 class="modal-title fs-5 @TitleClass">@Title</h1>
+                @if (ShowCloseButton)
+                {
+                    <button type="button" class="btn-close" aria-label="@CloseAriaLabel" @onclick="OnClose"></button>
+                }
+            </div>
+            <div class="modal-body">
+                @ChildContent
+            </div>
+            @if (Footer is not null)
+            {
+                <div class="modal-footer @FooterClass">
+                    @Footer
+                </div>
+            }
+        </div>
+    </div>
+</div>

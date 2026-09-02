@@ -163,12 +163,14 @@
 
 @if (DetailDialogForId is Guid openId && Notifications.FirstOrDefault(n => n.Id == openId) is { } open)
 {
-    @* Rendered outside the table so it overlays the modal rather than stretching a cell. Plain Blazor
-       state, no JS interop: the startup modal already runs on a circuit, so a second mechanism would
-       buy nothing and could leave the panel stuck open if interop failed. *@
-    <div class="notification-detail-backdrop" @onclick="() => DetailDialogForId = null">
-        <div class="notification-detail-dialog" @onclick:stopPropagation="true">
-            <div class="notification-detail-dialog-title">@(open.Title ?? Text.NotificationsDetailToggle)</div>
+    @* Rendered outside the table so it overlays the page rather than stretching a cell, and through
+       ModalDialog rather than a backdrop of its own — this is the third place needing a modal, and the
+       two before it had already had to be fixed separately for the same overflow. Backdrop click closes
+       here: unlike the startup modals there is nothing to acknowledge, so dismissing it costs nothing. *@
+    <ModalDialog OnClose="() => DetailDialogForId = null" CloseOnBackdropClick="true"
+                 MaxWidth="min(32rem, 90vw)" CloseAriaLabel="@Text.NotificationsCloseDetailButton">
+        <Title>@(open.Title ?? Text.NotificationsDetailToggle)</Title>
+        <ChildContent>
             @{
                 NotificationTable.PayloadTable openDetail = PayloadDetail(open, Text);
             }
@@ -193,8 +195,10 @@
                     }
                 </tbody>
             </table>
+        </ChildContent>
+        <Footer>
             <button type="button" class="btn btn-sm btn-secondary"
                     @onclick="() => DetailDialogForId = null">@Text.NotificationsCloseDetailButton</button>
-        </div>
-    </div>
+        </Footer>
+    </ModalDialog>
 }
