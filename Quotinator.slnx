@@ -319,6 +319,7 @@
     <File Path="docs/milestones/notification-system/369-orphaned-review-rows-plan.md" />
     <File Path="docs/milestones/notification-system/370-conflict-signalled-by-throwing-plan.md" />
     <File Path="docs/milestones/notification-system/372-reseed-does-not-delete-plan.md" />
+    <File Path="docs/milestones/notification-system/373-unchanged-is-not-modified-plan.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/">
     <File Path="docs/automated-testing/README.md" />
@@ -392,6 +393,7 @@
     <File Path="docs/automated-testing/import-and-staged-actions/18-rule-file-override-endpoints.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/19-per-file-import-report.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/20-pending-review-alert.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/21-reseed-preserves-existing-data.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

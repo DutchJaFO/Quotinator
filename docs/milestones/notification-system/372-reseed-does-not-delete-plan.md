@@ -1,9 +1,9 @@
 # #372 — Reseed should only import the designated files, not delete data first
 
-**Status:** Planning — the plan below is complete; execute it in order
+**Status:** In progress (step 6) — blocked on [#373](https://github.com/DutchJaFO/Quotinator/issues/373); steps 1–5 done
 **GitHub issue:** #372
 **Tiers required:** T1, T2
-**Depends on:** nothing. **Blocks #302**, whose final T2 and T1 wait on this
+**Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), found by this issue's own step 6. **Blocks #302**, whose final T2 and T1 wait on this
 
 ---
 
@@ -79,10 +79,50 @@ here are executed strictly in order for the same reason — a step run early bor
 
 ### 1. Write every test first, and run them red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 4 unit tests red, 6 classified as controls; T2 document written and run red
 
 Exit condition: every unit test in the verification table exists and **fails on its own assertion**,
 and the new T2 document has been run against the current build and failed.
+
+**The first attempt produced 8 of 10 passing, and the reason is the heart of this issue.** Every id in
+this project is a hash of normalised content (ADR 014 states it), so truncate-then-reimport restores
+byte-identical rows for everything the source files describe. Row counts match, ids match, links
+resolve. An assertion over any of them passes against the deletion it exists to catch.
+
+**Only content the files do not describe can tell the two behaviours apart.** The tests now insert one
+locally authored quote before reseeding — a delete loses it, an import cannot re-create it. That single
+change took `Reseed_OnPopulatedDatabase_DeletesNothing` and
+`Reseed_WithARowRemoved_ReAddsOnlyThatRow` from passing to failing on their own assertions.
+
+**A claim in the issue was wrong, and is corrected rather than quietly dropped.** The issue says every
+reseed orphans `Quotinator_CharacterSource` rows. It does not: the reimport re-creates the same
+Characters and Sources with the same content-derived ids, so the links resolve again. Orphans need
+content whose id actually changes across a reimport, which no fixture here produces. Row 5 stays as a
+regression guard — cheap, and the failure mode is silent — but carries a precondition asserting link
+rows exist at all, so it cannot pass by having nothing to check. It is not evidence of a live bug and
+must not be reported as one.
+
+**Red at step 1 (4):** rows 1, 3, 4, 6 — `DeletesNothing`, `ReAddsOnlyThatRow`,
+`StagesAConflictRatherThanOverwriting`, `PreservesImportBatches`.
+
+**Not red, and correctly so (6).** Two categories, kept apart deliberately:
+
+- **Controls and guards** — rows 2, 5, 9, 10, 13. These assert behaviour that must *not* change, so
+  passing before and after is what correct looks like. A control that starts red is a control that is
+  testing the wrong thing.
+- **Row 8, which needed the step order fixed instead.** `ImportsRegardlessOfExistingContent` passes
+  today only because truncation empties the database before the gate sees it. Splitting the gate first
+  leaves it passing throughout — never observed red. Swapping steps 2 and 3 makes it genuinely red in
+  between. See step 2.
+
+**The T2 document is written and red.** `21-reseed-preserves-existing-data.md`, run against
+`3e9bb19c`: the locally imported quote does not survive a reseed (`800` → `799`, zero search hits) and
+import batches drop from `5` to `4`. Its own canary section carries the numbers.
+
+**Writing it found two defects that reading it never would have.** `POST /quotes` does not exist — the
+v1 API is read-only for quote content — and `Invoke-RestMethod -Form` is PowerShell 7+, absent from
+this project's 5.1 shell. The first draft used both. A document written after the code would have been
+composed against whatever the implementation happened to make convenient and never tested this way.
 
 **This issue's reds are unusually easy to fake, and that is the thing to guard.** Most rows assert
 that something is *preserved*. Against today's build, truncation deletes the rows, so a preservation
@@ -93,9 +133,60 @@ positive control named in the same step, the way row 4's zero-files case needed 
 **The T2 document is written and run now**, while `HEAD` is still the pre-work build — the only point
 at which its canary costs nothing. Record the result in the document's own *Canary* section.
 
-### 2. Give cold start and reseed their own method bodies
+### 2. Remove the deletion
 
-**Status:** ⬜ Not started — turns rows 8–9 green
+**Status:** ✅ Done — rows 1 and 6 green; rows 2, 3, 4, 8 red, which step 3 closes
+
+**Start of step:** rows 1, 3, 4 and 6 confirmed red by re-running them, not inferred from step 1.
+**End of step:** rows 1 (`DeletesNothing`) and 6 (`PreservesImportBatches`) green; rows 2, 3, 4 and 8
+red. `TruncateDataAsync` and its call are gone; `BatchIdsAsync`'s pre-read went with them, since
+nothing is removed for it to report.
+
+**Two predictions in this step's own text were wrong, and the runs corrected them.**
+
+- **Rows 3 and 4 were predicted green here; they cannot be.** Both need the import to actually run
+  against a populated database, and the count gate still blocks it until step 3. They are red for the
+  same reason row 8 is, not for a different one.
+- **Row 2 stayed green when it should have gone red**, because the control was weak: it read
+  `LastSeedReport` from the same initializer instance the cold start had already filled, so a reseed
+  doing nothing at all still satisfied it. A second instance fixes it, and the row went red
+  immediately. **A control that cannot fail is worse than no control** — it certifies the very
+  vacuous pass it exists to prevent, and this one would have signed off step 3.
+
+`TruncateDataAsync` is deleted along with its call in `OnReseedAsync`. Not corrected, not made
+prefix-driven — reseed stops deciding what survives.
+
+**This step is deliberately taken before the gate split, and the original plan had it the other way
+round.** Measured at step 1: `Reseed_OnPopulatedDatabase_ImportsRegardlessOfExistingContent` passes
+against today's build, because truncation empties the database and the count gate therefore lets the
+import through. Split the gate first and it still passes — it can never be observed red, which is the
+"borrowed red" the Steps preamble warns about.
+
+Removing the deletion first makes it genuinely red: reseed then meets a populated database, the gate
+returns early, and nothing is imported. `Reseed_OnPopulatedDatabase_IsNotANoOp` goes red alongside it
+for the same reason. **This step therefore ends with two rows failing on purpose**, which step 3
+closes — the only point in this issue where that is correct, and it is recorded here so a later reader
+does not mistake it for an unfinished step.
+
+### 3. Give cold start and reseed their own method bodies
+
+**Status:** ✅ Done — rows 2, 3, 4, 8 green; all ten unit tests pass
+
+**Start of step:** rows 2, 3, 4 and 8 confirmed red by the run that closed step 2.
+**End of step:** all ten green. `SeedIfEmptyInternalAsync` keeps the count gate and delegates to a new
+`ImportDesignatedFilesAsync`; `OnReseedAsync` calls that directly and never sees the gate.
+
+**Row 4 had never actually been red, and only the green run revealed it.** Its failures up to this
+point were `SQLite Error 1: 'no such column: Text'` — the column is `QuoteText`. An exception is a
+weaker red than an assertion failure, because it looks identical for a test asserting the opposite,
+which is the caveat #308's plan recorded about storage-backed tests. Proven properly by mutation
+instead: adding `DELETE FROM Quotinator_Quote` back into the reseed fails it on
+`Assert.AreEqual(localEdit, stored)`, and fails row 1 alongside it. Reverted, both green.
+
+**Two guard tests in the T2 suite failed on this issue's own new document**, and both were right:
+`curl.exe` is not PowerShell — `scripts/testing/http.csx` exists for the multipart gap 5.1 leaves — and
+port `19521` was already published by document 20. Moved to `19522` and onto `http.csx`. The document
+was written before either rule was consulted; the guards are what caught it rather than a reader.
 
 `SeedIfEmptyInternalAsync` opens with `if (count > 0) return;`. That check is cold start's own job —
 it is literally "seed if empty". An explicit reseed must never consult it: the check is not a
@@ -123,16 +214,21 @@ Row 1's preservation assertion still enumerates every `Quotinator_` table — th
 question (what a reseed must not delete) and the broad set is correct there. Only the emptiness gate
 stays narrow.
 
-### 3. Remove the deletion
-
-**Status:** ⬜ Not started — turns rows 1–5 green
-
-`TruncateDataAsync` is deleted along with its call in `OnReseedAsync`. Not corrected, not made
-prefix-driven — reseed stops deciding what survives.
-
 ### 4. Settle the batch-removal and `Obsolete`-dismissal question
 
-**Status:** ⬜ Not started — turns rows 6–7 green
+**Status:** ✅ Done — row 7 green by removal
+
+**Established, not assumed.** `NotificationDismissReason.Obsolete` had exactly one producer in the
+whole codebase: `DismissAlertsForRemovedBatchesAsync`. `SqliteImportActionService`'s two
+`DismissByTriggerAndBatchAsync` calls both pass `Resolved`, not `Obsolete`. Reset cannot reach it
+either — it rebuilds from the baseline, wiping notifications outright, so there is nothing to mark.
+
+**The producer is removed; the enum member stays, and that is a separate decision.** Databases upgraded
+from an earlier build hold rows already carrying `Obsolete`, so the member, its CHECK constraint and
+`NotificationTable`'s rendering of it all have to keep working — deleting it would need a migration and
+would break the reading of history that already exists. It now has no producer, which is a stated fact
+rather than a gap to fill. #369, which handles review rows whose batch is genuinely gone, is where one
+may reappear.
 
 `BatchIdsAsync` and `DismissAlertsForRemovedBatchesAsync` exist because reseed removed import batches;
 with nothing removed, they have nothing to act on. **Establish where else #303's `Obsolete` dismissal
@@ -142,21 +238,48 @@ way; a path found to be genuinely dead is removed with that finding stated, not 
 
 ### 5. Decide what happens to the orphaned SQL constants
 
-**Status:** ⬜ Not started — turns row 10 green
+**Status:** ✅ Done — row 11 green by removal
 
-All 17 `Quotinator_*.DeleteAll` constants have no caller outside `TruncateDataAsync` and become dead
-with it. `Sql.*` constants are enumerated by the guard tests, so a kept-but-unused constant is still
-scanned on every run — keeping them is not free. Decide and record; do not leave them unexamined.
+All 17 became callerless with `TruncateDataAsync`, confirmed by grep across `src/`, `tests/` and
+`tools/`. **Removed**, all sixteen in `Quotinator.Core`'s `Sql.cs` plus `ImportBatches.DeleteAll` in
+`Quotinator.Data`'s.
+
+**The reason is not tidiness.** A `DeleteAll` left sitting in the project's single sanctioned SQL home,
+immediately after removing the code that used it, is an invitation to do the exact thing this issue
+took out. The guard-test scanning cost is real but secondary.
+
+**Removing them orphaned one more thing, which the compiler found.** `ImportBatches.SelectAllIds`
+existed only to read batch ids before the truncation, and its own doc comment referenced `DeleteAll` —
+a `CS1574` against the 0-warnings gate. Removed with it rather than having its comment patched to point
+at nothing.
+
+**Not touched:** the eight `DeleteForX` constants in Core's `Sql.cs` are scoped per-entity deletes the
+import pipeline uses during a Modify, and the `Audit_`/`Import_Action` ones in Data belong to other
+subsystems. Any of those that are dead were dead before this issue, and are not this issue's to clean —
+surface them separately rather than sweeping.
 
 ### 6. Repair the tests that assumed reseed re-applies everything
 
-**Status:** ⬜ Not started — turns rows 11–12 green
+**Status:** 🚧 Blocked on [#373](https://github.com/DutchJaFO/Quotinator/issues/373) — turns row 12 green
 
-Cross-check finding 4. `Reseed_AfterDismissal_WritesTheConfirmationAgain` expects six confirmations
-across two reseeds, which cannot hold once the second imports nothing. Each such test is rewritten to
-assert what the new behaviour makes true, not loosened until it passes — and each rewrite states which
-of the two it is, since "the assertion was over-broad" and "the behaviour changed" are different
-findings and only one of them is about this issue.
+Cross-check finding 4, which turned out to have one cause rather than being ten separate repairs.
+
+**All ten failures are the same behaviour, and it is #373's.** A reseed against an up-to-date database
+reports every quote as *modified* — `Quote +0 ~732`, `+0 ~13`, `+0 ~99` — because
+`ImportActionPlanner` records a `Modify` even when `effectiveChanged` is empty and nothing would
+actually be written. Each file therefore produces a second, differently-shaped confirmation, and the
+tests see six where they expect three.
+
+**Rewriting them against today's counts would bake the misreport in.** They would assert `~732` as
+correct and #373 would have to change them back. They wait.
+
+**Two wrong turns, recorded rather than smoothed away.** I first assumed the reseed's confirmations
+were *empty* and added a "skip when the breakdown is empty" guard to `ConfirmFileAppliedCleanlyAsync`.
+The count stayed at six, because the breakdowns are not empty. The guard was reverted — speculative
+behaviour added on a mistaken diagnosis, defensible in isolation but not to be left behind on a wrong
+premise. Only then did I print the actual payloads, which named the cause in a single run. **Measure
+the thing before changing the code that produces it**: the diagnostic was available from the start and
+I inferred twice instead.
 
 ### 7. Update the four documentation surfaces and ADR 014
 

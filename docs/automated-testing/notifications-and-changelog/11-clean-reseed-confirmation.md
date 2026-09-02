@@ -3,6 +3,8 @@
 **Smoke:** no
 **Environment:** Fresh
 **Traces to:** #302
+**Fully green after:** #372 and #373 — step 2 measures a reseed against a populated database, which
+deletes first until #372 and reports identical content as modified until #373
 
 ## Preconditions
 

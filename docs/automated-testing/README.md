@@ -357,6 +357,32 @@ its own container and volume.
 Turning such a sentence into a link makes the dependency official rather than removing it — the fix is
 always to give the test its own setup.
 
+### A document may need more than one issue before it can be fully green
+
+**This is a transient state, not a property of the suite** (developer, 2026-09-02). It arises only
+while a partially-fixed issue is being carried alongside the one that finishes the job — one issue
+splits, or a second is found mid-implementation, and for as long as both are open a document written
+against the finished behaviour has steps that no build yet satisfies. Outside a chain in flight, a red
+step is a red step.
+
+A test written red-first against issue A can still have steps that stay red after A lands, because a
+second issue B owns part of what they assert. That must not be resolved by weakening the assertion to
+whatever the current build produces — doing so bakes in the very behaviour B exists to correct, and the
+document then has to be changed back.
+
+**State it in the header** with `**Fully green after:** #NNN`, naming which steps are affected and what
+they read as until then. A reader running the suite mid-chain then knows a red step is expected rather
+than a regression, and the line disappears when the last issue lands.
+
+**Found live (2026-09-02, developer):** `import-and-staged-actions/21` was written for #372 and cannot
+be fully green until #373 as well — its "a second reseed changes nothing" step reads as a rewrite of
+every quote while identical content is still reported as modified. #302's
+`notifications-and-changelog/11` is in the same position for the same reason.
+
+**The line is scaffolding and is deleted when the last named issue lands.** It is not licence to leave
+a step red indefinitely: the header names specific open issues, and if none is open, the step is simply
+failing.
+
 ### Depending on content is not the same as depending on another test
 
 Some tests need a database with content before they mean anything — the pagination contract needs rows
@@ -1092,6 +1118,7 @@ different question in each.
 | 18 | [Rule-file override endpoints and alias candidates](import-and-staged-actions/18-rule-file-override-endpoints.md) | no |
 | 19 | [Every seed and import surface reports per-file counts](import-and-staged-actions/19-per-file-import-report.md) | yes |
 | 20 | [A file left awaiting review raises an alert, and resolving it retires the alert](import-and-staged-actions/20-pending-review-alert.md) | no |
+| 21 | [A reseed imports the designated files and deletes nothing](import-and-staged-actions/21-reseed-preserves-existing-data.md) | no |
 
 ---
 
@@ -1164,6 +1191,7 @@ Every test document follows this shape.
 **Smoke:** yes | no
 **Environment:** Fresh | Constrained | Upgraded
 **Traces to:** #NNN[, #NNN]
+**Fully green after:** #NNN — <which steps, and what they read as until then>   ← only when it applies
 
 ## Preconditions
 
