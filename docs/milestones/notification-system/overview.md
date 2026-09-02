@@ -52,7 +52,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#319](https://github.com/DutchJaFO/Quotinator/issues/319) | Notification title and body are not translated | Waiting for release | T1 ✅ T2 ✅ | [319-notification-translations-plan.md](319-notification-translations-plan.md) |
 | [#323](https://github.com/DutchJaFO/Quotinator/issues/323) | Source download: a stalled connection attempt outlives its request and fails every other source on the same host | Waiting for release | T1 ✅ T2 ✅ | [323-source-download-connection-stall-plan.md](323-source-download-connection-stall-plan.md) |
 | [#324](https://github.com/DutchJaFO/Quotinator/issues/324) | Notification: report when a source update attempt fails | Planning | T1 ⬜ T2 ⬜ | [324-source-refresh-failure-notification-plan.md](324-source-refresh-failure-notification-plan.md) |
-| [#325](https://github.com/DutchJaFO/Quotinator/issues/325) | Source download: no address-family fallback — a black-holed IPv6 path fails the download even though IPv4 works | Waiting for release | T1 ✅ T2 ✅ | [325-address-family-fallback-plan.md](325-address-family-fallback-plan.md) |
+| [#325](https://github.com/DutchJaFO/Quotinator/issues/325) | Source download: no address-family fallback — a black-holed IPv6 path fails the download even though IPv4 works | Closed as not planned | T1 — T2 — | [325-address-family-fallback-plan.md](325-address-family-fallback-plan.md) |
 | [#326](https://github.com/DutchJaFO/Quotinator/issues/326) | Startup crashes instead of degrading when the data directory is read-only and a migration is pending | Waiting for release | T1 ✅ T2 ✅ | [326-startup-degrades-on-unwritable-data-directory-plan.md](326-startup-degrades-on-unwritable-data-directory-plan.md) |
 | [#327](https://github.com/DutchJaFO/Quotinator/issues/327) | Smoke tests: prove startup problems degrade rather than crash | In progress | T1 ⬜ T2 ⬜ | [327-startup-degradation-smoke-coverage-plan.md](327-startup-degradation-smoke-coverage-plan.md) |
 | [#328](https://github.com/DutchJaFO/Quotinator/issues/328) | Smoke tests: verify bundled imports and endpoint behaviour against a real database | Planning | T1 ⬜ T2 ⬜ | [328-bundled-import-and-live-endpoint-coverage-plan.md](328-bundled-import-and-live-endpoint-coverage-plan.md) |
@@ -233,6 +233,23 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
          and reseed currently report different breakdowns for the same file, so dedupe does not
          suppress the second and one file is confirmed twice. Found by #302's reopening rather than by
          looking — the confirmations made a 14-of-17-tables delete list observable for the first time.
+#373 ─── depends on #372 for reproduction — a reseed that truncates first is always a first import, so
+         a row can never arrive and already match. **Blocks #372's own step 6**, whose ten failing
+         tests are all this one behaviour, and #302 behind that. Found by running #372's T2 document:
+         a reseed of unchanged files reported every quote as modified and said nothing at all about
+         six of the seven entity types involved.
+#374 ─── depends on nothing; #372 is what makes it reachable, since a rule never met a value it had
+         already resolved while every reseed was a first import. **Blocks #373's T2 runs** — both
+         documents reseed real content, which leaves 22 pending until a rule can recognise its own
+         outcome as already applied. Found by writing the positive seeding test #373 was asked for:
+         the negative fixture has no rule file and can never apply, so it only ever proved the stuck
+         case stays stuck.
+#367 ─── depends on #278 (the NotificationTable component it adds a status to) and #312 (the metadata
+         and dismissal shape its Executing state reads around). Blocks #308, which designs its
+         per-type layout against the finished status set — the reason #367 moved ahead of it. Its own
+         research found the Status column was already derived rather than stored, which turned the
+         stored-vs-transient question into a third option, a process registry, with no migration and
+         no way to strand a row.
 #371 ─── depends on nothing, and blocks nothing. Placed before #351 and #360 only for cost: it makes
          SchemaMigration's description required across 31 construction sites, and both of those add
          migrations that would otherwise be written twice. Consumes #308's per-type layout, which is
@@ -260,7 +277,7 @@ step, the other reuses it.
 |---|-------|--------|
 | 1 | **#313** ✅ | Done. Api tests were asserting before startup completed — measured at 5 of 5 runs, so every verification in this milestone was untrustworthy until it landed. Had to come first for that reason, not because of any dependency |
 | 2 | **#323** ✅ | Independent bug; taken first by developer direction (2026-08-17) because it was found live and its fix is self-contained to the HTTP client registration. Blocks nothing |
-| 3 | **#325** ✅ | Taken immediately after #323 as the same startup log's remaining half. Its fix was reverted on 2026-08-20 as disproportionate to a failure the application already handles by falling back to the local copy; #323's `ConnectTimeout`, raised to 60 s, carries it instead. See its plan doc's "Reverted" section |
+| 3 | **#325** ⛔ | `Closed as not planned` (GitHub, 2026-08-20). Taken immediately after #323 as the same startup log's remaining half. Its fix was reverted on 2026-08-20 as disproportionate to a failure the application already handles by falling back to the local copy; #323's `ConnectTimeout`, raised to 60 s, carries it instead. See its plan doc's "Reverted" section |
 | 4 | **#312** ✅ | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
 | 5 | **#81** ✅ | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
 | 6 | **#83** ✅ | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |

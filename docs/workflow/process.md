@@ -42,6 +42,23 @@ just because they're documented near each other.
 | `Waiting for release` | Every plan-doc verification row is ✅ | "Completing an issue" → Waiting for release, below | `checklist.md` → "Before closing an issue" → Waiting for release |
 | `Released` | Tag pushed, fix confirmed in the release artefact | "Completing an issue" → Released, below | `checklist.md` → "Before closing an issue" → Released |
 
+**One issue does not reach `Released`, and it needs a status of its own.** An issue can be closed
+because the work turned out not to be wanted — a fix judged disproportionate, a premise that did not
+survive scrutiny — rather than because it shipped. GitHub records that as `NOT_PLANNED`, and calling it
+`Released` would claim an artefact that never carried it.
+
+| Phase (status) | Entry criteria | Steps documented in | Checklist in |
+|---|---|---|---|
+| `Closed as not planned` | Closed on GitHub with reason `NOT_PLANNED` | — the deciding rationale goes in the plan doc, as for any scope reversal | — |
+
+It is a terminal state reachable from any phase, not a fifth step in the sequence. The plan doc keeps
+whatever section already records why (#325's own *Reverted* section is the worked example), and
+`overview.md` carries the same word so the two never disagree.
+
+**Do not add a sixth status without asking** (developer, 2026-09-03: "no need to invent any additional
+statuses yet"). A state the four above cannot express is a finding to raise, not a word to coin — this
+one was added only after being raised as exactly that.
+
 A phase's own steps run **as soon as that phase's entry criteria are met** — they do not wait for the
 next phase's gate. This is what "Completing an issue" below means by "two phases, not one flat list,"
 and it applies the same way to Planning/Implementation: don't bundle scope-checking work into the

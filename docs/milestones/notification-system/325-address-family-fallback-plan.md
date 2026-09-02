@@ -1,6 +1,6 @@
 # #325 — Source download: no address-family fallback — a black-holed IPv6 path fails the download even though IPv4 works
 
-**Status:** Waiting for release
+**Status:** Closed as not planned — closed on GitHub 2026-08-20, reason `NOT_PLANNED`; see *Reverted* below
 **GitHub issue:** #325
 **Tiers required:** T1, T2
 **Depends on:** #323
