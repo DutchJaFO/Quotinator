@@ -175,19 +175,25 @@ went red against `ShowsTitle => false` while the two asserting an absence needed
 same split here and plan two runs rather than reporting the first as complete.
 
 
-**Row 23 was mis-specified, and that is a planning failure — not a finding** (developer, 2026-09-02).
-It asserted that payload rendering never replaces the one-line body. Wrong twice over: `NotificationEntity.Body`
-is `init`-only so the compiler already guaranteed it, and **the premise was false** — for some types the
-structured payload says everything the sentence says and says it better, so rendering both is
-duplication. Whether a type shows its body, its payload, or both **is** the per-type layout decision,
-which makes it the most testable thing in this step rather than the least.
+**Row 23 was mis-specified twice, and both were planning failures — not findings** (developer,
+2026-09-02).
 
-Row 21 inherited the same wrong premise and is corrected with it: it demanded every kind name payload
-parts, which a body-only type legitimately does not. It now asserts the invariant instead — `Content`
-names payload exactly when `PayloadParts` is non-empty.
+**First**, it asserted that payload rendering never replaces the one-line body — true, but expressed as
+a non-mutation of `NotificationEntity.Body`, which is `init`-only, so the compiler already guaranteed
+it. The row could never go red. Deleting it was reported as a finding; it was the plan being wrong.
 
-The lesson recorded for the next plan: a requirement written without checking it is expressible is not
-a requirement, and deleting it later is not a finding.
+**Second**, the correction over-reached. Replacing it with a `BodyOnly`/`PayloadOnly`/`BodyAndPayload`
+choice assumed some type might show detail *instead of* its summary. **The body is always relevant —
+it is the summary of the payload wherever there is one** (developer). So `PayloadOnly` describes
+nothing real, and the original premise was right after all; only its expression had been wrong.
+
+What actually varies is whether a type has structured detail *beneath* the summary. `NotificationLayout`
+is therefore `BodyIsMultiLine` plus `PayloadParts`, with no content-mode enum, and the two rows became:
+row 21, every type leads with its body; row 23, whether payload detail exists varies by type.
+
+**The lesson, recorded rather than filed away:** a requirement written without checking it is
+expressible is not a requirement — and a correction made without re-checking the premise is how one
+wrong row becomes two.
 
 **A storage-backed test cannot reach its assertion before its column exists** — recorded 2026-09-02
 as a limit of step 1's mechanic. `DismissedAsResolved_RecordsTheResolution` and
@@ -277,9 +283,9 @@ action deliberate; naming the button is not a reason to remove the second step.
 | 18 | ❌ | A notification dismissed by the user records no resolution | Unit test | `NotificationWriterTests.DismissedByUser_RecordsNoResolution` — negative; the field means "how the action settled it", not "how it went inactive" |
 | 19 | ❌ | The migration and the baseline accept the same `Resolution` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` (extended) |
 | 20 | ❌ | Every `NotificationResolution` member has a label in all three locales | Unit test | `NotificationTableTests.EveryResolution_HasATranslationKey` — derived from the enum, like `EveryDisplayStatus_HasATranslationKey` |
-| 21 | ❌ | Each type's layout is internally consistent about what it renders | Unit test | `NotificationTableTests.LayoutFor_EachKind_NamesWhatItRenders` — `Content` names payload iff `PayloadParts` is non-empty; proven by mutation, since an invariant passes while it holds |
+| 21 | ❌ | Every type leads with its body, with no exception | Unit test | `NotificationTableTests.ContentLines_ForEveryKind_LeadWithTheBody` — the body is the summary of the payload, so detail never replaces it |
 | 22 | ❌ | A payload that cannot be deserialised renders the plain body rather than throwing | Unit test | `NotificationTableTests.UnreadablePayload_FallsBackToTheBody` — negative; a row written by an older build must still render |
-| 23 | ❌ | The choice of body, payload, or both actually varies by type | Unit test | `NotificationTableTests.LayoutFor_AcrossKinds_ActuallyVariesWhatIsRendered` — replaces the mis-specified row, asserting what genuinely varies |
+| 23 | ❌ | Whether a type has structured detail beneath the summary varies | Unit test | `NotificationTableTests.LayoutFor_AcrossKinds_PayloadDetailVaries` — if every type answers alike, `LayoutFor` is still the line-wrapping boolean under a longer name |
 | 24 | ❌ | The page collapses and expands | Automated (T2) | `13-notification-layout.md` — click the expander, assert the payload detail appears |
 | 25 | ❌ | The modal opens a dialog rather than expanding in place | Automated (T2) + screenshot | same document — restart, then open one notification's detail |
 | 26 | ❌ | Collapsed state shows the title and the one-line body, never the payload detail | Automated (T2) | same document — the detail is absent from the DOM or hidden, asserted before expanding |

@@ -95,24 +95,20 @@ public partial class NotificationTable
     internal static bool ShowsDismissControl(NotificationEntity notification, bool isExecuting) =>
         !notification.IsDismissed && !isExecuting;
 
-    /// <summary>What a notification type renders as its content. #308.</summary>
-    internal enum NotificationContent
-    {
-        /// <summary>The one-line body only — this type has no structured detail worth showing.</summary>
-        BodyOnly,
-
-        /// <summary>The payload only — its structured form says everything the sentence does, and better.</summary>
-        PayloadOnly,
-
-        /// <summary>The body as a summary, with the payload as detail beneath it.</summary>
-        BodyAndPayload,
-    }
-
-    /// <summary>How a notification's body is laid out, and what it renders. #308.</summary>
+    /// <summary>How a notification's body is laid out, and which payload parts accompany it. #308.</summary>
+    /// <remarks>
+    /// **The body is always rendered** (developer, 2026-09-02): it is the summary of the payload
+    /// wherever there is one, so payload detail is never an alternative to it. A `PayloadOnly` member
+    /// was drafted and rejected for exactly that reason — the only thing that varies by type is whether
+    /// there is structured detail to show *beneath* the summary.
+    /// </remarks>
     /// <param name="BodyIsMultiLine">Whether the body is expected to carry embedded line breaks.</param>
-    /// <param name="Content">Whether this type shows its body, its payload, or both.</param>
-    /// <param name="PayloadParts">The payload fields it shows. Empty exactly when <paramref name="Content"/> is <see cref="NotificationContent.BodyOnly"/>.</param>
-    internal sealed record NotificationLayout(bool BodyIsMultiLine, NotificationContent Content, IReadOnlyList<string> PayloadParts);
+    /// <param name="PayloadParts">The payload fields shown as detail beneath the body. Empty for a type with no structured detail worth showing.</param>
+    internal sealed record NotificationLayout(bool BodyIsMultiLine, IReadOnlyList<string> PayloadParts);
+
+    /// <summary>The lines a notification renders: its body, then any payload detail. #308.</summary>
+    /// <param name="notification">The row being rendered.</param>
+    internal static IReadOnlyList<string> ContentLines(NotificationEntity notification) => [];
 
     /// <summary>The detail lines rendered from a notification's stored payload. #308.</summary>
     /// <param name="notification">The row being rendered.</param>
@@ -156,13 +152,13 @@ public partial class NotificationTable
     {
         // One line per changelog highlight, and one per cleanly-applied or staged file: these producers
         // write several facts, and collapsing them into a paragraph is what #308 exists to stop.
-        NotificationMetadataKind.WhatsNew            => new NotificationLayout(BodyIsMultiLine: true, Content: NotificationContent.BodyOnly, PayloadParts: []),
-        NotificationMetadataKind.ReseedFileApplied   => new NotificationLayout(BodyIsMultiLine: true, Content: NotificationContent.BodyOnly, PayloadParts: []),
-        NotificationMetadataKind.ImportReviewPending => new NotificationLayout(BodyIsMultiLine: true, Content: NotificationContent.BodyOnly, PayloadParts: []),
-        NotificationMetadataKind.Announcement           => new NotificationLayout(BodyIsMultiLine: false, Content: NotificationContent.BodyOnly, PayloadParts: []),
-        NotificationMetadataKind.SchemaVersionOvershoot => new NotificationLayout(BodyIsMultiLine: false, Content: NotificationContent.BodyOnly, PayloadParts: []),
-        NotificationMetadataKind.ReseedRecommended      => new NotificationLayout(BodyIsMultiLine: false, Content: NotificationContent.BodyOnly, PayloadParts: []),
-        null                                            => new NotificationLayout(BodyIsMultiLine: false, Content: NotificationContent.BodyOnly, PayloadParts: []),
+        NotificationMetadataKind.WhatsNew            => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
+        NotificationMetadataKind.ReseedFileApplied   => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
+        NotificationMetadataKind.ImportReviewPending => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
+        NotificationMetadataKind.Announcement           => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
+        NotificationMetadataKind.SchemaVersionOvershoot => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
+        NotificationMetadataKind.ReseedRecommended      => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
+        null                                            => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
         _ => throw new NotSupportedException($"No layout is defined for notification kind '{kind}'."),
     };
 

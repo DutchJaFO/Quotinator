@@ -397,44 +397,52 @@ public class NotificationTableTests
     /// #308 finding 2: a layout says which parts of the payload its type renders. The boolean the first
     /// pass delivered said only whether the body wraps, which is not a layout.
     /// </summary>
+    /// <remarks>
+    /// The body leads for every type, with no exception (developer, 2026-09-02) — it is the summary of
+    /// the payload wherever there is one, so structured detail is never an alternative to it. A draft
+    /// of this row allowed a `PayloadOnly` type; it was rejected, and this asserts the rule that
+    /// replaced it.
+    /// </remarks>
     [TestMethod]
-    public void LayoutFor_EachKind_NamesWhatItRenders()
+    public void ContentLines_ForEveryKind_LeadWithTheBody()
     {
         foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
         {
-            NotificationTable.NotificationLayout layout = NotificationTable.LayoutFor(kind)!;
-            bool showsPayload = layout.Content is not NotificationTable.NotificationContent.BodyOnly;
+            NotificationEntity notification = WithTitle("A headline", metadata: MetadataFor(kind));
+            IReadOnlyList<string> lines = NotificationTable.ContentLines(notification);
 
-            Assert.AreEqual(showsPayload, layout.PayloadParts.Count > 0,
-                $"{kind}'s layout is self-contradictory: Content says {layout.Content} while it names " +
-                $"{layout.PayloadParts.Count} payload part(s). A type that renders payload must say which parts, " +
-                "and a body-only type must name none.");
+            Assert.IsNotEmpty(lines, $"{kind} renders nothing at all.");
+            Assert.AreEqual(notification.Body, lines[0],
+                $"{kind} does not lead with its body — the summary must never be replaced by its own detail.");
         }
     }
 
     /// <summary>
-    /// #308 finding 2, corrected 2026-09-02: which of body and payload a type renders is the layout
-    /// decision, and at least one type must make each choice.
+    /// #308 finding 2: whether a type has structured detail *beneath* the summary is what varies. If no
+    /// type has any, `LayoutFor` is still the line-wrapping boolean the first pass delivered under a
+    /// longer name.
     /// </summary>
-    /// <remarks>
-    /// The first version of this row asserted that payload rendering never replaces the body. That was
-    /// wrong twice: `Body` is `init`-only so the compiler already guaranteed it, and the premise itself
-    /// was false — for some types the structured payload says everything the sentence does and says it
-    /// better, so rendering the body as well is duplication. Layout decides; this proves the decision
-    /// is actually being made rather than defaulted.
-    /// </remarks>
     [TestMethod]
-    public void LayoutFor_AcrossKinds_ActuallyVariesWhatIsRendered()
+    public void LayoutFor_AcrossKinds_PayloadDetailVaries()
     {
-        List<NotificationTable.NotificationContent> choices =
+        List<bool> hasDetail =
             [.. Enum.GetValues<NotificationMetadataKind>()
-                    .Select(k => NotificationTable.LayoutFor(k)!.Content)
+                    .Select(k => NotificationTable.LayoutFor(k)!.PayloadParts.Count > 0)
                     .Distinct()];
 
-        Assert.IsGreaterThan(1, choices.Count,
-            "Every type renders the same thing, so no per-type layout decision is being made — the " +
-            "boolean this row replaced said exactly as much.");
+        Assert.HasCount(2, hasDetail,
+            "Every type answers the same way, so no per-type decision is being made — some types have " +
+            "structured detail worth showing and some do not.");
     }
+
+    private static string MetadataFor(NotificationMetadataKind kind) => kind switch
+    {
+        NotificationMetadataKind.ReseedFileApplied =>
+            """{"fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","added":2,"modified":1}]}""",
+        NotificationMetadataKind.ImportReviewPending =>
+            """{"fileName":"a.json","origin":"User","batchId":"b","counts":[{"status":"Pending","count":1}]}""",
+        _ => "{}",
+    };
 
     /// <summary>
     /// Negative case for the row above: a row whose payload cannot be read still renders. Rows written
