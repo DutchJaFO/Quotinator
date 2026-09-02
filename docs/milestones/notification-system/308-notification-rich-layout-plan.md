@@ -72,11 +72,20 @@ Reviewing it live produced four findings, all accepted as this issue's own work 
    Detail renders as a **table**, not a list — every entry has the same shape, so columns line the
    numbers up where a bulleted sentence per row does not.
 4. **`Run` does not say what it will do**, and for a multi-outcome action the choices are hidden behind
-   it. The available actions should be named on their own buttons — **using the domain's own words**.
-   The first attempt labelled the reseed action *Reload the quotes* while the body in that very row
-   read "Run a reseed to load the bundled sources"; a button that invents a synonym for the word the
-   rest of the UI uses makes the reader wonder whether it is a different operation. It now reads
-   *Run a reseed*, and the resolution line *Reseeded*.
+   it. The available actions should be named on their own buttons — **reusing the names the actions
+   already have, not new ones** (developer, 2026-09-02).
+
+   This took two corrections, both the same mistake. The first attempt wrote *Reload the quotes* while
+   the body in that very row read "Run a reseed to load the bundled sources" — a synonym for the
+   domain's own word, two lines apart. The second wrote *Run a reseed*, still invented. The endpoints
+   have carried the answer all along: `.WithSummary("Reseed the database")` and
+   `.WithSummary("Reset the database")` on `AdminEndpoints`, and `ImportReviewDecideColumn` —
+   *"Decide"* — is already the review page's own heading for these very controls.
+
+   Labels are now those strings verbatim: **Reseed the database**, **Reset the database**, **Decide**.
+   The resolution lines follow the same rule: *Database reseeded*, *Database reset*. **Before writing a
+   button label, look for the name the operation already has** — an endpoint summary, a column heading,
+   an existing UI key.
 
 **Step 4 was delivered thinly, and findings 2 and 3 are the consequence.** Step 4 says "define the
 per-type layout across both surfaces". What it produced was `LayoutFor(kind) → BodyIsMultiLine`, a
@@ -324,12 +333,12 @@ every consumer; and the first fix set the resolution *after* `ReseedAsync`, by w
 | 24 | ✅ | The page opens payload detail in a dialog | Automated (T2) + screenshot | `13-notification-layout.md` step 7 — `expandersOnPage: 0`, `openButtonsOnPage: 4`; the dialog carries the table. **Swapped 2026-09-02**: the page originally collapsed and the popup opened a dialog |
 | 25 | ✅ | The startup popup expands detail in place | Automated (T2) | same document step 8 — `expandersInModal: 4`, `openButtonsInModal: 0`, `collapsedByDefault: true` |
 | 26 | ✅ | Detail renders as a table, never a list | Automated (T2) | same document step 7 — headings `Entity / Added / Updated` over `Quote \| 63 \| 0`; `listsAnywhere: 0` guards the regression |
-| 27 | ✅ | Each executable trigger's button is named for what it does | Unit test | `NotificationTableTests.ActionLabelFor_EachExecutableTrigger_IsNamed` — derived from `NotificationDismissTrigger`, so a new one fails here. Confirmed live: the button reads *Run a reseed*. **Corrected 2026-09-02** from *Reload the quotes* — the body in that very row says "Run a reseed to load the bundled sources", so the button invented a synonym for the domain's own word |
+| 27 | ✅ | Each executable trigger's button is named for what it does | Unit test | `NotificationTableTests.ActionLabelFor_EachExecutableTrigger_IsNamed` — derived from `NotificationDismissTrigger`, so a new one fails here. Confirmed live: the button reads *Reseed the database* — the endpoint summary verbatim. **Corrected twice on 2026-09-02**: *Reload the quotes*, then *Run a reseed*, both invented while the operation already had a name |
 | 28 | ✅ | A multi-outcome action offers both choices without an intermediate click | Unit test | `NotificationTableTests.ImportReviewResolved_OffersBothChoicesDirectly` |
 | 29 | ✅ | The confirmation step still stands | Automated (T2) | same document step 9 — clicking the named button yields `Confirm`/`Cancel`, and nothing runs until Confirm |
 | 30 | ✅ | Every layout renders on both surfaces | Automated (T2) + screenshot | same document steps 7–10, run whole on the current build; screenshot of the modal dialog over the startup popup |
 | 31 | ✅ | The new T2 steps go red before they go green | Canary run | `quotinator:canary308b` at `7bc5bacc`: `0` expanders, `0` open buttons, a button reading `Run`, `0` resolution lines. Step 9 needed an actionable row first — it passed vacuously without one |
-| 32 | ✅ | A resolved notification says how it was resolved | Automated (T2) | same document step 10 — the resolved row reads *Reseeded*, and `GET /notifications` returns `resolution: reseeded` |
+| 32 | ✅ | A resolved notification says how it was resolved | Automated (T2) | same document step 10 — the resolved row reads *Database reseeded*, and `GET /notifications` returns `resolution: reseeded` |
 
 **Rows 5, 9 and 10 cannot be replaced by unit tests.** A unit test can prove the markup and the
 stylesheet name the same class; only a rendered page proves the rule reaches the element. #303's nav
