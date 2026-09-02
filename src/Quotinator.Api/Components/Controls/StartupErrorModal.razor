@@ -1,5 +1,7 @@
 <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 80vw;">
+    @* #308: same 95vh cap as StartupSuccessModal. This one carries a failure reason and a recovery
+       route, so a dialog running past the viewport would hide exactly the text the operator needs. *@
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 80vw; max-height: 95vh;">
         <div class="modal-content border-danger">
             <div class="modal-header border-danger">
                 <h1 class="modal-title fs-5 text-danger">
