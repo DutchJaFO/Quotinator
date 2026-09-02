@@ -194,6 +194,280 @@ public class DatabaseInitializerTests
     private async Task<IReadOnlyList<NotificationEntity>> NotificationsAsync()
         => (await TestNotificationReader.Create(_dbPath).GetPagedAsync(1, 0)).Items;
 
+    // ── #372: a reseed imports the designated files and deletes nothing ───────────────────────────
+
+    /// <summary>
+    /// The issue's whole point. Reseed's one job is importing the designated files; deleting first is
+    /// a second, independent decision about what data survives — the shape CLAUDE.md's endpoint
+    /// side-effect policy forbids and #156 already removed from Reset.
+    /// <para>
+    /// The table set is read from the schema, never listed here. A list is what let three tables fall
+    /// out of the reseed's own delete set unnoticed.
+    /// </para>
+    /// <para>
+    /// **Row counts alone cannot prove this, and asserting only them was the first attempt.** Ids are
+    /// content-derived hashes, so truncate-then-reimport restores every row the files describe,
+    /// byte-identical — counts, ids and links all match, and the assertion passes against the very
+    /// deletion it exists to catch. The locally authored quote is what makes the two distinguishable.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_OnPopulatedDatabase_DeletesNothing()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        string localQuoteId = await AddQuoteAbsentFromEverySourceFileAsync();
+        Dictionary<string, int> before = await DomainRowCountsAsync();
+
+        await db.ReseedAsync();
+
+        Dictionary<string, int> after = await DomainRowCountsAsync();
+        Assert.IsNotEmpty(before, "The schema must expose Quotinator_ tables, or this asserts nothing.");
+        foreach ((string table, int expected) in before)
+        {
+            Assert.IsGreaterThanOrEqualTo(expected, after[table],
+                $"{table} lost rows to a reseed. Reseed imports; it does not decide what survives.");
+        }
+
+        Assert.IsTrue(await QuoteExistsAsync(localQuoteId),
+            "A quote no source file describes cannot be re-created by an import — if it is gone, the "
+            + "reseed deleted it. This is the assertion the row counts above cannot make.");
+    }
+
+    /// <summary>
+    /// The positive control <see cref="Reseed_OnPopulatedDatabase_DeletesNothing"/> requires: a build
+    /// that imports nothing at all preserves every row perfectly and would satisfy it. This asserts the
+    /// reseed did real work against the same fixture.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_OnPopulatedDatabase_IsNotANoOp()
+    {
+        QuotinatorDatabaseInitializer seeded = CreateInitializer([AllFilesBatch()]);
+        await seeded.InitialiseAsync();
+
+        // A second instance, so LastSeedReport starts empty and can only be filled by the reseed.
+        // Reusing the seeded instance is what made this control useless on its first draft: its report
+        // still held the cold start's, so a reseed that did nothing at all passed it (measured at
+        // step 2, 2026-09-02 — it stayed green exactly when it should have gone red).
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.ReseedAsync();
+
+        Assert.IsNotEmpty(db.LastSeedReport,
+            "A reseed that reports no files processed did no work, and every preservation assertion "
+            + "beside this one would pass against it for the wrong reason.");
+    }
+
+    /// <summary>
+    /// A row removed since the last import comes back, and nothing else changes. This is what makes a
+    /// reseed useful against a populated database — it repairs, rather than replacing wholesale.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_WithARowRemoved_ReAddsOnlyThatRow()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        string localQuoteId = await AddQuoteAbsentFromEverySourceFileAsync();
+        Dictionary<string, int> before = await DomainRowCountsAsync();
+
+        using (SqliteConnection connection = new($"Data Source={_dbPath}"))
+        {
+            await connection.OpenAsync(TestContext.CancellationToken);
+            await connection.ExecuteAsync(
+                "DELETE FROM Quotinator_Quote WHERE Id = (SELECT Id FROM Quotinator_Quote WHERE Id <> @keep LIMIT 1);",
+                new { keep = localQuoteId });
+        }
+
+        Assert.AreEqual(before["Quotinator_Quote"] - 1, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "The fixture must actually be one quote short, or the reseed has nothing to repair.");
+
+        await db.ReseedAsync();
+
+        Assert.AreEqual(before["Quotinator_Quote"], (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "The missing quote is re-added by an ordinary import — no deletion required.");
+
+        // The "only that row" half. Without it, a reseed that wiped everything and reimported would
+        // also land on the same total and pass.
+        Assert.IsTrue(await QuoteExistsAsync(localQuoteId),
+            "Repairing one missing row must not cost the rows that were never missing.");
+    }
+
+    /// <summary>
+    /// Content changed locally is not overwritten; the disagreement is staged for a decision. Asserts
+    /// both halves deliberately — that the stored value survived *and* that an action was raised —
+    /// because either alone is satisfied by a reseed that does nothing at all.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_WithLocallyChangedContent_StagesAConflictRatherThanOverwriting()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        await db.InitialiseAsync();
+
+        const string localEdit = "A locally edited quote body.";
+        string? editedId;
+        using (SqliteConnection connection = new($"Data Source={_dbPath}"))
+        {
+            await connection.OpenAsync(TestContext.CancellationToken);
+            editedId = await connection.ExecuteScalarAsync<string?>("SELECT Id FROM Quotinator_Quote LIMIT 1;");
+            Assert.IsNotNull(editedId, "The fixture must have seeded at least one quote to edit.");
+            await connection.ExecuteAsync("UPDATE Quotinator_Quote SET QuoteText = @text WHERE Id = @id;",
+                new { text = localEdit, id = editedId });
+        }
+
+        await db.ReseedAsync();
+
+        using SqliteConnection after = new($"Data Source={_dbPath}");
+        await after.OpenAsync(TestContext.CancellationToken);
+        string? stored = await after.ExecuteScalarAsync<string?>(
+            "SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id;", new { id = editedId });
+
+        Assert.AreEqual(localEdit, stored,
+            "The local edit must survive — a reseed resolves a disagreement by asking, not by overwriting.");
+        Assert.IsGreaterThan(0, await StagedActionCountAsync(),
+            "And the disagreement must be staged. Without this half, a reseed that imported nothing "
+            + "would satisfy the assertion above perfectly.");
+    }
+
+    /// <summary>
+    /// `Quotinator_CharacterSource` joins two tables the reseed empties while leaving the join itself
+    /// populated. Nothing else in the suite reads these rows.
+    /// <para>
+    /// **A regression guard, not a reproduction of a live bug — the original claim was wrong.** With
+    /// unchanged source content the deletion is invisible here: ids are content-derived, so the
+    /// reimport re-creates the same Characters and Sources and every link resolves again. Orphans
+    /// require content whose id actually changes across a reimport, which this fixture does not
+    /// produce. Kept because the guard is cheap and the failure mode is silent, but it carries its own
+    /// precondition so it cannot pass by having nothing to check.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_OnPopulatedDatabase_LeavesNoOrphanedCharacterSourceRows()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+        await db.ReseedAsync();
+
+        Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_CharacterSource"],
+            "With no link rows at all there is nothing to orphan, and the assertion below is vacuous.");
+        Assert.AreEqual(0, await OrphanedCharacterSourceCountAsync(),
+            "A link row whose Character or Source is gone describes a relationship between two things "
+            + "that do not exist.");
+    }
+
+    /// <summary>
+    /// #303's alerts name a batch. A reseed that removes batches invalidates its own alerts; one that
+    /// only imports leaves them describing something real.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_PreservesImportBatches()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        IReadOnlyList<string> before = await LiveBatchIdsAsync();
+        Assert.IsNotEmpty(before, "The first seed must have staged batches, or this asserts nothing.");
+
+        await db.ReseedAsync();
+
+        IReadOnlyList<string> after = await LiveBatchIdsAsync();
+        foreach (string batchId in before)
+        {
+            Assert.Contains(batchId, after, StringComparer.OrdinalIgnoreCase,
+                "A batch the reseed did not create is not the reseed's to remove.");
+        }
+    }
+
+    /// <summary>
+    /// An explicit reseed never consults whether content already exists. The check is not a safeguard
+    /// there — it suppresses the report the operator ran the reseed to get.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_OnPopulatedDatabase_ImportsRegardlessOfExistingContent()
+    {
+        QuotinatorDatabaseInitializer seeded = CreateInitializer([AllFilesBatch()]);
+        await seeded.InitialiseAsync();
+
+        Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "The database must be populated, or this tests the empty case by accident.");
+
+        // A second instance over the same database, so its own LastSeedReport starts empty and can
+        // only be filled by the reseed below — the setter is protected, and clearing it is not the
+        // test's to do anyway.
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.ReseedAsync();
+
+        Assert.IsNotEmpty(db.LastSeedReport,
+            "A populated database must not short-circuit the import. Restoring the count gate on this "
+            + "path is what this fails against.");
+    }
+
+    /// <summary>
+    /// The other side of the same split: cold start keeps its gate, because "seed if empty" is exactly
+    /// what it means.
+    /// </summary>
+    [TestMethod]
+    public async Task Initialise_OnPopulatedDatabase_SeedsNothing()
+    {
+        QuotinatorDatabaseInitializer first = CreateInitializer([AllFilesBatch()]);
+        await first.InitialiseAsync();
+        Dictionary<string, int> before = await DomainRowCountsAsync();
+
+        QuotinatorDatabaseInitializer second = CreateInitializer([AllFilesBatch()]);
+        await second.InitialiseAsync();
+
+        Assert.IsEmpty(second.LastSeedReport,
+            "A startup against a database that already holds content seeds nothing.");
+        Assert.AreEqual(before["Quotinator_Quote"], (await DomainRowCountsAsync())["Quotinator_Quote"]);
+    }
+
+    /// <summary>
+    /// "Empty" means no seedable content — not that no table has rows (developer, 2026-09-02). Nothing
+    /// exercises the distinction today, because Quotinator has no baseline-seeded reference table:
+    /// genres are still a closed enum. It arrives with #310/#268, and a gate broadened to "any row
+    /// anywhere" would then read a brand-new database as already seeded and skip the seed silently.
+    /// <para>
+    /// `Universe` stands in for that future table here — it is the near-miss the rule names, generic
+    /// in shape but the operator's to edit — so this asserts the gate ignores rows that are not
+    /// content, using the only table available to say it with.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task Initialise_WithNonContentRowsOnly_StillSeeds()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+
+        using (SqliteConnection connection = new($"Data Source={_dbPath}"))
+        {
+            await connection.OpenAsync(TestContext.CancellationToken);
+            await CurrentSchema.ApplyDataSchemaAsync(_dbPath);
+        }
+
+        await db.InitialiseAsync();
+
+        Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "A database holding no content is empty for seeding purposes, whatever else it holds.");
+    }
+
+    /// <summary>
+    /// Reset then Reseed is the from-scratch path, and after this issue the only one. The composition
+    /// has to be asserted precisely because no single call does it any more.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetThenReseed_ProducesAFromScratchDatabase()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
+        await db.InitialiseAsync();
+
+        await db.ResetAsync();
+        Assert.AreEqual(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "Reset's own job is rebuilding the schema — it leaves no content behind.");
+
+        await db.ReseedAsync();
+        Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "And the reseed fills it. Two explicit actions, which is why Reset exists separately.");
+    }
+
     // ── #302: per-file confirmation that a reseed left nothing to review ──────────────────────────
 
     /// <summary>
@@ -763,6 +1037,86 @@ public class DatabaseInitializerTests
         IReadOnlyList<string> liveBatchIds = await LiveBatchIdsAsync();
         Assert.Contains(FirstReviewAlertPayloadOf(active[0]).BatchId, liveBatchIds, StringComparer.OrdinalIgnoreCase,
             "The one active alert must name a batch that still exists.");
+    }
+
+    /// <summary>
+    /// #372: every `Quotinator_`-prefixed table with its live row count, read from the schema rather
+    /// than a list. A hand-maintained list is exactly what let `Series`, `Universe` and
+    /// `CharacterSource` fall out of the reseed's own delete set unnoticed — a test asserting
+    /// preservation must not repeat the mistake it exists to catch.
+    /// </summary>
+    private async Task<Dictionary<string, int>> DomainRowCountsAsync()
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+
+        List<string> tables = [.. await connection.QueryAsync<string>(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'Quotinator!_%' ESCAPE '!' ORDER BY name;")];
+
+        Dictionary<string, int> counts = [];
+        foreach (string table in tables)
+            counts[table] = await connection.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM {table};");
+
+        return counts;
+    }
+
+    /// <summary>
+    /// #372: adds one quote that appears in no source file, so a reseed has no way to re-create it.
+    /// <para>
+    /// This is the only shape that can tell the two behaviours apart. Every id in this project is a
+    /// hash of normalised content, so truncate-then-reimport reproduces byte-identical rows for
+    /// everything the files contain — row counts, ids and links all come back the same, and an
+    /// assertion over them cannot fail against the deletion it exists to catch. Content the files do
+    /// **not** contain is the difference: a delete loses it, an import leaves it alone.
+    /// </para>
+    /// </summary>
+    private async Task<string> AddQuoteAbsentFromEverySourceFileAsync()
+    {
+        string id = Guid.NewGuid().ToString("D");
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+
+        string? sourceId = await connection.ExecuteScalarAsync<string?>("SELECT Id FROM Quotinator_Source LIMIT 1;");
+        Assert.IsNotNull(sourceId, "A quote needs a Source, so the fixture must have seeded at least one.");
+
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, DateCreated)
+            VALUES (@id, @text, 'en', @sourceId, @now);
+            """,
+            new
+            {
+                id,
+                text     = $"Locally authored, present in no bundled file. {id}",
+                sourceId,
+                now      = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+            });
+
+        return id;
+    }
+
+    private async Task<bool> QuoteExistsAsync(string id)
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Quotinator_Quote WHERE Id = @id;", new { id }) == 1;
+    }
+
+    /// <summary>
+    /// #372: link rows whose Character or Source no longer exists. A reseed that deletes both sides of
+    /// the join but not the join itself leaves these behind, and nothing else in the suite reads them.
+    /// </summary>
+    private async Task<int> OrphanedCharacterSourceCountAsync()
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<int>(
+            """
+            SELECT COUNT(*) FROM Quotinator_CharacterSource cs
+            WHERE NOT EXISTS (SELECT 1 FROM Quotinator_Character c WHERE c.Id = cs.CharacterId)
+               OR NOT EXISTS (SELECT 1 FROM Quotinator_Source   s WHERE s.Id = cs.SourceId);
+            """);
     }
 
     private async Task<int> StagedActionCountAsync()

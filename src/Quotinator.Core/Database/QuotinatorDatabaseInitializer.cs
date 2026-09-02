@@ -322,15 +322,12 @@ public sealed class QuotinatorDatabaseInitializer(
         await SharedSeedLock.WaitAsync();
         try
         {
-            // #303: read the batches before truncation removes them. Every review alert naming one of
-            // these is about to describe a batch that no longer exists, and an alert asking the operator
-            // to review actions that are gone is worse than no alert at all.
-            IReadOnlyList<string> removedBatchIds = await BatchIdsAsync(connection);
-
-            await TruncateDataAsync(connection);
-            await DismissAlertsForRemovedBatchesAsync(removedBatchIds);
-
-            await SeedIfEmptyInternalAsync(connection, effectiveBatches);
+            // #372: no deletion, and no emptiness check. A reseed imports the designated files and
+            // nothing else — deciding what data survives is a second, independent job, and CLAUDE.md's
+            // endpoint side-effect policy gives it to Reset, which rebuilds from the baseline. Starting
+            // from scratch is Reset then Reseed, two explicit actions. The gate belongs to cold start
+            // alone: here it would suppress the report the operator ran the reseed to get.
+            await ImportDesignatedFilesAsync(connection, effectiveBatches);
         }
         finally
         {
@@ -389,59 +386,16 @@ public sealed class QuotinatorDatabaseInitializer(
         Logger.LogInformation("[Database - Init] reset complete");
     }
 
-    /// <summary>
-    /// The <c>Import_Batch</c> ids that exist right now (#303) — read before a truncation so the alerts
-    /// describing them can be dismissed once they are gone.
-    /// </summary>
-    /// <param name="connection">Open connection to the database being reseeded.</param>
-    private static async Task<IReadOnlyList<string>> BatchIdsAsync(SqliteConnection connection)
-        => [.. await connection.QueryAsync<string>(Quotinator.Data.Queries.Sql.ImportBatches.SelectAllIds)];
-
-    /// <summary>
-    /// #303: marks every pending-review alert naming one of <paramref name="removedBatchIds"/> as
-    /// <see cref="NotificationDismissReason.Obsolete"/>.
-    /// </summary>
-    /// <remarks>
-    /// Obsolete rather than Resolved: nobody reviewed these actions, they were discarded wholesale by a
-    /// reseed. Claiming they were resolved would tell the reader the work was done, which is the class
-    /// of untruth <see cref="NotificationDismissReason"/> exists to prevent.
-    /// <para>
-    /// This is also what bounds the alert count. Because a batch id is part of an alert's identity and
-    /// <c>ImportBatchEntity.Id</c> is a fresh GUID per construction, every reseed necessarily raises new
-    /// alerts; without this, each run would leave its predecessors active forever.
-    /// </para>
-    /// </remarks>
-    /// <param name="removedBatchIds">The batch ids that existed before the truncation.</param>
-    private async Task DismissAlertsForRemovedBatchesAsync(IReadOnlyList<string> removedBatchIds)
-    {
-        foreach (string batchId in removedBatchIds)
-        {
-            await _notificationWriter.DismissByTriggerAndBatchAsync(
-                NotificationDismissTrigger.ImportReviewResolved, batchId, NotificationDismissReason.Obsolete);
-        }
-    }
-
-    /// <summary>Truncates all Quotinator domain data tables. Called during reseed/reset.</summary>
-    private static async Task TruncateDataAsync(SqliteConnection connection)
-    {
-        await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
-        await connection.ExecuteAsync(Sql.ConversationLines.DeleteAll);
-        await connection.ExecuteAsync(Sql.StageDirectionTranslations.DeleteAll);
-        await connection.ExecuteAsync(Sql.SoundCueTranslations.DeleteAll);
-        await connection.ExecuteAsync(Sql.Conversations.DeleteAll);
-        await connection.ExecuteAsync(Sql.StageDirections.DeleteAll);
-        await connection.ExecuteAsync(Sql.SoundCues.DeleteAll);
-        await connection.ExecuteAsync(Sql.QuoteGenres.DeleteAll);
-        await connection.ExecuteAsync(Sql.QuoteTranslations.DeleteAll);
-        await connection.ExecuteAsync(Sql.SourceTranslations.DeleteAll);
-        await connection.ExecuteAsync(Sql.CharacterTranslations.DeleteAll);
-        await connection.ExecuteAsync(Sql.Quotes.DeleteAll);
-        await connection.ExecuteAsync(Sql.Characters.DeleteAll);
-        await connection.ExecuteAsync(Sql.People.DeleteAll);
-        await connection.ExecuteAsync(Sql.Sources.DeleteAll);
-        await connection.ExecuteAsync(Quotinator.Data.Queries.Sql.ImportBatches.DeleteAll);
-        await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
-    }
+    // #372: `BatchIdsAsync` and `DismissAlertsForRemovedBatchesAsync` lived here until a reseed stopped
+    // removing batches. Both existed only to mark the alerts of just-truncated batches Obsolete, and
+    // with nothing truncated there is nothing to mark. Removed rather than left uncalled.
+    //
+    // `NotificationDismissReason.Obsolete` itself stays, and that is a separate decision from removing
+    // its producer. Databases upgraded from an earlier build hold rows already carrying it, so the enum
+    // member, its CHECK constraint and `NotificationTable`'s rendering of it all have to keep working —
+    // deleting the member would need a migration and would break the reading of history that already
+    // exists. It currently has no producer, which is a fact worth stating rather than a gap to fill;
+    // #369, which deals with review rows whose batch is genuinely gone, is where one may reappear.
 
     /// <inheritdoc/>
     /// <remarks>
@@ -530,14 +484,37 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <param name="connection">Open connection to the database being seeded.</param>
     /// <param name="effectiveBatches">The seed batches to apply, already resolved against the source cache.</param>
     /// <remarks>
-    /// Nothing here distinguishes the two callers, and since #302's reopening nothing needs to: both
-    /// paths apply the same files and report the same result. An <c>isReseed</c> flag was threaded
-    /// through both call sites for exactly one read — the confirmation gate — and was removed with it.
+    /// <para>
+    /// Cold start's own entry point, and the only one that asks whether there is anything to do. An
+    /// explicit reseed calls <see cref="ImportDesignatedFilesAsync"/> directly and never consults this
+    /// gate — see #372: on that path the check is not a safeguard, it suppresses the report the
+    /// operator ran the reseed to get.
+    /// </para>
+    /// <para>
+    /// **"Empty" means no seedable content, not that no table has rows.** The check counts quotes on
+    /// purpose. Broadening it to "any <c>Quotinator_</c> table has rows" would break the moment a
+    /// baseline-seeded reference table exists — genres become one in #310/#268 — because a brand-new
+    /// database would then read as already seeded and the seed would be skipped in silence. A
+    /// user-updatable table is content however generic it looks: <c>Universe</c> is the near-miss.
+    /// </para>
     /// </remarks>
     private async Task SeedIfEmptyInternalAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
     {
         int count = await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll);
         if (count > 0) return;
+
+        await ImportDesignatedFilesAsync(connection, effectiveBatches);
+    }
+
+    /// <summary>
+    /// Imports every designated file from both origins, unconditionally. This is reseed's whole job
+    /// (#372), and cold start's job once <see cref="SeedIfEmptyInternalAsync"/> has established there
+    /// is content to seed.
+    /// </summary>
+    /// <param name="connection">Open connection to the database being imported into.</param>
+    /// <param name="effectiveBatches">The seed batches to apply, already resolved against the source cache.</param>
+    private async Task ImportDesignatedFilesAsync(SqliteConnection connection, IReadOnlyList<SeedBatch> effectiveBatches)
+    {
 
         if (effectiveBatches.Count == 0)
         {

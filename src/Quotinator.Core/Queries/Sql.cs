@@ -29,7 +29,6 @@ internal static class Sql
     {
         internal const string CountAll    = "SELECT COUNT(*) FROM Quotinator_Quote;";
         internal const string CountActive = "SELECT COUNT(*) FROM Quotinator_Quote WHERE IsDeleted = 0;";
-        internal const string DeleteAll   = "DELETE FROM Quotinator_Quote;";
 
         internal const string Insert =
             "INSERT OR IGNORE INTO Quotinator_Quote " +
@@ -199,7 +198,6 @@ internal static class Sql
     internal static class QuoteGenres
     {
         internal const string CountAll  = "SELECT COUNT(*) FROM Quotinator_QuoteGenre;";
-        internal const string DeleteAll = "DELETE FROM Quotinator_QuoteGenre;";
 
         internal static readonly string DeleteForQuote = $"DELETE FROM Quotinator_QuoteGenre WHERE {IdClauses.Equals("QuoteId", "id")};";
         internal static readonly string LoadForQuote   = $"SELECT Genre FROM Quotinator_QuoteGenre WHERE {IdClauses.Equals("QuoteId", "id")} AND IsDeleted = 0";
@@ -222,7 +220,6 @@ internal static class Sql
     /// <summary>QuoteTranslations table.</summary>
     internal static class QuoteTranslations
     {
-        internal const string DeleteAll = "DELETE FROM Quotinator_QuoteTranslation;";
         internal static readonly string DeleteForQuote = $"DELETE FROM Quotinator_QuoteTranslation WHERE {IdClauses.Equals("QuoteId", "id")};";
 
         internal const string Insert =
@@ -234,7 +231,6 @@ internal static class Sql
     /// <summary>SourceTranslations table.</summary>
     internal static class SourceTranslations
     {
-        internal const string DeleteAll = "DELETE FROM Quotinator_SourceTranslation;";
 
         /// <summary>Case-insensitive on Language (#216) — see <see cref="Quotes.SelectBase"/>'s remark on why the SQL side still needs its own wrap despite input-side normalization.</summary>
         internal static readonly string CountForSource =
@@ -244,14 +240,12 @@ internal static class Sql
     /// <summary>CharacterTranslations table.</summary>
     internal static class CharacterTranslations
     {
-        internal const string DeleteAll = "DELETE FROM Quotinator_CharacterTranslation;";
     }
 
     /// <summary>Characters table.</summary>
     internal static class Characters
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Quotinator_Character WHERE IsDeleted = 0;";
-        internal const string DeleteAll   = "DELETE FROM Quotinator_Character;";
 
         /// <summary>
         /// #174, ADR 013 Decision 7: the single unified merge-candidate lookup, replacing #179's own
@@ -354,7 +348,6 @@ internal static class Sql
     internal static class People
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Quotinator_Person WHERE IsDeleted = 0;";
-        internal const string DeleteAll   = "DELETE FROM Quotinator_Person;";
         /// <summary>
         /// Case-insensitive on Name (#216 fix, matching <see cref="Sources.SelectIdByTitleAndType"/>'s
         /// #180 precedent) — Name is a natural-key lookup, not free text, so a case-only difference
@@ -402,7 +395,6 @@ internal static class Sql
     internal static class Sources
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Quotinator_Source WHERE IsDeleted = 0;";
-        internal const string DeleteAll   = "DELETE FROM Quotinator_Source;";
         /// <summary>
         /// Case-insensitive on Title/Type — corrected 2026-07-24 (found while designing #175's
         /// Character-driven Source resolution): the original policy treated Title/Type as free-text,
@@ -514,7 +506,6 @@ internal static class Sql
     internal static class Series
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Quotinator_Series WHERE IsDeleted = 0;";
-        internal const string DeleteAll   = "DELETE FROM Quotinator_Series;";
         /// <summary>
         /// Case-insensitive on Name (#216 fix, matching <see cref="Sources.SelectIdByTitleAndType"/>'s
         /// #180 precedent) — Name is a natural-key lookup, not free text, so a case-only difference
@@ -573,7 +564,6 @@ internal static class Sql
     internal static class Universe
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Quotinator_Universe WHERE IsDeleted = 0;";
-        internal const string DeleteAll   = "DELETE FROM Quotinator_Universe;";
         /// <summary>
         /// Case-insensitive on Name (#216 fix, matching <see cref="Sources.SelectIdByTitleAndType"/>'s
         /// #180 precedent) — Name is a natural-key lookup, not free text, so a case-only difference
@@ -617,7 +607,6 @@ internal static class Sql
     internal static class Conversations
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Quotinator_Conversation WHERE IsDeleted = 0;";
-        internal const string DeleteAll = "DELETE FROM Quotinator_Conversation;";
 
         /// <summary>Case-insensitive (#210) — see <see cref="SelectForRead"/>'s remark; every id-comparison query in this codebase is case-insensitive by default now (ADR 012), not just the ones with a known-differently-cased caller.</summary>
         internal static readonly string SelectIdById = $"SELECT {IdClauses.SelectColumn("Id")} FROM Quotinator_Conversation WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
@@ -666,7 +655,6 @@ internal static class Sql
     /// </summary>
     internal static class ConversationLines
     {
-        internal const string DeleteAll = "DELETE FROM Quotinator_ConversationLine;";
 
         /// <summary>
         /// Clears a Conversation's own lines before its stale row is hard-deleted — same pattern as
@@ -739,7 +727,6 @@ internal static class Sql
     internal static class StageDirections
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Quotinator_StageDirection WHERE IsDeleted = 0;";
-        internal const string DeleteAll = "DELETE FROM Quotinator_StageDirection;";
 
         /// <summary>Case-insensitive (#210) — see <see cref="Conversations.SelectIdById"/>'s remark.</summary>
         internal static readonly string SelectIdById = $"SELECT {IdClauses.SelectColumn("Id")} FROM Quotinator_StageDirection WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
@@ -810,7 +797,6 @@ internal static class Sql
     /// <summary>StageDirectionTranslations table (#67/#68) — detail rows of a StageDirection, same relationship as <see cref="QuoteTranslations"/> to Quote.</summary>
     internal static class StageDirectionTranslations
     {
-        internal const string DeleteAll = "DELETE FROM Quotinator_StageDirectionTranslation;";
         internal static readonly string DeleteForStageDirection = $"DELETE FROM Quotinator_StageDirectionTranslation WHERE {IdClauses.Equals("StageDirectionId", "id")};";
 
         internal const string Insert =
@@ -823,7 +809,6 @@ internal static class Sql
     internal static class SoundCues
     {
         internal const string CountActive = "SELECT COUNT(*) FROM Quotinator_SoundCue WHERE IsDeleted = 0;";
-        internal const string DeleteAll = "DELETE FROM Quotinator_SoundCue;";
 
         /// <summary>Case-insensitive (#210) — see <see cref="Conversations.SelectIdById"/>'s remark.</summary>
         internal static readonly string SelectIdById = $"SELECT {IdClauses.SelectColumn("Id")} FROM Quotinator_SoundCue WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
@@ -875,7 +860,6 @@ internal static class Sql
     /// <summary>SoundCueTranslations table (#67/#68) — detail rows of a SoundCue, same relationship as <see cref="QuoteTranslations"/> to Quote.</summary>
     internal static class SoundCueTranslations
     {
-        internal const string DeleteAll = "DELETE FROM Quotinator_SoundCueTranslation;";
         internal static readonly string DeleteForSoundCue = $"DELETE FROM Quotinator_SoundCueTranslation WHERE {IdClauses.Equals("SoundCueId", "id")};";
 
         internal const string Insert =

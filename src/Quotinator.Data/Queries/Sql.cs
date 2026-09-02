@@ -207,19 +207,12 @@ internal static class Sql
         internal static readonly string UpdateRecordCount =
             $"UPDATE Import_Batch SET RecordCount = @count, DateModified = @now WHERE {IdClauses.Equals("Id", "id")};";
 
-        internal const string DeleteAll = "DELETE FROM Import_Batch;";
 
-        /// <summary>
-        /// Every batch id, read before a reseed truncates the table so the pending-review alerts naming
-        /// those batches can be dismissed once they are gone (#303).
-        /// <para>
-        /// Deliberately unfiltered by <c>IsDeleted</c>, unlike the selects above:
-        /// <see cref="DeleteAll"/> is a hard delete, so a soft-deleted batch is about to vanish exactly
-        /// as an active one is, and its alert would be left behind just the same.
-        /// </para>
-        /// </summary>
-        internal static readonly string SelectAllIds =
-            $"SELECT {IdClauses.SelectColumn("Id", "Id")} FROM Import_Batch;";
+        // #372: `DeleteAll` and `SelectAllIds` lived here. Both existed only for the reseed's
+        // truncation — one to empty the table, the other to read the ids first so the alerts naming
+        // those batches could be marked obsolete. A reseed imports and deletes nothing now, so neither
+        // has a caller. Removed rather than kept: a `DeleteAll` sitting in the project's sanctioned SQL
+        // home is an invitation to do the exact thing that was just taken out.
 
         // COUNT base — shared by CountPaged factory method below.
         private const string CountPagedBase = "SELECT COUNT(*) FROM Import_Batch WHERE IsDeleted = 0";
