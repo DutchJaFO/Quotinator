@@ -91,8 +91,13 @@ public interface IImportActionService
     /// actions. Forfeits <c>ReverseBatchAsync</c> for this batch — its resolution-tracking rows are
     /// gone, and <see cref="ReverseBatchAsync"/> requires them to exist.
     /// </param>
+    /// <param name="resolution">
+    /// #308: how a notification's own action settled this batch, recorded on the alert this apply
+    /// dismisses. Only a caller that chose a side wholesale supplies one — the REST path decides per
+    /// field and has no single answer, so it passes <see langword="null"/>.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, CancellationToken cancellationToken = default);
+    Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, NotificationResolution? resolution = null, CancellationToken cancellationToken = default);
 
     /// <summary>Discards every action sharing <paramref name="batchId"/>. Never touches any domain table.</summary>
     Task DiscardBatchAsync(string batchId, CancellationToken cancellationToken = default);

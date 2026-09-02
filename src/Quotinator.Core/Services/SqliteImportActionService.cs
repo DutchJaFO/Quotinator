@@ -407,7 +407,7 @@ public sealed class SqliteImportActionService(
         => await _coordinator.UndoDecisionAsync(actionId);
 
     /// <inheritdoc/>
-    public async Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, CancellationToken cancellationToken = default)
+    public async Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, NotificationResolution? resolution = null, CancellationToken cancellationToken = default)
     {
         await ClearStaleAddTargetsAsync(batchId);
 
@@ -429,8 +429,11 @@ public sealed class SqliteImportActionService(
             // #303: this batch's own review is over, so the alert reporting it is resolved. Scoped to
             // this batch rather than the trigger alone — several files can each be awaiting review at
             // once, and clearing the trigger wholesale would dismiss alerts for batches nobody touched.
+            // #308: resolution is the caller's to state and is usually absent. Only a notification's own
+            // action chose a side wholesale; the REST path decides per field, so it has no single answer
+            // and passes none.
             await notificationWriter.DismissByTriggerAndBatchAsync(
-                NotificationDismissTrigger.ImportReviewResolved, batchId, NotificationDismissReason.Resolved);
+                NotificationDismissTrigger.ImportReviewResolved, batchId, NotificationDismissReason.Resolved, resolution);
 
             // #249: the caller opted in to purging this batch's conflict-resolution data the moment
             // it's no longer needed — mirrors QuotinatorDatabaseInitializer's seeding-path auto-purge,

@@ -6,7 +6,6 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Models;
-using Quotinator.Data.Testing.Database;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.Database;
 

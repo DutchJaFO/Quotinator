@@ -210,7 +210,7 @@ nothing writes the field.
 
 ### 8. Record how an action was resolved
 
-**Status:** 🔄 Storage landed early — row 19 green; rows 17, 18 and 20 outstanding
+**Status:** ✅ Done — rows 17–20 green
 
 **The schema half was pulled forward out of order, and that is a correction to step 7's mechanic rather
 than a shortcut** (2026-09-02). Step 7 added `NotificationEntity.Resolution` as though it were a stub.
@@ -299,10 +299,10 @@ action deliberate; naming the button is not a reason to remove the second step.
 | 14 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
 | 15 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
 | 16 | ❌ | Every layout renders correctly on the developer's own machine | Live (T1) | one confirmed rendering per type, on both surfaces |
-| 17 | ❌ | A notification resolved by an action records which resolution it was | Unit test | `NotificationWriterTests.DismissedAsResolved_RecordsTheResolution` |
-| 18 | ❌ | A notification dismissed by the user records no resolution | Unit test | `NotificationWriterTests.DismissedByUser_RecordsNoResolution` — negative; the field means "how the action settled it", not "how it went inactive". **Passes today for the wrong reason** — nothing writes the field yet — so it stays ❌ until step 8's writer lands and a mutation proves it wired |
+| 17 | ✅ | A notification resolved by an action records which resolution it was | Unit test | `NotificationWriterTests.DismissedAsResolved_RecordsTheResolution` — proven by mutation (hard-coding a resolution fails it) |
+| 18 | ✅ | A notification dismissed by the user records no resolution | Unit test | `NotificationWriterTests.DismissedByUser_RecordsNoResolution` — negative; the field means "how the action settled it", not "how it went inactive". Wired via `Sql.Notifications.UpdateDismissById`: the by-batch mutation does **not** reach this path, so proving it needed the by-id query mutated instead |
 | 19 | ✅ | The migration and the baseline accept the same `Resolution` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` — extended with all four members and a rejected value, on both paths |
-| 20 | ❌ | Every `NotificationResolution` member has a label in all three locales | Unit test | `NotificationTableTests.EveryResolution_HasATranslationKey` — derived from the enum, like `EveryDisplayStatus_HasATranslationKey` |
+| 20 | ✅ | Every `NotificationResolution` member has a label in all three locales | Unit test | `NotificationTableTests.EveryResolution_HasATranslationKey` — derived from the enum, like `EveryDisplayStatus_HasATranslationKey`; `TranslationCompletenessTests` covers the other two locales |
 | 21 | ❌ | Every type leads with its body, with no exception | Unit test | `NotificationTableTests.ContentLines_ForEveryKind_LeadWithTheBody` — the body is the summary of the payload, so detail never replaces it |
 | 22 | ❌ | A payload that cannot be deserialised renders the plain body rather than throwing | Unit test | `NotificationTableTests.UnreadablePayload_FallsBackToTheBody` — negative; a row written by an older build must still render. **Passes today for the wrong reason** — the stub returns no lines for any payload — so it stays ❌ until step 9 renders one, proven by the opposing stub |
 | 23 | ❌ | Whether a type has structured detail beneath the summary varies | Unit test | `NotificationTableTests.LayoutFor_AcrossKinds_PayloadDetailVaries` — if every type answers alike, `LayoutFor` is still the line-wrapping boolean under a longer name |

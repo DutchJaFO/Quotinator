@@ -144,6 +144,9 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
         // The reason is the caller's to state, unlike DismissByTriggerAsync above where every caller
         // had carried the work out. Here a batch can leave the review behind two ways — it was decided,
         // or it was removed — and only the caller knows which.
+        // #308: how the action settled it, where the reason above says only that it settled. Null
+        // whenever no action ran — the caller passes one only when it carried the notification to
+        // completion, so a superseded batch records a reason and no resolution.
         return await conn.ExecuteAsync(Sql.Notifications.UpdateDismissByTriggerAndBatch,
             new
             {
@@ -151,6 +154,7 @@ public sealed class NotificationWriter(IDbConnectionFactory factory)
                 batchId,
                 dismissedAt   = now.Raw,
                 dismissReason = reason.ToString(),
+                resolution    = resolution?.ToString(),
                 dateModified  = now.Raw,
             });
     }

@@ -93,7 +93,16 @@ internal sealed class NotificationActionExecutor(
                 // decision the operator just confirmed — the dialog says the action cannot be undone,
                 // which is only true once it has landed — and it is what dismisses this alert, since
                 // dismissal is wired to ApplyBatchAsync rather than to deciding.
-                await importActions.ApplyBatchAsync(review.BatchId);
+                // #308: the resolution rides the apply, because applying is what dismisses the alert.
+                // Recording it beforehand would mark a notification resolved even when the apply failed;
+                // recording it afterwards would need a second write against a row already dismissed.
+                // Only this caller knows which side was chosen — the REST apply path decides per field
+                // and passes none.
+                await importActions.ApplyBatchAsync(
+                    review.BatchId,
+                    resolution: resolution is FieldResolutionChoice.Keep
+                        ? NotificationResolution.KeptExisting
+                        : NotificationResolution.TookIncoming);
                 break;
             }
             default:

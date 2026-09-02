@@ -113,7 +113,7 @@ public sealed class SqliteQuoteImportService(
 
         if (!preview)
         {
-            var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken);
+            var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken: cancellationToken);
             if (applyResult is null)
             {
                 // #177: Status/AppliedAt are now set by ApplyBatchAsync itself, the shared choke point
@@ -166,7 +166,7 @@ public sealed class SqliteQuoteImportService(
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
         var totalQuotes = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote);
 
-        var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken);
+        var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken: cancellationToken);
         IReadOnlyList<Guid> pendingActionIds = [];
         if (applyResult is null)
         {

@@ -20,6 +20,9 @@ internal sealed class FakeImportActionService : IImportActionService
     public ConflictDecisionRequest? LastDecisionRequest { get; private set; }
     public Guid? LastUndoneActionId { get; private set; }
     public string? LastAppliedBatchId { get; private set; }
+
+    /// <summary>#308: which resolution the caller attached to the apply, if any.</summary>
+    public NotificationResolution? LastAppliedResolution { get; private set; }
     public bool? LastApplyPurgeOnSuccess { get; private set; }
     public string? LastDiscardedBatchId { get; private set; }
     public string? LastReversedBatchId { get; private set; }
@@ -71,8 +74,9 @@ internal sealed class FakeImportActionService : IImportActionService
         return Task.CompletedTask;
     }
 
-    public Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, CancellationToken cancellationToken = default)
+    public Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, NotificationResolution? resolution = null, CancellationToken cancellationToken = default)
     {
+        LastAppliedResolution = resolution;
         LastAppliedBatchId     = batchId;
         LastApplyPurgeOnSuccess = purgeOnSuccess;
         return Task.FromResult(ReturnApplyResult);

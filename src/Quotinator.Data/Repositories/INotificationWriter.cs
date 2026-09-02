@@ -72,5 +72,6 @@ public interface INotificationWriter
     /// <param name="trigger">The trigger the notification must carry.</param>
     /// <param name="batchId">The import batch named in the notification's own payload.</param>
     /// <param name="reason">Why it stopped being active — resolved by the review, or obsolete because the batch is gone.</param>
+    /// <param name="resolution">#308: how the action settled it, where <paramref name="reason"/> says only that it settled. <see langword="null"/> whenever no action ran — a superseded batch records a reason and no resolution.</param>
     Task<int> DismissByTriggerAndBatchAsync(NotificationDismissTrigger trigger, string batchId, NotificationDismissReason reason, NotificationResolution? resolution = null);
 }

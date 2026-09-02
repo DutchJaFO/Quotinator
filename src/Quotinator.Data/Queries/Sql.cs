@@ -674,7 +674,7 @@ internal static class Sql
         /// </para>
         /// </summary>
         internal static readonly string UpdateDismissByTriggerAndBatch =
-            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, DateModified = @dateModified " +
+            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, Resolution = @resolution, DateModified = @dateModified " +
             $"WHERE IsDismissed = 0 AND IsDeleted = 0 AND {TextClauses.Equals("DismissTriggerKey", "trigger")} " +
             $"AND {IdClauses.Equals("json_extract(Metadata, '$.batchId')", "batchId")};";
     }
