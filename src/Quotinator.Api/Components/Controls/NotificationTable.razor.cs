@@ -95,10 +95,24 @@ public partial class NotificationTable
     internal static bool ShowsDismissControl(NotificationEntity notification, bool isExecuting) =>
         !notification.IsDismissed && !isExecuting;
 
-    /// <summary>How a notification's body is laid out, and which payload parts it renders. #308.</summary>
+    /// <summary>What a notification type renders as its content. #308.</summary>
+    internal enum NotificationContent
+    {
+        /// <summary>The one-line body only — this type has no structured detail worth showing.</summary>
+        BodyOnly,
+
+        /// <summary>The payload only — its structured form says everything the sentence does, and better.</summary>
+        PayloadOnly,
+
+        /// <summary>The body as a summary, with the payload as detail beneath it.</summary>
+        BodyAndPayload,
+    }
+
+    /// <summary>How a notification's body is laid out, and what it renders. #308.</summary>
     /// <param name="BodyIsMultiLine">Whether the body is expected to carry embedded line breaks.</param>
-    /// <param name="PayloadParts">The payload fields this type shows as detail, beyond the one-line body.</param>
-    internal sealed record NotificationLayout(bool BodyIsMultiLine, IReadOnlyList<string> PayloadParts);
+    /// <param name="Content">Whether this type shows its body, its payload, or both.</param>
+    /// <param name="PayloadParts">The payload fields it shows. Empty exactly when <paramref name="Content"/> is <see cref="NotificationContent.BodyOnly"/>.</param>
+    internal sealed record NotificationLayout(bool BodyIsMultiLine, NotificationContent Content, IReadOnlyList<string> PayloadParts);
 
     /// <summary>The detail lines rendered from a notification's stored payload. #308.</summary>
     /// <param name="notification">The row being rendered.</param>
@@ -142,13 +156,13 @@ public partial class NotificationTable
     {
         // One line per changelog highlight, and one per cleanly-applied or staged file: these producers
         // write several facts, and collapsing them into a paragraph is what #308 exists to stop.
-        NotificationMetadataKind.WhatsNew            => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
-        NotificationMetadataKind.ReseedFileApplied   => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
-        NotificationMetadataKind.ImportReviewPending => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
-        NotificationMetadataKind.Announcement           => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
-        NotificationMetadataKind.SchemaVersionOvershoot => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
-        NotificationMetadataKind.ReseedRecommended      => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
-        null                                            => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
+        NotificationMetadataKind.WhatsNew            => new NotificationLayout(BodyIsMultiLine: true, Content: NotificationContent.BodyOnly, PayloadParts: []),
+        NotificationMetadataKind.ReseedFileApplied   => new NotificationLayout(BodyIsMultiLine: true, Content: NotificationContent.BodyOnly, PayloadParts: []),
+        NotificationMetadataKind.ImportReviewPending => new NotificationLayout(BodyIsMultiLine: true, Content: NotificationContent.BodyOnly, PayloadParts: []),
+        NotificationMetadataKind.Announcement           => new NotificationLayout(BodyIsMultiLine: false, Content: NotificationContent.BodyOnly, PayloadParts: []),
+        NotificationMetadataKind.SchemaVersionOvershoot => new NotificationLayout(BodyIsMultiLine: false, Content: NotificationContent.BodyOnly, PayloadParts: []),
+        NotificationMetadataKind.ReseedRecommended      => new NotificationLayout(BodyIsMultiLine: false, Content: NotificationContent.BodyOnly, PayloadParts: []),
+        null                                            => new NotificationLayout(BodyIsMultiLine: false, Content: NotificationContent.BodyOnly, PayloadParts: []),
         _ => throw new NotSupportedException($"No layout is defined for notification kind '{kind}'."),
     };
 

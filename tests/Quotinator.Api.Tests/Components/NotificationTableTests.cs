@@ -398,14 +398,42 @@ public class NotificationTableTests
     /// pass delivered said only whether the body wraps, which is not a layout.
     /// </summary>
     [TestMethod]
-    public void LayoutFor_EachKind_NamesItsPayloadParts()
+    public void LayoutFor_EachKind_NamesWhatItRenders()
     {
         foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
         {
             NotificationTable.NotificationLayout layout = NotificationTable.LayoutFor(kind)!;
-            Assert.IsNotEmpty(layout.PayloadParts,
-                $"{kind} renders no part of its payload — it would show only the frozen sentence.");
+            bool showsPayload = layout.Content is not NotificationTable.NotificationContent.BodyOnly;
+
+            Assert.AreEqual(showsPayload, layout.PayloadParts.Count > 0,
+                $"{kind}'s layout is self-contradictory: Content says {layout.Content} while it names " +
+                $"{layout.PayloadParts.Count} payload part(s). A type that renders payload must say which parts, " +
+                "and a body-only type must name none.");
         }
+    }
+
+    /// <summary>
+    /// #308 finding 2, corrected 2026-09-02: which of body and payload a type renders is the layout
+    /// decision, and at least one type must make each choice.
+    /// </summary>
+    /// <remarks>
+    /// The first version of this row asserted that payload rendering never replaces the body. That was
+    /// wrong twice: `Body` is `init`-only so the compiler already guaranteed it, and the premise itself
+    /// was false — for some types the structured payload says everything the sentence does and says it
+    /// better, so rendering the body as well is duplication. Layout decides; this proves the decision
+    /// is actually being made rather than defaulted.
+    /// </remarks>
+    [TestMethod]
+    public void LayoutFor_AcrossKinds_ActuallyVariesWhatIsRendered()
+    {
+        List<NotificationTable.NotificationContent> choices =
+            [.. Enum.GetValues<NotificationMetadataKind>()
+                    .Select(k => NotificationTable.LayoutFor(k)!.Content)
+                    .Distinct()];
+
+        Assert.IsGreaterThan(1, choices.Count,
+            "Every type renders the same thing, so no per-type layout decision is being made — the " +
+            "boolean this row replaced said exactly as much.");
     }
 
     /// <summary>
