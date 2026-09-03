@@ -12,6 +12,7 @@ using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
@@ -936,9 +937,9 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
         await db.ReseedAsync();
 
-        ReseedFileAppliedMetadataDto payload = FirstConfirmationPayload(await NotificationsAsync());
+        List<ReseedEntityCountDto> counts = AllConfirmationCounts(await NotificationsAsync());
 
-        List<string> countedTypes = [.. payload.Counts.Select(c => c.EntityType)];
+        List<string> countedTypes = [.. counts.Select(c => c.EntityType)];
 
         Assert.Contains(ImportActionEntityTypes.Quote, countedTypes,
             "Quotes are the one type the old counts already covered.");
@@ -964,23 +965,88 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
         await db.ReseedAsync();
 
-        ReseedFileAppliedMetadataDto payload = FirstConfirmationPayload(await NotificationsAsync());
+        List<ReseedEntityCountDto> counts = AllConfirmationCounts(await NotificationsAsync());
 
-        Assert.IsNotEmpty(payload.Counts, "The reseed carried entity types, so the breakdown names them.");
-        Assert.IsEmpty(payload.Counts.Where(c => c.Incoming == 0),
+        Assert.IsNotEmpty(counts, "The reseed carried entity types, so the breakdown names them.");
+        Assert.IsEmpty(counts.Where(c => c.Incoming == 0),
             "Every row is there because something arrived. A row with nothing incoming states nothing at all.");
-        Assert.IsNotEmpty(payload.Counts.Where(c => c.Unchanged > 0),
+        Assert.IsNotEmpty(counts.Where(c => c.Unchanged > 0),
             "And the reseed's own rows are unchanged ones — the case that used to be omitted entirely.");
     }
 
-    private static ReseedFileAppliedMetadataDto FirstConfirmationPayload(IReadOnlyList<NotificationEntity> notifications)
+    /// <summary>
+    /// The regression this exists for: found live (2026-09-03) while investigating an intermittent
+    /// failure of <see cref="Reseed_EntityTypeThatArrived_IsPresentEvenWhenNothingChanged"/> during a
+    /// full-solution <c>-m:1</c> run, non-reproducing in isolation. Root cause traced to the predecessor
+    /// helper this replaced: it picked <c>.First()</c> of several <c>ReseedFileApplied</c> notifications
+    /// with no guarantee about which file that was, and <c>Sql.Notifications.SelectPage</c>'s
+    /// <c>ORDER BY DateCreated DESC</c> has no secondary tiebreaker against
+    /// <c>SafeDateValue.TimestampFormat</c>'s whole-second precision — exactly the condition three files
+    /// processed in one reseed's tight loop can hit.
+    /// <para>
+    /// Constructs two notifications directly (no database, no timing dependency) — one deliberately
+    /// shaped like the file whose breakdown would have failed the original assertion (an entity type
+    /// with zero unchanged rows), the other like the file whose breakdown would have passed it — and
+    /// proves <see cref="AllConfirmationCounts"/> finds the passing evidence regardless of which one a
+    /// tied sort would have surfaced first.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void AllConfirmationCounts_TwoConfirmationsInEitherOrder_FindsUnchangedRegardlessOfWhichSortsFirst()
     {
-        NotificationEntity confirmation = notifications
-            .First(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied);
+        NotificationEntity allNewNoUnchanged = ConfirmationNotification("small-file.json",
+            [new ReseedEntityCountDto { EntityType = "Quote", Incoming = 1, Added = 1, Unchanged = 0 }]);
+        NotificationEntity someUnchanged = ConfirmationNotification("large-file.json",
+            [new ReseedEntityCountDto { EntityType = "Quote", Incoming = 5, Unchanged = 5 }]);
 
-        return (ReseedFileAppliedMetadataDto)NotificationMetadataKinds
-            .TryDeserialize(confirmation.MetadataKind.Parsed, confirmation.Metadata)!;
+        List<ReseedEntityCountDto> countsOneOrder = AllConfirmationCounts([allNewNoUnchanged, someUnchanged]);
+        List<ReseedEntityCountDto> countsOtherOrder = AllConfirmationCounts([someUnchanged, allNewNoUnchanged]);
+
+        Assert.IsNotEmpty(countsOneOrder.Where(c => c.Unchanged > 0),
+            "Aggregating both confirmations must find the unchanged evidence regardless of input order.");
+        Assert.IsNotEmpty(countsOtherOrder.Where(c => c.Unchanged > 0),
+            "The reverse order must find the same evidence — proving this is order-independent, not luck.");
+        Assert.HasCount(2, countsOneOrder, "Both files' rows must be present, not just whichever came first.");
     }
+
+    private static NotificationEntity ConfirmationNotification(string fileName, IReadOnlyList<ReseedEntityCountDto> counts)
+    {
+        ReseedFileAppliedMetadataDto payload = new()
+        {
+            FileName = fileName,
+            Origin = FileResourceOrigin.System,
+            Counts = counts,
+            ReleaseState = NotificationReleaseState.NotApplicable,
+        };
+
+        return new NotificationEntity
+        {
+            MetadataKind = new SafeValue<NotificationMetadataKind?>(
+                NotificationMetadataKind.ReseedFileApplied.ToString(), NotificationMetadataKind.ReseedFileApplied),
+            Metadata = NotificationMetadataKinds.Serialize(payload),
+        };
+    }
+
+    /// <summary>
+    /// Every <c>ReseedFileApplied</c> confirmation's own <see cref="ReseedEntityCountDto"/> rows,
+    /// concatenated across every file the reseed confirmed.
+    /// <para>
+    /// Replaces an earlier <c>.First()</c>-based lookup that assumed "the" confirmation could be
+    /// picked out of several without naming which file it wanted. Nothing makes that assumption true:
+    /// <c>Sql.Notifications.SelectPage</c> orders by <c>DateCreated DESC</c> with no tiebreaker, and
+    /// <c>SafeDateValue.TimestampFormat</c> ("yyyy-MM-dd HH:mm:ss") truncates to whole seconds — three
+    /// files processed in the same reseed's tight loop routinely land in the same second, and SQLite's
+    /// own tie-break order for equal sort keys is unspecified. A test asserting something true of "the
+    /// reseed as a whole" (every entity type it touched is named, none show zero incoming, at least one
+    /// shows an unchanged row) should check across every file it actually reseeded, not gamble on which
+    /// one a tied sort happens to surface first.
+    /// </para>
+    /// </summary>
+    private static List<ReseedEntityCountDto> AllConfirmationCounts(IReadOnlyList<NotificationEntity> notifications)
+        => [.. notifications
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)
+            .Select(n => (ReseedFileAppliedMetadataDto)NotificationMetadataKinds.TryDeserialize(n.MetadataKind.Parsed, n.Metadata)!)
+            .SelectMany(payload => payload.Counts)];
 
     // ── #303: alert when a reseed leaves import actions awaiting review ──────────────────────────
 
