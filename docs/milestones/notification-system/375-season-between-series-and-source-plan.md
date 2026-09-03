@@ -1,6 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 8)
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -307,7 +307,7 @@ would make the assertion vacuous.
 
 ### 7. Attach the resolvable quotes to their episodes
 
-**Status:** ⬜ Not started — its input data is gathered, below
+**Status:** ✅ Done, 2026-09-03
 
 The seven quotes are the ones step 1 measured; the lookups were done on 2026-09-03 rather than left as
 a step, so this step writes rules against known values and nothing here is open-ended.
@@ -339,6 +339,28 @@ Two things this lookup established that the plan depends on:
 One incidental find worth carrying into the data enhancement milestone: the bundled Tyrell Wellick quote
 is a trimmed fragment of a longer line — IMDb has "…And unfortunately, we're all human. Except me, of
 course."
+
+Delivered as five rules appended to `nikhilnamal17-conflict-rules.json`, matching the existing
+Anakin/Galadriel Custom-value pattern exactly — no new mechanism. All five verified against the real
+bundled file: `InitialiseAsync_NikhilNamal17WithRealRuleFile_ResolvedQuotesLandOnTheirEpisodeSource`
+covers the four source+date corrections, `..._VeraQuoteGetsCharacterButKeepsShowLevelSource` the
+character-only one, and `..._UnattributedQuotesKeepShowLevelSource` is the control proving the two
+unresolved quotes are untouched. All three were confirmed red before the rules existed (temporarily
+reverting the rule file) and green after — the equivalent of red-first for a data change rather than
+code.
+
+**Two real mistakes, caught before landing rather than after:**
+
+- **The rule's `existingRecord`/`incomingRecord` snapshot has to be the raw, pre-correction value on
+  *both* sides — not the corrected one, and not what a human would call "current".** This project's own
+  Anakin/Galadriel rules already establish the pattern; verified against them directly rather than
+  inferred from `ConflictRuleLookup`'s doc comments alone.
+- **Punctuation has to match exactly, not just case.** Three of the five quotes use a curly apostrophe
+  (`’`) in the bundled JSON, not a straight one — `ValuesEqual` does case-insensitive comparison
+  but no punctuation normalisation, so a straight apostrophe in the rule's `quoteText` would have left
+  `TryResolve` permanently reporting `false` with no error and no obvious symptom short of the rule
+  silently never firing. Caught by checking the raw bytes of each source line individually rather than
+  retyping the quote text by hand.
 
 ### 8. The masterdata endpoints
 
