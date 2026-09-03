@@ -1,6 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 7)
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -250,7 +250,7 @@ positionally, so the build stayed green while that path silently created no seas
 
 ### 6. Curate the Avatar reference data
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-03
 
 The worked example, and the only bundled content that exercises number + title + subtitle together.
 Verified 2026-09-03 against two Tier 1 sources:
@@ -277,6 +277,33 @@ being that whatever comes up must fit the tables, which proves more than a curat
 
 It exercises the whole chain at once: a Character, an episode-level Source, and a Season carrying number,
 title and subtitle together — the only bundled content that does.
+
+Delivered as `data/sources/quotinator-seasons.json` — `universe`/`series`/`seasons`/`sources` plus that
+one quote — wired into `manifest.json` between the series-universe overlay and the bulk files, so the
+reference graph exists before any bulk quote is read.
+`InitialiseAsync_BundledSeasonsFile_SeedsTheWholeChain` asserts the chain against the real file rather
+than a fixture, since arriving-ahead-of-the-bulk-import is the property under test.
+
+**`schemas/source-extended.schema.json` had to be extended first, and would otherwise have rejected the
+file outright.** Both the `source` definition and the new `season` one carry
+`additionalProperties: false`, so `seasonNumber` was not merely undocumented — it was invalid. Step 5
+added the DTO without the schema; that is the same gap CLAUDE.md's JSON-parsing policy names, seen from
+the other direction.
+
+**The quote's id was hand-authored in the first draft, and is not any more** (developer, 2026-09-03: "we
+never hand author Id's; it's why we have the various helper methods"). An invented UUID imports once and
+then diverges from whatever `QuoteIdentity.StableId` computes for the same quote on any later
+re-conversion, duplicating the row rather than matching it.
+`BundledSeasonsFile_QuoteIdsAreDerived_NotHandAuthored` asserts every quote id in the file equals the
+derived value, and is what produced the correct one.
+
+**Case-insensitivity is asserted, not assumed, for everything keyed on an id here.** Every new query
+wraps through `IdClauses`, but wrapping is not evidence:
+`EntityIdentityTests.SeasonId_SeriesIdCasingDiffers_ProducesSameId` covers the derivation and
+`SeasonNaturalKeyLookup_IsCaseInsensitiveOnSeriesId` covers the natural-key lookup against a real
+database, mutation-verified by dropping the wrap and watching it fail. Both fixtures use an id
+containing hex letters and assert that up front — a digits-only GUID is identical in either case and
+would make the assertion vacuous.
 
 ### 7. Attach the resolvable quotes to their episodes
 
