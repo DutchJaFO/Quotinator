@@ -13,6 +13,8 @@ Any time a change asserts a fact about a real-world work, including:
 - A `data/sources/*-source-aliases.json` entry (`SourceAliasRule`)
 - A manual edit to `quotinator-curated.json` or `quotinator-series-universe.json` that sets or changes
   a title, `date`, `seriesName`, or `universeName`
+- A conflict rule attributing a quote to a specific episode, speaker, or season (#375) — see
+  "Verifying a quote's text, speaker, and episode" below
 - Any future Data Enrichment milestone work that resolves a Source against an external dataset
 
 It does **not** apply to purely mechanical/structural changes (e.g. reordering a series's own
@@ -101,6 +103,40 @@ canonical presentation over a database's internal formatting convention:
   metadata formatting)
 - The original theatrical release title/poster, when identifiable, over a home-video or reissue title
 - Document the conflict and which side won, in the same place the fact itself is recorded
+
+## Verifying a quote's text, speaker, and episode
+
+This project's Tier 1/Tier 2 order above governs *which work* a title or date refers to. It does not by
+itself say how to verify a narrower claim: that a specific quote was actually said, by whom, and in
+which episode. Found live in #375, verifying which episode of a multi-season show four bundled quotes
+belong to.
+
+**IMDb is already Tier 1, and its per-title, per-episode, and per-character quotes pages are the source
+for this class of claim** — no new tier, no escalation beyond what the procedure above already permits.
+A series' own quotes page (`/title/<id>/quotes/`) names the character alongside each line; a specific
+episode's own page narrows it to that episode; a character's own page lists every quote IMDb has
+attributed to them. Cross-checking an episode's own air date against the season it is claimed to belong
+to is cheap corroboration — it caught nothing wrong in #375's four cases, but would have caught an
+episode attributed to the wrong season.
+
+**A quote absent from IMDb is not an unverified quote, and must not be treated as one.** IMDb's quote
+pages are user-contributed and incomplete by construction — absence there is evidence of nothing, in
+either direction. A quote demonstrably said on screen (a screen capture of the broadcast, a transcript,
+the work itself) is verified regardless of whether IMDb's own crowd-sourced page happens to carry it.
+Do not read a failed IMDb search as grounds to flag a quote under
+[#219](https://github.com/DutchJaFO/Quotinator/issues/219) (a quote that cannot be verified to exist at
+all) — that issue is for quotes nothing confirms, not quotes IMDb's own contributors haven't gotten to
+yet.
+
+**Attribution is expected to be partial, and that is not a failure to resolve before moving on.** Not
+every quote's episode can be found from Tier 1 sources — a line may appear only on a series-level quotes
+page with no episode named, or nowhere on IMDb at all despite being real. When that happens: attach the
+quote to the nearest Source that *is* identifiable — the whole work, if no instalment can be pinned down
+(#375's own plan doc records the reasoning: seeding has no pending results when done, but never
+guaranteed the data is complete, and a quote's Source may be as coarse as what is currently known) —
+record the row as a candidate for the data enhancement milestone, and continue. Holding the rest of a
+batch open because one quote's episode couldn't be pinned down treats an ordinary, expected gap as a
+blocker it was never meant to be.
 
 ## Practical use with the search tool
 
