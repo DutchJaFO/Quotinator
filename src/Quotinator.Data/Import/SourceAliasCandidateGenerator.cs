@@ -70,8 +70,8 @@ public static class SourceAliasCandidateGenerator
                     // only ever passes genuinely-distinct rows.
                     if (string.Equals(a.Title, b.Title, StringComparison.OrdinalIgnoreCase)) continue;
 
-                    if (existingAliases.TryResolve(a.Title, a.Type, out _)) continue;
-                    if (existingAliases.TryResolve(b.Title, b.Type, out _)) continue;
+                    if (existingAliases.TryResolve(a.Title, a.Type, null, out _)) continue;
+                    if (existingAliases.TryResolve(b.Title, b.Type, null, out _)) continue;
 
                     candidates.Add(new SourceAliasCandidate
                     {

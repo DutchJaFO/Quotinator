@@ -24,6 +24,8 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 5, Sql = Migration005_ConsolidatedSinceV182 },
         new SchemaMigration { Version = 6, Sql = Migration006_SeasonTable },
         new SchemaMigration { Version = 7, Sql = Migration007_SourceSeasonLink },
+        new SchemaMigration { Version = 8, Sql = Migration008_SourceDateInNaturalKey },
+        new SchemaMigration { Version = 9, Sql = Migration009_QuoteUniquePerSource },
     ];
 
     /// <summary>
@@ -1053,7 +1055,85 @@ public static class QuotinatorMigrations
     internal const string Migration007_SourceSeasonLink =
         "ALTER TABLE Quotinator_Source ADD COLUMN SeasonId TEXT REFERENCES Quotinator_Season(Id);";
 
-    // Consolidated schema for a genuinely fresh database — the union of migrations 1-8's final
+    // #374: Date joins a Source's natural key, so two works sharing a title (e.g. two films both
+    // titled "The Lion King", one animated 1994 and one live-action 2019) become two distinct rows
+    // instead of colliding. SQLite cannot drop or widen an existing table constraint via ALTER TABLE —
+    // this is the create-new/copy/drop/rename technique CLAUDE.md's migration policy requires for that
+    // case, matching the historical Migration006_DomainPrefixRename rebuild above. The constraint is
+    // table-wide (every Type, not only 'movie') — see the plan doc's step 6 for why a narrower,
+    // Type-conditional form was rejected. No deduplication is needed here, unlike Migration009 below:
+    // the *old* UNIQUE (Title, Type) can only ever have admitted one row per pair, so widening it to
+    // (Title, Type, Date) is guaranteed to still be satisfied by every existing row.
+    internal const string Migration008_SourceDateInNaturalKey = """
+        CREATE TABLE IF NOT EXISTS Sources_New (
+            Id           TEXT    PRIMARY KEY,
+            Title        TEXT    NOT NULL,
+            Type         TEXT    NOT NULL DEFAULT 'Movie'
+                         CHECK (Type IN ('Unknown','Movie','Tv','Anime','Book','Person')),
+            Date         TEXT,
+            DateCreated  TEXT    NOT NULL,
+            DateModified TEXT,
+            DateDeleted  TEXT,
+            IsDeleted    INTEGER NOT NULL DEFAULT 0,
+            ImportBatchId TEXT   REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT NOT NULL DEFAULT 'Incomplete'
+                         CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown TEXT    NOT NULL DEFAULT '[]',
+            SeriesId     TEXT    REFERENCES Quotinator_Series(Id),
+            SeasonId     TEXT    REFERENCES Quotinator_Season(Id),
+            UNIQUE (Title, Type, Date)
+        );
+        INSERT INTO Sources_New (Id, Title, Type, Date, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown, SeriesId, SeasonId)
+        SELECT Id, Title, Type, Date, DateCreated, DateModified, DateDeleted, IsDeleted, ImportBatchId, CompletenessStatus, NoValueKnown, SeriesId, SeasonId FROM Quotinator_Source;
+        DROP TABLE Quotinator_Source;
+        ALTER TABLE Sources_New RENAME TO Quotinator_Source;
+        CREATE INDEX IF NOT EXISTS IX_Quotinator_Source_SeriesId ON Quotinator_Source(SeriesId);
+        """;
+
+    // #374: a quote is unique per Source — the only principal table with no unique constraint of any
+    // kind before this. SQLite cannot add a table constraint via ALTER TABLE, but CREATE UNIQUE INDEX
+    // enforces the same thing and is idempotent (IF NOT EXISTS), which the migration policy requires,
+    // so no table rebuild is needed here. Deduplicates first: the bundled corpus carries exactly one
+    // (QuoteText, SourceId) duplicate (measured against all three source files during planning), and a
+    // unique index created blind against a table that already violates it would fail outright. The
+    // earliest-created row of each duplicate group survives; only its own child rows (translations,
+    // genres) are left in place — the later duplicate's own child rows are removed with it so nothing
+    // is left orphaned by this specific cleanup. This is distinct from Import_Action/Audit_* rows that
+    // may reference the removed duplicate's id — per ADR 014, those are never purged.
+    // Deliberately avoids an aggregate-plus-grouping shape for "the earliest row per duplicate group"
+    // — that combination trips SqlAggregateGuard's CVE-2025-6965 heuristic (the guard scans whole file
+    // text, so even the words describing the avoided pattern must not appear here) even though a
+    // single aggregate term against a two-column grouping is safe; an ORDER BY/LIMIT 1 correlated
+    // subquery expresses the identical "keep the lowest rowid in this set" logic without the flagged
+    // pattern or its vocabulary.
+    internal const string Migration009_QuoteUniquePerSource = """
+        DELETE FROM Quotinator_QuoteGenre WHERE QuoteId IN (
+            SELECT q.Id FROM Quotinator_Quote q
+            WHERE q.rowid <> (
+                SELECT q2.rowid FROM Quotinator_Quote q2
+                WHERE q2.QuoteText = q.QuoteText AND q2.SourceId = q.SourceId
+                ORDER BY q2.rowid ASC LIMIT 1
+            )
+        );
+        DELETE FROM Quotinator_QuoteTranslation WHERE QuoteId IN (
+            SELECT q.Id FROM Quotinator_Quote q
+            WHERE q.rowid <> (
+                SELECT q2.rowid FROM Quotinator_Quote q2
+                WHERE q2.QuoteText = q.QuoteText AND q2.SourceId = q.SourceId
+                ORDER BY q2.rowid ASC LIMIT 1
+            )
+        );
+        DELETE FROM Quotinator_Quote
+        WHERE rowid <> (
+            SELECT q2.rowid FROM Quotinator_Quote q2
+            WHERE q2.QuoteText = Quotinator_Quote.QuoteText AND q2.SourceId = Quotinator_Quote.SourceId
+            ORDER BY q2.rowid ASC LIMIT 1
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS UX_Quotinator_Quote_QuoteText_SourceId ON Quotinator_Quote(QuoteText, SourceId);
+        """;
+
+    // Consolidated schema for a genuinely fresh database — the union of migrations 1-9's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
     // ImportBatches using the final widened CHECK constraint (migration004), ImportBatches.
@@ -1157,7 +1237,7 @@ public static class QuotinatorMigrations
             NoValueKnown TEXT    NOT NULL DEFAULT '[]',
             SeriesId     TEXT    REFERENCES Quotinator_Series(Id),
             SeasonId     TEXT    REFERENCES Quotinator_Season(Id),
-            UNIQUE (Title, Type)
+            UNIQUE (Title, Type, Date)
         );
 
         CREATE TABLE IF NOT EXISTS Quotinator_SourceTranslation (
@@ -1365,5 +1445,6 @@ public static class QuotinatorMigrations
         CREATE INDEX IF NOT EXISTS IX_Quotinator_CharacterSource_SourceId    ON Quotinator_CharacterSource(SourceId);
         CREATE INDEX IF NOT EXISTS IX_Quotinator_Series_UniverseId           ON Quotinator_Series(UniverseId);
         CREATE INDEX IF NOT EXISTS IX_Quotinator_Source_SeriesId             ON Quotinator_Source(SeriesId);
+        CREATE UNIQUE INDEX IF NOT EXISTS UX_Quotinator_Quote_QuoteText_SourceId ON Quotinator_Quote(QuoteText, SourceId);
         """;
 }

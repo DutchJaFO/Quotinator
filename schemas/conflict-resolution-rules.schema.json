@@ -26,7 +26,7 @@
           },
           "incomingRecord": {
             "type": "object",
-            "description": "The incoming (this source file's own) side's complete field set, recorded at the time this rule was authored. See existingRecord."
+            "description": "The incoming (this source file's own) side's complete field set, recorded at the time this rule was authored. Unlike existingRecord, this one IS read by the matching logic (#374): a governed field's current value here is compared against the live import's own incoming value to detect a stale rule (the underlying source moved since authoring) or a retirable one (the incoming side has moved into agreement, making the rule a candidate for deletion)."
           },
           "fields": {
             "type": "array",

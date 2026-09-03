@@ -32,6 +32,29 @@ public class EntityIdentityTests
         Assert.AreNotEqual(a, b);
     }
 
+    /// <summary>#374: without the date-aware overload, two same-titled works differing only in date
+    /// would hash to the same id, and the natural key's own UNIQUE (Title, Type, Date) constraint would
+    /// admit the row while the surrogate PRIMARY KEY rejected it as a duplicate.</summary>
+    [TestMethod]
+    public void SourceId_SameTitleAndTypeDifferentDate_DiffersById()
+    {
+        string a = EntityIdentity.SourceId("The Lion King", "movie", "1994");
+        string b = EntityIdentity.SourceId("The Lion King", "movie", "2019");
+
+        Assert.AreNotEqual(a, b);
+    }
+
+    /// <summary>#374: the date-aware overload with a <see langword="null"/> date must produce the exact
+    /// same id as the two-argument overload — every currently-existing Source keeps the id it has.</summary>
+    [TestMethod]
+    public void SourceId_NullDate_MatchesTheTwoArgumentOverload()
+    {
+        string dateless = EntityIdentity.SourceId("Casablanca", "movie");
+        string explicitNullDate = EntityIdentity.SourceId("Casablanca", "movie", null);
+
+        Assert.AreEqual(dateless, explicitNullDate);
+    }
+
     [TestMethod]
     public void CharacterId_SameInput_IsDeterministic()
     {

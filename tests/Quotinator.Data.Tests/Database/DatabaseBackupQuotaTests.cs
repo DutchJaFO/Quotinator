@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Database;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Testing.Fakes;
 using Quotinator.Data.Testing.NoOps;
 
 namespace Quotinator.Data.Tests.Database;
@@ -152,7 +153,7 @@ public class DatabaseBackupQuotaTests
         // failing open. Clamping it to 100 would be just as wrong in the other direction: the operator
         // would never learn their value was ignored. It is reported, and the default is used.
         FillBackupsTo(percentOfCeiling: 95);
-        CapturingLogger logger = new CapturingLogger();
+        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
 
         BackupOutcome outcome = CreateInitializer(quotaPercent: 150, logger: logger).CheckBackupReadiness();
 
@@ -282,22 +283,5 @@ public class DatabaseBackupQuotaTests
             ResetHookRan = true;
             return Task.CompletedTask;
         }
-    }
-
-    /// <summary>
-    /// Captures rendered log messages. A plain assertion that "a warning happened" would pass for any
-    /// warning at all; this checks the message actually names the setting an operator has to correct.
-    /// </summary>
-    private sealed class CapturingLogger : ILogger<DatabaseInitializer>
-    {
-        public List<string> Messages { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter) => Messages.Add(formatter(state, exception));
     }
 }

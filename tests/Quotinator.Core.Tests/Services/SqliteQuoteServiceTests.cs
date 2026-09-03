@@ -182,7 +182,7 @@ public class SqliteQuoteServiceTests
     private async Task InsertQuoteTranslationAsync(Guid quoteId, string language, string quoteText)
     {
         using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync();
+        await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(Sql.QuoteTranslations.Insert, new
         {
             Id          = Guid.NewGuid().ToString(),
@@ -392,4 +392,49 @@ public class SqliteQuoteServiceTests
         Assert.HasCount(1, result.Items);
         Assert.AreEqual(quote.Id.ToString("D"), result.Items[0].Id);
     }
+
+    /// <summary>
+    /// #374, verification row 25 — against the real, freshly-migrated schema (not a planner-level
+    /// simulation): the same quote text is free to exist under two different Sources, since neither is
+    /// assumed to carry the other's line (developer, 2026-09-03: "we should not assume that quotes were
+    /// in them all, unless we have proof").
+    /// </summary>
+    [TestMethod]
+    public async Task SameQuoteTextUnderTwoSources_IsTwoRows()
+    {
+        SourceEntity sourceA = await InsertSourceAsync("Film A");
+        SourceEntity sourceB = await InsertSourceAsync("Film B");
+
+        QuoteEntity quoteA = await InsertQuoteAsync(sourceA.Id, "A line both films happen to share.");
+        QuoteEntity quoteB = await InsertQuoteAsync(sourceB.Id, "A line both films happen to share.");
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        int count = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Quotinator_Quote WHERE QuoteText = @text",
+            new { text = "A line both films happen to share." });
+
+        Assert.AreEqual(2, count);
+        Assert.AreNotEqual(quoteA.Id, quoteB.Id);
+    }
+
+    /// <summary>
+    /// #374, verification row 26 — the control for <see cref="SameQuoteTextUnderTwoSources_IsTwoRows"/>:
+    /// without <c>UX_Quotinator_Quote_QuoteText_SourceId</c>, row 25 would pass with no constraint
+    /// enforced at all. Goes through <c>SqliteRestorableRepository{T}.InsertAsync</c> directly
+    /// (a plain <c>INSERT</c>, not the planner's <c>INSERT OR IGNORE</c> Add path) so the assertion is
+    /// about the schema constraint itself, not about the planner's own conflict-detection logic already
+    /// covered by <c>ImportActionPlannerTests</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task SameQuoteTextUnderOneSource_IsRejected()
+    {
+        SourceEntity source = await InsertSourceAsync("Film A");
+        await InsertQuoteAsync(source.Id, "Only one of these may exist under this Source.");
+
+        await Assert.ThrowsExactlyAsync<SqliteException>(
+            () => InsertQuoteAsync(source.Id, "Only one of these may exist under this Source."));
+    }
+
+    public TestContext TestContext { get; set; }
 }

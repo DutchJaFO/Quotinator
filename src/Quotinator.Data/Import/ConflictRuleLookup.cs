@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Quotinator.Data.Enums;
 
 namespace Quotinator.Data.Import;
 
@@ -19,47 +20,66 @@ public sealed class ConflictRuleLookup
     public ConflictRuleLookup(IEnumerable<ConflictResolutionRule> rules)
     {
         _rules = new Dictionary<string, RuleEntry>(StringComparer.OrdinalIgnoreCase);
-        foreach (var rule in rules)
-            foreach (var field in rule.Fields)
+        foreach (ConflictResolutionRule rule in rules)
+            foreach (ConflictResolutionFieldRule field in rule.Fields)
             {
-                var decision = new FieldMergeDecision(field.Resolution, field.CustomValue);
-                _rules[Key(rule.EntityId, field.Field)] = new RuleEntry(decision, rule.ExistingRecord, rule.IncomingRecord);
+                FieldMergeDecision decision = new(field.Resolution, field.CustomValue);
+                _rules[Key(rule.EntityId, field.Field)] = new RuleEntry(decision, rule.IncomingRecord);
             }
     }
 
     /// <summary>
     /// Returns <see langword="true"/> when a rule exists for <paramref name="entityId"/> + <paramref name="field"/>.
     /// <paramref name="decision"/> is ready to feed directly into <see cref="FieldMergeResolver.ResolveWithDecisions"/>
-    /// when <paramref name="isStale"/> is <see langword="false"/> — the caller must not apply it otherwise (#153).
-    /// A rule is stale when the current staging run's own <paramref name="currentExistingValue"/>/
-    /// <paramref name="currentIncomingValue"/> for this field no longer match what was recorded in the
-    /// rule's <see cref="ConflictResolutionRule.ExistingRecord"/>/<see cref="ConflictResolutionRule.IncomingRecord"/>
-    /// snapshot at authoring time — meaning the underlying source's shape moved since the rule was
-    /// written and silently reapplying it could produce a wrong result. A field missing from either
-    /// recorded snapshot (e.g. a schema field added after the rule was authored) is treated as stale
-    /// rather than assumed unrelated — a rule can only be trusted when both sides were actually recorded.
+    /// only when <paramref name="outcome"/> is <see cref="ConflictRuleOutcome.Apply"/> or
+    /// <see cref="ConflictRuleOutcome.AlreadyApplied"/> — the caller must not apply it otherwise (#153, #374).
+    /// See <see cref="ConflictRuleOutcome"/> for what each outcome means and what the caller does with it.
     /// </summary>
-    public bool TryResolve(string entityId, string field, object? currentExistingValue, object? currentIncomingValue, out FieldMergeDecision decision, out bool isStale)
+    /// <remarks>
+    /// #374: staleness is judged on the incoming side alone — <see cref="ConflictResolutionRule.ExistingRecord"/>
+    /// is never read here (a stored value is expected to drift from what was recorded at authoring time;
+    /// that is the rule doing its job, not a reason to distrust it). A field's <em>wanted</em> value is
+    /// computed from <paramref name="decision"/> against the current sides (never against the recorded
+    /// snapshot) and compared against <paramref name="currentExistingValue"/> — the value actually
+    /// stored — to tell <see cref="ConflictRuleOutcome.Apply"/> from <see cref="ConflictRuleOutcome.AlreadyApplied"/>.
+    /// </remarks>
+    public bool TryResolve(string entityId, string field, object? currentExistingValue, object? currentIncomingValue, out FieldMergeDecision decision, out ConflictRuleOutcome outcome)
     {
-        if (!_rules.TryGetValue(Key(entityId, field), out var entry))
+        if (!_rules.TryGetValue(Key(entityId, field), out RuleEntry entry))
         {
             decision = default;
-            isStale  = false;
+            outcome  = ConflictRuleOutcome.Apply;
             return false;
         }
 
         decision = entry.Decision;
-        var existingMatches = TryExtractFieldValue(entry.RecordedExisting, field, out var recordedExisting)
-            && FieldMergeResolver.ValuesEqual(recordedExisting, currentExistingValue);
-        var incomingMatches = TryExtractFieldValue(entry.RecordedIncoming, field, out var recordedIncoming)
-            && FieldMergeResolver.ValuesEqual(recordedIncoming, currentIncomingValue);
-        isStale = !existingMatches || !incomingMatches;
+
+        bool incomingMoved = !TryExtractFieldValue(entry.RecordedIncoming, field, out object? recordedIncoming)
+            || !FieldMergeResolver.ValuesEqual(recordedIncoming, currentIncomingValue);
+        if (incomingMoved)
+        {
+            // Moved *into* agreement means the field would resolve identically with the rule removed —
+            // report that as a candidate for retirement, not as an ordinary staleness warning.
+            bool sidesNowAgree = FieldMergeResolver.ValuesEqual(currentExistingValue, currentIncomingValue);
+            outcome = sidesNowAgree ? ConflictRuleOutcome.Retirable : ConflictRuleOutcome.Stale;
+            return true;
+        }
+
+        object? wantedValue = decision.Choice switch
+        {
+            FieldResolutionChoice.Custom  => decision.CustomValue,
+            FieldResolutionChoice.Replace => currentIncomingValue,
+            _                             => currentExistingValue, // Keep, and any future default.
+        };
+        outcome = FieldMergeResolver.ValuesEqual(currentExistingValue, wantedValue)
+            ? ConflictRuleOutcome.AlreadyApplied
+            : ConflictRuleOutcome.Apply;
         return true;
     }
 
     private static bool TryExtractFieldValue(JsonElement record, string field, out object? value)
     {
-        if (record.ValueKind != JsonValueKind.Object || !record.TryGetProperty(field, out var prop))
+        if (record.ValueKind != JsonValueKind.Object || !record.TryGetProperty(field, out JsonElement prop))
         {
             value = null;
             return false;
@@ -77,5 +97,5 @@ public sealed class ConflictRuleLookup
 
     private static string Key(string entityId, string field) => $"{entityId}|{field}";
 
-    private readonly record struct RuleEntry(FieldMergeDecision Decision, JsonElement RecordedExisting, JsonElement RecordedIncoming);
+    private readonly record struct RuleEntry(FieldMergeDecision Decision, JsonElement RecordedIncoming);
 }

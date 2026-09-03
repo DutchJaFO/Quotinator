@@ -508,6 +508,81 @@ public class ImportActionPlannerTests
         Assert.AreEqual("Here's looking at you, kid.", payload.Fields.QuoteText, "Keep/Replace on a first-ever Add must be a no-op, not an error");
     }
 
+    // ── #374: ConflictRuleOutcome — AlreadyApplied resolves, Stale/Retirable both hold ──────────
+
+    /// <summary>A `Custom` rule whose stored value already equals its wanted value must resolve to a
+    /// terminal state with nothing left to decide, even though the incoming file still carries the
+    /// wrong value the rule was written to correct — verification row 16.</summary>
+    [TestMethod]
+    public async Task AlreadyAppliedRule_LeavesNothingPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "e1111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(conn, id); // stores QuoteText = "Original text"
+
+        SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
+        ConflictResolutionRule rule = new ConflictResolutionRule
+        {
+            EntityId       = id,
+            ExistingRecord = EmptyConflictRuleRecord,
+            IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"A changed line."}"""),
+            Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Custom, CustomValue = "Original text" }],
+        };
+        ConflictRuleLookup rules = new ConflictRuleLookup([rule]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreNotEqual(ImportActionStatus.Pending, quoteAction.Status.Parsed,
+            "The stored value ('Original text') already equals the rule's wanted value — nothing left to decide");
+        Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed);
+    }
+
+    /// <summary>The control for <see cref="AlreadyAppliedRule_LeavesNothingPending"/> — a genuinely
+    /// stale rule (incoming side moved since authoring) must still hold the action for review, exactly
+    /// as it did before #374. Verification row 17, first half.</summary>
+    [TestMethod]
+    public async Task StaleRule_StillStagesStale()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "e2111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(conn, id); // stores QuoteText = "Original text"
+
+        SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A different changed line.");
+        ConflictResolutionRule rule = new ConflictResolutionRule
+        {
+            EntityId       = id,
+            ExistingRecord = EmptyConflictRuleRecord,
+            // Recorded incoming ("A changed line.") no longer matches this run's real incoming
+            // ("A different changed line.") — the rule's own recorded snapshot has moved.
+            IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"A changed line."}"""),
+            Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Custom, CustomValue = "Original text" }],
+        };
+        ConflictRuleLookup rules = new ConflictRuleLookup([rule]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Stale, quoteAction.Status.Parsed, "A rule whose incoming side has moved must hold the action for review, not silently apply or resolve");
+    }
+
+    /// <summary>The other half of row 17's control pair — a genuine conflict with no matching rule at
+    /// all must still stage Pending, unaffected by #374's outcome split.</summary>
+    [TestMethod]
+    public async Task ConflictWithNoRule_StillStagesPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "e3111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(conn, id); // stores QuoteText = "Original text"
+
+        SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Pending, quoteAction.Status.Parsed, "No rule at all must still leave a genuine conflict Pending, unaffected by the outcome split");
+    }
+
     // ── #181: source-title alias lookup ────────────────────────────────────────
 
     private static async Task SeedExistingQuoteWithSourceAsync(SqliteConnection conn, string quoteId, string sourceId, string sourceTitle, string sourceType, string quoteText)
@@ -593,7 +668,7 @@ public class ImportActionPlannerTests
     /// <summary>
     /// Simulates a genuine rename: the Source that was originally created under exactly the alias's
     /// own recorded canonical (title, type) — and therefore carries the id that pair deterministically
-    /// hashes to (<see cref="EntityIdentity.SourceId"/>, fixed at creation, never recomputed on a later
+    /// hashes to (<see cref="EntityIdentity.SourceId(string, string)"/>, fixed at creation, never recomputed on a later
     /// Modify) — has since had its Title changed away from that canonical value. The alias file was
     /// never updated to match. Deliberately does NOT test "no Source with the canonical title exists
     /// at all" as stale — found live via Docker T2 that an earlier version of this check conflated that
@@ -685,6 +760,54 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed, "A fresh alias (canonical Source still exists) must resolve normally, not be treated as stale");
     }
 
+    // ── #374, step 8: an alias corrects a wrong date ────────────────────────────
+
+    /// <summary>
+    /// #374, verification row 28 — planner-level proof, not just the lookup in isolation: a quote whose
+    /// raw entry claims a wrong date (a typo, e.g. "1958" for a 1985 film) is corrected to the
+    /// already-correct dated Source, not left to fragment into its own spurious second variant.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_DatedAliasCorrectsWrongDate_ResolvesToCanonicalDatedSource()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto correctQuote = BuildQuote("f4111111-1111-4111-8111-111111111111", source: "Back to the Future", date: "1985");
+        SourceQuoteDto typoQuote    = BuildQuote("f4211111-1111-4111-8111-111111111111", source: "Back to the future", date: "1958", quoteText: "Great Scott!");
+        SourceAliasLookup aliases = new SourceAliasLookup([
+            new SourceAliasRule { Title = "Back to the future", Type = "movie", Date = "1958", CanonicalTitle = "Back to the Future", CanonicalType = "movie", CanonicalDate = "1985" },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [correctQuote, typoQuote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
+
+        Assert.ContainsSingle(a => a.EntityType == "Source", actions, "The corrected date must resolve to the same single Source, not fragment into a second variant");
+        ImportActionEntity correctAction = actions.Single(a => a.EntityType == "Quote" && a.EntityId == "f4111111-1111-4111-8111-111111111111");
+        ImportActionEntity typoAction    = actions.Single(a => a.EntityType == "Quote" && a.EntityId == "f4211111-1111-4111-8111-111111111111");
+        QuoteActionPayloadDto correctPayload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(correctAction.IncomingValue!)!;
+        QuoteActionPayloadDto typoPayload    = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(typoAction.IncomingValue!)!;
+        Assert.AreEqual(correctPayload.SourceId, typoPayload.SourceId);
+        Assert.AreEqual(ImportActionStatus.Decided, typoAction.Status.Parsed, "A dated alias resolves the conflict outright — nothing left for a curator to decide");
+    }
+
+    /// <summary>
+    /// #374, verification row 30 — the control for row 28/step 8: without an alias to correct it, a
+    /// wrong date is indistinguishable from a genuinely distinct work (step 6's own design, "residue is
+    /// enhancement material, not a blocker" — see the plan's step 8 text). It must still resolve cleanly
+    /// to its own new Source variant, with nothing left pending, exactly like <see cref="SameTitleDifferentDate_ResolvesToTwoSources"/>.
+    /// </summary>
+    [TestMethod]
+    public async Task AWrongDatedSource_StillLeavesNothingPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto correctQuote = BuildQuote("f4311111-1111-4111-8111-111111111111", source: "Back to the Future", date: "1985");
+        SourceQuoteDto typoQuote    = BuildQuote("f4411111-1111-4111-8111-111111111111", source: "Back to the future", date: "1958", quoteText: "Great Scott!");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [correctQuote, typoQuote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.HasCount(2, [.. actions.Where(a => a.EntityType == "Source")], "An uncorrected wrong date is a real, distinguishable variant — not a reported conflict");
+        Assert.DoesNotContain(a => a.EntityType == "Quote" && a.Status.Parsed != ImportActionStatus.Decided, actions,
+            "Nothing is left pending — the uncorrected wrong date leaves a spurious but resolved second Source, not an unresolved one");
+    }
+
     private static async Task SeedExistingQuoteWithCharacterAsync(SqliteConnection conn, string id, string quoteText, string characterName)
     {
         string now          = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
@@ -726,18 +849,90 @@ public class ImportActionPlannerTests
         Assert.AreEqual("1993", payload.Date, "The resolving quote's own Date must carry through to the staged Source Add payload");
     }
 
+    /// <summary>
+    /// #374: renamed and reversed from `ResolveSourceAsync_TwoQuotesSameSourceDifferentDates_FirstQuotesDateWins`
+    /// — verification row 18. Two works sharing a title and differing in date (the Lion King shape,
+    /// animated 1994 / live-action 2019) must become two distinct Source rows, not collapse onto
+    /// whichever quote's date happened to be seen first. Date is now part of a Source's natural key
+    /// (step 6), so the two rows coexist under the same widened UNIQUE constraint instead of colliding.
+    /// </summary>
     [TestMethod]
-    public async Task ResolveSourceAsync_TwoQuotesSameSourceDifferentDates_FirstQuotesDateWins()
+    public async Task SameTitleDifferentDate_ResolvesToTwoSources()
     {
         using SqliteConnection conn = await OpenConnectionAsync();
-        SourceQuoteDto q1 = BuildQuote("61311111-1111-4111-8111-111111111111", character: "Rick Blaine", date: "1942");
-        SourceQuoteDto q2 = BuildQuote("61411111-1111-4111-8111-111111111111", character: "Ilsa Lund", date: "1943");
+        SourceQuoteDto q1 = BuildQuote("61311111-1111-4111-8111-111111111111", character: "Rick Blaine", date: "1994");
+        SourceQuoteDto q2 = BuildQuote("61411111-1111-4111-8111-111111111111", character: "Ilsa Lund", date: "2019");
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [q1, q2], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
-        SourceActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
-        Assert.AreEqual("1942", payload.Date, "Only one Source Add is staged for both quotes — the first-encountered quote's Date wins, matching the existing Title/Type first-quote-wins behaviour");
+        List<ImportActionEntity> sourceActions = [.. actions.Where(a => a.EntityType == "Source")];
+        Assert.HasCount(2, sourceActions, "Two distinct dates for the same title must stage two distinct Source Add actions, not one");
+        Assert.AreNotEqual(sourceActions[0].EntityId, sourceActions[1].EntityId, "The two variants must get distinct ids");
+        List<string?> dates = [.. sourceActions.Select(a => System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(a.IncomingValue!)!.Date)];
+        Assert.Contains("1994", dates);
+        Assert.Contains("2019", dates);
+    }
+
+    /// <summary>The control for <see cref="SameTitleDifferentDate_ResolvesToTwoSources"/> — a second
+    /// quote for the SAME title and the SAME date within one batch must still be recognised as the same
+    /// Source, not treated as yet another new variant.</summary>
+    [TestMethod]
+    public async Task SameTitleSameDate_ResolvesToOneSource()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto q1 = BuildQuote("61511111-1111-4111-8111-111111111111", character: "Rick Blaine", date: "1994");
+        SourceQuoteDto q2 = BuildQuote("61611111-1111-4111-8111-111111111111", character: "Ilsa Lund", date: "1994");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [q1, q2], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.ContainsSingle(a => a.EntityType == "Source", actions, "Both quotes agree on the same date — must resolve to one Source, not two");
+    }
+
+    // ── #374: a series-capable type (tv) with no Series data cannot tell "new season" from "wrong ──
+    // ── year" — a second date must be reported as a conflict, never silently split into a new Source ──
+
+    /// <summary>
+    /// Found live against the real bundled corpus: "Arrow" and "Mr. Robot" each split into two Source
+    /// rows once Date joined the natural key, because their remaining un-curated quotes carry a
+    /// per-quote year that is simply wrong (#375), not a real season marker — and nothing distinguishes
+    /// that from a genuinely new season without Series data to check it against. The second quote must
+    /// attach to the same, nearest Source (no fragmentation) and be held for a curator's own decision.
+    /// </summary>
+    [TestMethod]
+    public async Task TvQuoteWithASecondYear_NoSeriesData_AttachesToNearestSourceAndStagesPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto q1 = BuildQuote("71711111-1111-4111-8111-111111111111", source: "Arrow", character: "Oliver Queen", date: "2015", type: Core.Enums.QuoteType.Tv);
+        SourceQuoteDto q2 = BuildQuote("71811111-1111-4111-8111-111111111111", source: "Arrow", character: "Felicity Smoak", date: "2017", type: Core.Enums.QuoteType.Tv);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [q1, q2], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.ContainsSingle(a => a.EntityType == "Source", actions, "A wrong per-quote year must never fragment a tv show into a second Source row");
+
+        ImportActionEntity secondQuoteAction = actions.Single(a => a.EntityType == "Quote" && a.EntityId == "71811111-1111-4111-8111-111111111111");
+        Assert.AreEqual(ImportActionStatus.Pending, secondQuoteAction.Status.Parsed, "The disagreeing year must be reported as a conflict, not silently resolved either way");
+
+        ImportActionEntity firstQuoteAction = actions.Single(a => a.EntityType == "Quote" && a.EntityId == "71711111-1111-4111-8111-111111111111");
+        QuoteActionPayloadDto firstPayload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(firstQuoteAction.IncomingValue!)!;
+        QuoteActionPayloadDto secondPayload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(secondQuoteAction.IncomingValue!)!;
+        Assert.AreEqual(firstPayload.SourceId, secondPayload.SourceId, "Both quotes must resolve to the same, single Arrow Source");
+    }
+
+    /// <summary>The control for <see cref="TvQuoteWithASecondYear_NoSeriesData_AttachesToNearestSourceAndStagesPending"/>
+    /// — a movie (not series-capable) with the same shape still gets two distinct Source rows, exactly as
+    /// <see cref="SameTitleDifferentDate_ResolvesToTwoSources"/> already established. Restated here as an
+    /// explicit type-based control so the tv-specific carve-out is proven, not assumed.</summary>
+    [TestMethod]
+    public async Task MovieQuoteWithASecondYear_StillResolvesToTwoSources()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto q1 = BuildQuote("71911111-1111-4111-8111-111111111111", source: "The Lion King", character: "Simba", date: "1994", type: Core.Enums.QuoteType.Movie);
+        SourceQuoteDto q2 = BuildQuote("72011111-1111-4111-8111-111111111111", source: "The Lion King", character: "Nala", date: "2019", type: Core.Enums.QuoteType.Movie);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [q1, q2], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.HasCount(2, [.. actions.Where(a => a.EntityType == "Source")], "A movie's second date is a real, distinguishable variant — not a reported conflict");
+        Assert.DoesNotContain(a => a.EntityType == "Quote" && a.Status.Parsed == ImportActionStatus.Pending, actions);
     }
 
     // ── #245: ResolveSourceAsync backfilling a null Date on an already-existing Source ──────────
@@ -759,8 +954,14 @@ public class ImportActionPlannerTests
         Assert.AreEqual("1942", payload.Date, "The resolving quote's own Date must backfill the existing row's null Date");
     }
 
+    /// <summary>
+    /// #374: renamed and reversed from `ResolveSourceAsync_ExistingDatedSource_QuoteWithDifferentDate_NoActionStaged`.
+    /// A quote whose date genuinely disagrees with an already-dated Source no longer silently attaches
+    /// to that row (the pre-#374 "first-found-wins" bug this whole issue is about) — it stages a new,
+    /// distinctly-dated Source variant instead, leaving the original row untouched.
+    /// </summary>
     [TestMethod]
-    public async Task ResolveSourceAsync_ExistingDatedSource_QuoteWithDifferentDate_NoActionStaged()
+    public async Task ResolveSourceAsync_ExistingDatedSource_QuoteWithDifferentDate_StagesNewSourceVariant()
     {
         using SqliteConnection conn = await OpenConnectionAsync();
         string sourceId = Guid.NewGuid().ToString("D");
@@ -769,11 +970,33 @@ public class ImportActionPlannerTests
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
 
-        // #373: "never touched" means no Add and no Modify. An Unchanged action touches nothing — it
-        // records that the Source arrived and matched, which is the reporting this issue adds.
-        Assert.DoesNotContain(
-            a => a.EntityType == "Source" && a.ActionType.Parsed != ImportActionKind.Unchanged, actions,
-            "An already-dated Source must never be touched by a later, differently-dated quote — first-found-wins, no invented conflict logic");
+        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Add, sourceAction.ActionType.Parsed, "A genuinely different date must stage a new variant, not silently attach to the existing 1942 row");
+        Assert.AreNotEqual(sourceId, sourceAction.EntityId, "The new variant must not reuse the existing, differently-dated row's id");
+        SourceActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(sourceAction.IncomingValue!)!;
+        Assert.AreEqual("1999", payload.Date);
+    }
+
+    /// <summary>
+    /// #374 verification row 21 — the control proving steps 6/7 need no id rewrite. A quote whose date
+    /// agrees with an already-existing, explicitly-dated Source must still be matched by natural key and
+    /// reuse that row's real id — never recomputed via <see cref="EntityIdentity.SourceId(string, string, string?)"/>,
+    /// which per ADR 002 governs new rows only. A failure here is the wipe-and-reseed the design exists
+    /// to avoid.
+    /// </summary>
+    [TestMethod]
+    public async Task ExistingSource_IsMatchedByNaturalKey_AndKeepsItsId()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: "1942", completenessStatus: "Incomplete");
+        SourceQuoteDto quote = BuildQuote("c4111111-1111-4111-8111-111111111111", date: "1942");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Unchanged, sourceAction.ActionType.Parsed, "Agreeing dates must resolve to the existing row, untouched");
+        Assert.AreEqual(sourceId, sourceAction.EntityId, "The existing row's real id must be reused, never recomputed");
     }
 
     [TestMethod]
@@ -1204,11 +1427,70 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
             universe: [new UniverseEntryDto { Id = id, Name = "Middle Earth" }], conflictRules: rules);
 
-        ImportActionEntity? universeAction = actions.SingleOrDefault(a => a.EntityType == "Universe");
-        Assert.IsNotNull(universeAction, "The Custom rule must produce an action even though nothing 'changed' in the ordinary sense");
-        Assert.AreEqual(ImportActionStatus.Decided, universeAction!.Status.Parsed);
+        ImportActionEntity universeAction = actions.Single(a => a.EntityType == "Universe");
+        Assert.AreEqual(ImportActionStatus.Decided, universeAction.Status.Parsed, "The Custom rule must produce an action even though nothing 'changed' in the ordinary sense");
         UniverseActionPayloadDto merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayloadDto>(universeAction.MergedFields!)!;
         Assert.AreEqual("Middle-earth", merged.Name, "Custom must resolve to customValue, not either side's actual value");
+    }
+
+    /// <summary>
+    /// #374, verification row 32 — proves the sink threads a real <c>Retirable</c> finding out of the
+    /// planner, not just out of <c>ConflictRuleLookup</c> in isolation (already proven at step 4). A
+    /// <c>Keep</c> rule whose incoming side has moved back into agreement with the existing value is
+    /// exactly what <c>PlanUniverseAsync</c>'s own unconditional per-field rule check (the #181 fix
+    /// above) reaches even though nothing "changed" in the ordinary sense.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_RetirableRule_IsCollectedIntoTheSink()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId = id,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
+                // Recorded incoming ("Middle-earth (corrected)") disagreed with existing at authoring
+                // time; the current incoming ("Middle Earth") has since moved back into agreement.
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle-earth (corrected)"}"""),
+                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+        List<RetirableRuleFinding> findings = [];
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle Earth" }], conflictRules: rules, retirableRuleFindings: findings);
+
+        Assert.ContainsSingle(findings);
+        Assert.AreEqual("Universe", findings[0].EntityType);
+        Assert.AreEqual(id, findings[0].EntityId);
+        Assert.AreEqual("name", findings[0].Field);
+
+        ImportActionEntity universeAction = actions.Single(a => a.EntityType == "Universe");
+        Assert.AreEqual(ImportActionStatus.Stale, universeAction.Status.Parsed, "Retirable still holds the action for review exactly like Stale — only the remedy reported differs (delete the rule, not re-author it)");
+    }
+
+    /// <summary>The control for <see cref="PlanAsync_RetirableRule_IsCollectedIntoTheSink"/> — an ordinary Stale rule must never be collected as retirable.</summary>
+    [TestMethod]
+    public async Task PlanAsync_StaleRule_IsNotCollectedAsRetirable()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId = id,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"A name that no longer matches anything"}"""),
+                Fields = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+        List<RetirableRuleFinding> findings = [];
+
+        await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle-earth (corrected)" }], conflictRules: rules, retirableRuleFindings: findings);
+
+        Assert.IsEmpty(findings, "A genuinely stale rule (incoming side moved since authoring) must never be reported as retirable");
     }
 
     [TestMethod]

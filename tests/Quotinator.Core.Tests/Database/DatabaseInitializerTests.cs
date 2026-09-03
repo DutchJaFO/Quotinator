@@ -3,6 +3,7 @@ using System.Text.Json;
 using Quotinator.Core.Import;
 using Dapper;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Core.Enums;
 using Quotinator.Core.Models;
@@ -18,6 +19,7 @@ using Quotinator.Data.Paths;
 using Quotinator.Data.Queries;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.Database;
+using Quotinator.Data.Testing.Fakes;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
@@ -65,10 +67,10 @@ public class DatabaseInitializerTests
         IAuditEntryWriter? auditWriter = null,
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
         ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false,
-        IAppVersionTracker? appVersionTracker = null)
+        IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null)
         => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline, ruleFileOverridePathResolver, sourceFileOverrideRegistry,
             autoPurgeBundledImportActions, autoPurgeUserImportActions, auditWriter, diskSpaceProvider, maxBackupStorageGb,
-            sourceCacheUpdater, autoUpdateSources, appVersionTracker);
+            sourceCacheUpdater, autoUpdateSources, appVersionTracker, logger);
 
     private QuotinatorDatabaseInitializer CreateInitializer(
         IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline,
@@ -77,12 +79,12 @@ public class DatabaseInitializerTests
         IAuditEntryWriter? auditWriter = null,
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
         ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false,
-        IAppVersionTracker? appVersionTracker = null)
+        IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null)
     {
         SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
         DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1 };
         SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        NullLogger<DatabaseInitializer> logger        = NullLogger<DatabaseInitializer>.Instance;
+        ILogger<DatabaseInitializer> resolvedLogger = logger ?? NullLogger<DatabaseInitializer>.Instance;
         ImportActionReader actionReader   = new ImportActionReader(factory);
         ImportActionWriter actionWriter   = new ImportActionWriter(factory);
         ImportActionResolutionCoordinator coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
@@ -97,7 +99,7 @@ public class DatabaseInitializerTests
             importBatches, factory, NoOpNotificationWriter.Instance);
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
             coordinator, actionService, actionWriter,
-            auditWriter ?? NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, logger,
+            auditWriter ?? NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, resolvedLogger,
             sourceCacheUpdater ?? NoOpSourceCacheUpdater.Instance, autoUpdateSources,
             autoPurgeBundledImportActions, autoPurgeUserImportActions,
             ruleFileOverridePathResolver ?? NoOpRuleFileOverridePathResolver.Instance,
@@ -549,13 +551,22 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(3, await ReseedConfirmationCountAsync(),
-            "Three files, three confirmations from the cold start.");
+        // #374: 2, not 3 — NikhilNamal17 always carries at least one genuine, permanent tv-date conflict
+        // under AllFilesBatch's un-curated wiring (see InitialiseAsync_AllSourceFiles_SeedsExpectedCounts'
+        // own comment), so that file takes the review-alert branch instead of the clean-confirmation one,
+        // on every run, cold start included — it never has "nothing left to review" to confirm.
+        Assert.AreEqual(2, await ReseedConfirmationCountAsync(),
+            "Two of the three files apply cleanly from the cold start; NikhilNamal17 always has a genuine conflict to report instead.");
 
         await db.ReseedAsync();
         int afterFirstReseed = await ReseedConfirmationCountAsync();
-        Assert.AreEqual(6, afterFirstReseed,
-            "The reseed reports the same rows as unchanged — a different outcome from 'added', so its own confirmation.");
+        // #374: +3, not +2 — on a reseed specifically (unlike the cold start above), NikhilNamal17 also
+        // confirms: its tv-date conflict quotes were already reported once and this pass's own dedup
+        // check does not re-stage them, so the rest of its content applies cleanly as Unchanged — see
+        // Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile's own comment for the full
+        // reasoning behind cold start (2) and reseed (3) differing.
+        Assert.AreEqual(5, afterFirstReseed,
+            "The reseed reports the same rows as unchanged — a different outcome from 'added', so its own confirmation — for all three files.");
 
         await db.ReseedAsync();
         Assert.AreEqual(afterFirstReseed, await ReseedConfirmationCountAsync(),
@@ -603,10 +614,18 @@ public class DatabaseInitializerTests
         List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed)];
 
+        // #374: on a *reseed* specifically, NikhilNamal17 still gets its own confirmation, unlike the
+        // cold-start case (Initialise_FirstEmptyDatabaseSeed_WritesOnePerFile, 2 not 3) — its tv-date
+        // conflict quotes were already reported once (that alert is still live, undismissed, from the
+        // cold start) and this pass's own dedup check (Sql.Quotes.SelectHasPendingActionById) correctly
+        // does not re-stage them, so nothing new happens for those specific quotes this run. The rest of
+        // the file's content genuinely does apply cleanly again (as Unchanged), which is exactly what
+        // this notification reports — it is not a claim that the file has zero open conflicts anywhere.
         Assert.HasCount(3, confirmations,
-            "AllFilesBatch carries three files and all three apply cleanly — one confirmation each.");
+            "All three files have something to confirm on this reseed — an unresolved older conflict "
+            + "does not suppress a fresh confirmation for the rest of that file's own unchanged content.");
         Assert.IsTrue(confirmations.All(n => n.Type.Parsed == NotificationType.Success),
-            "A file that reseeded with nothing left to review is a Success, not an ActionRequired.");
+            "A file that reseeded with nothing NEW left to review is a Success, not an ActionRequired.");
     }
 
     /// <summary>
@@ -639,8 +658,9 @@ public class DatabaseInitializerTests
         List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
 
-        Assert.HasCount(3, confirmations,
-            "AllFilesBatch carries three files and all three apply cleanly — one confirmation each, "
+        // #374: 2, not 3 — see Reseed_AgainstCurrentContent_StopsAddingConfirmations' own comment.
+        Assert.HasCount(2, confirmations,
+            "Two of AllFilesBatch's three files apply cleanly — one confirmation each, "
             + "exactly as Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile asserts for the other path.");
     }
 
@@ -1114,8 +1134,13 @@ public class DatabaseInitializerTests
 
         Assert.IsGreaterThan(0, ConfirmationCount(all),
             "Positive control: the clean-apply branch must have produced its confirmations here.");
-        Assert.AreEqual(0, ReviewAlertCount(all),
-            "Nothing was left to review, so no alert — the two branches are mutually exclusive per file.");
+        // #374: 1, not 0 — NikhilNamal17 always has a genuine, permanent tv-date conflict under
+        // AllFilesBatch's un-curated wiring (see Reseed_AgainstCurrentContent_StopsAddingConfirmations'
+        // own comment) and takes the alert branch; the other two files still take the confirmation
+        // branch above, which is what "mutually exclusive per file" actually means — not that the whole
+        // batch is all-confirmation or all-alert.
+        Assert.AreEqual(1, ReviewAlertCount(all),
+            "The one file with something left to review gets an alert; the two that applied cleanly do not — mutually exclusive per file.");
     }
 
     /// <summary>
@@ -1256,8 +1281,17 @@ public class DatabaseInitializerTests
     /// adds nothing to review.
     /// </para>
     /// </summary>
+    /// <remarks>
+    /// #374 (developer decision, 2026-09-04): 3, not 0. Three Mr. Robot/Arrow quotes carry a per-quote
+    /// year that disagrees with their show's other quotes — a series-capable type with no Series data
+    /// cannot tell that apart from a genuinely new season, so these three are now correctly reported as
+    /// conflicts rather than silently resolved. This is the intended behaviour, not a residual defect —
+    /// see <see cref="InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions"/>'s own
+    /// documented exceptions and <see cref="Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows"/>
+    /// for what actually matters now: the count stays stable, not that it reaches zero.
+    /// </remarks>
     [TestMethod]
-    public async Task Seed_WithAResolvableFile_LeavesNothingPendingAndNoAlerts()
+    public async Task Seed_WithAResolvableFile_LeavesOnlyKnownConflictsPendingAndOneAlert()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
@@ -1266,13 +1300,49 @@ public class DatabaseInitializerTests
             "The positive control: a resolvable file actually applies, so its quotes are in the database. "
             + "Without this, 'nothing pending' would also be true of a run that imported nothing at all.");
 
-        Assert.AreEqual(0, await StagedActionCountAsync(),
-            "A file whose conflicts its rule file resolves leaves no decision waiting.");
+        Assert.AreEqual(3, await StagedActionCountAsync(),
+            "A file whose conflicts its rule file resolves leaves only the three known, genuine tv-season ambiguities waiting.");
 
-        Assert.IsEmpty((await NotificationsAsync())
+        Assert.IsNotEmpty((await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending && !n.IsDismissed),
-            "And with nothing to review, no alert is raised — the accumulation the negative test shows is a "
-            + "property of the unresolved state, not of seeding.");
+            "With three genuine conflicts to review, an alert must be raised — that is the entire point of reporting them.");
+    }
+
+    /// <summary>
+    /// #374's own reproduction, run to completion: stable, not growing, across a cold start and two
+    /// reseeds of the same, unchanged file. Before steps 6-7, this was `0 / 22 / 44` — every reseed
+    /// re-staged the same conflicts because a rule that had already resolved something could never be
+    /// recognised as already applied, and a shared Source row could only hold one date.
+    /// </summary>
+    /// <remarks>
+    /// **Corrected 2026-09-04 — the count is 3, not 0, and that is correct, not a residual defect.**
+    /// The developer's own design decision the same day: "every time we don't know what to do with the
+    /// data that means we have a conflict to report." NikhilNamal17's three remaining Mr. Robot/Arrow
+    /// quotes (see <see cref="InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions"/>'s
+    /// own documented exceptions) carry a per-quote year that cannot be told apart from a genuinely new
+    /// season without Series data — a real, permanent ambiguity a curator must resolve, not a bug to
+    /// drive to zero. What actually matters, and what this test asserts, is that the count is *stable*:
+    /// reseeding unchanged content must never re-stage a duplicate Pending action on top of one already
+    /// awaiting review (found live: without the dedup check in `ImportActionPlanner`'s Add-branch, this
+    /// grew `3 → 6 → 9` — the exact accumulation pattern this whole issue exists to fix, just for a
+    /// newly-introduced mechanism rather than the original conflict-rule one).
+    /// </remarks>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        await db.InitialiseAsync();
+        int cold = await StagedActionCountAsync();
+
+        await db.ReseedAsync();
+        int reseed1 = await StagedActionCountAsync();
+
+        await db.ReseedAsync();
+        int reseed2 = await StagedActionCountAsync();
+
+        Assert.AreEqual(3, cold, "Three genuine, permanent tv-season ambiguities are correctly reported as conflicts on cold start");
+        Assert.AreEqual(cold, reseed1, "Reseeding unchanged content must not add anything beyond what is already correctly pending");
+        Assert.AreEqual(cold, reseed2, "A second reseed must not accumulate anything further");
     }
 
     /// <summary>
@@ -1465,17 +1535,54 @@ public class DatabaseInitializerTests
     /// <summary>#153: seeding NikhilNamal17 alone, under its real Review policy and real rule file, must
     /// produce zero Pending/Stale/Blocked actions — the same "no file left staged awaiting review"
     /// invariant CLAUDE.md's own live T2 checklist already asserts against the full bundled dataset.</summary>
+    /// <remarks>
+    /// #374: four specific, understood exceptions — genuine, permanent conflicts, not residual defects.
+    /// <para/>
+    /// One `Blocked`: NikhilNamal17's own raw data carries the identical "Hope is a good thing..." quote
+    /// twice — once under "Shawshank Redemption", once under "The Shawshank Redemption" — and this
+    /// file's own real alias file (nikhilnamal17-source-aliases.json) already merges those two titles
+    /// onto one canonical Source, so once Date joined a Source's natural key (step 6) and a quote became
+    /// unique per Source (step 7), the second occurrence collides and is correctly Blocked rather than
+    /// silently duplicated. There is no lower-friction fix available today:
+    /// NikhilNamal17_popular-movie-quotes.json is converter-generated (never hand-edited, CLAUDE.md), and
+    /// the existing ConflictResolutionRule mechanism resolves a field on one entity id, not a cross-id
+    /// content collision — matching the precedent CLAUDE.md's #219 already documents for a different
+    /// unresolvable-bundled-quote shape. The isolated-hold fix
+    /// (ImportActionResolutionCoordinator.TryApplyBatchAsync) is what keeps this one known exception from
+    /// blocking the other 1,175+ actions in this same batch.
+    /// <para/>
+    /// Three `Pending` (developer decision, 2026-09-04): two "Mr. Robot" quotes and one "Arrow" quote
+    /// each carry a per-quote year (2017) that disagrees with the show's other quotes (2015) — a
+    /// series-capable type with no Series data yet cannot tell "a genuinely new season" from "this one
+    /// quote's year is simply wrong" (#375 already established these specific years are the latter, not
+    /// season markers), so per the developer's stated principle ("every time we don't know what to do
+    /// with the data that means we have a conflict to report") these are correctly reported for a
+    /// curator to resolve, not silently split into a second Source (which would fragment the show — found
+    /// live: "Arrow" and "Mr. Robot" each split into two Source rows before this exception existed) nor
+    /// silently merged into the first (which would erase a difference that might, once Series data
+    /// exists, turn out to matter).
+    /// </remarks>
     [TestMethod]
     public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
 
+        HashSet<string> knownExceptionQuoteIds = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "7e53658c-0c3a-6546-8c12-c5e4af23c9f8", // Blocked: Shawshank duplicate (see remarks)
+            "779f3b34-37f6-8b48-864e-42d262129a3d", // Pending: Mr. Robot, disagreeing year
+            "e69951f1-4d01-964d-86d5-13f80f5bfd8a", // Pending: Mr. Robot, disagreeing year
+            "e41d0f7a-a39a-4346-a0dd-ca08efd75724", // Pending: Arrow, disagreeing year
+        };
+
         IReadOnlyList<ImportActionEntity> allActions = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items;
-        List<ImportActionEntity> unresolved = [.. allActions.Where(a => a.Status.Parsed is not (ImportActionStatus.Decided or ImportActionStatus.Applied))];
+        List<ImportActionEntity> unresolved = [.. allActions
+            .Where(a => a.Status.Parsed is not (ImportActionStatus.Decided or ImportActionStatus.Applied))
+            .Where(a => !knownExceptionQuoteIds.Contains(a.EntityId))];
 
         Assert.IsEmpty(unresolved,
-            $"Every action must auto-resolve under Review with the real rule file — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
+            $"Every action must auto-resolve under Review with the real rule file (the four known exceptions excepted) — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
     }
 
     /// <summary>#153: the Galadriel Custom rule (nikhilnamal17-conflict-rules.json) must correct the
@@ -1530,39 +1637,53 @@ public class DatabaseInitializerTests
         }
     }
 
-    /// <summary>#375: the one quote resolved by character alone keeps the show-level Source and gains only its speaker.</summary>
+    /// <summary>
+    /// #375: the one quote resolved by character alone would, absent any other issue, keep the
+    /// show-level Source and gain only its speaker.
+    /// </summary>
+    /// <remarks>
+    /// #374 (developer decision, 2026-09-04): this specific quote's own claimed year (2017) disagrees
+    /// with the show's other quotes (2015) — a series-capable Source with no Series data cannot tell
+    /// that apart from a genuinely new season, so it is now correctly reported as a conflict (`Pending`)
+    /// rather than silently applied. The quote is not in `Quotinator_Quote` at all until a curator
+    /// resolves it; this test now asserts the *staged* payload instead of a database row — the nearest
+    /// Source it would attach to, and the character it already carries, are both visible there.
+    /// </remarks>
     [TestMethod]
     public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_VeraQuoteGetsCharacterButKeepsShowLevelSource()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
 
+        const string quoteId = "e69951f1-4d01-964d-86d5-13f80f5bfd8a";
+        ImportActionEntity action = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items
+            .Single(a => a.EntityId.Equals(quoteId, StringComparison.OrdinalIgnoreCase) && a.EntityType == "Quote");
+
+        Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, "A disagreeing year must be reported as a conflict, not silently applied");
+        QuoteActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
+        Assert.AreEqual("Fernando Vera", payload.Fields.Character);
+
         using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
-
-        (string? character, string? title) = await conn.QuerySingleOrDefaultAsync<(string?, string?)>(
-            "SELECT c.Name, s.Title FROM Quotinator_Quote q " +
-            "JOIN Quotinator_Source s ON s.Id = q.SourceId AND s.IsDeleted = 0 " +
-            "LEFT JOIN Quotinator_Character c ON c.Id = q.CharacterId AND c.IsDeleted = 0 " +
-            "WHERE q.Id = 'e69951f1-4d01-964d-86d5-13f80f5bfd8a' AND q.IsDeleted = 0;");
-
-        Assert.AreEqual("Fernando Vera", character);
-        Assert.AreEqual("Mr. Robot", title, "Nearest-Source rule: no episode was identifiable, so the quote stays on the show-level Source.");
+        string? title = await conn.ExecuteScalarAsync<string?>(
+            "SELECT Title FROM Quotinator_Source WHERE Id = @sourceId AND IsDeleted = 0;", new { sourceId = payload.SourceId });
+        Assert.AreEqual("Mr. Robot", title, "Nearest-Source rule: no episode was identifiable, so the staged payload points at the show-level Source.");
     }
 
     /// <summary>
-    /// #375: the two quotes step 7 could not attribute to any episode keep the ordinary show-level
-    /// Source — the control proving the five rules above are additive, not a change to every Mr. Robot
-    /// or Arrow quote.
+    /// #375: the two quotes step 7 could not attribute to any episode would, absent any other issue,
+    /// keep the ordinary show-level Source — the control proving the five rules above are additive, not
+    /// a change to every Mr. Robot or Arrow quote.
     /// </summary>
+    /// <remarks>#374: both quotes' own years disagree with their show's other quotes — see
+    /// <see cref="InitialiseAsync_NikhilNamal17WithRealRuleFile_VeraQuoteGetsCharacterButKeepsShowLevelSource"/>'s
+    /// own remarks for why this is now a reported `Pending` conflict, checked via the staged payload
+    /// rather than a database row.</remarks>
     [TestMethod]
     public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_UnattributedQuotesKeepShowLevelSource()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
-
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync(TestContext.CancellationToken);
 
         (string QuoteId, string ExpectedTitle)[] cases =
         [
@@ -1570,13 +1691,19 @@ public class DatabaseInitializerTests
             ("e41d0f7a-a39a-4346-a0dd-ca08efd75724", "Arrow"),
         ];
 
+        IReadOnlyList<ImportActionEntity> allActions = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items;
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
         foreach ((string quoteId, string expectedTitle) in cases)
         {
-            string? title = await conn.ExecuteScalarAsync<string?>(
-                "SELECT s.Title FROM Quotinator_Quote q JOIN Quotinator_Source s ON s.Id = q.SourceId " +
-                "WHERE q.Id = @quoteId AND q.IsDeleted = 0 AND s.IsDeleted = 0;", new { quoteId });
+            ImportActionEntity action = allActions.Single(a => a.EntityId.Equals(quoteId, StringComparison.OrdinalIgnoreCase) && a.EntityType == "Quote");
+            Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, $"Quote '{quoteId}' has no episode-attribution rule and a disagreeing year — reported as a conflict, not silently applied");
 
-            Assert.AreEqual(expectedTitle, title, $"Quote '{quoteId}' has no episode-attribution rule and must stay on the show-level Source.");
+            QuoteActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
+            string? title = await conn.ExecuteScalarAsync<string?>(
+                "SELECT Title FROM Quotinator_Source WHERE Id = @sourceId AND IsDeleted = 0;", new { sourceId = payload.SourceId });
+            Assert.AreEqual(expectedTitle, title, $"Quote '{quoteId}' must still point at the show-level Source in its staged payload.");
         }
     }
 
@@ -1589,8 +1716,23 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(799, db.QuoteCount,     "Unique quotes");
-        Assert.AreEqual(482, db.SourceCount,    "Sources");
+        // #374: 798, not 799 — quotinator-curated.json's "Inigo Montoya" entry previously carried its
+        // own hand-invented id instead of the id NikhilNamal17's own entry for the identical quote
+        // already computes, in violation of CLAUDE.md's import-file-minimalism policy (a correction
+        // entry must reuse the id it's correcting, never mint a new one). Fixed by pointing the curated
+        // entry at the real id, which is what a `UNIQUE (QuoteText, SourceId)` index — added by this
+        // issue — surfaced: the two ids were always the same quote, just never recognised as one.
+        // #374: 792, not 798 — six tv quotes (Arrow/Game of Thrones/Mr. Robot/The Good Place, under
+        // AllFilesBatch's un-curated wiring) each carry a per-quote year that disagrees with their
+        // show's other quotes; a series-capable type with no Series data cannot tell that apart from a
+        // genuinely new season, so per the developer's decision these are reported as Pending conflicts
+        // rather than applied — see InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates' own count.
+        Assert.AreEqual(792, db.QuoteCount,     "Unique quotes");
+        // #374: 497, not 501 — the four tv titles above no longer fragment into a second Source row for
+        // their disagreeing year (the fragmentation this whole feature exists to prevent); the movie
+        // titles' own distinct-date variants are unaffected and still counted, matching
+        // SourceId_SameTitleAndTypeDifferentDate_DiffersById and SameTitleDifferentDate_ResolvesToTwoSources.
+        Assert.AreEqual(497, db.SourceCount,    "Sources");
         Assert.AreEqual(7,   db.CharacterCount, "Characters");
         Assert.AreEqual(3,   db.PeopleCount,    "People (Winston Churchill, Neil Armstrong, Martin Luther King Jr. — curated)");
     }
@@ -1637,8 +1779,17 @@ public class DatabaseInitializerTests
         // #373: 42, not 45. Three of the 45 cross-file duplicate occurrences are byte-identical to the
         // row already stored, so they are reported as unchanged rather than as writes that never
         // happen. The figure was 45 only because every duplicate was called a modification.
-        Assert.AreEqual(42, modified, "Cross-file duplicates that genuinely differ, resolved as modified Quote actions");
-        Assert.AreEqual(0, pending, "NewestWins always resolves deterministically — nothing pending");
+        // #374: 43, not 42 — quotinator-curated.json's "Inigo Montoya" entry now correctly reuses the
+        // id NikhilNamal17's own identical-text entry already computes (see SeedsExpectedCounts' own
+        // comment), so what was two separately-added quote rows is now one Add plus one genuine
+        // cross-file Modify (the curated file's own Character attribution).
+        Assert.AreEqual(43, modified, "Cross-file duplicates that genuinely differ, resolved as modified Quote actions");
+        // #374: 6, not 0 — a genuinely new season and a wrong per-quote year look identical without
+        // Series data, so this is reported as a conflict regardless of DuplicateResolutionPolicy (a
+        // fundamentally different ambiguity than the one that policy resolves). AllFilesBatch wires no
+        // rule file, so more of NikhilNamal17's tv quotes hit this than under the curated
+        // NikhilNamal17WithRuleFileBatch fixture (3 — see InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions).
+        Assert.AreEqual(6, pending, "Series-capable Sources with no Series data and a disagreeing year are reported as conflicts, independent of policy");
         Assert.AreEqual(0, blocked, "NewestWins never blocks — no Complete rows exist yet to block against");
     }
 
@@ -1675,16 +1826,31 @@ public class DatabaseInitializerTests
         int modified  = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Modified ?? 0);
         int newCount  = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.New ?? 0);
         int unchanged = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Unchanged ?? 0);
+        int pending   = preview.Reports.Sum(r => r.EntityTypes.GetValueOrDefault("Quote")?.Pending ?? 0);
 
         // #373 reversed this assertion, and the old figure is the clearest single statement of the
         // defect: all 844 were counted as *modified* against a database already seeded from these very
         // files. 799 unique quotes plus 45 cross-file duplicate occurrences (AllFilesBatch's own
         // vilaboim/NikhilNamal17 overlap) — every line matches a row that already exists.
-        Assert.AreEqual(759, unchanged, "Most quote lines match an already-existing row exactly");
-        Assert.AreEqual(85, modified,
-            "And 85 genuinely differ — the cross-file overlap where two source files disagree about the same quote");
-        Assert.AreEqual(844, unchanged + modified,
-            "799 unique quotes plus 45 cross-file duplicate occurrences, every one accounted for");
+        // #374: 767/71/6, not 759/85/0 — the 844 total is unaffected (still every raw line accounted
+        // for). 14 quotes that used to need a Modify (their own date disagreed with the one shared,
+        // wrongly-dated Source every same-titled quote pointed at) now resolve straight to Unchanged,
+        // because each one's date now selects its own correctly-dated Source variant (steps 6-7). Six
+        // tv quotes (Arrow/Mr. Robot/etc. — see InitialiseAsync_AllSourceFiles_SeedsExpectedCounts' own
+        // comment) were never applied in the first place (a genuine, permanent conflict, not a database
+        // row to compare against), so they preview as Pending rather than Unchanged/Modified/New.
+        Assert.AreEqual(767, unchanged, "Most quote lines match an already-existing row exactly");
+        Assert.AreEqual(71, modified,
+            "And 71 genuinely differ — the cross-file overlap where two source files disagree about the same quote");
+        // #374: 0, not 6 — a quote already reported as a Pending conflict by the earlier real seed is
+        // recognised as already-known (Sql.Quotes.SelectHasPendingActionById) and never re-staged, even
+        // during a preview — the same dedup that keeps a real reseed from accumulating duplicates
+        // (Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows) applies here too. The six known
+        // tv quotes are therefore omitted from this preview's report entirely, not counted as Pending in
+        // it — there is nothing new to preview about a conflict already on record.
+        Assert.AreEqual(0, pending, "An already-known Pending conflict has nothing new to preview and is omitted, not re-reported");
+        Assert.AreEqual(838, unchanged + modified + pending,
+            "798 unique quotes plus 46 cross-file duplicate occurrences, minus the six already-known tv conflicts this preview omits");
         Assert.AreEqual(0, newCount, "Nothing is genuinely new — the database was already fully seeded from the same files");
     }
 
@@ -1863,6 +2029,56 @@ public class DatabaseInitializerTests
         string? date = await conn.ExecuteScalarAsync<string?>(
             "SELECT Date FROM Quotinator_Source WHERE Title = 'Test Film' AND Type = 'Movie' AND IsDeleted = 0;");
         Assert.AreEqual("1999", date, "The dateless sources[] entry's Source must be backfilled from the later file's own dated quote");
+    }
+
+    /// <summary>
+    /// #374, verification row 31 — a single file's own quotes claim two different dates for the same
+    /// (Title, Type) Source, with no rule or alias resolving which is right. Step 6's own mechanism
+    /// already resolves this correctly (two distinct Source rows, nothing left pending — see
+    /// <see cref="ImportActionPlannerTests.SameTitleDifferentDate_ResolvesToTwoSources"/>); this test is
+    /// only about whether a curator is told, at cold start, rather than the disagreement staying silent
+    /// until a later reseed happens to surface it (step 1's original finding).
+    /// </summary>
+    [TestMethod]
+    public async Task ColdStart_WithAFileThatContradictsItself_ReportsIt()
+    {
+        string contradictingFile = Path.Combine(_tempDir, "self-contradicting.json");
+        File.WriteAllText(contradictingFile,
+            """
+            {"quotes":[
+                {"id":"e2111111-1111-4111-8111-111111111111","quote":"Great Scott!","originalLanguage":"en","source":"Back to the future","date":"1958","character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"e2211111-1111-4111-8111-111111111111","quote":"Roads? Where we're going, we don't need roads.","originalLanguage":"en","source":"Back to the future","date":"1985","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        SeedBatch batch = new SeedBatch([new SeedFile(contradictingFile, null)], ManifestPolicy.HardcodedDefault, "self-contradiction-test");
+        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], logger: logger);
+        await db.InitialiseAsync();
+
+        Assert.Contains(m => m.Contains("Back to the future", StringComparison.OrdinalIgnoreCase) && m.Contains('2'), logger.Messages,
+            "A file claiming two dates for the same title must be reported at cold start, not left silent until a later reseed");
+    }
+
+    /// <summary>The control for <see cref="ColdStart_WithAFileThatContradictsItself_ReportsIt"/> — a file with no such disagreement must not report one.</summary>
+    [TestMethod]
+    public async Task ColdStart_WithNoSelfContradiction_ReportsNothing()
+    {
+        string consistentFile = Path.Combine(_tempDir, "self-consistent.json");
+        File.WriteAllText(consistentFile,
+            """
+            {"quotes":[
+                {"id":"e2311111-1111-4111-8111-111111111111","quote":"Great Scott!","originalLanguage":"en","source":"Back to the Future","date":"1985","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        SeedBatch batch = new SeedBatch([new SeedFile(consistentFile, null)], ManifestPolicy.HardcodedDefault, "self-consistency-control-test");
+        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], logger: logger);
+        await db.InitialiseAsync();
+
+        Assert.IsEmpty(logger.Messages.Where(m => m.Contains("Back to the Future", StringComparison.OrdinalIgnoreCase)),
+            "A file with no date disagreement must not be reported as self-contradicting");
     }
 
     /// <summary>
@@ -2615,7 +2831,60 @@ public class DatabaseInitializerTests
 
         QuotinatorDatabaseInitializer db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(7, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+        Assert.AreEqual(9, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+    }
+
+    /// <summary>
+    /// #374, verification row 27 — a deliberately minimal fixture, not the bundled corpus (per the
+    /// row's own text: "the test keeps failing if the corpus changes"). Builds a database at exactly
+    /// v8 (Migration008 applied, Migration009 not yet), inserts a genuine
+    /// <c>(QuoteText, SourceId)</c> duplicate directly while no unique index exists to reject it, then
+    /// replays Migration009 alone against that pre-existing duplicate. Migration009's own dedup step
+    /// (an <c>ORDER BY rowid ASC LIMIT 1</c> correlated subquery, chosen specifically to avoid
+    /// <c>SqlAggregateGuard</c>'s CVE-2025-6965 heuristic — see the migration's own comment) must
+    /// collapse the duplicate to one row before <c>CREATE UNIQUE INDEX</c> runs, or the migration
+    /// itself would throw on the corpus's own real duplicate — exactly what step 7's implementation
+    /// found live against <c>InitialiseAsync_AllSourceFiles_SeedsExpectedCounts</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task Migration009_DeduplicatesBeforeCreatingTheUniqueIndex()
+    {
+        IReadOnlyList<SchemaMigration> migrationsThroughV8 = [.. QuotinatorMigrations.All.Where(m => m.Version <= 8)];
+        QuotinatorDatabaseInitializer dbAtV8 = CreateInitializer([], migrationsThroughV8, useBaseline: true);
+        await dbAtV8.InitialiseForTestingAsync(forceIncremental: true);
+        Assert.AreEqual(8, dbAtV8.SchemaVersion, "The fixture must stop exactly at v8, before Migration009 ever runs");
+
+        string sourceId = Guid.NewGuid().ToString("D");
+        string quoteIdA = Guid.NewGuid().ToString("D");
+        string quoteIdB = Guid.NewGuid().ToString("D");
+        string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync(TestContext.CancellationToken);
+            await conn.ExecuteAsync(
+                "INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated, IsDeleted) VALUES (@sourceId, 'Fixture Film', 'Movie', @now, 0);",
+                new { sourceId, now });
+            await conn.ExecuteAsync(
+                "INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, DateCreated, IsDeleted) VALUES (@id, @text, 'en', @sourceId, @now, 0);",
+                new { id = quoteIdA, text = "A duplicated line.", sourceId, now });
+            await conn.ExecuteAsync(
+                "INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, DateCreated, IsDeleted) VALUES (@id, @text, 'en', @sourceId, @now, 0);",
+                new { id = quoteIdB, text = "A duplicated line.", sourceId, now });
+        }
+
+        QuotinatorDatabaseInitializer dbToV9 = CreateInitializer([], QuotinatorMigrations.All, useBaseline: true);
+        await dbToV9.InitialiseForTestingAsync(forceIncremental: true);
+
+        Assert.AreEqual(9, dbToV9.SchemaVersion, "Migration009 must complete, not throw on the pre-existing duplicate");
+        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        await verifyConn.OpenAsync(TestContext.CancellationToken);
+        int remaining = await verifyConn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Quotinator_Quote WHERE QuoteText = @text AND SourceId = @sourceId;",
+            new { text = "A duplicated line.", sourceId });
+        Assert.AreEqual(1, remaining, "The duplicate must be collapsed to one row before the unique index is created");
+        List<string> indexNames = [.. (await verifyConn.QueryAsync<string>(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'Quotinator_Quote';"))];
+        Assert.Contains("UX_Quotinator_Quote_QuoteText_SourceId", indexNames, "The unique index must exist after Migration009");
     }
 
     /// <summary>
@@ -3294,11 +3563,12 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
         // The claim is that one collapsed row still reports the fully-migrated version, not that the
-        // version is any particular number — a literal here goes stale whenever a milestone adds a
-        // migration and gets "fixed" by editing the digit rather than by rechecking the collapse.
+        // version is any particular number — comparing against the real migration count (rather than a
+        // literal that silently goes stale whenever a milestone adds a migration) is what actually
+        // rechecks the collapse instead of just restating whatever number was last typed in here.
         Assert.IsGreaterThan(0, db.DataSchemaVersion,
             "The baseline must report a real version, or the single collapsed row above proves nothing.");
-        Assert.AreEqual(7, db.SchemaVersion);
+        Assert.AreEqual(Quotinator.Core.Database.QuotinatorMigrations.All.Count, db.SchemaVersion);
     }
 
     /// <summary>
@@ -3384,7 +3654,7 @@ public class DatabaseInitializerTests
 
         QuotinatorDatabaseInitializer db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(7, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+        Assert.AreEqual(9, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
     // ── #179 — Series/Universe schema, Character↔Source many-to-many ───────────

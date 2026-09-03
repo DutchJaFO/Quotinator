@@ -16,6 +16,17 @@ public static class EntityIdentity
     public static string SourceId(string title, string type) => StableId("source", title, type);
 
     /// <summary>
+    /// #374: the date-aware overload — used only when a second (or later) distinct dated variant of an
+    /// already-seen title needs its own id, distinguishing it from the first (which keeps the id
+    /// <see cref="SourceId(string, string)"/> above has always produced). <paramref name="date"/> is
+    /// <see langword="null"/> exactly when no such disambiguation is needed, in which case this
+    /// overload defers to the two-argument one and produces an <em>identical</em> hash — every
+    /// currently-existing Source keeps the id it already has.
+    /// </summary>
+    public static string SourceId(string title, string type, string? date) =>
+        date is null ? SourceId(title, type) : StableId("source", title, type, date);
+
+    /// <summary>
     /// Derives a stable id for a Character from the resolving Source's id, the Character's Name, and
     /// the resolving Source's Type. Used only as the fallback when <see cref="Quotinator.Core.Database.
     /// ImportActionPlanner.ResolveCharacterAsync"/> finds no existing match at all (ADR 013 Decision

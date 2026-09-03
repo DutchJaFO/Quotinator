@@ -38,7 +38,15 @@ public sealed class ConflictResolutionRule
     [JsonPropertyName("existingRecord")]
     public required JsonElement ExistingRecord { get; init; }
 
-    /// <summary>The incoming (this source file's own) side's complete field set, recorded at the time this rule was authored. See <see cref="ExistingRecord"/>.</summary>
+    /// <summary>
+    /// The incoming (this source file's own) side's complete field set, recorded at the time this rule
+    /// was authored — same shape and same human-review purpose as <see cref="ExistingRecord"/>, but
+    /// unlike it, **this one is read by the matching logic** (#374): <see cref="ConflictRuleLookup.TryResolve"/>
+    /// compares each governed field's currently-recorded value here against the live import's own
+    /// incoming value to decide whether the rule has gone stale, or is a candidate for retirement. It is
+    /// the only signal that can tell a curator a rule has become redundant — see
+    /// <see cref="ConflictRuleOutcome"/>.
+    /// </summary>
     [JsonPropertyName("incomingRecord")]
     public required JsonElement IncomingRecord { get; init; }
 

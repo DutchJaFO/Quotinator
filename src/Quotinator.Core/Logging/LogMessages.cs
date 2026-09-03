@@ -38,6 +38,24 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Seed] genre re-seed complete — {Count} genre rows processed")]
     public static partial void LogGenreReseedComplete(this ILogger logger, int count);
 
+    /// <summary>
+    /// #374, step 9 — a single file's own quotes claimed more than one date for the same (Title, Type)
+    /// Source in this one import. Each is resolved to its own correct, distinct Source row (step 6's
+    /// own mechanism); this only makes the disagreement visible at cold start, where it was previously
+    /// silent until a later reseed's own accumulation happened to surface it (step 1's original finding).
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Seed] {File} claims {VariantCount} different dates for \"{Title}\" ({Type}) — each resolved to its own Source; verify this is genuinely {VariantCount} distinct works and not a wrong date")]
+    public static partial void LogSourceDateContradiction(this ILogger logger, string file, string title, string type, int variantCount);
+
+    /// <summary>
+    /// #374, step 10 — a conflict-resolution rule's own incoming side has moved into agreement with what
+    /// the rule would produce anyway, which is advice about the rule file, not a defect in this row (the
+    /// row itself still stages Stale for review, unaffected). Endorsed as a feature (developer,
+    /// 2026-09-03): "helps improve the rules as incoming data is updated."
+    /// </summary>
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Seed] {File} — a conflict rule for {EntityType} {EntityId}, field \"{Field}\", is retirable: the incoming data now agrees with the rule's own outcome, so the rule can be removed")]
+    public static partial void LogRetirableRule(this ILogger logger, string file, string entityType, string entityId, string field);
+
     /// <summary>Logs the final per-entity-type row-count statistics after seeding.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message =
         "[Database - Stats] {Quotes} quotes  {Sources} sources  {Characters} characters  {People} people  " +

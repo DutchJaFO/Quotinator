@@ -178,14 +178,14 @@ public class ImportBatchesTests
         }
     }
 
-    /// <summary>App schema migration version is bumped to 5 after <c>InitialiseAsync</c>.</summary>
+    /// <summary>App schema migration version is bumped to 9 after <c>InitialiseAsync</c>.</summary>
     [TestMethod]
     public async Task Schema_MigrationVersion_IsBumped()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(7, db.SchemaVersion, "SchemaVersion should be 7: #155's consolidation of migrations 4-11 into one (4), #289's consolidation of #150's ImportBatches.ConflictPolicy CHECK constraint migration and #254's domain-prefix rename into one (5), then #375's Season table (6) and the Source.SeasonId link (7)");
+        Assert.AreEqual(9, db.SchemaVersion, "SchemaVersion should be 9: #155's consolidation of migrations 4-11 into one (4), #289's consolidation of #150's ImportBatches.ConflictPolicy CHECK constraint migration and #254's domain-prefix rename into one (5), then #375's Season table (6) and the Source.SeasonId link (7), then #374's Source date-in-key rebuild (8) and Quote-unique-per-Source index (9)");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────

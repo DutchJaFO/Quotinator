@@ -35,6 +35,33 @@ internal static class Sql
             "(Id, QuoteText, OriginalLanguage, SourceId, CharacterId, PersonId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
             "VALUES (@Id, @QuoteText, @OriginalLanguage, @SourceId, @CharacterId, @PersonId, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
 
+        /// <summary>
+        /// #374: a brand-new quote id's own text+Source may already belong to a different,
+        /// already-existing quote row — two independently-computed <c>QuoteIdentity.StableId</c> values
+        /// can collide on content alone (e.g. after an alias resolves two originally-different Source
+        /// titles onto the same canonical row). Consulted before staging a plain Add, so the conflict is
+        /// surfaced for review at planning time rather than silently dropped by <see cref="Insert"/>'s
+        /// own <c>OR IGNORE</c> at apply time (which exists for re-applying the *same* id, not for
+        /// tolerating a different id's content collision). Case-insensitive per CLAUDE.md's
+        /// comparison-default (deliberately a shade broader than the <c>UNIQUE (QuoteText, SourceId)</c>
+        /// index itself, which is case-sensitive — a case-only "collision" this catches but the index
+        /// would not is at worst an extra review a curator dismisses, never a missed real one).
+        /// </summary>
+        internal static readonly string SelectExistingIdByTextAndSource =
+            $"SELECT {IdClauses.SelectColumn("Id")} FROM Quotinator_Quote WHERE {TextClauses.Equals("QuoteText", "quoteText")} AND {IdClauses.Equals("SourceId", "sourceId")} AND IsDeleted = 0 LIMIT 1;";
+
+        /// <summary>
+        /// #374: a quote id already has an unresolved `Pending` action staged in an earlier batch (e.g.
+        /// a series-capable Source's date conflict — see <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s
+        /// `dateNeedsReview` handling). A reseed that never applies that action would otherwise re-plan
+        /// the same never-before-seen-in-Quotinator_Quote id every time and stage a brand-new duplicate
+        /// Pending action on top of the still-unresolved one, growing without bound — exactly the
+        /// accumulation pattern this issue exists to fix, just for a different mechanism than the
+        /// original conflict-rule staleness. Consulted before staging a new Pending Add.
+        /// </summary>
+        internal static readonly string SelectHasPendingActionById =
+            $"SELECT COUNT(*) FROM Import_Action WHERE EntityType = 'Quote' AND {IdClauses.Equals("EntityId", "id")} AND Status = 'Pending';";
+
         /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state; also used to read a fresh Add's just-inserted defaults. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark; #210 extends this to Quote.</summary>
         internal static readonly string SelectCompletenessById =
             $"SELECT CompletenessStatus, NoValueKnown FROM Quotinator_Quote WHERE {IdClauses.Equals("Id", "id")};";
@@ -419,6 +446,18 @@ internal static class Sql
         /// <see cref="SelectIdByTitleAndType"/>'s own remark for why.
         /// </summary>
         internal static readonly string SelectExistingByTitleAndType =
+            $"SELECT {IdClauses.SelectColumn("Id")}, Date, {IdClauses.SelectColumn("SeriesId")}, {IdClauses.SelectColumn("SeasonId")}, CompletenessStatus FROM Quotinator_Source WHERE {TextClauses.Equals("Title", "title")} AND {TextClauses.Equals("Type", "type")} AND IsDeleted = 0;";
+
+        /// <summary>
+        /// #374: the multi-row sibling of <see cref="SelectExistingByTitleAndType"/> — once <c>Date</c>
+        /// joins a Source's natural key, more than one row can share a (Title, Type) pair, each a
+        /// distinct dated variant (or, rarely, one date-less placeholder awaiting a date). Used by
+        /// <c>ImportActionPlanner.ResolveSourceAsync</c>, which picks the specific variant a given
+        /// quote's own date claim belongs to; every other <c>Title</c>/<c>Type</c> consumer in this
+        /// project still expects at most one row and keeps using <see cref="SelectExistingByTitleAndType"/>
+        /// unchanged. Same columns, same case-insensitive matching, no row limit.
+        /// </summary>
+        internal static readonly string SelectAllExistingByTitleAndType =
             $"SELECT {IdClauses.SelectColumn("Id")}, Date, {IdClauses.SelectColumn("SeriesId")}, {IdClauses.SelectColumn("SeasonId")}, CompletenessStatus FROM Quotinator_Source WHERE {TextClauses.Equals("Title", "title")} AND {TextClauses.Equals("Type", "type")} AND IsDeleted = 0;";
 
         /// <summary>

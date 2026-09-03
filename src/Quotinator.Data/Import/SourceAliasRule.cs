@@ -19,6 +19,15 @@ public sealed class SourceAliasRule
     [JsonPropertyName("type")]
     public required string Type { get; init; }
 
+    /// <summary>
+    /// #374: optional. The raw date this alias targets, when the same wrong (title, type) is claimed
+    /// with more than one date and only one of them needs this correction. <see langword="null"/> means
+    /// this alias applies regardless of the incoming quote's date — the pre-#374 behaviour, and every
+    /// alias file shipped before this field existed.
+    /// </summary>
+    [JsonPropertyName("date")]
+    public string? Date { get; init; }
+
     /// <summary>The correct title to resolve/create the Source under instead.</summary>
     [JsonPropertyName("canonicalTitle")]
     public required string CanonicalTitle { get; init; }
@@ -26,4 +35,12 @@ public sealed class SourceAliasRule
     /// <summary>The correct type to resolve/create the Source under instead.</summary>
     [JsonPropertyName("canonicalType")]
     public required string CanonicalType { get; init; }
+
+    /// <summary>
+    /// #374: optional. The correct date to resolve/create the Source under instead, when a Source's own
+    /// date (not just its title) needs correcting. <see langword="null"/> leaves the incoming quote's
+    /// own date untouched.
+    /// </summary>
+    [JsonPropertyName("canonicalDate")]
+    public string? CanonicalDate { get; init; }
 }

@@ -74,7 +74,7 @@
       "translations": {}
     },
     {
-      "id": "f3557c41-4d2e-4145-82f5-7f0ea4df5d7f",
+      "id": "da53310a-21c1-4742-a0b6-bcd981f926ca",
       "quote": "Hello. My name is Inigo Montoya. You killed my father. Prepare to die.",
       "originalLanguage": "en",
       "source": "The Princess Bride",
@@ -259,7 +259,7 @@
       "description": "Inigo Montoya's revenge",
       "lines": [
         { "order": 1, "type": "stage_direction", "stageDirectionId": "8206c30d-02e2-4320-a330-895e65b1dad3" },
-        { "order": 2, "type": "quote", "quoteId": "f3557c41-4d2e-4145-82f5-7f0ea4df5d7f" }
+        { "order": 2, "type": "quote", "quoteId": "da53310a-21c1-4742-a0b6-bcd981f926ca" }
       ]
     },
     {

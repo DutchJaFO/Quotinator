@@ -307,6 +307,41 @@ public sealed class QuotinatorDatabaseInitializer(
     }
 
     /// <summary>
+    /// #374, step 9 — a self-contradicting file (the same raw title claimed under more than one date,
+    /// with no rule or alias resolving which is right) is handled correctly by
+    /// <c>ImportActionPlanner.ResolveSourceAsync</c> already: each date resolves to its own, distinct
+    /// Source row rather than corrupting the first. This makes that outcome visible at cold start
+    /// instead of leaving it silent (step 1's original finding: it only became visible on a later
+    /// reseed, once the accumulated rows were already there to compare against). Reporting-only — it
+    /// changes nothing about which rows get created, only whether anyone is told.
+    /// </summary>
+    /// <param name="fileName">The seed file whose own actions are being checked.</param>
+    /// <param name="actions">Every action this file's import staged.</param>
+    private void ReportSelfContradictingSources(string fileName, IReadOnlyList<ImportActionEntity> actions)
+    {
+        IEnumerable<IGrouping<(string Title, string Type), SourceActionPayloadDto>> addedSources = actions
+            .Where(a => a.EntityType == ImportActionEntityTypes.Source && a.ActionType.Parsed == ImportActionKind.Add)
+            .Select(a => JsonSerializer.Deserialize<SourceActionPayloadDto>(a.IncomingValue!)!)
+            .GroupBy(s => (s.Title, s.Type), new TitleTypeComparer());
+
+        foreach (IGrouping<(string Title, string Type), SourceActionPayloadDto> group in addedSources)
+        {
+            if (group.Count() <= 1) continue;
+            Logger.LogSourceDateContradiction(fileName, group.Key.Title, group.Key.Type, group.Count());
+        }
+    }
+
+    private sealed class TitleTypeComparer : IEqualityComparer<(string Title, string Type)>
+    {
+        public bool Equals((string Title, string Type) x, (string Title, string Type) y)
+            => string.Equals(x.Title, y.Title, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(x.Type, y.Type, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string Title, string Type) obj)
+            => HashCode.Combine(obj.Title.ToUpperInvariant(), obj.Type.ToUpperInvariant());
+    }
+
+    /// <summary>
     /// The <c>System_AppVersion</c> row a notification written from here is attributed to, recording
     /// the running version first when nothing has been recorded yet (#302).
     /// <para>
@@ -571,11 +606,13 @@ public sealed class QuotinatorDatabaseInitializer(
                 string batchIdStr  = importBatch.Id.ToCanonicalId();
 
                 IReadOnlyList<ImportActionEntity> actions;
+                List<RetirableRuleFinding> retirableRuleFindings = [];
                 using (SqliteTransaction tx = connection.BeginTransaction())
                 {
                     actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx,
                         parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
-                        parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases, parsed.Seasons);
+                        parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases, parsed.Seasons,
+                        retirableRuleFindings);
                     await _actionCoordinator.StageAsync(actions, connection, tx);
                     tx.Commit();
                 }
@@ -584,9 +621,21 @@ public sealed class QuotinatorDatabaseInitializer(
                 reports.Add(report);
                 if (Logger.IsEnabled(LogLevel.Information))
                     Logger.LogFileReport(fileName, FormatReport(report));
+                ReportSelfContradictingSources(fileName, actions);
+                foreach (RetirableRuleFinding finding in retirableRuleFindings)
+                    Logger.LogRetirableRule(fileName, finding.EntityType, finding.EntityId, finding.Field);
 
                 ImportActionBatchStatusResponse? applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Seed);
-                if (applyResult is null)
+
+                // #374: `applyResult is null` alone no longer means "every action in this batch is
+                // resolved" — TryApplyBatchAsync's isolated hold lets an unrelated Blocked/Pending Add
+                // (e.g. a quote-uniqueness collision, or a series-capable Source's own date conflict)
+                // apply everything else around it instead of holding the whole batch, so `null` can come
+                // back with that one action still genuinely outstanding. Checked directly against the
+                // actions this same batch staged, not re-derived from applyResult's own (now narrower)
+                // list, so the alert and the purge-eligibility below see the true remaining state.
+                bool hasOutstandingReviewItems = actions.Any(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale);
+                if (applyResult is null && !hasOutstandingReviewItems)
                 {
                     int imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
                     int updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
@@ -636,7 +685,12 @@ public sealed class QuotinatorDatabaseInitializer(
                 else
                 {
                     stagedFiles.Add(fileName);
-                    Logger.LogFileStagedAwaitingReview(fileName, batchIdStr, applyResult.PendingActionIds.Count);
+                    // #374: applyResult can be null here (an isolated hold applied everything else in
+                    // the batch) — the count then comes from the actions this batch actually staged,
+                    // the same source hasOutstandingReviewItems above already checked.
+                    int outstandingCount = applyResult?.PendingActionIds.Count
+                        ?? actions.Count(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale);
+                    Logger.LogFileStagedAwaitingReview(fileName, batchIdStr, outstandingCount);
 
                     // Ungated for the same reason as the confirmation above (#303): a first install whose
                     // bundled content staged conflicts genuinely has something to review, and the startup

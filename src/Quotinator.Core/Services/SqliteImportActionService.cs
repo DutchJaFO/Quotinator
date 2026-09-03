@@ -1602,6 +1602,13 @@ public sealed class SqliteImportActionService(
         if (action.Status.Parsed != ImportActionStatus.Pending)
             return [];
 
+        // #374: a Pending Add (e.g. a series-capable Source's own date conflict) has no existing row to
+        // diff against — the reviewer is deciding where the whole new row belongs, not resolving a
+        // per-field disagreement on an existing one. Every other Pending action pairs with Modify and
+        // always carries a real ExistingValue, so this is the only case with nothing to compute here.
+        if (action.ExistingValue is null)
+            return [];
+
         IReadOnlyDictionary<string, object?> existing;
         IReadOnlyDictionary<string, object?> incoming;
 

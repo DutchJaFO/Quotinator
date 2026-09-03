@@ -563,7 +563,7 @@ public class SqliteImportActionServiceTests
         Guid batch1 = Guid.NewGuid();
         Guid batch2 = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote("61111111-1111-4111-8111-111111111111", character: "Rick Blaine")], batch1, DuplicateResolutionPolicy.NewestWins);
-        await PlanAndStageAsync([BuildQuote("71111111-1111-4111-8111-111111111111", character: "Ilsa Lund")], batch2, DuplicateResolutionPolicy.NewestWins);
+        await PlanAndStageAsync([BuildQuote("71111111-1111-4111-8111-111111111111", character: "Ilsa Lund", quoteText: "We'll always have Paris.")], batch2, DuplicateResolutionPolicy.NewestWins);
 
         await _service.ApplyBatchAsync(batch1.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
         await _service.ApplyBatchAsync(batch2.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
@@ -676,6 +676,46 @@ public class SqliteImportActionServiceTests
 
         Assert.AreEqual("Pending", quoteItem.Status);
         Assert.Contains("quoteText", [.. quoteItem.AmbiguousFields]);
+    }
+
+    /// <summary>
+    /// Found live (T2 Docker verification, #374) — a real NikhilNamal17 reseed with a genuine tv
+    /// second-date conflict crashed <c>GET /import/actions</c> with a 500 (<c>ArgumentNullException</c>
+    /// on a null <c>ExistingValue</c>) because <c>ComputeAmbiguousFields</c> assumed every Pending action
+    /// is a Modify with two rows to diff. A Pending Add has no existing row at all — the reviewer is
+    /// deciding where the whole new quote belongs, not resolving a per-field disagreement.
+    /// </summary>
+    [TestMethod]
+    public async Task GetPagedAsync_PendingAdd_AmbiguousFieldsIsEmpty()
+    {
+        SourceQuoteDto q1 = new()
+        {
+            Id = "d1111111-1111-4111-8111-111111111111",
+            QuoteText = "Oliver Queen's line.",
+            OriginalLanguage = "en",
+            Source = "Arrow",
+            Character = "Oliver Queen",
+            Date = "2015",
+            Type = QuoteType.Tv,
+        };
+        SourceQuoteDto q2 = new()
+        {
+            Id = "d2111111-1111-4111-8111-111111111111",
+            QuoteText = "Felicity Smoak's line.",
+            OriginalLanguage = "en",
+            Source = "Arrow",
+            Character = "Felicity Smoak",
+            Date = "2017",
+            Type = QuoteType.Tv,
+        };
+
+        Guid batchId = Guid.NewGuid();
+        await PlanAndStageAsync([q1, q2], batchId, DuplicateResolutionPolicy.NewestWins);
+
+        PagedItems<ImportActionSummaryResponse> page = await _service.GetPagedAsync(batchId.ToString("D").ToUpperInvariant(), null, null, 1, 50, TestContext.CancellationToken);
+        ImportActionSummaryResponse pendingQuote = page.Items.Single(i => i.EntityType == "Quote" && i.Status == "Pending");
+
+        Assert.IsEmpty(pendingQuote.AmbiguousFields, "A Pending Add has no existing row to diff against");
     }
 
     [TestMethod]
@@ -869,7 +909,7 @@ public class SqliteImportActionServiceTests
         // id means only the Conversation and Quote are genuinely new here; the StageDirection Add is
         // skipped (already exists), matching how re-seeding avoids duplicating a reused stage direction.
         Guid newerBatchId = Guid.NewGuid();
-        SourceQuoteDto quote2 = BuildQuote(quote2Id);
+        SourceQuoteDto quote2 = BuildQuote(quote2Id, quoteText: "We'll always have Paris.");
         SourceConversationDto conversation2 = new SourceConversationDto
         {
             Id = conversation2Id,
@@ -935,7 +975,7 @@ public class SqliteImportActionServiceTests
         Guid olderBatch = Guid.NewGuid();
         Guid newerBatch = Guid.NewGuid();
         await PlanAndStageAsync([BuildQuote(olderId, character: "Rick Blaine")], olderBatch, DuplicateResolutionPolicy.NewestWins);
-        await PlanAndStageAsync([BuildQuote(newerId, character: "Ilsa Lund")], newerBatch, DuplicateResolutionPolicy.NewestWins);
+        await PlanAndStageAsync([BuildQuote(newerId, character: "Ilsa Lund", quoteText: "We'll always have Paris.")], newerBatch, DuplicateResolutionPolicy.NewestWins);
         await _service.ApplyBatchAsync(olderBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
         await _service.ApplyBatchAsync(newerBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
 
@@ -1134,7 +1174,7 @@ public class SqliteImportActionServiceTests
     public async Task ReverseBatchAsync_NotTopOfStack_ThrowsImportBatchStateException()
     {
         Guid olderBatch = await StageAndApplyAsync(BuildQuote("ac111111-1111-4111-8111-111111111111", character: "Rick Blaine"), DuplicateResolutionPolicy.NewestWins);
-        await StageAndApplyAsync(BuildQuote("ad111111-1111-4111-8111-111111111111", character: "Ilsa Lund"), DuplicateResolutionPolicy.NewestWins);
+        await StageAndApplyAsync(BuildQuote("ad111111-1111-4111-8111-111111111111", character: "Ilsa Lund", quoteText: "We'll always have Paris."), DuplicateResolutionPolicy.NewestWins);
 
         ImportBatchStateException ex = await Assert.ThrowsExactlyAsync<ImportBatchStateException>(
             () => _service.ReverseBatchAsync(olderBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken));
@@ -1145,7 +1185,7 @@ public class SqliteImportActionServiceTests
     public async Task ReverseBatchAsync_TopOfStack_ThenNextOldest_BothSucceedInOrder()
     {
         Guid olderBatch = await StageAndApplyAsync(BuildQuote("ae111111-1111-4111-8111-111111111111", character: "Rick Blaine"), DuplicateResolutionPolicy.NewestWins);
-        Guid newerBatch = await StageAndApplyAsync(BuildQuote("af111111-1111-4111-8111-111111111111", character: "Ilsa Lund"), DuplicateResolutionPolicy.NewestWins);
+        Guid newerBatch = await StageAndApplyAsync(BuildQuote("af111111-1111-4111-8111-111111111111", character: "Ilsa Lund", quoteText: "We'll always have Paris."), DuplicateResolutionPolicy.NewestWins);
 
         await _service.ReverseBatchAsync(newerBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
         await _service.ReverseBatchAsync(olderBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);

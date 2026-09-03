@@ -50,10 +50,25 @@ internal static class ImportActionPlanner
         IReadOnlyList<CharacterEntryDto>? characters = null,
         ConflictRuleLookup? conflictRules = null,
         SourceAliasLookup? sourceAliases = null,
-        IReadOnlyList<SeasonEntryDto>? seasons = null)
+        IReadOnlyList<SeasonEntryDto>? seasons = null,
+        List<RetirableRuleFinding>? retirableRuleFindings = null)
     {
         List<ImportActionEntity> actions = [];
         Dictionary<string, string> sourceIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // #374: date joins a Source's natural key, so more than one row can now share (Title, Type).
+        // sourceIndex above still maps a key to a single id, for every consumer that has never needed
+        // more than one Source per title (PlanSourcesAsync's own sources[] declarations included) —
+        // these two structures are ResolveSourceAsync's own, tracking every dated variant seen so far
+        // in this run so a second quote's differing date is never silently matched against the first
+        // quote's not-yet-persisted row, and which variant ids have already had an action staged for
+        // them this run so a repeat quote for an already-settled variant stages nothing further.
+        Dictionary<string, List<SourceVariant>> sourceVariantsByKey = new Dictionary<string, List<SourceVariant>>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> stagedSourceVariantIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // #374: a quote is unique per Source. Two brand-new quote ids within this same batch can
+        // collide on (QuoteText, SourceId) before either has reached the database — tracked here so the
+        // second one is still caught, the same way stagedSourceVariantIds catches a same-batch Source
+        // collision the database itself cannot yet see.
+        HashSet<string> stagedQuoteTextsBySource = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, string> characterIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, string> personIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, string> seriesIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -68,18 +83,18 @@ internal static class ImportActionPlanner
         // #180: Universe then Series are planned before Source — a declared series[] entry's own
         // universeName must resolve against an already-built universe index, and a sources[] entry's
         // seriesName must resolve against an already-built series index.
-        await PlanUniverseAsync(connection, universe ?? [], batchIdStr, policy, universeIndex, actions, now, transaction, conflictRules);
-        await PlanSeriesAsync(connection, series ?? [], batchIdStr, policy, universeIndex, seriesIndex, actions, now, transaction, conflictRules);
+        await PlanUniverseAsync(connection, universe ?? [], batchIdStr, policy, universeIndex, actions, now, transaction, conflictRules, retirableRuleFindings);
+        await PlanSeriesAsync(connection, series ?? [], batchIdStr, policy, universeIndex, seriesIndex, actions, now, transaction, conflictRules, retirableRuleFindings);
 
         // #375: Seasons follow Series for the same reason — a declared seasons[] entry's seriesName must
         // resolve against an already-built series index, and a sources[] entry's seasonNumber against
         // an already-built season index.
-        await PlanSeasonsAsync(connection, seasons ?? [], batchIdStr, policy, seriesIndex, seasonIndex, actions, now, transaction, conflictRules);
+        await PlanSeasonsAsync(connection, seasons ?? [], batchIdStr, policy, seriesIndex, seasonIndex, actions, now, transaction, conflictRules, retirableRuleFindings);
 
         // #162: explicit Source declarations are planned before quotes resolve — a quote may
         // reference a source this same file also declares explicitly, mirroring the existing
         // conversations/stageDirections/soundCues ordering.
-        await PlanSourcesAsync(connection, sources ?? [], batchIdStr, policy, sourceIndex, seriesIndex, seasonIndex, actions, now, transaction, conflictRules);
+        await PlanSourcesAsync(connection, sources ?? [], batchIdStr, policy, sourceIndex, seriesIndex, seasonIndex, actions, now, transaction, conflictRules, retirableRuleFindings);
 
         // #173: same reasoning as Source above — a quote's author may reference a person this same
         // file also declares explicitly via people[].
@@ -122,7 +137,7 @@ internal static class ImportActionPlanner
             // bug this closes (a rule that only corrected the displayed field left the quote linked to
             // a spurious, alias-derived Source row).
             bool sourceAliasStale = false;
-            if (sourceAliases is not null && sourceAliases.TryResolve(q.Source, q.Type.ToString(), out (string CanonicalTitle, string CanonicalType) canonical))
+            if (sourceAliases is not null && sourceAliases.TryResolve(q.Source, q.Type.ToString(), q.Date, out (string CanonicalTitle, string CanonicalType, string? CanonicalDate) canonical))
             {
                 // #153: staleness here means "this alias's canonical target was renamed/changed since
                 // the alias was authored" — NOT "no Source with this exact title exists yet." Those
@@ -145,7 +160,13 @@ internal static class ImportActionPlanner
                 // canonical pair, a rename genuinely happened and the alias is stale. If no row with
                 // that id exists at all, nothing has been renamed — this is simply the first time this
                 // canonical Source is being introduced, exactly what the alias exists to guide.
-                string canonicalId = EntityIdentity.SourceId(canonical.CanonicalTitle, canonical.CanonicalType);
+                // #374: a dated alias (CanonicalDate set) targets a specific second-or-later variant —
+                // the same reason a date was needed to disambiguate the raw side in the first place — so
+                // the 3-arg id form is the correct match for ResolveSourceAsync's own creation
+                // convention. A date-less alias keeps the original 2-arg form unchanged.
+                string canonicalId = canonical.CanonicalDate is null
+                    ? EntityIdentity.SourceId(canonical.CanonicalTitle, canonical.CanonicalType)
+                    : EntityIdentity.SourceId(canonical.CanonicalTitle, canonical.CanonicalType, canonical.CanonicalDate);
                 (string Title, string Type, bool Found, string? IndexedId) canonicalRow = sourceIndex.TryGetValue($"{canonical.CanonicalTitle}|{canonical.CanonicalType}", out string? indexedId)
                     ? (Title: canonical.CanonicalTitle, Type: canonical.CanonicalType, Found: true, IndexedId: (string?)indexedId)
                     : await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
@@ -167,7 +188,7 @@ internal static class ImportActionPlanner
                         QuoteText = q.QuoteText,
                         OriginalLanguage = q.OriginalLanguage,
                         Source = canonical.CanonicalTitle,
-                        Date = q.Date,
+                        Date = canonical.CanonicalDate ?? q.Date,
                         Character = q.Character,
                         Author = q.Author,
                         Type = QuoteSeedWriter.ParseQuoteType(canonical.CanonicalType),
@@ -197,8 +218,8 @@ internal static class ImportActionPlanner
                 Dictionary<string, FieldMergeDecision>? customDecisions = null;
                 foreach (string field in rawFields.Keys)
                 {
-                    if (conflictRules.TryResolve(q.Id, field, rawFields[field], rawFields[field], out FieldMergeDecision decision, out bool isStale)
-                        && !isStale && decision.Choice == FieldResolutionChoice.Custom)
+                    if (conflictRules.TryResolve(q.Id, field, rawFields[field], rawFields[field], out FieldMergeDecision decision, out ConflictRuleOutcome outcome)
+                        && outcome is ConflictRuleOutcome.Apply or ConflictRuleOutcome.AlreadyApplied && decision.Choice == FieldResolutionChoice.Custom)
                     {
                         (customDecisions ??= new Dictionary<string, FieldMergeDecision>(StringComparer.OrdinalIgnoreCase))[field] = decision;
                     }
@@ -211,7 +232,7 @@ internal static class ImportActionPlanner
                 }
             }
 
-            string sourceId = await ResolveSourceAsync(connection, q, sourceIndex, batchIdStr, actions, now, transaction);
+            (string sourceId, bool dateNeedsReview) = await ResolveSourceAsync(connection, q, sourceIndex, sourceVariantsByKey, stagedSourceVariantIds, batchIdStr, actions, now, transaction);
             string? characterId = await ResolveCharacterAsync(connection, q, sourceId, characterIndex, batchIdStr, actions, now, transaction);
             string? personId = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
 
@@ -221,15 +242,14 @@ internal static class ImportActionPlanner
 
             if (existing is null)
             {
-                // #153: a stale alias substitution left this quote's Source resolution unreliable —
-                // never registered as a confirmed same-batch reference (matching how a Pending Modify
-                // is never registered either), so a later quote in this same batch referencing this id
-                // re-checks against real DB state rather than this unconfirmed one.
-                if (!sourceAliasStale)
-                {
-                    seenQuotes[q.Id] = q;
-                    seenQuoteStatus[q.Id] = CompletenessStatus.Incomplete;
-                }
+                // #374: a Pending action is never applied, so a quote reported for this reason on an
+                // earlier reseed still has no row in Quotinator_Quote and would otherwise look
+                // "never-before-seen" again on every later reseed — staging a fresh duplicate Pending
+                // action on top of the still-unresolved one and growing without bound. Checked first, so
+                // an already-reported conflict is recognised before any of the branches below run.
+                if (dateNeedsReview && await connection.ExecuteScalarAsync<int>(Sql.Quotes.SelectHasPendingActionById, new { id = q.Id }, transaction) > 0)
+                    continue;
+
                 QuoteActionPayloadDto payload = new QuoteActionPayloadDto
                 {
                     Fields = QuoteFieldMerge.ToDto(q),
@@ -237,7 +257,56 @@ internal static class ImportActionPlanner
                     CharacterId = characterId,
                     PersonId = personId,
                 };
-                ImportActionStatus addStatus = sourceAliasStale ? ImportActionStatus.Stale : ImportActionStatus.Decided;
+
+                // #374: this id has never been seen, but its own (QuoteText, SourceId) may already
+                // belong to a different quote — two independently-computed QuoteIdentity.StableId
+                // values can collide on content alone (most often after an alias resolves two
+                // originally-different Source titles onto one canonical row). Checked against both this
+                // same batch's own staged Adds (not yet in the database) and the database itself, but
+                // only when this quote isn't already headed for review via a stale alias or an unresolved
+                // Source date — either already holds the action, and stacking a second, unrelated review
+                // reason on top would only obscure which one actually needs the curator's attention.
+                bool collidesWithinBatch = false;
+                string? collidingExistingId = null;
+                if (!sourceAliasStale && !dateNeedsReview)
+                {
+                    string quoteTextKey = $"{sourceId}|{q.QuoteText}";
+                    collidesWithinBatch = !stagedQuoteTextsBySource.Add(quoteTextKey);
+                    if (!collidesWithinBatch)
+                        collidingExistingId = await connection.QuerySingleOrDefaultAsync<string?>(
+                            Sql.Quotes.SelectExistingIdByTextAndSource, new { quoteText = q.QuoteText, sourceId }, transaction);
+                }
+
+                if (collidesWithinBatch || collidingExistingId is not null)
+                {
+                    actions.Add(new ImportActionEntity
+                    {
+                        BatchId = batchIdStr,
+                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                        EntityType = ImportActionEntityTypes.Quote,
+                        EntityId = q.Id,
+                        ExistingValue = collidingExistingId is not null ? JsonSerializer.Serialize(new { conflictingQuoteId = collidingExistingId }) : null,
+                        IncomingValue = JsonSerializer.Serialize(payload),
+                        AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                        DetectedAt = now,
+                    });
+                    continue;
+                }
+
+                // #153/#374: a stale alias substitution or an unresolved Source date leaves this quote's
+                // Source resolution provisional — never registered as a confirmed same-batch reference
+                // (matching how a Pending Modify is never registered either), so a later quote in this
+                // same batch referencing this id re-checks against real DB state rather than this
+                // unconfirmed one.
+                if (!sourceAliasStale && !dateNeedsReview)
+                {
+                    seenQuotes[q.Id] = q;
+                    seenQuoteStatus[q.Id] = CompletenessStatus.Incomplete;
+                }
+                ImportActionStatus addStatus = dateNeedsReview ? ImportActionStatus.Pending
+                    : sourceAliasStale ? ImportActionStatus.Stale
+                    : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
@@ -349,10 +418,13 @@ internal static class ImportActionPlanner
                     if (FieldMergeResolver.ValuesEqual(existingFields[field], incomingFields.GetValueOrDefault(field)))
                         continue;
 
-                    if (!conflictRules.TryResolve(q.Id, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
+                    if (!conflictRules.TryResolve(q.Id, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out ConflictRuleOutcome outcome))
                         continue;
+                    bool isStale = outcome is ConflictRuleOutcome.Stale or ConflictRuleOutcome.Retirable;
                     if (isStale) hasStaleRule = true;
                     else ruleDecisions[field] = decision;
+                    if (outcome == ConflictRuleOutcome.Retirable)
+                        retirableRuleFindings?.Add(new RetirableRuleFinding(ImportActionEntityTypes.Quote, q.Id, field));
                 }
 
                 // #153: a stale rule holds the whole action for review, the same way a Blocked action
@@ -461,79 +533,186 @@ internal static class ImportActionPlanner
         DetectedAt = now,
     };
 
-    private static async Task<string> ResolveSourceAsync(
+    /// <summary>
+    /// #374: one Source row matching a (Title, Type) pair — since Date joined the natural key, more
+    /// than one of these can share a title, distinguished by <see cref="Date"/>.
+    /// </summary>
+    private readonly record struct SourceVariant(string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus);
+
+    /// <summary>
+    /// #374: picks which of an already-seen title's <paramref name="variants"/> a quote claiming
+    /// <paramref name="incomingDate"/> belongs to, in priority order: (1) an exact date match, treating
+    /// two date-less rows as matching each other; (2) if the incoming side states a date and no exact
+    /// match exists, a date-less row to backfill — preserving the pre-#374 "we didn't know the date
+    /// yet" behaviour; (3) if the incoming side states no date at all, the nearest existing variant
+    /// (the first one seen) rather than manufacturing a needless duplicate for a quote with nothing to
+    /// disagree about. Returns <see langword="null"/> only when none of these apply — meaning a new,
+    /// distinctly-dated variant is genuinely needed.
+    /// </summary>
+    private static SourceVariant? PickSourceVariant(IReadOnlyList<SourceVariant> variants, string? incomingDate)
+    {
+        foreach (SourceVariant variant in variants)
+            if (FieldMergeResolver.ValuesEqual(variant.Date, incomingDate))
+                return variant;
+
+        if (incomingDate is not null)
+        {
+            foreach (SourceVariant variant in variants)
+                if (variant.Date is null)
+                    return variant;
+            return null;
+        }
+
+        return variants.Count > 0 ? variants[0] : null;
+    }
+
+    /// <summary>
+    /// #374: the result of resolving a quote's Source. <paramref name="DateNeedsReview"/> is
+    /// <see langword="true"/> exactly when <see cref="ResolveSourceAsync"/> attached the quote to
+    /// <see cref="SourceId"/> *despite* a date disagreement it could not safely resolve on its own —
+    /// see that method's own remarks for why this is a reported conflict, not a silent choice.
+    /// </summary>
+    private readonly record struct SourceResolution(string SourceId, bool DateNeedsReview);
+
+    /// <summary>
+    /// #374: types capable of having a Series/Season structure (ADR 011) — currently just `tv`, matching
+    /// where the ambiguity below was actually found (Arrow, Mr. Robot). Not `Anime`: no bundled evidence
+    /// yet that its quotes carry the same kind of per-quote wrong-year noise; extend here if that
+    /// changes, rather than guessing ahead of evidence.
+    /// </summary>
+    private static bool IsSeriesCapable(string typeStr) => string.Equals(typeStr, nameof(QuoteType.Tv), StringComparison.OrdinalIgnoreCase);
+
+    private static async Task<SourceResolution> ResolveSourceAsync(
         SqliteConnection connection, SourceQuoteDto q, Dictionary<string, string> index,
+        Dictionary<string, List<SourceVariant>> variantsByKey, HashSet<string> stagedVariantIds,
         string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
         string typeStr = q.Type.ToString();
         string key = $"{q.Source}|{typeStr}";
-        if (index.TryGetValue(key, out string? existing)) return existing;
 
-        // #162: raw string, not Guid?-typed — a natural-key-matched row's id may now be an explicit,
-        // not-necessarily-canonically-cased file-authored id (from a sources[] entry), not only a
-        // Guid.NewGuid()/EntityIdentity-derived one. Guid has no memory of original string casing —
-        // ToString("D") always renders lowercase regardless of what was actually stored — so
+        // #162/#374: raw string ids throughout, not Guid?-typed — a natural-key-matched row's id may be
+        // an explicit, not-necessarily-canonically-cased file-authored id (from a sources[] entry), not
+        // only a Guid.NewGuid()/EntityIdentity-derived one. Guid has no memory of original string
+        // casing — ToString("D") always renders lowercase regardless of what was actually stored — so
         // round-tripping through Guid? and re-casing would silently produce a string that no longer
         // matches the real row's id if that row predates a casing-convention change (this project has
         // been through two: see ADR 012's revision history).
-        //
-        // #245: SelectExistingByTitleAndType (not the narrower id-only SelectIdByTitleAndType) so a
-        // Source first created date-less via a sources[] entry (#162/#180) can be backfilled here once
-        // a later quote supplies a Date — #191's own fix only ever populates Date on a brand-new Add
-        // below, never on a row that already exists.
-        (string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)? existingRow =
-            await connection.QuerySingleOrDefaultAsync<(string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
-                Sql.Sources.SelectExistingByTitleAndType, new { title = q.Source, type = typeStr }, transaction);
-        if (existingRow is { } row)
+        if (!variantsByKey.TryGetValue(key, out List<SourceVariant>? variants))
         {
-            index[key] = row.Id;
-
-            if (row.Date is null && q.Date is not null)
-            {
-                SourceActionPayloadDto existingPayload = new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId, row.SeasonId);
-                SourceActionPayloadDto incomingPayload = new SourceActionPayloadDto(q.Source, typeStr, q.Date, row.SeriesId, row.SeasonId);
-                HashSet<string> changedFields = ["date"];
-                CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-
-                actions.Add(CompletenessGuard.ShouldBlock(currentStatus, changedFields)
-                    ? new ImportActionEntity
-                    {
-                        BatchId = batchId,
-                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType = ImportActionEntityTypes.Source,
-                        EntityId = row.Id,
-                        ExistingValue = JsonSerializer.Serialize(existingPayload),
-                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                        DetectedAt = now,
-                    }
-                    : new ImportActionEntity
-                    {
-                        BatchId = batchId,
-                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType = ImportActionEntityTypes.Source,
-                        EntityId = row.Id,
-                        ExistingValue = JsonSerializer.Serialize(existingPayload),
-                        IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                        MergedFields = JsonSerializer.Serialize(incomingPayload),
-                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
-                        DetectedAt = now,
-                    });
-            }
-            else
-            {
-                // #373: the Source arrived and already matches. Emitted once per distinct Source, on
-                // the database lookup rather than on every quote referencing it — the index above is
-                // what makes that "once", exactly as it does for the Add below.
-                actions.Add(UnchangedAction(
-                    batchId, ImportActionEntityTypes.Source, row.Id,
-                    new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId, row.SeasonId), now));
-            }
-
-            return row.Id;
+            // #245: SelectAllExistingByTitleAndType (not the narrower id-only SelectIdByTitleAndType) so
+            // a Source first created date-less via a sources[] entry (#162/#180) can be backfilled here
+            // once a later quote supplies a Date — #191's own fix only ever populates Date on a
+            // brand-new Add below, never on a row that already exists. #374: every matching row, not
+            // just one — every dated variant of this title needs to be seen at once so a second,
+            // differently-dated quote is never matched against the wrong one.
+            IEnumerable<SourceVariant> existingRows = await connection.QueryAsync<SourceVariant>(
+                Sql.Sources.SelectAllExistingByTitleAndType, new { title = q.Source, type = typeStr }, transaction);
+            variants = [.. existingRows];
+            variantsByKey[key] = variants;
         }
 
-        string stableId = EntityIdentity.SourceId(q.Source, typeStr);
+        SourceVariant? picked = PickSourceVariant(variants, q.Date);
+
+        // #374: `index` is shared with PlanSourcesAsync's own sources[] resolution (and, historically,
+        // was ResolveSourceAsync's own single-value cache). A key already resolved there — a curated
+        // declaration, not yet reflected in the database — must never be treated as "no variant found"
+        // and duplicated; adopt it as a known variant instead.
+        if (picked is null && index.TryGetValue(key, out string? preResolvedId) && !variants.Exists(v => v.Id == preResolvedId))
+        {
+            SourceVariant preResolved = new(preResolvedId, q.Date, null, null, SafeValue<CompletenessStatus?>.Empty);
+            variants.Add(preResolved);
+            stagedVariantIds.Add(preResolvedId);
+            return new SourceResolution(preResolvedId, DateNeedsReview: false);
+        }
+
+        if (picked is { } row)
+        {
+            // #374: a variant already settled earlier in this same batch (staged once, whether Add,
+            // Modify, Blocked or Unchanged) must not be re-evaluated for every later quote referencing
+            // it — this is what index's own pre-#374 single-entry cache achieved for the single-variant
+            // case, extended here to hold per-variant, not just per-key.
+            if (stagedVariantIds.Add(row.Id))
+            {
+                if (row.Date is null && q.Date is not null)
+                {
+                    SourceActionPayloadDto existingPayload = new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId, row.SeasonId);
+                    SourceActionPayloadDto incomingPayload = new SourceActionPayloadDto(q.Source, typeStr, q.Date, row.SeriesId, row.SeasonId);
+                    HashSet<string> changedFields = ["date"];
+                    CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+
+                    actions.Add(CompletenessGuard.ShouldBlock(currentStatus, changedFields)
+                        ? new ImportActionEntity
+                        {
+                            BatchId = batchId,
+                            ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                            EntityType = ImportActionEntityTypes.Source,
+                            EntityId = row.Id,
+                            ExistingValue = JsonSerializer.Serialize(existingPayload),
+                            IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                            Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                            DetectedAt = now,
+                        }
+                        : new ImportActionEntity
+                        {
+                            BatchId = batchId,
+                            ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                            EntityType = ImportActionEntityTypes.Source,
+                            EntityId = row.Id,
+                            ExistingValue = JsonSerializer.Serialize(existingPayload),
+                            IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                            MergedFields = JsonSerializer.Serialize(incomingPayload),
+                            Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                            DetectedAt = now,
+                        });
+
+                    // #374: the backfilled date is now this variant's real date — a later quote in this
+                    // same batch that also carries this date must match it directly, not re-trigger a
+                    // second backfill of what is, from that quote's perspective, an already-dated row.
+                    int variantIndex = variants.FindIndex(v => v.Id == row.Id);
+                    variants[variantIndex] = row with { Date = q.Date };
+                }
+                else
+                {
+                    // #373: the Source arrived and already matches. Emitted once per distinct Source, on
+                    // the database lookup rather than on every quote referencing it — stagedVariantIds
+                    // is what makes that "once", exactly as it does for the Add below.
+                    actions.Add(UnchangedAction(
+                        batchId, ImportActionEntityTypes.Source, row.Id,
+                        new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId, row.SeasonId), now));
+                }
+            }
+
+            index[key] = row.Id;
+            return new SourceResolution(row.Id, DateNeedsReview: false);
+        }
+
+        // #374 (developer decision, 2026-09-04): a series-capable type (currently just `tv`) with no
+        // Series data yet cannot tell "a genuinely new season" from "this one quote's year is just
+        // wrong" — both look identical from the raw import alone. Rather than guess by creating a new
+        // Source variant (which silently fragments one show into several, found live against Arrow and
+        // Mr. Robot), this is exactly the "we don't know what to do with the data" case that must be
+        // reported as a conflict: attach to the nearest existing variant for now (the #375 nearest-Source
+        // principle) and let the caller flag the quote itself for review, where a curator decides between
+        // adding an unknown new season or accepting the quote into the existing show-level Source. Once a
+        // variant already carries a SeriesId (a real Series, with a known date range, exists to place the
+        // claimed year against), this ambiguity goes away and the normal per-variant resolution applies.
+        if (variants.Count > 0 && IsSeriesCapable(typeStr) && variants.TrueForAll(v => v.SeriesId is null))
+        {
+            SourceVariant nearest = variants[0];
+            index[key] = nearest.Id;
+            return new SourceResolution(nearest.Id, DateNeedsReview: true);
+        }
+
+        // #374: no variant matches this quote's date claim. A genuinely first-ever title (no variant
+        // seen at all yet, from neither the database nor this batch so far) keeps the legacy date-less
+        // id every existing Source already has, even when this quote itself carries a date — the
+        // overwhelmingly common case, and the one every pre-#374 id must keep resolving to. Only a
+        // second-or-later variant needs the date folded into its id, to avoid colliding with the first.
+        string stableId = variants.Count == 0
+            ? EntityIdentity.SourceId(q.Source, typeStr)
+            : EntityIdentity.SourceId(q.Source, typeStr, q.Date);
+        variants.Add(new SourceVariant(stableId, q.Date, null, null, SafeValue<CompletenessStatus?>.Empty));
+        stagedVariantIds.Add(stableId);
         index[key] = stableId;
 
         actions.Add(new ImportActionEntity
@@ -547,7 +726,7 @@ internal static class ImportActionPlanner
             DetectedAt = now,
         });
 
-        return stableId;
+        return new SourceResolution(stableId, DateNeedsReview: false);
     }
 
     private static async Task<string?> ResolveCharacterAsync(
@@ -656,7 +835,8 @@ internal static class ImportActionPlanner
         DuplicateResolutionPolicy policy, Dictionary<string, string> sourceIndex,
         Dictionary<string, string> seriesIndex, Dictionary<string, string> seasonIndex,
         List<ImportActionEntity> actions, DateTime now,
-        SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
+        SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null,
+        List<RetirableRuleFinding>? retirableRuleFindings = null)
     {
         foreach (SourceEntryDto s in sources)
         {
@@ -744,10 +924,13 @@ internal static class ImportActionPlanner
                 {
                     foreach (string field in existingFields.Keys)
                     {
-                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out ConflictRuleOutcome outcome))
                             continue;
+                        bool isStale = outcome is ConflictRuleOutcome.Stale or ConflictRuleOutcome.Retirable;
                         if (isStale) hasStaleRule = true;
                         else ruleDecisions[field] = decision;
+                        if (outcome == ConflictRuleOutcome.Retirable)
+                            retirableRuleFindings?.Add(new RetirableRuleFinding(ImportActionEntityTypes.Source, matchedId, field));
                     }
                 }
 
@@ -879,10 +1062,13 @@ internal static class ImportActionPlanner
                 {
                     foreach (string field in keyExistingFields.Keys)
                     {
-                        if (!conflictRules.TryResolve(keyRow.Id, field, keyExistingFields[field], keyIncomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
+                        if (!conflictRules.TryResolve(keyRow.Id, field, keyExistingFields[field], keyIncomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out ConflictRuleOutcome outcome))
                             continue;
+                        bool isStale = outcome is ConflictRuleOutcome.Stale or ConflictRuleOutcome.Retirable;
                         if (isStale) keyHasStaleRule = true;
                         else keyRuleDecisions[field] = decision;
+                        if (outcome == ConflictRuleOutcome.Retirable)
+                            retirableRuleFindings?.Add(new RetirableRuleFinding(ImportActionEntityTypes.Source, keyRow.Id, field));
                     }
                 }
 
@@ -1337,7 +1523,8 @@ internal static class ImportActionPlanner
         SqliteConnection connection, IReadOnlyList<UniverseEntryDto> universes, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> universeIndex,
         List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction,
-        ConflictRuleLookup? conflictRules = null)
+        ConflictRuleLookup? conflictRules = null,
+        List<RetirableRuleFinding>? retirableRuleFindings = null)
     {
         foreach (UniverseEntryDto u in universes)
         {
@@ -1371,10 +1558,13 @@ internal static class ImportActionPlanner
                 {
                     foreach (string field in existingFields.Keys)
                     {
-                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out ConflictRuleOutcome outcome))
                             continue;
+                        bool isStale = outcome is ConflictRuleOutcome.Stale or ConflictRuleOutcome.Retirable;
                         if (isStale) hasStaleRule = true;
                         else ruleDecisions[field] = decision;
+                        if (outcome == ConflictRuleOutcome.Retirable)
+                            retirableRuleFindings?.Add(new RetirableRuleFinding(ImportActionEntityTypes.Universe, matchedId, field));
                     }
                 }
 
@@ -1499,7 +1689,8 @@ internal static class ImportActionPlanner
         SqliteConnection connection, IReadOnlyList<SeriesEntryDto> series, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> universeIndex,
         Dictionary<string, string> seriesIndex, List<ImportActionEntity> actions, DateTime now,
-        SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
+        SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null,
+        List<RetirableRuleFinding>? retirableRuleFindings = null)
     {
         foreach (SeriesEntryDto s in series)
         {
@@ -1548,10 +1739,13 @@ internal static class ImportActionPlanner
                 {
                     foreach (string field in existingFields.Keys)
                     {
-                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out ConflictRuleOutcome outcome))
                             continue;
+                        bool isStale = outcome is ConflictRuleOutcome.Stale or ConflictRuleOutcome.Retirable;
                         if (isStale) hasStaleRule = true;
                         else ruleDecisions[field] = decision;
+                        if (outcome == ConflictRuleOutcome.Retirable)
+                            retirableRuleFindings?.Add(new RetirableRuleFinding(ImportActionEntityTypes.Series, matchedId, field));
                     }
                 }
 
@@ -1690,7 +1884,8 @@ internal static class ImportActionPlanner
         SqliteConnection connection, IReadOnlyList<SeasonEntryDto> seasons, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> seriesIndex,
         Dictionary<string, string> seasonIndex, List<ImportActionEntity> actions, DateTime now,
-        SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
+        SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null,
+        List<RetirableRuleFinding>? retirableRuleFindings = null)
     {
         foreach (SeasonEntryDto se in seasons)
         {
@@ -1735,10 +1930,13 @@ internal static class ImportActionPlanner
                 {
                     foreach (string field in existingFields.Keys)
                     {
-                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out ConflictRuleOutcome outcome))
                             continue;
+                        bool isStale = outcome is ConflictRuleOutcome.Stale or ConflictRuleOutcome.Retirable;
                         if (isStale) hasStaleRule = true;
                         else ruleDecisions[field] = decision;
+                        if (outcome == ConflictRuleOutcome.Retirable)
+                            retirableRuleFindings?.Add(new RetirableRuleFinding(ImportActionEntityTypes.Season, matchedId, field));
                     }
                 }
 
@@ -2150,6 +2348,15 @@ internal sealed class QuoteActionPayloadDto
 
 /// <summary>Staged payload for a Source Add/Modify <see cref="ImportActionEntity"/> (#162 adds <see cref="Date"/>; #180 adds <see cref="SeriesId"/> — a resolved id, not the file's own <c>seriesName</c> text).</summary>
 internal sealed record SourceActionPayloadDto(string Title, string Type, string? Date = null, string? SeriesId = null, string? SeasonId = null);
+
+/// <summary>
+/// #374, step 10 — a <see cref="ConflictRuleOutcome.Retirable"/> outcome for one governed field on one
+/// entity, collected into <c>PlanAsync</c>'s optional <c>retirableRuleFindings</c> sink so a
+/// caller can report it (the seed pipeline logs it; a caller with no interest in this passes nothing
+/// and nothing is collected). Advice about the rule file, not a defect in the row it was found on — the
+/// row itself still stages <see cref="ImportActionStatus.Stale"/> exactly as before this existed.
+/// </summary>
+internal sealed record RetirableRuleFinding(string EntityType, string EntityId, string Field);
 
 /// <summary>Staged payload for a Series Add <see cref="ImportActionEntity"/> (#180). <see cref="UniverseId"/> is a resolved id, not the file's own <c>universeName</c> text.</summary>
 internal sealed record SeriesActionPayloadDto(string Name, string? UniverseId = null, string? UniverseName = null);

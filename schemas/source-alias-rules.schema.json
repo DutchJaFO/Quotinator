@@ -25,6 +25,11 @@
             "minLength": 1,
             "description": "The raw type as this bundled source file actually carries it (matched case-insensitively)."
           },
+          "date": {
+            "type": "string",
+            "minLength": 1,
+            "description": "#374: optional. The raw date this alias targets, when the same wrong (title, type) is claimed with more than one date and only one of them needs this correction. Omit for an alias that applies regardless of the incoming quote's date (the pre-#374 behaviour, and every alias file shipped before this field existed)."
+          },
           "canonicalTitle": {
             "type": "string",
             "minLength": 1,
@@ -34,6 +39,11 @@
             "type": "string",
             "minLength": 1,
             "description": "The correct type to resolve/create the Source under instead."
+          },
+          "canonicalDate": {
+            "type": "string",
+            "minLength": 1,
+            "description": "#374: optional. The correct date to resolve/create the Source under instead, when a Source's own date (not just its title) needs correcting, or to say which of two same-titled Sources (differing only by date) is canonical. Omit to leave the incoming quote's own date untouched."
           }
         }
       }
