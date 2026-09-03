@@ -26,6 +26,21 @@ signal that we need to update the rule."
 pending when the initial seeding left nothing, however often it runs. Step 1 found that the symptom and
 the intent have different causes, and the Scope changes section below records the decision to keep both.
 
+**Three principles govern this issue and #375, and separating them is what keeps the scope honest**
+(developer, 2026-09-03):
+
+1. **Seeding has no pending results when done.**
+2. **Seeding does not guarantee the data is 100% complete and accurate.**
+3. **The rules help us enhance and improve incoming results for sources we don't control.**
+
+The first two are orthogonal, and this plan's earlier drafts repeatedly conflated them. `Pending` means
+*a human decision is required before this batch can be applied* — nothing more. It does not mean the
+data is right, and clearing it does not make the data right. Accuracy is a separate axis with no
+completion state, worked by principle 3's rules and by the data enhancement milestone. Reading them as
+one guarantee is what produced two wrong conclusions here: that every wrong date had to be corrected
+before this issue could close, and that a quote we cannot fully attribute is a defect rather than an
+ordinary, expected state.
+
 ---
 
 ## Scope changes
@@ -325,17 +340,26 @@ them all, unless we have proof").
 one of two same-titled Sources and say which is canonical. Without this, step 6 leaves a spurious Source
 row for every wrong date.
 
-The corrections themselves are two jobs, and neither may be answered from recognition —
-`docs/workflow/source-verification.md` governs both:
+**Correcting the twenty is not a precondition for this issue, and this step does not enumerate them.**
+Zero pending comes from steps 6 and 7 alone: with date in the key, each quote resolves to the Source
+matching its own claim and agrees with it, whether or not that Source's date is right. An uncorrected
+wrong date leaves a second Source row that is simply the nearest Source we can identify for the quotes
+citing it — the same standing rule #375 adopted for quotes whose episode is unknown (developer,
+2026-09-03: "we do not expect all quotes to be perfectly attributed… examples that need more research in
+the data enhancement milestone"). The residue is enhancement material, not a blocker.
 
-- **16 `movie` titles**, where a second date may be a typo (`"Back to the future" / 1958`) *or* a
-  genuinely distinct work (`"The Lion King"`, animated 1994 and live-action 2019). Each is decided
-  individually; deciding wrongly either merges two films or splits one. Both Lion King entries dated
-  2019 carry lines plausible in either film, which is exactly the case that rule exists for.
-- **4 `tv` titles** — `Arrow` 2015/2017, `Game of Thrones` 2011/2012, `Mr. Robot` 2015/2017,
-  `The Good Place` 2018/2019 — which are **not** date corrections. A second year on a multi-season show
-  is a season, and those quotes are linked to one by #375. Correcting
-  the year away here would delete that link; nothing in this step touches them.
+What this step delivers is therefore the *mechanism* plus whatever is verified while it is being built:
+
+- **The alias gains a date**, which is the code change and is complete on its own.
+- **16 `movie` titles** are candidates, each needing an individual determination — a second date may be
+  a typo (`"Back to the future" / 1958`) or a genuinely distinct work (`"The Lion King"`, animated 1994
+  and live-action 2019, both real). Deciding wrongly merges two films or splits one, so each is decided
+  under `source-verification.md` when it is decided, and left alone until then. Note both Lion King
+  entries dated 2019 carry lines plausible in either film.
+- **4 `tv` titles** — `Arrow`, `Game of Thrones`, `Mr. Robot`, `The Good Place` — are **not** date
+  corrections and are explicitly out of this step. #375 established that their years are simply wrong
+  rather than season markers, and that the quotes' seasons come from episode lookups it has already
+  done. Correcting a year here would achieve nothing and could contradict that work.
 
 ### 9. Report a file that contradicts itself, at cold start
 
@@ -420,7 +444,7 @@ largest single piece of work here and is worth knowing before it is discovered m
 | 27 | ❌ | The migration deduplicates before creating the index | Unit test | a fixture database carrying a duplicate, migrated — not the bundled corpus, so the test keeps failing if the corpus changes |
 | 28 | ❌ | An alias can target one of two same-titled Sources by date | Unit test | `SourceAliasLookupTests.AliasWithDate_TargetsTheMatchingSourceOnly` |
 | 29 | ❌ | An alias file without dates still loads and applies | Unit test | `SourceAliasLookupTests.AliasWithoutDate_StillApplies` — the three shipped alias files predate the field |
-| 30 | ❌ | Every date correction added in step 8 cites a verified source | Recorded rationale | one citation per corrected entry, per `docs/workflow/source-verification.md` |
+| 30 | ❌ | An uncorrected wrong date still leaves nothing pending | Unit test | `ImportActionPlannerTests.AWrongDatedSource_StillLeavesNothingPending` — principle 1 holding without principle 2, which is what makes step 8's corrections optional rather than a precondition |
 | 31 | ❌ | A file that contradicts itself about a Source's date is reported at cold start | Unit test | `DatabaseInitializerTests.ColdStart_WithAFileThatContradictsItself_ReportsIt` — today it is silent |
 | 32 | ❌ | A retirable rule is surfaced where a curator will see it | Unit test | assertion over whichever carrier step 10 settles on |
 | 33 | ❌ | Reseeding repeatedly leaves nothing pending | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAResolvableFile_LeavesNothingPending` — `0 / 0 / 0`, the issue's stated intent |

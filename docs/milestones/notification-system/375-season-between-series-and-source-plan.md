@@ -14,14 +14,24 @@ later season has nowhere to say so. `Quotinator_Quote` has no `Date` of its own;
 `Sql.Quotes.SelectRawById` reads a quote's `source` and `date` from `s.Title AS Source, s.Date`, and a
 `tv` Source's `Date` is the series' start year. The year an import file carries per quote is discarded.
 
-Four bundled `tv` titles already carry quotes from more than one year — `Arrow` 2015/2017,
+Four bundled `tv` titles carry quotes claiming more than one year — `Arrow` 2015/2017,
 `Game of Thrones` 2011/2012, `Mr. Robot` 2015/2017, `The Good Place` 2018/2019 (measured 2026-09-03).
-They are neither competing release dates nor typos: they are quotes from different seasons of one show.
+Those quotes do come from different seasons, but **the years are not what says so**: every one that
+resolved to an episode aired in a different year than the file claims (2012 → 2016, 2017 → 2016, 2017 →
+2015). The year is bad data. The quote text is the only thing that identifies the episode, and the
+episode is what establishes the season — see step 7, where that lookup is already done.
 
 **The hierarchy gains a level: `Universe → Series → (Season) → Source`** (developer, 2026-09-03), with
 Season optional and deliberately neutral — "tv-series are the first that have the 'season' concept, but
 we should be sure to keep the concept neutral as that allows us to apply it to other material (like
 magazines and podcasts) that group episodes." **A Source is always the episode.**
+
+**A quote attaches to the nearest Source we can find** (developer, 2026-09-03). An episode where the
+episode is known, the show otherwise. "If we can find the precise series or episode that is a bonus,
+but not critical at this stage… we do not expect all quotes to be perfectly attributed." That is what
+keeps `Quote.SourceId` non-nullable without inventing placeholder rows: the show-level Source every
+`tv` quote already points at stays exactly where it is, and episode Sources are added beside it for the
+quotes that can reach one.
 
 **#374 depends on this.** Its `UNIQUE (Title, Type, Date)` is table-wide, so without seasons it splits
 one show into a Source row per year, and its date-correction step would then delete the season year to
@@ -42,6 +52,25 @@ way, so a quote always has a real episode to attach to.
 
 That rejection is what keeps this issue small. `Quote.SourceId` stays `NOT NULL`, every quote read path
 keeps its `INNER JOIN Quotinator_Source`, and no response shape changes for non-episodic material.
+
+**2026-09-03 — a Source is the nearest work we can identify, not always the episode.** An earlier
+answer in this thread was "a Source is always the episode." The data gathered for step 7 then showed
+three of seven quotes cannot be tied to an episode from a Tier 1 source at all, which under that rule
+would leave them with nothing to attach to — the nullable-parent gap arriving from the data side.
+Resolved (developer): "we attach quotes to the nearest source we can find… we do not expect all quotes
+to be perfectly attributed. We may encounter more as we evaluate the data we have. This simply gives us
+examples that need more research in the data enhancement milestone."
+
+So the granularity of a Source varies by what is known, deliberately. Nothing migrates: an unattributed
+`tv` quote keeps the show-level Source it already has, and gaining an episode later is an improvement to
+that row, not a repair of a broken one. **Imperfect attribution is an expected steady state here, not a
+defect**, and the residue is material for the data enhancement milestone rather than a blocker for this
+issue.
+
+This follows from the second of the three principles governing both issues (developer, 2026-09-03,
+recorded in full in #374's plan): seeding has no pending results when done; seeding does not guarantee
+the data is 100% complete and accurate; the rules exist to enhance incoming results for sources we do
+not control. The first two are separate guarantees, and this issue only owes the first.
 
 **Not this issue:** #374's own key change and date corrections. This issue only has to make seasons
 exist and be attachable before that lands.
@@ -175,18 +204,49 @@ Sources: [season 1](https://en.wikipedia.org/wiki/Avatar:_The_Last_Airbender_sea
 [the 2024 series](https://en.wikipedia.org/wiki/Avatar:_The_Last_Airbender_(2024_TV_series)),
 [tt0801470](https://www.imdb.com/title/tt0801470/).
 
-The quotes themselves come from IMDb's per-title quotes page for each episode, verbatim, with the
-character named there. Step 10 is what makes that a documented source rather than a choice made here.
+**The quote, picked arbitrarily from that episode's IMDb quotes page** — the point of a random pick
+being that whatever comes up must fit the tables, which proves more than a curated choice would:
 
-### 7. Attach the four bundled shows' quotes to their episodes
+> **Sokka** — "Giant light beams, flying bison, Airbenders, I think I've got Midnight Sun Madness. I'm
+> going home to where stuff makes sense."
 
-**Status:** ⬜ Not started
+It exercises the whole chain at once: a Character, an episode-level Source, and a Season carrying number,
+title and subtitle together — the only bundled content that does.
 
-Per-quote `Custom` conflict rules setting `source` and `date` together, so each quote resolves to its
-episode's Source. Which episode each quote is from is researched per `source-verification.md` as
-extended by step 10. This is the step whose size is set by research rather than by code, and it is the
-one that can be staged if it runs long — the model works without it; the four shows simply stay
-attached at show level until it lands.
+### 7. Attach the resolvable quotes to their episodes
+
+**Status:** ⬜ Not started — its input data is gathered, below
+
+The seven quotes are the ones step 1 measured; the lookups were done on 2026-09-03 rather than left as
+a step, so this step writes rules against known values and nothing here is open-ended.
+
+| Quote | Character | Episode | Season |
+|---|---|---|---|
+| "That's what I do: I drink and I know things." (Game of Thrones) | Tyrion Lannister | *Home* | S6.E2, aired 2016-05-01 |
+| "I have burrowed underneath your brain…" (Mr. Robot) | Mr. Robot | `eps2.1_k3rnel-pan1c.ksd` | S2.E1, 2016 |
+| "Unfortunately, we're all human. Except me, of course." (Mr. Robot) | Tyrell Wellick | `eps1.4_3xpl0its.wmv` | S1.E4, 2015 |
+| "Time means nothing. Jeremy Bearimy, baby…" (The Good Place) | Chidi | *Pandemonium* | S4, 2019 |
+| "People walk around… That's power." (Mr. Robot) | **Fernando Vera** | — listed only at series and character level | — |
+| "When we lose our principles, we invite chaos." (Mr. Robot) | — | — | — |
+| "Love's the most powerful emotion…" (Arrow) | — | — | — |
+
+Four get a per-quote `Custom` rule setting `source` and `date` together, resolving each to its episode's
+Source. The fifth gets its Character and nothing more. **The last two keep the show-level Source they
+already have** — nearest-Source, per Scope changes — and are recorded as data enhancement candidates.
+
+Two things this lookup established that the plan depends on:
+
+- **The file's years are wrong, not season markers.** Every resolved episode aired in a different year
+  than the file claims. Any rule written from the year rather than from the episode would be wrong.
+- **A missing IMDb quote entry is not a missing quote.** "When we lose our principles, we invite chaos"
+  returns nothing on IMDb and is nonetheless real — the developer supplied a screen capture of the line
+  as broadcast. IMDb's quote pages are user-contributed and incomplete, so absence there is evidence of
+  nothing at all, and must never be read as a quote being unverifiable (which would wrongly implicate
+  [#219](https://github.com/DutchJaFO/Quotinator/issues/219)).
+
+One incidental find worth carrying into the data enhancement milestone: the bundled Tyrell Wellick quote
+is a trimmed fragment of a longer line — IMDb has "…And unfortunately, we're all human. Except me, of
+course."
 
 ### 8. The masterdata endpoints
 
@@ -211,9 +271,18 @@ per row.
 **Status:** ⬜ Not started
 
 `source-verification.md` gains the case its tiers do not cover. IMDb is already Tier 1 and publishes
-per-title quote pages; the procedure states that this is the source for a quote's text and its episode,
-and that the episode's own air date is cross-checked against the season's range as corroboration — which
-is what caught nothing wrong here but would catch an episode attributed to the wrong season.
+per-title, per-episode and per-character quote pages; the procedure states that these are the source for
+a quote's text, its speaker and its episode, and that the episode's own air date is cross-checked
+against the season's range — which caught nothing wrong here but would catch an episode attributed to
+the wrong season.
+
+Two rules step 7 learned the hard way, and the reason this step is not merely administrative:
+
+- **A quote absent from IMDb is not an unverified quote.** Those pages are user-contributed and
+  incomplete. Absence is evidence of nothing, and must not be read as grounds for #219.
+- **Attribution is expected to be partial.** The procedure says what to do when the episode cannot be
+  found: attach to the nearest Source that can be, record the row as a data enhancement candidate, and
+  move on. Without that written down, the next reader treats a gap as a failure and stalls.
 
 ### 11. Docs, vocabulary, and the boyscout pass
 
@@ -250,9 +319,9 @@ is what caught nothing wrong here but would catch an episode attributed to the w
 | 19 | ❌ | The live spec publishes seasons' `page`/`pageSize` as integer with their defaults | Unit test | `OpenApiSpecEndpointTests` — the transformer's own unit tests pass even when it is never registered |
 | 20 | ❌ | Every tag the seasons endpoints use is declared with a description | Unit test | `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` (existing) — expected to pass unchanged, since `MasterData` is already declared |
 | 21 | ❌ | Every new test is red against the pre-change build | Test run | run at step 2 |
-| 22 | ❌ | The Avatar seasons and first episode match their cited sources | Recorded rationale | step 6's table, each row citing its Wikipedia or IMDb URL |
-| 23 | ❌ | Every curated Avatar quote cites the IMDb page it came from, verbatim | Recorded rationale | per `source-verification.md` as extended by step 10 |
-| 24 | ❌ | The verification procedure states how a quote's text and episode are established | Unit test | assertion over `source-verification.md`'s own text, so the gap cannot silently reopen |
+| 22 | ❌ | The four resolvable quotes land on the episodes step 7 names | Unit test | `DatabaseInitializerTests.TheFourResolvedTvQuotes_LandOnTheirNamedEpisodes` — the values are fixed in step 7, so this asserts them rather than discovering them |
+| 23 | ❌ | The three unresolved quotes keep their show-level Source | Unit test | `DatabaseInitializerTests.AnUnattributedTvQuote_KeepsItsShowLevelSource` — nearest-Source asserted, so partial attribution stays a supported state rather than a silent gap |
+| 24 | ❌ | The verification procedure states how a quote's text, speaker and episode are established, and what to do when the episode is not found | Unit test | assertion over `source-verification.md`'s own text, covering both rules step 10 names |
 | 25 | ❌ | A real container serves an episode-attached quote through the API | Automated (T2) | a new `docs/automated-testing/` document — the seeded corpus end to end, which no unit test covers |
 | 26 | ❌ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
 | 27 | ❌ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
