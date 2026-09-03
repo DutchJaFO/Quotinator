@@ -84,7 +84,8 @@
               "fantasy", "fiction", "horror", "mystery", "non-fiction",
               "romance", "sci-fi", "thriller"
             ]
-          }
+          },
+          "uniqueItems": true
         },
         "translations": {
           "type": "object",

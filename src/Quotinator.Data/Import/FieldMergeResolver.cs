@@ -27,14 +27,14 @@ public static class FieldMergeResolver
         if (policy is not (DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs))
             throw new ArgumentOutOfRangeException(nameof(policy), policy, "FieldMergeResolver only supports MergeOurs and MergeTheirs.");
 
-        var merged       = new Dictionary<string, object?>(existing.Count);
-        var fromIncoming = new List<string>();
+        Dictionary<string, object?> merged       = new(existing.Count);
+        List<string> fromIncoming = [];
 
-        foreach (var (field, existingValue) in existing)
+        foreach ((string? field, object? existingValue) in existing)
         {
-            var incomingValue = incoming.TryGetValue(field, out var iv) ? iv : null;
-            var existingEmpty = IsEmpty(existingValue);
-            var incomingEmpty = IsEmpty(incomingValue);
+            object? incomingValue = incoming.TryGetValue(field, out object? iv) ? iv : null;
+            bool existingEmpty = IsEmpty(existingValue);
+            bool incomingEmpty = IsEmpty(incomingValue);
 
             if (!existingEmpty && incomingEmpty)
             {
@@ -87,15 +87,15 @@ public static class FieldMergeResolver
         IReadOnlyDictionary<string, object?> incoming,
         IReadOnlyDictionary<string, FieldMergeDecision> decisions)
     {
-        var merged       = new Dictionary<string, object?>(existing.Count);
-        var fromIncoming = new List<string>();
-        var unresolved    = new List<string>();
+        Dictionary<string, object?> merged       = new(existing.Count);
+        List<string> fromIncoming = [];
+        List<string> unresolved    = [];
 
-        foreach (var (field, existingValue) in existing)
+        foreach ((string? field, object? existingValue) in existing)
         {
-            var incomingValue = incoming.TryGetValue(field, out var iv) ? iv : null;
+            object? incomingValue = incoming.TryGetValue(field, out object? iv) ? iv : null;
 
-            if (decisions.TryGetValue(field, out var decision))
+            if (decisions.TryGetValue(field, out FieldMergeDecision decision))
             {
                 switch (decision.Choice)
                 {
@@ -114,8 +114,8 @@ public static class FieldMergeResolver
                 continue;
             }
 
-            var existingEmpty = IsEmpty(existingValue);
-            var incomingEmpty = IsEmpty(incomingValue);
+            bool existingEmpty = IsEmpty(existingValue);
+            bool incomingEmpty = IsEmpty(incomingValue);
 
             if (!existingEmpty && incomingEmpty)
             {
@@ -157,22 +157,36 @@ public static class FieldMergeResolver
 
     /// <summary>
     /// Compares two field values for equality, treating list/array-valued fields (e.g. <c>genres</c>)
-    /// by sequence content rather than reference identity — <see cref="List{T}"/> doesn't override
-    /// <see cref="object.Equals(object)"/>, so two equal-content-but-different-instance lists would
-    /// otherwise compare unequal. String values (scalar or within a collection) compare
-    /// case-insensitively, matching this project's case-insensitive-by-default convention already
-    /// applied to id/enum comparisons — a value arriving from an outside source (an import file, in
-    /// this case) must never be treated as a "conflict" purely because of letter casing (e.g. "star
-    /// wars" vs "Star Wars"), the same reasoning <c>QuoteIdentity.StableId</c> already applies when
-    /// generating a quote's own id. Applied uniformly to every field, including free-text ones — a
-    /// casing-only correction to a field's own content is treated the same as any other non-conflict.
-    /// Used both for merge resolution and for any changed-field diff a caller computes outside this
-    /// class (e.g. <c>ImportActionPlanner</c>'s completeness-blocking check, #168).
+    /// as a set rather than a sequence — order carries no meaning for any list-valued field this
+    /// project stores (nothing in the schema, storage, or UI attaches meaning to which genre is listed
+    /// first), so two lists holding the same elements compare equal regardless of position. Set
+    /// equality, not multiset: a genre is unique to a quote by construction
+    /// (<c>UNIQUE (QuoteId, Genre)</c> on <c>Quotinator_QuoteGenre</c>), so a duplicate can never
+    /// legitimately occur and nothing here needs to count occurrences. <see cref="List{T}"/> doesn't
+    /// override <see cref="object.Equals(object)"/> either, so two equal-content-but-different-instance
+    /// lists would otherwise compare unequal on identity alone. String values (scalar or within a
+    /// collection) compare case-insensitively, matching this project's case-insensitive-by-default
+    /// convention already applied to id/enum comparisons — a value arriving from an outside source (an
+    /// import file, in this case) must never be treated as a "conflict" purely because of letter casing
+    /// (e.g. "star wars" vs "Star Wars"), the same reasoning <c>QuoteIdentity.StableId</c> already
+    /// applies when generating a quote's own id. Applied uniformly to every field, including free-text
+    /// ones — a casing-only correction to a field's own content is treated the same as any other
+    /// non-conflict. Used both for merge resolution and for any changed-field diff a caller computes
+    /// outside this class (e.g. <c>ImportActionPlanner</c>'s completeness-blocking check, #168).
+    /// <para>
+    /// Found live (2026-09-04): the previous <c>SequenceEqual</c> implementation made an unchanged
+    /// quote compare as Modified whenever its stored genre row order (SQLite gives no ordering
+    /// guarantee absent an explicit <c>ORDER BY</c>, which <c>Sql.QuoteGenres.LoadForQuote</c> does not
+    /// have) differed from the source file's own listed order — a false conflict over something that
+    /// was never a real difference. The fix is this comparison, not pinning the read order: order was
+    /// never meaningful data, so nothing should depend on it, including the query.
+    /// </para>
     /// </summary>
     public static bool ValuesEqual(object? a, object? b)
     {
         if (a is IEnumerable ea && a is not string && b is IEnumerable eb && b is not string)
-            return ea.Cast<object?>().SequenceEqual(eb.Cast<object?>(), ScalarComparer.Instance);
+            return new HashSet<object?>(ea.Cast<object?>(), ScalarComparer.Instance).SetEquals(eb.Cast<object?>());
+
         return ScalarComparer.Instance.Equals(a, b);
     }
 

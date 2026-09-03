@@ -59,7 +59,8 @@
               "romance", "sci-fi", "thriller"
             ]
           },
-          "description": "Genre tags from the standard vocabulary. May be empty."
+          "uniqueItems": true,
+          "description": "Genre tags from the standard vocabulary. May be empty. Each tag must appear at most once — a genre is unique to a quote by storage (UNIQUE (QuoteId, Genre) on Quotinator_QuoteGenre), so a duplicate here is always an authoring mistake, not meaningful data."
         },
         "translations": {
           "type": "object",

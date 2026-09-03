@@ -37,7 +37,7 @@ public class SourceDataIntegrityTests
     /// <summary>Every *.json file listed in a manifest entry's own `ruleFile` property (#181) — a different shape from a source file, validated separately.</summary>
     private static HashSet<string> RuleFilesListedInManifest()
     {
-        var root = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
+        JsonNode root = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
         return root["files"]!.AsArray()
             .Select(e => e!["ruleFile"]?.GetValue<string>())
             .Where(name => name is not null)
@@ -47,7 +47,7 @@ public class SourceDataIntegrityTests
     /// <summary>Every *.json file listed in a manifest entry's own `sourceAliasFile` property (#181) — a different shape from a source file, validated separately.</summary>
     private static HashSet<string> SourceAliasFilesListedInManifest()
     {
-        var root = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
+        JsonNode root = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
         return root["files"]!.AsArray()
             .Select(e => e!["sourceAliasFile"]?.GetValue<string>())
             .Where(name => name is not null)
@@ -59,8 +59,8 @@ public class SourceDataIntegrityTests
         get
         {
             if (!Directory.Exists(SourcesDir)) return [];
-            var ruleFiles = RuleFilesListedInManifest();
-            var aliasFiles = SourceAliasFilesListedInManifest();
+            HashSet<string> ruleFiles = RuleFilesListedInManifest();
+            HashSet<string> aliasFiles = SourceAliasFilesListedInManifest();
             return Directory.EnumerateFiles(SourcesDir, "*.json")
                 .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
                 .Where(f => !ruleFiles.Contains(Path.GetFileName(f)))
@@ -73,7 +73,7 @@ public class SourceDataIntegrityTests
         get
         {
             if (!Directory.Exists(SourcesDir)) return [];
-            var ruleFiles = RuleFilesListedInManifest();
+            HashSet<string> ruleFiles = RuleFilesListedInManifest();
             return Directory.EnumerateFiles(SourcesDir, "*.json")
                 .Where(f => ruleFiles.Contains(Path.GetFileName(f)));
         }
@@ -84,7 +84,7 @@ public class SourceDataIntegrityTests
         get
         {
             if (!Directory.Exists(SourcesDir)) return [];
-            var aliasFiles = SourceAliasFilesListedInManifest();
+            HashSet<string> aliasFiles = SourceAliasFilesListedInManifest();
             return Directory.EnumerateFiles(SourcesDir, "*.json")
                 .Where(f => aliasFiles.Contains(Path.GetFileName(f)));
         }
@@ -97,7 +97,7 @@ public class SourceDataIntegrityTests
     public void Manifest_IsValidJson()
     {
         Assert.IsTrue(File.Exists(ManifestPath), $"manifest.json not found at: {ManifestPath}");
-        var ex = Record(() => JsonNode.Parse(File.ReadAllText(ManifestPath)));
+        Exception? ex = Record(() => JsonNode.Parse(File.ReadAllText(ManifestPath)));
         Assert.IsNull(ex, $"manifest.json is not valid JSON: {ex?.Message}");
     }
 
@@ -107,9 +107,9 @@ public class SourceDataIntegrityTests
     {
         Assert.IsTrue(Directory.Exists(SourcesDir), $"data/sources/ not found at: {SourcesDir}");
 
-        foreach (var file in Directory.EnumerateFiles(SourcesDir, "*.json"))
+        foreach (string file in Directory.EnumerateFiles(SourcesDir, "*.json"))
         {
-            var ex = Record(() => JsonNode.Parse(File.ReadAllText(file)));
+            Exception? ex = Record(() => JsonNode.Parse(File.ReadAllText(file)));
             Assert.IsNull(ex, $"{Path.GetFileName(file)} is not valid JSON: {ex?.Message}");
         }
     }
@@ -120,8 +120,8 @@ public class SourceDataIntegrityTests
     [TestMethod]
     public void Manifest_ConformsToSchema()
     {
-        var element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(ManifestPath));
-        var result  = ManifestSchema.Evaluate(element, StrictOptions);
+        JsonElement element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(ManifestPath));
+        EvaluationResults result  = ManifestSchema.Evaluate(element, StrictOptions);
         Assert.IsTrue(result.IsValid, FormatErrors("manifest.json", result));
     }
 
@@ -129,26 +129,112 @@ public class SourceDataIntegrityTests
     [TestMethod]
     public void SourceFiles_ConformToSchema()
     {
-        foreach (var file in SourceFiles)
+        foreach (string file in SourceFiles)
         {
-            var name    = Path.GetFileName(file);
-            var text    = File.ReadAllText(file);
-            var element = JsonSerializer.Deserialize<JsonElement>(text);
-            var schema  = element.ValueKind == JsonValueKind.Array ? FlatSchema : ExtendedSchema;
-            var result  = schema.Evaluate(element, StrictOptions);
+            string name    = Path.GetFileName(file);
+            string text    = File.ReadAllText(file);
+            JsonElement element = JsonSerializer.Deserialize<JsonElement>(text);
+            JsonSchema schema  = element.ValueKind == JsonValueKind.Array ? FlatSchema : ExtendedSchema;
+            EvaluationResults result  = schema.Evaluate(element, StrictOptions);
             Assert.IsTrue(result.IsValid, FormatErrors(name, result));
         }
+    }
+
+    /// <summary>
+    /// A quote listing the same genre twice must fail schema validation. The database enforces
+    /// uniqueness per quote (<c>UNIQUE (QuoteId, Genre)</c> on <c>Quotinator_QuoteGenre</c>), but that
+    /// only catches it once the row is written — the source JSON files a curator hand-edits have no such
+    /// guard, and a literal duplicate there (a copy-paste slip, most plausibly) is exactly the kind of
+    /// authoring mistake this project's own priority ("quotes must be real and accurately attributed")
+    /// exists to catch before it ships, not silently absorb via <c>INSERT OR IGNORE</c> at write time.
+    /// Found live (2026-09-04): neither <c>source-flat.schema.json</c> nor
+    /// <c>source-extended.schema.json</c> declared <c>uniqueItems</c> on <c>genres</c>, so a duplicate
+    /// passed validation silently.
+    /// </summary>
+    [TestMethod]
+    public void FlatSchema_QuoteWithDuplicateGenre_FailsValidation()
+    {
+        JsonArray quotes = new(new JsonObject
+        {
+            ["id"]               = "9a02c1dc-8a7f-1f4e-9b90-3229f4c2a361",
+            ["quote"]            = "A quote for schema testing only.",
+            ["originalLanguage"] = "en",
+            ["source"]           = "Schema Test Fixture",
+            ["type"]             = "movie",
+            ["genres"]           = new JsonArray("action", "action"),
+            ["translations"]     = new JsonObject(),
+        });
+
+        JsonElement element = JsonSerializer.Deserialize<JsonElement>(quotes.ToJsonString());
+        EvaluationResults result = FlatSchema.Evaluate(element, StrictOptions);
+
+        Assert.IsFalse(result.IsValid, "A quote listing the same genre twice must fail schema validation.");
+    }
+
+    /// <summary>The control for the row above: the same fixture with its duplicate removed must pass, proving the failure above is about the duplicate specifically.</summary>
+    [TestMethod]
+    public void FlatSchema_QuoteWithDistinctGenres_PassesValidation()
+    {
+        JsonArray quotes = new(new JsonObject
+        {
+            ["id"]               = "9a02c1dc-8a7f-1f4e-9b90-3229f4c2a361",
+            ["quote"]            = "A quote for schema testing only.",
+            ["originalLanguage"] = "en",
+            ["source"]           = "Schema Test Fixture",
+            ["type"]             = "movie",
+            ["genres"]           = new JsonArray("action", "sci-fi"),
+            ["translations"]     = new JsonObject(),
+        });
+
+        JsonElement element = JsonSerializer.Deserialize<JsonElement>(quotes.ToJsonString());
+        EvaluationResults result = FlatSchema.Evaluate(element, StrictOptions);
+
+        Assert.IsTrue(result.IsValid, FormatErrors("synthetic quote with distinct genres", result));
+    }
+
+    /// <summary>
+    /// <c>uniqueItems</c> is exact-match, not case-insensitive on its own — <c>["action", "Action"]</c>
+    /// is two distinct JSON string values as far as that keyword is concerned, so it alone would not
+    /// catch a case-variant duplicate the way <see cref="FlatSchema_QuoteWithDuplicateGenre_FailsValidation"/>
+    /// proves it catches an exact one. Verified this is not a live gap: the pre-existing <c>enum</c>
+    /// constraint on <c>genres</c>' items is itself case-sensitive and closed to the canonical
+    /// all-lowercase vocabulary, so <c>"Action"</c> is already rejected on its own before uniqueness is
+    /// ever considered — confirmed by asserting the specific failure reason below, not just that
+    /// validation failed for some reason. If the vocabulary ever stopped being a closed, lowercase enum
+    /// (a free-text tag field, say), this reasoning would no longer hold and <c>uniqueItems</c> alone
+    /// would need to become case-insensitive too.
+    /// </summary>
+    [TestMethod]
+    public void FlatSchema_QuoteWithCaseVariantGenre_FailsValidation_ViaEnumNotUniqueItems()
+    {
+        JsonArray quotes = new(new JsonObject
+        {
+            ["id"]               = "9a02c1dc-8a7f-1f4e-9b90-3229f4c2a361",
+            ["quote"]            = "A quote for schema testing only.",
+            ["originalLanguage"] = "en",
+            ["source"]           = "Schema Test Fixture",
+            ["type"]             = "movie",
+            ["genres"]           = new JsonArray("action", "Action"),
+            ["translations"]     = new JsonObject(),
+        });
+
+        JsonElement element = JsonSerializer.Deserialize<JsonElement>(quotes.ToJsonString());
+        EvaluationResults result = FlatSchema.Evaluate(element, StrictOptions);
+
+        Assert.IsFalse(result.IsValid, "A case-variant genre must still fail validation.");
+        string errors = FormatErrors("case-variant genre", result);
+        Assert.Contains("enum", errors, "The rejection must come from the enum constraint (wrong casing is not a valid tag at all), not from uniqueItems — confirming the closed lowercase vocabulary is what actually prevents a case-insensitive duplicate, not the uniqueness check.");
     }
 
     /// <summary>Each per-source conflict-resolution rule file (#181) conforms to schemas/conflict-resolution-rules.schema.json.</summary>
     [TestMethod]
     public void RuleFiles_ConformToSchema()
     {
-        foreach (var file in RuleFiles)
+        foreach (string file in RuleFiles)
         {
-            var name    = Path.GetFileName(file);
-            var element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(file));
-            var result  = ConflictResolutionRuleSchema.Evaluate(element, StrictOptions);
+            string name    = Path.GetFileName(file);
+            JsonElement element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(file));
+            EvaluationResults result  = ConflictResolutionRuleSchema.Evaluate(element, StrictOptions);
             Assert.IsTrue(result.IsValid, FormatErrors(name, result));
         }
     }
@@ -157,11 +243,11 @@ public class SourceDataIntegrityTests
     [TestMethod]
     public void SourceAliasFiles_ConformToSchema()
     {
-        foreach (var file in SourceAliasFiles)
+        foreach (string file in SourceAliasFiles)
         {
-            var name    = Path.GetFileName(file);
-            var element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(file));
-            var result  = SourceAliasRuleSchema.Evaluate(element, StrictOptions);
+            string name    = Path.GetFileName(file);
+            JsonElement element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(file));
+            EvaluationResults result  = SourceAliasRuleSchema.Evaluate(element, StrictOptions);
             Assert.IsTrue(result.IsValid, FormatErrors(name, result));
         }
     }
@@ -170,7 +256,7 @@ public class SourceDataIntegrityTests
     [TestMethod]
     public void Manifest_EntryWithBothGithubAndUrl_FailsSchemaValidation()
     {
-        var manifest = new JsonObject
+        JsonObject manifest = new()
         {
             ["files"] = new JsonArray(new JsonObject
             {
@@ -186,8 +272,8 @@ public class SourceDataIntegrityTests
             })
         };
 
-        var element = JsonSerializer.Deserialize<JsonElement>(manifest.ToJsonString());
-        var result  = ManifestSchema.Evaluate(element, StrictOptions);
+        JsonElement element = JsonSerializer.Deserialize<JsonElement>(manifest.ToJsonString());
+        EvaluationResults result  = ManifestSchema.Evaluate(element, StrictOptions);
 
         Assert.IsFalse(result.IsValid, "A manifest entry with both github and url should fail schema validation");
     }
@@ -196,7 +282,7 @@ public class SourceDataIntegrityTests
     [TestMethod]
     public void Manifest_EntryWithConverterOptions_PassesSchemaValidation()
     {
-        var manifest = new JsonObject
+        JsonObject manifest = new()
         {
             ["files"] = new JsonArray(new JsonObject
             {
@@ -211,8 +297,8 @@ public class SourceDataIntegrityTests
             })
         };
 
-        var element = JsonSerializer.Deserialize<JsonElement>(manifest.ToJsonString());
-        var result  = ManifestSchema.Evaluate(element, StrictOptions);
+        JsonElement element = JsonSerializer.Deserialize<JsonElement>(manifest.ToJsonString());
+        EvaluationResults result  = ManifestSchema.Evaluate(element, StrictOptions);
 
         Assert.IsTrue(result.IsValid, FormatErrors("synthetic manifest with converterOptions", result));
     }
@@ -223,13 +309,13 @@ public class SourceDataIntegrityTests
     [TestMethod]
     public void Manifest_AllListedFilesExist()
     {
-        var root  = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
-        var files = root["files"]!.AsArray();
+        JsonNode root  = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
+        JsonArray files = root["files"]!.AsArray();
 
-        foreach (var entry in files)
+        foreach (JsonNode? entry in files)
         {
-            var fileName = entry!["file"]!.GetValue<string>();
-            var fullPath = Path.Combine(SourcesDir, fileName);
+            string fileName = entry!["file"]!.GetValue<string>();
+            string fullPath = Path.Combine(SourcesDir, fileName);
             Assert.IsTrue(File.Exists(fullPath), $"Manifest lists '{fileName}' but the file does not exist");
         }
     }
@@ -238,16 +324,16 @@ public class SourceDataIntegrityTests
     [TestMethod]
     public void SourceFiles_AllListedInManifest()
     {
-        var root   = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
-        var listed = root["files"]!.AsArray()
+        JsonNode root   = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
+        HashSet<string> listed = root["files"]!.AsArray()
                         .Select(e => e!["file"]!.GetValue<string>())
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
         listed.UnionWith(RuleFilesListedInManifest());
         listed.UnionWith(SourceAliasFilesListedInManifest());
 
-        foreach (var file in Directory.EnumerateFiles(SourcesDir, "*.json"))
+        foreach (string file in Directory.EnumerateFiles(SourcesDir, "*.json"))
         {
-            var name = Path.GetFileName(file);
+            string name = Path.GetFileName(file);
             if (name.Equals("manifest.json", StringComparison.OrdinalIgnoreCase)) continue;
             Assert.Contains(name, listed, $"'{name}' exists in data/sources/ but is not listed in manifest.json (as either 'file', 'ruleFile', or 'sourceAliasFile')");
         }
@@ -263,7 +349,7 @@ public class SourceDataIntegrityTests
 
     private static string FormatErrors(string fileName, EvaluationResults result)
     {
-        var errors = (result.Details ?? [])
+        IEnumerable<string> errors = (result.Details ?? [])
             .Where(d => !d.IsValid && d.Errors != null)
             .SelectMany(d => d.Errors!.Select(e => $"  {d.InstanceLocation}: {e.Value}"));
         return $"Schema validation failed for {fileName}:\n{string.Join('\n', errors)}";

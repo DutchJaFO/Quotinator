@@ -12,8 +12,8 @@ public class FieldMergeResolverTests
     [DataRow(DuplicateResolutionPolicy.Review)]
     public void Resolve_UnsupportedPolicy_Throws(DuplicateResolutionPolicy policy)
     {
-        var existing = new Dictionary<string, object?>();
-        var incoming = new Dictionary<string, object?>();
+        Dictionary<string, object?> existing = [];
+        Dictionary<string, object?> incoming = [];
 
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(
             () => FieldMergeResolver.Resolve(existing, incoming, policy));
@@ -24,10 +24,10 @@ public class FieldMergeResolverTests
     [DataRow(DuplicateResolutionPolicy.MergeTheirs)]
     public void Resolve_ExistingBlankIncomingSet_AutoFillsFromIncoming(DuplicateResolutionPolicy policy)
     {
-        var existing = new Dictionary<string, object?> { ["date"] = null };
-        var incoming = new Dictionary<string, object?> { ["date"] = "1994" };
+        Dictionary<string, object?> existing = new() { ["date"] = null };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1994" };
 
-        var result = FieldMergeResolver.Resolve(existing, incoming, policy);
+        FieldMergeResult result = FieldMergeResolver.Resolve(existing, incoming, policy);
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
         Assert.Contains("date", [.. result.FieldsFromIncoming]);
@@ -38,10 +38,10 @@ public class FieldMergeResolverTests
     [DataRow(DuplicateResolutionPolicy.MergeTheirs)]
     public void Resolve_ExistingSetIncomingBlank_KeepsExisting(DuplicateResolutionPolicy policy)
     {
-        var existing = new Dictionary<string, object?> { ["date"] = "1994" };
-        var incoming = new Dictionary<string, object?> { ["date"] = "" };
+        Dictionary<string, object?> existing = new() { ["date"] = "1994" };
+        Dictionary<string, object?> incoming = new() { ["date"] = "" };
 
-        var result = FieldMergeResolver.Resolve(existing, incoming, policy);
+        FieldMergeResult result = FieldMergeResolver.Resolve(existing, incoming, policy);
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
         Assert.DoesNotContain("date", [.. result.FieldsFromIncoming]);
@@ -50,10 +50,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void Resolve_TrueConflictScalarField_MergeOursKeepsExisting()
     {
-        var existing = new Dictionary<string, object?> { ["date"] = "1994" };
-        var incoming = new Dictionary<string, object?> { ["date"] = "1995" };
+        Dictionary<string, object?> existing = new() { ["date"] = "1994" };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1995" };
 
-        var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeOurs);
+        FieldMergeResult result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeOurs);
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
         Assert.DoesNotContain("date", [.. result.FieldsFromIncoming]);
@@ -62,10 +62,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void Resolve_TrueConflictScalarField_MergeTheirsTakesIncoming()
     {
-        var existing = new Dictionary<string, object?> { ["date"] = "1994" };
-        var incoming = new Dictionary<string, object?> { ["date"] = "1995" };
+        Dictionary<string, object?> existing = new() { ["date"] = "1994" };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1995" };
 
-        var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
+        FieldMergeResult result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
 
         Assert.AreEqual("1995", result.MergedFields["date"]);
         Assert.Contains("date", [.. result.FieldsFromIncoming]);
@@ -74,10 +74,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void Resolve_TrueConflictArrayField_MergeOursKeepsExistingWholesaleNoUnion()
     {
-        var existing = new Dictionary<string, object?> { ["genres"] = new List<string> { "drama" } };
-        var incoming = new Dictionary<string, object?> { ["genres"] = new List<string> { "drama", "thriller" } };
+        Dictionary<string, object?> existing = new() { ["genres"] = new List<string> { "drama" } };
+        Dictionary<string, object?> incoming = new() { ["genres"] = new List<string> { "drama", "thriller" } };
 
-        var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeOurs);
+        FieldMergeResult result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeOurs);
 
         Assert.AreSequenceEqual(["drama"], ((List<string>)result.MergedFields["genres"]!));
     }
@@ -85,10 +85,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void Resolve_TrueConflictArrayField_MergeTheirsTakesIncomingWholesaleNoUnion()
     {
-        var existing = new Dictionary<string, object?> { ["genres"] = new List<string> { "drama" } };
-        var incoming = new Dictionary<string, object?> { ["genres"] = new List<string> { "drama", "thriller" } };
+        Dictionary<string, object?> existing = new() { ["genres"] = new List<string> { "drama" } };
+        Dictionary<string, object?> incoming = new() { ["genres"] = new List<string> { "drama", "thriller" } };
 
-        var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
+        FieldMergeResult result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
 
         Assert.AreSequenceEqual(["drama", "thriller"], ((List<string>)result.MergedFields["genres"]!));
     }
@@ -96,10 +96,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void Resolve_EmptyArrayFieldAutoFillsFromNonEmptySide()
     {
-        var existing = new Dictionary<string, object?> { ["genres"] = new List<string>() };
-        var incoming = new Dictionary<string, object?> { ["genres"] = new List<string> { "drama" } };
+        Dictionary<string, object?> existing = new() { ["genres"] = new List<string>() };
+        Dictionary<string, object?> incoming = new() { ["genres"] = new List<string> { "drama" } };
 
-        var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeOurs);
+        FieldMergeResult result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeOurs);
 
         Assert.AreSequenceEqual(["drama"], ((List<string>)result.MergedFields["genres"]!));
         Assert.Contains("genres", [.. result.FieldsFromIncoming]);
@@ -108,10 +108,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void Resolve_EqualValues_NotRecordedAsFromIncoming()
     {
-        var existing = new Dictionary<string, object?> { ["genres"] = new List<string> { "drama" } };
-        var incoming = new Dictionary<string, object?> { ["genres"] = new List<string> { "drama" } };
+        Dictionary<string, object?> existing = new() { ["genres"] = new List<string> { "drama" } };
+        Dictionary<string, object?> incoming = new() { ["genres"] = new List<string> { "drama" } };
 
-        var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
+        FieldMergeResult result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
 
         Assert.DoesNotContain("genres", [.. result.FieldsFromIncoming]);
     }
@@ -133,13 +133,31 @@ public class FieldMergeResolverTests
     public void ValuesEqual_ArrayOfStringsDifferOnlyByCase_ReturnsTrue()
         => Assert.IsTrue(FieldMergeResolver.ValuesEqual(new List<string> { "Drama", "Sci-Fi" }, new List<string> { "drama", "sci-fi" }));
 
+    /// <summary>
+    /// Genre order carries no meaning anywhere in this project's schema, UI, or storage — a list-valued
+    /// field is a set, not a sequence, so two lists holding the same elements in a different order must
+    /// compare equal. Found live (2026-09-04): <c>quotinator-curated.json</c> genuinely stores
+    /// <c>["sci-fi", "action"]</c> for one quote, and <c>Sql.QuoteGenres.LoadForQuote</c> has no
+    /// <c>ORDER BY</c>, so SQLite's returned row order for a quote's stored genres is unspecified by the
+    /// SQL standard and not guaranteed to match the order the source file lists them in. Before this
+    /// fix, that mismatch made an unchanged quote compare as Modified purely because of row-return
+    /// order — nothing about its actual content had changed.
+    /// </summary>
+    [TestMethod]
+    public void ValuesEqual_ArrayOfStringsSameElementsDifferentOrder_ReturnsTrue()
+        => Assert.IsTrue(FieldMergeResolver.ValuesEqual(new List<string> { "sci-fi", "action" }, new List<string> { "action", "sci-fi" }));
+
+    [TestMethod]
+    public void ValuesEqual_ArrayOfStringsGenuinelyDiffer_ReturnsFalse()
+        => Assert.IsFalse(FieldMergeResolver.ValuesEqual(new List<string> { "action", "comedy" }, new List<string> { "action", "drama" }));
+
     [TestMethod]
     public void Resolve_ScalarStringsDifferOnlyByCase_TreatedAsEqual_KeepsExistingCasing()
     {
-        var existing = new Dictionary<string, object?> { ["source"] = "The Simpsons Movie" };
-        var incoming = new Dictionary<string, object?> { ["source"] = "the simpsons movie" };
+        Dictionary<string, object?> existing = new() { ["source"] = "The Simpsons Movie" };
+        Dictionary<string, object?> incoming = new() { ["source"] = "the simpsons movie" };
 
-        var result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
+        FieldMergeResult result = FieldMergeResolver.Resolve(existing, incoming, DuplicateResolutionPolicy.MergeTheirs);
 
         Assert.AreEqual("The Simpsons Movie", result.MergedFields["source"], "A casing-only difference is not a true conflict — the existing side's casing is kept, not silently replaced");
         Assert.DoesNotContain("source", [.. result.FieldsFromIncoming]);
@@ -148,10 +166,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void ResolveWithDecisions_FieldsDifferOnlyByCase_NotTreatedAsAmbiguous()
     {
-        var existing = new Dictionary<string, object?> { ["source"] = "Star Wars" };
-        var incoming = new Dictionary<string, object?> { ["source"] = "star wars" };
+        Dictionary<string, object?> existing = new() { ["source"] = "Star Wars" };
+        Dictionary<string, object?> incoming = new() { ["source"] = "star wars" };
 
-        var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
 
         Assert.AreEqual("Star Wars", result.MergedFields["source"]);
     }
@@ -161,10 +179,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void ResolveWithDecisions_UnambiguousFieldNoDecision_AutoResolvesEmptySideWins()
     {
-        var existing = new Dictionary<string, object?> { ["date"] = null };
-        var incoming = new Dictionary<string, object?> { ["date"] = "1994" };
+        Dictionary<string, object?> existing = new() { ["date"] = null };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1994" };
 
-        var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
         Assert.Contains("date", [.. result.FieldsFromIncoming]);
@@ -173,10 +191,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void ResolveWithDecisions_UnambiguousFieldNoDecision_EqualValuesKeepExisting()
     {
-        var existing = new Dictionary<string, object?> { ["date"] = "1994" };
-        var incoming = new Dictionary<string, object?> { ["date"] = "1994" };
+        Dictionary<string, object?> existing = new() { ["date"] = "1994" };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1994" };
 
-        var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
         Assert.DoesNotContain("date", [.. result.FieldsFromIncoming]);
@@ -185,10 +203,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void ResolveWithDecisions_AmbiguousFieldNoDecision_ThrowsWithFieldName()
     {
-        var existing = new Dictionary<string, object?> { ["date"] = "1994", ["source"] = "A" };
-        var incoming = new Dictionary<string, object?> { ["date"] = "1995", ["source"] = "A" };
+        Dictionary<string, object?> existing = new() { ["date"] = "1994", ["source"] = "A" };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1995", ["source"] = "A" };
 
-        var ex = Assert.ThrowsExactly<UnresolvedFieldConflictException>(
+        UnresolvedFieldConflictException ex = Assert.ThrowsExactly<UnresolvedFieldConflictException>(
             () => FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>()));
 
         Assert.AreSequenceEqual(["date"], [.. ex.FieldNames]);
@@ -197,10 +215,10 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void ResolveWithDecisions_AmbiguousFieldsNoDecision_ThrowsWithEveryAmbiguousFieldName()
     {
-        var existing = new Dictionary<string, object?> { ["date"] = "1994", ["character"] = "Bob" };
-        var incoming = new Dictionary<string, object?> { ["date"] = "1995", ["character"] = "Alice" };
+        Dictionary<string, object?> existing = new() { ["date"] = "1994", ["character"] = "Bob" };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1995", ["character"] = "Alice" };
 
-        var ex = Assert.ThrowsExactly<UnresolvedFieldConflictException>(
+        UnresolvedFieldConflictException ex = Assert.ThrowsExactly<UnresolvedFieldConflictException>(
             () => FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>()));
 
         Assert.AreSequenceEqual(["date", "character"], [.. ex.FieldNames], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
@@ -209,11 +227,11 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void ResolveWithDecisions_KeepDecision_AlwaysKeepsExistingEvenWhenUnambiguous()
     {
-        var existing = new Dictionary<string, object?> { ["date"] = "1994" };
-        var incoming = new Dictionary<string, object?> { ["date"] = "" };
-        var decisions = new Dictionary<string, FieldMergeDecision> { ["date"] = new(FieldResolutionChoice.Keep, null) };
+        Dictionary<string, object?> existing = new() { ["date"] = "1994" };
+        Dictionary<string, object?> incoming = new() { ["date"] = "" };
+        Dictionary<string, FieldMergeDecision> decisions = new() { ["date"] = new(FieldResolutionChoice.Keep, null) };
 
-        var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
 
         Assert.AreEqual("1994", result.MergedFields["date"]);
         Assert.DoesNotContain("date", [.. result.FieldsFromIncoming]);
@@ -222,11 +240,11 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void ResolveWithDecisions_ReplaceDecision_AlwaysTakesIncomingEvenForAmbiguousField()
     {
-        var existing = new Dictionary<string, object?> { ["date"] = "1994" };
-        var incoming = new Dictionary<string, object?> { ["date"] = "1995" };
-        var decisions = new Dictionary<string, FieldMergeDecision> { ["date"] = new(FieldResolutionChoice.Replace, null) };
+        Dictionary<string, object?> existing = new() { ["date"] = "1994" };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1995" };
+        Dictionary<string, FieldMergeDecision> decisions = new() { ["date"] = new(FieldResolutionChoice.Replace, null) };
 
-        var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
 
         Assert.AreEqual("1995", result.MergedFields["date"]);
         Assert.Contains("date", [.. result.FieldsFromIncoming]);
@@ -235,12 +253,12 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void ResolveWithDecisions_CustomDecision_UsesCallerSuppliedValueOverridingBothSides()
     {
-        var existing = new Dictionary<string, object?> { ["genres"] = new List<string> { "drama" } };
-        var incoming = new Dictionary<string, object?> { ["genres"] = new List<string> { "thriller" } };
-        var custom   = new List<string> { "drama", "thriller", "mystery" };
-        var decisions = new Dictionary<string, FieldMergeDecision> { ["genres"] = new(FieldResolutionChoice.Custom, custom) };
+        Dictionary<string, object?> existing = new() { ["genres"] = new List<string> { "drama" } };
+        Dictionary<string, object?> incoming = new() { ["genres"] = new List<string> { "thriller" } };
+        List<string> custom   = ["drama", "thriller", "mystery"];
+        Dictionary<string, FieldMergeDecision> decisions = new() { ["genres"] = new(FieldResolutionChoice.Custom, custom) };
 
-        var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
 
         Assert.AreSequenceEqual(custom, (List<string>)result.MergedFields["genres"]!);
         Assert.Contains("genres", [.. result.FieldsFromIncoming]);
@@ -249,11 +267,11 @@ public class FieldMergeResolverTests
     [TestMethod]
     public void ResolveWithDecisions_MixOfDecidedAndAutoResolvedFields_BothApplyCorrectly()
     {
-        var existing = new Dictionary<string, object?> { ["date"] = "1994", ["character"] = null };
-        var incoming = new Dictionary<string, object?> { ["date"] = "1995", ["character"] = "Alice" };
-        var decisions = new Dictionary<string, FieldMergeDecision> { ["date"] = new(FieldResolutionChoice.Replace, null) };
+        Dictionary<string, object?> existing = new() { ["date"] = "1994", ["character"] = null };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1995", ["character"] = "Alice" };
+        Dictionary<string, FieldMergeDecision> decisions = new() { ["date"] = new(FieldResolutionChoice.Replace, null) };
 
-        var result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
 
         Assert.AreEqual("1995", result.MergedFields["date"]);
         Assert.AreEqual("Alice", result.MergedFields["character"]);
