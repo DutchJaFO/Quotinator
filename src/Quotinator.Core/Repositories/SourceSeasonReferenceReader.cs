@@ -19,7 +19,7 @@ public sealed class SourceSeasonReferenceReader(
         IReadOnlyList<SourceSeasonReferenceRow> rows = await referenceRepository.QueryAsync(new { sourceId = sourceId.ToCanonicalId() });
         SourceSeasonReferenceRow? row = rows.Count > 0 ? rows[0] : null;
 
-        return row is null ? null : (row.Id, row.Number, row.Title, row.Subtitle);
+        return row is null ? null : (row.Id, (int)row.Number, row.Title, row.Subtitle);
     }
 
     /// <inheritdoc/>
@@ -31,6 +31,6 @@ public sealed class SourceSeasonReferenceReader(
         List<string> canonicalIds = [.. sourceIds.Select(id => id.ToCanonicalId())];
         IReadOnlyList<SourceSeasonReferencesBatchRow> rows = await batchRepository.QueryAsync(new { sourceIds = canonicalIds });
 
-        return rows.ToDictionary(r => r.SourceId, r => (r.SeasonId, r.Number, r.Title, r.Subtitle));
+        return rows.ToDictionary(r => r.SourceId, r => (r.SeasonId, (int)r.Number, r.Title, r.Subtitle));
     }
 }
