@@ -8,8 +8,8 @@ public class EntityIdentityTests
     [TestMethod]
     public void SourceId_SameInput_IsDeterministic()
     {
-        var first  = EntityIdentity.SourceId("Casablanca", "movie");
-        var second = EntityIdentity.SourceId("Casablanca", "movie");
+        string first  = EntityIdentity.SourceId("Casablanca", "movie");
+        string second = EntityIdentity.SourceId("Casablanca", "movie");
 
         Assert.AreEqual(first, second);
     }
@@ -17,8 +17,8 @@ public class EntityIdentityTests
     [TestMethod]
     public void SourceId_WhitespaceAndCasingDifferences_NormaliseToSameId()
     {
-        var a = EntityIdentity.SourceId("Casablanca", "movie");
-        var b = EntityIdentity.SourceId("  CASABLANCA  ", "  Movie  ");
+        string a = EntityIdentity.SourceId("Casablanca", "movie");
+        string b = EntityIdentity.SourceId("  CASABLANCA  ", "  Movie  ");
 
         Assert.AreEqual(a, b);
     }
@@ -26,8 +26,8 @@ public class EntityIdentityTests
     [TestMethod]
     public void SourceId_DifferentInputs_NeverCollide()
     {
-        var a = EntityIdentity.SourceId("Casablanca", "movie");
-        var b = EntityIdentity.SourceId("Casablanca", "tv");
+        string a = EntityIdentity.SourceId("Casablanca", "movie");
+        string b = EntityIdentity.SourceId("Casablanca", "tv");
 
         Assert.AreNotEqual(a, b);
     }
@@ -35,8 +35,8 @@ public class EntityIdentityTests
     [TestMethod]
     public void CharacterId_SameInput_IsDeterministic()
     {
-        var first  = EntityIdentity.CharacterId("some-source-id", "Rick Blaine", "Movie");
-        var second = EntityIdentity.CharacterId("some-source-id", "Rick Blaine", "Movie");
+        string first  = EntityIdentity.CharacterId("some-source-id", "Rick Blaine", "Movie");
+        string second = EntityIdentity.CharacterId("some-source-id", "Rick Blaine", "Movie");
 
         Assert.AreEqual(first, second);
     }
@@ -44,8 +44,8 @@ public class EntityIdentityTests
     [TestMethod]
     public void CharacterId_DifferentSourceId_NeverCollide()
     {
-        var a = EntityIdentity.CharacterId("source-a", "Rick Blaine", "Movie");
-        var b = EntityIdentity.CharacterId("source-b", "Rick Blaine", "Movie");
+        string a = EntityIdentity.CharacterId("source-a", "Rick Blaine", "Movie");
+        string b = EntityIdentity.CharacterId("source-b", "Rick Blaine", "Movie");
 
         Assert.AreNotEqual(a, b);
     }
@@ -54,8 +54,8 @@ public class EntityIdentityTests
     [TestMethod]
     public void CharacterId_DifferentSourceType_NeverCollide()
     {
-        var a = EntityIdentity.CharacterId("source-a", "Gandalf", "Movie");
-        var b = EntityIdentity.CharacterId("source-a", "Gandalf", "Book");
+        string a = EntityIdentity.CharacterId("source-a", "Gandalf", "Movie");
+        string b = EntityIdentity.CharacterId("source-a", "Gandalf", "Book");
 
         Assert.AreNotEqual(a, b);
     }
@@ -63,8 +63,8 @@ public class EntityIdentityTests
     [TestMethod]
     public void PersonId_SameInput_IsDeterministic()
     {
-        var first  = EntityIdentity.PersonId("Winston Churchill");
-        var second = EntityIdentity.PersonId("Winston Churchill");
+        string first  = EntityIdentity.PersonId("Winston Churchill");
+        string second = EntityIdentity.PersonId("Winston Churchill");
 
         Assert.AreEqual(first, second);
     }
@@ -72,8 +72,8 @@ public class EntityIdentityTests
     [TestMethod]
     public void PersonId_WhitespaceAndCasingDifferences_NormaliseToSameId()
     {
-        var a = EntityIdentity.PersonId("Winston Churchill");
-        var b = EntityIdentity.PersonId("  winston   churchill  ");
+        string a = EntityIdentity.PersonId("Winston Churchill");
+        string b = EntityIdentity.PersonId("  winston   churchill  ");
 
         Assert.AreEqual(a, b);
     }
@@ -81,12 +81,12 @@ public class EntityIdentityTests
     [TestMethod]
     public void SourceId_CharacterId_PersonId_NeverCollideWithEachOtherOrQuoteIdentity()
     {
-        var sourceId    = EntityIdentity.SourceId("X", "Y");
-        var characterId = EntityIdentity.CharacterId("X", "Y", "Z");
-        var personId    = EntityIdentity.PersonId("X");
-        var quoteId     = QuoteIdentity.StableId("X", "Y");
+        string sourceId    = EntityIdentity.SourceId("X", "Y");
+        string characterId = EntityIdentity.CharacterId("X", "Y", "Z");
+        string personId    = EntityIdentity.PersonId("X");
+        string quoteId     = QuoteIdentity.StableId("X", "Y");
 
-        var ids = new[] { sourceId, characterId, personId, quoteId };
+        string[] ids = [sourceId, characterId, personId, quoteId];
         Assert.AreAllDistinct(ids);
     }
 

@@ -25,8 +25,8 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void ToCsvRow_PopulatedRow_EmitsFieldsInCsvHeaderOrder()
     {
-        var actionId = Guid.NewGuid();
-        var row = new ImportActionFieldRowResponse
+        Guid actionId = Guid.NewGuid();
+        ImportActionFieldRowResponse row = new ImportActionFieldRowResponse
         {
             ActionId           = actionId,
             EntityId           = "e0000001-0000-4000-8000-000000000001",
@@ -39,7 +39,7 @@ public class ImportActionFieldRowMapperTests
             MarkCompletenessAs = CompletenessStatus.Complete,
         };
 
-        var fields = ImportActionFieldRowMapper.ToCsvRow(row).ToList();
+        List<string?> fields = [.. ImportActionFieldRowMapper.ToCsvRow(row)];
 
         Assert.AreSequenceEqual(
         [
@@ -51,7 +51,7 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void ToCsvRow_UndecidedRow_EmitsNullForDecisionCustomValueAndMarkCompletenessAs()
     {
-        var row = new ImportActionFieldRowResponse
+        ImportActionFieldRowResponse row = new ImportActionFieldRowResponse
         {
             ActionId      = Guid.NewGuid(),
             EntityId      = "e0000001-0000-4000-8000-000000000001",
@@ -61,7 +61,7 @@ public class ImportActionFieldRowMapperTests
             IncomingValue = "New Name",
         };
 
-        var fields = ImportActionFieldRowMapper.ToCsvRow(row).ToList();
+        List<string?> fields = [.. ImportActionFieldRowMapper.ToCsvRow(row)];
 
         Assert.IsNull(fields[6], "Decision");
         Assert.IsNull(fields[7], "CustomValue");
@@ -71,7 +71,7 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void ToCsvRow_ThenFromCsvRow_RoundTripsAllFields()
     {
-        var row = new ImportActionFieldRowResponse
+        ImportActionFieldRowResponse row = new ImportActionFieldRowResponse
         {
             ActionId           = Guid.NewGuid(),
             EntityId           = "e0000001-0000-4000-8000-000000000001",
@@ -84,8 +84,8 @@ public class ImportActionFieldRowMapperTests
             MarkCompletenessAs = CompletenessStatus.Complete,
         };
 
-        var fields = ImportActionFieldRowMapper.ToCsvRow(row).ToList();
-        var parsed = ImportActionFieldRowMapper.FromCsvRow(fields!);
+        List<string?> fields = [.. ImportActionFieldRowMapper.ToCsvRow(row)];
+        ImportActionFieldRowDto parsed = ImportActionFieldRowMapper.FromCsvRow(fields!);
 
         Assert.AreEqual(row.ActionId, parsed.ActionId);
         Assert.AreEqual(row.EntityId, parsed.EntityId);
@@ -101,7 +101,7 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void FromCsvRow_EmptyOptionalFields_ParsedAsNull()
     {
-        var parsed = ImportActionFieldRowMapper.FromCsvRow(
+        ImportActionFieldRowDto parsed = ImportActionFieldRowMapper.FromCsvRow(
             [Guid.NewGuid().ToString(), "e0000001-0000-4000-8000-000000000001", "Person", "name", "", "", "", "", ""]);
 
         Assert.IsNull(parsed.ExistingValue);
@@ -154,15 +154,15 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void DecodeGenres_DelimitedString_RoundTripsFromEncode()
     {
-        var encoded = ImportActionFieldRowMapper.EncodeGenres(["drama", "comedy", "sci-fi"]);
+        string? encoded = ImportActionFieldRowMapper.EncodeGenres(["drama", "comedy", "sci-fi"]);
         Assert.AreSequenceEqual(["drama", "comedy", "sci-fi"], ImportActionFieldRowMapper.DecodeGenres(encoded));
     }
 
     [TestMethod]
     public void BuildRequest_UnknownEntityType_ThrowsImportActionUnknownEntityTypeException()
     {
-        var rows = new[] { Row("NotAnEntityType", "name") };
-        var ex = Assert.ThrowsExactly<ImportActionUnknownEntityTypeException>(() => ImportActionFieldRowMapper.BuildRequest("NotAnEntityType", rows));
+        ImportActionFieldRowDto[] rows = [Row("NotAnEntityType", "name")];
+        ImportActionUnknownEntityTypeException ex = Assert.ThrowsExactly<ImportActionUnknownEntityTypeException>(() => ImportActionFieldRowMapper.BuildRequest("NotAnEntityType", rows));
         Assert.AreEqual("NotAnEntityType", ex.EntityType);
     }
 
@@ -170,8 +170,8 @@ public class ImportActionFieldRowMapperTests
     public void BuildRequest_FieldNotValidForEntityType_ThrowsImportActionUnknownFieldException()
     {
         // "quoteText" is a real field, but not one of Person's decidable fields.
-        var rows = new[] { Row(ImportActionEntityTypes.Person, "quoteText", FieldResolutionChoice.Replace) };
-        var ex = Assert.ThrowsExactly<ImportActionUnknownFieldException>(() => ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Person, rows));
+        ImportActionFieldRowDto[] rows = [Row(ImportActionEntityTypes.Person, "quoteText", FieldResolutionChoice.Replace)];
+        ImportActionUnknownFieldException ex = Assert.ThrowsExactly<ImportActionUnknownFieldException>(() => ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Person, rows));
         Assert.AreEqual(ImportActionEntityTypes.Person, ex.EntityType);
         Assert.AreEqual("quoteText", ex.Field);
     }
@@ -181,21 +181,21 @@ public class ImportActionFieldRowMapperTests
     {
         // "name" means something different on every one of these four entity types — proves the
         // (EntityType, Field) pair is what disambiguates, not Field alone.
-        var person = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Person, [Row(ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace)]);
+        ConflictDecisionRequest person = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Person, [Row(ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace)]);
         Assert.IsNotNull(person.PersonName);
         Assert.IsNull(person.CharacterName);
         Assert.IsNull(person.SeriesName);
         Assert.IsNull(person.UniverseName);
 
-        var character = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Character, [Row(ImportActionEntityTypes.Character, "name", FieldResolutionChoice.Replace)]);
+        ConflictDecisionRequest character = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Character, [Row(ImportActionEntityTypes.Character, "name", FieldResolutionChoice.Replace)]);
         Assert.IsNotNull(character.CharacterName);
         Assert.IsNull(character.PersonName);
 
-        var series = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Series, [Row(ImportActionEntityTypes.Series, "name", FieldResolutionChoice.Replace)]);
+        ConflictDecisionRequest series = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Series, [Row(ImportActionEntityTypes.Series, "name", FieldResolutionChoice.Replace)]);
         Assert.IsNotNull(series.SeriesName);
         Assert.IsNull(series.UniverseName);
 
-        var universe = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Universe, [Row(ImportActionEntityTypes.Universe, "name", FieldResolutionChoice.Replace)]);
+        ConflictDecisionRequest universe = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Universe, [Row(ImportActionEntityTypes.Universe, "name", FieldResolutionChoice.Replace)]);
         Assert.IsNotNull(universe.UniverseName);
         Assert.IsNull(universe.SeriesName);
     }
@@ -203,8 +203,8 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void BuildRequest_QuoteAllScalarFieldsPlusGenres_MapsEveryPropertyWithCorrectChoiceAndValue()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowDto[] rows =
+        [
             Row(ImportActionEntityTypes.Quote, "quoteText", FieldResolutionChoice.Custom, "Custom text"),
             Row(ImportActionEntityTypes.Quote, "originalLanguage", FieldResolutionChoice.Keep),
             Row(ImportActionEntityTypes.Quote, "source", FieldResolutionChoice.Replace),
@@ -213,9 +213,9 @@ public class ImportActionFieldRowMapperTests
             Row(ImportActionEntityTypes.Quote, "author", FieldResolutionChoice.Keep),
             Row(ImportActionEntityTypes.Quote, "type", FieldResolutionChoice.Replace),
             Row(ImportActionEntityTypes.Quote, "genres", FieldResolutionChoice.Custom, "drama;comedy"),
-        };
+        ];
 
-        var request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Quote, rows);
+        ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Quote, rows);
 
         Assert.AreEqual(FieldResolutionChoice.Custom, request.QuoteText!.Choice);
         Assert.AreEqual("Custom text", request.QuoteText.Value);
@@ -232,15 +232,15 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void BuildRequest_SourceFields_MapToSourcePrefixedProperties()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowDto[] rows =
+        [
             Row(ImportActionEntityTypes.Source, "title", FieldResolutionChoice.Replace),
             Row(ImportActionEntityTypes.Source, "type", FieldResolutionChoice.Keep),
             Row(ImportActionEntityTypes.Source, "date", FieldResolutionChoice.Replace),
             Row(ImportActionEntityTypes.Source, "seriesId", FieldResolutionChoice.Custom, "s0000001-0000-4000-8000-000000000001"),
-        };
+        ];
 
-        var request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Source, rows);
+        ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Source, rows);
 
         Assert.AreEqual(FieldResolutionChoice.Replace, request.SourceTitle!.Choice);
         Assert.AreEqual(FieldResolutionChoice.Keep, request.SourceType!.Choice);
@@ -252,13 +252,13 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void BuildRequest_SeriesFields_MapToSeriesPrefixedProperties()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowDto[] rows =
+        [
             Row(ImportActionEntityTypes.Series, "name", FieldResolutionChoice.Replace),
             Row(ImportActionEntityTypes.Series, "universeId", FieldResolutionChoice.Keep),
-        };
+        ];
 
-        var request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Series, rows);
+        ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Series, rows);
 
         Assert.AreEqual(FieldResolutionChoice.Replace, request.SeriesName!.Choice);
         Assert.AreEqual(FieldResolutionChoice.Keep, request.SeriesUniverseId!.Choice);
@@ -267,13 +267,13 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void BuildRequest_StageDirectionFields_MapToStageDirectionPrefixedProperties()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowDto[] rows =
+        [
             Row(ImportActionEntityTypes.StageDirection, "text", FieldResolutionChoice.Replace),
             Row(ImportActionEntityTypes.StageDirection, "imageUrl", FieldResolutionChoice.Keep),
-        };
+        ];
 
-        var request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.StageDirection, rows);
+        ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.StageDirection, rows);
 
         Assert.AreEqual(FieldResolutionChoice.Replace, request.StageDirectionText!.Choice);
         Assert.AreEqual(FieldResolutionChoice.Keep, request.StageDirectionImageUrl!.Choice);
@@ -282,14 +282,14 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void BuildRequest_SoundCueFields_MapToSoundCuePrefixedProperties()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowDto[] rows =
+        [
             Row(ImportActionEntityTypes.SoundCue, "text", FieldResolutionChoice.Replace),
             Row(ImportActionEntityTypes.SoundCue, "soundFileUrl", FieldResolutionChoice.Keep),
             Row(ImportActionEntityTypes.SoundCue, "imageUrl", FieldResolutionChoice.Replace),
-        };
+        ];
 
-        var request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.SoundCue, rows);
+        ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.SoundCue, rows);
 
         Assert.AreEqual(FieldResolutionChoice.Replace, request.SoundCueText!.Choice);
         Assert.AreEqual(FieldResolutionChoice.Keep, request.SoundCueSoundFileUrl!.Choice);
@@ -299,9 +299,9 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void BuildRequest_ConversationField_MapsToConversationDescription_NoDedicatedToDecisionMapExistsForThisEntity()
     {
-        var rows = new[] { Row(ImportActionEntityTypes.Conversation, "description", FieldResolutionChoice.Replace) };
+        ImportActionFieldRowDto[] rows = [Row(ImportActionEntityTypes.Conversation, "description", FieldResolutionChoice.Replace)];
 
-        var request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Conversation, rows);
+        ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Conversation, rows);
 
         Assert.AreEqual(FieldResolutionChoice.Replace, request.ConversationDescription!.Choice);
     }
@@ -309,9 +309,9 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void BuildRequest_RowWithNullDecision_SuppliesNoOverrideForThatField()
     {
-        var rows = new[] { Row(ImportActionEntityTypes.Person, "name", decision: null) };
+        ImportActionFieldRowDto[] rows = [Row(ImportActionEntityTypes.Person, "name", decision: null)];
 
-        var request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Person, rows);
+        ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Person, rows);
 
         Assert.IsNull(request.PersonName);
     }
@@ -319,13 +319,13 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void BuildRequest_MarkCompletenessAsRepeatedAcrossRows_TakesFirstNonNullValue()
     {
-        var rows = new[]
-        {
+        ImportActionFieldRowDto[] rows =
+        [
             Row(ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace, markCompletenessAs: CompletenessStatus.Complete),
             Row(ImportActionEntityTypes.Person, "dateOfBirth", FieldResolutionChoice.Keep, markCompletenessAs: CompletenessStatus.Complete),
-        };
+        ];
 
-        var request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Person, rows);
+        ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Person, rows);
 
         Assert.AreEqual(CompletenessStatus.Complete, request.MarkCompletenessAs);
     }
@@ -333,9 +333,9 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void BuildRequest_MarkCompletenessAsOmitted_LeavesRequestValueNull()
     {
-        var rows = new[] { Row(ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace) };
+        ImportActionFieldRowDto[] rows = [Row(ImportActionEntityTypes.Person, "name", FieldResolutionChoice.Replace)];
 
-        var request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Person, rows);
+        ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(ImportActionEntityTypes.Person, rows);
 
         Assert.IsNull(request.MarkCompletenessAs);
     }
@@ -343,7 +343,7 @@ public class ImportActionFieldRowMapperTests
     [TestMethod]
     public void DecidableFieldsByEntityType_CoversEveryEntityType()
     {
-        foreach (var entityType in ImportActionEntityTypes.All)
+        foreach (string entityType in ImportActionEntityTypes.All)
             Assert.IsTrue(ImportActionFieldRowMapper.DecidableFieldsByEntityType.ContainsKey(entityType), $"Missing decidable-fields entry for '{entityType}'");
         Assert.HasCount(ImportActionEntityTypes.All.Length, ImportActionFieldRowMapper.DecidableFieldsByEntityType,
             "The map must have an entry per entity type and no extras — a stale key would otherwise pass the loop above.");

@@ -30,7 +30,7 @@ internal static class SourceEndpoints
 
     internal static void MapSourceEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/v1/masterdata/sources")
+        RouteGroupBuilder group = app.MapGroup("/api/v1/masterdata/sources")
                        .WithTags(ApiTags.MasterData)
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
@@ -63,14 +63,14 @@ internal static class SourceEndpoints
             page, pageSize, localizer, repository,
             async items =>
             {
-                var sourceIds        = items.Select(s => s.Id).ToList();
-                var seriesBySourceId = await seriesReader.GetSeriesReferencesForManyAsync(sourceIds);
-                var seasonBySourceId = await seasonReader.GetSeasonReferencesForManyAsync(sourceIds);
+                List<Guid> sourceIds        = [.. items.Select(s => s.Id)];
+                IReadOnlyDictionary<Guid, (Guid Id, string Name)> seriesBySourceId = await seriesReader.GetSeriesReferencesForManyAsync(sourceIds);
+                IReadOnlyDictionary<Guid, (Guid Id, int Number, string? Title, string? Subtitle)> seasonBySourceId = await seasonReader.GetSeasonReferencesForManyAsync(sourceIds);
                 return [.. items.Select(s => ToResponse(s,
-                    seriesBySourceId.TryGetValue(s.Id, out var series)
+                    seriesBySourceId.TryGetValue(s.Id, out (Guid Id, string Name) series)
                         ? new MasterDataReference(series.Id.ToCanonicalId(), series.Name)
                         : null,
-                    seasonBySourceId.TryGetValue(s.Id, out var season)
+                    seasonBySourceId.TryGetValue(s.Id, out (Guid Id, int Number, string? Title, string? Subtitle) season)
                         ? new MasterDataReference(season.Id.ToCanonicalId(), SeasonDisplay.Format(season.Number, season.Title, season.Subtitle))
                         : null))];
             });
@@ -89,10 +89,10 @@ internal static class SourceEndpoints
         return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.SourceNotFound,
             async source =>
             {
-                var seriesRef = await seriesReader.GetSeriesReferenceAsync(source.Id);
-                var series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToCanonicalId(), s.Name) : null;
-                var seasonRef = await seasonReader.GetSeasonReferenceAsync(source.Id);
-                var season    = seasonRef is { } se ? new MasterDataReference(se.Id.ToCanonicalId(), SeasonDisplay.Format(se.Number, se.Title, se.Subtitle)) : null;
+                (Guid Id, string Name)? seriesRef = await seriesReader.GetSeriesReferenceAsync(source.Id);
+                MasterDataReference? series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToCanonicalId(), s.Name) : null;
+                (Guid Id, int Number, string? Title, string? Subtitle)? seasonRef = await seasonReader.GetSeasonReferenceAsync(source.Id);
+                MasterDataReference? season    = seasonRef is { } se ? new MasterDataReference(se.Id.ToCanonicalId(), SeasonDisplay.Format(se.Number, se.Title, se.Subtitle)) : null;
                 return ToResponse(source, series, season);
             });
     }

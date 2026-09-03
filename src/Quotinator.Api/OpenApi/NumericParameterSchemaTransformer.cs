@@ -138,13 +138,13 @@ internal sealed class NumericParameterSchemaTransformer : IOpenApiOperationTrans
         OpenApiOperationTransformerContext context,
         CancellationToken cancellationToken)
     {
-        var path = ScopedPath.From(context.Description.RelativePath);
-        if (!NumericParamsByPath.TryGetValue(path, out var paramMap))
+        string path = ScopedPath.From(context.Description.RelativePath);
+        if (!NumericParamsByPath.TryGetValue(path, out IReadOnlyDictionary<string, int?>? paramMap))
             return Task.CompletedTask;
 
-        foreach (var param in operation.Parameters ?? [])
+        foreach (IOpenApiParameter param in operation.Parameters ?? [])
         {
-            if (param.Name is null || !paramMap.TryGetValue(param.Name, out var @default)
+            if (param.Name is null || !paramMap.TryGetValue(param.Name, out int? @default)
                 || param is not OpenApiParameter p || p.Schema is not OpenApiSchema s)
                 continue;
 

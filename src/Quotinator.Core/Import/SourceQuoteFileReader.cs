@@ -29,7 +29,7 @@ public static class SourceQuoteFileReader
             // JsonNode.Parse here only sniffs whether the root is a bare array or a {"quotes":[...]}
             // wrapper — the one shape-sniffing exception CLAUDE.md's JSON parsing policy allows. Actual
             // field extraction always goes through JsonSerializer.Deserialize<List<SourceQuoteDto>>.
-            var root = JsonNode.Parse(json);
+            JsonNode? root = JsonNode.Parse(json);
 
             if (root is JsonArray)
             {
@@ -37,7 +37,7 @@ public static class SourceQuoteFileReader
                 return true;
             }
 
-            var quotesNode = root?["quotes"];
+            JsonNode? quotesNode = root?["quotes"];
             if (quotesNode is null)
             {
                 quotes = [];
@@ -71,16 +71,16 @@ public static class SourceQuoteFileReader
             // Same single shape-sniffing JsonNode.Parse call as TryParse — see its own remarks for why
             // this is the one permitted exception to the JSON parsing policy. Every section below is
             // still extracted via JsonSerializer.Deserialize<T>, never manual node walking.
-            var root = JsonNode.Parse(json);
+            JsonNode? root = JsonNode.Parse(json);
 
             if (root is JsonArray)
             {
-                var quotes = JsonSerializer.Deserialize<List<SourceQuoteDto>>(json, Options) ?? [];
+                List<SourceQuoteDto> quotes = JsonSerializer.Deserialize<List<SourceQuoteDto>>(json, Options) ?? [];
                 result = new ParsedSourceFileDto { Quotes = quotes };
                 return true;
             }
 
-            var quotesNode = root?["quotes"];
+            JsonNode? quotesNode = root?["quotes"];
             result = new ParsedSourceFileDto
             {
                 Quotes          = quotesNode is null ? [] : quotesNode.Deserialize<List<SourceQuoteDto>>(Options) ?? [],

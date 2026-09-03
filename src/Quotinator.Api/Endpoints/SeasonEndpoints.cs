@@ -30,7 +30,7 @@ internal static class SeasonEndpoints
 
     internal static void MapSeasonEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/v1/masterdata/seasons")
+        RouteGroupBuilder group = app.MapGroup("/api/v1/masterdata/seasons")
                        .WithTags(ApiTags.MasterData)
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
@@ -64,9 +64,9 @@ internal static class SeasonEndpoints
             page, pageSize, localizer, repository,
             async items =>
             {
-                var seasonIds        = items.Select(s => s.Id).ToList();
-                var seriesBySeasonId = await seriesReader.GetSeriesReferencesForManyAsync(seasonIds);
-                return [.. items.Select(s => ToResponse(s, seriesBySeasonId.TryGetValue(s.Id, out var series)
+                List<Guid> seasonIds        = [.. items.Select(s => s.Id)];
+                IReadOnlyDictionary<Guid, (Guid Id, string Name)> seriesBySeasonId = await seriesReader.GetSeriesReferencesForManyAsync(seasonIds);
+                return [.. items.Select(s => ToResponse(s, seriesBySeasonId.TryGetValue(s.Id, out (Guid Id, string Name) series)
                     ? new MasterDataReference(series.Id.ToCanonicalId(), series.Name)
                     : null))];
             });
@@ -84,8 +84,8 @@ internal static class SeasonEndpoints
         return EntityLookup.TryFindByIdAsync(id, localizer, repository, ApiMessages.SeasonNotFound,
             async entity =>
             {
-                var seriesRef = await seriesReader.GetSeriesReferenceAsync(entity.Id);
-                var series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToCanonicalId(), s.Name) : null;
+                (Guid Id, string Name)? seriesRef = await seriesReader.GetSeriesReferenceAsync(entity.Id);
+                MasterDataReference? series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToCanonicalId(), s.Name) : null;
                 return ToResponse(entity, series);
             });
     }

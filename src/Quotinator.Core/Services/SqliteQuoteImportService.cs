@@ -55,14 +55,14 @@ public sealed class SqliteQuoteImportService(
         Stream file, string fileName, ImportSettingsDto? settings, bool preview, bool purgeOnSuccess = false,
         CancellationToken cancellationToken = default)
     {
-        var (parsed, rawContent) = await LoadSourceFileAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
-        var quotes = parsed.Quotes;
-        var policy = ManifestPolicy.Resolve(ToManifestPolicy(settings?.DuplicateResolution), _configPolicy);
-        var effectivePolicy = policy.ForQuotes;
+        (ParsedSourceFileDto? parsed, string? rawContent) = await LoadSourceFileAsync(file, settings?.Converter, settings?.ConverterOptions, cancellationToken);
+        IReadOnlyList<SourceQuoteDto> quotes = parsed.Quotes;
+        ManifestPolicy policy = ManifestPolicy.Resolve(ToManifestPolicy(settings?.DuplicateResolution), _configPolicy);
+        DuplicateResolutionPolicy effectivePolicy = policy.ForQuotes;
 
-        var (valid, errors) = ValidateRows(quotes);
+        (List<SourceQuoteDto>? valid, List<ImportRowError>? errors) = ValidateRows(quotes);
 
-        var batch = new ImportBatchEntity
+        ImportBatchEntity batch = new ImportBatchEntity
         {
             Name           = fileName,
             Type           = new SafeValue<ImportBatchType?>(ImportBatchType.Import.ToString(), ImportBatchType.Import),
@@ -71,7 +71,7 @@ public sealed class SqliteQuoteImportService(
             Status         = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Staged.ToString(), ImportBatchStatus.Staged),
         };
         await _importBatches.InsertAsync(batch);
-        var batchIdStr = batch.Id.ToCanonicalId();
+        string batchIdStr = batch.Id.ToCanonicalId();
 
         // #251 — a multipart upload carries no folder information, only a bare filename, so
         // homeDirectoryKey is also always null (#252) — there is no root for it to be relative to.
@@ -83,10 +83,10 @@ public sealed class SqliteQuoteImportService(
             cancellationToken: cancellationToken);
 
         IReadOnlyList<ImportActionEntity> actions;
-        using (var conn = (SqliteConnection)_factory.CreateConnection())
+        using (SqliteConnection conn = (SqliteConnection)_factory.CreateConnection())
         {
             conn.Open();
-            using var tx = conn.BeginTransaction();
+            using SqliteTransaction tx = conn.BeginTransaction();
             actions = await ImportActionPlanner.PlanAsync(conn, valid, batch.Id, effectivePolicy, tx,
                 parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
                 parsed.Series, parsed.Universe, parsed.Characters, seasons: parsed.Seasons);
@@ -96,15 +96,15 @@ public sealed class SqliteQuoteImportService(
 
         // Matches the pre-#154 summary contract exactly: Skip and Review both never write, so both
         // count as "skipped" here (Review is additionally left Pending, awaiting a manual decision).
-        var imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
+        int imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
         // #168: a Blocked action has no AppliedPolicy (nothing decided yet), so "is not (Skip or
         // Review)" is true for it too — must be excluded explicitly, or a held/unwritten Blocked
         // action gets miscounted as a genuine update. #153: a Stale action is the same — nothing
         // decided yet, no AppliedPolicy.
-        var updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
+        int updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.Status.Parsed is not (ImportActionStatus.Blocked or ImportActionStatus.Stale)
                                        && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
-        var skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
+        int skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
 
         IReadOnlyList<Guid> pendingActionIds = [.. actions
@@ -113,7 +113,7 @@ public sealed class SqliteQuoteImportService(
 
         if (!preview)
         {
-            var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken: cancellationToken);
+            ImportActionBatchStatusResponse? applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken: cancellationToken);
             if (applyResult is null)
             {
                 // #177: Status/AppliedAt are now set by ApplyBatchAsync itself, the shared choke point
@@ -149,24 +149,24 @@ public sealed class SqliteQuoteImportService(
     /// <inheritdoc/>
     public async Task<ImportResultResponse> ApplyStagedBatchAsync(Guid batchId, bool purgeOnSuccess = false, CancellationToken cancellationToken = default)
     {
-        var batch = await _importBatches.GetByIdAsync(batchId) ?? throw new ImportBatchNotFoundException(batchId);
-        var batchIdStr = batchId.ToCanonicalId();
+        ImportBatchEntity batch = await _importBatches.GetByIdAsync(batchId) ?? throw new ImportBatchNotFoundException(batchId);
+        string batchIdStr = batchId.ToCanonicalId();
 
-        var actions = await _actionReader.GetAllForBatchAsync(batchIdStr);
+        IReadOnlyList<ImportActionEntity> actions = await _actionReader.GetAllForBatchAsync(batchIdStr);
 
-        var imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
+        int imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
         // #168: a Blocked action has no AppliedPolicy (nothing decided yet), so "is not (Skip or
         // Review)" is true for it too — must be excluded explicitly, or a held/unwritten Blocked
         // action gets miscounted as a genuine update. #153: a Stale action is the same — nothing
         // decided yet, no AppliedPolicy.
-        var updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
+        int updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.Status.Parsed is not (ImportActionStatus.Blocked or ImportActionStatus.Stale)
                                        && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
-        var skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
+        int skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
-        var totalQuotes = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote);
+        int totalQuotes = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote);
 
-        var applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken: cancellationToken);
+        ImportActionBatchStatusResponse? applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken: cancellationToken);
         IReadOnlyList<Guid> pendingActionIds = [];
         if (applyResult is null)
         {
@@ -203,8 +203,8 @@ public sealed class SqliteQuoteImportService(
 
     private static List<ImportConflictEntry> BuildConflictEntries(IReadOnlyList<ImportActionEntity> actions)
     {
-        var entries = new List<ImportConflictEntry>();
-        foreach (var action in actions)
+        List<ImportConflictEntry> entries = [];
+        foreach (ImportActionEntity action in actions)
         {
             // #168: a Blocked Quote action (like a Blocked Source action) has no AppliedPolicy yet —
             // nothing has been decided. It's surfaced to callers via PendingActionIds, not this legacy
@@ -214,15 +214,15 @@ public sealed class SqliteQuoteImportService(
                 || action.Status.Parsed is ImportActionStatus.Blocked or ImportActionStatus.Stale)
                 continue;
 
-            var existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
-            var incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
-            var existingFields  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
-            var incomingFields  = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
-            var policy          = action.AppliedPolicy.Parsed!.Value;
-            var isPending       = action.Status.Parsed == ImportActionStatus.Pending;
+            QuoteActionPayloadDto existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
+            QuoteActionPayloadDto incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
+            IReadOnlyDictionary<string, object?> existingFields  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
+            IReadOnlyDictionary<string, object?> incomingFields  = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
+            DuplicateResolutionPolicy policy          = action.AppliedPolicy.Parsed!.Value;
+            bool isPending       = action.Status.Parsed == ImportActionStatus.Pending;
 
-            var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-            var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+            bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+            FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
 
             entries.Add(new ImportConflictEntry
             {
@@ -240,10 +240,10 @@ public sealed class SqliteQuoteImportService(
 
     private static (List<SourceQuoteDto> Valid, List<ImportRowError> Errors) ValidateRows(IReadOnlyList<SourceQuoteDto> quotes)
     {
-        var valid  = new List<SourceQuoteDto>();
-        var errors = new List<ImportRowError>();
-        var row = 0;
-        foreach (var q in quotes)
+        List<SourceQuoteDto> valid  = [];
+        List<ImportRowError> errors = [];
+        int row = 0;
+        foreach (SourceQuoteDto q in quotes)
         {
             row++;
             if (string.IsNullOrWhiteSpace(q.QuoteText) || string.IsNullOrWhiteSpace(q.Source))
@@ -270,26 +270,26 @@ public sealed class SqliteQuoteImportService(
     /// </summary>
     private async Task<(ParsedSourceFileDto Parsed, string RawContent)> LoadSourceFileAsync(Stream file, string? converterName, JsonElement? converterOptions, CancellationToken cancellationToken)
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), "quotinator-import-" + Guid.NewGuid().ToString("N"));
+        string tempDir = Path.Combine(Path.GetTempPath(), "quotinator-import-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
         try
         {
-            var rawPath = Path.Combine(tempDir, "input.raw");
-            await using (var rawStream = File.Create(rawPath))
+            string rawPath = Path.Combine(tempDir, "input.raw");
+            await using (FileStream rawStream = File.Create(rawPath))
                 await file.CopyToAsync(rawStream, cancellationToken);
 
             // #251 — captured before any converter runs: this is the file the caller actually
             // uploaded, not a converter's transformed output, matching "reconstruct the original
             // content of a file" as the provenance record's own stated goal.
-            var rawContent = await File.ReadAllTextAsync(rawPath, cancellationToken);
-            var contentPath = rawPath;
+            string rawContent = await File.ReadAllTextAsync(rawPath, cancellationToken);
+            string contentPath = rawPath;
 
             if (!string.IsNullOrEmpty(converterName))
             {
-                if (!_converters.TryGetValue(converterName, out var converter))
+                if (!_converters.TryGetValue(converterName, out IQuoteSourceConverter? converter))
                     throw new UnknownConverterException(converterName);
 
-                var convertedPath = Path.Combine(tempDir, "converted.json");
+                string convertedPath = Path.Combine(tempDir, "converted.json");
                 try
                 {
                     await converter.ConvertAsync(rawPath, convertedPath, converterOptions, cancellationToken);
@@ -301,8 +301,8 @@ public sealed class SqliteQuoteImportService(
                 contentPath = convertedPath;
             }
 
-            var json = await File.ReadAllTextAsync(contentPath, cancellationToken);
-            if (!SourceQuoteFileReader.TryParseExtended(json, out var parsed))
+            string json = await File.ReadAllTextAsync(contentPath, cancellationToken);
+            if (!SourceQuoteFileReader.TryParseExtended(json, out ParsedSourceFileDto? parsed))
                 throw new QuoteImportValidationException("File content is not valid JSON in Quotinator's canonical quote schema.");
 
             if (parsed is null || parsed.Quotes.Count == 0)

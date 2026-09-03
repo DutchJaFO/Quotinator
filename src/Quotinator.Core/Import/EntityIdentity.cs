@@ -66,8 +66,8 @@ public static class EntityIdentity
     /// </summary>
     private static string StableId(params string[] parts)
     {
-        var key  = string.Join('|', parts.Select(QuoteIdentity.Normalise));
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+        string key  = string.Join('|', parts.Select(QuoteIdentity.Normalise));
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
         hash[6] = (byte)((hash[6] & 0x0f) | 0x40);
         hash[8] = (byte)((hash[8] & 0x3f) | 0x80);
         return new Guid(hash[..16]).ToString("D");

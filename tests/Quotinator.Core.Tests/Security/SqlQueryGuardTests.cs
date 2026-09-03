@@ -63,7 +63,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AllNamedSqlConstants))]
     public void SqlConstant_PassesIdCaseGuard(string name, string sql)
     {
-        var violations = SqlIdCaseGuard.FindViolations(sql);
+        IReadOnlyList<string> violations = SqlIdCaseGuard.FindViolations(sql);
         Assert.IsEmpty(violations,
             $"Sql.{name} contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
             "Wrap both sides in LOWER(...) — see ADR 012.");
@@ -74,7 +74,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AssembledQueryCases))]
     public void AssembledQuery_PassesIdCaseGuard(string label, string fullSql)
     {
-        var violations = SqlIdCaseGuard.FindViolations(fullSql);
+        IReadOnlyList<string> violations = SqlIdCaseGuard.FindViolations(fullSql);
         Assert.IsEmpty(violations,
             $"Assembled query '{label}' contains a case-sensitive id comparison: {string.Join(", ", violations)}. " +
             "Wrap both sides in LOWER(...) — see ADR 012.");
@@ -89,7 +89,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AllNamedSqlConstants))]
     public void SqlConstant_PassesSelectPresentationGuard(string name, string sql)
     {
-        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
+        IReadOnlyList<string> violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(sql);
         Assert.IsEmpty(violations,
             $"Sql.{name} selects {string.Join(", ", violations)} unwrapped — wrap in LOWER(...) AS " +
             "ColumnName in the SELECT column list. See ADR 012's \"read-time presentation " +
@@ -101,7 +101,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AssembledQueryCases))]
     public void AssembledQuery_PassesSelectPresentationGuard(string label, string fullSql)
     {
-        var violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(fullSql);
+        IReadOnlyList<string> violations = SqlSelectPresentationGuard.FindUnwrappedSelectColumns(fullSql);
         Assert.IsEmpty(violations,
             $"Assembled query '{label}' selects {string.Join(", ", violations)} unwrapped — wrap in " +
             "LOWER(...) AS ColumnName in the SELECT column list. See ADR 012's \"read-time " +
@@ -118,7 +118,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AllNamedSqlConstants))]
     public void SqlConstant_PassesTextCaseGuard(string name, string sql)
     {
-        var violations = SqlTextCaseGuard.FindViolations(sql, CoreTextColumnNames);
+        IReadOnlyList<string> violations = SqlTextCaseGuard.FindViolations(sql, CoreTextColumnNames);
         Assert.IsEmpty(violations,
             $"Sql.{name} contains a case-sensitive text comparison: {string.Join(", ", violations)}. " +
             "Wrap both sides via TextClauses.Equals(...) — see #211.");
@@ -129,7 +129,7 @@ public class SqlQueryGuardTests
     [DynamicData(nameof(AssembledQueryCases))]
     public void AssembledQuery_PassesTextCaseGuard(string label, string fullSql)
     {
-        var violations = SqlTextCaseGuard.FindViolations(fullSql, CoreTextColumnNames);
+        IReadOnlyList<string> violations = SqlTextCaseGuard.FindViolations(fullSql, CoreTextColumnNames);
         Assert.IsEmpty(violations,
             $"Assembled query '{label}' contains a case-sensitive text comparison: " +
             $"{string.Join(", ", violations)}. Wrap both sides via TextClauses.Equals(...) — see #211.");
@@ -146,8 +146,8 @@ public class SqlQueryGuardTests
         // These are the only SQL constants permitted to contain aggregate function calls.
         // All were reviewed when the CVE-2025-6965 guard was implemented (2026-06-19).
         // None use GROUP BY or HAVING, so none trigger the vulnerability.
-        var documented = new HashSet<string>
-        {
+        HashSet<string> documented =
+        [
             "Quotes.CountAll",                    // COUNT(*)
             "Quotes.CountActive",                 // COUNT(*)
             "Quotes.CountForRandomBase",          // COUNT(*) — private base for CountRandom factory
@@ -173,12 +173,11 @@ public class SqlQueryGuardTests
             "SoundCues.CountActive",               // COUNT(*) — #221 stats/report entity-type count
             "Season.CountActive",                  // COUNT(*) — #375
             "Season.CountActiveReferences",        // COUNT(*) — #375 reversal reference check
-        };
+        ];
 
-        var actual = EnumerateSqlConstants()
+        HashSet<string> actual = [.. EnumerateSqlConstants()
             .Where(x => SqlAggregateGuard.HasAggregateFunction(x.Sql))
-            .Select(x => x.Name)
-            .ToHashSet();
+            .Select(x => x.Name)];
 
         Assert.AreSequenceEqual(
             [.. documented], [.. actual], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of SQL constants containing aggregate functions has changed. " +
@@ -195,7 +194,7 @@ public class SqlQueryGuardTests
     [TestMethod]
     public void AllNamedSqlConstants_DiscoversZeroArgAndAllOptionalStaticFactoryMethods()
     {
-        var names = EnumerateSqlConstants().Select(x => x.Name).ToHashSet();
+        HashSet<string> names = [.. EnumerateSqlConstants().Select(x => x.Name)];
 
         Assert.Contains("Quotes.SelectById()", names);
         Assert.Contains("Quotes.SelectRawById()", names);
@@ -204,10 +203,10 @@ public class SqlQueryGuardTests
     public static IEnumerable<object[]> AssembledQueryCases()
     {
         // Full matrix of filter combinations — exercises every branch in BuildFilterWhere.
-        var seriesGuid   = Guid.Parse("11111111-0000-0000-0000-000000000001");
-        var universeGuid = Guid.Parse("22222222-0000-0000-0000-000000000001");
-        var filterCases = new (string Label, string[]? Types, string[]? Genres, string? Lang, string? Character, string? Author, string? Source, Guid? SeriesId, Guid? UniverseId, int? YearFrom, int? YearTo)[]
-        {
+        Guid seriesGuid   = Guid.Parse("11111111-0000-0000-0000-000000000001");
+        Guid universeGuid = Guid.Parse("22222222-0000-0000-0000-000000000001");
+        (string Label, string[]? Types, string[]? Genres, string? Lang, string? Character, string? Author, string? Source, Guid? SeriesId, Guid? UniverseId, int? YearFrom, int? YearTo)[] filterCases =
+        [
             ("no filters",      null,               null,               null, null,       null,    null,    null,        null,          null, null),
             ("type",            ["movie"],          null,               null, null,       null,    null,    null,        null,          null, null),
             ("genre",           null,               ["drama"],          null, null,       null,    null,    null,        null,          null, null),
@@ -222,11 +221,11 @@ public class SqlQueryGuardTests
             ("all filters",     ["tv"],             ["comedy"],         "de", "Sherlock", "Doyle", "BBC",   seriesGuid,  universeGuid,  1900, 2020),
             ("multi-type",      ["movie", "book"],  null,               null, null,       null,    null,    null,        null,          null, null),
             ("multi-genre",     null,               ["sci-fi", "drama"],null, null,       null,    null,    null,        null,          null, null),
-        };
+        ];
 
-        foreach (var (label, types, genres, lang, character, author, source, seriesId, universeId, yearFrom, yearTo) in filterCases)
+        foreach ((string? label, string[]? types, string[]? genres, string? lang, string? character, string? author, string? source, Guid? seriesId, Guid? universeId, int? yearFrom, int? yearTo) in filterCases)
         {
-            var (whereClause, _) = SqliteQuoteService.BuildFilterWhere(
+            (string? whereClause, Dapper.DynamicParameters _) = SqliteQuoteService.BuildFilterWhere(
                 types, genres, lang, unicodeAwareSearch: false, character, author, source, seriesId, universeId, yearFrom, yearTo);
 
             yield return [$"CountRandom({label})",    Sql.Quotes.CountRandom(whereClause)];
@@ -239,15 +238,15 @@ public class SqlQueryGuardTests
         // every other filterCases row above is invariant to the flag (no CharacterFilter/AuthorFilter/
         // SourceFilter clause gets added when those params are null), so doubling the whole matrix
         // would add no distinct coverage. Only these three need a unicodeAware:true variant.
-        var unicodeFilterCases = new (string Label, string? Character, string? Author, string? Source)[]
-        {
+        (string Label, string? Character, string? Author, string? Source)[] unicodeFilterCases =
+        [
             ("character (unicode)", "Hannibal", null,    null),
             ("author (unicode)",    null,       "Twain", null),
             ("source (unicode)",    null,       null,    "Matrix"),
-        };
-        foreach (var (label, character, author, source) in unicodeFilterCases)
+        ];
+        foreach ((string? label, string? character, string? author, string? source) in unicodeFilterCases)
         {
-            var (whereClause, _) = SqliteQuoteService.BuildFilterWhere(
+            (string? whereClause, Dapper.DynamicParameters _) = SqliteQuoteService.BuildFilterWhere(
                 null, null, null, unicodeAwareSearch: true, character, author, source, null, null, null, null);
 
             yield return [$"CountRandom({label})",    Sql.Quotes.CountRandom(whereClause)];
@@ -260,10 +259,10 @@ public class SqlQueryGuardTests
         // and guard-checks them automatically via AllNamedSqlConstants, so no manual case is needed here.
 
         // SelectSearch: one case per field-filter method × unicodeAware state × a representative where clause.
-        var (baseWhere, _) = SqliteQuoteService.BuildFilterWhere(["movie"], ["drama"], null, unicodeAwareSearch: false, null, null, null, null, null, null, null);
-        foreach (var unicodeAware in new[] { false, true })
+        (string? baseWhere, Dapper.DynamicParameters _) = SqliteQuoteService.BuildFilterWhere(["movie"], ["drama"], null, unicodeAwareSearch: false, null, null, null, null, null, null, null);
+        foreach (bool unicodeAware in new[] { false, true })
         {
-            foreach (var (fieldName, fieldFilter) in new[]
+            foreach ((string? fieldName, string? fieldFilter) in new[]
             {
                 (nameof(Sql.SearchField.Quote),     Sql.SearchField.Quote(unicodeAware)),
                 (nameof(Sql.SearchField.Source),    Sql.SearchField.Source(unicodeAware)),
@@ -303,8 +302,8 @@ public class SqlQueryGuardTests
     [TestMethod]
     public void ParameterizedSqlFactoryMethods_MatchDocumentedInventory()
     {
-        var documented = new HashSet<string>
-        {
+        HashSet<string> documented =
+        [
             "Quotes.SelectRandom",
             "Quotes.SelectPaged",
             "Quotes.SelectSearch",
@@ -319,9 +318,9 @@ public class SqlQueryGuardTests
             "SearchField.CharacterFilter",
             "SearchField.AuthorFilter",
             "SearchField.SourceFilter",
-        };
+        ];
 
-        var actual = EnumerateParameterizedSqlFactoryMethodNames().ToHashSet();
+        HashSet<string> actual = [.. EnumerateParameterizedSqlFactoryMethodNames()];
 
         Assert.AreSequenceEqual(
             [.. documented], [.. actual], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder, "The set of static SQL factory methods requiring at least one parameter has changed. " +

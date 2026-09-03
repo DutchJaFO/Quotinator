@@ -52,18 +52,18 @@ internal static class ImportActionPlanner
         SourceAliasLookup? sourceAliases = null,
         IReadOnlyList<SeasonEntryDto>? seasons = null)
     {
-        var actions = new List<ImportActionEntity>();
-        var sourceIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var characterIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var personIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var seriesIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var universeIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        List<ImportActionEntity> actions = [];
+        Dictionary<string, string> sourceIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> characterIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> personIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> seriesIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> universeIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, string> seasonIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var seenQuotes = new Dictionary<string, SourceQuoteDto>(StringComparer.Ordinal);
-        var seenQuoteStatus = new Dictionary<string, CompletenessStatus>(StringComparer.Ordinal);
+        Dictionary<string, SourceQuoteDto> seenQuotes = new Dictionary<string, SourceQuoteDto>(StringComparer.Ordinal);
+        Dictionary<string, CompletenessStatus> seenQuoteStatus = new Dictionary<string, CompletenessStatus>(StringComparer.Ordinal);
 
-        var batchIdStr = batchId.ToCanonicalId();
-        var now = DateTime.UtcNow;
+        string batchIdStr = batchId.ToCanonicalId();
+        DateTime now = DateTime.UtcNow;
 
         // #180: Universe then Series are planned before Source — a declared series[] entry's own
         // universeName must resolve against an already-built universe index, and a sources[] entry's
@@ -89,7 +89,7 @@ internal static class ImportActionPlanner
         // character this same file also declares explicitly via characters[].
         await PlanCharactersAsync(connection, characters ?? [], batchIdStr, policy, sourceIndex, characterIndex, actions, now, transaction);
 
-        foreach (var rawQuote in quotes)
+        foreach (SourceQuoteDto rawQuote in quotes)
         {
             // #210: canonicalize a file-authored Quotes.Id to lowercase at the single earliest point of
             // capture, matching this project's single canonical id convention (ADR 012, GuidHandler).
@@ -98,7 +98,7 @@ internal static class ImportActionPlanner
             // substitution is made. SourceQuoteDto is a plain class with init-only properties, not a
             // record, so a corrected copy is built the same way ApplyMergedFields already does above,
             // not via a `with` expression.
-            var q = EntityIdCanonicalizer.TryCanonicalizeLowercase(rawQuote.Id, out var canonicalQuoteId)
+            SourceQuoteDto q = EntityIdCanonicalizer.TryCanonicalizeLowercase(rawQuote.Id, out string? canonicalQuoteId)
                 ? new SourceQuoteDto
                 {
                     Id = canonicalQuoteId!,
@@ -121,8 +121,8 @@ internal static class ImportActionPlanner
             // field displays in its audit trail. See #181's plan doc, Step 10, for the Zootopia-class
             // bug this closes (a rule that only corrected the displayed field left the quote linked to
             // a spurious, alias-derived Source row).
-            var sourceAliasStale = false;
-            if (sourceAliases is not null && sourceAliases.TryResolve(q.Source, q.Type.ToString(), out var canonical))
+            bool sourceAliasStale = false;
+            if (sourceAliases is not null && sourceAliases.TryResolve(q.Source, q.Type.ToString(), out (string CanonicalTitle, string CanonicalType) canonical))
             {
                 // #153: staleness here means "this alias's canonical target was renamed/changed since
                 // the alias was authored" — NOT "no Source with this exact title exists yet." Those
@@ -145,8 +145,8 @@ internal static class ImportActionPlanner
                 // canonical pair, a rename genuinely happened and the alias is stale. If no row with
                 // that id exists at all, nothing has been renamed — this is simply the first time this
                 // canonical Source is being introduced, exactly what the alias exists to guide.
-                var canonicalId = EntityIdentity.SourceId(canonical.CanonicalTitle, canonical.CanonicalType);
-                var canonicalRow = sourceIndex.TryGetValue($"{canonical.CanonicalTitle}|{canonical.CanonicalType}", out var indexedId)
+                string canonicalId = EntityIdentity.SourceId(canonical.CanonicalTitle, canonical.CanonicalType);
+                (string Title, string Type, bool Found, string? IndexedId) canonicalRow = sourceIndex.TryGetValue($"{canonical.CanonicalTitle}|{canonical.CanonicalType}", out string? indexedId)
                     ? (Title: canonical.CanonicalTitle, Type: canonical.CanonicalType, Found: true, IndexedId: (string?)indexedId)
                     : await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                         Sql.Sources.SelectExistingById, new { id = canonicalId }, transaction) is { } row
@@ -155,7 +155,7 @@ internal static class ImportActionPlanner
 
                 // Not found at all → first-time creation, not stale. Found (by id) → stale only if the
                 // live row's own Title/Type has drifted from what the alias itself claims is canonical.
-                var canonicalSourceExists = !canonicalRow.Found
+                bool canonicalSourceExists = !canonicalRow.Found
                     || (string.Equals(canonicalRow.Title, canonical.CanonicalTitle, StringComparison.OrdinalIgnoreCase)
                         && string.Equals(canonicalRow.Type, canonical.CanonicalType, StringComparison.OrdinalIgnoreCase));
 
@@ -193,11 +193,11 @@ internal static class ImportActionPlanner
             // no-ops here, since ResolveWithDecisions is given the same value on both sides.
             if (conflictRules is not null && !sourceAliasStale)
             {
-                var rawFields = QuoteFieldMerge.ToFieldMap(q);
+                IReadOnlyDictionary<string, object?> rawFields = QuoteFieldMerge.ToFieldMap(q);
                 Dictionary<string, FieldMergeDecision>? customDecisions = null;
-                foreach (var field in rawFields.Keys)
+                foreach (string field in rawFields.Keys)
                 {
-                    if (conflictRules.TryResolve(q.Id, field, rawFields[field], rawFields[field], out var decision, out var isStale)
+                    if (conflictRules.TryResolve(q.Id, field, rawFields[field], rawFields[field], out FieldMergeDecision decision, out bool isStale)
                         && !isStale && decision.Choice == FieldResolutionChoice.Custom)
                     {
                         (customDecisions ??= new Dictionary<string, FieldMergeDecision>(StringComparer.OrdinalIgnoreCase))[field] = decision;
@@ -206,16 +206,16 @@ internal static class ImportActionPlanner
 
                 if (customDecisions is { Count: > 0 })
                 {
-                    var corrected = FieldMergeResolver.ResolveWithDecisions(rawFields, rawFields, customDecisions);
+                    FieldMergeResult corrected = FieldMergeResolver.ResolveWithDecisions(rawFields, rawFields, customDecisions);
                     q = QuoteFieldMerge.ApplyMergedFields(corrected.MergedFields, q);
                 }
             }
 
-            var sourceId = await ResolveSourceAsync(connection, q, sourceIndex, batchIdStr, actions, now, transaction);
-            var characterId = await ResolveCharacterAsync(connection, q, sourceId, characterIndex, batchIdStr, actions, now, transaction);
-            var personId = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
+            string sourceId = await ResolveSourceAsync(connection, q, sourceIndex, batchIdStr, actions, now, transaction);
+            string? characterId = await ResolveCharacterAsync(connection, q, sourceId, characterIndex, batchIdStr, actions, now, transaction);
+            string? personId = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
 
-            var existing = seenQuotes.TryGetValue(q.Id, out var firstInFile)
+            QuoteSeedWriter.ExistingQuoteFields? existing = seenQuotes.TryGetValue(q.Id, out SourceQuoteDto? firstInFile)
                 ? new QuoteSeedWriter.ExistingQuoteFields(QuoteFieldMerge.ToFieldMap(firstInFile), batchIdStr, seenQuoteStatus.GetValueOrDefault(q.Id, CompletenessStatus.Incomplete))
                 : await QuoteSeedWriter.TryGetExistingFieldsAsync(connection, q.Id, transaction);
 
@@ -230,14 +230,14 @@ internal static class ImportActionPlanner
                     seenQuotes[q.Id] = q;
                     seenQuoteStatus[q.Id] = CompletenessStatus.Incomplete;
                 }
-                var payload = new QuoteActionPayloadDto
+                QuoteActionPayloadDto payload = new QuoteActionPayloadDto
                 {
                     Fields = QuoteFieldMerge.ToDto(q),
                     SourceId = sourceId,
                     CharacterId = characterId,
                     PersonId = personId,
                 };
-                var addStatus = sourceAliasStale ? ImportActionStatus.Stale : ImportActionStatus.Decided;
+                ImportActionStatus addStatus = sourceAliasStale ? ImportActionStatus.Stale : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
@@ -253,17 +253,17 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            var existingFields = existing.Value.Fields;
-            var existingBatchId = existing.Value.ImportBatchId;
-            var incomingFields = QuoteFieldMerge.ToFieldMap(q);
+            IReadOnlyDictionary<string, object?> existingFields = existing.Value.Fields;
+            string? existingBatchId = existing.Value.ImportBatchId;
+            IReadOnlyDictionary<string, object?> incomingFields = QuoteFieldMerge.ToFieldMap(q);
 
-            var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-            var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+            bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+            FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
             // Skip's resolved payload is the existing row's own values (nothing changes) — not the
             // incoming row's, which is what "resolved" would otherwise default to. The applier's Quote
             // case checks AppliedPolicy==Skip and skips the write/changelog entirely regardless, but
             // storing the accurate "nothing changes" payload here keeps GET /import/actions honest.
-            var resolved = policy switch
+            SourceQuoteDto resolved = policy switch
             {
                 DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs => QuoteFieldMerge.ApplyMergedFields(mergeResult!.MergedFields, q),
                 DuplicateResolutionPolicy.Skip => QuoteFieldMerge.ApplyMergedFields(existingFields, q),
@@ -274,9 +274,8 @@ internal static class ImportActionPlanner
             // the raw incoming value — Skip's resolved value always equals existingFields (nothing
             // written), so Skip can never block a Complete quote; a merge policy only blocks on
             // fields the merge itself would actually change.
-            var resolvedFields = QuoteFieldMerge.ToFieldMap(resolved);
-            var effectiveChanged = new HashSet<string>(
-                existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+            IReadOnlyDictionary<string, object?> resolvedFields = QuoteFieldMerge.ToFieldMap(resolved);
+            HashSet<string> effectiveChanged = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
             // #373: the row arrived and already matches. Reported as Unchanged rather than Modify,
             // which claims a write that never happens, and rather than nothing at all, which leaves a
@@ -336,9 +335,9 @@ internal static class ImportActionPlanner
             FieldMergeResult? ruleResolved = null;
             if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
             {
-                var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
-                var hasStaleRule = false;
-                foreach (var field in existingFields.Keys)
+                Dictionary<string, FieldMergeDecision> ruleDecisions = [];
+                bool hasStaleRule = false;
+                foreach (string field in existingFields.Keys)
                 {
                     // #153: a field already equal on both sides needs no decision at all (matching
                     // FieldMergeResolver's own "equal values keep existing" auto-resolution) — most
@@ -350,7 +349,7 @@ internal static class ImportActionPlanner
                     if (FieldMergeResolver.ValuesEqual(existingFields[field], incomingFields.GetValueOrDefault(field)))
                         continue;
 
-                    if (!conflictRules.TryResolve(q.Id, field, existingFields[field], incomingFields.GetValueOrDefault(field), out var decision, out var isStale))
+                    if (!conflictRules.TryResolve(q.Id, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
                         continue;
                     if (isStale) hasStaleRule = true;
                     else ruleDecisions[field] = decision;
@@ -403,9 +402,9 @@ internal static class ImportActionPlanner
             // human to decide. #153: a stale alias substitution overrides all of that — this quote's
             // Source resolution is unreliable regardless of how cleanly its fields would otherwise
             // have resolved, so it is held for review the same way a stale rule already is above.
-            var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
-            var status = sourceAliasStale ? ImportActionStatus.Stale : isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
-            var isUnresolved = isPending || sourceAliasStale;
+            bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+            ImportActionStatus status = sourceAliasStale ? ImportActionStatus.Stale : isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+            bool isUnresolved = isPending || sourceAliasStale;
 
             actions.Add(new ImportActionEntity
             {
@@ -466,9 +465,9 @@ internal static class ImportActionPlanner
         SqliteConnection connection, SourceQuoteDto q, Dictionary<string, string> index,
         string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
-        var typeStr = q.Type.ToString();
-        var key = $"{q.Source}|{typeStr}";
-        if (index.TryGetValue(key, out var existing)) return existing;
+        string typeStr = q.Type.ToString();
+        string key = $"{q.Source}|{typeStr}";
+        if (index.TryGetValue(key, out string? existing)) return existing;
 
         // #162: raw string, not Guid?-typed — a natural-key-matched row's id may now be an explicit,
         // not-necessarily-canonically-cased file-authored id (from a sources[] entry), not only a
@@ -491,10 +490,10 @@ internal static class ImportActionPlanner
 
             if (row.Date is null && q.Date is not null)
             {
-                var existingPayload = new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId, row.SeasonId);
-                var incomingPayload = new SourceActionPayloadDto(q.Source, typeStr, q.Date, row.SeriesId, row.SeasonId);
-                var changedFields = new HashSet<string> { "date" };
-                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                SourceActionPayloadDto existingPayload = new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId, row.SeasonId);
+                SourceActionPayloadDto incomingPayload = new SourceActionPayloadDto(q.Source, typeStr, q.Date, row.SeriesId, row.SeasonId);
+                HashSet<string> changedFields = ["date"];
+                CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
 
                 actions.Add(CompletenessGuard.ShouldBlock(currentStatus, changedFields)
                     ? new ImportActionEntity
@@ -534,7 +533,7 @@ internal static class ImportActionPlanner
             return row.Id;
         }
 
-        var stableId = EntityIdentity.SourceId(q.Source, typeStr);
+        string stableId = EntityIdentity.SourceId(q.Source, typeStr);
         index[key] = stableId;
 
         actions.Add(new ImportActionEntity
@@ -555,24 +554,24 @@ internal static class ImportActionPlanner
         SqliteConnection connection, SourceQuoteDto q, string sourceId, Dictionary<string, string> index,
         string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
-        var sourceTypeStr = q.Type.ToString();
+        string sourceTypeStr = q.Type.ToString();
         if (string.IsNullOrWhiteSpace(q.Character)) return null;
 
-        var key = $"{sourceId}|{q.Character}";
-        if (index.TryGetValue(key, out var existing)) return existing;
+        string key = $"{sourceId}|{q.Character}";
+        if (index.TryGetValue(key, out string? existing)) return existing;
 
         // #174, ADR 013: the resolving Source's own SeriesId is the Series-relatedness signal for the
         // merge-candidate lookup below — NULL for a not-yet-existing (brand-new) Source, which
         // correctly means "no known Series" (Decision 1(c)'s conservative default).
-        var seriesId = await connection.ExecuteScalarAsync<string?>(
+        string? seriesId = await connection.ExecuteScalarAsync<string?>(
             Sql.Sources.SelectSeriesIdById, new { id = sourceId }, transaction);
 
-        var existingId = await connection.ExecuteScalarAsync<Guid?>(
+        Guid? existingId = await connection.ExecuteScalarAsync<Guid?>(
             Sql.Characters.SelectGlobalCandidateId,
             new { sourceId, name = q.Character, sourceType = sourceTypeStr, seriesId }, transaction);
         if (existingId is { } foundId)
         {
-            var idStr = foundId.ToCanonicalId();
+            string idStr = foundId.ToCanonicalId();
             index[key] = idStr;
             // #373: arrived and already matches — reported once per distinct Character, not per quote.
             actions.Add(UnchangedAction(
@@ -581,7 +580,7 @@ internal static class ImportActionPlanner
             return idStr;
         }
 
-        var stableId = EntityIdentity.CharacterId(sourceId, q.Character, sourceTypeStr);
+        string stableId = EntityIdentity.CharacterId(sourceId, q.Character, sourceTypeStr);
         index[key] = stableId;
 
         actions.Add(new ImportActionEntity
@@ -604,20 +603,20 @@ internal static class ImportActionPlanner
     {
         if (string.IsNullOrWhiteSpace(q.Author)) return null;
 
-        if (index.TryGetValue(q.Author, out var existing)) return existing;
+        if (index.TryGetValue(q.Author, out string? existing)) return existing;
 
-        var existingId = await connection.ExecuteScalarAsync<Guid?>(
+        Guid? existingId = await connection.ExecuteScalarAsync<Guid?>(
             Sql.People.SelectIdByName, new { name = q.Author }, transaction);
         if (existingId is { } foundId)
         {
-            var idStr = foundId.ToCanonicalId();
+            string idStr = foundId.ToCanonicalId();
             index[q.Author] = idStr;
             // #373: arrived and already matches — reported once per distinct Person, not per quote.
             actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Person, idStr, new PersonActionPayloadDto(q.Author), now));
             return idStr;
         }
 
-        var stableId = EntityIdentity.PersonId(q.Author);
+        string stableId = EntityIdentity.PersonId(q.Author);
         index[q.Author] = stableId;
 
         actions.Add(new ImportActionEntity
@@ -659,15 +658,15 @@ internal static class ImportActionPlanner
         List<ImportActionEntity> actions, DateTime now,
         SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
     {
-        foreach (var s in sources)
+        foreach (SourceEntryDto s in sources)
         {
-            var typeStr = s.Type.ToString();
+            string typeStr = s.Type.ToString();
 
             // #209: canonicalize once, at the single earliest point this entry's explicit id is
             // captured — every later reference to the file's id (lookup, matchedId, addId) uses this
             // canonicalized form instead of the file's raw casing. A malformed or absent id passes
             // through unchanged; general id-format validation is out of scope here.
-            var canonicalId = s.Id is { } sIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(sIdRaw, out var sIdCanonical)
+            string? canonicalId = s.Id is { } sIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(sIdRaw, out string? sIdCanonical)
                 ? sIdCanonical
                 : s.Id;
 
@@ -678,13 +677,13 @@ internal static class ImportActionPlanner
             // a DB lookup for a Series declared in an earlier batch. A name with no match anywhere
             // resolves to null — silently dropped, same as PlanSeriesAsync's own dangling-universeName
             // treatment.
-            var resolvedSeriesId = Optional<string>.Absent;
+            Optional<string> resolvedSeriesId = Optional<string>.Absent;
             if (s.SeriesName.HasValue)
             {
-                var seriesName = s.SeriesName.Value;
+                string? seriesName = s.SeriesName.Value;
                 resolvedSeriesId = seriesName is null
                     ? Optional<string>.Of(null)
-                    : Optional<string>.Of(seriesIndex.TryGetValue(seriesName, out var indexed)
+                    : Optional<string>.Of(seriesIndex.TryGetValue(seriesName, out string? indexed)
                         ? indexed
                         : await connection.ExecuteScalarAsync<Guid?>(Sql.Series.SelectIdByName, new { name = seriesName }, transaction) is { } found
                             ? found.ToCanonicalId()
@@ -714,39 +713,38 @@ internal static class ImportActionPlanner
 
             // #162's correction shape: an entry carrying an explicit id is matched by it first. An
             // entry omitting one (#180's enrichment shape) skips straight to the natural-key path below.
-            var existing = canonicalId is { } explicitId
+            (string Title, string Type, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = canonicalId is { } explicitId
                 ? await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                     Sql.Sources.SelectExistingById, new { id = explicitId }, transaction)
                 : null;
 
             if (existing is { } row)
             {
-                var matchedId = canonicalId!; // Non-null by construction: `existing` is only set when canonicalId is.
+                string matchedId = canonicalId!; // Non-null by construction: `existing` is only set when canonicalId is.
                 // #190: an absent Date/SeriesName resolves to the existing row's own value — never a
                 // change, under any policy. See OptionalExtensions.ResolveAgainst.
-                var incomingDate = s.Date.ResolveAgainst(row.Date);
-                var incomingSeriesId = resolvedSeriesId.ResolveAgainst(row.SeriesId);
-                var existingPayload = new SourceActionPayloadDto(row.Title, row.Type, row.Date, row.SeriesId, row.SeasonId);
-                var incomingPayload = new SourceActionPayloadDto(s.Title, typeStr, incomingDate, incomingSeriesId, resolvedSeasonId.ResolveAgainst(row.SeasonId));
-                var existingFields = ToFieldMap(existingPayload);
-                var incomingFields = ToFieldMap(incomingPayload);
+                string? incomingDate = s.Date.ResolveAgainst(row.Date);
+                string? incomingSeriesId = resolvedSeriesId.ResolveAgainst(row.SeriesId);
+                SourceActionPayloadDto existingPayload = new SourceActionPayloadDto(row.Title, row.Type, row.Date, row.SeriesId, row.SeasonId);
+                SourceActionPayloadDto incomingPayload = new SourceActionPayloadDto(s.Title, typeStr, incomingDate, incomingSeriesId, resolvedSeasonId.ResolveAgainst(row.SeasonId));
+                Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
+                Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
                 // The corrected Title/Type is what a same-batch quote referencing this Source should
                 // resolve to — indexed regardless of whether this ends up changed/blocked/unchanged.
                 sourceIndex[$"{s.Title}|{typeStr}"] = matchedId;
 
-                var changedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                HashSet<string> changedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 // #181: build the rule-decisions map before the "nothing changed" early exit below —
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides.
-                var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
-                var hasStaleRule = false;
+                Dictionary<string, FieldMergeDecision> ruleDecisions = [];
+                bool hasStaleRule = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
-                    foreach (var field in existingFields.Keys)
+                    foreach (string field in existingFields.Keys)
                     {
-                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out var decision, out var isStale))
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
                             continue;
                         if (isStale) hasStaleRule = true;
                         else ruleDecisions[field] = decision;
@@ -763,9 +761,9 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved = policy switch
+                bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                SourceActionPayloadDto resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new SourceActionPayloadDto((string)mergeResult!.MergedFields["title"]!, (string)mergeResult.MergedFields["type"]!, (string?)mergeResult.MergedFields["date"], (string?)mergeResult.MergedFields["seriesId"]),
@@ -777,11 +775,10 @@ internal static class ImportActionPlanner
                 // not the raw incoming value used for the "unchanged" check above — Skip's resolved
                 // value is always existingPayload (nothing written), so Skip can never block a
                 // Complete row; a merge policy only blocks on fields the merge itself would change.
-                var resolvedFields = ToFieldMap(resolved);
-                var effectiveChangedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
+                HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
-                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
                     actions.Add(new ImportActionEntity
@@ -827,8 +824,8 @@ internal static class ImportActionPlanner
                 if (ruleResolved is not null)
                     resolved = new SourceActionPayloadDto((string)ruleResolved.MergedFields["title"]!, (string)ruleResolved.MergedFields["type"]!, (string?)ruleResolved.MergedFields["date"], (string?)ruleResolved.MergedFields["seriesId"], (string?)ruleResolved.MergedFields["seasonId"]);
 
-                var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
-                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+                ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
@@ -849,7 +846,7 @@ internal static class ImportActionPlanner
             // Falls back to natural-key (title+type): either the entry omits an explicit id (#180's
             // enrichment shape) or it carries one that matches no row yet (a not-yet-migrated row —
             // #162's scope boundary).
-            var existingByKey = await connection.QuerySingleOrDefaultAsync<(string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+            (string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)? existingByKey = await connection.QuerySingleOrDefaultAsync<(string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.Sources.SelectExistingByTitleAndType, new { title = s.Title, type = typeStr }, transaction);
 
             if (existingByKey is { } keyRow)
@@ -865,25 +862,24 @@ internal static class ImportActionPlanner
                 // "date" still never changes it (ResolveAgainst falls back to keyRow.Date); one that
                 // explicitly sets "date" now actually takes effect, where it was previously always
                 // silently ignored regardless of what the file said.
-                var keyIncomingDate = s.Date.ResolveAgainst(keyRow.Date);
-                var keyIncomingSeriesId = resolvedSeriesId.ResolveAgainst(keyRow.SeriesId);
-                var keyExistingPayload = new SourceActionPayloadDto(s.Title, typeStr, keyRow.Date, keyRow.SeriesId, keyRow.SeasonId);
-                var keyIncomingPayload = new SourceActionPayloadDto(s.Title, typeStr, keyIncomingDate, keyIncomingSeriesId, resolvedSeasonId.ResolveAgainst(keyRow.SeasonId));
-                var keyExistingFields = ToFieldMap(keyExistingPayload);
-                var keyIncomingFields = ToFieldMap(keyIncomingPayload);
+                string? keyIncomingDate = s.Date.ResolveAgainst(keyRow.Date);
+                string? keyIncomingSeriesId = resolvedSeriesId.ResolveAgainst(keyRow.SeriesId);
+                SourceActionPayloadDto keyExistingPayload = new SourceActionPayloadDto(s.Title, typeStr, keyRow.Date, keyRow.SeriesId, keyRow.SeasonId);
+                SourceActionPayloadDto keyIncomingPayload = new SourceActionPayloadDto(s.Title, typeStr, keyIncomingDate, keyIncomingSeriesId, resolvedSeasonId.ResolveAgainst(keyRow.SeasonId));
+                Dictionary<string, object?> keyExistingFields = ToFieldMap(keyExistingPayload);
+                Dictionary<string, object?> keyIncomingFields = ToFieldMap(keyIncomingPayload);
 
-                var changedFields = new HashSet<string>(
-                    keyExistingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, keyIncomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                HashSet<string> changedFields = [.. keyExistingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, keyIncomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 // #181: build the rule-decisions map before the "nothing changed" early exit below —
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides.
-                var keyRuleDecisions = new Dictionary<string, FieldMergeDecision>();
-                var keyHasStaleRule = false;
+                Dictionary<string, FieldMergeDecision> keyRuleDecisions = [];
+                bool keyHasStaleRule = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
-                    foreach (var field in keyExistingFields.Keys)
+                    foreach (string field in keyExistingFields.Keys)
                     {
-                        if (!conflictRules.TryResolve(keyRow.Id, field, keyExistingFields[field], keyIncomingFields.GetValueOrDefault(field), out var decision, out var isStale))
+                        if (!conflictRules.TryResolve(keyRow.Id, field, keyExistingFields[field], keyIncomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
                             continue;
                         if (isStale) keyHasStaleRule = true;
                         else keyRuleDecisions[field] = decision;
@@ -903,9 +899,9 @@ internal static class ImportActionPlanner
                 // but Skip, so MergeOurs could silently overwrite an existing Series link even though
                 // its own contract is "existing wins on a genuine conflict". Now matches the
                 // explicit-id branch's shape exactly.
-                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-                var mergeResult = isMerge ? FieldMergeResolver.Resolve(keyExistingFields, keyIncomingFields, policy) : null;
-                var resolved = policy switch
+                bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(keyExistingFields, keyIncomingFields, policy) : null;
+                SourceActionPayloadDto resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new SourceActionPayloadDto((string)mergeResult!.MergedFields["title"]!, (string)mergeResult.MergedFields["type"]!, (string?)mergeResult.MergedFields["date"], (string?)mergeResult.MergedFields["seriesId"]),
@@ -915,11 +911,10 @@ internal static class ImportActionPlanner
 
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
-                var resolvedFields = ToFieldMap(resolved);
-                var effectiveChangedFields = new HashSet<string>(
-                    keyExistingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
+                HashSet<string> effectiveChangedFields = [.. keyExistingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
-                var keyCurrentStatus = keyRow.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                CompletenessStatus keyCurrentStatus = keyRow.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(keyCurrentStatus, effectiveChangedFields))
                 {
                     actions.Add(new ImportActionEntity
@@ -964,8 +959,8 @@ internal static class ImportActionPlanner
                 if (keyRuleResolved is not null)
                     resolved = new SourceActionPayloadDto((string)keyRuleResolved.MergedFields["title"]!, (string)keyRuleResolved.MergedFields["type"]!, (string?)keyRuleResolved.MergedFields["date"], (string?)keyRuleResolved.MergedFields["seriesId"], (string?)keyRuleResolved.MergedFields["seasonId"]);
 
-                var keyIsPending = policy == DuplicateResolutionPolicy.Review && keyRuleResolved is null;
-                var keyStatus = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                bool keyIsPending = policy == DuplicateResolutionPolicy.Review && keyRuleResolved is null;
+                ImportActionStatus keyStatus = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
@@ -987,7 +982,7 @@ internal static class ImportActionPlanner
             // EntityIdentity-derived stable id is used: the same value ResolveSourceAsync would
             // independently compute for a quote referencing this same title/type, so both resolve to
             // one row rather than two.
-            var addId = canonicalId ?? EntityIdentity.SourceId(s.Title, typeStr);
+            string addId = canonicalId ?? EntityIdentity.SourceId(s.Title, typeStr);
 
             // Indexed so a same-batch quote referencing this exact title/type resolves to this same
             // new row, instead of ResolveSourceAsync independently deriving its own EntityIdentity
@@ -1038,11 +1033,11 @@ internal static class ImportActionPlanner
         DuplicateResolutionPolicy policy, Dictionary<string, string> personIndex,
         List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
-        foreach (var p in people)
+        foreach (PersonEntryDto p in people)
         {
             // #209: canonicalize once, at the single earliest point this entry's explicit id is
             // captured — PersonEntryDto.Id is required, so there is no absent case to preserve.
-            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(p.Id, out var pIdCanonical) ? pIdCanonical! : p.Id;
+            string canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(p.Id, out string? pIdCanonical) ? pIdCanonical! : p.Id;
 
             (string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = await connection.QuerySingleOrDefaultAsync<(string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.People.SelectExistingById, new { id = canonicalId }, transaction);
@@ -1051,17 +1046,16 @@ internal static class ImportActionPlanner
             {
                 // #190: an absent DateOfBirth/DateOfDeath resolves to the existing row's own value —
                 // never a change, under any policy.
-                var incomingDob = p.DateOfBirth.ResolveAgainst(row.DateOfBirth);
-                var incomingDod = p.DateOfDeath.ResolveAgainst(row.DateOfDeath);
-                var existingPayload = new PersonActionPayloadDto(row.Name, row.DateOfBirth, row.DateOfDeath);
-                var incomingPayload = new PersonActionPayloadDto(p.Name, incomingDob, incomingDod);
-                var existingFields = ToFieldMap(existingPayload);
+                string? incomingDob = p.DateOfBirth.ResolveAgainst(row.DateOfBirth);
+                string? incomingDod = p.DateOfDeath.ResolveAgainst(row.DateOfDeath);
+                PersonActionPayloadDto existingPayload = new PersonActionPayloadDto(row.Name, row.DateOfBirth, row.DateOfDeath);
+                PersonActionPayloadDto incomingPayload = new PersonActionPayloadDto(p.Name, incomingDob, incomingDod);
+                Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
                 Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
                 personIndex[p.Name] = canonicalId;
 
-                var changedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                HashSet<string> changedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
                 // #373: reported as Unchanged rather than silently reused.
                 if (changedFields.Count == 0)
                 {
@@ -1069,9 +1063,9 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved = policy switch
+                bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                PersonActionPayloadDto resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new PersonActionPayloadDto((string)mergeResult!.MergedFields["name"]!, (string?)mergeResult.MergedFields["dateOfBirth"], (string?)mergeResult.MergedFields["dateOfDeath"]),
@@ -1081,11 +1075,10 @@ internal static class ImportActionPlanner
 
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
-                var resolvedFields = ToFieldMap(resolved);
-                var effectiveChangedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
+                HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
-                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
                     actions.Add(new ImportActionEntity
@@ -1102,8 +1095,8 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isPending = policy == DuplicateResolutionPolicy.Review;
-                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                bool isPending = policy == DuplicateResolutionPolicy.Review;
+                ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
@@ -1123,7 +1116,7 @@ internal static class ImportActionPlanner
 
             // Falls back to natural-key: a not-yet-migrated row found only by Name — Name/DateOfBirth/
             // DateOfDeath correction isn't available on it yet (#173's scope boundary, same as #162's).
-            var matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
+            Guid? matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
                 Sql.People.SelectIdByName, new { name = p.Name }, transaction);
             if (matchesByKey is not null)
             {
@@ -1159,10 +1152,10 @@ internal static class ImportActionPlanner
         SqliteConnection connection, string title, string typeStr, Dictionary<string, string> sourceIndex,
         string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
-        var key = $"{title}|{typeStr}";
-        if (sourceIndex.TryGetValue(key, out var indexed)) return indexed;
+        string key = $"{title}|{typeStr}";
+        if (sourceIndex.TryGetValue(key, out string? indexed)) return indexed;
 
-        var existingId = await connection.ExecuteScalarAsync<string?>(
+        string? existingId = await connection.ExecuteScalarAsync<string?>(
             Sql.Sources.SelectIdByTitleAndType, new { title, type = typeStr }, transaction);
         if (existingId is { } foundId)
         {
@@ -1170,7 +1163,7 @@ internal static class ImportActionPlanner
             return foundId;
         }
 
-        var stableId = EntityIdentity.SourceId(title, typeStr);
+        string stableId = EntityIdentity.SourceId(title, typeStr);
         sourceIndex[key] = stableId;
 
         actions.Add(new ImportActionEntity
@@ -1193,21 +1186,21 @@ internal static class ImportActionPlanner
         Dictionary<string, string> characterIndex, List<ImportActionEntity> actions, DateTime now,
         SqliteTransaction? transaction)
     {
-        foreach (var c in characters)
+        foreach (CharacterEntryDto c in characters)
         {
-            var sourceTypeStr = c.SourceType.ToString();
-            var canonicalId = c.Id is { } cIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(cIdRaw, out var cIdCanonical)
+            string sourceTypeStr = c.SourceType.ToString();
+            string? canonicalId = c.Id is { } cIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(cIdRaw, out string? cIdCanonical)
                 ? cIdCanonical
                 : c.Id;
 
-            var resolvedSourceId = await ResolveOrStageSourceIdAsync(connection, c.SourceTitle, sourceTypeStr, sourceIndex, batchId, actions, now, transaction);
+            string resolvedSourceId = await ResolveOrStageSourceIdAsync(connection, c.SourceTitle, sourceTypeStr, sourceIndex, batchId, actions, now, transaction);
 
             (string Name, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = null;
             string? matchedId = null;
 
             if (canonicalId is { } explicitId)
             {
-                var byId = await connection.QuerySingleOrDefaultAsync<(string Name, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                (string Name, SafeValue<CompletenessStatus?> CompletenessStatus)? byId = await connection.QuerySingleOrDefaultAsync<(string Name, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                     Sql.Characters.SelectExistingById, new { id = explicitId }, transaction);
                 if (byId is { } row)
                 {
@@ -1221,9 +1214,9 @@ internal static class ImportActionPlanner
                 // No id, or a declared id that matched nothing — falls back to ADR 013's own
                 // Type-anchored, Series-scoped matching algorithm, mirroring ResolveCharacterAsync's
                 // own resolution exactly.
-                var seriesId = await connection.ExecuteScalarAsync<string?>(
+                string? seriesId = await connection.ExecuteScalarAsync<string?>(
                     Sql.Sources.SelectSeriesIdById, new { id = resolvedSourceId }, transaction);
-                var candidateId = await connection.ExecuteScalarAsync<Guid?>(
+                Guid? candidateId = await connection.ExecuteScalarAsync<Guid?>(
                     Sql.Characters.SelectGlobalCandidateId,
                     new { sourceId = resolvedSourceId, name = c.Name, sourceType = sourceTypeStr, seriesId }, transaction);
 
@@ -1242,7 +1235,7 @@ internal static class ImportActionPlanner
                 // PlanSourcesAsync's own Add-path precedent exactly: an explicit id that matched
                 // nothing (neither by id nor by ADR 013's own algorithm) is still honoured as the new
                 // row's id; only a genuinely id-less entry gets an EntityIdentity-derived one.
-                var stableId = canonicalId ?? EntityIdentity.CharacterId(resolvedSourceId, c.Name, sourceTypeStr);
+                string stableId = canonicalId ?? EntityIdentity.CharacterId(resolvedSourceId, c.Name, sourceTypeStr);
                 characterIndex[$"{resolvedSourceId}|{c.Name}"] = stableId;
 
                 actions.Add(new ImportActionEntity
@@ -1258,19 +1251,18 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            var row2 = existing!.Value;
-            var existingPayload = new CharacterActionPayloadDto(resolvedSourceId, row2.Name, c.SourceTitle, sourceTypeStr);
-            var incomingPayload = new CharacterActionPayloadDto(resolvedSourceId, c.Name, c.SourceTitle, sourceTypeStr);
-            var existingFields = ToFieldMap(existingPayload);
-            var incomingFields = ToFieldMap(incomingPayload);
+            (string Name, SafeValue<CompletenessStatus?> CompletenessStatus) row2 = existing!.Value;
+            CharacterActionPayloadDto existingPayload = new CharacterActionPayloadDto(resolvedSourceId, row2.Name, c.SourceTitle, sourceTypeStr);
+            CharacterActionPayloadDto incomingPayload = new CharacterActionPayloadDto(resolvedSourceId, c.Name, c.SourceTitle, sourceTypeStr);
+            Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
+            Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
             // Indexed under the file's own declared name (not the corrected one), mirroring Person's
             // own Correction-path indexing (#173) — a same-batch quote referencing this exact
             // (Source, Name) pair resolves to the matched row either way.
             characterIndex[$"{resolvedSourceId}|{c.Name}"] = matchedId;
 
-            var changedFields = new HashSet<string>(
-                existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+            HashSet<string> changedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
             // #373: reported as Unchanged rather than silently reused.
             if (changedFields.Count == 0)
             {
@@ -1278,9 +1270,9 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-            var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-            var resolved = policy switch
+            bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+            FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+            CharacterActionPayloadDto resolved = policy switch
             {
                 DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                     new CharacterActionPayloadDto(resolvedSourceId, (string)mergeResult!.MergedFields["name"]!, c.SourceTitle, sourceTypeStr),
@@ -1290,11 +1282,10 @@ internal static class ImportActionPlanner
 
             // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
             // not the raw incoming value used for the "unchanged" check above.
-            var resolvedFields = ToFieldMap(resolved);
-            var effectiveChangedFields = new HashSet<string>(
-                existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+            Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
+            HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
-            var currentStatus = row2.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+            CompletenessStatus currentStatus = row2.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
             if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
             {
                 actions.Add(new ImportActionEntity
@@ -1311,8 +1302,8 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            var isPending = policy == DuplicateResolutionPolicy.Review;
-            var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+            bool isPending = policy == DuplicateResolutionPolicy.Review;
+            ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
             actions.Add(new ImportActionEntity
             {
@@ -1348,40 +1339,39 @@ internal static class ImportActionPlanner
         List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction,
         ConflictRuleLookup? conflictRules = null)
     {
-        foreach (var u in universes)
+        foreach (UniverseEntryDto u in universes)
         {
-            var canonicalId = u.Id is { } uIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(uIdRaw, out var uIdCanonical)
+            string? canonicalId = u.Id is { } uIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(uIdRaw, out string? uIdCanonical)
                 ? uIdCanonical
                 : u.Id;
 
-            var existing = canonicalId is { } explicitId
+            (string Name, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = canonicalId is { } explicitId
                 ? await connection.QuerySingleOrDefaultAsync<(string Name, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                     Sql.Universe.SelectExistingById, new { id = explicitId }, transaction)
                 : null;
 
             if (existing is { } row)
             {
-                var matchedId = canonicalId!;
-                var existingPayload = new UniverseActionPayloadDto(row.Name);
-                var incomingPayload = new UniverseActionPayloadDto(u.Name);
-                var existingFields = ToFieldMap(existingPayload);
-                var incomingFields = ToFieldMap(incomingPayload);
+                string matchedId = canonicalId!;
+                UniverseActionPayloadDto existingPayload = new UniverseActionPayloadDto(row.Name);
+                UniverseActionPayloadDto incomingPayload = new UniverseActionPayloadDto(u.Name);
+                Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
+                Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
                 universeIndex[u.Name] = matchedId;
 
-                var changedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                HashSet<string> changedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 // #181: build the rule-decisions map before the "nothing changed" early exit below —
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides, which
                 // must still get a chance to apply rather than being skipped as "unchanged".
-                var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
-                var hasStaleRule = false;
+                Dictionary<string, FieldMergeDecision> ruleDecisions = [];
+                bool hasStaleRule = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
-                    foreach (var field in existingFields.Keys)
+                    foreach (string field in existingFields.Keys)
                     {
-                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out var decision, out var isStale))
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
                             continue;
                         if (isStale) hasStaleRule = true;
                         else ruleDecisions[field] = decision;
@@ -1396,9 +1386,9 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved = policy switch
+                bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                UniverseActionPayloadDto resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new UniverseActionPayloadDto((string)mergeResult!.MergedFields["name"]!),
@@ -1406,11 +1396,10 @@ internal static class ImportActionPlanner
                     _ => incomingPayload,
                 };
 
-                var resolvedFields = ToFieldMap(resolved);
-                var effectiveChangedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
+                HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
-                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
                     actions.Add(new ImportActionEntity
@@ -1455,8 +1444,8 @@ internal static class ImportActionPlanner
                 if (ruleResolved is not null)
                     resolved = new UniverseActionPayloadDto((string)ruleResolved.MergedFields["name"]!);
 
-                var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
-                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+                ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
@@ -1475,7 +1464,7 @@ internal static class ImportActionPlanner
             }
 
             // Falls back to natural-key: an id-less entry, or a declared id that matched nothing.
-            var matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
+            Guid? matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
                 Sql.Universe.SelectIdByName, new { name = u.Name }, transaction);
             if (matchesByKey is not null)
             {
@@ -1483,7 +1472,7 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            var stableId = canonicalId ?? EntityIdentity.UniverseId(u.Name);
+            string stableId = canonicalId ?? EntityIdentity.UniverseId(u.Name);
             universeIndex[u.Name] = stableId;
 
             actions.Add(new ImportActionEntity
@@ -1512,55 +1501,54 @@ internal static class ImportActionPlanner
         Dictionary<string, string> seriesIndex, List<ImportActionEntity> actions, DateTime now,
         SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
     {
-        foreach (var s in series)
+        foreach (SeriesEntryDto s in series)
         {
-            var canonicalId = s.Id is { } sIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(sIdRaw, out var sIdCanonical)
+            string? canonicalId = s.Id is { } sIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(sIdRaw, out string? sIdCanonical)
                 ? sIdCanonical
                 : s.Id;
 
             async Task<string?> ResolveUniverseIdAsync(string? universeName) =>
                 universeName is null
                     ? null
-                    : universeIndex.TryGetValue(universeName, out var indexed)
+                    : universeIndex.TryGetValue(universeName, out string? indexed)
                         ? indexed
                         : await connection.ExecuteScalarAsync<Guid?>(Sql.Universe.SelectIdByName, new { name = universeName }, transaction) is { } found
                             ? found.ToCanonicalId()
                             : null;
 
-            var existing = canonicalId is { } explicitId
+            (string Name, string? UniverseId, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = canonicalId is { } explicitId
                 ? await connection.QuerySingleOrDefaultAsync<(string Name, string? UniverseId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                     Sql.Series.SelectExistingById, new { id = explicitId }, transaction)
                 : null;
 
             if (existing is { } row)
             {
-                var matchedId = canonicalId!;
-                var incomingUniverseId = await ResolveUniverseIdAsync(s.UniverseName);
+                string matchedId = canonicalId!;
+                string? incomingUniverseId = await ResolveUniverseIdAsync(s.UniverseName);
                 // UniverseName is only ever carried on the incoming side: EnsureUniverseExistsAsync's
                 // defensive re-insert (guarding against Series applying before its own Universe within
                 // the same batch) only genuinely fires when the resolved UniverseId is the incoming one
                 // — the existing side's Universe row is already known to exist, so the insert there is
                 // always a safe no-op regardless of what name is passed.
-                var existingPayload = new SeriesActionPayloadDto(row.Name, row.UniverseId);
-                var incomingPayload = new SeriesActionPayloadDto(s.Name, incomingUniverseId, s.UniverseName);
-                var existingFields = ToFieldMap(existingPayload);
-                var incomingFields = ToFieldMap(incomingPayload);
+                SeriesActionPayloadDto existingPayload = new SeriesActionPayloadDto(row.Name, row.UniverseId);
+                SeriesActionPayloadDto incomingPayload = new SeriesActionPayloadDto(s.Name, incomingUniverseId, s.UniverseName);
+                Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
+                Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
                 seriesIndex[s.Name] = matchedId;
 
-                var changedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                HashSet<string> changedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 // #181: build the rule-decisions map before the "nothing changed" early exit below —
                 // a Custom rule can correct a field that's identical (e.g. missing) on both sides, which
                 // must still get a chance to apply rather than being skipped as "unchanged".
-                var ruleDecisions = new Dictionary<string, FieldMergeDecision>();
-                var hasStaleRule = false;
+                Dictionary<string, FieldMergeDecision> ruleDecisions = [];
+                bool hasStaleRule = false;
                 if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
                 {
-                    foreach (var field in existingFields.Keys)
+                    foreach (string field in existingFields.Keys)
                     {
-                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out var decision, out var isStale))
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
                             continue;
                         if (isStale) hasStaleRule = true;
                         else ruleDecisions[field] = decision;
@@ -1575,9 +1563,9 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved = policy switch
+                bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                SeriesActionPayloadDto resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new SeriesActionPayloadDto(
@@ -1588,11 +1576,10 @@ internal static class ImportActionPlanner
                     _ => incomingPayload,
                 };
 
-                var resolvedFields = ToFieldMap(resolved);
-                var effectiveChangedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
+                HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
-                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
                     actions.Add(new ImportActionEntity
@@ -1636,15 +1623,15 @@ internal static class ImportActionPlanner
                 }
                 if (ruleResolved is not null)
                 {
-                    var resolvedUniverseId = (string?)ruleResolved.MergedFields["universeId"];
+                    string? resolvedUniverseId = (string?)ruleResolved.MergedFields["universeId"];
                     resolved = new SeriesActionPayloadDto(
                         (string)ruleResolved.MergedFields["name"]!,
                         resolvedUniverseId,
                         resolvedUniverseId == incomingUniverseId ? s.UniverseName : null);
                 }
 
-                var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
-                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+                ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
@@ -1663,7 +1650,7 @@ internal static class ImportActionPlanner
             }
 
             // Falls back to natural-key: an id-less entry, or a declared id that matched nothing.
-            var matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
+            Guid? matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
                 Sql.Series.SelectIdByName, new { name = s.Name }, transaction);
             if (matchesByKey is not null)
             {
@@ -1671,8 +1658,8 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            var universeId = await ResolveUniverseIdAsync(s.UniverseName);
-            var stableId = canonicalId ?? EntityIdentity.SeriesId(s.Name);
+            string? universeId = await ResolveUniverseIdAsync(s.UniverseName);
+            string stableId = canonicalId ?? EntityIdentity.SeriesId(s.Name);
             seriesIndex[s.Name] = stableId;
 
             actions.Add(new ImportActionEntity
@@ -1837,27 +1824,26 @@ internal static class ImportActionPlanner
         SqliteConnection connection, IReadOnlyList<SourceStageDirectionDto> stageDirections, string batchId,
         DuplicateResolutionPolicy policy, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
-        foreach (var sd in stageDirections)
+        foreach (SourceStageDirectionDto sd in stageDirections)
         {
             // #209: canonicalize once, at the single earliest point this entry's explicit id is
             // captured. No natural-key fallback exists for StageDirection — matched purely by id.
-            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(sd.Id, out var sdIdCanonical) ? sdIdCanonical! : sd.Id;
+            string canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(sd.Id, out string? sdIdCanonical) ? sdIdCanonical! : sd.Id;
 
-            var existing = await connection.QuerySingleOrDefaultAsync<(string Text, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+            (string Text, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = await connection.QuerySingleOrDefaultAsync<(string Text, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.StageDirections.SelectExistingById, new { id = canonicalId }, transaction);
 
             if (existing is { } row)
             {
-                var emptyTranslations = new Dictionary<string, SourceStageDirectionTranslation>();
+                Dictionary<string, SourceStageDirectionTranslation> emptyTranslations = [];
                 // #190: an absent ImageUrl resolves to the existing row's own value — never a change.
-                var incomingImageUrl = sd.ImageUrl.ResolveAgainst(row.ImageUrl);
-                var existingPayload = new StageDirectionActionPayloadDto(row.Text, row.ImageUrl, emptyTranslations);
-                var incomingPayload = new StageDirectionActionPayloadDto(sd.Text, incomingImageUrl, emptyTranslations);
-                var existingFields = ToFieldMap(existingPayload);
-                var incomingFields = ToFieldMap(incomingPayload);
+                string? incomingImageUrl = sd.ImageUrl.ResolveAgainst(row.ImageUrl);
+                StageDirectionActionPayloadDto existingPayload = new StageDirectionActionPayloadDto(row.Text, row.ImageUrl, emptyTranslations);
+                StageDirectionActionPayloadDto incomingPayload = new StageDirectionActionPayloadDto(sd.Text, incomingImageUrl, emptyTranslations);
+                Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
+                Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
-                var changedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                HashSet<string> changedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
                 // #373: reported as Unchanged rather than silently reused.
                 if (changedFields.Count == 0)
                 {
@@ -1865,9 +1851,9 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved = policy switch
+                bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                StageDirectionActionPayloadDto resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new StageDirectionActionPayloadDto((string)mergeResult!.MergedFields["text"]!, (string?)mergeResult.MergedFields["imageUrl"], emptyTranslations),
@@ -1877,11 +1863,10 @@ internal static class ImportActionPlanner
 
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
-                var resolvedFields = ToFieldMap(resolved);
-                var effectiveChangedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
+                HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
-                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
                     actions.Add(new ImportActionEntity
@@ -1898,8 +1883,8 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isPending = policy == DuplicateResolutionPolicy.Review;
-                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                bool isPending = policy == DuplicateResolutionPolicy.Review;
+                ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
@@ -1934,28 +1919,27 @@ internal static class ImportActionPlanner
         SqliteConnection connection, IReadOnlyList<SourceSoundCueDto> soundCues, string batchId,
         DuplicateResolutionPolicy policy, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
-        foreach (var sc in soundCues)
+        foreach (SourceSoundCueDto sc in soundCues)
         {
             // #209: canonicalize once, at the single earliest point this entry's explicit id is
             // captured. No natural-key fallback exists for SoundCue — matched purely by id.
-            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(sc.Id, out var scIdCanonical) ? scIdCanonical! : sc.Id;
+            string canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(sc.Id, out string? scIdCanonical) ? scIdCanonical! : sc.Id;
 
-            var existing = await connection.QuerySingleOrDefaultAsync<(string Text, string? SoundFileUrl, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+            (string Text, string? SoundFileUrl, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = await connection.QuerySingleOrDefaultAsync<(string Text, string? SoundFileUrl, string? ImageUrl, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.SoundCues.SelectExistingById, new { id = canonicalId }, transaction);
 
             if (existing is { } row)
             {
-                var emptyTranslations = new Dictionary<string, SourceSoundCueTranslation>();
+                Dictionary<string, SourceSoundCueTranslation> emptyTranslations = [];
                 // #190: an absent SoundFileUrl/ImageUrl resolves to the existing row's own value — never a change.
-                var incomingSoundFileUrl = sc.SoundFileUrl.ResolveAgainst(row.SoundFileUrl);
-                var incomingImageUrl = sc.ImageUrl.ResolveAgainst(row.ImageUrl);
-                var existingPayload = new SoundCueActionPayloadDto(row.Text, row.SoundFileUrl, row.ImageUrl, emptyTranslations);
-                var incomingPayload = new SoundCueActionPayloadDto(sc.Text, incomingSoundFileUrl, incomingImageUrl, emptyTranslations);
-                var existingFields = ToFieldMap(existingPayload);
-                var incomingFields = ToFieldMap(incomingPayload);
+                string? incomingSoundFileUrl = sc.SoundFileUrl.ResolveAgainst(row.SoundFileUrl);
+                string? incomingImageUrl = sc.ImageUrl.ResolveAgainst(row.ImageUrl);
+                SoundCueActionPayloadDto existingPayload = new SoundCueActionPayloadDto(row.Text, row.SoundFileUrl, row.ImageUrl, emptyTranslations);
+                SoundCueActionPayloadDto incomingPayload = new SoundCueActionPayloadDto(sc.Text, incomingSoundFileUrl, incomingImageUrl, emptyTranslations);
+                Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
+                Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
-                var changedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                HashSet<string> changedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
                 // #373: reported as Unchanged rather than silently reused.
                 if (changedFields.Count == 0)
                 {
@@ -1963,9 +1947,9 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved = policy switch
+                bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                SoundCueActionPayloadDto resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new SoundCueActionPayloadDto((string)mergeResult!.MergedFields["text"]!, (string?)mergeResult.MergedFields["soundFileUrl"], (string?)mergeResult.MergedFields["imageUrl"], emptyTranslations),
@@ -1975,11 +1959,10 @@ internal static class ImportActionPlanner
 
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
-                var resolvedFields = ToFieldMap(resolved);
-                var effectiveChangedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
+                HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
-                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
                     actions.Add(new ImportActionEntity
@@ -1996,8 +1979,8 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isPending = policy == DuplicateResolutionPolicy.Review;
-                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                bool isPending = policy == DuplicateResolutionPolicy.Review;
+                ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
@@ -2042,28 +2025,27 @@ internal static class ImportActionPlanner
         SqliteConnection connection, IReadOnlyList<SourceConversationDto> conversations, string batchId,
         DuplicateResolutionPolicy policy, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
     {
-        foreach (var c in conversations)
+        foreach (SourceConversationDto c in conversations)
         {
             // #209: canonicalize once, at the single earliest point this entry's explicit id is
             // captured. No natural-key fallback exists for Conversation — matched purely by id.
             // Cross-references inside c.Lines (StageDirectionId/SoundCueId/QuoteId) are a separate,
             // not-yet-scoped capture point — tracked in a follow-up issue, not touched here.
-            var canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(c.Id, out var cIdCanonical) ? cIdCanonical! : c.Id;
+            string canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(c.Id, out string? cIdCanonical) ? cIdCanonical! : c.Id;
 
-            var existing = await connection.QuerySingleOrDefaultAsync<(string? Description, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+            (string? Description, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = await connection.QuerySingleOrDefaultAsync<(string? Description, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.Conversations.SelectExistingById, new { id = canonicalId }, transaction);
 
             if (existing is { } row)
             {
                 // #190: an absent Description resolves to the existing row's own value — never a change.
-                var incomingDescription = c.Description.ResolveAgainst(row.Description);
-                var existingPayload = new ConversationActionPayloadDto(row.Description, []);
-                var incomingPayload = new ConversationActionPayloadDto(incomingDescription, []);
-                var existingFields = ToConversationFieldMap(existingPayload);
-                var incomingFields = ToConversationFieldMap(incomingPayload);
+                string? incomingDescription = c.Description.ResolveAgainst(row.Description);
+                ConversationActionPayloadDto existingPayload = new ConversationActionPayloadDto(row.Description, []);
+                ConversationActionPayloadDto incomingPayload = new ConversationActionPayloadDto(incomingDescription, []);
+                Dictionary<string, object?> existingFields = ToConversationFieldMap(existingPayload);
+                Dictionary<string, object?> incomingFields = ToConversationFieldMap(incomingPayload);
 
-                var changedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                HashSet<string> changedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
                 // #373: reported as Unchanged rather than silently reused.
                 if (changedFields.Count == 0)
                 {
@@ -2071,9 +2053,9 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-                var mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
-                var resolved = policy switch
+                bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
+                FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+                ConversationActionPayloadDto resolved = policy switch
                 {
                     DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs =>
                         new ConversationActionPayloadDto((string?)mergeResult!.MergedFields["description"], []),
@@ -2083,11 +2065,10 @@ internal static class ImportActionPlanner
 
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
-                var resolvedFields = ToConversationFieldMap(resolved);
-                var effectiveChangedFields = new HashSet<string>(
-                    existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key));
+                Dictionary<string, object?> resolvedFields = ToConversationFieldMap(resolved);
+                HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
-                var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                 if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
                 {
                     actions.Add(new ImportActionEntity
@@ -2104,8 +2085,8 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                var isPending = policy == DuplicateResolutionPolicy.Review;
-                var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
+                bool isPending = policy == DuplicateResolutionPolicy.Review;
+                ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity
                 {
@@ -2130,13 +2111,12 @@ internal static class ImportActionPlanner
             // canonicalized identically here too, or ConversationLines' real FOREIGN KEY constraint to
             // Quotes(Id)/StageDirections(Id)/SoundCues(Id) fails outright once the referenced row's own
             // id no longer matches the file's raw casing.
-            var lines = c.Lines
+            List<ConversationLinePayloadDto> lines = [.. c.Lines
                 .Select(l => new ConversationLinePayloadDto(
                     l.Order, l.Type,
-                    l.QuoteId is { } qRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(qRaw, out var qCanonical) ? qCanonical : l.QuoteId,
-                    l.StageDirectionId is { } sdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(sdRaw, out var sdCanonical) ? sdCanonical : l.StageDirectionId,
-                    l.SoundCueId is { } scRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(scRaw, out var scCanonical) ? scCanonical : l.SoundCueId))
-                .ToList();
+                    l.QuoteId is { } qRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(qRaw, out string? qCanonical) ? qCanonical : l.QuoteId,
+                    l.StageDirectionId is { } sdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(sdRaw, out string? sdCanonical) ? sdCanonical : l.StageDirectionId,
+                    l.SoundCueId is { } scRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(scRaw, out string? scCanonical) ? scCanonical : l.SoundCueId))];
 
             actions.Add(new ImportActionEntity
             {

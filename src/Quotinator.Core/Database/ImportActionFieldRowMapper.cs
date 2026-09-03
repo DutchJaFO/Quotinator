@@ -74,13 +74,13 @@ public static class ImportActionFieldRowMapper
         if (fields.Count != CsvHeader.Length)
             throw new FormatException($"Expected {CsvHeader.Length} columns, found {fields.Count}.");
 
-        if (!Guid.TryParse(fields[0], out var actionId))
+        if (!Guid.TryParse(fields[0], out Guid actionId))
             throw new FormatException($"'{fields[0]}' is not a valid ActionId.");
 
         FieldResolutionChoice? decision = null;
         if (fields[6].Length > 0)
         {
-            if (!Enum.TryParse<FieldResolutionChoice>(fields[6], ignoreCase: true, out var parsedDecision))
+            if (!Enum.TryParse<FieldResolutionChoice>(fields[6], ignoreCase: true, out FieldResolutionChoice parsedDecision))
                 throw new FormatException($"'{fields[6]}' is not a recognised Decision value.");
             decision = parsedDecision;
         }
@@ -88,7 +88,7 @@ public static class ImportActionFieldRowMapper
         CompletenessStatus? markCompletenessAs = null;
         if (fields[8].Length > 0)
         {
-            if (!Enum.TryParse<CompletenessStatus>(fields[8], ignoreCase: true, out var parsedStatus))
+            if (!Enum.TryParse<CompletenessStatus>(fields[8], ignoreCase: true, out CompletenessStatus parsedStatus))
                 throw new FormatException($"'{fields[8]}' is not a recognised MarkCompletenessAs value.");
             markCompletenessAs = parsedStatus;
         }
@@ -129,7 +129,7 @@ public static class ImportActionFieldRowMapper
     /// <exception cref="ImportActionUnknownFieldException">A row's <c>Field</c> is not decidable for <paramref name="entityType"/>.</exception>
     public static ConflictDecisionRequest BuildRequest(string entityType, IReadOnlyList<ImportActionFieldRowDto> rows)
     {
-        if (!DecidableFieldsByEntityType.TryGetValue(entityType, out var validFields))
+        if (!DecidableFieldsByEntityType.TryGetValue(entityType, out IReadOnlyList<string>? validFields))
             throw new ImportActionUnknownEntityTypeException(entityType);
 
         FieldDecision? quoteText = null, originalLanguage = null, source = null, date = null, character = null, author = null, type = null;
@@ -144,7 +144,7 @@ public static class ImportActionFieldRowMapper
         FieldDecision? conversationDescription = null;
         CompletenessStatus? markCompletenessAs = null;
 
-        foreach (var row in rows)
+        foreach (ImportActionFieldRowDto row in rows)
         {
             if (!validFields.Contains(row.Field))
                 throw new ImportActionUnknownFieldException(entityType, row.Field);
@@ -159,7 +159,7 @@ public static class ImportActionFieldRowMapper
                 continue;
             }
 
-            var decision = new FieldDecision { Choice = row.Decision.Value, Value = row.CustomValue };
+            FieldDecision decision = new FieldDecision { Choice = row.Decision.Value, Value = row.CustomValue };
 
             switch (entityType, row.Field)
             {

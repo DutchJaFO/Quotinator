@@ -18,7 +18,7 @@ internal sealed class FakeSourceSeasonReferenceReader : ISourceSeasonReferenceRe
 
     public Task<(Guid Id, int Number, string? Title, string? Subtitle)?> GetSeasonReferenceAsync(Guid sourceId)
     {
-        (Guid Id, int Number, string? Title, string? Subtitle)? result = _seasonBySourceId.TryGetValue(sourceId, out var season) ? season : null;
+        (Guid Id, int Number, string? Title, string? Subtitle)? result = _seasonBySourceId.TryGetValue(sourceId, out (Guid Id, int Number, string? Title, string? Subtitle) season) ? season : null;
         return Task.FromResult(result);
     }
 
