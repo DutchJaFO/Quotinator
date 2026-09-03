@@ -463,7 +463,7 @@ public sealed class QuotinatorDatabaseInitializer(
 
                 IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(connection, quotes, Guid.NewGuid(), filePolicy.ForQuotes, transaction: null,
                     parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
-                    parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases);
+                    parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases, parsed.Seasons);
 
                 reports.Add(ImportActionReportBuilder.Build(fileName, actions));
             }
@@ -575,7 +575,7 @@ public sealed class QuotinatorDatabaseInitializer(
                 {
                     actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx,
                         parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
-                        parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases);
+                        parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases, parsed.Seasons);
                     await _actionCoordinator.StageAsync(actions, connection, tx);
                     tx.Commit();
                 }

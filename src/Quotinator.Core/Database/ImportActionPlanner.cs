@@ -49,7 +49,8 @@ internal static class ImportActionPlanner
         IReadOnlyList<UniverseEntryDto>? universe = null,
         IReadOnlyList<CharacterEntryDto>? characters = null,
         ConflictRuleLookup? conflictRules = null,
-        SourceAliasLookup? sourceAliases = null)
+        SourceAliasLookup? sourceAliases = null,
+        IReadOnlyList<SeasonEntryDto>? seasons = null)
     {
         var actions = new List<ImportActionEntity>();
         var sourceIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -57,6 +58,7 @@ internal static class ImportActionPlanner
         var personIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var seriesIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var universeIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> seasonIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var seenQuotes = new Dictionary<string, SourceQuoteDto>(StringComparer.Ordinal);
         var seenQuoteStatus = new Dictionary<string, CompletenessStatus>(StringComparer.Ordinal);
 
@@ -69,10 +71,15 @@ internal static class ImportActionPlanner
         await PlanUniverseAsync(connection, universe ?? [], batchIdStr, policy, universeIndex, actions, now, transaction, conflictRules);
         await PlanSeriesAsync(connection, series ?? [], batchIdStr, policy, universeIndex, seriesIndex, actions, now, transaction, conflictRules);
 
+        // #375: Seasons follow Series for the same reason — a declared seasons[] entry's seriesName must
+        // resolve against an already-built series index, and a sources[] entry's seasonNumber against
+        // an already-built season index.
+        await PlanSeasonsAsync(connection, seasons ?? [], batchIdStr, policy, seriesIndex, seasonIndex, actions, now, transaction, conflictRules);
+
         // #162: explicit Source declarations are planned before quotes resolve — a quote may
         // reference a source this same file also declares explicitly, mirroring the existing
         // conversations/stageDirections/soundCues ordering.
-        await PlanSourcesAsync(connection, sources ?? [], batchIdStr, policy, sourceIndex, seriesIndex, actions, now, transaction, conflictRules);
+        await PlanSourcesAsync(connection, sources ?? [], batchIdStr, policy, sourceIndex, seriesIndex, seasonIndex, actions, now, transaction, conflictRules);
 
         // #173: same reasoning as Source above — a quote's author may reference a person this same
         // file also declares explicitly via people[].
@@ -141,7 +148,7 @@ internal static class ImportActionPlanner
                 var canonicalId = EntityIdentity.SourceId(canonical.CanonicalTitle, canonical.CanonicalType);
                 var canonicalRow = sourceIndex.TryGetValue($"{canonical.CanonicalTitle}|{canonical.CanonicalType}", out var indexedId)
                     ? (Title: canonical.CanonicalTitle, Type: canonical.CanonicalType, Found: true, IndexedId: (string?)indexedId)
-                    : await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                    : await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                         Sql.Sources.SelectExistingById, new { id = canonicalId }, transaction) is { } row
                         ? (row.Title, row.Type, Found: true, IndexedId: canonicalId)
                         : (Title: canonical.CanonicalTitle, Type: canonical.CanonicalType, Found: false, IndexedId: (string?)null);
@@ -475,8 +482,8 @@ internal static class ImportActionPlanner
         // Source first created date-less via a sources[] entry (#162/#180) can be backfilled here once
         // a later quote supplies a Date — #191's own fix only ever populates Date on a brand-new Add
         // below, never on a row that already exists.
-        (string Id, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)? existingRow =
-            await connection.QuerySingleOrDefaultAsync<(string Id, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+        (string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)? existingRow =
+            await connection.QuerySingleOrDefaultAsync<(string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.Sources.SelectExistingByTitleAndType, new { title = q.Source, type = typeStr }, transaction);
         if (existingRow is { } row)
         {
@@ -484,8 +491,8 @@ internal static class ImportActionPlanner
 
             if (row.Date is null && q.Date is not null)
             {
-                var existingPayload = new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId);
-                var incomingPayload = new SourceActionPayloadDto(q.Source, typeStr, q.Date, row.SeriesId);
+                var existingPayload = new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId, row.SeasonId);
+                var incomingPayload = new SourceActionPayloadDto(q.Source, typeStr, q.Date, row.SeriesId, row.SeasonId);
                 var changedFields = new HashSet<string> { "date" };
                 var currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
 
@@ -521,7 +528,7 @@ internal static class ImportActionPlanner
                 // what makes that "once", exactly as it does for the Add below.
                 actions.Add(UnchangedAction(
                     batchId, ImportActionEntityTypes.Source, row.Id,
-                    new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId), now));
+                    new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId, row.SeasonId), now));
             }
 
             return row.Id;
@@ -629,7 +636,7 @@ internal static class ImportActionPlanner
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync, both feed the same decide-time <c>FieldMergeResolver</c> field-name vocabulary. <c>seriesId</c> added by #180.</summary>
     private static Dictionary<string, object?> ToFieldMap(SourceActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId };
+        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId, ["seasonId"] = payload.SeasonId };
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#171).</summary>
     private static Dictionary<string, object?> ToFieldMap(StageDirectionActionPayloadDto payload) =>
@@ -648,7 +655,8 @@ internal static class ImportActionPlanner
     private static async Task PlanSourcesAsync(
         SqliteConnection connection, IReadOnlyList<SourceEntryDto> sources, string batchId,
         DuplicateResolutionPolicy policy, Dictionary<string, string> sourceIndex,
-        Dictionary<string, string> seriesIndex, List<ImportActionEntity> actions, DateTime now,
+        Dictionary<string, string> seriesIndex, Dictionary<string, string> seasonIndex,
+        List<ImportActionEntity> actions, DateTime now,
         SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
     {
         foreach (var s in sources)
@@ -683,10 +691,31 @@ internal static class ImportActionPlanner
                             : null);
             }
 
+            // #375: seasonNumber resolution mirrors seriesName's Optional handling above — absent
+            // leaves the existing Season link untouched, an explicit null clears it, and a number
+            // resolves against the season index PlanSeasonsAsync built, keyed by (SeriesId, Number).
+            // A number naming no declared or existing Season resolves to null, silently dropped, same
+            // as a dangling seriesName.
+            Optional<string> resolvedSeasonId = Optional<string>.Absent;
+            if (s.SeasonNumber.HasValue)
+            {
+                int? seasonNumber = s.SeasonNumber.Value;
+                resolvedSeasonId = seasonNumber is null
+                    ? Optional<string>.Of(null)
+                    : Optional<string>.Of(seasonIndex.TryGetValue(SeasonKey(resolvedSeriesId.HasValue ? resolvedSeriesId.Value : null, seasonNumber.Value), out string? indexedSeason)
+                        ? indexedSeason
+                        : await connection.ExecuteScalarAsync<Guid?>(
+                            Sql.Season.SelectIdBySeriesAndNumber,
+                            new { seriesId = resolvedSeriesId.HasValue ? resolvedSeriesId.Value : null, number = seasonNumber.Value },
+                            transaction) is { } foundSeason
+                            ? foundSeason.ToCanonicalId()
+                            : null);
+            }
+
             // #162's correction shape: an entry carrying an explicit id is matched by it first. An
             // entry omitting one (#180's enrichment shape) skips straight to the natural-key path below.
             var existing = canonicalId is { } explicitId
-                ? await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                ? await connection.QuerySingleOrDefaultAsync<(string Title, string Type, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                     Sql.Sources.SelectExistingById, new { id = explicitId }, transaction)
                 : null;
 
@@ -697,8 +726,8 @@ internal static class ImportActionPlanner
                 // change, under any policy. See OptionalExtensions.ResolveAgainst.
                 var incomingDate = s.Date.ResolveAgainst(row.Date);
                 var incomingSeriesId = resolvedSeriesId.ResolveAgainst(row.SeriesId);
-                var existingPayload = new SourceActionPayloadDto(row.Title, row.Type, row.Date, row.SeriesId);
-                var incomingPayload = new SourceActionPayloadDto(s.Title, typeStr, incomingDate, incomingSeriesId);
+                var existingPayload = new SourceActionPayloadDto(row.Title, row.Type, row.Date, row.SeriesId, row.SeasonId);
+                var incomingPayload = new SourceActionPayloadDto(s.Title, typeStr, incomingDate, incomingSeriesId, resolvedSeasonId.ResolveAgainst(row.SeasonId));
                 var existingFields = ToFieldMap(existingPayload);
                 var incomingFields = ToFieldMap(incomingPayload);
 
@@ -796,7 +825,7 @@ internal static class ImportActionPlanner
                     catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
                 }
                 if (ruleResolved is not null)
-                    resolved = new SourceActionPayloadDto((string)ruleResolved.MergedFields["title"]!, (string)ruleResolved.MergedFields["type"]!, (string?)ruleResolved.MergedFields["date"], (string?)ruleResolved.MergedFields["seriesId"]);
+                    resolved = new SourceActionPayloadDto((string)ruleResolved.MergedFields["title"]!, (string)ruleResolved.MergedFields["type"]!, (string?)ruleResolved.MergedFields["date"], (string?)ruleResolved.MergedFields["seriesId"], (string?)ruleResolved.MergedFields["seasonId"]);
 
                 var isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 var status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
@@ -820,7 +849,7 @@ internal static class ImportActionPlanner
             // Falls back to natural-key (title+type): either the entry omits an explicit id (#180's
             // enrichment shape) or it carries one that matches no row yet (a not-yet-migrated row —
             // #162's scope boundary).
-            var existingByKey = await connection.QuerySingleOrDefaultAsync<(string Id, string? Date, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+            var existingByKey = await connection.QuerySingleOrDefaultAsync<(string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.Sources.SelectExistingByTitleAndType, new { title = s.Title, type = typeStr }, transaction);
 
             if (existingByKey is { } keyRow)
@@ -838,8 +867,8 @@ internal static class ImportActionPlanner
                 // silently ignored regardless of what the file said.
                 var keyIncomingDate = s.Date.ResolveAgainst(keyRow.Date);
                 var keyIncomingSeriesId = resolvedSeriesId.ResolveAgainst(keyRow.SeriesId);
-                var keyExistingPayload = new SourceActionPayloadDto(s.Title, typeStr, keyRow.Date, keyRow.SeriesId);
-                var keyIncomingPayload = new SourceActionPayloadDto(s.Title, typeStr, keyIncomingDate, keyIncomingSeriesId);
+                var keyExistingPayload = new SourceActionPayloadDto(s.Title, typeStr, keyRow.Date, keyRow.SeriesId, keyRow.SeasonId);
+                var keyIncomingPayload = new SourceActionPayloadDto(s.Title, typeStr, keyIncomingDate, keyIncomingSeriesId, resolvedSeasonId.ResolveAgainst(keyRow.SeasonId));
                 var keyExistingFields = ToFieldMap(keyExistingPayload);
                 var keyIncomingFields = ToFieldMap(keyIncomingPayload);
 
@@ -933,7 +962,7 @@ internal static class ImportActionPlanner
                     catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
                 }
                 if (keyRuleResolved is not null)
-                    resolved = new SourceActionPayloadDto((string)keyRuleResolved.MergedFields["title"]!, (string)keyRuleResolved.MergedFields["type"]!, (string?)keyRuleResolved.MergedFields["date"], (string?)keyRuleResolved.MergedFields["seriesId"]);
+                    resolved = new SourceActionPayloadDto((string)keyRuleResolved.MergedFields["title"]!, (string)keyRuleResolved.MergedFields["type"]!, (string?)keyRuleResolved.MergedFields["date"], (string?)keyRuleResolved.MergedFields["seriesId"], (string?)keyRuleResolved.MergedFields["seasonId"]);
 
                 var keyIsPending = policy == DuplicateResolutionPolicy.Review && keyRuleResolved is null;
                 var keyStatus = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
@@ -973,7 +1002,7 @@ internal static class ImportActionPlanner
                 ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
                 EntityType = ImportActionEntityTypes.Source,
                 EntityId = addId,
-                IncomingValue = JsonSerializer.Serialize(new SourceActionPayloadDto(s.Title, typeStr, s.Date.ResolveAgainst(null), resolvedSeriesId.ResolveAgainst(null))),
+                IncomingValue = JsonSerializer.Serialize(new SourceActionPayloadDto(s.Title, typeStr, s.Date.ResolveAgainst(null), resolvedSeriesId.ResolveAgainst(null), resolvedSeasonId.ResolveAgainst(null))),
                 Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
                 DetectedAt = now,
             });
@@ -1659,6 +1688,146 @@ internal static class ImportActionPlanner
         }
     }
 
+    /// <summary>
+    /// #375: plans a declared <c>seasons[]</c> entry, resolving its <c>seriesName</c> against
+    /// <paramref name="seriesIndex"/> — populated by <see cref="PlanSeriesAsync"/>, which must run
+    /// first in <see cref="PlanAsync"/>. The natural key is (SeriesId, Number) rather than a name,
+    /// which is the one structural difference from every sibling planner here: an ordinal only
+    /// identifies a season within its parent. <paramref name="seasonIndex"/> is keyed the same way, so
+    /// <see cref="ResolveSourceAsync"/> can resolve a <c>seasonNumber</c> to a real Season id.
+    /// A <c>seriesName</c> that resolves to nothing leaves the Season parentless rather than failing —
+    /// same silently-dropped dangling-reference handling as <see cref="PlanSeriesAsync"/>'s own
+    /// <c>universeName</c>.
+    /// </summary>
+    private static async Task PlanSeasonsAsync(
+        SqliteConnection connection, IReadOnlyList<SeasonEntryDto> seasons, string batchId,
+        DuplicateResolutionPolicy policy, Dictionary<string, string> seriesIndex,
+        Dictionary<string, string> seasonIndex, List<ImportActionEntity> actions, DateTime now,
+        SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null)
+    {
+        foreach (SeasonEntryDto se in seasons)
+        {
+            string? canonicalId = se.Id is { } seIdRaw && EntityIdCanonicalizer.TryCanonicalizeLowercase(seIdRaw, out string? seIdCanonical)
+                ? seIdCanonical
+                : se.Id;
+
+            string? seriesId = se.SeriesName is null
+                ? null
+                : seriesIndex.TryGetValue(se.SeriesName, out string? indexedSeries)
+                    ? indexedSeries
+                    : await connection.ExecuteScalarAsync<Guid?>(Sql.Series.SelectIdByName, new { name = se.SeriesName }, transaction) is { } foundSeries
+                        ? foundSeries.ToCanonicalId()
+                        : null;
+
+            SeasonActionPayloadDto incomingPayload = new(se.Number, se.Title, se.Subtitle, seriesId, se.SeriesName);
+
+            (int Number, string? Title, string? Subtitle, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)? existing =
+                canonicalId is { } explicitId
+                    ? await connection.QuerySingleOrDefaultAsync<(int, string?, string?, string?, SafeValue<CompletenessStatus?>)?>(
+                        Sql.Season.SelectExistingById, new { id = explicitId }, transaction)
+                    : null;
+
+            if (existing is { } row)
+            {
+                string matchedId = canonicalId!;
+                SeasonActionPayloadDto existingPayload = new(row.Number, row.Title, row.Subtitle, row.SeriesId);
+                Dictionary<string, object?> existingFields = ToSeasonFieldMap(existingPayload);
+                Dictionary<string, object?> incomingFields = ToSeasonFieldMap(incomingPayload);
+
+                seasonIndex[SeasonKey(row.SeriesId, row.Number)] = matchedId;
+                if (seriesId is not null)
+                    seasonIndex[SeasonKey(seriesId, se.Number)] = matchedId;
+
+                HashSet<string> changedFields = [.. existingFields
+                    .Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key)))
+                    .Select(kv => kv.Key)];
+
+                Dictionary<string, FieldMergeDecision> ruleDecisions = [];
+                bool hasStaleRule = false;
+                if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
+                {
+                    foreach (string field in existingFields.Keys)
+                    {
+                        if (!conflictRules.TryResolve(matchedId, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out bool isStale))
+                            continue;
+                        if (isStale) hasStaleRule = true;
+                        else ruleDecisions[field] = decision;
+                    }
+                }
+
+                // #373: an unchanged row is reported as such rather than silently skipped.
+                if (changedFields.Count == 0 && ruleDecisions.Count == 0 && !hasStaleRule)
+                {
+                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Season, matchedId, incomingPayload, now));
+                    continue;
+                }
+
+                SeasonActionPayloadDto resolved = policy == DuplicateResolutionPolicy.Skip ? existingPayload : incomingPayload;
+                Dictionary<string, object?> resolvedFields = ToSeasonFieldMap(resolved);
+                HashSet<string> effectiveChangedFields = [.. existingFields
+                    .Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key)))
+                    .Select(kv => kv.Key)];
+
+                CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                ImportActionStatus modifyStatus =
+                    CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields) ? ImportActionStatus.Blocked
+                    : hasStaleRule ? ImportActionStatus.Stale
+                    : policy == DuplicateResolutionPolicy.Review ? ImportActionStatus.Pending
+                    : ImportActionStatus.Decided;
+
+                actions.Add(new ImportActionEntity
+                {
+                    BatchId = batchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Season,
+                    EntityId = matchedId,
+                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                    MergedFields = modifyStatus == ImportActionStatus.Decided ? JsonSerializer.Serialize(resolved) : null,
+                    AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
+                    Status = new SafeValue<ImportActionStatus?>(modifyStatus.ToString(), modifyStatus),
+                    DetectedAt = now,
+                });
+                continue;
+            }
+
+            // Natural key: an id-less entry, or a declared id that matched nothing.
+            Guid? matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
+                Sql.Season.SelectIdBySeriesAndNumber, new { seriesId, number = se.Number }, transaction);
+            if (matchesByKey is not null)
+            {
+                seasonIndex[SeasonKey(seriesId, se.Number)] = matchesByKey.Value.ToCanonicalId();
+                continue;
+            }
+
+            string stableId = canonicalId ?? EntityIdentity.SeasonId(seriesId ?? string.Empty, se.Number);
+            seasonIndex[SeasonKey(seriesId, se.Number)] = stableId;
+
+            actions.Add(new ImportActionEntity
+            {
+                BatchId = batchId,
+                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
+                EntityType = ImportActionEntityTypes.Season,
+                EntityId = stableId,
+                IncomingValue = JsonSerializer.Serialize(incomingPayload),
+                Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
+                DetectedAt = now,
+            });
+        }
+    }
+
+    /// <summary>The (SeriesId, Number) natural key, rendered as one index key. A parentless season keys on its number alone.</summary>
+    private static string SeasonKey(string? seriesId, int number) =>
+        $"{seriesId?.ToLowerInvariant() ?? string.Empty}|{number.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+
+    private static Dictionary<string, object?> ToSeasonFieldMap(SeasonActionPayloadDto payload) => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["number"]   = payload.Number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ["title"]    = payload.Title,
+        ["subtitle"] = payload.Subtitle,
+        ["seriesId"] = payload.SeriesId,
+    };
+
     // ── #68: StageDirection/SoundCue/Conversation planning ──────────────────
     // All three are Add-only and id-keyed (the file supplies an explicit id, like Quote — not a
     // natural-key-derived EntityIdentity stable id like Source/Character/Person), so planning is
@@ -2000,13 +2169,18 @@ internal sealed class QuoteActionPayloadDto
 }
 
 /// <summary>Staged payload for a Source Add/Modify <see cref="ImportActionEntity"/> (#162 adds <see cref="Date"/>; #180 adds <see cref="SeriesId"/> — a resolved id, not the file's own <c>seriesName</c> text).</summary>
-internal sealed record SourceActionPayloadDto(string Title, string Type, string? Date = null, string? SeriesId = null);
+internal sealed record SourceActionPayloadDto(string Title, string Type, string? Date = null, string? SeriesId = null, string? SeasonId = null);
 
 /// <summary>Staged payload for a Series Add <see cref="ImportActionEntity"/> (#180). <see cref="UniverseId"/> is a resolved id, not the file's own <c>universeName</c> text.</summary>
 internal sealed record SeriesActionPayloadDto(string Name, string? UniverseId = null, string? UniverseName = null);
 
 /// <summary>Staged payload for a Universe Add <see cref="ImportActionEntity"/> (#180).</summary>
 internal sealed record UniverseActionPayloadDto(string Name);
+
+/// <summary>#375: a Season action's payload — its ordinal, optional title and subtitle, and its resolved Series id.
+/// <c>SeriesName</c> travels on the incoming side only, mirroring <see cref="SeriesActionPayloadDto"/>'s own
+/// <c>UniverseName</c>, so an apply can re-resolve the parent when Season applies before its Series.</summary>
+internal sealed record SeasonActionPayloadDto(int Number, string? Title = null, string? Subtitle = null, string? SeriesId = null, string? SeriesName = null);
 
 /// <summary>
 /// Staged payload for a Character Add <see cref="ImportActionEntity"/>. Carries the owning Source's

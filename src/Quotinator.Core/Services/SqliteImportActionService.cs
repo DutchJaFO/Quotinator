@@ -720,6 +720,7 @@ public sealed class SqliteImportActionService(
                             type  = existingSourcePayload.Type,
                             date  = existingSourcePayload.Date,
                             seriesId = existingSourcePayload.SeriesId,
+                            seasonId = existingSourcePayload.SeasonId,
                             dateModified = now,
                             id    = action.EntityId,
                         }, sqliteTransaction);
@@ -985,7 +986,7 @@ public sealed class SqliteImportActionService(
                 if (isSourceAdd)
                 {
                         SourceActionPayloadDto payload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.IncomingValue!)!;
-                    await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Title, payload.Type, batchId, now, changeLog, payload.Date, payload.SeriesId);
+                    await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.Title, payload.Type, batchId, now, changeLog, payload.Date, payload.SeriesId, payload.SeasonId);
                 }
                 else
                 {
@@ -997,6 +998,7 @@ public sealed class SqliteImportActionService(
                         type  = payload.Type,
                         date  = payload.Date,
                         seriesId = payload.SeriesId,
+                        seasonId = payload.SeasonId,
                         dateModified = now,
                         id    = action.EntityId,
                     }, sqliteTransaction);
@@ -1129,6 +1131,41 @@ public sealed class SqliteImportActionService(
                 }
 
                 await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Series.SelectCompletenessById, Sql.Series.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
+                break;
+            }
+            case ImportActionEntityTypes.Season:
+            {
+                if (action.ActionType.Parsed == ImportActionKind.Add)
+                {
+                    SeasonActionPayloadDto payload = JsonSerializer.Deserialize<SeasonActionPayloadDto>(action.IncomingValue!)!;
+                    // Defensive, for the same reason as Series' own Universe insert above: Season.SeriesId
+                    // is a real FK and actions apply in whatever order the coordinator returns them, so
+                    // this Season's own Series may not have applied yet. Idempotent either way. Uses
+                    // payload.SeriesName — the Series' own name — never the Season's title.
+                    if (payload.SeriesId is not null)
+                        await EnsureSeriesExistsAsync(sqliteConnection, sqliteTransaction, payload.SeriesId, payload.SeriesName ?? string.Empty, null, batchId, now, changeLog);
+                    await EnsureSeasonExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
+                }
+                else
+                {
+                    SeasonActionPayloadDto payload = JsonSerializer.Deserialize<SeasonActionPayloadDto>(action.MergedFields
+                        ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
+                    if (payload.SeriesId is not null)
+                        await EnsureSeriesExistsAsync(sqliteConnection, sqliteTransaction, payload.SeriesId, payload.SeriesName ?? string.Empty, null, batchId, now, changeLog);
+                    await sqliteConnection.ExecuteAsync(Sql.Season.UpdateFieldsById, new
+                    {
+                        number = payload.Number,
+                        title = payload.Title,
+                        subtitle = payload.Subtitle,
+                        seriesId = payload.SeriesId,
+                        dateModified = now,
+                        id = action.EntityId,
+                    }, sqliteTransaction);
+                    await QuoteSeedWriter.LogChangeAsync(changeLog, "season", action.EntityId, ChangeAction.Modified,
+                        oldValue: action.ExistingValue, newValue: payload, sqliteConnection, sqliteTransaction);
+                }
+
+                await ApplyCompletenessAsync(sqliteConnection, sqliteTransaction, Sql.Season.SelectCompletenessById, Sql.Season.UpdateCompletenessById, action.EntityId, action.MarkCompletenessAs.Parsed, now);
                 break;
             }
             case ImportActionEntityTypes.Quote:
@@ -1352,17 +1389,17 @@ public sealed class SqliteImportActionService(
 
     private static async Task EnsureSourceExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, string title, string type,
-        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog, string? date = null, string? seriesId = null)
+        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog, string? date = null, string? seriesId = null, string? seasonId = null)
     {
         // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
         // #180: seriesId defaults to null — every defensive call site (Character/Quote's own "ensure
         // the referenced Source exists" checks) has no Series context of its own; only a genuine
         // Source Add action (which does) passes one.
         int inserted = await connection.ExecuteAsync(Sql.Sources.InsertIfNotExists,
-            new { Id = id, Title = title, Type = type, Date = date, SeriesId = seriesId, ImportBatchId = batchId, DateCreated = now }, transaction);
+            new { Id = id, Title = title, Type = type, Date = date, SeriesId = seriesId, SeasonId = seasonId, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "source", id, ChangeAction.Created,
-                oldValue: null, newValue: new { title, type, date, seriesId }, connection, transaction);
+                oldValue: null, newValue: new { title, type, date, seriesId, seasonId }, connection, transaction);
     }
 
     private static async Task EnsureSeriesExistsAsync(
@@ -1374,6 +1411,27 @@ public sealed class SqliteImportActionService(
         if (inserted > 0)
             await QuoteSeedWriter.LogChangeAsync(changeLog, "series", id, ChangeAction.Created,
                 oldValue: null, newValue: new { name, universeId }, connection, transaction);
+    }
+
+    /// <summary>#375: idempotent Season insert, mirroring <see cref="EnsureSeriesExistsAsync"/>.</summary>
+    private static async Task EnsureSeasonExistsAsync(
+        SqliteConnection connection, SqliteTransaction transaction, string id, SeasonActionPayloadDto payload,
+        Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
+    {
+        int inserted = await connection.ExecuteAsync(Sql.Season.InsertIfNotExists,
+            new
+            {
+                Id = id,
+                payload.Number,
+                payload.Title,
+                payload.Subtitle,
+                payload.SeriesId,
+                ImportBatchId = batchId,
+                DateCreated = now,
+            }, transaction);
+        if (inserted > 0)
+            await QuoteSeedWriter.LogChangeAsync(changeLog, "season", id, ChangeAction.Created,
+                oldValue: null, newValue: new { payload.Number, payload.Title, payload.Subtitle, payload.SeriesId }, connection, transaction);
     }
 
     private static async Task EnsureUniverseExistsAsync(

@@ -171,6 +171,8 @@ public class SqlQueryGuardTests
             "Conversations.CountActive",           // COUNT(*) — #221 stats/report entity-type count
             "StageDirections.CountActive",         // COUNT(*) — #221 stats/report entity-type count
             "SoundCues.CountActive",               // COUNT(*) — #221 stats/report entity-type count
+            "Season.CountActive",                  // COUNT(*) — #375
+            "Season.CountActiveReferences",        // COUNT(*) — #375 reversal reference check
         };
 
         var actual = EnumerateSqlConstants()

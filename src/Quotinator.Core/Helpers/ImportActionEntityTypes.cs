@@ -50,6 +50,13 @@ public static class ImportActionEntityTypes
     /// <summary>A <c>Universe</c> row (#180). Natural-key-keyed by <c>Name</c> — see <see cref="Series"/>'s remark; gained Modify/decidability (Name) in #163.</summary>
     public const string Universe = "Universe";
 
-    /// <summary>All nine values.</summary>
-    public static readonly string[] All = [Quote, Source, Character, Person, Conversation, StageDirection, SoundCue, Series, Universe];
+    /// <summary>
+    /// A <c>Season</c> row (#375). Natural-key-keyed by (<c>SeriesId</c>, <c>Number</c>) rather than by
+    /// a name, unlike every other natural-key-keyed type here — an ordinal only identifies a season
+    /// within its parent, and "Season 1" recurs for every series.
+    /// </summary>
+    public const string Season = "Season";
+
+    /// <summary>All ten values.</summary>
+    public static readonly string[] All = [Quote, Source, Character, Person, Conversation, StageDirection, SoundCue, Series, Universe, Season];
 }

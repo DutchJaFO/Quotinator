@@ -2654,6 +2654,45 @@ public class DatabaseInitializerTests
         Assert.AreEqual(2, count, "Season 1 of two different series must be two rows — the natural key is (SeriesId, Number).");
     }
 
+    /// <summary>
+    /// #375: a later file's quote backfilling a Source's Date must not clear its Season link. Found
+    /// while wiring the apply path: <c>Sql.Sources.UpdateFieldsById</c> writes every field it names, and
+    /// the quote-driven backfill builds its payload from <c>SelectExistingByTitleAndType</c> — which did
+    /// not return SeasonId, so the write would have set it to NULL. No compiler error, no failing test,
+    /// just a silently dropped link on the next import that touched the row.
+    /// </summary>
+    [TestMethod]
+    public async Task AQuoteBackfillingASourcesDate_KeepsItsSeasonLink()
+    {
+        string referenceFile = Path.Combine(_tempDir, "reference.json");
+        string quoteFile     = Path.Combine(_tempDir, "later-quote.json");
+
+        File.WriteAllText(referenceFile,
+            """
+            {"quotes":[],
+             "series":[{"name":"Avatar: The Last Airbender"}],
+             "seasons":[{"number":1,"seriesName":"Avatar: The Last Airbender","title":"Book One","subtitle":"Water"}],
+             "sources":[{"title":"The Boy in the Iceberg","type":"tv","seriesName":"Avatar: The Last Airbender","seasonNumber":1}]}
+            """);
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[{"id":"e2222222-2222-4222-8222-222222222222","quote":"Giant light beams.","originalLanguage":"en","source":"The Boy in the Iceberg","date":"2005-02-21","character":null,"author":null,"type":"tv","genres":[],"translations":{}}],"sources":[]}
+            """);
+
+        QuotinatorDatabaseInitializer db = CreateInitializer(
+            [new SeedBatch([new SeedFile(referenceFile, null), new SeedFile(quoteFile, null)], ManifestPolicy.HardcodedDefault, "season-backfill")]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        (string? date, string? seasonId) = await conn.QuerySingleAsync<(string?, string?)>(
+            "SELECT Date, SeasonId FROM Quotinator_Source WHERE Title = 'The Boy in the Iceberg' AND IsDeleted = 0;");
+
+        Assert.AreEqual("2005-02-21", date, "The quote must still backfill the Source's date — the control for the assertion below.");
+        Assert.IsNotNull(seasonId, "Backfilling the date must not clear the Season link.");
+    }
+
     /// <summary>#375: seasons change nothing for material that has none. A movie quote seeds exactly as before.</summary>
     [TestMethod]
     public async Task ImportingAMovieQuote_IsUnaffectedBySeasonSupport()

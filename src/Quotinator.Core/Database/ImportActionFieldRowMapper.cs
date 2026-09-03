@@ -29,7 +29,7 @@ public static class ImportActionFieldRowMapper
         new Dictionary<string, IReadOnlyList<string>>
         {
             [ImportActionEntityTypes.Quote]          = ["quoteText", "originalLanguage", "source", "date", "character", "author", "type", "genres"],
-            [ImportActionEntityTypes.Source]         = ["title", "type", "date", "seriesId"],
+            [ImportActionEntityTypes.Source]         = ["title", "type", "date", "seriesId", "seasonId"],
             [ImportActionEntityTypes.Person]         = ["name", "dateOfBirth", "dateOfDeath"],
             [ImportActionEntityTypes.Character]      = ["name"],
             [ImportActionEntityTypes.Series]         = ["name", "universeId"],
@@ -37,6 +37,7 @@ public static class ImportActionFieldRowMapper
             [ImportActionEntityTypes.StageDirection] = ["text", "imageUrl"],
             [ImportActionEntityTypes.SoundCue]       = ["text", "soundFileUrl", "imageUrl"],
             [ImportActionEntityTypes.Conversation]   = ["description"],
+            [ImportActionEntityTypes.Season]         = ["number", "title", "subtitle", "seriesId"],
         };
 
     /// <summary>

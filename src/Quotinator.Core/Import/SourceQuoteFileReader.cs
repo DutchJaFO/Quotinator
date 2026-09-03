@@ -92,6 +92,7 @@ public static class SourceQuoteFileReader
                 Conversations   = root?["conversations"]?.Deserialize<List<SourceConversationDto>>(Options) ?? [],
                 Series          = root?["series"]?.Deserialize<List<SeriesEntryDto>>(Options) ?? [],
                 Universe        = root?["universe"]?.Deserialize<List<UniverseEntryDto>>(Options) ?? [],
+                Seasons         = root?["seasons"]?.Deserialize<List<SeasonEntryDto>>(Options) ?? [],
             };
             return true;
         }

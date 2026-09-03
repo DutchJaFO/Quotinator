@@ -419,7 +419,7 @@ internal static class Sql
         /// <see cref="SelectIdByTitleAndType"/>'s own remark for why.
         /// </summary>
         internal static readonly string SelectExistingByTitleAndType =
-            $"SELECT {IdClauses.SelectColumn("Id")}, Date, {IdClauses.SelectColumn("SeriesId")}, CompletenessStatus FROM Quotinator_Source WHERE {TextClauses.Equals("Title", "title")} AND {TextClauses.Equals("Type", "type")} AND IsDeleted = 0;";
+            $"SELECT {IdClauses.SelectColumn("Id")}, Date, {IdClauses.SelectColumn("SeriesId")}, {IdClauses.SelectColumn("SeasonId")}, CompletenessStatus FROM Quotinator_Source WHERE {TextClauses.Equals("Title", "title")} AND {TextClauses.Equals("Type", "type")} AND IsDeleted = 0;";
 
         /// <summary>
         /// #162's id-first lookup for an explicit <c>sources[]</c> entry — a row already migrated to
@@ -435,7 +435,7 @@ internal static class Sql
         /// by default" principle, not waited for a second live report first.
         /// </summary>
         internal static readonly string SelectExistingById =
-            $"SELECT Title, Type, Date, {IdClauses.SelectColumn("SeriesId")}, CompletenessStatus FROM Quotinator_Source WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+            $"SELECT Title, Type, Date, {IdClauses.SelectColumn("SeriesId")}, {IdClauses.SelectColumn("SeasonId")}, CompletenessStatus FROM Quotinator_Source WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
 
         /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal static readonly string SelectCompletenessById =
@@ -460,7 +460,7 @@ internal static class Sql
 
         /// <summary>#162's Modify apply — writes an id-matched Source's corrected Title/Type/Date/SeriesId (SeriesId added by #180). Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/> for that. Case-insensitive — see <see cref="SelectExistingById"/>'s remark.</summary>
         internal static readonly string UpdateFieldsById =
-            $"UPDATE Quotinator_Source SET Title = @title, Type = @type, Date = @date, SeriesId = @seriesId, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+            $"UPDATE Quotinator_Source SET Title = @title, Type = @type, Date = @date, SeriesId = @seriesId, SeasonId = @seasonId, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
 
         /// <summary>
         /// Number of active (non-deleted) rows still referencing this Source — sums both direct
@@ -477,8 +477,8 @@ internal static class Sql
 
         /// <summary>See <see cref="Characters.InsertIfNotExists"/>'s remark — same idempotent-Add rationale. SeriesId (nullable) added by #180, resolved by name at planning time.</summary>
         internal const string InsertIfNotExists =
-            "INSERT OR IGNORE INTO Quotinator_Source (Id, Title, Type, Date, SeriesId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
-            "VALUES (@Id, @Title, @Type, @Date, @SeriesId, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+            "INSERT OR IGNORE INTO Quotinator_Source (Id, Title, Type, Date, SeriesId, SeasonId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @Title, @Type, @Date, @SeriesId, @SeasonId, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
 
         /// <summary>Active Series reference for one Source — #184's GetById join. No row if the Source has
         /// no Series, or its Series has been soft-deleted.</summary>
@@ -555,6 +555,57 @@ internal static class Sql
             $"SELECT {IdClauses.SelectColumn("s.Id", "SeriesId")}, {IdClauses.SelectColumn("u.Id", "UniverseId")}, u.Name AS UniverseName FROM Quotinator_Series s " +
             $"JOIN Quotinator_Universe u ON {IdClauses.Join("u.Id", "s.UniverseId")} AND u.IsDeleted = 0 " +
             $"WHERE {IdClauses.In("s.Id", "seriesIds")} AND s.IsDeleted = 0;";
+    }
+
+    /// <summary>#375: Season — an ordered grouping of Sources within a Series (ADR 011).</summary>
+    internal static class Season
+    {
+        internal const string CountActive = "SELECT COUNT(*) FROM Quotinator_Season WHERE IsDeleted = 0;";
+
+        /// <summary>
+        /// The natural-key lookup, and the one place this entity differs from every sibling: a Season is
+        /// keyed by (SeriesId, Number), not by a name. No <c>TextClauses</c> wrap is needed on Number —
+        /// it is an integer, not text — while SeriesId takes the usual id-comparison treatment.
+        /// </summary>
+        internal static readonly string SelectIdBySeriesAndNumber =
+            $"SELECT {IdClauses.SelectColumn("Id")} FROM Quotinator_Season WHERE {IdClauses.Equals("SeriesId", "seriesId")} AND Number = @number AND IsDeleted = 0;";
+
+        /// <summary>Id-first lookup for an explicit <c>seasons[]</c> entry — mirrors <see cref="Series.SelectExistingById"/>.</summary>
+        internal static readonly string SelectExistingById =
+            $"SELECT Number, Title, Subtitle, {IdClauses.SelectColumn("SeriesId")}, CompletenessStatus FROM Quotinator_Season WHERE {IdClauses.Equals("Id", "id")} AND IsDeleted = 0;";
+
+        /// <summary>Modify apply — writes an id-matched Season's corrected fields. Never touches CompletenessStatus/NoValueKnown; see <see cref="UpdateCompletenessById"/>.</summary>
+        internal static readonly string UpdateFieldsById =
+            $"UPDATE Quotinator_Season SET Number = @number, Title = @title, Subtitle = @subtitle, SeriesId = @seriesId, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+
+        /// <summary>See <see cref="Series.InsertIfNotExists"/>'s remark — same idempotent-Add rationale.</summary>
+        internal const string InsertIfNotExists =
+            "INSERT OR IGNORE INTO Quotinator_Season (Id, Number, Title, Subtitle, SeriesId, ImportBatchId, DateCreated, DateModified, DateDeleted, IsDeleted, CompletenessStatus, NoValueKnown) " +
+            "VALUES (@Id, @Number, @Title, @Subtitle, @SeriesId, @ImportBatchId, @DateCreated, NULL, NULL, 0, 'Incomplete', '[]');";
+
+        /// <summary>Number of active (non-deleted) Sources still referencing this Season.</summary>
+        internal static readonly string CountActiveReferences =
+            $"SELECT COUNT(*) FROM Quotinator_Source WHERE {IdClauses.Equals("SeasonId", "id")} AND IsDeleted = 0;";
+
+        /// <summary>Read before an apply so CompletenessGuard.ComputeNextStatus can see the before-state.</summary>
+        internal static readonly string SelectCompletenessById =
+            $"SELECT CompletenessStatus, NoValueKnown FROM Quotinator_Season WHERE {IdClauses.Equals("Id", "id")};";
+
+        /// <summary>Persists a decide-time override or auto-computed transition — the only path allowed to change CompletenessStatus after insert.</summary>
+        internal static readonly string UpdateCompletenessById =
+            $"UPDATE Quotinator_Season SET CompletenessStatus = @completenessStatus, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+
+        /// <summary>Active Series reference for one Season. No row if the Season has no Series, or its Series has been soft-deleted.</summary>
+        internal static readonly string SelectSeriesReferenceForSeason =
+            $"SELECT {IdClauses.SelectColumn("s.Id", "Id")}, s.Name FROM Quotinator_Season se " +
+            $"JOIN Quotinator_Series s ON {IdClauses.Join("s.Id", "se.SeriesId")} AND s.IsDeleted = 0 " +
+            $"WHERE {IdClauses.Equals("se.Id", "seasonId")} AND se.IsDeleted = 0;";
+
+        /// <summary>Active Series references for a batch of Seasons in a single round-trip, avoiding one query per row across a page.</summary>
+        internal static readonly string SelectSeriesReferencesForSeasons =
+            $"SELECT {IdClauses.SelectColumn("se.Id", "SeasonId")}, {IdClauses.SelectColumn("s.Id", "SeriesId")}, s.Name AS SeriesName FROM Quotinator_Season se " +
+            $"JOIN Quotinator_Series s ON {IdClauses.Join("s.Id", "se.SeriesId")} AND s.IsDeleted = 0 " +
+            $"WHERE {IdClauses.In("se.Id", "seasonIds")} AND se.IsDeleted = 0;";
     }
 
     /// <summary>

@@ -341,10 +341,11 @@ public class ImportActionFieldRowMapperTests
     }
 
     [TestMethod]
-    public void DecidableFieldsByEntityType_CoversAllNineEntityTypes()
+    public void DecidableFieldsByEntityType_CoversEveryEntityType()
     {
         foreach (var entityType in ImportActionEntityTypes.All)
             Assert.IsTrue(ImportActionFieldRowMapper.DecidableFieldsByEntityType.ContainsKey(entityType), $"Missing decidable-fields entry for '{entityType}'");
-        Assert.HasCount(9, ImportActionFieldRowMapper.DecidableFieldsByEntityType);
+        Assert.HasCount(ImportActionEntityTypes.All.Length, ImportActionFieldRowMapper.DecidableFieldsByEntityType,
+            "The map must have an entry per entity type and no extras — a stale key would otherwise pass the loop above.");
     }
 }

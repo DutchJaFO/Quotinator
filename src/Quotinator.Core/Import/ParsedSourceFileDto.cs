@@ -29,4 +29,7 @@ public sealed class ParsedSourceFileDto
 
     /// <summary>Explicit Universe declarations (#180). Empty for a flat-format file or a file with no <c>universe</c> section.</summary>
     public IReadOnlyList<UniverseEntryDto> Universe { get; init; } = [];
+
+    /// <summary>Explicit Season declarations (#375). Empty for a flat-format file or a file with no <c>seasons</c> section.</summary>
+    public IReadOnlyList<SeasonEntryDto> Seasons { get; init; } = [];
 }
