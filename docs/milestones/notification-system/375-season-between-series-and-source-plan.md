@@ -1,6 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 9)
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -364,13 +364,59 @@ code.
 
 ### 8. The masterdata endpoints
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-03
 
-`GET /api/v1/masterdata/seasons` and `/{id}`, tagged `ApiTags.MasterData` (already declared, so ADR 020
-needs no entry), `.WithName`/`.WithSummary` per the List/GetById convention with each name a
-`private const string` shared with its logging tag. The full pagination contract including all eight
-cases of the required matrix, and `page`/`pageSize` registered in
-`NumericParameterSchemaTransformer.NumericParamsByPath` with the path.
+`SeasonEndpoints.cs` mirrors `SeriesEndpoints.cs` exactly — `GET /api/v1/masterdata/seasons` and
+`/{id}`, tagged `ApiTags.MasterData`, `.WithName`/`.WithSummary` per the List/GetById convention with
+each name a `private const string` shared with its logging tag, both handlers built on the shared
+`PagedListing.GetAllAsync`/`EntityLookup.TryFindByIdAsync` helpers so the full eight-case pagination
+contract and the 404 behaviour come for free rather than being reimplemented. `ApiMessages.SeasonNotFound`
+added with its three locale strings. `page`/`pageSize` registered in
+`NumericParameterSchemaTransformer.NumericParamsByPath` under `api/v1/masterdata/seasons`, and a live
+`OpenApiSpecEndpointTests` `DataRow` added for it — the generic pagination row (17 tests) proves the
+contract against a fake; this one proves the transformer is actually wired into `AddOpenApi`.
+
+`SeasonSeriesReferenceReader` implements `ISeasonSeriesReferenceReader` via
+`JoinQueryRepository`/`IJoinStrategy` per ADR 017, mirroring `SeriesUniverseReferenceReader` exactly —
+`SeasonSeriesReferenceStrategy`/`...BatchStrategy` wrap the SQL step 5 already wrote. All 17
+`SeasonEndpointsTests` from step 2 now pass, plus `SeasonSeriesReferenceReaderTests` (real SQLite, no
+fake, mirroring `SeriesUniverseReferenceReaderTests`) and `SeasonRepositoryTests` — see below for why
+the latter exists despite step 3's "no repository is written" decision standing unchanged.
+
+`docs/api-endpoints.md` gained the two routes in the same commit.
+
+**Three mistakes, all caught before landing:**
+
+- **A file-clobbering `mv`.** Creating the new single-row DTO by `mv`-ing an *existing* file
+  (`SeriesReferenceRow.cs`, already in use by `SourceSeriesReferenceReader`) onto the new name silently
+  destroyed it — the build broke immediately with two `CS0246`s naming the file I had just erased.
+  Recovered with `git show HEAD:<path>`; the two types now live in separate files as they should have
+  from the start.
+- **`Assert.AreEqual(JsonValueKind.Null, ...)` is the wrong test for a null `MasterDataReference`.**
+  This project's JSON options omit a null property rather than emit it, so `GetProperty("series")`
+  threw `KeyNotFoundException` instead of failing the assertion. `SeriesEndpointsTests`,
+  `SourceEndpointsTests` and `PersonEndpointsTests` each already carry a private
+  `AssertPropertyIsNullOrAbsent` helper for exactly this; `SeasonEndpointsTests` now carries the fourth
+  copy, matching the established (if unconsolidated) convention rather than inventing a fifth shape.
+- **"No repository is written" does not mean "no test is needed."** `SqliteRepositoryTests` already
+  proves the shared generic's `pageSize = 0` contract — against a synthetic `Widget` table, never
+  against `Quotinator_Season`. Neither Series nor Universe has ever had this gap closed either, so
+  `SeasonRepositoryTests` is new ground for the whole masterdata family, not a Season-specific
+  requirement: it is the one thing generic coverage cannot prove — that Season's real schema
+  (`[Table("Quotinator_Season")]`, its columns) round-trips through the shared machinery at all.
+
+**Two regressions from adding a tenth `ImportActionEntityTypes` member, both hardcoded inventories
+working exactly as designed:** `EnumParameterSchemaTransformerTests.EntityType_OnImportActions_PatchedToEnum`
+asserted the OpenAPI enum's nine values by name (fixed — `Season` added); grepped the test suite for
+other `"Series", "Universe"]`-shaped literals and found no sibling.
+
+**One pre-existing intermittent found, not fixed here.**
+`DatabaseInitializerTests.Reseed_EntityTypeThatArrived_IsPresentEvenWhenNothingChanged` (from #373,
+commit `ad4f3fd3` — this issue never touches its logic or fixture) failed once during a full-solution
+`-m:1` run and did not reproduce across five follow-up attempts, including two full runs of
+`Quotinator.Core.Tests` alone. Flagged as its own task rather than guessed at, per
+`docs/testing-policy.md`'s bug-fix rules — a real fix needs a red-before-fix reproduction, which
+non-reproducing does not provide.
 
 ### 9. A Source's response carries its Season
 
