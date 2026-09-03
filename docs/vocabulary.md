@@ -60,6 +60,7 @@ and follow standard C# documentation conventions.
 | `person` | A real-world individual (author, public figure) who said or wrote a quote. Distinct from `character`. |
 | `RecordBase` | The abstract base class for all database-backed entities. Provides a UUID primary key and soft-delete audit columns (`DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted`). |
 | `SafeValue<T>` | A wrapper for database column values that may be imprecisely formatted (e.g. a date stored as `"1994"` rather than a full timestamp). Preserves the raw string alongside the parsed value. |
+| `Season` | An ordered grouping of Sources within a Series (see ADR 011) — a television series' seasons, but deliberately not television-specific: a magazine's volumes or a podcast's seasons fit the same shape. Keyed by (`SeriesId`, `Number`) rather than a name, since an ordinal only identifies a season within its parent. |
 | `SeedBatch` | A group of source files processed together in a single seeding run, sharing a duplicate-resolution policy. Distinct from `ImportBatch`. |
 | `source` | In the quote schema, `source` refers to the media title or occasion from which a quote is drawn — a film title, book title, TV series, or speech event. It does **not** mean an import data source. |
 | `type` | The classification of a quote's origin. Valid values: `movie`, `tv`, `anime`, `book`, `person`. |

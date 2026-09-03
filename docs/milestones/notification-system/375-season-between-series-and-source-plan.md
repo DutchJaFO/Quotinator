@@ -1,6 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (step 11)
+**Status:** In progress (verification checklist)
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -490,11 +490,45 @@ Corrected to cite only what is real: #375's own plan doc, and the reasoning alre
 
 ### 11. Docs, vocabulary, and the boyscout pass
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-03
 
-`docs/api-endpoints.md` and the endpoints' `[Description]` attributes in the same commit as step 8.
-`docs/vocabulary.md` gains Season. Every file this issue touches joins the scoped `IDE0008` list in
-`.editorconfig` the moment it is first touched, per CLAUDE.md's "Variable declarations".
+`docs/api-endpoints.md` and the endpoints' `[Description]` attributes landed with steps 8 and 9, in
+their own commits, as the plan required. `docs/vocabulary.md` gains `Season`, alphabetically between
+`SafeValue<T>` and `SeedBatch`.
+
+**The `.editorconfig` scoped `IDE0008` list was not kept current step by step, despite the plan saying
+so.** Every new file this issue created did use explicit types from the start, but the list itself —
+the record CLAUDE.md says exists specifically so the boyscout rule can't be "silently missed... before
+the developer caught it by eye" — was only updated here, at the end, rather than at each file's first
+touch. Recovered by diffing this issue's full touched-file set (`git log --name-only` across every
+#375 commit) against the list already there: 42 files were missing. Appended at the end of the
+existing glob, preserving its order rather than re-sorting the whole thing, since a reordered diff
+would obscure which 42 were actually new. The seven files this issue touched that were already present
+— `Program.cs`, `ApiMessages.cs`, `QuotinatorDatabaseInitializer.cs`,
+`SqliteImportActionService.cs`, `OpenApiSpecEndpointTests.cs`, `DatabaseInitializerTests.cs`,
+`ImportBatchesTests.cs` — needed no addition, having joined the list during earlier notification-system
+work.
+
+**`dotnet format style`'s `--include` flag silently did nothing on the first invocation with several
+space-separated paths, then worked identically on a retry.** No error, no partial result — the run
+reported "0 of N files" formatted for files independently confirmed (via a single-file rerun) to have
+fixable violations. Root cause not identified; worked around by treating every "0 formatted" result as
+suspect and re-running rather than trusting it, which is what caught it. Recorded here as a reason to
+distrust a clean `dotnet format` run that follows a change to the file set, not just a reason to
+distrust the tool once.
+
+**`dotnet format --diagnostics IDE0028 IDE0305 IDE0300` was first run without `--include`, scanning the
+whole `Quotinator.Core` project rather than only this issue's 43 files.** Only two files changed, both
+already in the touched set, so the mistake happened to be harmless — but that was luck, not the rule
+being followed, and every subsequent pass was re-run scoped. CLAUDE.md's own text anticipates exactly
+this follow-on ("Giving a declaration an explicit type routinely exposes IDE0028/IDE0305... fix them in
+the same pass"), and 6 more files needed a further pass once the `var` conversions above landed.
+
+Verified with a manual sweep afterward for the three shapes the automated fixer cannot reach
+(`foreach (var x in …)`, `using var x = …`, `var (a, b) = …` deconstructions) — none present in any of
+the 43 files — and a full solution rebuild plus test run (0 warnings, every project green), since the
+conversion touched live logic files (`ImportActionPlanner.cs`, `SqliteQuoteImportService.cs`) rather
+than only test code.
 
 ---
 
