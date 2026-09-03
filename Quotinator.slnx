@@ -66,6 +66,7 @@
     <File Path="data/sources/quotinator-series-universe.json" />
     <File Path="data/sources/quotinator-series-universe-conflict-rules.json" />
     <File Path="data/sources/quotinator-series-universe-source-aliases.json" />
+    <File Path="data/sources/quotinator-seasons.json" />
     <File Path="data/sources/vilaboim_movie-quotes.json" />
     <File Path="data/sources/vilaboim-conflict-rules.json" />
     <File Path="data/sources/vilaboim-source-aliases.json" />

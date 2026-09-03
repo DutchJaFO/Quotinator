@@ -121,6 +121,22 @@ public class EntityIdentityTests
         Assert.AreNotEqual(EntityIdentity.SeasonId(seriesId, 1), EntityIdentity.SeasonId(seriesId, 2));
     }
 
+    /// <summary>
+    /// #375: a differently-cased parent id must derive the same season id. The fixture deliberately
+    /// contains hex letters (a–f) — a digits-only GUID is identical in either case and would make this
+    /// assertion vacuous.
+    /// </summary>
+    [TestMethod]
+    public void SeasonId_SeriesIdCasingDiffers_ProducesSameId()
+    {
+        const string lower = "9a02c1dc-8a7f-1f4e-9b90-3229f4c2a361";
+        string upper = lower.ToUpperInvariant();
+
+        Assert.AreNotEqual(lower, upper, StringComparer.Ordinal,
+            "Fixture guard: the id must contain hex letters, or this test proves nothing.");
+        Assert.AreEqual(EntityIdentity.SeasonId(lower, 1), EntityIdentity.SeasonId(upper, 1));
+    }
+
     /// <summary>A season id must not collide with any other id space — the type tag is what guarantees it.</summary>
     [TestMethod]
     public void SeasonId_NeverCollidesWithTheOtherIdSpaces()

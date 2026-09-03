@@ -51,6 +51,11 @@
       "type": "array",
       "description": "Optional explicit Universe declarations (#180) — a fictional world or franchise spanning one or more Series. Matched by name only; no explicit id, since the id is generated from the name.",
       "items": { "$ref": "#/$defs/universe" }
+    },
+    "seasons": {
+      "type": "array",
+      "description": "Optional explicit Season declarations (#375) — an ordered grouping of Sources within a Series. Not television-specific: a magazine's volumes or a podcast's seasons use the same shape. Matched by natural key (seriesName + number) unless an explicit id is given.",
+      "items": { "$ref": "#/$defs/season" }
     }
   },
   "$defs": {
@@ -105,7 +110,8 @@
         "title":      { "type": "string", "minLength": 1 },
         "type":       { "type": "string", "enum": ["movie", "tv", "anime", "book", "person"] },
         "date":       { "type": ["string", "null"], "description": "Publication or release date. Only meaningful alongside an explicit 'id' — a natural-key-matched entry never sets it. Omit entirely unless you intend to set it." },
-        "seriesName": { "type": ["string", "null"], "description": "Name of the Series (#180) this Source belongs to, if any. Resolved to a Series id at import time — never a raw id, matching how a quote's own 'source'/'author' fields are text, not ids. Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." }
+        "seriesName": { "type": ["string", "null"], "description": "Name of the Series (#180) this Source belongs to, if any. Resolved to a Series id at import time — never a raw id, matching how a quote's own 'source'/'author' fields are text, not ids. Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." },
+        "seasonNumber": { "type": ["integer", "null"], "description": "Ordinal of the Season (#375) this Source belongs to, within the Series named by 'seriesName'. A number rather than a name, because a season's ordinal is its natural key within its parent. Resolved to a Season id at import time. Omit entirely unless you intend to set it — a present null resets it, an absent property leaves it alone (#190)." }
       }
     },
     "series": {
@@ -117,6 +123,19 @@
         "id":           { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive (#163). Optional — omit it to match by natural key (name) instead." },
         "name":         { "type": "string", "minLength": 1 },
         "universeName": { "type": ["string", "null"], "description": "Name of the Universe (#180) this Series belongs to, if any. Resolved to a Universe id at import time, same as Source.seriesName." }
+      }
+    },
+    "season": {
+      "type": "object",
+      "required": ["number"],
+      "additionalProperties": false,
+      "description": "Two shapes (#375). CORRECTION: include 'id' — the Season is matched by that explicit id, so every field can be corrected. CREATION/ENRICHMENT: omit 'id' — the Season is matched, or if genuinely new created, by natural key (seriesName + number). Unlike Series and Universe, the natural key is an ordinal scoped to the parent rather than a globally unique name: 'Season 1' recurs for every series.",
+      "properties": {
+        "id":         { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", "description": "UUID v4, case-insensitive. Optional — omit it to match by natural key (seriesName + number) instead." },
+        "number":     { "type": "integer", "description": "The season's ordinal within its series, and half its natural key." },
+        "seriesName": { "type": ["string", "null"], "description": "Name of the Series this Season belongs to. Resolved to a Series id at import time — never a raw id, same as Source.seriesName." },
+        "title":      { "type": ["string", "null"], "description": "The season's own name, where it has one — 'Book One' for Avatar: The Last Airbender's first season. Omit for a season identified by its ordinal alone." },
+        "subtitle":   { "type": ["string", "null"], "description": "The season's subtitle, where it has one — 'Water', rendering 'Book One: Water'." }
       }
     },
     "universe": {

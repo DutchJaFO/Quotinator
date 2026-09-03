@@ -23,6 +23,13 @@
       "sourceAliasFile": "quotinator-series-universe-source-aliases.json"
     },
     {
+      "file": "quotinator-seasons.json",
+      "name": "quotinator/seasons",
+      "duplicateResolution": {
+        "default": "review"
+      }
+    },
+    {
       "file": "NikhilNamal17_popular-movie-quotes.json",
       "name": "NikhilNamal17/popular-movie-quotes",
       "github": {

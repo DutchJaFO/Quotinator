@@ -1,4 +1,6 @@
 using System.Data;
+using System.Text.Json;
+using Quotinator.Core.Import;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -2691,6 +2693,107 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual("2005-02-21", date, "The quote must still backfill the Source's date — the control for the assertion below.");
         Assert.IsNotNull(seasonId, "Backfilling the date must not clear the Season link.");
+    }
+
+    /// <summary>
+    /// #375: the bundled seasons file seeds the whole chain — Universe, Series, its three Seasons, the
+    /// episode Source linked to Book One, and the quote attached to that episode. Verified against the
+    /// real `data/sources/quotinator-seasons.json` rather than a fixture, because the point of the file
+    /// is that curated reference data arrives ahead of the bulk import and actually resolves.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_BundledSeasonsFile_SeedsTheWholeChain()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer(
+            [new SeedBatch([new SeedFile(Path.Combine(SourcesDir, "quotinator-seasons.json"), null)],
+                ManifestPolicy.HardcodedDefault, "bundled sources")]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        List<(int Number, string? Title, string? Subtitle)> seasons =
+        [
+            .. await conn.QueryAsync<(int, string?, string?)>(
+                "SELECT se.Number, se.Title, se.Subtitle FROM Quotinator_Season se "
+                + "JOIN Quotinator_Series s ON s.Id = se.SeriesId AND s.IsDeleted = 0 "
+                + "WHERE s.Name = 'Avatar: The Last Airbender' AND se.IsDeleted = 0 ORDER BY se.Number;")
+        ];
+
+        Assert.HasCount(3, seasons, "Avatar's three books must all be declared.");
+        Assert.AreEqual((1, "Book One", "Water"), seasons[0]);
+        Assert.AreEqual((3, "Book Three", "Fire"), seasons[2]);
+
+        (string Title, int Number)? episode = await conn.QuerySingleOrDefaultAsync<(string, int)?>(
+            "SELECT src.Title, se.Number FROM Quotinator_Source src "
+            + "JOIN Quotinator_Season se ON se.Id = src.SeasonId AND se.IsDeleted = 0 "
+            + "WHERE src.Title = 'The Boy in the Iceberg' AND src.IsDeleted = 0;");
+        Assert.IsNotNull(episode, "The episode Source must be linked to its Season.");
+        Assert.AreEqual(1, episode.Value.Number, "The Boy in the Iceberg belongs to Book One.");
+
+        string? character = await conn.ExecuteScalarAsync<string?>(
+            "SELECT c.Name FROM Quotinator_Quote q "
+            + "JOIN Quotinator_Source src ON src.Id = q.SourceId AND src.IsDeleted = 0 "
+            + "JOIN Quotinator_Character c ON c.Id = q.CharacterId AND c.IsDeleted = 0 "
+            + "WHERE src.Title = 'The Boy in the Iceberg' AND q.IsDeleted = 0;");
+        Assert.AreEqual("Sokka", character, "The quote must attach to the episode, with its speaker.");
+    }
+
+    /// <summary>
+    /// #375: every quote id in the bundled seasons file is the one <see cref="QuoteIdentity.StableId"/>
+    /// derives from its own text and source — never hand-authored. An invented UUID would import once
+    /// and then diverge from whatever a converter or a re-import computes for the same quote,
+    /// duplicating the row instead of matching it.
+    /// </summary>
+    [TestMethod]
+    public void BundledSeasonsFile_QuoteIdsAreDerived_NotHandAuthored()
+    {
+        using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(SourcesDir, "quotinator-seasons.json")));
+
+        foreach (JsonElement quote in doc.RootElement.GetProperty("quotes").EnumerateArray())
+        {
+            string id       = quote.GetProperty("id").GetString()!;
+            string text     = quote.GetProperty("quote").GetString()!;
+            string source   = quote.GetProperty("source").GetString()!;
+            string expected = QuoteIdentity.StableId(text, source);
+
+            Assert.AreEqual(expected, id, StringComparer.OrdinalIgnoreCase,
+                $"Quote id must be QuoteIdentity.StableId(quote, source), not hand-authored. Expected '{expected}'.");
+        }
+    }
+
+    /// <summary>
+    /// #375: a Season is found by its natural key regardless of the stored SeriesId's casing — the
+    /// case-insensitive-by-default rule, which matters for rows written before ADR 012's canonicalization.
+    /// The fixture id contains hex letters on purpose; a digits-only GUID would match either way and
+    /// prove nothing.
+    /// </summary>
+    [TestMethod]
+    public async Task SeasonNaturalKeyLookup_IsCaseInsensitiveOnSeriesId()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
+        await db.InitialiseAsync();
+
+        const string lowerSeriesId = "9a02c1dc-8a7f-1f4e-9b90-3229f4c2a361";
+        string upperSeriesId = lowerSeriesId.ToUpperInvariant();
+        Assert.AreNotEqual(lowerSeriesId, upperSeriesId, StringComparer.Ordinal,
+            "Fixture guard: the id must contain hex letters, or this test proves nothing.");
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+        await conn.ExecuteAsync(
+            "INSERT INTO Quotinator_Season (Id, Number, SeriesId, DateCreated, IsDeleted, CompletenessStatus, NoValueKnown) "
+            + "VALUES (@id, 1, @seriesId, @now, 0, 'Incomplete', '[]');",
+            new { id = Guid.NewGuid().ToString("D"), seriesId = upperSeriesId, now });
+
+        Guid? found = await conn.ExecuteScalarAsync<Guid?>(
+            Quotinator.Core.Queries.Sql.Season.SelectIdBySeriesAndNumber,
+            new { seriesId = lowerSeriesId, number = 1 });
+
+        Assert.IsNotNull(found, "A Season stored under an upper-cased SeriesId must still be found by its lower-cased form.");
     }
 
     /// <summary>#375: seasons change nothing for material that has none. A movie quote seeds exactly as before.</summary>

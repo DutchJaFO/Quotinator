@@ -1,0 +1,36 @@
+{
+  "quotes": [
+    {
+      "id": "9a02c1dc-8a7f-1f4e-9b90-3229f4c2a361",
+      "quote": "Giant light beams, flying bison, Airbenders, I think I've got Midnight Sun Madness. I'm going home to where stuff makes sense.",
+      "originalLanguage": "en",
+      "source": "The Boy in the Iceberg",
+      "date": "2005-02-21",
+      "character": "Sokka",
+      "author": null,
+      "type": "tv",
+      "genres": ["adventure", "animation", "fantasy"],
+      "translations": {}
+    }
+  ],
+  "universe": [
+    { "name": "Avatar" }
+  ],
+  "series": [
+    { "name": "Avatar: The Last Airbender", "universeName": "Avatar" }
+  ],
+  "seasons": [
+    { "number": 1, "seriesName": "Avatar: The Last Airbender", "title": "Book One", "subtitle": "Water" },
+    { "number": 2, "seriesName": "Avatar: The Last Airbender", "title": "Book Two", "subtitle": "Earth" },
+    { "number": 3, "seriesName": "Avatar: The Last Airbender", "title": "Book Three", "subtitle": "Fire" }
+  ],
+  "sources": [
+    {
+      "title": "The Boy in the Iceberg",
+      "type": "tv",
+      "date": "2005-02-21",
+      "seriesName": "Avatar: The Last Airbender",
+      "seasonNumber": 1
+    }
+  ]
+}
