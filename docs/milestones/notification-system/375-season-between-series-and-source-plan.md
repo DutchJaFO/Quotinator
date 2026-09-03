@@ -1,6 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (step 9)
+**Status:** In progress (step 10)
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -420,11 +420,42 @@ non-reproducing does not provide.
 
 ### 9. A Source's response carries its Season
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-03
 
-A `MasterDataReference?` alongside its existing Series reference, and a Season's own response carries
-its Series the same way. Both resolved by a batched reader per ADR 017 — one query per page, never one
-per row.
+Season's own response already carries its Series (step 8). This step is the other direction:
+`SourceResponse.Season`, a `MasterDataReference?` alongside its existing `Series`, resolved by
+`ISourceSeasonReferenceReader`/`SourceSeasonReferenceReader` — `Sql.Sources.SelectSeasonReferenceForSource`/
+`SelectSeasonReferencesForSources` mirror the existing Source→Series pair exactly, and the reader mirrors
+`SourceSeriesReferenceReader`. `SourceEndpoints.GetAll`/`GetById` both call it, batched at `GetAll`
+(one query per page, never one per row) exactly as the Series reference already is.
+
+**The reference's `Name` is the season's rendered display name** (`SeasonDisplay.Format`), not its raw
+`Title` — a number-only season has no `Title` at all, and "Book One" alone would be wrong when the
+season also has a `Subtitle`. The row DTOs carry `Number`/`Title`/`Subtitle` for exactly this; the
+formatting happens once, at the API layer, matching where `MasterDataReference` construction already
+happens for every other reference in this codebase.
+
+Six new `SourceEndpointsTests` (the reference shape, its null/soft-deleted cases, and the batch case)
+were mutation-verified in both directions — one mutation on `GetById`'s resolution, a separate one on
+`GetAll`'s, each caught by its own test and left the other's tests passing, confirming they check
+different code paths rather than one incidentally covering the other.
+
+**One real bug, self-inflicted and caught by the zero-warnings gate rather than a failing test.** The
+first draft of `GetSourceById_SourceHasSeason_ReturnsSeasonReferenceWithRenderedDisplayName` built a
+`repo` fixture and then never passed it to `CreateFactory` — the test ran against an empty repository,
+so the id it queried 404'd, and asserting into a 404 body's `season` property would itself have thrown
+rather than asserted anything meaningful. Caught by `dotnet build` flagging the now-unused `repo`
+variable (`IDE0059`) before the test was ever run — the zero-warnings policy finding a test bug before
+the test had a chance to lie by passing for the wrong reason.
+
+**Registering `ISourceSeasonReferenceReader` in `Program.cs` immediately broke six existing
+`SourceEndpointsTests`.** The real DI registration is live for every test using the real
+`QuotinatorWebApplicationFactory`, and none of the existing Source tests supplied a fake for the new
+interface — so they hit the real SQLite-backed reader against a database with no `Quotinator_Season`
+table. Fixed by adding `FakeSourceSeasonReferenceReader` (mirroring `FakeSourceSeriesReferenceReader`)
+and wiring it into `SourceEndpointsTests.CreateFactory`'s default. The general shape: adding any new
+reader to `Program.cs`'s real DI graph is a breaking change for every endpoint test that shares that
+entity's factory, whether or not that test's own scenario cares about the new reference.
 
 ### 10. Document how a quote's text and episode are verified
 
