@@ -75,7 +75,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | In progress | T1 ⬜ T2 ⬜ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
 | [#373](https://github.com/DutchJaFO/Quotinator/issues/373) | An import that re-states identical content reports it as modified | In progress | T1 ⬜ T2 ⬜ | [373-unchanged-is-not-modified-plan.md](373-unchanged-is-not-modified-plan.md) |
 | [#374](https://github.com/DutchJaFO/Quotinator/issues/374) | A conflict rule cannot tell "already correct" from "cannot apply" | Planning | T1 ⬜ T2 ⬜ | [374-already-correct-is-not-cannot-apply-plan.md](374-already-correct-is-not-cannot-apply-plan.md) |
-| [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | In progress | T1 ⬜ T2 ⬜ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
+| [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | Waiting for release | T1 ⬜ T2 ✅ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
 
 ---
 

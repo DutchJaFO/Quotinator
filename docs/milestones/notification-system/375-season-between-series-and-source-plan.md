@@ -1,6 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (verification checklist)
+**Status:** Waiting for release
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -163,7 +163,7 @@ from a Source's presence — the accepted cost of never leaving a quote without 
 
 ### 2. Write every test first, and run them red
 
-**Status:** 🚧 In progress
+**Status:** ✅ Done, 2026-09-03
 
 Per `docs/testing-policy.md`, whose "Red first means signatures first" section this step's own failure
 prompted: a test referencing a type that does not exist yet breaks the build rather than going red, so
@@ -187,15 +187,26 @@ Progress:
 | `SeasonEntryDto`, `SourceEntryDto.SeasonNumber` | 4 import-linking in `DatabaseInitializerTests` | red on the missing table and column |
 | `SeasonResponse`, `ISeasonSeriesReferenceReader`, 2 fakes | 17 in `SeasonEndpointsTests` | 15 red — no endpoint is mapped yet |
 
-**Two of the seventeen pass for a weak reason, and are known to.** `GetSeasonById_UnknownId_Returns404`
-and `..._MalformedId_Returns404NotBadRequest` are satisfied by the route not existing at all. They are
-kept because they become meaningful once the endpoint exists, and every positive case beside them is
-red — but on their own they would prove nothing, which is the "only-failures" shape the testing policy
-warns about.
+**Two of the seventeen passed for a weak reason at the time, and were known to.**
+`GetSeasonById_UnknownId_Returns404` and `..._MalformedId_Returns404NotBadRequest` were satisfied by the
+route not existing at all. Kept because they become meaningful once the endpoint exists, and every
+positive case beside them was red — but on their own they would have proven nothing, which is the
+"only-failures" shape the testing policy warns about. Both are now genuine: the endpoint is mapped, and
+each 404 is reached by the real `EntityLookup.TryFindByIdAsync` path, not by an absent route.
 
-Remaining: `SeasonReaderTests` (the repository-level `pageSize = 0` case, which needs the real reader),
-the `SourceEndpointsTests` Season-reference and N+1 cases, `OpenApiSpecEndpointTests`, and the
-`source-verification.md` text assertion.
+**The four items originally left as "Remaining" are now built and confirmed green**, closing out this
+step (`dotnet test`, 2026-09-03):
+
+| Signature | Test | Result |
+|---|---|---|
+| `SqliteRepository<SeasonEntity>` against the real table | `SeasonRepositoryTests.GetPageAsync_PageSizeZero_ReturnsEveryRowFromTheRealTable` | passed |
+| `ISourceSeasonReferenceReader` — reference shape, null-on-none, null-on-soft-deleted, batched N+1 | `SourceEndpointsTests.GetSourceById_SourceHasSeason_ReturnsSeasonReferenceWithRenderedDisplayName` / `..._SourceHasNoSeason_ReturnsNullSeason` / `..._SeasonSoftDeleted_ReturnsNullSeason` / `GetAllSources_MultipleSourcesWithSeasons_BatchResolvesEachSeasonInOneQuery` | all 4 passed |
+| `/masterdata/seasons` numeric params on the live spec | `OpenApiSpecEndpointTests.PageParam_OnLiveSpec_PublishesIntegerType("/api/v1/masterdata/seasons", "page"/"pageSize")` | both passed |
+| `source-verification.md`'s own text | `SourceVerificationDocTests` (3 tests) | all 3 passed |
+
+`SeasonReaderTests` in the original wording became `SeasonRepositoryTests` — there is no bespoke reader
+here (cross-check 5: Season takes the generic `SqliteRepository<T>`), so the repository-level test is
+what row 15 of the verification checklist actually names.
 
 ### 3. The Season entity and its migration
 
@@ -532,38 +543,76 @@ than only test code.
 
 ---
 
+## A genuine defect found by row 25's own live verification, 2026-09-03
+
+Building row 25's T2 document (below) — the only checklist item requiring a real container rather than
+a unit test — found a real bug no unit test in this issue had caught. `GET
+/api/v1/masterdata/sources/{id}` and `GET /api/v1/masterdata/sources?pageSize=0` both returned `500` on
+the first live request against a rebuilt image, for a Source carrying a Season link.
+
+**Cause (per this suite's own three-cause framework, `docs/automated-testing/README.md`): the feature
+was broken, not the expectation.** `SourceSeasonReferenceRow`/`SourceSeasonReferencesBatchRow` declared
+their `Number` column as `int`. SQLite's `INTEGER` affinity always reads back as `long` through
+Microsoft.Data.Sqlite regardless of the column's declared type or the value's magnitude, and Dapper's
+record-constructor materialization — used by `JoinQueryRepository<TResult>` per ADR 017 — requires an
+exact type match between the reader's column types and the constructor's parameter types. The generic
+repository's property-setter mapping (`SqliteRepository<SeasonEntity>`, used for `GetAllSeasons`/
+`GetSeasonById`) narrows `long` into `int` implicitly, which is exactly why the Season endpoints
+themselves never showed the bug and only the Source-side reference did.
+
+**No unit test in step 2's own matrix could have caught this.** `SourceEndpointsTests`' Season-reference
+cases all pass against `FakeSourceSeasonReferenceReader` — a fake substitutes the reader entirely, so it
+never reaches Dapper's own materialization. `SourceSeriesReferenceReaderTests`' pre-existing remarks
+name this exact gap for a sibling reader ("No fake-backed test previously exercised this reader's own
+SQL"); this issue repeated it for a new reader rather than learning from the precedent already in the
+codebase.
+
+**Fixed** by declaring `Number` as `long` on both records and narrowing to `int` at the one point
+`SourceSeasonReferenceReader` builds its own `int`-typed tuple contract (the public
+`ISourceSeasonReferenceReader` interface is unaffected — only the internal Dapper row shape changed).
+`SourceSeasonReferenceReaderTests.cs` (new, real SQLite) is the regression guard, and was itself
+mutation-verified: reverting `long` back to `int` reproduced 5 of its 6 assertions failing with the
+identical `InvalidOperationException` observed live, confirming the test catches the actual defect and
+not a coincidence.
+
+This closes a testing-policy gap for this issue specifically (no real-SQLite test existed for either
+`SourceSeasonReferenceReader` method), not a broader one — `SeasonSeriesReferenceReaderTests` already
+covered the Season→Series direction with a real database from the start.
+
+---
+
 ## Verification checklist
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A Source declaring a season number is linked to that season | Unit test | `DatabaseInitializerTests.ImportingASourceWithASeasonNumber_LinksItToThatSeason` |
-| 2 | ❌ | A Source declaring no season is linked to none | Unit test | `DatabaseInitializerTests.ImportingASourceWithNoSeasonNumber_LinksItToNoSeason` — the control; the link is optional and this is what proves it |
-| 3 | ❌ | Two series each with a season 1 are two distinct seasons | Unit test | `DatabaseInitializerTests.TwoSeriesEachWithSeasonOne_AreDistinctSeasons` — the per-parent natural key; a global key would collapse them |
-| 4 | ❌ | Two seasons with the same number under different series get distinct ids | Unit test | `EntityIdentityTests.SeasonId_SameNumberUnderDifferentSeries_DiffersById` — row 3's failure mode one layer down, where the natural key admits both and the primary key rejects one |
-| 5 | ❌ | A movie quote is unaffected | Unit test | `DatabaseInitializerTests.ImportingAMovieQuote_IsUnaffectedBySeasonSupport` |
-| 6 | ❌ | `Quote.SourceId` is still `NOT NULL` and every quote still resolves a Source | Unit test | the schema drift test plus an assertion over `Sql.Quotes.SelectBase` keeping its inner join — the rejected design's failure mode, asserted so it cannot creep back |
-| 7 | ❌ | A quote ruled to an episode resolves to that episode's Source | Unit test | `DatabaseInitializerTests.AQuoteRuledToAnEpisode_ResolvesToThatEpisodesSource` — the curated-overlay-then-bulk-import path end to end |
-| 8 | ❌ | A season renders its number, title and subtitle together | Unit test | `DatabaseInitializerTests.AvatarSeasonRendersBookOneWater_FromNumberTitleAndSubtitle` |
-| 9 | ❌ | A number-only season renders without them | Unit test | `DatabaseInitializerTests.ANumberOnlySeason_RendersWithoutTitleOrSubtitle` — the control for row 8 |
-| 10 | ❌ | The migration and the baseline produce an identical `Quotinator_Season` schema | Unit test | `Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema`, extended |
-| 11 | ❌ | The same holds for `Quotinator_Source` after its new column | Unit test | the same test — an `ADD COLUMN` is where a default or a reference silently differs between the two paths |
-| 12 | ❌ | Both paths accept the same `CompletenessStatus` values on the new table | Unit test | the CHECK-constraint drift test, extended — `PRAGMA table_info` does not capture CHECK behaviour |
-| 13 | ❌ | The seasons list and get-by-id return the expected payload, and an unknown id is a 404 | Unit test | `SeasonEndpointsTests` |
-| 14 | ❌ | The list endpoint satisfies all eight pagination cases | Unit test | `SeasonEndpointsTests`, the standard matrix |
-| 15 | ❌ | `pageSize = 0` returns every row at the repository level | Unit test | `SeasonReaderTests.GetPagedAsync_PageSizeZero_ReturnsEveryRow` — an endpoint test against a stub cannot catch a literal `LIMIT 0` |
-| 16 | ❌ | A Source's Season is a `MasterDataReference`, resolved in one query per page | Unit test | `SourceEndpointsTests` — the reference shape and the N+1 guard together |
-| 17 | ❌ | A Season's own Series is a `MasterDataReference` | Unit test | `SeasonEndpointsTests` |
-| 18 | ❌ | A soft-deleted Season does not appear as a reference | Unit test | the join filters the referenced table, per CLAUDE.md's soft-delete rule — a reference must resolve to null, not to a deleted row |
-| 19 | ❌ | The live spec publishes seasons' `page`/`pageSize` as integer with their defaults | Unit test | `OpenApiSpecEndpointTests` — the transformer's own unit tests pass even when it is never registered |
-| 20 | ❌ | Every tag the seasons endpoints use is declared with a description | Unit test | `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` (existing) — expected to pass unchanged, since `MasterData` is already declared |
-| 21 | ❌ | Every new test is red against the pre-change build | Test run | run at step 2 |
-| 22 | ❌ | The four resolvable quotes land on the episodes step 7 names | Unit test | `DatabaseInitializerTests.TheFourResolvedTvQuotes_LandOnTheirNamedEpisodes` — the values are fixed in step 7, so this asserts them rather than discovering them |
-| 23 | ❌ | The three unresolved quotes keep their show-level Source | Unit test | `DatabaseInitializerTests.AnUnattributedTvQuote_KeepsItsShowLevelSource` — nearest-Source asserted, so partial attribution stays a supported state rather than a silent gap |
-| 24 | ❌ | The verification procedure states how a quote's text, speaker and episode are established, and what to do when the episode is not found | Unit test | assertion over `source-verification.md`'s own text, covering both rules step 10 names |
-| 25 | ❌ | A real container serves an episode-attached quote through the API | Automated (T2) | a new `docs/automated-testing/` document — the seeded corpus end to end, which no unit test covers |
-| 26 | ❌ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
-| 27 | ❌ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
-| 28 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | the seasons endpoints return the Avatar seasons, and a quote from an episode reports that episode |
+| 1 | ✅ | A Source declaring a season number is linked to that season | Unit test | `DatabaseInitializerTests.ImportingASourceWithASeasonNumber_LinksItToThatSeason` |
+| 2 | ✅ | A Source declaring no season is linked to none | Unit test | `DatabaseInitializerTests.ImportingASourceWithNoSeasonNumber_LinksItToNoSeason` — the control; the link is optional and this is what proves it |
+| 3 | ✅ | Two series each with a season 1 are two distinct seasons | Unit test | `DatabaseInitializerTests.TwoSeriesEachWithSeasonOne_AreDistinctSeasons` — the per-parent natural key; a global key would collapse them |
+| 4 | ✅ | Two seasons with the same number under different series get distinct ids | Unit test | `EntityIdentityTests.SeasonId_SameNumberUnderDifferentSeries_DiffersById` — row 3's failure mode one layer down, where the natural key admits both and the primary key rejects one |
+| 5 | ✅ | A movie quote is unaffected | Unit test | `DatabaseInitializerTests.ImportingAMovieQuote_IsUnaffectedBySeasonSupport` |
+| 6 | ✅ | `Quote.SourceId` is still `NOT NULL` and every quote still resolves a Source | Unit test | `DatabaseInitializerTests.Quote_StillRequiresASource` — asserts both halves in one test: the `NOT NULL` pragma and `Sql.Quotes.SelectRawById()` still containing `JOIN Quotinator_Source` — the rejected nullable-parent design's failure mode, asserted so it cannot creep back |
+| 7 | ✅ | A quote ruled to an episode resolves to that episode's Source | Unit test | `DatabaseInitializerTests.InitialiseAsync_NikhilNamal17WithRealRuleFile_ResolvedQuotesLandOnTheirEpisodeSource` — the curated-overlay-then-bulk-import path end to end. Named differently from the plan's original guess (`AQuoteRuledToAnEpisode_ResolvesToThatEpisodesSource`); this is the real test that covers the requirement |
+| 8 | ✅ | A season renders its number, title and subtitle together | Unit test | `SeasonDisplayTests.Format_NumberTitleAndSubtitle_RendersAllThree` — a `SeasonDisplay.Format` unit test, not a `DatabaseInitializerTests` one as the plan originally guessed; the rendering logic itself has no database dependency |
+| 9 | ✅ | A number-only season renders without them | Unit test | `SeasonDisplayTests.Format_NumberOnly_RendersWithoutTitleOrSubtitle` — the control for row 8, same correction as row 8 |
+| 10 | ✅ | The migration and the baseline produce an identical `Quotinator_Season` schema | Unit test | `Baseline_And_IncrementalReplay_ProduceIdenticalConsumerSchema`, extended |
+| 11 | ✅ | The same holds for `Quotinator_Source` after its new column | Unit test | the same test — an `ADD COLUMN` is where a default or a reference silently differs between the two paths |
+| 12 | ✅ | Both paths accept the same `CompletenessStatus` values on the new table | Unit test | `Baseline_And_IncrementalReplay_AcceptSameCheckConstraintValues`, extended — `PRAGMA table_info` does not capture CHECK behaviour |
+| 13 | ✅ | The seasons list and get-by-id return the expected payload, and an unknown id is a 404 | Unit test | `SeasonEndpointsTests` (17 tests, all passing) |
+| 14 | ✅ | The list endpoint satisfies all eight pagination cases | Unit test | `SeasonEndpointsTests`, the standard matrix |
+| 15 | ✅ | `pageSize = 0` returns every row at the repository level | Unit test | `SeasonRepositoryTests.GetPageAsync_PageSizeZero_ReturnsEveryRowFromTheRealTable` — real SQLite against the actual `Quotinator_Season` table, not a stub. Named differently from the plan's original guess (`SeasonReaderTests.GetPagedAsync_PageSizeZero_ReturnsEveryRow`) because Season has no bespoke reader — it takes the generic `SqliteRepository<T>` (cross-check 5) |
+| 16 | ✅ | A Source's Season is a `MasterDataReference`, resolved in one query per page | Unit test | `SourceEndpointsTests.GetSourceById_SourceHasSeason_ReturnsSeasonReferenceWithRenderedDisplayName` / `..._SourceHasNoSeason_ReturnsNullSeason` / `GetAllSources_MultipleSourcesWithSeasons_BatchResolvesEachSeasonInOneQuery` — the reference shape and the N+1 guard together (42 tests in the file, all passing) |
+| 17 | ✅ | A Season's own Series is a `MasterDataReference` | Unit test | `SeasonEndpointsTests.GetSeasonById_SeasonHasSeries_ReturnsSeriesReference` / `..._SeasonHasNoResolvableSeries_ReturnsNullReference` / `GetAllSeasons_ResolvesSeriesReferencesForEveryRow` |
+| 18 | ✅ | A soft-deleted Season does not appear as a reference | Unit test | `SourceEndpointsTests.GetSourceById_SeasonSoftDeleted_ReturnsNullSeason` — the join filters the referenced table, per CLAUDE.md's soft-delete rule |
+| 19 | ✅ | The live spec publishes seasons' `page`/`pageSize` as integer with their defaults | Unit test | `OpenApiSpecEndpointTests.PageParam_OnLiveSpec_PublishesIntegerType("/api/v1/masterdata/seasons", "page"/"pageSize")` — against the real live spec, not the transformer's own unit tests in isolation |
+| 20 | ✅ | Every tag the seasons endpoints use is declared with a description | Unit test | `OpenApiSpecEndpointTests.EveryTagAnEndpointUses_IsDeclaredWithADescription` (existing, unchanged) — passes as expected, since `MasterData` was already declared |
+| 21 | ✅ | Every new test is genuinely proven, not only passing against the finished build | Test run + mutation | Mixed, and recorded honestly rather than claimed uniformly: most of step 2's signature-first tests were directly observed red before implementation (see step 2's Progress table). `EntityIdentity.SeasonId`'s 4 tests were mutation-verified rather than observed red — the slip that prompted the "signatures first" policy addition. The `SourceSeasonReferenceReaderTests` added for the row-25 defect (below) were both: directly observed red by reproducing the live `500` (5 of 6 failed with the identical `InvalidOperationException`), then reverted to green and reconfirmed |
+| 22 | ✅ | The four resolvable quotes land on the episodes step 7 names | Unit test | Same test as row 7 — `InitialiseAsync_NikhilNamal17WithRealRuleFile_ResolvedQuotesLandOnTheirEpisodeSource` covers all four in one assertion; the plan originally split this into two rows expecting two different tests, but only one exists and it is sufficient for both |
+| 23 | ✅ | The three unresolved quotes keep their show-level Source | Unit test | `DatabaseInitializerTests.InitialiseAsync_NikhilNamal17WithRealRuleFile_UnattributedQuotesKeepShowLevelSource`, plus `..._VeraQuoteGetsCharacterButKeepsShowLevelSource` for the partial-attribution case (character known, episode not) — nearest-Source asserted, so partial attribution stays a supported state rather than a silent gap |
+| 24 | ✅ | The verification procedure states how a quote's text, speaker and episode are established, and what to do when the episode is not found | Unit test | `SourceVerificationDocTests` (3 tests: `NamesImdbAsTheSourceForAQuotesTextSpeakerAndEpisode`, `StatesAbsenceFromImdbIsNotEvidenceOfAnUnverifiedQuote`, `StatesPartialAttributionIsExpectedAndNamesTheFallback`) |
+| 25 | ✅ | A real container serves an episode-attached quote through the API | Automated (T2) | [`docs/automated-testing/import-and-staged-actions/22-season-attached-quote-served-through-the-api.md`](../../automated-testing/import-and-staged-actions/22-season-attached-quote-served-through-the-api.md) — run live 2026-09-03 against a freshly built image. Found and fixed a genuine defect in the process (see the section above this table) that no unit test had caught |
+| 26 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s), run 2026-09-03 after the row-25 fix |
+| 27 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` — all 10 projects green, 3859 tests passed, 0 failed, run 2026-09-03 after the row-25 fix |
+| 28 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Not performed by the assistant — CLAUDE.md reserves T1 (Visual Studio, `dotnet run`) exclusively for the developer's own action, never replicated locally by the assistant. Remains open until the developer confirms it directly |
 
 **Row 6 is the rejected design asserted as a guard.** Making a quote's parent nullable was considered
 and overruled; a test that fails the moment `SourceId` becomes nullable or the join becomes a `LEFT
@@ -573,5 +622,10 @@ JOIN` is what keeps that decision from being quietly reversed by a later change.
 Season link applied unconditionally, or a renderer that always emits a title, would pass rows 1 and 8
 and break every non-episodic row in the database.
 
-**Row 22 is a recorded rationale rather than a test because the claim is about the world, not the
-code** — the same treatment `source-verification.md` already prescribes for a title or date correction.
+**Rows 7 and 22 turned out to be the same requirement, verified by the same test.** The plan originally
+expected two different tests — one for "a quote resolves to its episode" (row 7) and a separate one
+asserting all four resolved quotes by name (row 22). Only one test exists,
+`InitialiseAsync_NikhilNamal17WithRealRuleFile_ResolvedQuotesLandOnTheirEpisodeSource`, and its own
+assertions already cover both: it resolves the quotes *and* checks each one lands on its named episode.
+Splitting them into two rows in the plan did not predict two tests; verifying against the real test
+names is what surfaced that.

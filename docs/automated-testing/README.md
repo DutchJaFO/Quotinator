@@ -1119,6 +1119,7 @@ different question in each.
 | 19 | [Every seed and import surface reports per-file counts](import-and-staged-actions/19-per-file-import-report.md) | yes |
 | 20 | [A file left awaiting review raises an alert, and resolving it retires the alert](import-and-staged-actions/20-pending-review-alert.md) | no |
 | 21 | [A reseed imports the designated files and deletes nothing](import-and-staged-actions/21-reseed-preserves-existing-data.md) | no |
+| 22 | [A season-attached quote is served correctly through a real container](import-and-staged-actions/22-season-attached-quote-served-through-the-api.md) | no |
 
 ---
 
