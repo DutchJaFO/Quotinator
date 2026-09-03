@@ -401,7 +401,7 @@ reachable. Then #373's two T2 documents (`21-reseed-preserves-existing-data.md`,
 
 **Status:** ⬜ Not started
 
-Per CLAUDE.md's "Variable declarations". Files are added to the scoped `IDE0008` list the moment each is
+Per CLAUDE.md's "Zero-warnings policy and boyscout rules". Files are added to the scoped `IDE0008` list the moment each is
 first touched, not at the end — at minimum `src/Quotinator.Data/Import/ConflictRuleLookup.cs`,
 `src/Quotinator.Core/Database/ImportActionPlanner.cs`,
 `src/Quotinator.Data/Import/ConflictResolutionRule.cs`, `src/Quotinator.Core/Import/EntityIdentity.cs`,

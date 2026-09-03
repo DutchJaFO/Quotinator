@@ -769,30 +769,49 @@ Two separate rules:
 
 2. **No inline `//` comments that explain *what* the code does** — well-named identifiers do that. Only add an inline comment when the *why* is non-obvious: a hidden constraint, a subtle invariant, a workaround for a specific quirk, or a configuration value whose purpose isn't clear from its name.
 
-### Variable declarations
+### Zero-warnings policy and boyscout rules
+
+This section is the single place the policy and every rule that ratchets toward it are recorded —
+other documents (the Pre-Push Checklist below, `docs/workflow/checklist.md`'s milestone-close step,
+`docs/logging.md`) state their own piece and point back here rather than restating it.
+
+**The build and the test run must both report 0 warnings, 0 errors — at any time, not only at the
+moment of pushing.** A warning is never acceptable, whoever introduced it and whichever issue's file
+it sits in. Enforced identically by `dotnet build --configuration Release` and
+`dotnet test --configuration Release --verbosity normal -m:1` (see the Pre-Push Checklist) — a
+compiler warning surfaced during test build is exactly as blocking as one from a plain build.
+
+**That is not a licence to fix any warning you happen to see.** The escalated rules below exist so a
+boyscout pass has something concrete to act on, and that pass is deliberately narrow: **only files
+the current issue actually touched, and only at the end of the issue.** A warning in a file the
+current issue did not touch is not yours to clean up as you go — surface it and let the developer
+decide who fixes it and when, exactly as `docs/workflow/process.md` requires for a discovered process
+gap. Found live during #326: a pre-existing `CA1873` in `ChangelogReader` (a #309 file) was fixed
+unprompted because the gate said "0 warnings" and nothing said whose call that was.
+
+**Some analyzer rules cannot be turned on solution-wide without breaching that gate immediately** —
+the codebase holds thousands of pre-existing instances the rule would newly flag, and converting them
+all in one pass is neither realistic in one commit nor the point of a boyscout rule. For those, this
+project escalates the rule's severity to `warning` only for the files a piece of work actually
+touches — a ratchet, not a bulk rewrite — and lets the scoped list grow toward eventually covering the
+solution. Two rules currently use this mechanism.
+
+#### Explicit types over `var` (IDE0008)
 
 **Explicit types are preferred over `var`** (developer decision, 2026-08-08). This reverses the
 codebase's dominant existing pattern — a live measurement during #244 found roughly 13,298 existing
 `var` declarations across the solution, far too many to convert in one pass or even one milestone.
-
-**Boyscout rule, not a bulk rewrite:** whenever you edit a file for any other reason, convert that
-file's `var` declarations to explicit types in the same commit — mirroring the `[Subsystem - Phase]`
-logging boyscout rule below. Do not go looking for `var` usages outside files you're already
-touching, and do not defer this to a dedicated cleanup pass; #244's own measurement is why a bulk
-pass isn't the plan.
 
 **The one mandatory exception: anonymous types can never take an explicit type name** (`var x = new
 { A = 1 };` has no other legal spelling) — leave `var` in place wherever the right-hand side is an
 anonymous type, a tuple literal relying on inferred element names, or any other construct with no
 expressible type name (e.g. some LINQ query-expression intermediates).
 
-**`IDE0008` is escalated to `warning` for the files a milestone touches — never solution-wide.**
-Relying on memory alone did not work: the boyscout rule above was silently missed across several
-consecutive #312 commits before the developer caught it by eye. The compiler enforces it instead.
-
-At the start of a milestone or issue, add a path-scoped section to `.editorconfig` naming the files
-that work creates or touches, and add each further file to that list *the moment* it is first
-touched:
+`IDE0008` is escalated to `warning` for the files a milestone touches — never solution-wide. Relying
+on memory alone did not work: the boyscout rule was silently missed across several consecutive #312
+commits before the developer caught it by eye. The compiler enforces it instead. At the start of a
+milestone or issue, add a path-scoped section to `.editorconfig` naming the files that work creates or
+touches, and add each further file to that list *the moment* it is first touched:
 
 ```ini
 [{src/Foo/Bar.cs,tests/Foo.Tests/BarTests.cs}]
@@ -803,16 +822,16 @@ The `csharp_style_var_*` preferences are stated solution-wide; only the **severi
 that distinction is the whole point. Escalating the severity globally *today* surfaces **14,286**
 warnings (measured 2026-08-15, not estimated) — the "convert everything at once" outcome #244
 rejected, and an immediate breach of the 0-warnings gate. The scoped list has a useful second effect:
-it is the milestone's own record of its blast radius.
+it is each milestone's own record of its blast radius.
 
-**This list is a ratchet with a defined end state — it is scaffolding, not permanent structure.**
-Files are only ever added, never removed, so as milestones progress the list grows monotonically
-toward covering the solution while the outstanding `var` count falls. Read the "never solution-wide"
-instruction above as **"not yet"**, not as "never" — the prohibition is on flipping it early and
-eating 14k warnings, not on the end state, which is no list at all.
+**The list is a ratchet with a defined end state — scaffolding, not permanent structure.** Files are
+only ever added, never removed, so as milestones progress the list grows monotonically toward
+covering the solution while the outstanding `var` count falls. Read "never solution-wide" as **"not
+yet,"** not "never" — the prohibition is on flipping it early and eating 14k warnings, not on the end
+state, which is no list at all.
 
 **At the close of every milestone, test whether the end state has arrived** (developer decision,
-2026-08-15). This is a concrete checklist step, not an aspiration:
+2026-08-15; also `docs/workflow/checklist.md`'s milestone-close checklist):
 
 1. Temporarily set `dotnet_diagnostic.IDE0008.severity = warning` in the solution-wide block.
 2. `dotnet build --configuration Release` and count the `IDE0008` warnings.
@@ -841,6 +860,59 @@ routinely exposes `IDE0028`/`IDE0305` ("collection initialization can be simplif
 masking — `List<T> x = (await …).ToList()` becomes `List<T> x = [.. await …]`. These are real
 warnings against the 0-warnings gate, not noise; `dotnet format --diagnostics IDE0028 IDE0305` fixes
 them, also iteratively.
+
+#### Target-typed `new(...)` (IDE0090)
+
+The direct follow-on of the rule above: once a declaration states its type explicitly, `Type x = new
+Type(...)` repeats that type redundantly on the right — `Type x = new(...)` is the same construction
+with the redundancy removed. Every conversion from `var` to an explicit type routinely leaves one or
+more of these behind, exactly the way it routinely leaves `IDE0028`/`IDE0305` behind (above).
+
+Same ratchet, same reason: escalating `IDE0090` solution-wide today surfaces **1,550** warnings
+(measured 2026-09-04, not estimated) — pre-existing instances that predate this project's
+explicit-types decision and were never touched by it, immediately breaching the 0-warnings gate the
+same way IDE0008's 14,286 would. `.editorconfig` carries its own scoped section, following the exact
+same shape as IDE0008's — add a file the moment it needs this cleanup, most often right after that
+same file went through the `var` conversion above:
+
+```ini
+[{src/Foo/Bar.cs,tests/Foo.Tests/BarTests.cs}]
+dotnet_diagnostic.IDE0090.severity = warning
+```
+
+**Purely mechanical, more so than `var`** — spot-checked directly against a real file's diff before
+this rule was adopted: every change is `new TypeName(...)` → `new(...)` where the left side already
+states the type, with no behaviour possible, and there is no `var`-style "shapes the fixer can't
+reach" category to sweep by hand. `dotnet format style <project> --diagnostics IDE0090 --severity
+warn` — same iterative caveat as IDE0008's own Mechanics note — handles it fully; the only rough edge
+is an occasional awkward line break on a multi-line collection initializer, worth a glance but not a
+correctness risk.
+
+Tested for its own end state the same way as IDE0008, at the same milestone-close checkpoint (see
+`docs/workflow/checklist.md`) — temporarily escalate solution-wide, count, and either keep it (clear
+the remainder, delete the scoped section) or revert and record the trend.
+
+#### Other escalated analyzer rules (already solution-wide)
+
+#244 also escalated a number of other rules to `warning` solution-wide, each in its own commit: the
+collection-expression-simplification family (`IDE0028`/`IDE0300`/`IDE0301`/`IDE0305`), member-name and
+control-flow simplification (`IDE0037`/`IDE0042`/`IDE0270`/`IDE0059`/`IDE0039`/`IDE0063`/`IDE0044`),
+namespace/folder matching (`IDE0130`), unused parameters (`IDE0060`), primary constructors (`IDE0290`
+— see its own section below), and a set of `CA`/`SYSLIB` rules (`CA1861`, `CA1822`, `SYSLIB1045`,
+`CA1869`, `CA1507`, `CA1826`, `CA1859`, `CA1806`, `CA2254`, `CA1068`, `CA1873`). None of these had
+anywhere near IDE0008's pre-existing volume, so each went straight to solution-wide in one pass rather
+than needing a ratchet. Each rule's own rationale, and the specific defects its escalation actually
+found, is recorded once — in `.editorconfig`'s own comments, at the point it was escalated — rather
+than duplicated here; that record is authoritative for "why this rule, why this severity."
+
+#### Non-analyzer boyscout rules
+
+Two more boyscout rules exist with no compiler warning behind them, so they rely on the same
+"act on it the moment you touch the file, don't sweep the rest" discipline without a mechanical gate:
+
+- The `[Subsystem - Phase]` logging-prefix rule — see `docs/logging.md`'s own "Boyscout rule" section.
+- `nameof(TEntity.Property)` for SQL column names — see this file's "String centralisation policy"
+  section below.
 
 ### Primary constructors
 
@@ -924,8 +996,9 @@ The same principle applies across three domains in this project:
 - When adding a new query or string, the corresponding test (`SqlQueryGuardTests`, `TranslationCompletenessTests`) must pass before the commit is pushed.
 
 **Column names inside a SQL string come from `nameof(TEntity.Property)`, not a literal** (developer
-decision, 2026-08-15). Adopted as a **boyscout rule**, exactly like explicit types above: apply it to
-any `Sql.*` nested class you touch, and do not sweep the file. This is not a naming trick — the
+decision, 2026-08-15). Adopted as a **boyscout rule** — see "Zero-warnings policy and boyscout
+rules" → "Non-analyzer boyscout rules" above: apply it to any `Sql.*` nested class you touch, and do
+not sweep the file. This is not a naming trick — the
 project already treats property name == column name as mechanically true, since
 `ReflectedColumnMetadata` builds `ValidColumnNames` from `type.GetProperties().Select(p => p.Name)`.
 `nameof` states that existing invariant, so an IDE rename propagates into the query instead of
@@ -1174,19 +1247,9 @@ Run these checks before pushing any commit or tag. Tests alone do not cover all 
 
 **`main` must always be green.** A failing build or test is acceptable on a feature branch mid-development — it is never acceptable on `main`. This checklist exists specifically to guarantee that; do not skip steps because a deadline is close or the failure "looks unrelated."
 
-1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`
-
-   **Zero warnings means zero warnings at any time, not only at the moment of pushing.** A warning is
-   never acceptable in the build, whoever introduced it and whichever issue's file it sits in.
-
-   **That is not a licence to fix any warning you happen to see.** The escalated analyzer rules
-   (`IDE0008` and the rest — see "Variable declarations") exist so a boyscout pass has something to
-   act on, and that pass is deliberately narrow: **only files this issue actually touched, and only at
-   the end of the issue.** A warning in a file the current issue did not touch is not yours to clean
-   up as you go — surface it and let the developer decide who fixes it and when, exactly as
-   `docs/workflow/process.md` requires for a discovered process gap. Found live during #326: a
-   pre-existing `CA1873` in `ChangelogReader` (a #309 file) was fixed unprompted because the gate said
-   "0 warnings" and nothing said whose call that was.
+1. **Build clean** — `dotnet build --configuration Release` must report `0 Warning(s)  0 Error(s)`.
+   See "Zero-warnings policy and boyscout rules" above for the full policy, the escalated-rule list,
+   and the boundary on which warnings are yours to fix versus surface and leave for the developer.
 2. **Tests pass** — `dotnet test --configuration Release --verbosity normal -m:1` must report all tests passed with `0 Warning(s)  0 Error(s)`. Keep `-m:1` (see the Commands section's note on why). The same 0-warnings policy that applies to `dotnet build` applies here — any compiler warning surfaced during test build is a blocking failure.
 3. **Changelog updated** — `data/changelog/changelog.en.json` is the source of truth for all changelog content. **Never edit `CHANGELOG.md`, `addon/CHANGELOG.md`, or `addon-beta/CHANGELOG.md` directly — they are generated files.**
 

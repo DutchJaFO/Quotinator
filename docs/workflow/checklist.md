@@ -229,7 +229,14 @@ Releases follow a two-stage model. See `docs/release-verification.md` for tier d
       is small enough to clear as part of this milestone's close, keep it, clear the remainder, and
       **delete the per-file scoped section**; otherwise revert the escalation and record the measured
       count here so the trend is visible next milestone. Baseline: **14,286** (2026-08-15). See
-      `CLAUDE.md` → "Variable declarations" for the full rule and why the scoped list exists
+      `CLAUDE.md` → "Zero-warnings policy and boyscout rules" for the full rule and why the scoped
+      list exists
+- [ ] **`IDE0090` solution-wide trial** — same trial, same mechanism, its own separate scoped section
+      in `.editorconfig`: temporarily move `dotnet_diagnostic.IDE0090.severity = warning` into the
+      solution-wide block, build, and count. Small enough to clear now → keep it solution-wide, clear
+      the remainder, delete the scoped section; otherwise revert and record the count here. Baseline:
+      **1,550** (2026-09-04). See `CLAUDE.md` → "Zero-warnings policy and boyscout rules" → "Target-typed
+      `new(...)` (IDE0090)"
 - [ ] Build clean: `dotnet build --configuration Release` — 0 warnings, 0 errors
 - [ ] Tests pass: `dotnet test --configuration Release` — all tests pass, 0 warnings
 - [ ] Changelogs updated (`CHANGELOG.md`, `addon/CHANGELOG.md`, `addon-beta/CHANGELOG.md`) — optionally

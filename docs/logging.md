@@ -470,3 +470,8 @@ Never log a secret value. This applies everywhere — banners, structured log li
 
 When you edit a file that emits log lines without the `[Subsystem - Phase]` prefix, add the prefix
 in the same commit. Do not defer it to a separate cleanup PR.
+
+This is one of two non-analyzer boyscout rules the project keeps — no compiler warning enforces it,
+so it relies on the same discipline by hand. See `CLAUDE.md` → "Zero-warnings policy and boyscout
+rules" for the full policy, the analyzer-backed rules (`var`/IDE0008, target-typed `new`/IDE0090),
+and the other non-analyzer rule (SQL column names via `nameof`).
