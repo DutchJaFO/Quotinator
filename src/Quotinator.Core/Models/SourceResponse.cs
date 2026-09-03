@@ -27,6 +27,13 @@ public sealed class SourceResponse
     /// a deleted series is never surfaced).</summary>
     public MasterDataReference? Series { get; init; }
 
+    /// <summary>The season this source is, if it is an instalment within a series (#375, ADR 011), as a
+    /// minimal read-only reference whose <c>Name</c> is the season's rendered display name (e.g. "Book
+    /// One: Water") — resolved via <c>ISourceSeasonReferenceReader</c>. <c>null</c> when the source is
+    /// not a season's episode, and <c>null</c> if the linked season has been soft-deleted (same
+    /// dangling-reference rule as <see cref="Series"/>).</summary>
+    public MasterDataReference? Season { get; init; }
+
     /// <summary>Whether the record's fields are known to be fully populated and reviewed.</summary>
     public required CompletenessStatus CompletenessStatus { get; init; }
 }

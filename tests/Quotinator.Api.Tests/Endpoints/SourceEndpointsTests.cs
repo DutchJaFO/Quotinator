@@ -23,7 +23,8 @@ public class SourceEndpointsTests
 {
     private static WebApplicationFactory<Program> CreateFactory(
         FakeSourceRepository? repository = null,
-        FakeSourceSeriesReferenceReader? seriesReader = null) =>
+        FakeSourceSeriesReferenceReader? seriesReader = null,
+        FakeSourceSeasonReferenceReader? seasonReader = null) =>
         new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
@@ -31,6 +32,7 @@ public class SourceEndpointsTests
                 services.AddSingleton<IDatabaseInitializer>(new NoOpDatabaseInitializer());
                 services.AddSingleton<IListableRepository<SourceEntity>>(repository ?? new FakeSourceRepository());
                 services.AddSingleton<ISourceSeriesReferenceReader>(seriesReader ?? new FakeSourceSeriesReferenceReader());
+                services.AddSingleton<ISourceSeasonReferenceReader>(seasonReader ?? new FakeSourceSeasonReferenceReader());
             }));
 
     private static SourceEntity NewSource(
@@ -299,6 +301,103 @@ public class SourceEndpointsTests
                     break;
                 case "Airplane!":
                     AssertPropertyIsNullOrAbsent(item, "series");
+                    break;
+                default:
+                    Assert.Fail($"unexpected item title '{title}'");
+                    break;
+            }
+        }
+    }
+
+    // ── Season reference resolution (#375 join) ─────────────────────────────
+
+    [TestMethod]
+    public async Task GetSourceById_SourceHasSeason_ReturnsSeasonReferenceWithRenderedDisplayName()
+    {
+        Guid sourceId = Guid.NewGuid();
+        Guid seasonId = Guid.NewGuid();
+        FakeSourceRepository repo = new([NewSource(id: sourceId)]);
+        FakeSourceSeasonReferenceReader reader = new(new Dictionary<Guid, (Guid, int, string?, string?)>
+        {
+            [sourceId] = (seasonId, 1, "Book One", "Water"),
+        });
+        using WebApplicationFactory<Program> factory = CreateFactory(repo, seasonReader: reader);
+        HttpResponseMessage response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{sourceId}", TestContext.CancellationToken);
+
+        JsonElement root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
+        JsonElement season = root.GetProperty("season");
+        Assert.AreEqual(JsonValueKind.Object, season.ValueKind);
+        Assert.AreEqual(seasonId.ToString("D"), season.GetProperty("id").GetString());
+        Assert.AreEqual("Book One: Water", season.GetProperty("name").GetString(),
+            "The reference's Name is the season's rendered display name, not its raw Title alone.");
+    }
+
+    [TestMethod]
+    public async Task GetSourceById_SourceHasNoSeason_ReturnsNullSeason()
+    {
+        Guid sourceId = Guid.NewGuid();
+        FakeSourceRepository repo = new([NewSource(id: sourceId)]);
+        using WebApplicationFactory<Program> factory = CreateFactory(repo, seasonReader: new FakeSourceSeasonReferenceReader());
+        HttpResponseMessage response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{sourceId}", TestContext.CancellationToken);
+
+        JsonElement root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
+        AssertPropertyIsNullOrAbsent(root, "season");
+    }
+
+    [TestMethod]
+    public async Task GetSourceById_SeasonSoftDeleted_ReturnsNullSeason()
+    {
+        Guid sourceId = Guid.NewGuid();
+        // The reader's seed omits the entry entirely — modelling a soft-deleted Season, per the
+        // reader's documented "absent means unresolved" contract.
+        FakeSourceRepository repo = new([NewSource(id: sourceId)]);
+        FakeSourceSeasonReferenceReader reader = new(new Dictionary<Guid, (Guid, int, string?, string?)>());
+        using WebApplicationFactory<Program> factory = CreateFactory(repo, seasonReader: reader);
+        HttpResponseMessage response = await factory.CreateClient().GetAsync($"/api/v1/masterdata/sources/{sourceId}", TestContext.CancellationToken);
+
+        JsonElement root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
+        AssertPropertyIsNullOrAbsent(root, "season", "a Source pointing at a soft-deleted Season must resolve to null, not a dangling reference");
+    }
+
+    [TestMethod]
+    public async Task GetAllSources_MultipleSourcesWithSeasons_BatchResolvesEachSeasonInOneQuery()
+    {
+        Guid sourceWithSeasonA = Guid.NewGuid();
+        Guid sourceWithSeasonB = Guid.NewGuid();
+        Guid sourceNoSeason    = Guid.NewGuid();
+        Guid seasonA = Guid.NewGuid();
+        Guid seasonB = Guid.NewGuid();
+
+        FakeSourceRepository repo = new(
+        [
+            NewSource(id: sourceWithSeasonA, title: "The Boy in the Iceberg", dateCreated: new DateTime(2026, 1, 1)),
+            NewSource(id: sourceWithSeasonB, title: "eps1.4_3xpl0its.wmv", dateCreated: new DateTime(2026, 1, 2)),
+            NewSource(id: sourceNoSeason, title: "Airplane!", dateCreated: new DateTime(2026, 1, 3)),
+        ]);
+        FakeSourceSeasonReferenceReader reader = new(new Dictionary<Guid, (Guid, int, string?, string?)>
+        {
+            [sourceWithSeasonA] = (seasonA, 1, "Book One", "Water"),
+            [sourceWithSeasonB] = (seasonB, 1, null, null),
+        });
+        using WebApplicationFactory<Program> factory = CreateFactory(repo, seasonReader: reader);
+        HttpResponseMessage response = await factory.CreateClient().GetAsync("/api/v1/masterdata/sources?pageSize=0", TestContext.CancellationToken);
+
+        JsonElement items = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement.GetProperty("items");
+        Assert.AreEqual(3, items.GetArrayLength());
+
+        foreach (JsonElement item in items.EnumerateArray())
+        {
+            string? title = item.GetProperty("title").GetString();
+            switch (title)
+            {
+                case "The Boy in the Iceberg":
+                    Assert.AreEqual("Book One: Water", item.GetProperty("season").GetProperty("name").GetString());
+                    break;
+                case "eps1.4_3xpl0its.wmv":
+                    Assert.AreEqual("Season 1", item.GetProperty("season").GetProperty("name").GetString());
+                    break;
+                case "Airplane!":
+                    AssertPropertyIsNullOrAbsent(item, "season");
                     break;
                 default:
                     Assert.Fail($"unexpected item title '{title}'");

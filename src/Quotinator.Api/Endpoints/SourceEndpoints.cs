@@ -2,6 +2,7 @@ using Quotinator.Data.Enums;
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Shared;
+using Quotinator.Core.Import;
 using Quotinator.Core.Models;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
@@ -52,6 +53,7 @@ internal static class SourceEndpoints
         ILogger<Log> logger,
         IListableRepository<SourceEntity> repository,
         ISourceSeriesReferenceReader seriesReader,
+        ISourceSeasonReferenceReader seasonReader,
         [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
         [Description("Number of entries per page (0–500). 0 means every matching entry as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null)
     {
@@ -63,9 +65,14 @@ internal static class SourceEndpoints
             {
                 var sourceIds        = items.Select(s => s.Id).ToList();
                 var seriesBySourceId = await seriesReader.GetSeriesReferencesForManyAsync(sourceIds);
-                return [.. items.Select(s => ToResponse(s, seriesBySourceId.TryGetValue(s.Id, out var series)
-                    ? new MasterDataReference(series.Id.ToCanonicalId(), series.Name)
-                    : null))];
+                var seasonBySourceId = await seasonReader.GetSeasonReferencesForManyAsync(sourceIds);
+                return [.. items.Select(s => ToResponse(s,
+                    seriesBySourceId.TryGetValue(s.Id, out var series)
+                        ? new MasterDataReference(series.Id.ToCanonicalId(), series.Name)
+                        : null,
+                    seasonBySourceId.TryGetValue(s.Id, out var season)
+                        ? new MasterDataReference(season.Id.ToCanonicalId(), SeasonDisplay.Format(season.Number, season.Title, season.Subtitle))
+                        : null))];
             });
     }
 
@@ -74,7 +81,8 @@ internal static class SourceEndpoints
         IApiLocalizer localizer,
         ILogger<Log> logger,
         IListableRepository<SourceEntity> repository,
-        ISourceSeriesReferenceReader seriesReader)
+        ISourceSeriesReferenceReader seriesReader,
+        ISourceSeasonReferenceReader seasonReader)
     {
         logger.LogIdQuery($"[Api - {GetSourceByIdName}]", id);
 
@@ -83,11 +91,13 @@ internal static class SourceEndpoints
             {
                 var seriesRef = await seriesReader.GetSeriesReferenceAsync(source.Id);
                 var series    = seriesRef is { } s ? new MasterDataReference(s.Id.ToCanonicalId(), s.Name) : null;
-                return ToResponse(source, series);
+                var seasonRef = await seasonReader.GetSeasonReferenceAsync(source.Id);
+                var season    = seasonRef is { } se ? new MasterDataReference(se.Id.ToCanonicalId(), SeasonDisplay.Format(se.Number, se.Title, se.Subtitle)) : null;
+                return ToResponse(source, series, season);
             });
     }
 
-    private static SourceResponse ToResponse(SourceEntity source, MasterDataReference? series) => new()
+    private static SourceResponse ToResponse(SourceEntity source, MasterDataReference? series, MasterDataReference? season) => new()
     {
         Id                 = source.Id.ToCanonicalId(),
         Title              = source.Title,
@@ -95,6 +105,7 @@ internal static class SourceEndpoints
                               ?? source.Type.Raw.ToLowerInvariant(),
         Date               = string.IsNullOrEmpty(source.Date.Raw) ? null : source.Date.Raw,
         Series             = series,
+        Season             = season,
         CompletenessStatus = source.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete,
     };
 }

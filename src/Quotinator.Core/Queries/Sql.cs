@@ -497,6 +497,18 @@ internal static class Sql
             $"SELECT {IdClauses.SelectColumn("s.Id", "SourceId")}, {IdClauses.SelectColumn("ser.Id", "SeriesId")}, ser.Name AS SeriesName FROM Quotinator_Source s " +
             $"JOIN Quotinator_Series ser ON {IdClauses.Join("ser.Id", "s.SeriesId")} AND ser.IsDeleted = 0 " +
             $"WHERE {IdClauses.In("s.Id", "sourceIds")} AND s.IsDeleted = 0;";
+
+        /// <summary>#375: active Season reference for one Source. No row if the Source has no Season, or its Season has been soft-deleted.</summary>
+        internal static readonly string SelectSeasonReferenceForSource =
+            $"SELECT {IdClauses.SelectColumn("se.Id", "Id")}, se.Number, se.Title, se.Subtitle FROM Quotinator_Source s " +
+            $"JOIN Quotinator_Season se ON {IdClauses.Join("se.Id", "s.SeasonId")} AND se.IsDeleted = 0 " +
+            $"WHERE {IdClauses.Equals("s.Id", "sourceId")} AND s.IsDeleted = 0;";
+
+        /// <summary>#375: active Season references for a batch of Sources in a single round-trip — same reasoning as <see cref="SelectSeriesReferencesForSources"/>.</summary>
+        internal static readonly string SelectSeasonReferencesForSources =
+            $"SELECT {IdClauses.SelectColumn("s.Id", "SourceId")}, {IdClauses.SelectColumn("se.Id", "SeasonId")}, se.Number, se.Title, se.Subtitle FROM Quotinator_Source s " +
+            $"JOIN Quotinator_Season se ON {IdClauses.Join("se.Id", "s.SeasonId")} AND se.IsDeleted = 0 " +
+            $"WHERE {IdClauses.In("s.Id", "sourceIds")} AND s.IsDeleted = 0;";
     }
 
     /// <summary>

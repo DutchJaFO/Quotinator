@@ -478,6 +478,14 @@ builder.Services.AddSingleton<IJoinStrategy<SourceSeriesReferenceRow>, SourceSer
 builder.Services.AddSingleton<JoinQueryRepository<SourceSeriesReferenceRow>>();
 builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenceReader>();
 
+// #375: resolves a Source's SeasonId to its Season's (Id, Number, Title, Subtitle) — same ADR 017
+// reasoning as ISourceSeriesReferenceReader above.
+builder.Services.AddSingleton<IJoinStrategy<SourceSeasonReferenceRow>, SourceSeasonReferenceStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SourceSeasonReferenceRow>>();
+builder.Services.AddSingleton<IJoinStrategy<SourceSeasonReferencesBatchRow>, SourceSeasonReferencesBatchStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SourceSeasonReferencesBatchRow>>();
+builder.Services.AddSingleton<ISourceSeasonReferenceReader, SourceSeasonReferenceReader>();
+
 // #185/#284: resolves a Character's linked Sources (via CharacterSources, #179) to their (Id, Title) —
 // same ADR 017 reasoning as ISourceSeriesReferenceReader above.
 builder.Services.AddSingleton<IJoinStrategy<SourceRow>, CharacterSourceReferenceStrategy>();
