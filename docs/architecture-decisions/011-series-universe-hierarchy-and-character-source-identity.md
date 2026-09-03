@@ -1,8 +1,8 @@
-# ADR 011 — Series/Universe hierarchy and Character↔Source many-to-many identity
+# ADR 011 — Universe/Series/Season hierarchy and Character↔Source many-to-many identity
 
 **Status:** Accepted
 **Date:** 2026-07-15
-**GitHub issues:** #169, #179, #174
+**GitHub issues:** #169, #179, #174, #375
 
 ---
 
@@ -25,6 +25,11 @@ already bundled with this project:
   media — a book adaptation's Gandalf and a film adaptation's Gandalf are different Characters
   despite sharing a Name and a fictional universe.
 
+A quote carries no date or title of its own — both are read from the Source row it points at — so for a
+serialised work whose Source is the whole series, a quote from one instalment has nowhere to record
+which instalment it came from. Four bundled television titles already carry such quotes. Grouping
+instalments is a structural gap in the hierarchy below, not a property of any one medium.
+
 This ADR is deliberately scoped to the **structural shape only** — the hierarchy, the join table, and
 the identity-anchor invariant. It does not decide the Character merge *algorithm* (which existing
 per-source rows actually get consolidated into which global rows) — that is #174's own, separate ADR,
@@ -34,16 +39,35 @@ which operates within the boundary this ADR establishes.
 
 ## Decision
 
-### 1. Universe → Series → Source hierarchy, one-to-many at both levels
+### 1. Universe → Series → Season → Source hierarchy, one-to-many at every level
 
-A new `Universe` table (a fictional world or franchise, e.g. "Middle Earth") and a new `Series` table
-(a direct continuity within a universe, e.g. "The Lord of the Rings" trilogy, "The Hobbit" trilogy)
-are added. A `Series` belongs to at most one `Universe` (nullable FK); a `Source` belongs to at most
-one `Series` (nullable FK). Not many-to-many at either level — no genuine one-Source-belongs-to-many-
-Series case was identified during #169's research, and this project's Simplicity priority (ranked
-above Extensibility in `CLAUDE.md`'s "Project Priorities") favours the narrower shape. A `Source`/
-`Series` with no parent is implicitly standalone (e.g. Casablanca has no Series; a standalone Series
-has no Universe).
+A `Universe` table (a fictional world or franchise, e.g. "Middle Earth"), a `Series` table (a direct
+continuity within a universe, e.g. "The Lord of the Rings" trilogy, "The Hobbit" trilogy), and a
+`Season` table (an ordered grouping of Sources within a Series). A `Series` belongs to at most one
+`Universe`; a `Season` belongs to at most one `Series`; a `Source` belongs to at most one `Series` and
+at most one `Season`. Every parent FK is nullable, and a row with no parent is implicitly standalone
+(e.g. Casablanca has no Series; a standalone Series has no Universe). Not many-to-many at any level —
+no genuine one-Source-belongs-to-many-Series case was identified during #169's research, and this
+project's Simplicity priority (ranked above Extensibility in `CLAUDE.md`'s "Project Priorities")
+favours the narrower shape.
+
+**`Season` is not television-specific.** It is an ordered grouping of Sources within a Series, and
+applies equally to a magazine's volumes or a podcast's seasons. Nothing about it keys off
+`Source.Type`, and no behaviour is conditioned on the medium.
+
+**A Source's granularity follows what can be established, not a fixed rule.** Where an instalment is
+identified, the Source is that instalment and also carries a `Season`; where it is not, the Source is
+the whole work and carries none. Both are ordinary Sources, so a quote always has one to point at and
+`Quote.SourceId` stays non-nullable. Refining a Source from the whole work to one instalment later is
+an improvement to that row, not the repair of a broken one — attribution is expected to be partial and
+to improve over time.
+
+**`Season` is keyed on its parent and an ordinal**, unlike `Universe` and `Series` whose `Name` is
+globally unique. It carries `Number` (required) plus optional `Title` and `Subtitle` — Avatar: The Last
+Airbender's first season is `Number` 1, "Book One", "Water", rendering "Book One: Water" — and its
+natural key is `UNIQUE (SeriesId, Number)`, because an ordinal only means anything within its parent
+and "Season 1" recurs for every series. `EntityIdentity.SeasonId` therefore takes the parent id
+alongside the number, as `CharacterId` takes `sourceId`.
 
 ### 2. Character ↔ Source becomes many-to-many via `CharacterSources`
 
@@ -55,15 +79,18 @@ has no Universe).
 `CompletenessStatus`/`NoValueKnown` columns — mirrors `QuoteGenres`' own junction-table shape exactly
 (a link row has no content field that could itself be incomplete).
 
-### 3. `Universe`/`Series` get the full standard entity shape
+### 3. `Universe`/`Series`/`Season` get the full standard entity shape
 
-Both tables receive the complete shape already used by `Source`/`Character`/`Person`: `RecordBase`
+All three tables receive the complete shape already used by `Source`/`Character`/`Person`: `RecordBase`
 audit columns plus `ImportBatchId`, `CompletenessStatus`, `NoValueKnown` — not a lighter, RecordBase-
-only shape. Reasoning: `Universe`/`Series` rows will be created and corrected through the same
-staged-import machinery as every other entity (a curated overlay file per #180, and potentially
-future bundled-source population), so they need the same `CompletenessGuard`/decide-time machinery
-(#165/#168) uniformly available, rather than special-casing two tables out of an otherwise-consistent
-pattern.
+only shape. Reasoning: their rows are created and corrected through the same staged-import machinery as
+every other entity (a curated overlay file per #180, and potentially future bundled-source population),
+so they need the same `CompletenessGuard`/decide-time machinery (#165/#168) uniformly available, rather
+than special-casing tables out of an otherwise-consistent pattern.
+
+They are also read through the same generic repository (`IListableRepository<T>` against
+`SqliteRepository<T>`) and exposed under the same `/api/v1/masterdata/` prefix as every other masterdata
+entity. Neither a bespoke repository nor a separate route convention is introduced for any of them.
 
 ### 4. `Source.Type` is a hard identity anchor
 
@@ -97,6 +124,12 @@ independent of the harder, still-undecided merge algorithm #174 will build on to
 - #174's merge algorithm may consolidate little to nothing beyond what's already explicitly curated
   until `Series`/`Universe` data is populated over time — an intentional, conservative starting
   point per #174's own plan doc, not a shortfall of this ADR's design.
+- A `Season` between `Series` and `Source` means two Sources sharing a title can be told apart by the
+  instalment they belong to, which is what lets a serialised work hold quotes from more than one of its
+  parts without either collapsing them or splitting the work in two.
+- Because a Source may be the whole work or one instalment, the same query returns rows of differing
+  granularity, and a consumer must not infer the medium or the level of detail from a Source's presence
+  alone. This is the accepted cost of never leaving a quote without a Source to point at.
 
 ---
 
@@ -107,3 +140,4 @@ independent of the harder, still-undecided merge algorithm #174 will build on to
   ADR)
 - #180 — populates `Series`/`Universe` data via a curated overlay file
 - #169 — the research that surfaced the need for this ADR (closed, see its closing comment)
+- #375 — implements `Season`, its `Source` link, and its masterdata endpoints

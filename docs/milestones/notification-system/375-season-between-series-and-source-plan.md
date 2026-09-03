@@ -1,6 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** Planning
+**Status:** In progress (step 2)
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -24,7 +24,7 @@ episode is what establishes the season — see step 7, where that lookup is alre
 **The hierarchy gains a level: `Universe → Series → (Season) → Source`** (developer, 2026-09-03), with
 Season optional and deliberately neutral — "tv-series are the first that have the 'season' concept, but
 we should be sure to keep the concept neutral as that allows us to apply it to other material (like
-magazines and podcasts) that group episodes." **A Source is always the episode.**
+magazines and podcasts) that group episodes."
 
 **A quote attaches to the nearest Source we can find** (developer, 2026-09-03). An episode where the
 episode is known, the show otherwise. "If we can find the precise series or episode that is a bonus,
@@ -81,10 +81,13 @@ exist and be attachable before that lands.
 
 Per `docs/workflow/process.md`'s Planning step 3.
 
-1. **ADR 011 owns the hierarchy this changes, so an ADR is part of the work.** It fixes
-   Universe → Series → Source as one-to-many at both levels, with Simplicity ranked above
-   Extensibility, and says a Source belongs to at most one Series. Inserting Season is exactly the kind
-   of decision it exists to record; the new ADR extends it rather than superseding it.
+1. **ADR 011 owns the hierarchy this changes, and is revised in place rather than superseded.** Its
+   Decision 1 fixes Universe → Series → Source as one-to-many at both levels, with Simplicity ranked
+   above Extensibility. Inserting Season modifies that rule inside that ADR's own subject, which
+   `docs/architecture-decisions/README.md` settles: "When a decision is refined, edit the affected
+   section in place so the ADR reads as one current statement. Do not append a `## Revision — issue #N`
+   section" — and no new ADR, since stripped of narrative a new one would restate ADR 011 almost
+   entirely. No new index row follows; only ADR 011's own title changes.
 
 2. **ADR 002 gives the entity shape, and settles the natural key question.** Surrogate `Guid Id` plus a
    `UNIQUE` constraint carrying the natural key. Season's differs from its siblings: `Quotinator_Series`
@@ -134,15 +137,29 @@ Per `docs/workflow/process.md`'s Planning step 3.
 
 ## Steps
 
-### 1. Decide where a Season lives, and write the ADR
+### 1. Decide where a Season lives, and record it in ADR 011
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-03
 
-`Universe → Series → (Season) → Source` is settled; what the ADR records is *why* a fourth level rather
-than a Source attribute, what keeps the concept neutral (no `Type` gate, no TV-specific column, an
-ordered grouping of Sources within a Series), and that a Source is always the episode. It extends
-ADR 011 rather than superseding it, and is added to `docs/architecture-decisions/README.md`'s index in
-the same commit.
+**Revised ADR 011 in place; no ADR 021.** The plan originally said the ADR "is added to
+`README.md`'s index", which presumed a new document. `docs/architecture-decisions/README.md` settles it
+the other way: a refinement is edited into the affected section so the ADR reads as one current
+statement, with no `## Revision` section and no second document to assemble the rule from. Inserting
+Season modifies ADR 011's Decision 1 — the hierarchy — inside ADR 011's own subject, so a new ADR
+stripped of narrative would have restated it almost entirely. Only the ADR's own title changed in the
+index.
+
+What the revision records: the hierarchy as `Universe → Series → Season → Source`, one-to-many at every
+level with every parent FK nullable; that a Season is an ordered grouping of Sources within a Series and
+is **not** television-specific, with nothing keyed off `Source.Type`; that a Source's granularity
+follows what can be established, so a quote always has one to point at and `Quote.SourceId` stays
+non-nullable; and that `Season` is keyed `UNIQUE (SeriesId, Number)` rather than on a globally unique
+name. Decision 3 extends to Season, including that it takes the generic repository and the standard
+masterdata route rather than anything bespoke.
+
+Two consequences were added: that a Season is what lets one serialised work hold quotes from more than
+one part without collapsing them or splitting the work, and that a consumer must not infer granularity
+from a Source's presence — the accepted cost of never leaving a quote without a Source.
 
 ### 2. Write every test first, and run them red
 
