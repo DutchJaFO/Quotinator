@@ -40,7 +40,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#312](https://github.com/DutchJaFO/Quotinator/issues/312) | Notification schema: title/body, typed metadata, optional expiry, and app-version provenance | Waiting for release | T1 ✅ T2 ✅ | [312-notification-schema-foundation-plan.md](312-notification-schema-foundation-plan.md) |
 | [#313](https://github.com/DutchJaFO/Quotinator/issues/313) | Api tests can silently assert against the startup wait page instead of the endpoint under test | Waiting for release | T1 ✅ T2 ⬜ | [313-api-test-startup-race-plan.md](313-api-test-startup-race-plan.md) |
 | [#83](https://github.com/DutchJaFO/Quotinator/issues/83) | Research: notification system design | Waiting for release | T1 ✅ T2 ⬜ T3 ⬜ | [83-notification-system-design-research-plan.md](83-notification-system-design-research-plan.md) |
-| [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: what's new after upgrade | Waiting for release | T1 ✅ T2 ✅ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |
+| [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: import warnings and what's new after upgrade | Waiting for release | T1 ✅ T2 ✅ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |
 | [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed | In progress | T1 ⬜ T2 ⬜ | [302-clean-reseed-confirmation-notification-plan.md](302-clean-reseed-confirmation-notification-plan.md) |
 | [#303](https://github.com/DutchJaFO/Quotinator/issues/303) | Notification + minimal review page: alert when a reseed leaves import actions pending review | Waiting for release | T1 ⬜ T2 ✅ | [303-pending-review-alert-and-review-page-plan.md](303-pending-review-alert-and-review-page-plan.md) |
 | [#304](https://github.com/DutchJaFO/Quotinator/issues/304) | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) | Waiting for release | T1 ✅ T2 ✅ | [304-reseed-notification-action-plan.md](304-reseed-notification-action-plan.md) |
@@ -48,7 +48,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#308](https://github.com/DutchJaFO/Quotinator/issues/308) | Notification: multi-line/rich message layout | Waiting for release | T1 ⬜ T2 ✅ | [308-notification-rich-layout-plan.md](308-notification-rich-layout-plan.md) |
 | [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | Waiting for release | T1 ✅ T2 ✅ | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
 | [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify all expected tables exist at startup, not just row counts | Planning | T1 ⬜ T2 ⬜ | [305-database-integrity-check-plan.md](305-database-integrity-check-plan.md) |
-| [#306](https://github.com/DutchJaFO/Quotinator/issues/306) | Bug: empty "Unreleased" section renders on the About page after a release tag | Planning | T1 ⬜ T2 ⬜ | [306-empty-unreleased-section-plan.md](306-empty-unreleased-section-plan.md) |
+| [#306](https://github.com/DutchJaFO/Quotinator/issues/306) | Changelog: empty 'Unreleased' section renders on the About page after a release tag | Planning | T1 ⬜ T2 ⬜ | [306-empty-unreleased-section-plan.md](306-empty-unreleased-section-plan.md) |
 | [#319](https://github.com/DutchJaFO/Quotinator/issues/319) | Notification title and body are not translated | Waiting for release | T1 ✅ T2 ✅ | [319-notification-translations-plan.md](319-notification-translations-plan.md) |
 | [#323](https://github.com/DutchJaFO/Quotinator/issues/323) | Source download: a stalled connection attempt outlives its request and fails every other source on the same host | Waiting for release | T1 ✅ T2 ✅ | [323-source-download-connection-stall-plan.md](323-source-download-connection-stall-plan.md) |
 | [#324](https://github.com/DutchJaFO/Quotinator/issues/324) | Notification: report when a source update attempt fails | Planning | T1 ⬜ T2 ⬜ | [324-source-refresh-failure-notification-plan.md](324-source-refresh-failure-notification-plan.md) |
@@ -63,7 +63,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#348](https://github.com/DutchJaFO/Quotinator/issues/348) | Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable | Waiting for release | T1 ⬜ T2 ✅ | [348-backup-outcomes-and-refusal-plan.md](348-backup-outcomes-and-refusal-plan.md) |
 | [#349](https://github.com/DutchJaFO/Quotinator/issues/349) | Admin endpoints to list, delete and report status for database backups | Waiting for release | T1 ✅ T2 ✅ | [349-backup-management-endpoints-plan.md](349-backup-management-endpoints-plan.md) |
 | [#350](https://github.com/DutchJaFO/Quotinator/issues/350) | A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown | Planning | T1 ⬜ T2 ⬜ | [350-overshoot-must-degrade-plan.md](350-overshoot-must-degrade-plan.md) |
-| [#351](https://github.com/DutchJaFO/Quotinator/issues/351) | `AuditOperation` is a string-constant set where the project's convention is an enum | Planning | T1 ⬜ T2 ⬜ | [351-audit-operation-enum-plan.md](351-audit-operation-enum-plan.md) |
+| [#351](https://github.com/DutchJaFO/Quotinator/issues/351) | AuditOperation is a string-constant set where the project's convention is an enum | Planning | T1 ⬜ T2 ⬜ | [351-audit-operation-enum-plan.md](351-audit-operation-enum-plan.md) |
 | [#352](https://github.com/DutchJaFO/Quotinator/issues/352) | Restore a stored backup, refusing one taken ahead of this build | Planning | T1 ⬜ T2 ⬜ | [352-restore-a-stored-backup-plan.md](352-restore-a-stored-backup-plan.md) |
 | [#353](https://github.com/DutchJaFO/Quotinator/issues/353) | Upload a backup file | Planning | T1 ⬜ T2 ⬜ | [353-upload-a-backup-file-plan.md](353-upload-a-backup-file-plan.md) |
 | [#360](https://github.com/DutchJaFO/Quotinator/issues/360) | Migration-generated identifiers are not valid UUIDs; route all id creation through one factory | Planning | T1 ⬜ T2 ⬜ | [360-guid-factory-plan.md](360-guid-factory-plan.md) |
@@ -82,211 +82,46 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 ## Dependency map
 
 ```
-#312 ─── depends on #278 (the shipped mechanism it reshapes). Blocks #81, #302, #303, #304, #308 —
-         every one of them either writes or renders a notification. Also absorbs the "relocate the
-         dedupe helper into a project Quotinator.Core can reach" decision that #302, #303 and #304
-         each separately defer to their own planning phase, and extends #81's own System_AppVersion
-         table to an append-only Application/Version history so a provenance FK stays frozen
-#83  ─── (none) — narrowed scope; last open question is a live T3 confirmation, not a blocker for anything else
-#81  ─── depends on #278 (notification mechanism), #80 (IChangelogService) — both done, released;
-         depends on #309 (hard — needs System_Changelog to be queryable), #307 (hard — cannot
-         implement without the flagged-highlight field), and #312 (hard — its producer moves off the
-         message-prefix dedupe onto typed metadata, and its own table changes shape underneath it);
-         soft-depends on #308 (renders better once it lands, not blocked by it)
-#304 ─── depends on #278 (notification mechanism), #156 (Reset no longer auto-seeds, which is
-         exactly the gap it fills for the post-Reset trigger), #312 (hard — the relocated dedupe
-         helper its Core-side trigger needs, and parameterised actions from #312's own
-         metadata-aware INotificationActionExecutor), and #319 (hard — it writes new user-facing
-         text, and #319 changes both the shape that text is stored in and where the helper building
-         it has to live)
-#302 ─── depends on #278 and #312 (hard — the relocated dedupe helper, plus opt-in expiry, which
-         removes the aging mechanism this issue currently assumes); writes from inside
-         QuotinatorDatabaseInitializer's own seeding loop (#221's FileImportReport data, read from the
-         same call site rather than after the fact)
-#303 ─── depends on #278 and #312 (same as #302); same seeding-loop hook point as #302; its review page
-         depends on the existing #154 staging model (ImportAction, IImportActionReader/Service) and the
-         existing /import/actions REST endpoints — all already shipped, nothing new needed there
-#307 ─── verified entirely by unit tests; it delivers a data contract and a lookup method and drives no
-         UI of its own, so it carries no front-end verification row (2026-08-29). Whether a flagged
-         highlight renders is #308's to assert, against #308's own code.
-         Depends on #80 (extends its shipped schema/generator/models) and, per ADR 018, on #309's
-         importer abstraction existing conceptually (not a hard build-order dependency — #307's schema
-         field addition doesn't itself need System_Changelog to exist yet)
-#308 ─── depends on #278 (extends its shipped NotificationTable component) and #312 (hard — renders
-         the Title/Body split #312 introduces). **Corrected 2026-09-01:** this entry claimed #308's own
-         body still described a rendering-only fix. It does not — the body carries its own
-         "Revised (2026-08-15)" section recording the #312 dependency, so the stale text was here, not
-         there. Also soft-depends on #302/#303/#304 — each adds a
-         notification type with its own payload, and #308 defines the per-type layout for both the
-         startup/popup dialogs and the notifications view, which cannot be settled before those types
-         exist. Sequenced last for that reason (see Order of operations)
-#309 ─── depends on ADR 005's revision and ADR 018 (design basis); Quotinator.Data takes a new
-         dependency on Quotinator.Changelog as part of this issue; its fallback (when
-         System_Changelog is missing/broken) reuses #293's exact narrow-exception-catch idiom and
-         stays structurally compatible with #305's future general DB-integrity warning, without
-         duplicating it
-#305 ─── (none) — independent bug
-#306 ─── (none) — independent bug
-#319 ─── depends on #312 (hard — extends the table, the write API and the metadata contract it
-         introduced; language is a first-class column, explicitly not a metadata payload field).
-         Blocks #304, #302, #303 and #308 — each writes or renders notification text against a shape
-         #319 changes. Migrates the three already-shipped producers (#279, #289, #81) as part of its
-         own scope: the first two supply translations from i18ntext/UI.*.json, #81 from the
-         per-language changelog files it already reads
-#323 ─── (none) — independent bug, found live 2026-08-17 reading a startup log. Fixes the HTTP client
-         registration only; does not change the import path. Not a blocker for #324: #324 reports a
-         failed refresh whatever its cause, and this issue removes one specific cause
-#324 ─── depends on #278 and #312 (the mechanism and the typed-metadata/opt-in-expiry shape) and on
-         #319 (hard — it writes new user-facing text, and #319 changes the shape that text is stored
-         in; building it first means building it twice). Consumes SourceRefreshResult.Failed, which
-         nothing reads for user-facing purposes today. Soft-relates to #323 only in that #323 makes
-         the failure it reports rarer
-#325 ─── fix REVERTED 2026-08-20 as disproportionate; see its plan doc's "Reverted" section. What now
-         carries it is #323's ConnectTimeout, raised here from 10s to 60s (request budget 30s → 90s to
-         stay above it). The custom connect path is gone; the connector and its tests are kept in
-         Quotinator.Data, unused, so the concepts need not be reinvented. Blocks nothing
-#326 ─── (none) — independent bug, found while re-checking the smoke tests. Violates the never-crash
-         rule: a read-only data directory plus a pending migration exits the process instead of
-         degrading. Blocks #327, whose degradation scenarios include this one
-#327 ─── depended on #326, which is now done. Now depends on #348: its corrupt- and truncated-database
-         documents are written against the refusal behaviour that issue delivers, since a document
-         asserting today's unhandled 500 would have to be rewritten a week later. Replaces the obsolete
-         #293 reproduction, whose --read-only technique #294 made survivable. Inherits a corrected
-         premise: #326 measured that WAL sidecar state, not a pending migration, decides whether a
-         read-only mount degrades. #339 has already delivered its requirement 1 and its first scenario
-         (the rewritten startup-and-degradation/05), so what remains is two documents, one overshoot
-         document, and the in-process cases — which are written and green
-#328 ─── (none) — covers two guarantees no unit test can reach: bundled content imports cleanly, and
-         endpoints behave correctly against a real database rather than the stubs the endpoint tests
-         deliberately use
-#329 ─── depends on #323 and #325 only in that it revises their arrangement, not in build order: it
-         revisits the ConnectTimeout #323 added and #325 raised to 60s, which is now the ENTIRE
-         resilience of the download path — there is no retry and no connector behind it. Moved from
-         13 to 11 on 2026-08-21 for that reason. Blocks #324 (hard for its multi-attempt
-         reporting — #329 establishes the download statistics #324 becomes the first consumer of;
-         #324's plain failure reporting does not need it). Adds the first NuGet dependency this
-         milestone takes, Microsoft.Extensions.Http.Resilience
-#330 ─── (none) — independent foundation. Establishes a per-file record (sidecar + Import_FileMetadata
-         row, SHA-256 + MD5, first/last inspection) that the project has never had. References
-         Import_FileResource (#251/#252) rather than extending it: that table is keyed by content
-         version, this one by file identity. Blocks #331, which has nowhere to store HTTP validators
-         without it
-#331 ─── depends on #330 (hard — its ETag/Last-Modified are two more fields in #330's shape, and its
-         staleness rule is #330's reconciliation rule). Reports into #329's statistics but does not
-         depend on it; a 304 still needs the connection #329 makes reliable, so neither reduces the
-         other's problem. Introduces SourceRefreshOutcome.Unchanged, which #324 may choose to surface
-#339 ─── #347 (in the v1.9.0 milestone, not this one — the only cross-milestone dependency here, and it
-         gates this milestone's close, not just this issue's). Restructures the T2 suite into
-         docs/automated-testing/ and defines the run scopes.
-         Blocks #327 and #328, which author their documents into that structure rather than into the
-         monolith it removes. Revises ADR 010 in place (test-only scripts move to scripts/testing/)
-         and resolves the live-only Definition-of-done gap in issues.md that #328 hits
-#348 ─── (none) — found by #327 while measuring whether a stated recovery route can actually succeed.
-         Blocks #327's two remaining degradation documents. A backup exists to make a startup or a
-         destructive action safe, so a backup that cannot be taken becomes a reported failure with
-         options rather than a silent skip (two variants today) or an unhandled 500 (three more). Also
-         replaces the storage arithmetic, which decides a hard yes/no from a size SQLite's page-level
-         copy does not guarantee, with a 90% operating quota plus a reserve to the absolute ceiling.
-         Soft-relates to #349, which supplies the in-app remedy its messages point at — either order
-#349 ─── depends on nothing; #348's remedy text names its endpoints once they exist and the manual
-         option until then, so the two can land either way round. Adds list, delete, status, download
-         and on-demand create under a new Backup tag — the first new endpoint group since ADR 020, so it
-         is also that rule's first live application. Nothing here writes to the live database, which is
-         what keeps it separable from #352 and #353 (both filed 2026-08-29 after the scope grew)
-#350 ─── (none) — found by #327, which built the first coverage of the overshoot state and asserted the
-         behaviour this issue reverses. Overturns #289's continue-and-notify design: an overshoot means
-         this build does not know what the missing migrations did, so the schema's shape is unknown and
-         the app must degrade rather than serve from it. Owns rewriting startup-and-degradation/06 and
-         replacing the in-process test #327 added, so #327 does not touch either again. Names restoring
-         an older backup as a second remedy alongside Reset, which #349 records as future work
-#352 ─── (none) — the remedy #348's SourceUnreadable text and #350's overshoot text both name and
-         neither can reach. Takes nothing from #349 but its `{name}` guard, so either order. Deliberately
-         does *not* back up before restoring: that would bolt a second data-retention decision onto an
-         endpoint with one job, feed the quota #348 refuses on, and duplicate a rollback SQLite already
-         guarantees — #349's create endpoint is where an operator takes a restore point instead
-#360 ─── (none) — found while reviewing migration 14's own id construction during #319. Blocks nothing,
-         but must land before the end-of-milestone migration consolidation: that pass rewrites this
-         milestone's migrations, and consolidating first would carry the hand-written expression into
-         the collapsed result. Touches NotificationTranslationMigrations, so it is cheaper after #319's
-         T2 than before it
-#353 ─── (none) — the other half of #349's download: a restore point that can leave the container has to
-         be able to come back. Its optional-restore flag was rejected for the same side-effect-policy
-         reason as #352's pre-restore backup, which also removes any dependency on #352 in either
-         direction
-#351 ─── (none) — found while planning #349, which adds a thirteenth const string into the shape this
-         issue replaces. Takes whatever members exist when it runs, so either order relative to #349.
-         Its table rebuild is written against this milestone's own end-of-milestone migration
-         consolidation, not as a permanent numbered step — the frozen boundary is the last released
-         migration, which is what makes the conversion affordable here rather than deferred
-#313 ─── (none) — independent test-harness bug, but sequenced first: until it landed, no test run in
-         this milestone could be trusted, because Api tests asserted before the app finished starting
-         (measured: 5 of 5). Blocks nothing structurally; blocked *confidence* in everything
-#370 ─── (none) — FieldMergeResolver predates this milestone. Sequenced next to #369 only because both
-         touch /import-review, and doing them together means one T2 pass over that page rather than two.
-         Its own first step is checking what the existing tests assert, since several of them pin the
-         throw this issue removes
-#369 ─── depends on #303 — it corrects that page, and reads the file name from the notification metadata
-         #303 defined. Found in the same T1 run as #368 but a different defect: reseed deletes
-         Import_Batch and keeps Import_Action, so actions outlive their parent and are still offered as
-         decidable. Predates #303 (the REST endpoint has always returned them); the page made it legible
-#372 ─── (none) — TruncateDataAsync predates this milestone. **Blocks #302**, whose per-file
-         confirmations cannot be verified against a reseed that is about to stop deleting: cold start
-         and reseed currently report different breakdowns for the same file, so dedupe does not
-         suppress the second and one file is confirmed twice. Found by #302's reopening rather than by
-         looking — the confirmations made a 14-of-17-tables delete list observable for the first time.
-#373 ─── depends on #372 for reproduction — a reseed that truncates first is always a first import, so
-         a row can never arrive and already match. **Blocks #372's own step 6**, whose ten failing
-         tests are all this one behaviour, and #302 behind that. Found by running #372's T2 document:
-         a reseed of unchanged files reported every quote as modified and said nothing at all about
-         six of the seven entity types involved.
-#375 ─── depends on nothing, and blocks #374. Filed 2026-09-03 out of #374's planning. A quote has no
-         `Date` of its own — it reads its Source's — so a quote from a later season of a multi-season
-         show has nowhere to say so, and four bundled `tv` titles already carry such quotes. Settled
-         during planning (developer): the hierarchy gains a level, `Universe → Series → (Season) →
-         Source`, with a Source always the episode and the concept kept neutral enough for magazines
-         and podcasts. Extends ADR 011, so it owns an ADR, and Season being an entity brings the
-         masterdata endpoint pair and the pagination contract with it. A first design making a quote's
-         parent nullable was rejected: the missing episode is a content gap, solved by curating
-         reference data ahead of the bulk import exactly as Series and Universe already are
-#374 ─── depends on #375 (hard — see below); #372 is what makes it reachable, since a rule never met
-         a value it had already resolved while every reseed was a first import. Found by writing the
-         positive seeding test #373 was asked for: the negative fixture has no rule file and can never apply,
-         so it only ever proved the stuck case stays stuck. **Corrected 2026-09-03:** this entry
-         claimed the 22 pending rows blocking #373's T2 runs would clear once a rule could recognise
-         its own outcome. Measured: none of the 22 is covered by a rule at all — they are a
-         Source-date disagreement inside the source file, reported once per quote because a quote's
-         `source`/`date` are read from its shared Source row. The issue absorbed that finding rather
-         than splitting it off (developer, 2026-09-03), so its scope is now the intent behind the
-         symptom — a reseed leaves nothing pending when the initial seeding left nothing — and it
-         still unblocks #373, by a different route than assumed. It grew two schema changes with it:
-         date joins a Source's natural key, and a quote becomes unique per Source. **Depends on
-         #375**, which runs first: several bundled quotes belong to a specific season, and without
-         somewhere to record that, the table-wide key splits one show into a Source row per year and
-         the date corrections would delete the season year to tidy it up.
-#367 ─── depends on #278 (the NotificationTable component it adds a status to) and #312 (the metadata
-         and dismissal shape its Executing state reads around). Blocks #308, which designs its
-         per-type layout against the finished status set — the reason #367 moved ahead of it. Its own
-         research found the Status column was already derived rather than stored, which turned the
-         stored-vs-transient question into a third option, a process registry, with no migration and
-         no way to strand a row.
-#371 ─── depends on nothing, and blocks nothing. Placed before #351 and #360 only for cost: it makes
-         SchemaMigration's description required across 31 construction sites, and both of those add
-         migrations that would otherwise be written twice. Consumes #308's per-type layout, which is
-         done.
-#368 ─── depends on #303 (its /import-review page is where any remedy points) and on #304 (whose reseed
-         action is the destructive path this issue exists to avoid needing). Found during #303's T1:
-         files in imports/ are discovered and a manifest written for them, then never read, because
-         seeding returns early on a non-empty Quotes table. Blocks nothing, but it is why #303's own T2
-         document has to start from a fresh container
+#312 ─── depends on #278; blocks #81, #302, #303, #304, #308 — Waiting for release
+#83  ─── (none) — Waiting for release
+#81  ─── depends on #278, #80, #309, #307, #312; soft-depends on #308 — Waiting for release
+#304 ─── depends on #278, #156, #312, #319 — Waiting for release
+#302 ─── depends on #278, #312 — In progress
+#303 ─── depends on #278, #312 — Waiting for release
+#307 ─── depends on #80; soft-depends on #309 — Waiting for release
+#308 ─── depends on #278, #312; soft-depends on #302, #303, #304 — Waiting for release
+#309 ─── (none) — Waiting for release
+#305 ─── (none) — Planning
+#306 ─── (none) — Planning
+#319 ─── depends on #312; blocks #304, #302, #303, #308 — Waiting for release
+#323 ─── (none) — Waiting for release
+#324 ─── depends on #278, #312, #319; soft-consumes #329 — Planning
+#325 ─── (none) — Closed as not planned
+#326 ─── (none); blocks #327 — Waiting for release
+#327 ─── depends on #326, #348 — In progress
+#328 ─── (none) — Planning
+#329 ─── blocks #324 — Planning
+#330 ─── (none); blocks #331 — Planning
+#331 ─── depends on #330 — Planning
+#339 ─── depends on #347 (v1.9.0 milestone); blocks #327, #328 — In progress
+#348 ─── (none); blocks #327 — Waiting for release
+#349 ─── (none); soft-relates to #348 — Waiting for release
+#350 ─── (none) — Planning
+#352 ─── (none) — Planning
+#360 ─── (none) — Planning
+#353 ─── (none) — Planning
+#351 ─── (none) — Planning
+#313 ─── (none) — Waiting for release
+#370 ─── (none) — Planning
+#369 ─── depends on #303 — Planning
+#372 ─── (none); blocks #302 — In progress
+#373 ─── depends on #372; blocks #302 (via #372) — In progress
+#375 ─── (none); blocks #374 — Waiting for release
+#374 ─── depends on #375 — Planning
+#367 ─── depends on #278, #312; blocks #308 — Waiting for release
+#371 ─── (none) — Planning
+#368 ─── depends on #303, #304 — Planning
 ```
-
-None of #302/#303/#304 depend on each other for their own correctness, but #304 is what makes #302's
-and #303's producers reachable from the UI for the first time (today a reseed only happens via
-curl+admin key) — natural to build first, not a hard requirement. #302 and #303 share one new
-`INotificationWriter` injection into `QuotinatorDatabaseInitializer` — whichever lands first does that
-step, the other reuses it.
-
-#83, #305, and #306 remain independent of everything else in this milestone.
 
 ---
 
@@ -294,58 +129,45 @@ step, the other reuses it.
 
 | # | Issue | Reason |
 |---|-------|--------|
-| 1 | **#313** ✅ | Done. Api tests were asserting before startup completed — measured at 5 of 5 runs, so every verification in this milestone was untrustworthy until it landed. Had to come first for that reason, not because of any dependency |
-| 2 | **#323** ✅ | Independent bug; taken first by developer direction (2026-08-17) because it was found live and its fix is self-contained to the HTTP client registration. Blocks nothing |
-| 3 | **#325** ⛔ | `Closed as not planned` (GitHub, 2026-08-20). Taken immediately after #323 as the same startup log's remaining half. Its fix was reverted on 2026-08-20 as disproportionate to a failure the application already handles by falling back to the local copy; #323's `ConnectTimeout`, raised to 60 s, carries it instead. See its plan doc's "Reverted" section |
-| 4 | **#312** ✅ | Foundation: title/body, typed metadata, opt-in expiry, app-version provenance, and the relocated dedupe helper. Blocks #81, #302, #303, #304, #308 — building any of them first means building them twice |
-| 5 | **#81** ✅ | What's-new-after-upgrade path; builds on #278's, #80's, #309's, #307's and #312's output |
-| 6 | **#83** ✅ | Narrowed to a single live T3 confirmation; can run whenever the next beta add-on install happens, independently of everything else |
-| 7 | **#309** ✅ | Done. T1 confirmed live (2026-08-19) surfaced four further defects — all fixed and verified; see steps 14–18 in its plan doc. T2 green the same day |
-| 8 | **#326** ✅ | Done, `Waiting for release`. All 12 verification rows green including T1 and a T2 controlled pair. It also corrected its own premise, which #327 inherits: sidecar state decides whether a read-only mount degrades, **not** a pending migration |
-| 9 | **#348** ✅ | Done, `Waiting for release` — T1 outstanding, the developer's own. Backup outcomes and refusal: five named obstacles, a reset that refuses rather than returning an unhandled 500, and a 90% operating quota with a reserve. Found by #327 while measuring whether a stated recovery route can actually succeed |
-| 10 | **#349** ✅ | Done. Grew from three endpoints to five — list, delete, status, download, create — under their own `Backup` tag. Three defects were found by running it rather than by unit tests: an unhandled 500 on delete against a read-only mount, another on download caused by a pooled connection holding every backup file open, and no logging at all |
-| 11 | **#307** ✅ | Done. All eight verification rows are green: its two documentation-confirmation rows became an assertion in `ChangelogSchemaTests` rather than a human read, and it carries no front-end row — it delivers a data contract and a lookup method, with the rendering of a flagged highlight verified by #308 against #308's own code |
-| 12 | **#319** ✅ | Translated title/body. The gateway to the producers below: every one of them writes new user-facing text, and building any first means building the text twice |
-| 13 | **#304** ✅ | Done. Gave the reseed action a Blazor-reachable entry point for the first time; #302 and #303 below become observable through that path. Its T1 pass also found that a notification resolved by running its action read as *dismissed*, and that every UI timestamp was rendered in UTC — both fixed here, both affecting every notification rather than only this one |
-| 14 | **#302** 🚧 | **Reopened 2026-09-02** and blocked on #372 below: its confirmation was suppressed on cold start, so the same files applying identically produced four notifications from the UI and none at startup. The gate is gone and its tests are green; only the final T2 and T1 wait. Running its document also found the two defects #372 and the bind-directory fix came from. Two findings worth carrying into #303, which shares the hook point: the four-variant seeding matrix (no files / bundled / user imports / both) is the only thing that exposed a same-name collision across origins, and the startup modal needs a *restart* after the action to show anything, so it cannot be verified in the run that caused it |
-| 15 | **#303** ✅ | Done, `Waiting for release` — T1 outstanding, the developer's own. Two findings for whoever picks up #66: the basic keep/take options landed on *both* the alert and the page, resolving only each action's conflicted fields (git's `--ours`/`--theirs` on conflicted hunks), and its T2 pass found that `/notifications` has always returned `500` on a read-only data directory — the health-gate exemption works, but `InteractiveServer`'s DataProtection cannot write `/data/keys` |
-| 16 | **#367** ✅ | Done, `Waiting for release` — T1 confirmed 2026-09-01. **Moved up from 31 (developer, 2026-09-01)** so #308 designs its per-type layout against the finished status set rather than revisiting it. Its own research found the Status column was already derived rather than stored, which turned the issue's stored-vs-transient question into a third option — a process registry — with no migration and no way to strand a row |
-| 17 | **#308** ✅ | Done, `Waiting for release` — T1 outstanding, the developer's own. Reopened after its first pass for four T1 findings, which turned a rendering issue into one that also stores how an action resolved (one enum-backed column) and renders the payload it had been discarding. Two lessons for the issues below: running the T2 document found three defects every unit test had passed over, because both unit tests read with `SELECT *` and exercised only one of two dismissal paths; and the same modal shell had been hand-built three times before being extracted, having already cost the identical fix twice |
-| 18 | **#375** | **A quote from a multi-season TV series cannot say which season it is from.** Filed 2026-09-03 out of #374's planning, and placed ahead of it (developer): several bundled quotes belong to a specific season, and #374's own `UNIQUE (Title, Type, Date)` would otherwise split one show into a Source row per year, with #374's date corrections then deleting the season year to tidy the duplicate away. A quote has no `Date` of its own today — it reads its Source's — so a season has nowhere to live. Planning settled the shape: `Universe → Series → (Season) → Source`, Season keyed on `(SeriesId, Number)` rather than a name, a Source always the episode, and the reference data curated ahead of the bulk import the way Series and Universe already are. Extends ADR 011, so the issue owns an ADR, and Avatar: The Last Airbender is its worked example — "Book One: Water" is the only bundled content that exercises number, title and subtitle together |
-| 19 | **#374** | **A conflict rule cannot tell "already correct" from "cannot apply".** `TryResolve` reports two outcomes where there are four: after the first import the stored value *is* what the rule produced, so a rule that resolved something can never again recognise its own result. **Planning found its stated cause was not the measured one (2026-09-03)** — none of the 22 rows blocking #373's T2 runs is covered by a rule; they are a Source-date disagreement inside the file, one quote's date claim against the shared Source row it reads from. Scope now follows the intent rather than the symptom (developer): a reseed leaves nothing pending when the initial seeding left nothing. That adds two schema changes — date joins a Source's natural key, and a quote becomes unique per Source — plus cold-start reporting of a self-contradicting file and surfacing rules that upstream has made redundant. Still first, and still what unblocks #373 |
-| 20 | **#373** 🚧 | **Identical content must not report as modified.** Found by #372's step 6: a reseed against an up-to-date database reports every quote as updated (`Quote +0 ~732`), because the planner records a `Modify` even when nothing would be written. First, because #372's ten failing tests are all this one behaviour, and rewriting them against today's counts would bake the misreport in |
-| 21 | **#372** 🚧 | **Reseed stops deleting**, and #302 above cannot finish until it does. Reseed imports *and* deletes today — the shape CLAUDE.md's endpoint side-effect policy forbids and #156 already fixed for Reset, never applied to the mirror case. Found by #302's reopening: per-file confirmations made the deletion observable, and it keeps `Series`, `Universe` and `CharacterSource`, orphaning link rows on every reseed. First, because it changes what every reseed-facing test measures |
-| 22 | **#369** | **Moved up from 32.** Its own entry always said "straight after #303", and the cost it names — every reseed adding more undecidable rows to whatever database the issues above are verified against — has been accruing throughout #308's and #302's live runs |
-| 23 | **#370** | **Moved up from 33.** Straight after #369, as its own entry says: one T2 pass covers both `/import-review` changes, and #369 decides which rows that page keeps |
-| 24 | **#371** | Database-created and migration-applied notifications. Before #351 and #360 below, which each add migrations: this converts `SchemaMigration` across 31 construction sites, so doing it first means those two write their entries in the final shape rather than being converted afterwards |
-| 25 | **#350** | Overshoot must degrade, not run healthy. Changes application behaviour, and #327's overshoot document is rewritten against the result. Reverses #289's shipped continue-and-notify design |
-| 26 | **#327** | Rewrites the degradation smoke coverage around the never-crash feature. Unblocked: #326 is done, #348's refusal behaviour is in, and #339 has already delivered the structure these documents are authored into. The overshoot document and its in-process test belong to #350 |
-| 27 | **#328** | Bundled-import and live-endpoint smoke coverage; authors into the same delivered structure |
-| 28 | **#339** | **Moved down from 9 (2026-08-29).** Its structure is delivered and in use — what remains is one verification row, "every document can distinguish the feature working from the feature broken", blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone. Leaving it at 9 made the sequence unworkable, since nothing after it could proceed while it waited on another milestone. Running it after #327/#328 is also better than before: those two add documents, and this row validates every document there is |
-| 29 | **#329** | Retry and parallelism for source downloads. Before #324, which consumes its statistics |
-| 30 | **#330** | File metadata foundation — sidecar + `Import_FileMetadata`. #331 below cannot start without it. Also owns giving a *backup* file its own record, which #349 deferred here rather than extending the audit schema |
-| 31 | **#331** | Conditional requests, storing validators in #330's shape. Lands before #324 so the source-download subsystem is finished before anything reports on it |
-| 32 | **#324** | The one notification issue that cannot join the cluster above: it reports on the source-download subsystem and consumes #329's statistics, so it stays after them and is written once rather than revised as #329/#330/#331 land |
-| 33 | **#305** | Independent bug; can slot in anywhere |
-| 34 | **#306** | Independent bug; can slot in anywhere |
-| 35 | **#351** | `AuditOperation` to an enum with its CHECK constraint. Independent of everything above and slottable anywhere; placed late so #349's own new member is already in place when the conversion runs, and so its table rebuild is written with this milestone's full migration set visible |
-| 36 | **#352** | Restore a stored backup. After #349, whose `{name}` guard and create endpoint it relies on being there — not for compilation, but so the remedy text and the operator's loop are written once |
-| 37 | **#353** | Upload a backup file. Last of the backup cluster: it is the only endpoint that accepts an arbitrary file, and writing it after restore exists means its validation is written against a real consumer rather than a hypothetical one |
-| 38 | **#360** | Identifier generation through one factory, and a SQLite function migrations call instead of hand-writing one. Deliberately before the end-of-milestone migration consolidation: that pass rewrites this milestone's migrations, so the factory has to exist first or the consolidated result bakes in a sixth copy of the expression it replaces |
-| 39 | **#368** | Import files discovered but never imported, found in #303's T1. Last, because its own planning has to settle whether the remedy is an import path or only a report — and that decision is easier once #372 above has established what an import against existing content actually does. Its original reason for being last (waiting on #367 to decide how a running action reports itself) no longer applies: #367 is done |
-
-**Notifications come first from position 11 (developer direction, 2026-08-29).** The safe-start cluster
-(#326, #348, #349) and the backup endpoints grew large enough to crowd out the milestone's own subject:
-every notification producer was still unstarted at position 21 or below.
-
-**#319 leads because every producer after it writes user-facing text**, and #308 comes before #307
-because a notification feature is only verified by being seen: #307's flagged highlights prove nothing
-until something renders them. Only #324 sits outside the cluster, because it reports on statistics #329
-has not established yet.
-
-**#339's blocker reaches past this issue.** Per the PR merge plan below, the branch stays open until every
-issue in the milestone is done — so #347, in the v1.9.0 milestone, gates this milestone's close and not
-only #339's. That is a cross-milestone dependency worth watching rather than discovering at close time.
+| 1 | **#313** ✅ | Waiting for release; sequenced first — test-harness reliability |
+| 2 | **#323** ✅ | Waiting for release; independent |
+| 3 | **#325** ⛔ | Closed as not planned |
+| 4 | **#312** ✅ | Waiting for release; foundation for #81, #302, #303, #304, #308 |
+| 5 | **#81** ✅ | Waiting for release |
+| 6 | **#83** ✅ | Waiting for release |
+| 7 | **#309** ✅ | Waiting for release |
+| 8 | **#326** ✅ | Waiting for release |
+| 9 | **#348** ✅ | Waiting for release — T1 outstanding |
+| 10 | **#349** ✅ | Waiting for release |
+| 11 | **#307** ✅ | Waiting for release |
+| 12 | **#319** ✅ | Waiting for release; gateway for the producers below |
+| 13 | **#304** ✅ | Waiting for release |
+| 14 | **#302** 🚧 | In progress — blocked on #372 |
+| 15 | **#303** ✅ | Waiting for release — T1 outstanding |
+| 16 | **#367** ✅ | Waiting for release — moved up so #308 designs against the finished status set |
+| 17 | **#308** ✅ | Waiting for release — T1 outstanding |
+| 18 | **#375** ✅ | Waiting for release — T1 outstanding |
+| 19 | **#374** | Planning — depends on #375 |
+| 20 | **#373** 🚧 | In progress |
+| 21 | **#372** 🚧 | In progress — #302 cannot finish until this lands |
+| 22 | **#369** | Planning — depends on #303 |
+| 23 | **#370** | Planning — sequenced with #369, same page |
+| 24 | **#371** | Planning — before #351/#360, which each add migrations |
+| 25 | **#350** | Planning |
+| 26 | **#327** 🚧 | In progress — depends on #326 (done), #348 |
+| 27 | **#328** | Planning |
+| 28 | **#339** 🚧 | In progress — blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
+| 29 | **#329** | Planning — before #324, which consumes its statistics |
+| 30 | **#330** | Planning — #331 depends on it |
+| 31 | **#331** | Planning — depends on #330 |
+| 32 | **#324** | Planning — after #329/#330/#331 |
+| 33 | **#305** | Planning — independent |
+| 34 | **#306** | Planning — independent |
+| 35 | **#351** | Planning — independent, placed late |
+| 36 | **#352** | Planning — after #349 |
+| 37 | **#353** | Planning — after #352 |
+| 38 | **#360** | Planning — before end-of-milestone migration consolidation |
+| 39 | **#368** | Planning — depends on #303, #304 |
 
 ---
 
