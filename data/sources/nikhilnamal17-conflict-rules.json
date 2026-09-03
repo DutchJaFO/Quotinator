@@ -337,6 +337,129 @@
       "fields": [
         { "field": "character", "resolution": "Custom", "customValue": "Tony Stark" }
       ]
+    },
+    {
+      "entityId": "7ca55240-5279-6c42-84bf-b960b1f4a22e",
+      "existingRecord": {
+        "quoteText": "That's what I do: I drink and I know things.",
+        "source": "Game of Thrones",
+        "date": "2012",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "That's what I do: I drink and I know things.",
+        "source": "Game of Thrones",
+        "date": "2012",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "fields": [
+        { "field": "source", "resolution": "Custom", "customValue": "Home" },
+        { "field": "date", "resolution": "Custom", "customValue": "2016-05-01" }
+      ]
+    },
+    {
+      "entityId": "58f3ac90-c36b-1942-8d99-19feb852d966",
+      "existingRecord": {
+        "quoteText": "I have burrowed underneath your brain. I am nested there. I am the scream in your mind. You will cooperate.",
+        "source": "Mr. Robot",
+        "date": "2017",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "I have burrowed underneath your brain. I am nested there. I am the scream in your mind. You will cooperate.",
+        "source": "Mr. Robot",
+        "date": "2017",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "fields": [
+        { "field": "source", "resolution": "Custom", "customValue": "eps2.1_k3rnel-pan1c.ksd" },
+        { "field": "date", "resolution": "Custom", "customValue": "2016" }
+      ]
+    },
+    {
+      "entityId": "7a319d4a-682d-0f46-bb3b-8293672c1ca1",
+      "existingRecord": {
+        "quoteText": "Unfortunately, we’re all human. Except me, of course.",
+        "source": "Mr. Robot",
+        "date": "2017",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Unfortunately, we’re all human. Except me, of course.",
+        "source": "Mr. Robot",
+        "date": "2017",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "fields": [
+        { "field": "source", "resolution": "Custom", "customValue": "eps1.4_3xpl0its.wmv" },
+        { "field": "date", "resolution": "Custom", "customValue": "2015" }
+      ]
+    },
+    {
+      "entityId": "e2e8272d-538b-7e4f-b305-582c67f437e1",
+      "existingRecord": {
+        "quoteText": "Time means nothing. Jeremy Bearimy, baby. We’ll just get through this. And then you and I can chill out in the dot of the I forever.",
+        "source": "The Good Place",
+        "date": "2019",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Time means nothing. Jeremy Bearimy, baby. We’ll just get through this. And then you and I can chill out in the dot of the I forever.",
+        "source": "The Good Place",
+        "date": "2019",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "fields": [
+        { "field": "source", "resolution": "Custom", "customValue": "Pandemonium" }
+      ]
+    },
+    {
+      "entityId": "e69951f1-4d01-964d-86d5-13f80f5bfd8a",
+      "existingRecord": {
+        "quoteText": "People walk around, act like they know what hate means. Nah, no one does, until you hate yourself. I mean truly hate yourself. That’s power.",
+        "source": "Mr. Robot",
+        "date": "2017",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "People walk around, act like they know what hate means. Nah, no one does, until you hate yourself. I mean truly hate yourself. That’s power.",
+        "source": "Mr. Robot",
+        "date": "2017",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "fields": [
+        { "field": "character", "resolution": "Custom", "customValue": "Fernando Vera" }
+      ]
     }
   ]
 }

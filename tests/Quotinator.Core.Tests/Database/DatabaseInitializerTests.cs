@@ -1430,6 +1430,90 @@ public class DatabaseInitializerTests
         Assert.AreEqual("Galadriel", character);
     }
 
+    /// <summary>
+    /// #375: the four quotes step 7 resolved to a named episode land on that episode's own Source —
+    /// not the show-level one every other same-titled quote still points at — with the corrected date.
+    /// Verified against the real bundled rule file, since the point is that these rules actually apply.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_ResolvedQuotesLandOnTheirEpisodeSource()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        (string QuoteId, string ExpectedTitle, string ExpectedDate)[] cases =
+        [
+            ("7ca55240-5279-6c42-84bf-b960b1f4a22e", "Home", "2016-05-01"),
+            ("58f3ac90-c36b-1942-8d99-19feb852d966", "eps2.1_k3rnel-pan1c.ksd", "2016"),
+            ("7a319d4a-682d-0f46-bb3b-8293672c1ca1", "eps1.4_3xpl0its.wmv", "2015"),
+            ("e2e8272d-538b-7e4f-b305-582c67f437e1", "Pandemonium", "2019"),
+        ];
+
+        foreach ((string quoteId, string expectedTitle, string expectedDate) in cases)
+        {
+            (string Title, string Date)? source = await conn.QuerySingleOrDefaultAsync<(string, string)?>(
+                "SELECT s.Title, s.Date FROM Quotinator_Quote q JOIN Quotinator_Source s ON s.Id = q.SourceId " +
+                "WHERE q.Id = @quoteId AND q.IsDeleted = 0 AND s.IsDeleted = 0;", new { quoteId });
+
+            Assert.IsNotNull(source, $"Quote '{quoteId}' did not resolve to a Source at all.");
+            Assert.AreEqual(expectedTitle, source.Value.Title, $"Quote '{quoteId}' should resolve to its episode's Source.");
+            Assert.AreEqual(expectedDate, source.Value.Date, $"Quote '{quoteId}' should carry its episode's corrected date.");
+        }
+    }
+
+    /// <summary>#375: the one quote resolved by character alone keeps the show-level Source and gains only its speaker.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_VeraQuoteGetsCharacterButKeepsShowLevelSource()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        (string? character, string? title) = await conn.QuerySingleOrDefaultAsync<(string?, string?)>(
+            "SELECT c.Name, s.Title FROM Quotinator_Quote q " +
+            "JOIN Quotinator_Source s ON s.Id = q.SourceId AND s.IsDeleted = 0 " +
+            "LEFT JOIN Quotinator_Character c ON c.Id = q.CharacterId AND c.IsDeleted = 0 " +
+            "WHERE q.Id = 'e69951f1-4d01-964d-86d5-13f80f5bfd8a' AND q.IsDeleted = 0;");
+
+        Assert.AreEqual("Fernando Vera", character);
+        Assert.AreEqual("Mr. Robot", title, "Nearest-Source rule: no episode was identifiable, so the quote stays on the show-level Source.");
+    }
+
+    /// <summary>
+    /// #375: the two quotes step 7 could not attribute to any episode keep the ordinary show-level
+    /// Source — the control proving the five rules above are additive, not a change to every Mr. Robot
+    /// or Arrow quote.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_UnattributedQuotesKeepShowLevelSource()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        (string QuoteId, string ExpectedTitle)[] cases =
+        [
+            ("779f3b34-37f6-8b48-864e-42d262129a3d", "Mr. Robot"),
+            ("e41d0f7a-a39a-4346-a0dd-ca08efd75724", "Arrow"),
+        ];
+
+        foreach ((string quoteId, string expectedTitle) in cases)
+        {
+            string? title = await conn.ExecuteScalarAsync<string?>(
+                "SELECT s.Title FROM Quotinator_Quote q JOIN Quotinator_Source s ON s.Id = q.SourceId " +
+                "WHERE q.Id = @quoteId AND q.IsDeleted = 0 AND s.IsDeleted = 0;", new { quoteId });
+
+            Assert.AreEqual(expectedTitle, title, $"Quote '{quoteId}' has no episode-attribution rule and must stay on the show-level Source.");
+        }
+    }
+
     // ── Seeding ───────────────────────────────────────────────────────────────
 
     /// <summary>Seeding all three bundled source files produces the expected quote/source/character counts.</summary>
