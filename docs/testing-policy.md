@@ -101,6 +101,32 @@ This is not the same as showing an assertion *can* fail (the mutation step under
 neither substitutes for the other: mutation proves the test is wired to the behaviour, a positive
 control proves the behaviour is not simply failing everywhere.
 
+## Red first means signatures first — a test that cannot compile is not a red test
+
+**Always test red first.** In a compiled language that has a consequence worth stating, because it is
+where the rule quietly fails: a test referencing a type, method or property that does not exist yet does
+not go red, it breaks the build, and nothing in the project runs at all. There is no way to write the
+test first and observe it failing without something for it to bind to.
+
+So the order for new behaviour is three steps, not two:
+
+1. **Create the signature only** — the class with its properties, the method with its parameters and
+   return type, throwing `NotImplementedException` or returning a default. No behaviour.
+2. **Write the test, run it, and watch it fail** — on the assertion, not on the build.
+3. **Implement.**
+
+**The trap is step 1 sliding into step 3.** Having opened the file to add a signature, writing the real
+body is one keystroke away and feels like the same task — and then the test passes on its first run and
+has proven nothing. Found live in #375 (2026-09-03) on a four-line pure function: `EntityIdentity.SeasonId`
+was implemented while its signature was being added, and all four of its tests were green before they had
+ever been red.
+
+**If it happens anyway, mutation is the recovery, not a substitute.** Break the implementation in the
+specific way the test exists to catch, confirm that test fails while its siblings still pass, then revert.
+That establishes the test is wired to the behaviour, which is most of what the red run would have shown —
+but it does not establish that the test was written against the requirement rather than against the code
+already in front of you, and only writing it first does that.
+
 ## Red first applies to automated tests, not only unit tests
 
 An automated (T2) document added for an issue is a test, and it goes red before it goes green like any

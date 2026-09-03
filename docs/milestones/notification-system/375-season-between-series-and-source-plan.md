@@ -1,6 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 5)
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -163,15 +163,43 @@ from a Source's presence — the accepted cost of never leaving a quote without 
 
 ### 2. Write every test first, and run them red
 
-**Status:** ⬜ Not started
+**Status:** 🚧 In progress
 
-Per `docs/testing-policy.md`. Covers the migration's drift tests as much as the entity's behaviour: the
-baseline and the incremental replay must agree about a table that does not exist yet, which is a test
-that can be written before the table is.
+Per `docs/testing-policy.md`, whose "Red first means signatures first" section this step's own failure
+prompted: a test referencing a type that does not exist yet breaks the build rather than going red, so
+each piece is **signature → test → watch it fail → implement**, and the signature carries no behaviour.
+The plan originally said only "write every test first", which is unachievable as stated in a compiled
+language and is where `EntityIdentity.SeasonId` was implemented before its own tests existed.
+
+Covers the migration's drift assertions as much as the entity's behaviour. Note that a drift test alone
+is not red here: with no `Quotinator_Season` in either the baseline or the replay the two agree
+trivially, so the red assertion is that the table exists with its expected columns and constraint, not
+that the two paths match.
+
+Progress:
+
+| Signature | Tests | State |
+|---|---|---|
+| `SeasonEntity` | — | created |
+| `EntityIdentity.SeasonId` | 4 in `EntityIdentityTests` | green, **mutation-verified rather than observed red** — the slip that prompted the policy section |
+| — (schema only) | 3 in `DatabaseInitializerTests` | 2 red on the missing table and column; `Quote_StillRequiresASource` green as its control |
+| `SeasonDisplay.Format` | 5 in `SeasonDisplayTests` | red on `NotImplementedException` |
+| `SeasonEntryDto`, `SourceEntryDto.SeasonNumber` | 4 import-linking in `DatabaseInitializerTests` | red on the missing table and column |
+| `SeasonResponse`, `ISeasonSeriesReferenceReader`, 2 fakes | 17 in `SeasonEndpointsTests` | 15 red — no endpoint is mapped yet |
+
+**Two of the seventeen pass for a weak reason, and are known to.** `GetSeasonById_UnknownId_Returns404`
+and `..._MalformedId_Returns404NotBadRequest` are satisfied by the route not existing at all. They are
+kept because they become meaningful once the endpoint exists, and every positive case beside them is
+red — but on their own they would prove nothing, which is the "only-failures" shape the testing policy
+warns about.
+
+Remaining: `SeasonReaderTests` (the repository-level `pageSize = 0` case, which needs the real reader),
+the `SourceEndpointsTests` Season-reference and N+1 cases, `OpenApiSpecEndpointTests`, and the
+`source-verification.md` text assertion.
 
 ### 3. The Season entity and its migration
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-03
 
 `Quotinator_Season` mirroring `Quotinator_Series` — `Id`, nullable `SeriesId` FK, `ImportBatchId`,
 `CompletenessStatus` with its copied CHECK, `NoValueKnown`, RecordBase — plus `Number` (required) and
@@ -184,7 +212,7 @@ Registration is one line against the existing generic — see cross-check 5.
 
 ### 4. Source gains its Season link
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-03
 
 `Quotinator_Source.SeasonId`, nullable, `REFERENCES Quotinator_Season(Id)` — an `ALTER TABLE … ADD
 COLUMN`, which SQLite supports and which carries no CHECK, so no rebuild. `SourceEntity` gains the
