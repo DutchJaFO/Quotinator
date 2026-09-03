@@ -2463,7 +2463,7 @@ public class DatabaseInitializerTests
 
         QuotinatorDatabaseInitializer db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(5, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
+        Assert.AreEqual(7, db3.SchemaVersion, "An explicit Reset must fully resolve the version/schema mismatch");
     }
 
     /// <summary>
@@ -2566,7 +2566,191 @@ public class DatabaseInitializerTests
          "Quotinator_Person", "Quotinator_Quote", "Quotinator_QuoteTranslation", "Quotinator_QuoteGenre",
          "Quotinator_Conversation", "Quotinator_ConversationLine", "Quotinator_StageDirection", "Quotinator_StageDirectionTranslation",
          "Quotinator_SoundCue", "Quotinator_SoundCueTranslation",
-         "Quotinator_Universe", "Quotinator_Series", "Quotinator_CharacterSource"];
+         "Quotinator_Universe", "Quotinator_Series", "Quotinator_Season", "Quotinator_CharacterSource"];
+
+    /// <summary>#375: a seasons[] declaration plus a sources[] entry naming its ordinal links the Source to that Season.</summary>
+    [TestMethod]
+    public async Task ImportingASourceWithASeasonNumber_LinksItToThatSeason()
+    {
+        string file = Path.Combine(_tempDir, "seasons.json");
+        File.WriteAllText(file,
+            """
+            {"quotes":[],
+             "series":[{"name":"Avatar: The Last Airbender"}],
+             "seasons":[{"number":1,"seriesName":"Avatar: The Last Airbender","title":"Book One","subtitle":"Water"}],
+             "sources":[{"title":"The Boy in the Iceberg","type":"tv","date":"2005-02-21","seriesName":"Avatar: The Last Airbender","seasonNumber":1}]}
+            """);
+
+        QuotinatorDatabaseInitializer db = CreateInitializer(
+            [new SeedBatch([new SeedFile(file, null)], ManifestPolicy.HardcodedDefault, "season-test")]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        (int Number, string? Title, string? Subtitle)? season =
+            await conn.QuerySingleOrDefaultAsync<(int, string?, string?)?>(
+                "SELECT se.Number, se.Title, se.Subtitle FROM Quotinator_Source s "
+                + "JOIN Quotinator_Season se ON se.Id = s.SeasonId AND se.IsDeleted = 0 "
+                + "WHERE s.Title = 'The Boy in the Iceberg' AND s.IsDeleted = 0;");
+
+        Assert.IsNotNull(season, "The Source was not linked to a Season.");
+        Assert.AreEqual(1, season.Value.Number);
+        Assert.AreEqual("Book One", season.Value.Title);
+        Assert.AreEqual("Water", season.Value.Subtitle);
+    }
+
+    /// <summary>#375: the control — the Season link is optional, and a Source that names no ordinal gets none.</summary>
+    [TestMethod]
+    public async Task ImportingASourceWithNoSeasonNumber_LinksItToNoSeason()
+    {
+        string file = Path.Combine(_tempDir, "no-season.json");
+        File.WriteAllText(file,
+            """
+            {"quotes":[],
+             "series":[{"name":"Avatar: The Last Airbender"}],
+             "seasons":[{"number":1,"seriesName":"Avatar: The Last Airbender","title":"Book One","subtitle":"Water"}],
+             "sources":[{"title":"Avatar: The Last Airbender","type":"tv","seriesName":"Avatar: The Last Airbender"}]}
+            """);
+
+        QuotinatorDatabaseInitializer db = CreateInitializer(
+            [new SeedBatch([new SeedFile(file, null)], ManifestPolicy.HardcodedDefault, "season-test")]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        string? seasonId = await conn.ExecuteScalarAsync<string?>(
+            "SELECT SeasonId FROM Quotinator_Source WHERE Title = 'Avatar: The Last Airbender' AND IsDeleted = 0;");
+        Assert.IsNull(seasonId, "A Source naming no season must not be linked to one.");
+
+        int seasons = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Season WHERE IsDeleted = 0;");
+        Assert.AreEqual(1, seasons, "The declared season must still be created — declaring it and linking to it are separate.");
+    }
+
+    /// <summary>#375: two series each with a season 1 are two distinct seasons. A globally unique key would collapse them.</summary>
+    [TestMethod]
+    public async Task TwoSeriesEachWithSeasonOne_AreDistinctSeasons()
+    {
+        string file = Path.Combine(_tempDir, "two-series.json");
+        File.WriteAllText(file,
+            """
+            {"quotes":[],
+             "series":[{"name":"Avatar: The Last Airbender"},{"name":"Mr. Robot"}],
+             "seasons":[{"number":1,"seriesName":"Avatar: The Last Airbender","title":"Book One","subtitle":"Water"},
+                        {"number":1,"seriesName":"Mr. Robot"}],
+             "sources":[]}
+            """);
+
+        QuotinatorDatabaseInitializer db = CreateInitializer(
+            [new SeedBatch([new SeedFile(file, null)], ManifestPolicy.HardcodedDefault, "season-test")]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        int count = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Quotinator_Season WHERE Number = 1 AND IsDeleted = 0;");
+        Assert.AreEqual(2, count, "Season 1 of two different series must be two rows — the natural key is (SeriesId, Number).");
+    }
+
+    /// <summary>#375: seasons change nothing for material that has none. A movie quote seeds exactly as before.</summary>
+    [TestMethod]
+    public async Task ImportingAMovieQuote_IsUnaffectedBySeasonSupport()
+    {
+        string file = Path.Combine(_tempDir, "movie.json");
+        File.WriteAllText(file,
+            """
+            {"quotes":[{"id":"e1111111-1111-4111-8111-111111111111","quote":"A test line.","originalLanguage":"en","source":"Casablanca","date":"1942","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
+            """);
+
+        QuotinatorDatabaseInitializer db = CreateInitializer(
+            [new SeedBatch([new SeedFile(file, null)], ManifestPolicy.HardcodedDefault, "movie-test")]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        string? seasonId = await conn.ExecuteScalarAsync<string?>(
+            "SELECT SeasonId FROM Quotinator_Source WHERE Title = 'Casablanca' AND IsDeleted = 0;");
+        Assert.IsNull(seasonId, "A movie has no season.");
+
+        int quotes = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote WHERE IsDeleted = 0;");
+        Assert.AreEqual(1, quotes, "The quote must still seed — season support must not disturb material that has no seasons.");
+    }
+
+    /// <summary>
+    /// #375: the Season table exists with its own columns and, crucially, the per-parent natural key.
+    /// Asserted explicitly rather than left to the drift test below — with no table in either path the
+    /// two agree trivially and the comparison passes while proving nothing.
+    /// </summary>
+    [TestMethod]
+    public async Task Season_TableExists_WithItsColumnsAndPerParentNaturalKey()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        List<string> schema = await DumpTableSchemaAsync(conn, "Quotinator_Season");
+        Assert.IsNotEmpty(schema, "Quotinator_Season does not exist.");
+
+        IEnumerable<string> columns = await conn.QueryAsync<string>("SELECT name FROM pragma_table_info('Quotinator_Season');");
+        List<string> actual = [.. columns];
+        foreach (string expected in new[] { "Id", "Number", "Title", "Subtitle", "SeriesId", "ImportBatchId", "CompletenessStatus", "NoValueKnown" })
+            Assert.Contains(expected, actual, $"Quotinator_Season is missing the '{expected}' column.");
+
+        Assert.Contains(
+            line => line.StartsWith("IDX", StringComparison.Ordinal)
+                    && line.Contains("unique=1", StringComparison.Ordinal)
+                    && line.Contains("SeriesId", StringComparison.Ordinal)
+                    && line.Contains("Number", StringComparison.Ordinal),
+            schema,
+            "Quotinator_Season needs UNIQUE (SeriesId, Number) — a globally unique Name cannot work for an "
+            + $"ordinal that only means something within its parent. Indexes found: {string.Join(" | ", schema.Where(l => l.StartsWith("IDX", StringComparison.Ordinal)))}");
+    }
+
+    /// <summary>#375: a Source may belong to a Season, alongside its existing Series link.</summary>
+    [TestMethod]
+    public async Task Source_HasANullableSeasonLink()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        IEnumerable<(string name, int notnull)> columns =
+            await conn.QueryAsync<(string, int)>("SELECT name, \"notnull\" FROM pragma_table_info('Quotinator_Source');");
+        List<(string name, int notnull)> actual = [.. columns];
+
+        List<(string name, int notnull)> seasonIdColumn = [.. actual.Where(c => c.name == "SeasonId")];
+        Assert.IsNotEmpty(seasonIdColumn, $"Quotinator_Source is missing SeasonId. Columns: {string.Join(", ", actual.Select(c => c.name))}");
+        Assert.AreEqual(0, seasonIdColumn[0].notnull, "SeasonId must be nullable — a Source with no Season is the ordinary case.");
+    }
+
+    /// <summary>
+    /// #375: the control for the two rows above — a quote still resolves a Source unconditionally.
+    /// A nullable quote parent was considered and rejected; this fails the moment SourceId becomes
+    /// nullable or the quote read path stops requiring a Source.
+    /// </summary>
+    [TestMethod]
+    public async Task Quote_StillRequiresASource()
+    {
+        QuotinatorDatabaseInitializer db = CreateInitializer([]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+
+        int notnull = await conn.ExecuteScalarAsync<int>(
+            "SELECT \"notnull\" FROM pragma_table_info('Quotinator_Quote') WHERE name = 'SourceId';");
+
+        Assert.AreEqual(1, notnull, "Quote.SourceId must stay NOT NULL — every quote attaches to the nearest Source we can identify.");
+        Assert.Contains("JOIN Quotinator_Source", Quotinator.Core.Queries.Sql.Quotes.SelectRawById(),
+            "The quote read path must keep requiring a Source rather than left-joining one.");
+    }
 
     /// <summary>
     /// QuotinatorMigrations.Baseline must produce the exact same schema, table by table, as
@@ -2822,7 +3006,7 @@ public class DatabaseInitializerTests
         // migration and gets "fixed" by editing the digit rather than by rechecking the collapse.
         Assert.IsGreaterThan(0, db.DataSchemaVersion,
             "The baseline must report a real version, or the single collapsed row above proves nothing.");
-        Assert.AreEqual(5, db.SchemaVersion);
+        Assert.AreEqual(7, db.SchemaVersion);
     }
 
     /// <summary>
@@ -2908,7 +3092,7 @@ public class DatabaseInitializerTests
 
         QuotinatorDatabaseInitializer db3 = CreateInitializer([AllFilesBatch()]);
         await db3.ResetAsync();
-        Assert.AreEqual(5, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
+        Assert.AreEqual(7, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
     // ── #179 — Series/Universe schema, Character↔Source many-to-many ───────────

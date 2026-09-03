@@ -50,4 +50,13 @@ public sealed class SourceEntryDto
     /// </summary>
     [JsonPropertyName("seriesName")]
     public Optional<string> SeriesName { get; init; }
+
+    /// <summary>
+    /// The ordinal of the Season (#375) this Source belongs to, within the Series named by
+    /// <see cref="SeriesName"/>. A number rather than a name because a season's ordinal is its natural
+    /// key within its parent. <see cref="Optional{T}"/> for the same reason as <see cref="SeriesName"/>
+    /// (#190) — an absent key means "leave this alone", an explicit null means "clear it".
+    /// </summary>
+    [JsonPropertyName("seasonNumber")]
+    public Optional<int> SeasonNumber { get; init; }
 }

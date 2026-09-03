@@ -22,6 +22,8 @@ public static class QuotinatorMigrations
         new SchemaMigration { Version = 3, Sql = Migration003_ImportBatches },
         new SchemaMigration { Version = 4, Sql = Migration004_ConsolidatedSinceV172 },
         new SchemaMigration { Version = 5, Sql = Migration005_ConsolidatedSinceV182 },
+        new SchemaMigration { Version = 6, Sql = Migration006_SeasonTable },
+        new SchemaMigration { Version = 7, Sql = Migration007_SourceSeasonLink },
     ];
 
     /// <summary>
@@ -1020,6 +1022,37 @@ public static class QuotinatorMigrations
     internal const string Migration005_ConsolidatedSinceV182 =
         Migration005_ImportBatchConflictPolicyCheckConstraint + Migration006_DomainPrefixRename;
 
+    // #375, ADR 011 — Season, between Series and Source. Its natural key is (SeriesId, Number) rather
+    // than a globally unique name: an ordinal only means something within its parent, and "Season 1"
+    // recurs for every series. Deliberately carries nothing television-specific — it is an ordered
+    // grouping of Sources within a Series, and a magazine's volumes fit it unchanged.
+    internal const string Migration006_SeasonTable = """
+        CREATE TABLE IF NOT EXISTS Quotinator_Season (
+            Id                 TEXT    PRIMARY KEY,
+            Number             INTEGER NOT NULL,
+            Title              TEXT,
+            Subtitle           TEXT,
+            SeriesId           TEXT    REFERENCES Quotinator_Series(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (SeriesId, Number)
+        );
+        """;
+
+    // #375 — a Source may belong to a Season, alongside its existing Series link. Nullable: a film has
+    // a Series and no Season, and a Source that is a whole series rather than one instalment has
+    // neither. SQLite has no IF NOT EXISTS form for ADD COLUMN (see CLAUDE.md's migration policy), so
+    // this statement is not idempotent — the initializer's backup-and-restore on failure is what covers
+    // it, exactly as for the existing ADD COLUMN migrations.
+    internal const string Migration007_SourceSeasonLink =
+        "ALTER TABLE Quotinator_Source ADD COLUMN SeasonId TEXT REFERENCES Quotinator_Season(Id);";
+
     // Consolidated schema for a genuinely fresh database — the union of migrations 1-8's final
     // result, with ImportBatchId baked directly into the four entity tables (migration003's
     // ALTER TABLE ADD COLUMN always appends, so it's listed last here to match column order),
@@ -1091,6 +1124,23 @@ public static class QuotinatorMigrations
             IsDeleted          INTEGER NOT NULL DEFAULT 0
         );
 
+        CREATE TABLE IF NOT EXISTS Quotinator_Season (
+            Id                 TEXT    PRIMARY KEY,
+            Number             INTEGER NOT NULL,
+            Title              TEXT,
+            Subtitle           TEXT,
+            SeriesId           TEXT    REFERENCES Quotinator_Series(Id),
+            ImportBatchId      TEXT    REFERENCES Import_Batch(Id),
+            CompletenessStatus TEXT    NOT NULL DEFAULT 'Incomplete'
+                               CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
+            NoValueKnown       TEXT    NOT NULL DEFAULT '[]',
+            DateCreated        TEXT    NOT NULL,
+            DateModified       TEXT,
+            DateDeleted        TEXT,
+            IsDeleted          INTEGER NOT NULL DEFAULT 0,
+            UNIQUE (SeriesId, Number)
+        );
+
         CREATE TABLE IF NOT EXISTS Quotinator_Source (
             Id           TEXT    PRIMARY KEY,
             Title        TEXT    NOT NULL,
@@ -1106,6 +1156,7 @@ public static class QuotinatorMigrations
                          CHECK (CompletenessStatus IN ('Incomplete', 'NeedsReview', 'Complete')),
             NoValueKnown TEXT    NOT NULL DEFAULT '[]',
             SeriesId     TEXT    REFERENCES Quotinator_Series(Id),
+            SeasonId     TEXT    REFERENCES Quotinator_Season(Id),
             UNIQUE (Title, Type)
         );
 

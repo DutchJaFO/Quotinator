@@ -185,7 +185,7 @@ public class ImportBatchesTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        Assert.AreEqual(5, db.SchemaVersion, "SchemaVersion should be 5: #155's consolidation of migrations 4-11 into one (4), plus #289's consolidation of #150's ImportBatches.ConflictPolicy CHECK constraint migration and #254's domain-prefix rename into one (5)");
+        Assert.AreEqual(7, db.SchemaVersion, "SchemaVersion should be 7: #155's consolidation of migrations 4-11 into one (4), #289's consolidation of #150's ImportBatches.ConflictPolicy CHECK constraint migration and #254's domain-prefix rename into one (5), then #375's Season table (6) and the Source.SeasonId link (7)");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────

@@ -37,6 +37,15 @@ public static class EntityIdentity
     /// <summary>Derives a stable id for a Series (#180) from its name.</summary>
     public static string SeriesId(string name) => StableId("series", name);
 
+    /// <summary>
+    /// Derives a stable id for a Season (#375) from its Series' id and its ordinal. Unlike
+    /// <see cref="SeriesId"/> and <see cref="UniverseId"/>, which key on a globally unique name, a
+    /// season's number only identifies it within its parent — "Season 1" recurs for every series — so
+    /// the parent id is part of the hash, as it is for <see cref="CharacterId"/>.
+    /// </summary>
+    public static string SeasonId(string seriesId, int number) =>
+        StableId("season", seriesId, number.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
     /// <summary>Derives a stable id for a Universe (#180) from its name.</summary>
     public static string UniverseId(string name) => StableId("universe", name);
 
@@ -45,7 +54,7 @@ public static class EntityIdentity
     /// the UUID version/variant bits forced — identical mechanics to <see cref="QuoteIdentity.StableId"/>,
     /// and now (ADR 012) identical casing too: both render <c>Guid.ToString("D")</c>'s default
     /// lowercase form, this project's single canonical id format. The first part is always a type tag
-    /// (<c>"source"</c>/<c>"character"</c>/<c>"person"</c>/<c>"series"</c>/<c>"universe"</c>) so these
+    /// (<c>"source"</c>/<c>"character"</c>/<c>"person"</c>/<c>"series"</c>/<c>"season"</c>/<c>"universe"</c>) so these
     /// id spaces can never collide with each other or with a <see cref="QuoteIdentity.StableId"/> value.
     /// This id is stored directly as a Source/Character/Person/Series/Universe <c>Id</c> without passing
     /// through <c>GuidHandler</c> at creation time (Character/Series/Universe's own <c>Add</c> ids are

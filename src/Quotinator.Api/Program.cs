@@ -451,6 +451,7 @@ builder.Services.AddSingleton<IRestorableRepository<SoundCueEntity>, SqliteResto
 // it extends SqliteRepository<T>), not a second instance.
 builder.Services.AddSingleton<IListableRepository<SeriesEntity>, SqliteRepository<SeriesEntity>>();
 builder.Services.AddSingleton<IListableRepository<UniverseEntity>, SqliteRepository<UniverseEntity>>();
+builder.Services.AddSingleton<IListableRepository<SeasonEntity>, SqliteRepository<SeasonEntity>>();
 builder.Services.AddSingleton<IListableRepository<SourceEntity>>(sp => (IListableRepository<SourceEntity>)sp.GetRequiredService<IRestorableRepository<SourceEntity>>());
 builder.Services.AddSingleton<IListableRepository<CharacterEntity>>(sp => (IListableRepository<CharacterEntity>)sp.GetRequiredService<IRestorableRepository<CharacterEntity>>());
 builder.Services.AddSingleton<IListableRepository<PersonEntity>>(sp => (IListableRepository<PersonEntity>)sp.GetRequiredService<IRestorableRepository<PersonEntity>>());
