@@ -1,6 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (step 10)
+**Status:** In progress (step 11)
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -459,13 +459,15 @@ entity's factory, whether or not that test's own scenario cares about the new re
 
 ### 10. Document how a quote's text and episode are verified
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-03
 
-`source-verification.md` gains the case its tiers do not cover. IMDb is already Tier 1 and publishes
-per-title, per-episode and per-character quote pages; the procedure states that these are the source for
-a quote's text, its speaker and its episode, and that the episode's own air date is cross-checked
-against the season's range — which caught nothing wrong here but would catch an episode attributed to
-the wrong season.
+`source-verification.md` gained a new section, "Verifying a quote's text, speaker, and episode" — the
+case its tiers didn't cover. IMDb is already Tier 1 and publishes per-title, per-episode and
+per-character quote pages; the procedure states that these are the source for a quote's text, its
+speaker and its episode, and that the episode's own air date is cross-checked against the season's
+range — which caught nothing wrong here but would catch an episode attributed to the wrong season.
+Also extended the "When this applies" list, since a conflict rule attributing a quote to an episode is
+exactly the class of claim that section scopes.
 
 Two rules step 7 learned the hard way, and the reason this step is not merely administrative:
 
@@ -474,6 +476,17 @@ Two rules step 7 learned the hard way, and the reason this step is not merely ad
 - **Attribution is expected to be partial.** The procedure says what to do when the episode cannot be
   found: attach to the nearest Source that can be, record the row as a data enhancement candidate, and
   move on. Without that written down, the next reader treats a gap as a failure and stalls.
+
+**Verified by `SourceVerificationDocTests`, not by eye** — three assertions over the doc's own text,
+mirroring #307's "a documentation-confirmation row is not a step anyone schedules" fix rather than
+leaving this as a box a human is trusted to remember to re-check. Confirmed genuinely red by
+temporarily reverting the doc and watching all three fail, then restoring.
+
+**One fabricated citation, caught before it shipped.** The first draft of the "attribution is partial"
+paragraph pointed at "CLAUDE.md's 'GUID/enum/id/Name/Title comparisons' section's sibling rule on
+nearest-match defaults" — a rule that section does not contain; it governs case-insensitivity, nothing
+about matching granularity. Re-read the actual section before citing it and found no such rule exists.
+Corrected to cite only what is real: #375's own plan doc, and the reasoning already recorded in it.
 
 ### 11. Docs, vocabulary, and the boyscout pass
 
