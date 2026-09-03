@@ -1,6 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 6)
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -221,12 +221,32 @@ Season, an episode has both.
 
 ### 5. The import shape: `seasons[]` and `seasonNumber`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-03
 
 A `seasons[]` declaration array in `schemas/source-extended.schema.json` and its DTO, mirroring
 `series[]`/`universe[]`, carrying number, title, subtitle and the series it belongs to. `SourceEntryDto`
 gains `seasonNumber` as `Optional<int>` — the number identifies the season within the series the entry
 already names, so no name matching is involved.
+
+Delivered as the full staged-import path, not a shortcut: `PlanSeasonsAsync` (Add, natural-key match,
+Modify with the same conflict-rule and CompletenessGuard handling its siblings have), an apply branch
+with an idempotent `EnsureSeasonExistsAsync`, and `Sql.Season`. Season is planned after Series so a
+`seriesName` resolves against an already-built index, and before Sources so a `seasonNumber` resolves
+against an already-built season index.
+
+**Two defects found while wiring it, neither of which a compiler or an existing test would have caught:**
+
+1. **A silently cleared Season link.** `Sql.Sources.UpdateFieldsById` writes every field it names, and
+   the quote-driven date backfill builds its payload from `SelectExistingByTitleAndType` — which did not
+   return `SeasonId`. Any later quote touching a season-linked Source would have written `NULL` over the
+   link. Fixed by returning `SeasonId` from that query and threading it through every Source payload;
+   `AQuoteBackfillingASourcesDate_KeepsItsSeasonLink` is the regression guard, mutation-verified.
+2. **Positional Dapper tuples.** Adding a column mid-`SELECT` shifts every later column into the wrong
+   tuple slot, with no compile error — `CompletenessStatus` would have received `SeasonId`'s value. Both
+   readers of each changed query were updated in step with the SQL.
+
+The `/import` endpoint's own call site needed `seasons` passed explicitly; it takes optional arguments
+positionally, so the build stayed green while that path silently created no seasons.
 
 ### 6. Curate the Avatar reference data
 
