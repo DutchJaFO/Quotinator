@@ -51,6 +51,7 @@ public static class ApiMessages
     public const string PersonNotFound                   = "ErrorPersonNotFound";
     public const string SeriesNotFound                   = "ErrorSeriesNotFound";
     public const string UniverseNotFound                 = "ErrorUniverseNotFound";
+    public const string SeasonNotFound                    = "ErrorSeasonNotFound";
     public const string StageDirectionNotFound           = "ErrorStageDirectionNotFound";
     public const string SoundCueNotFound                 = "ErrorSoundCueNotFound";
     public const string RuleFileNameRequired             = "ErrorRuleFileNameRequired";

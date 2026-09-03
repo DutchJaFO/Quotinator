@@ -30,6 +30,8 @@ All endpoints accept an optional `lang` query parameter (ISO 639-1) to request a
 | GET | `/api/v1/masterdata/series/{id}` | Series by UUID. Includes a `universe` reference (`{id, name}`, or `null` if the series has no universe) |
 | GET | `/api/v1/masterdata/universes` | Paginated list of Universes — fictional worlds or franchises spanning one or more Series (`page`, `pageSize`) |
 | GET | `/api/v1/masterdata/universes/{id}` | Universe by UUID |
+| GET | `/api/v1/masterdata/seasons` | Paginated list of Seasons — an ordered grouping of Sources within a Series (`page`, `pageSize`) |
+| GET | `/api/v1/masterdata/seasons/{id}` | Season by UUID. Includes a `series` reference (`{id, name}`, or `null` if the season has no series) |
 | GET | `/api/v1/masterdata/stagedirections` | Paginated list of StageDirections — reusable scene-setting or action descriptions that can appear in a conversation (`page`, `pageSize`) |
 | GET | `/api/v1/masterdata/stagedirections/{id}` | StageDirection by UUID |
 | GET | `/api/v1/masterdata/soundcues` | Paginated list of SoundCues — reusable audio elements that can appear in a conversation (`page`, `pageSize`) |

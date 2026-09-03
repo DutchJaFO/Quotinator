@@ -188,6 +188,7 @@
   "ErrorPersonNotFound": "No person with the requested ID was found.",
   "ErrorSeriesNotFound": "No series with the requested ID was found.",
   "ErrorUniverseNotFound": "No universe with the requested ID was found.",
+  "ErrorSeasonNotFound": "No season with the requested ID was found.",
   "ErrorStageDirectionNotFound": "No stage direction with the requested ID was found.",
   "ErrorSoundCueNotFound": "No sound cue with the requested ID was found.",
   "ErrorRuleFileNameRequired": "You must provide a fileName.",

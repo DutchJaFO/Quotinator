@@ -246,7 +246,7 @@ public class SeasonEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         JsonElement root = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken)).RootElement;
-        Assert.AreEqual(JsonValueKind.Null, root.GetProperty("series").ValueKind);
+        AssertPropertyIsNullOrAbsent(root, "series");
     }
 
     /// <summary>A page of Seasons resolves every Series reference in one batched call, never one per row.</summary>
@@ -272,5 +272,13 @@ public class SeasonEndpointsTests
         foreach (JsonElement item in items.EnumerateArray())
             Assert.AreEqual("Avatar: The Last Airbender", item.GetProperty("series").GetProperty("name").GetString());
     }
+
+    /// <summary>Mirrors SeriesEndpointsTests/SourceEndpointsTests' own private copy — a null MasterDataReference is omitted from the response by this project's JSON options, never emitted as an explicit null.</summary>
+    private static void AssertPropertyIsNullOrAbsent(JsonElement element, string propertyName, string? message = null)
+    {
+        bool isNullOrAbsent = !element.TryGetProperty(propertyName, out JsonElement value) || value.ValueKind == JsonValueKind.Null;
+        Assert.IsTrue(isNullOrAbsent, message ?? $"'{propertyName}' must be null or omitted, never a non-null value");
+    }
+
     public TestContext TestContext { get; set; }
 }

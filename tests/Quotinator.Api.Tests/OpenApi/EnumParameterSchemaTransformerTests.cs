@@ -67,7 +67,7 @@ public class EnumParameterSchemaTransformerTests
     public async Task EntityType_OnImportActions_PatchedToEnum()
     {
         var schema = await TransformAndGetSchema(ScalarParam("entityType"), "api/v1/import/actions");
-        Assert.AreSequenceEqual(["Quote", "Source", "Character", "Person", "Conversation", "StageDirection", "SoundCue", "Series", "Universe"], [.. schema!.Enum!.Select(v => v!.ToString())], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["Quote", "Source", "Character", "Person", "Conversation", "StageDirection", "SoundCue", "Series", "Universe", "Season"], [.. schema!.Enum!.Select(v => v!.ToString())], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
     }
 
     #endregion

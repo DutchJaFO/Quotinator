@@ -494,6 +494,14 @@ builder.Services.AddSingleton<IJoinStrategy<SeriesUniverseReferenceRow>, SeriesU
 builder.Services.AddSingleton<JoinQueryRepository<SeriesUniverseReferenceRow>>();
 builder.Services.AddSingleton<ISeriesUniverseReferenceReader, SeriesUniverseReferenceReader>();
 
+// #375: resolves a Season's SeriesId to its Series' (Id, Name) — same ADR 017 reasoning as
+// ISeriesUniverseReferenceReader above.
+builder.Services.AddSingleton<IJoinStrategy<SeasonSeriesReferenceRow>, SeasonSeriesReferenceStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SeasonSeriesReferenceRow>>();
+builder.Services.AddSingleton<IJoinStrategy<SeasonSeriesReferencesBatchRow>, SeasonSeriesReferencesBatchStrategy>();
+builder.Services.AddSingleton<JoinQueryRepository<SeasonSeriesReferencesBatchRow>>();
+builder.Services.AddSingleton<ISeasonSeriesReferenceReader, SeasonSeriesReferenceReader>();
+
 // #189: resolves each Conversation's active line count via ConversationLines. Deliberately stays on
 // a raw connection, not JoinQueryRepository/IJoinStrategy — ADR 017's one documented exemption, since
 // this read's QueryAsync<dynamic> works around two real Dapper/SQLite bugs that IJoinStrategy<TResult>'s
@@ -847,6 +855,7 @@ app.MapCharacterEndpoints();
 app.MapPersonEndpoints();
 app.MapSeriesEndpoints();
 app.MapUniverseEndpoints();
+app.MapSeasonEndpoints();
 app.MapStageDirectionEndpoints();
 app.MapSoundCueEndpoints();
 

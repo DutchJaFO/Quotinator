@@ -185,6 +185,7 @@
   "ErrorPersonNotFound": "Er is geen persoon gevonden met het opgegeven ID.",
   "ErrorSeriesNotFound": "Er is geen serie gevonden met het opgegeven ID.",
   "ErrorUniverseNotFound": "Er is geen universum gevonden met het opgegeven ID.",
+  "ErrorSeasonNotFound": "Er is geen seizoen gevonden met het opgegeven ID.",
   "ErrorStageDirectionNotFound": "Er is geen regieaanwijzing gevonden met het opgegeven ID.",
   "ErrorSoundCueNotFound": "Er is geen geluidssignaal gevonden met het opgegeven ID.",
   "ErrorRuleFileNameRequired": "Je moet een fileName opgeven.",

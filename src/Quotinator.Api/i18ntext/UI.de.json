@@ -185,6 +185,7 @@
   "ErrorPersonNotFound": "Es wurde keine Person mit der angegebenen ID gefunden.",
   "ErrorSeriesNotFound": "Es wurde keine Serie mit der angegebenen ID gefunden.",
   "ErrorUniverseNotFound": "Es wurde kein Universum mit der angegebenen ID gefunden.",
+  "ErrorSeasonNotFound": "Es wurde keine Staffel mit der angegebenen ID gefunden.",
   "ErrorStageDirectionNotFound": "Es wurde keine Regieanweisung mit der angegebenen ID gefunden.",
   "ErrorSoundCueNotFound": "Es wurde kein Soundeffekt mit der angegebenen ID gefunden.",
   "ErrorRuleFileNameRequired": "Sie müssen einen fileName angeben.",

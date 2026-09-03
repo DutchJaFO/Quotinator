@@ -44,6 +44,8 @@ public class OpenApiSpecEndpointTests
     [DataRow("/api/v1/masterdata/people", "pageSize")]
     [DataRow("/api/v1/masterdata/series", "page")]
     [DataRow("/api/v1/masterdata/series", "pageSize")]
+    [DataRow("/api/v1/masterdata/seasons", "page")]
+    [DataRow("/api/v1/masterdata/seasons", "pageSize")]
     [DataRow("/api/v1/conversations", "page")]
     [DataRow("/api/v1/conversations", "pageSize")]
     [DataRow("/api/v1/masterdata/stagedirections", "page")]
