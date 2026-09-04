@@ -70,8 +70,8 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Keep" },
-        { "field": "character", "resolution": "Custom", "customValue": "Galadriel" }
+        { "field": "character", "resolution": "Custom", "customValue": "Galadriel" },
+        { "field": "date", "resolution": "Custom", "customValue": "2001" }
       ]
     },
     {
@@ -95,7 +95,7 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Keep" }
+        { "field": "date", "resolution": "Custom", "customValue": "2007" }
       ]
     },
     {
@@ -119,21 +119,12 @@
         "genres": []
       },
       "fields": [
-        { "field": "date", "resolution": "Keep" }
+        { "field": "date", "resolution": "Custom", "customValue": "2012" }
       ]
     },
     {
       "entityId": "a38c6022-6ffa-ff47-b16e-7287df826731",
       "existingRecord": {
-        "quoteText": "I have nothing to prove to you",
-        "source": "Captain Marvel",
-        "date": "2013",
-        "character": null,
-        "author": null,
-        "type": "movie",
-        "genres": []
-      },
-      "incomingRecord": {
         "quoteText": "I have nothing to prove to you",
         "source": "Captain Marvel",
         "date": "2019",
@@ -142,8 +133,41 @@
         "type": "movie",
         "genres": []
       },
+      "incomingRecord": {
+        "quoteText": "I have nothing to prove to you",
+        "source": "Captain Marvel",
+        "date": "2013",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
       "fields": [
-        { "field": "date", "resolution": "Replace" }
+        { "field": "date", "resolution": "Custom", "customValue": "2019" }
+      ]
+    },
+    {
+      "entityId": "255047c3-45c3-1b48-b69d-90fde26ac421",
+      "existingRecord": {
+        "quoteText": "A census taker once tried to test me. I ate his liver with some fava beans and a nice Chianti.",
+        "source": "The Silence of the Lambs",
+        "date": "1991",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "A census taker once tried to test me. I ate his liver with some fava beans and a nice Chianti.",
+        "source": "The Silence of the lambs",
+        "date": "1998",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Custom", "customValue": "1991" }
       ]
     },
     {

@@ -1453,16 +1453,31 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
         int cold = await StagedActionCountAsync();
+        int coldStale = await StaleActionCountAsync();
 
         await db.ReseedAsync();
         int reseed1 = await StagedActionCountAsync();
+        int reseed1Stale = await StaleActionCountAsync();
 
         await db.ReseedAsync();
         int reseed2 = await StagedActionCountAsync();
+        int reseed2Stale = await StaleActionCountAsync();
 
         Assert.AreEqual(KnownUnresolvedNikhilNamal17QuoteIds.Count, cold, "Every genuine, permanent ambiguity — see KnownUnresolvedNikhilNamal17QuoteIds — is correctly reported as a conflict on cold start");
         Assert.AreEqual(cold, reseed1, "Reseeding unchanged content must not add anything beyond what is already correctly pending");
         Assert.AreEqual(cold, reseed2, "A second reseed must not accumulate anything further");
+
+        // #374 — found live (T1, the developer's own run against the real bundled corpus, 2026-09-04):
+        // this test only ever checked Pending, and the real corpus also carries genuine Stale conflicts
+        // (a conflict rule whose recorded snapshot matches only one raw occurrence of an in-file
+        // duplicated quote id — see Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows for
+        // the isolated reproduction). Cold start genuinely does not detect these (the same-batch
+        // collision mechanism compares the file's own two entries against each other, never against a
+        // stored row), so coldStale is not asserted against reseed1Stale here — only that reseed1 does
+        // not keep growing on top of itself, which is what a real reseed measured live: 0 → 4 → 4 → 4.
+        Assert.AreEqual(0, coldStale, "The same-batch collision mechanism resolves the file's own two entries against each other, not against a stored row, so no staleness is detected yet");
+        Assert.IsGreaterThan(0, reseed1Stale, "The real corpus's own Stale conflicts (e.g. the Galadriel quote's date rule) are genuinely detected once a reseed compares each entry against the stored row");
+        Assert.AreEqual(reseed1Stale, reseed2Stale, "A second reseed must not accumulate anything further beyond whatever the first reseed already found");
     }
 
     /// <summary>
@@ -1548,6 +1563,70 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, cold, "The second, differently-cased occurrence is correctly staged Pending for review on cold start");
         Assert.AreEqual(cold, reseed1, "Reseeding unchanged content must not stage a duplicate Pending action on top of the still-unresolved one");
         Assert.AreEqual(cold, reseed2, "A second reseed must not accumulate anything further");
+    }
+
+    /// <summary>
+    /// #374 — found live (T1, the developer's own run against the real bundled corpus, 2026-09-04):
+    /// `Sql.Quotes.SelectHasUnresolvedActionById`'s accumulation-prevention check only recognises
+    /// `Pending`/`Blocked`, never `Stale` — so a quote whose conflict rule genuinely cannot resolve it
+    /// (the rule's own recorded incoming snapshot matches a *different* raw occurrence of the same
+    /// in-file-duplicated id than the one actually being compared) stages a fresh `Stale` action on
+    /// every single reseed, unbounded. Measured live against the real corpus: `0 → 4 → 8 → 12`, exactly
+    /// +4 per reseed, while `Pending` itself stayed flat — the exact accumulation class this whole issue
+    /// exists to fix, in the one status this session's own extension of the check never covered.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows()
+    {
+        string staleFile = Path.Combine(_tempDir, "stale-rule-conflict.json");
+        File.WriteAllText(staleFile,
+            """
+            {"quotes":[
+                {"id":"e6411111-1111-4111-8111-111111111111","quote":"Even the smallest person can change the course of the future.","originalLanguage":"en","source":"The Lord of the Rings: The Fellowship of the Ring","date":"1990","character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"e6411111-1111-4111-8111-111111111111","quote":"Even the smallest person can change the course of the future.","originalLanguage":"en","source":"The Lord of the Rings: The Fellowship of the Ring","date":"1991","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        string ruleFile = Path.Combine(_tempDir, "stale-rule-conflict-rules.json");
+        File.WriteAllText(ruleFile,
+            """
+            {"rules":[{
+                "entityId":"e6411111-1111-4111-8111-111111111111",
+                "existingRecord":{"date":"1990"},
+                "incomingRecord":{"date":"1991"},
+                "fields":[{"field":"date","resolution":"keep"}]
+            }]}
+            """);
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(staleFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
+            ManifestPolicy.HardcodedDefault, "stale-rule-conflict-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+        int cold = await StaleActionCountAsync();
+
+        await db.ReseedAsync();
+        int reseed1 = await StaleActionCountAsync();
+
+        await db.ReseedAsync();
+        int reseed2 = await StaleActionCountAsync();
+
+        // Cold start genuinely does not detect this: the same-batch collision mechanism (seenQuotes)
+        // compares the two in-file entries against each other, not against a stored row, so the rule's
+        // own staleness check never fires there. A real reseed compares each entry independently against
+        // what actually got stored — this is a one-time, correct transition (matching the real corpus
+        // exactly: cold=0, reseed1=4, then stable), not a bug in its own right. What matters, and what
+        // this test exists to prove, is that reseed1 does not keep growing afterward.
+        Assert.AreEqual(0, cold, "The same-batch collision mechanism resolves the two in-file entries against each other, not against a stored row, so no staleness is detected yet");
+        Assert.IsGreaterThan(0, reseed1, "The stale conflict is genuinely detected once a reseed compares each entry against the stored row");
+        Assert.AreEqual(reseed1, reseed2, "A second reseed must not accumulate anything further beyond whatever the first reseed already found");
+    }
+
+    private async Task<int> StaleActionCountAsync()
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Import_Action WHERE Status = 'Stale';");
     }
 
     /// <summary>

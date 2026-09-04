@@ -835,6 +835,32 @@ growing further). Not fixed here — filed as [#377](https://github.com/DutchJaF
 since it is architecturally deeper than this issue's own scope: it would need a "no-op Modify"
 classification threaded through every entity's own Modify branch, not just Quote's.
 
+**A seventh defect, found by the developer's own T1 run against the real bundled corpus (2026-09-04),
+in this same step's own dedup fix rather than in new territory:** `Sql.Quotes.SelectHasUnresolvedActionById`
+was extended earlier in this step to cover `Pending` and `Blocked`, but never `Stale` — so a quote whose
+conflict rule genuinely cannot resolve it (the rule's own recorded incoming snapshot matches only one
+raw occurrence of an in-file-duplicated quote id, e.g. the Galadriel quote in
+`nikhilnamal17-conflict-rules.json`, authored against one of its two differently-dated raw entries)
+staged a brand-new `Stale` action on every single reseed, unbounded. Measured live against the real
+corpus: `0 → 4 → 8 → 12`, exactly +4 per reseed, while `Pending` itself stayed flat throughout — the
+same accumulation class this whole issue exists to fix, in the one status this session's own extension
+of the check still hadn't covered. Fixed by widening the `IN (...)` clause to include `'Stale'`.
+`DatabaseInitializerTests.Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows` (a minimal,
+isolated reproduction) and the extended `Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows`
+(now also asserting `Stale` stability against the real corpus) are the regression guards, both
+confirmed red before the fix and green after. Re-verified live afterward against a freshly rebuilt
+image: `pending`/`stale` go `3/0 → 4/4 → 4/4 → 4/4` across three reseeds — stable from the first reseed
+onward, matching the pattern already established for every other status this issue's dedup mechanism
+covers.
+
+**Cold start genuinely not detecting this is expected, not a residual gap.** The same-batch collision
+mechanism (`seenQuotes`) resolves a file's own two in-file-duplicate entries against *each other*, never
+against a stored row — the rule's own staleness check (which compares against the current incoming
+value) only has something meaningful to disagree with once a real reseed compares each entry
+independently against what actually got stored. This is a one-time, correct transition, the same shape
+already accepted for the `Pending` mechanism's own cold-start-to-reseed transition elsewhere in this
+issue — not evidence of a further bug.
+
 ### 13. Boyscout: explicit types, and the `.editorconfig` list
 
 **Status:** ✅ Done, 2026-09-03 — for every file this issue actually touched
@@ -927,6 +953,7 @@ Warning(s), 0 Error(s); `dotnet test -m:1` → all ten projects green, 0 failure
 | 50 | ✅ | A same-batch collision on a newly-ambiguous field does not hold the rest of the batch to zero writes | Unit test | `ImportActionResolutionCoordinatorTests.TryApplyBatchAsync_PendingModifyFromSameBatch_DoesNotHoldTheRestOfTheBatch`, confirmed red before the `ExistingBatchId == BatchId` gating exemption |
 | 51 | ✅ | A case-only Pending Modify does not re-stage a duplicate on a later reseed | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithACaseOnlyPendingModify_PendingCountNeverGrows` — extends the Add branch's existing `SelectHasUnresolvedActionById` dedup to Modify |
 | 52 | ✅ | Both of #373's own T2 documents run clean against the fixed build, with the developer-reported duplication actually gone | Automated (T2) | Live Docker, 2026-09-04, rebuilt image: doc 21 steps 1–4/6 pass (step 5 can't execute — no `DELETE /quotes/{id}` endpoint exists, a document defect not a product one); doc 11 steps 1–3/5/6/8 pass, step 4/7 duplication confirmed gone (`4 → 5` fixed to stable) — one distinct, pre-existing no-op-Modify gap found, not fixed, filed as [#377](https://github.com/DutchJaFO/Quotinator/issues/377) |
+| 53 | ✅ | A `Stale` conflict does not double on every reseed | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows` (minimal reproduction) and the extended `Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows` (real corpus) — step 12's seventh live-found defect, found by the developer's own T1 run |
 
 **A live T2 run against real data found a sixth defect no unit test caught** (see step 7's own new
 finding above): `GET /import/actions` 500'd on a genuine Pending-Add row. Fixed and reverified live —

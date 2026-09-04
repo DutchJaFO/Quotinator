@@ -3,6 +3,10 @@
     {
       "id": "7e53658c-0c3a-6546-8c12-c5e4af23c9f8",
       "reason": "Duplicate of e97a8197-657f-ce43-8032-4edd8e3549a3 — the same line ('Hope is a good thing, maybe the best of things, and no good thing ever dies.'), same film, same date, appears twice in the raw upstream data under two title spellings ('The Shawshank Redemption' and 'Shawshank Redemption') that nikhilnamal17-source-aliases.json already merges onto one canonical Source. Found via #374's Migration009 (quote-unique-per-Source) staging it Blocked on every reseed with no way to auto-resolve."
+    },
+    {
+      "id": "76edb02c-3b5b-9249-929c-ef24ff15d0e7",
+      "reason": "#219 — could not be verified against any real source. 'Sometimes, informations is more dangerous than weapons', attributed to 'Naruto Shippuden' (2007, movie). A Tier 1/2 search found no matching line from that source; this is the quote #219 itself was filed about, not the same as the unrelated Madara Uchiha line (68c2fcd0-...) that review confirmed as genuine."
     }
   ]
 }
