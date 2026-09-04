@@ -73,7 +73,8 @@
         "default": "review"
       },
       "ruleFile": "vilaboim-conflict-rules.json",
-      "sourceAliasFile": "vilaboim-source-aliases.json"
+      "sourceAliasFile": "vilaboim-source-aliases.json",
+      "excludeFile": "vilaboim-quote-exclusions.json"
     }
   ]
 }

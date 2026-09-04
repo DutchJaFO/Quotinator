@@ -575,6 +575,25 @@ public class NotificationTableTests
     }
 
     /// <summary>
+    /// #374: a row with nothing added or modified but something skipped by policy must still surface —
+    /// before this fix, the row filter (<c>Added &gt; 0 || Modified &gt; 0</c>) dropped it entirely,
+    /// hiding from the UI the exact information the underlying confirmation had just stopped hiding.
+    /// </summary>
+    [TestMethod]
+    public void SkippedOnlyRow_StillRenders()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","added":0,"modified":0,"skipped":1}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.IsNotEmpty(detail.Rows, "A skipped-only row must not be dropped from the table.");
+        Assert.Contains("1", detail.Rows[0], "The skipped count must appear somewhere in the row.");
+    }
+
+    /// <summary>
     /// Negative case for the row above: a row whose payload cannot be read still renders. Rows written
     /// by an older build, or with metadata this build does not recognise, must degrade to the body
     /// rather than throwing a whole page away.

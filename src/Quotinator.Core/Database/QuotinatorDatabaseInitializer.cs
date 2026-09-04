@@ -190,10 +190,24 @@ public sealed class QuotinatorDatabaseInitializer(
                 Incoming   = group.Count(),
                 Added      = group.Count(a => a.ActionType.Parsed == ImportActionKind.Add),
                 Unchanged  = group.Count(a => a.ActionType.Parsed == ImportActionKind.Unchanged),
-                // Matches the batch's own RecordCount rule: an action resolved as Skip or Review changed
-                // nothing, so counting it as modified would report work that never happened.
+                // #374: found live — AppliedPolicy always echoes the *file's* own configured policy
+                // (every Modify branch in ImportActionPlanner stamps the same batch-wide `policy`
+                // parameter, never a per-row "how this specific field was actually resolved" value), so
+                // excluding Review here excluded every genuinely-changed row from a Review-policy file,
+                // not just the ones that happened not to change — the confirmation reported "107 came
+                // in, 106 added, 0 updated" for a batch whose own report line said one Source was
+                // modified. Review carries no such guarantee of a no-op — an action stamped Review that
+                // got this far already resolved cleanly (no ambiguity, or a rule fired), and a real field
+                // did change. Matches the batch's own RecordCount rule below.
                 Modified   = group.Count(a => a.ActionType.Parsed == ImportActionKind.Modify
-                                           && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review)),
+                                           && a.AppliedPolicy.Parsed is not DuplicateResolutionPolicy.Skip),
+                // #374: Skip means "always keep the existing side" — a real difference arrived and was
+                // discarded on purpose. That is neither Unchanged (nothing differed) nor Modified
+                // (nothing was kept as-is), and folding it into either would hide that the file actually
+                // wanted to change this row. Reported as its own bucket instead of silently vanishing
+                // from the breakdown while still counting toward Incoming.
+                Skipped    = group.Count(a => a.ActionType.Parsed == ImportActionKind.Modify
+                                           && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip),
                 // #373: every remaining outcome, recorded whether or not it can occur on this branch.
                 // A confirmation is written from the clean-apply path, so these are normally zero — and
                 // a non-zero one is precisely the thing worth finding quickly, which is why they are
@@ -220,6 +234,9 @@ public sealed class QuotinatorDatabaseInitializer(
 
         // #373: what arrived leads, then what became of it — the shape the body template now states,
         // so "0 added, 0 updated" is no longer the whole story a reader gets.
+        // #374: Skipped is stated in its own right rather than folded into Unchanged/Modified — a row a
+        // Skip policy left as-is despite a real incoming difference is neither, and hiding it inside
+        // either bucket is exactly the defect this issue fixed (see ReseedEntityCountDto.Skipped).
         object[] bodyArgs =
         [
             fileName,
@@ -227,6 +244,7 @@ public sealed class QuotinatorDatabaseInitializer(
             counts.Sum(c => c.Added),
             counts.Sum(c => c.Modified),
             counts.Sum(c => c.Unchanged),
+            counts.Sum(c => c.Skipped),
         ];
 
         // One key per origin rather than an origin word passed as an argument: bodyArgs is a single
@@ -647,8 +665,9 @@ public sealed class QuotinatorDatabaseInitializer(
                 if (applyResult is null && !hasOutstandingReviewItems)
                 {
                     int imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
+                    // #374: Skip alone excluded — see ConfirmFileAppliedCleanlyAsync's Modified count for why Review must not be.
                     int updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
-                                                   && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
+                                                   && a.AppliedPolicy.Parsed is not DuplicateResolutionPolicy.Skip);
 
                     importBatch.Status      = new SafeValue<ImportBatchStatus?>(ImportBatchStatus.Applied.ToString(), ImportBatchStatus.Applied);
                     importBatch.AppliedAt   = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);

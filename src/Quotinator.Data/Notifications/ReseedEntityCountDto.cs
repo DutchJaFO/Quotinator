@@ -45,6 +45,16 @@ public sealed class ReseedEntityCountDto
     public int Unchanged { get; init; }
 
     /// <summary>
+    /// How many arrived with a real field difference but were kept as-is because the file's
+    /// duplicate-resolution policy is <c>Skip</c> — "always keep the existing side" (#374). Distinct
+    /// from <see cref="Unchanged"/> (nothing differed) and from <see cref="Modified"/> (a difference
+    /// that was actually applied): a row counted here differed and the difference was discarded, which
+    /// is itself worth knowing rather than folding silently into either neighbour.
+    /// </summary>
+    [JsonPropertyName("skipped")]
+    public int Skipped { get; init; }
+
+    /// <summary>
     /// How many were held because the stored row is marked Complete and the import would change it
     /// (#373).
     /// </summary>

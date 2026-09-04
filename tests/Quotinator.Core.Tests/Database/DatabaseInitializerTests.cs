@@ -1045,6 +1045,93 @@ public class DatabaseInitializerTests
         Assert.HasCount(2, countsOneOrder, "Both files' rows must be present, not just whichever came first.");
     }
 
+    /// <summary>
+    /// #374 — found live (T1, a real reseed): a Review-policy file's confirmation reported "107 items
+    /// came in, 106 added, 0 updated and 0 already stored" — the numbers do not add up, because the
+    /// one genuinely-modified row (a Source's SeriesName correction, auto-resolved cleanly — no
+    /// ambiguity, nothing to review) was silently excluded from every bucket. `ConfirmFileAppliedCleanlyAsync`
+    /// excluded any Modify tagged `AppliedPolicy = Review`, but that field always echoes the *file's*
+    /// own configured policy, not what happened to this specific row — a Review-tagged Modify reaching
+    /// this code path (already proven clean of Pending/Blocked/Stale) genuinely wrote a change.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_ReviewPolicyFileWithOneGenuineModify_ConfirmationCountsAddUpToIncoming()
+    {
+        string quoteFile = Path.Combine(_tempDir, "review-policy-quote.json");
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[{"id":"e6111111-1111-4111-8111-111111111111","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
+            """);
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
+            ManifestPolicy.HardcodedDefault, "review-policy-modify-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[{"id":"e6111111-1111-4111-8111-111111111111","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":"A Character","author":null,"type":"movie","genres":[],"translations":{}}]}
+            """);
+        // The character field was empty on cold start, filled in on reseed — a genuine, non-ambiguous
+        // change (nothing to disagree about, per FieldMergeResolver's own "empty side auto-fills"
+        // rule), so it auto-resolves under Review without ever becoming Pending.
+        await db.ReseedAsync();
+
+        // Two confirmations exist by now (cold start's own, then the reseed's) — the reseed's is the
+        // one with a genuine Modified row; cold start's own Quote was a brand-new Add.
+        List<ReseedEntityCountDto> quoteCounts = [.. AllConfirmationCounts(await NotificationsAsync())
+            .Where(c => c.EntityType == "Quote" && c.Modified > 0)];
+
+        Assert.ContainsSingle(quoteCounts);
+        ReseedEntityCountDto counts = quoteCounts[0];
+        Assert.AreEqual(1, counts.Modified, "The character fill-in is a genuine, non-ambiguous change under Review — it must count as modified, not vanish");
+        Assert.AreEqual(counts.Incoming, counts.Added + counts.Modified + counts.Unchanged + counts.Skipped,
+                $"Incoming={counts.Incoming} must equal Added({counts.Added}) + Modified({counts.Modified}) + Unchanged({counts.Unchanged}) + Skipped({counts.Skipped}) — the confirmation's own numbers must add up");
+    }
+
+    /// <summary>
+    /// #374: a Skip-policy file's row that genuinely differed from what is stored must not vanish from
+    /// the confirmation. Before this fix it counted toward neither <see cref="ReseedEntityCountDto.Unchanged"/>
+    /// (a real difference did arrive) nor <see cref="ReseedEntityCountDto.Modified"/> (deliberately
+    /// excluded for Skip) — leaving no visible record that the file wanted to change this row at all,
+    /// even though it still counted toward <see cref="ReseedEntityCountDto.Incoming"/>.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_SkipPolicyFileWithADifferingRow_ReportsItAsSkippedRatherThanVanishing()
+    {
+        string quoteFile = Path.Combine(_tempDir, "skip-policy-quote.json");
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[{"id":"e6222222-2222-4222-8222-222222222222","quote":"Another test line.","originalLanguage":"en","source":"Some Other Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
+            """);
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Skip))],
+            ManifestPolicy.HardcodedDefault, "skip-policy-modify-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[{"id":"e6222222-2222-4222-8222-222222222222","quote":"Another test line.","originalLanguage":"en","source":"Some Other Film","date":null,"character":"A Character","author":null,"type":"movie","genres":[],"translations":{}}]}
+            """);
+        // The character field differs from what is stored, but Skip means "always keep the existing
+        // side" — the difference is discarded on purpose rather than applied.
+        await db.ReseedAsync();
+
+        List<ReseedEntityCountDto> quoteCounts = [.. AllConfirmationCounts(await NotificationsAsync())
+            .Where(c => c.EntityType == "Quote" && c.Incoming > 0 && c.Added == 0)];
+
+        Assert.ContainsSingle(quoteCounts);
+        ReseedEntityCountDto counts = quoteCounts[0];
+        Assert.AreEqual(1, counts.Skipped, "A row that genuinely differed and was kept as-is under Skip must be reported as skipped");
+        Assert.AreEqual(0, counts.Modified, "Skip never applies a change, so it must not also count as modified");
+        Assert.AreEqual(0, counts.Unchanged, "The row did differ — it is not the same as one that arrived identical");
+        Assert.AreEqual(counts.Incoming, counts.Added + counts.Modified + counts.Unchanged + counts.Skipped,
+                $"Incoming={counts.Incoming} must equal Added({counts.Added}) + Modified({counts.Modified}) + Unchanged({counts.Unchanged}) + Skipped({counts.Skipped}) — the confirmation's own numbers must add up");
+    }
+
     private static NotificationEntity ConfirmationNotification(string fileName, IReadOnlyList<ReseedEntityCountDto> counts)
     {
         ReseedFileAppliedMetadataDto payload = new()

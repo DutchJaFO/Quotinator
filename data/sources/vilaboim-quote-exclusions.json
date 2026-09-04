@@ -1,0 +1,12 @@
+{
+  "exclusions": [
+    {
+      "id": "0590486b-16dd-b145-9a12-3ffcf46d0458",
+      "reason": "Duplicate of NikhilNamal17_popular-movie-quotes.json's d45d695a-87e6-7d42-9e49-5421feb9ffea — the same line ('I'll have what she's having.'), same film, appears in both bundled files. NikhilNamal17's own raw entry is titled 'When Harry Met Sally' and nikhilnamal17-source-aliases.json already corrects it to 'When Harry Met Sally...' — matching this file's own raw spelling exactly — so once NikhilNamal17 is processed first, this entry collides with the row it created."
+    },
+    {
+      "id": "9ee90d54-cf0e-014c-b4a1-4378ddd2d791",
+      "reason": "Duplicate of NikhilNamal17_popular-movie-quotes.json's 3eb18c68-6211-ed48-b54a-6ebbb42d6c79 — the same line ('Keep your friends close, but your enemies closer.'), same film, appears in both bundled files. NikhilNamal17's own raw entry is titled 'The Godfather II' and nikhilnamal17-source-aliases.json already corrects it to 'The Godfather Part II' — matching this file's own raw spelling exactly — so once NikhilNamal17 is processed first, this entry collides with the row it created."
+    }
+  ]
+}

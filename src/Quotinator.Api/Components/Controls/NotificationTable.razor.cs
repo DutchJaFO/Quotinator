@@ -153,17 +153,22 @@ public partial class NotificationTable
             ReseedFileAppliedMetadataDto applied => new PayloadTable(
                 [text?.NotificationsDetailEntityColumn ?? "Entity",
                  text?.NotificationsDetailAddedColumn  ?? "Added",
-                 text?.NotificationsDetailUpdatedColumn ?? "Updated"],
+                 text?.NotificationsDetailUpdatedColumn ?? "Updated",
+                 text?.NotificationsDetailSkippedColumn ?? "Skipped"],
                 // #373: the payload now also carries Incoming and Unchanged, and keeps them — it is the
                 // complete record the API, the log and any audit read. This table stays a view of what
                 // *changed*, so a row that only arrived and matched is omitted rather than rendered as
-                // "0  0", which states nothing and reads as a fault. The body carries those totals.
+                // "0  0  0", which states nothing and reads as a fault. The body carries those totals.
+                // #374: Skipped counts as "changed" for this filter too — a row a Skip policy kept as-is
+                // despite a real incoming difference is exactly the kind of outcome this table exists to
+                // surface, not one to drop silently the way the underlying confirmation used to.
                 [.. applied.Counts
-                    .Where(c => c.Added > 0 || c.Modified > 0)
+                    .Where(c => c.Added > 0 || c.Modified > 0 || c.Skipped > 0)
                     .Select(IReadOnlyList<string> (c) =>
                     [c.EntityType,
                      c.Added.ToString(CultureInfo.CurrentCulture),
-                     c.Modified.ToString(CultureInfo.CurrentCulture)])]),
+                     c.Modified.ToString(CultureInfo.CurrentCulture),
+                     c.Skipped.ToString(CultureInfo.CurrentCulture)])]),
 
             ImportReviewPendingMetadataDto review => new PayloadTable(
                 [text?.NotificationsDetailStatusColumn ?? "Status",

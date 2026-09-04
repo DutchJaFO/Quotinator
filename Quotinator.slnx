@@ -70,6 +70,7 @@
     <File Path="data/sources/vilaboim_movie-quotes.json" />
     <File Path="data/sources/vilaboim-conflict-rules.json" />
     <File Path="data/sources/vilaboim-source-aliases.json" />
+    <File Path="data/sources/vilaboim-quote-exclusions.json" />
     <File Path="data/sources/NikhilNamal17_popular-movie-quotes.json" />
     <File Path="data/sources/nikhilnamal17-conflict-rules.json" />
     <File Path="data/sources/nikhilnamal17-source-aliases.json" />

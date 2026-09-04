@@ -662,6 +662,86 @@ already-documented `Blocked` exception (step 7's finding 5) doesn't affect this 
 end to end — a real container, not a unit-test fixture. #373's step 8 (its own remaining "unblock
 #372's step 6" work) is unaffected by this issue and stays #373's to do.
 
+**Four more defects found only by this step's own live T2 pass, none caught by any unit test above
+because none of the fixtures those tests use combine a full multi-file corpus with a Review-policy
+reseed the way a real one does:**
+
+1. **`ComputeAmbiguousFields` crashed on a Pending Add's null `ExistingValue`** — the same shape as step
+   7's sixth defect, on a different code path. Fixed with an early `[]` return, mirroring that fix.
+   `SqliteImportActionServiceTests.GetPagedAsync_PendingAdd_AmbiguousFieldsIsEmpty` is the regression
+   guard (shared with step 7's own citation for the sixth defect).
+2. **`BuildFields`/`ToSummaryAsync` crashed (`JsonException`) reading a `Blocked` collision's
+   `ExistingValue`** — it holds a bare `{conflictingQuoteId}` marker for that status, not a full
+   `QuoteActionPayloadDto`. Fixed by only calling `BuildFields` for non-Add action types.
+   `SqliteImportActionServiceTests.GetPagedAsync_BlockedCollisionAgainstAnExistingQuote_DoesNotCrash` is
+   the regression guard.
+3. **`PlanSourcesAsync`'s natural-key branch crashed (`InvalidOperationException`) against a title with
+   two or more dated variants** — `QuerySingleOrDefaultAsync` assumed at most one row; switched to the
+   list-returning query plus the existing `PickSourceVariant` helper (step 6's own mechanism).
+   `ImportActionPlannerTests.PlanSourcesAsync_NaturalKeyEntryAgainstTwoDatedVariants_DoesNotCrash` is the
+   regression guard.
+4. **A `Blocked` collision doubled on every reseed**, the exact accumulation class this issue exists to
+   fix, recurring for a status step 6/7's own dedup check never covered:
+   `Sql.Quotes.SelectHasPendingActionById` only guarded the `dateNeedsReview` path, leaving `Blocked`
+   unguarded. Renamed to `SelectHasUnresolvedActionById`, widened to `Status IN ('Pending', 'Blocked')`,
+   and the `dateNeedsReview &&` gate removed so every already-unresolved quote is recognised regardless
+   of which mechanism reported it. `DatabaseInitializerTests.Reseed_Repeatedly_WithABlockedCollision_BlockedCountNeverGrows`
+   is the regression guard.
+
+**A fifth, reported by the developer directly from a real T1 run rather than found by this step's own
+T2 pass, with a distinct root cause from any of the above:** a Review-policy file's confirmation read
+"107 items came in, 106 added, 0 updated and 0 already stored" — the numbers do not add up.
+`ConfirmFileAppliedCleanlyAsync`'s `Modified` count excluded every `Review`-policy row, on the mistaken
+assumption that `AppliedPolicy` reflects what happened to that specific row; it actually always echoes
+the *file's* own configured policy (every Modify branch in `ImportActionPlanner` stamps the same
+batch-wide `policy` parameter). A `Review`-tagged Modify reaching this code path already resolved
+cleanly — the exclusion should only ever have applied to `Skip`, which is the one policy guaranteed to
+change nothing by construction. Fixed by narrowing the exclusion to `Skip` alone.
+
+**Raised immediately afterward by the developer: narrowing the exclusion to `Skip` alone still hides
+something — a `Skip`-policy row that genuinely differed from what is stored now counts toward none of
+`Added`/`Modified`/`Unchanged`, only toward `Incoming`, which is the same class of defect in a smaller
+blast radius.** "Knowing items were skipped is valuable information" — folding a real, deliberately
+discarded difference into whichever neighbouring bucket happened to be convenient is exactly what this
+step had just finished ruling out for `Review`. Fixed properly this time: `ReseedEntityCountDto` gains
+its own `Skipped` bucket (`src/Quotinator.Data/Notifications/ReseedEntityCountDto.cs`), populated
+alongside `Modified` in `ConfirmFileAppliedCleanlyAsync` so `Incoming` always equals
+`Added + Modified + Unchanged + Skipped`. The fix reaches every layer that would otherwise still hide
+it: the confirmation body template (`NotificationReseedFileApplied{Bundled,User}Body`, all three
+locales) states the skipped count as its own number rather than folding it into "already stored", and
+`NotificationTable.razor.cs`'s detail table gains a `Skipped` column and includes a skipped-only row in
+its filter — before this, a row with nothing added or modified but something skipped would have been
+silently dropped from the table even after the underlying payload started carrying the number
+correctly. `DatabaseInitializerTests.Reseed_SkipPolicyFileWithADifferingRow_ReportsItAsSkippedRatherThanVanishing`
+and `NotificationTableTests.SkippedOnlyRow_StillRenders` are the two regression guards, both confirmed
+red before the fix and green after.
+
+**A near-identical fix was drafted and reverted for `SqliteQuoteImportService.cs`'s `ImportSummary`,
+correctly.** Its `Updated`/`Skipped` counts look like the same bug, but are not: that type's own XML
+docs already scope `Updated` to `newest-wins`/`merge-ours`/`merge-theirs` only and `Skipped` to
+`skip`/`review` together — a narrower, pre-existing, intentional contract, unlike
+`ReseedEntityCountDto.Modified`'s generic "how many rows of this type the file modified". Applying the
+same widening there broke `QuoteImportServiceTests.ImportAsync_Review_BehavesLikeSkip`, which is what
+caught the false analogy before it shipped; the file was reverted in full rather than partially
+patched.
+
+**Two more cross-file duplicates found while investigating a live "we are missing rules" report,
+the same underlying cause as step 7's finding 5 (Shawshank), fixed the same way:** vilaboim's own
+"I'll have what she's having." and "Keep your friends close, but your enemies closer." entries are
+byte-identical to two NikhilNamal17 entries once NikhilNamal17's own alias file corrects their titles
+("When Harry Met Sally" → "When Harry Met Sally...", "The Godfather II" → "The Godfather Part II") to
+match vilaboim's raw spelling exactly. `data/sources/vilaboim-quote-exclusions.json` (new, same
+mechanism as step 7 finding 5's `nikhilnamal17-quote-exclusions.json`) excludes both ids. Verified live:
+`Blocked` collisions dropped from 2 to 0 on cold start and stayed 0 across two further reseeds.
+
+**Confirmed still open, and explicitly out of this issue's scope — a different bug class from every one
+above:** `Pending` grows unbounded across reseeds (`3 → 4 → 5`, live-verified) for a genuine field-level
+Modify conflict ("Silence of the Lambs", a title/date disagreement between the two bundled files with no
+covering rule). None of the accumulation-prevention mechanisms above cover this, because they all key on
+*entity* identity (`SelectHasUnresolvedActionById` checks by quote id); a Modify conflict's identity is
+`(entity, field)`, which nothing currently dedups against. Not fixed here — recorded so it is not lost,
+and left for its own issue.
+
 ### 13. Boyscout: explicit types, and the `.editorconfig` list
 
 **Status:** ✅ Done, 2026-09-03 — for every file this issue actually touched
@@ -729,6 +809,10 @@ green end to end).
 | 41 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s), confirmed 2026-09-04 |
 | 42 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` → all green, 0 failures, confirmed 2026-09-04 (`Quotinator.Core.Tests` 1570, `Quotinator.Data.Tests` 1337, full solution) |
 | 43 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | reseed twice against the bundled content; `/import-review` stays empty across both runs. **T1 is the developer's own action, not the assistant's — see CLAUDE.md** |
+| 44 | ✅ | A `Blocked` collision does not double on every reseed | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithABlockedCollision_BlockedCountNeverGrows` — step 12's fourth live-found defect |
+| 45 | ✅ | A Review-policy row that auto-resolved cleanly counts as modified, not silently excluded | Unit test | `DatabaseInitializerTests.Reseed_ReviewPolicyFileWithOneGenuineModify_ConfirmationCountsAddUpToIncoming` — the "107 items, 106 added, 0 updated" defect |
+| 46 | ✅ | A Skip-policy row that genuinely differed is reported as skipped, not folded silently into another bucket or dropped from the UI | Unit test | `DatabaseInitializerTests.Reseed_SkipPolicyFileWithADifferingRow_ReportsItAsSkippedRatherThanVanishing` (payload) and `NotificationTableTests.SkippedOnlyRow_StillRenders` (UI table) — both confirmed red before the fix, green after |
+| 47 | ✅ | Two further vilaboim/NikhilNamal17 cross-file duplicates (surfaced by NikhilNamal17's own alias file matching vilaboim's raw spelling) are excluded | Live | Docker T2: `Blocked` count 2 → 0 on cold start, stable at 0 across two reseeds, after adding `data/sources/vilaboim-quote-exclusions.json` |
 
 **A live T2 run against real data found a sixth defect no unit test caught** (see step 7's own new
 finding above): `GET /import/actions` 500'd on a genuine Pending-Add row. Fixed and reverified live —
