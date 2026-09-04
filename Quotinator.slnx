@@ -73,6 +73,7 @@
     <File Path="data/sources/NikhilNamal17_popular-movie-quotes.json" />
     <File Path="data/sources/nikhilnamal17-conflict-rules.json" />
     <File Path="data/sources/nikhilnamal17-source-aliases.json" />
+    <File Path="data/sources/nikhilnamal17-quote-exclusions.json" />
   </Folder>
   <Folder Name="/data/changelog/">
     <File Path="data/changelog/changelog.en.json" />
@@ -423,6 +424,7 @@
     <File Path="schemas/changelog.schema.json" />
     <File Path="schemas/conflict-resolution-rules.schema.json" />
     <File Path="schemas/source-alias-rules.schema.json" />
+    <File Path="schemas/quote-exclusion-rules.schema.json" />
   </Folder>
   <Folder Name="/scripts/">
     <File Path="scripts/README.md" />

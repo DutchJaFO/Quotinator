@@ -55,4 +55,12 @@ internal sealed class ManifestFileEntryDto : SourceImportSettingsDto
     /// </summary>
     [JsonPropertyName("sourceAliasFile")]
     public string? SourceAliasFile { get; init; }
+
+    /// <summary>
+    /// Filename (relative to this manifest's directory, same convention as <see cref="File"/>) of this
+    /// source's own per-source quote-exclusion file (#219) — a <see cref="QuoteExclusionRuleFileDto"/>.
+    /// Absent means no quotes are excluded for this source (equivalent to an empty exclusion file).
+    /// </summary>
+    [JsonPropertyName("excludeFile")]
+    public string? ExcludeFile { get; init; }
 }

@@ -14,6 +14,14 @@ namespace Quotinator.Data.Import;
 /// <param name="Policy">Optional per-file duplicate-resolution policy override, taking priority over the owning <see cref="SeedBatch"/>'s <see cref="SeedBatch.Policy"/> when present.</param>
 /// <param name="RuleFilePath">Absolute path to this source's own per-source conflict-resolution rule file (#181), resolved from the manifest entry's <c>ruleFile</c> property the same way <paramref name="FilePath"/> is resolved from <c>file</c>. <see langword="null"/> when the manifest entry has none.</param>
 /// <param name="SourceAliasFilePath">Absolute path to this source's own per-source title-alias file (#181), resolved from the manifest entry's <c>sourceAliasFile</c> property the same way <paramref name="FilePath"/> is resolved from <c>file</c>. <see langword="null"/> when the manifest entry has none.</param>
+/// <param name="QuoteExclusionFilePath">
+/// Absolute path to this source's own per-source quote-exclusion file (#219), resolved from the
+/// manifest entry's <c>excludeFile</c> property the same way <paramref name="FilePath"/> is resolved
+/// from <c>file</c>. <see langword="null"/> when the manifest entry has none. Lists quote ids to skip
+/// entirely during import — for a raw upstream duplicate a rule/alias cannot fix, since those only
+/// ever correct fields on quotes that do get imported, never decide whether one should be imported at
+/// all.
+/// </param>
 public record SeedFile(
     string FilePath,
     string? Url,
@@ -24,4 +32,5 @@ public record SeedFile(
     JsonElement? ConverterOptions = null,
     ManifestPolicy? Policy = null,
     string? RuleFilePath = null,
-    string? SourceAliasFilePath = null);
+    string? SourceAliasFilePath = null,
+    string? QuoteExclusionFilePath = null);

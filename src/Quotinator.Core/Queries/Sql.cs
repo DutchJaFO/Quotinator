@@ -51,16 +51,21 @@ internal static class Sql
             $"SELECT {IdClauses.SelectColumn("Id")} FROM Quotinator_Quote WHERE {TextClauses.Equals("QuoteText", "quoteText")} AND {IdClauses.Equals("SourceId", "sourceId")} AND IsDeleted = 0 LIMIT 1;";
 
         /// <summary>
-        /// #374: a quote id already has an unresolved `Pending` action staged in an earlier batch (e.g.
-        /// a series-capable Source's date conflict — see <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s
-        /// `dateNeedsReview` handling). A reseed that never applies that action would otherwise re-plan
-        /// the same never-before-seen-in-Quotinator_Quote id every time and stage a brand-new duplicate
-        /// Pending action on top of the still-unresolved one, growing without bound — exactly the
-        /// accumulation pattern this issue exists to fix, just for a different mechanism than the
-        /// original conflict-rule staleness. Consulted before staging a new Pending Add.
+        /// #374: a quote id already has an unresolved `Pending` or `Blocked` action staged in an
+        /// earlier batch — a series-capable Source's date conflict (`Pending`, see
+        /// <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s `dateNeedsReview` handling) or a
+        /// quote-uniqueness content collision (`Blocked`, step 7's own mechanism). #372's reseed never
+        /// truncates `Import_Action`, and neither of these ever resolves on its own, so without this
+        /// check a reseed re-plans the same never-before-seen-in-Quotinator_Quote id every time and
+        /// stages a brand-new duplicate action on top of the still-unresolved one, growing without bound
+        /// — exactly the accumulation pattern this issue exists to fix. Found live for the `Blocked`
+        /// case specifically (T2 Docker, a real reseed) after this check had only ever been applied to
+        /// the `Pending` case it was originally written for — the same class of bug recurring in a
+        /// sibling mechanism this fix was never extended to. Consulted before staging a new Blocked or
+        /// Pending Add.
         /// </summary>
-        internal static readonly string SelectHasPendingActionById =
-            $"SELECT COUNT(*) FROM Import_Action WHERE EntityType = 'Quote' AND {IdClauses.Equals("EntityId", "id")} AND Status = 'Pending';";
+        internal static readonly string SelectHasUnresolvedActionById =
+            $"SELECT COUNT(*) FROM Import_Action WHERE EntityType = 'Quote' AND {IdClauses.Equals("EntityId", "id")} AND Status IN ('Pending', 'Blocked');";
 
         /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state; also used to read a fresh Add's just-inserted defaults. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark; #210 extends this to Quote.</summary>
         internal static readonly string SelectCompletenessById =

@@ -718,6 +718,36 @@ public class SqliteImportActionServiceTests
         Assert.IsEmpty(pendingQuote.AmbiguousFields, "A Pending Add has no existing row to diff against");
     }
 
+    /// <summary>
+    /// Found live (T2 Docker, #374) — a real Shawshank Redemption duplicate crashed
+    /// <c>GET /import/actions</c> with a 500 (<c>JsonException</c>, "missing required properties
+    /// including: 'SourceId'") the moment its <c>Blocked</c> collision action was paged. Step 7's
+    /// collision detection stores <c>ExistingValue = {"conflictingQuoteId": "..."}</c> for a Blocked
+    /// Add — a small marker referencing the colliding row's id, not a full <c>QuoteActionPayloadDto</c>
+    /// — but <c>ToSummaryAsync</c> unconditionally tried to deserialize every Quote action's
+    /// <c>ExistingValue</c> as one. An Add's <c>ExistingValue</c> is never a full payload by
+    /// construction (only a Modify's is), which is the same class of bug the earlier
+    /// <c>ComputeAmbiguousFields</c> fix (<see cref="GetPagedAsync_PendingAdd_AmbiguousFieldsIsEmpty"/>)
+    /// addressed in a different method.
+    /// </summary>
+    [TestMethod]
+    public async Task GetPagedAsync_BlockedCollisionAgainstAnExistingQuote_DoesNotCrash()
+    {
+        SourceQuoteDto original = BuildQuote("f5111111-1111-4111-8111-111111111111", source: "The Shawshank Redemption", quoteText: "Hope is a good thing, maybe the best of things, and no good thing ever dies.");
+        Guid firstBatch = Guid.NewGuid();
+        await PlanAndStageAsync([original], firstBatch, DuplicateResolutionPolicy.NewestWins);
+        await _service.ApplyBatchAsync(firstBatch.ToString("D").ToUpperInvariant(), cancellationToken: TestContext.CancellationToken);
+
+        SourceQuoteDto duplicate = BuildQuote("f5211111-1111-4111-8111-111111111111", source: "The Shawshank Redemption", quoteText: "Hope is a good thing, maybe the best of things, and no good thing ever dies.");
+        Guid secondBatch = Guid.NewGuid();
+        await PlanAndStageAsync([duplicate], secondBatch, DuplicateResolutionPolicy.NewestWins);
+
+        PagedItems<ImportActionSummaryResponse> page = await _service.GetPagedAsync(secondBatch.ToString("D").ToUpperInvariant(), null, null, 1, 50, TestContext.CancellationToken);
+        ImportActionSummaryResponse blockedQuote = page.Items.Single(i => i.EntityType == "Quote" && i.Status == "Blocked");
+
+        Assert.IsNull(blockedQuote.ExistingFields, "A Blocked collision's ExistingValue is a conflictingQuoteId marker, not a real row's fields");
+    }
+
     [TestMethod]
     public async Task GetPagedAsync_DecidedAction_AmbiguousFieldsIsEmpty()
     {

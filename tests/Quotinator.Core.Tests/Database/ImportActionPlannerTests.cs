@@ -89,6 +89,64 @@ public class ImportActionPlannerTests
         return conn;
     }
 
+    // ── #219: quote exclusions ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// #219 — the fix behind #374's Shawshank Redemption resolution: an excluded quote produces no
+    /// action at all, not a decision to make. Its own Source ("The Godfather") would otherwise still
+    /// be staged (a real Source, referenced by a real quote elsewhere), proving the exclusion is
+    /// scoped to the one quote id, not to the whole file.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_ExcludedQuote_ProducesNoAction()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto excluded = BuildQuote("f6111111-1111-4111-8111-111111111111", source: "The Godfather", quoteText: "I'm gonna make him an offer he can't refuse.");
+        SourceQuoteDto kept     = BuildQuote("f6211111-1111-4111-8111-111111111111", source: "The Godfather", quoteText: "Keep your friends close, but your enemies closer.");
+        QuoteExclusionLookup exclusions = new QuoteExclusionLookup([
+            new QuoteExclusionRule { Id = "f6111111-1111-4111-8111-111111111111", Reason = "Test exclusion" },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [excluded, kept], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, quoteExclusions: exclusions);
+
+        Assert.DoesNotContain(a => a.EntityId == "f6111111-1111-4111-8111-111111111111", actions, "An excluded quote must produce no action of any kind");
+        Assert.ContainsSingle(a => a.EntityId == "f6211111-1111-4111-8111-111111111111", actions, "The other, unexcluded quote in the same file must still be staged normally");
+    }
+
+    /// <summary>
+    /// #374 — found live (T2 Docker, a full-corpus reseed): once two dated variants of the same
+    /// (Title, Type) already exist, a `sources[]` enrichment entry with no id and no date of its own
+    /// (the natural-key fallback in <c>PlanSourcesAsync</c>) crashed with "Sequence contains more than
+    /// one element" — the single-row <c>SelectExistingByTitleAndType</c> query this branch still used
+    /// could no longer assume at most one row per title once step 6 put Date in the natural key.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSourcesAsync_NaturalKeyEntryAgainstTwoDatedVariants_DoesNotCrash()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        await SeedExplicitSourceAsync(conn, Guid.NewGuid().ToString("D"), title: "The Lion King", type: "Movie", date: "1994");
+        await SeedExplicitSourceAsync(conn, Guid.NewGuid().ToString("D"), title: "The Lion King", type: "Movie", date: "2019");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            sources: [new SourceEntryDto { Title = "The Lion King", Type = Core.Enums.QuoteType.Movie }]);
+
+        Assert.ContainsSingle(a => a.EntityType == "Source", actions, "Must match one existing variant (nearest, since the entry states no date), not crash or create a third row");
+    }
+
+    /// <summary>The control for <see cref="PlanAsync_ExcludedQuote_ProducesNoAction"/> — the same two quotes with no exclusion list must both stage.</summary>
+    [TestMethod]
+    public async Task PlanAsync_NoExclusions_BothQuotesStage()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto q1 = BuildQuote("f6311111-1111-4111-8111-111111111111", source: "The Godfather", quoteText: "I'm gonna make him an offer he can't refuse.");
+        SourceQuoteDto q2 = BuildQuote("f6411111-1111-4111-8111-111111111111", source: "The Godfather", quoteText: "Keep your friends close, but your enemies closer.");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [q1, q2], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        Assert.ContainsSingle(a => a.EntityId == "f6311111-1111-4111-8111-111111111111", actions);
+        Assert.ContainsSingle(a => a.EntityId == "f6411111-1111-4111-8111-111111111111", actions);
+    }
+
     [TestMethod]
     public async Task PlanAsync_BrandNewQuote_StagesAddActionsForQuoteSourceCharacterPerson()
     {

@@ -97,6 +97,11 @@
             "type": "string",
             "minLength": 1,
             "description": "Filename (relative to this manifest's directory, same convention as file) of this source's own per-source title-alias file (#181) — a set of raw-(title,type) substitutions consulted before Source resolution runs, so a misspelled/inconsistent title or type resolves to the already-canonical Source instead of creating a duplicate. Omit for a source with no known title/type inconsistencies, equivalent to an empty alias file."
+          },
+          "excludeFile": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Filename (relative to this manifest's directory, same convention as file) of this source's own per-source quote-exclusion file (#219) — a list of quote ids to skip entirely during import, for a raw upstream duplicate or unverifiable entry that a rule or alias cannot fix (those only ever correct a field on a quote that does get imported, never decide whether one should be imported at all). Omit for a source with no known exclusions, equivalent to an empty exclusion file."
           }
         }
       }

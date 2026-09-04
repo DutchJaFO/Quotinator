@@ -617,7 +617,7 @@ public class DatabaseInitializerTests
         // #374: on a *reseed* specifically, NikhilNamal17 still gets its own confirmation, unlike the
         // cold-start case (Initialise_FirstEmptyDatabaseSeed_WritesOnePerFile, 2 not 3) — its tv-date
         // conflict quotes were already reported once (that alert is still live, undismissed, from the
-        // cold start) and this pass's own dedup check (Sql.Quotes.SelectHasPendingActionById) correctly
+        // cold start) and this pass's own dedup check (Sql.Quotes.SelectHasUnresolvedActionById) correctly
         // does not re-stage them, so nothing new happens for those specific quotes this run. The rest of
         // the file's content genuinely does apply cleanly again (as Unchanged), which is exactly what
         // this notification reports — it is not a claim that the file has zero open conflicts anywhere.
@@ -704,26 +704,42 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// The negative control for the test above it: a file whose batch did not fully apply has actions
-    /// waiting for review, so confirming it reseeded cleanly would be a lie.
+    /// The negative control for the test above it: a batch whose *own* actions did not fully apply has
+    /// actions waiting for review, so confirming that specific batch reseeded cleanly would be a lie.
     /// </summary>
+    /// <remarks>
+    /// #374 — corrected 2026-09-04, found live (T2 Docker, a real reseed). Before the accumulation-
+    /// prevention dedup covered every quote id, a reseed of this fixture's unresolved content re-staged
+    /// a brand-new duplicate Pending action per conflicting quote every time, which kept this reseed's
+    /// own batch permanently non-empty of Pending items — suppressing the confirmation was correct
+    /// *for that reason*. Once the dedup means an already-known-unresolved quote produces no action in
+    /// this batch at all, the reseed's own batch consists only of the file's genuinely-unchanged
+    /// content (hundreds of quotes, none of them the handful of permanent conflicts) — which really did
+    /// apply/confirm cleanly, exactly the "an unresolved older conflict does not suppress a fresh
+    /// confirmation for the rest of that file's own unchanged content" principle
+    /// <see cref="Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile"/> already established.
+    /// The cold start is unaffected either way — its own first-ever batch genuinely does contain the
+    /// new Pending rows, so it correctly writes no confirmation.
+    /// </remarks>
     [TestMethod]
-    public async Task Reseed_FileLeftAwaitingReview_WritesNoSuccessNotification()
+    public async Task Reseed_FileLeftAwaitingReview_ColdStartWritesNoSuccessNotification_ButReseedOfTheRestDoes()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
         await db.InitialiseAsync();
-        await db.ReseedAsync();
-
-        List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
-            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
 
         // Stated as a precondition rather than branched on: a conditional assertion would pass whichever
         // way this fixture behaved, and would silently stop testing the awaiting-review path the day the
         // bundled content stopped producing conflicts.
         Assert.IsGreaterThan(0, await StagedActionCountAsync(),
             "This fixture exists to leave actions awaiting review — if it no longer does, it is testing nothing.");
+        Assert.IsEmpty((await NotificationsAsync()).Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied),
+            "Cold start's own first-ever batch genuinely contains the new Pending rows — there is nothing clean to confirm yet.");
 
-        Assert.IsEmpty(confirmations, "The file left actions awaiting review — there is nothing clean to confirm.");
+        await db.ReseedAsync();
+
+        Assert.IsGreaterThan(0, await StagedActionCountAsync(), "The same permanent conflicts are still genuinely unresolved after the reseed.");
+        Assert.IsNotEmpty((await NotificationsAsync()).Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied),
+            "The reseed's own batch contains only the file's genuinely-unchanged content (the still-open conflicts are deduped, not re-staged) — that content really did apply cleanly");
     }
 
     /// <summary>
@@ -1244,28 +1260,35 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// The new batch gets its own alert rather than the old one being reused. `ImportBatchEntity.Id` is
-    /// a fresh Guid per construction, so a reseed can never reproduce a batch id — this pins that the
-    /// identity actually follows it.
+    /// #374 — corrected 2026-09-04, found live (T2 Docker, a real reseed). Before the accumulation-
+    /// prevention dedup (<c>Sql.Quotes.SelectHasUnresolvedActionById</c>) covered every quote id rather
+    /// than only the tv-date-conflict mechanism it was first written for, a reseed of this fixture's
+    /// still-unresolved content re-staged a brand-new duplicate action per quote in a second batch,
+    /// and that batch got its own alert — the shape this test originally asserted (2 alerts, one per
+    /// batch). Once the dedup covers every quote id, the second reseed's own batch has nothing new to
+    /// stage for content that is already known and unresolved, so there is nothing new to alert about
+    /// either: the original alert is still live, still names a batch that still exists, and still
+    /// accurately describes the outstanding review. Raising a second alert for the identical
+    /// still-unresolved conflict would not tell a curator anything the first alert doesn't already say.
     /// </summary>
     [TestMethod]
-    public async Task Reseed_Twice_RaisesNewAlertsRatherThanReusingTheOld()
+    public async Task Reseed_Twice_WithUnchangedUnresolvedContent_RaisesNoSecondAlert()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17AwaitingReviewBatch()]);
         await db.InitialiseAsync();
+
+        NotificationEntity originalAlert = (await NotificationsAsync())
+            .Single(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending);
+        string originalBatchId = FirstReviewAlertPayloadOf(originalAlert).BatchId;
+
         await db.ReseedAsync();
 
         List<NotificationEntity> alerts = [.. (await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending)];
 
-        Assert.HasCount(2, alerts, "One alert per staged batch, and the reseed staged a second batch.");
-
-        List<string> distinctBatchIds = [.. alerts
-            .Select(n => FirstReviewAlertPayloadOf(n).BatchId)
-            .Distinct(StringComparer.OrdinalIgnoreCase)];
-
-        Assert.HasCount(2, distinctBatchIds,
-            "Two alerts naming the same batch would mean the identity is not following the batch at all.");
+        Assert.ContainsSingle(alerts, "Nothing new was staged for already-known-unresolved content — the original alert already covers it, and raising a second would be a duplicate, not new information");
+        Assert.AreEqual(originalBatchId, FirstReviewAlertPayloadOf(alerts[0]).BatchId,
+            "The surviving alert must be the original one from cold start, not a coincidentally-identical replacement");
     }
 
     /// <summary>
@@ -1343,6 +1366,52 @@ public class DatabaseInitializerTests
         Assert.AreEqual(3, cold, "Three genuine, permanent tv-season ambiguities are correctly reported as conflicts on cold start");
         Assert.AreEqual(cold, reseed1, "Reseeding unchanged content must not add anything beyond what is already correctly pending");
         Assert.AreEqual(cold, reseed2, "A second reseed must not accumulate anything further");
+    }
+
+    /// <summary>
+    /// #374 — found live (T2 Docker, a real full-corpus reseed): the accumulation-prevention check
+    /// (<c>Sql.Quotes.SelectHasUnresolvedActionById</c>) was originally gated on <c>dateNeedsReview</c>
+    /// alone, the one mechanism it was first written for — leaving step 7's own <c>Blocked</c>
+    /// quote-uniqueness collision completely unguarded. A real reseed doubled every <c>Blocked</c>
+    /// collision (2 → 4) because #372's reseed never truncates <c>Import_Action</c> and the collision
+    /// never resolves on its own, so the same never-before-seen id was re-detected and re-staged as a
+    /// brand-new duplicate every time — exactly the accumulation pattern this whole issue exists to fix,
+    /// recurring in a sibling mechanism the original fix was never extended to.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithABlockedCollision_BlockedCountNeverGrows()
+    {
+        string collisionFile = Path.Combine(_tempDir, "blocked-collision.json");
+        File.WriteAllText(collisionFile,
+            """
+            {"quotes":[
+                {"id":"e5111111-1111-4111-8111-111111111111","quote":"Keep your friends close, but your enemies closer.","originalLanguage":"en","source":"The Godfather Part II","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"e5211111-1111-4111-8111-111111111111","quote":"Keep your friends close, but your enemies closer.","originalLanguage":"en","source":"The Godfather Part II","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        SeedBatch batch = new SeedBatch([new SeedFile(collisionFile, null)], ManifestPolicy.HardcodedDefault, "blocked-collision-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+        int cold = await BlockedActionCountAsync();
+
+        await db.ReseedAsync();
+        int reseed1 = await BlockedActionCountAsync();
+
+        await db.ReseedAsync();
+        int reseed2 = await BlockedActionCountAsync();
+
+        Assert.AreEqual(1, cold, "The second, colliding quote is correctly Blocked for review on cold start");
+        Assert.AreEqual(cold, reseed1, "Reseeding unchanged content must not double the still-unresolved Blocked action");
+        Assert.AreEqual(cold, reseed2, "A second reseed must not accumulate anything further");
+    }
+
+    private async Task<int> BlockedActionCountAsync()
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Import_Action WHERE Status = 'Blocked';");
     }
 
     /// <summary>
@@ -1527,7 +1596,8 @@ public class DatabaseInitializerTests
                 "https://github.com/NikhilNamal17/popular-movie-quotes",
                 Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review),
                 RuleFilePath: Path.Combine(SourcesDir, "nikhilnamal17-conflict-rules.json"),
-                SourceAliasFilePath: Path.Combine(SourcesDir, "nikhilnamal17-source-aliases.json"))
+                SourceAliasFilePath: Path.Combine(SourcesDir, "nikhilnamal17-source-aliases.json"),
+                QuoteExclusionFilePath: Path.Combine(SourcesDir, "nikhilnamal17-quote-exclusions.json"))
         ],
         ManifestPolicy.HardcodedDefault,
         "bundled sources");
@@ -1536,20 +1606,13 @@ public class DatabaseInitializerTests
     /// produce zero Pending/Stale/Blocked actions — the same "no file left staged awaiting review"
     /// invariant CLAUDE.md's own live T2 checklist already asserts against the full bundled dataset.</summary>
     /// <remarks>
-    /// #374: four specific, understood exceptions — genuine, permanent conflicts, not residual defects.
-    /// <para/>
-    /// One `Blocked`: NikhilNamal17's own raw data carries the identical "Hope is a good thing..." quote
-    /// twice — once under "Shawshank Redemption", once under "The Shawshank Redemption" — and this
-    /// file's own real alias file (nikhilnamal17-source-aliases.json) already merges those two titles
-    /// onto one canonical Source, so once Date joined a Source's natural key (step 6) and a quote became
-    /// unique per Source (step 7), the second occurrence collides and is correctly Blocked rather than
-    /// silently duplicated. There is no lower-friction fix available today:
-    /// NikhilNamal17_popular-movie-quotes.json is converter-generated (never hand-edited, CLAUDE.md), and
-    /// the existing ConflictResolutionRule mechanism resolves a field on one entity id, not a cross-id
-    /// content collision — matching the precedent CLAUDE.md's #219 already documents for a different
-    /// unresolvable-bundled-quote shape. The isolated-hold fix
-    /// (ImportActionResolutionCoordinator.TryApplyBatchAsync) is what keeps this one known exception from
-    /// blocking the other 1,175+ actions in this same batch.
+    /// #374/#219: three specific, understood exceptions — genuine, permanent conflicts, not residual
+    /// defects. A fourth, previously-documented exception (a `Blocked` Shawshank Redemption duplicate:
+    /// NikhilNamal17's own raw data carries the identical "Hope is a good thing..." quote twice, once
+    /// under "Shawshank Redemption" and once under "The Shawshank Redemption", which
+    /// nikhilnamal17-source-aliases.json already merges onto one canonical Source) is resolved as of
+    /// #219's quote-exclusion mechanism — nikhilnamal17-quote-exclusions.json excludes the duplicate id
+    /// outright, so it produces no action at all and is no longer in this list.
     /// <para/>
     /// Three `Pending` (developer decision, 2026-09-04): two "Mr. Robot" quotes and one "Arrow" quote
     /// each carry a per-quote year (2017) that disagrees with the show's other quotes (2015) — a
@@ -1570,7 +1633,6 @@ public class DatabaseInitializerTests
 
         HashSet<string> knownExceptionQuoteIds = new(StringComparer.OrdinalIgnoreCase)
         {
-            "7e53658c-0c3a-6546-8c12-c5e4af23c9f8", // Blocked: Shawshank duplicate (see remarks)
             "779f3b34-37f6-8b48-864e-42d262129a3d", // Pending: Mr. Robot, disagreeing year
             "e69951f1-4d01-964d-86d5-13f80f5bfd8a", // Pending: Mr. Robot, disagreeing year
             "e41d0f7a-a39a-4346-a0dd-ca08efd75724", // Pending: Arrow, disagreeing year
@@ -1582,7 +1644,10 @@ public class DatabaseInitializerTests
             .Where(a => !knownExceptionQuoteIds.Contains(a.EntityId))];
 
         Assert.IsEmpty(unresolved,
-            $"Every action must auto-resolve under Review with the real rule file (the four known exceptions excepted) — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
+            $"Every action must auto-resolve under Review with the real rule file (the three known exceptions excepted) — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
+
+        Assert.DoesNotContain(a => a.EntityId == "7e53658c-0c3a-6546-8c12-c5e4af23c9f8", allActions,
+            "The Shawshank duplicate is now excluded outright (#219) — it must produce no action at all, not merely an ignored Blocked one");
     }
 
     /// <summary>#153: the Galadriel Custom rule (nikhilnamal17-conflict-rules.json) must correct the
@@ -1843,7 +1908,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(71, modified,
             "And 71 genuinely differ — the cross-file overlap where two source files disagree about the same quote");
         // #374: 0, not 6 — a quote already reported as a Pending conflict by the earlier real seed is
-        // recognised as already-known (Sql.Quotes.SelectHasPendingActionById) and never re-staged, even
+        // recognised as already-known (Sql.Quotes.SelectHasUnresolvedActionById) and never re-staged, even
         // during a preview — the same dedup that keeps a real reseed from accumulating duplicates
         // (Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows) applies here too. The six known
         // tv quotes are therefore omitted from this preview's report entirely, not counted as Pending in

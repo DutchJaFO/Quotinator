@@ -13,11 +13,14 @@ public class QuoteServiceTests
         Directory.Exists(SourcesDir)
             ? Directory.EnumerateFiles(SourcesDir, "*.json")
                        .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
-                       // #181: a per-source conflict-resolution rule file (e.g. nikhilnamal17-conflict-rules.json)
-                       // or title-alias file (e.g. nikhilnamal17-source-aliases.json) is a different shape
-                       // entirely (not quotes) — never a quote source.
+                       // #181/#219: a per-source conflict-resolution rule file (e.g.
+                       // nikhilnamal17-conflict-rules.json), title-alias file (e.g.
+                       // nikhilnamal17-source-aliases.json), or quote-exclusion file (e.g.
+                       // nikhilnamal17-quote-exclusions.json) is a different shape entirely (not quotes)
+                       // — never a quote source.
                        .Where(f => !Path.GetFileName(f).EndsWith("-conflict-rules.json", StringComparison.OrdinalIgnoreCase))
                        .Where(f => !Path.GetFileName(f).EndsWith("-source-aliases.json", StringComparison.OrdinalIgnoreCase))
+                       .Where(f => !Path.GetFileName(f).EndsWith("-quote-exclusions.json", StringComparison.OrdinalIgnoreCase))
             : [];
 
     /// <summary>

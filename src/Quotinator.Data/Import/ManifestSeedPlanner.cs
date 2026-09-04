@@ -56,14 +56,15 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
                     var filePolicy         = e.DuplicateResolution is null ? null : ToManifestPolicy(e.DuplicateResolution);
                     var ruleFilePath       = e.RuleFile is null ? null : Path.Combine(dir, e.RuleFile);
                     var sourceAliasFilePath = e.SourceAliasFile is null ? null : Path.Combine(dir, e.SourceAliasFile);
-                    return new SeedFile(path, url, downloadUrl, e.RefreshIntervalHours, e.DownloadTarget, e.Converter, e.ConverterOptions, filePolicy, ruleFilePath, sourceAliasFilePath);
+                    var quoteExclusionFilePath = e.ExcludeFile is null ? null : Path.Combine(dir, e.ExcludeFile);
+                    return new SeedFile(path, url, downloadUrl, e.RefreshIntervalHours, e.DownloadTarget, e.Converter, e.ConverterOptions, filePolicy, ruleFilePath, sourceAliasFilePath, quoteExclusionFilePath);
                 })
                 .Where(f => File.Exists(f.FilePath))
                 .ToList();
 
-            // #181: a manifest entry's own ruleFile/sourceAliasFile (different shapes entirely — neither
-            // is a quotes array) must never be treated as an unlisted quote source just because it sits
-            // in the same directory and isn't itself listed under files[].file.
+            // #181/#219: a manifest entry's own ruleFile/sourceAliasFile/excludeFile (different shapes
+            // entirely — none is a quotes array) must never be treated as an unlisted quote source just
+            // because it sits in the same directory and isn't itself listed under files[].file.
             var listedPaths = new HashSet<string>(listed.Select(f => f.FilePath), StringComparer.OrdinalIgnoreCase);
             var ruleFilePaths = new HashSet<string>(
                 manifest.Files.Where(e => e.RuleFile is not null).Select(e => Path.Combine(dir, e.RuleFile!)),
@@ -71,7 +72,10 @@ public sealed class ManifestSeedPlanner(ILogger<ManifestSeedPlanner> logger) : I
             var sourceAliasFilePaths = new HashSet<string>(
                 manifest.Files.Where(e => e.SourceAliasFile is not null).Select(e => Path.Combine(dir, e.SourceAliasFile!)),
                 StringComparer.OrdinalIgnoreCase);
-            var unlisted = allJson.Where(f => !listedPaths.Contains(f.FilePath) && !ruleFilePaths.Contains(f.FilePath) && !sourceAliasFilePaths.Contains(f.FilePath)).ToList();
+            var quoteExclusionFilePaths = new HashSet<string>(
+                manifest.Files.Where(e => e.ExcludeFile is not null).Select(e => Path.Combine(dir, e.ExcludeFile!)),
+                StringComparer.OrdinalIgnoreCase);
+            var unlisted = allJson.Where(f => !listedPaths.Contains(f.FilePath) && !ruleFilePaths.Contains(f.FilePath) && !sourceAliasFilePaths.Contains(f.FilePath) && !quoteExclusionFilePaths.Contains(f.FilePath)).ToList();
             if (unlisted.Count > 0 && logger.IsEnabled(LogLevel.Information))
                 logger.LogUnlistedFilesAppended(
                     unlisted.Count, string.Join(", ", unlisted.Select(f => Path.GetFileName(f.FilePath))));

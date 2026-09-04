@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/DutchJaFO/Quotinator/main/schemas/quote-exclusion-rules.schema.json",
+  "title": "Quotinator Per-Source Quote-Exclusion File",
+  "description": "A minimal, hand-authored list of quote ids to skip entirely during import (#219) — for a raw upstream duplicate or unverifiable entry that a conflict-resolution rule or source alias cannot fix, since those only ever correct a field on a quote that does get imported, never decide whether one should be imported at all. One exclusion file per bundled source, referenced from that source's own manifest.json entry via excludeFile.",
+  "type": "object",
+  "required": ["exclusions"],
+  "additionalProperties": false,
+  "properties": {
+    "exclusions": {
+      "type": "array",
+      "description": "Every quote this file excludes. Empty for a source with no known exclusions.",
+      "items": {
+        "type": "object",
+        "required": ["id", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The excluded quote's own id, exactly as it appears in the source file (matched case-insensitively)."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why this quote is excluded, for a future reader auditing the file — not read by any code path."
+          }
+        }
+      }
+    }
+  }
+}

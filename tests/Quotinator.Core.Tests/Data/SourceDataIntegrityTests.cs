@@ -29,6 +29,9 @@ public class SourceDataIntegrityTests
     private static readonly JsonSchema SourceAliasRuleSchema =
         JsonSchema.FromFile(Path.Combine(SchemasDir, "source-alias-rules.schema.json"));
 
+    private static readonly JsonSchema QuoteExclusionRuleSchema =
+        JsonSchema.FromFile(Path.Combine(SchemasDir, "quote-exclusion-rules.schema.json"));
+
     private static readonly EvaluationOptions StrictOptions = new()
     {
         OutputFormat = OutputFormat.List
@@ -54,6 +57,16 @@ public class SourceDataIntegrityTests
             .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
     }
 
+    /// <summary>Every *.json file listed in a manifest entry's own `excludeFile` property (#219) — a different shape from a source file, validated separately.</summary>
+    private static HashSet<string> QuoteExclusionFilesListedInManifest()
+    {
+        JsonNode root = JsonNode.Parse(File.ReadAllText(ManifestPath))!;
+        return root["files"]!.AsArray()
+            .Select(e => e!["excludeFile"]?.GetValue<string>())
+            .Where(name => name is not null)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)!;
+    }
+
     private static IEnumerable<string> SourceFiles
     {
         get
@@ -61,10 +74,12 @@ public class SourceDataIntegrityTests
             if (!Directory.Exists(SourcesDir)) return [];
             HashSet<string> ruleFiles = RuleFilesListedInManifest();
             HashSet<string> aliasFiles = SourceAliasFilesListedInManifest();
+            HashSet<string> exclusionFiles = QuoteExclusionFilesListedInManifest();
             return Directory.EnumerateFiles(SourcesDir, "*.json")
                 .Where(f => !Path.GetFileName(f).Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
                 .Where(f => !ruleFiles.Contains(Path.GetFileName(f)))
-                .Where(f => !aliasFiles.Contains(Path.GetFileName(f)));
+                .Where(f => !aliasFiles.Contains(Path.GetFileName(f)))
+                .Where(f => !exclusionFiles.Contains(Path.GetFileName(f)));
         }
     }
 
@@ -87,6 +102,17 @@ public class SourceDataIntegrityTests
             HashSet<string> aliasFiles = SourceAliasFilesListedInManifest();
             return Directory.EnumerateFiles(SourcesDir, "*.json")
                 .Where(f => aliasFiles.Contains(Path.GetFileName(f)));
+        }
+    }
+
+    private static IEnumerable<string> QuoteExclusionFiles
+    {
+        get
+        {
+            if (!Directory.Exists(SourcesDir)) return [];
+            HashSet<string> exclusionFiles = QuoteExclusionFilesListedInManifest();
+            return Directory.EnumerateFiles(SourcesDir, "*.json")
+                .Where(f => exclusionFiles.Contains(Path.GetFileName(f)));
         }
     }
 
@@ -252,6 +278,19 @@ public class SourceDataIntegrityTests
         }
     }
 
+    /// <summary>Each per-source quote-exclusion file (#219) conforms to schemas/quote-exclusion-rules.schema.json.</summary>
+    [TestMethod]
+    public void QuoteExclusionFiles_ConformToSchema()
+    {
+        foreach (string file in QuoteExclusionFiles)
+        {
+            string name    = Path.GetFileName(file);
+            JsonElement element = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(file));
+            EvaluationResults result  = QuoteExclusionRuleSchema.Evaluate(element, StrictOptions);
+            Assert.IsTrue(result.IsValid, FormatErrors(name, result));
+        }
+    }
+
     /// <summary>A manifest file entry that sets both `github` and `url` violates the schema — the two source kinds are mutually exclusive.</summary>
     [TestMethod]
     public void Manifest_EntryWithBothGithubAndUrl_FailsSchemaValidation()
@@ -320,7 +359,7 @@ public class SourceDataIntegrityTests
         }
     }
 
-    /// <summary>Every *.json source file in data/sources/ (excluding manifest) is listed in the manifest, either as a source file's own `file` entry or as some entry's `ruleFile`/`sourceAliasFile` (#181).</summary>
+    /// <summary>Every *.json source file in data/sources/ (excluding manifest) is listed in the manifest, either as a source file's own `file` entry or as some entry's `ruleFile`/`sourceAliasFile`/`excludeFile` (#181/#219).</summary>
     [TestMethod]
     public void SourceFiles_AllListedInManifest()
     {
@@ -330,12 +369,13 @@ public class SourceDataIntegrityTests
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
         listed.UnionWith(RuleFilesListedInManifest());
         listed.UnionWith(SourceAliasFilesListedInManifest());
+        listed.UnionWith(QuoteExclusionFilesListedInManifest());
 
         foreach (string file in Directory.EnumerateFiles(SourcesDir, "*.json"))
         {
             string name = Path.GetFileName(file);
             if (name.Equals("manifest.json", StringComparison.OrdinalIgnoreCase)) continue;
-            Assert.Contains(name, listed, $"'{name}' exists in data/sources/ but is not listed in manifest.json (as either 'file', 'ruleFile', or 'sourceAliasFile')");
+            Assert.Contains(name, listed, $"'{name}' exists in data/sources/ but is not listed in manifest.json (as either 'file', 'ruleFile', 'sourceAliasFile', or 'excludeFile')");
         }
     }
 

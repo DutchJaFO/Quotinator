@@ -1546,7 +1546,11 @@ public sealed class SqliteImportActionService(
             DetectedAt       = action.DetectedAt,
             AppliedAt        = action.AppliedAt,
             DiscardedAt      = action.DiscardedAt,
-            ExistingFields   = BuildFields(action.EntityType, action.ExistingValue),
+            // #374: an Add's ExistingValue is never a full payload to build fields from — it is either
+            // absent, or (Quote only) a `{ conflictingQuoteId }` marker referencing a different row
+            // entirely (step 7's quote-uniqueness collision). Only a Modify's ExistingValue is ever the
+            // existing row's real fields.
+            ExistingFields   = action.ActionType.Parsed == ImportActionKind.Add ? null : BuildFields(action.EntityType, action.ExistingValue),
             IncomingFields   = BuildFields(action.EntityType, action.IncomingValue) ?? new Dictionary<string, object?>(),
             MergedFields     = BuildFields(action.EntityType, action.MergedFields),
             RelatedActionIds = await ComputeRelatedActionIdsAsync(action, batchCache),

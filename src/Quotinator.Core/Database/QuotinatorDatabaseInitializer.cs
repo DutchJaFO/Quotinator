@@ -495,10 +495,12 @@ public sealed class QuotinatorDatabaseInitializer(
 
                 ConflictRuleLookup conflictRules = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
                 SourceAliasLookup sourceAliases = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
+                QuoteExclusionLookup quoteExclusions = await LoadQuoteExclusionsAsync(seedFile.QuoteExclusionFilePath, batch.Origin);
 
                 IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(connection, quotes, Guid.NewGuid(), filePolicy.ForQuotes, transaction: null,
                     parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
-                    parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases, parsed.Seasons);
+                    parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases, parsed.Seasons,
+                    retirableRuleFindings: null, quoteExclusions: quoteExclusions);
 
                 reports.Add(ImportActionReportBuilder.Build(fileName, actions));
             }
@@ -599,6 +601,7 @@ public sealed class QuotinatorDatabaseInitializer(
                 DuplicateResolutionPolicy policy          = filePolicy.ForQuotes;
                 ConflictRuleLookup conflictRules   = await LoadConflictRulesAsync(seedFile.RuleFilePath, batch.Origin);
                 SourceAliasLookup sourceAliases   = await LoadSourceAliasesAsync(seedFile.SourceAliasFilePath, batch.Origin);
+                QuoteExclusionLookup quoteExclusions = await LoadQuoteExclusionsAsync(seedFile.QuoteExclusionFilePath, batch.Origin);
 
                 Logger.LogImportingQuotes(quotes.Count, fileName, batch.Label);
 
@@ -612,7 +615,7 @@ public sealed class QuotinatorDatabaseInitializer(
                     actions = await ImportActionPlanner.PlanAsync(connection, quotes, importBatch.Id, policy, tx,
                         parsed.Sources, parsed.StageDirections, parsed.SoundCues, parsed.Conversations, parsed.People,
                         parsed.Series, parsed.Universe, parsed.Characters, conflictRules, sourceAliases, parsed.Seasons,
-                        retirableRuleFindings);
+                        retirableRuleFindings, quoteExclusions);
                     await _actionCoordinator.StageAsync(actions, connection, tx);
                     tx.Commit();
                 }
@@ -634,6 +637,12 @@ public sealed class QuotinatorDatabaseInitializer(
                 // back with that one action still genuinely outstanding. Checked directly against the
                 // actions this same batch staged, not re-derived from applyResult's own (now narrower)
                 // list, so the alert and the purge-eligibility below see the true remaining state.
+                //
+                // Deliberately batch-local, not global: a quote the accumulation-prevention dedup
+                // recognised as already unresolved from an earlier batch produces no action here at all,
+                // and that is correct — the rest of this batch's own content (everything else the file
+                // describes) can still genuinely apply/confirm cleanly on its own terms, independent of
+                // a handful of permanent conflicts sitting in an unrelated, still-active alert elsewhere.
                 bool hasOutstandingReviewItems = actions.Any(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale);
                 if (applyResult is null && !hasOutstandingReviewItems)
                 {
@@ -944,6 +953,40 @@ public sealed class QuotinatorDatabaseInitializer(
             Logger.LogWarning(ex, "[Database - Seed] source-alias file {File} is not valid JSON — continuing without aliases",
                 Path.GetFileName(effectivePath));
             return SourceAliasLookup.Empty;
+        }
+    }
+
+    /// <summary>
+    /// #219: loads a source's own per-source quote-exclusion file, referenced by the manifest entry's
+    /// <c>excludeFile</c> property. Missing/absent/invalid all resolve to
+    /// <see cref="QuoteExclusionLookup.Empty"/> — same fail-open convention as
+    /// <see cref="LoadConflictRulesAsync"/>/<see cref="LoadSourceAliasesAsync"/>.
+    /// </summary>
+    private async Task<QuoteExclusionLookup> LoadQuoteExclusionsAsync(string? quoteExclusionFilePath, SeedBatchOrigin origin)
+    {
+        if (quoteExclusionFilePath is null) return QuoteExclusionLookup.Empty;
+
+        string effectivePath = await EffectiveRuleFileResolver.ResolveEffectivePathAsync(
+            quoteExclusionFilePath, origin, _ruleFileOverridePathResolver, _sourceFileOverrideRegistry, Logger);
+
+        if (!File.Exists(effectivePath))
+        {
+            Logger.LogWarning("[Database - Seed] quote-exclusion file {File} referenced in manifest but not found — continuing without exclusions",
+                Path.GetFileName(effectivePath));
+            return QuoteExclusionLookup.Empty;
+        }
+
+        try
+        {
+            string json = await File.ReadAllTextAsync(effectivePath);
+            QuoteExclusionRuleFileDto? exclusionFile = JsonSerializer.Deserialize<QuoteExclusionRuleFileDto>(json, ConflictRuleReadOptions);
+            return new QuoteExclusionLookup(exclusionFile?.Exclusions ?? []);
+        }
+        catch (JsonException ex)
+        {
+            Logger.LogWarning(ex, "[Database - Seed] quote-exclusion file {File} is not valid JSON — continuing without exclusions",
+                Path.GetFileName(effectivePath));
+            return QuoteExclusionLookup.Empty;
         }
     }
 

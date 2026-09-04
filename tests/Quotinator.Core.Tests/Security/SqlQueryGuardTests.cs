@@ -150,7 +150,7 @@ public class SqlQueryGuardTests
         [
             "Quotes.CountAll",                    // COUNT(*)
             "Quotes.CountActive",                 // COUNT(*)
-            "Quotes.SelectHasPendingActionById",  // COUNT(*) — #374 tv-date-conflict dedup check
+            "Quotes.SelectHasUnresolvedActionById", // COUNT(*) — #374 tv-date-conflict/quote-collision dedup check
             "Quotes.CountForRandomBase",          // COUNT(*) — private base for CountRandom factory
             "Quotes.CountForGetAllBase",          // COUNT(*) — private base for CountGetAll factory
             "QuoteGenres.CountAll",               // COUNT(*)

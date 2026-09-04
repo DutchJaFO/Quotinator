@@ -51,7 +51,8 @@ internal static class ImportActionPlanner
         ConflictRuleLookup? conflictRules = null,
         SourceAliasLookup? sourceAliases = null,
         IReadOnlyList<SeasonEntryDto>? seasons = null,
-        List<RetirableRuleFinding>? retirableRuleFindings = null)
+        List<RetirableRuleFinding>? retirableRuleFindings = null,
+        QuoteExclusionLookup? quoteExclusions = null)
     {
         List<ImportActionEntity> actions = [];
         Dictionary<string, string> sourceIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -106,6 +107,12 @@ internal static class ImportActionPlanner
 
         foreach (SourceQuoteDto rawQuote in quotes)
         {
+            // #219: an excluded quote produces no action at all — not a decision to make, simply never
+            // imported. Checked first, before id canonicalization or anything else, since an excluded
+            // quote has nothing further to resolve.
+            if (quoteExclusions is not null && quoteExclusions.Contains(rawQuote.Id))
+                continue;
+
             // #210: canonicalize a file-authored Quotes.Id to lowercase at the single earliest point of
             // capture, matching this project's single canonical id convention (ADR 012, GuidHandler).
             // Every later reference to q.Id in this iteration (seenQuotes, EntityId, the resolved
@@ -242,12 +249,16 @@ internal static class ImportActionPlanner
 
             if (existing is null)
             {
-                // #374: a Pending action is never applied, so a quote reported for this reason on an
-                // earlier reseed still has no row in Quotinator_Quote and would otherwise look
-                // "never-before-seen" again on every later reseed — staging a fresh duplicate Pending
-                // action on top of the still-unresolved one and growing without bound. Checked first, so
-                // an already-reported conflict is recognised before any of the branches below run.
-                if (dateNeedsReview && await connection.ExecuteScalarAsync<int>(Sql.Quotes.SelectHasPendingActionById, new { id = q.Id }, transaction) > 0)
+                // #374: neither a Pending nor a Blocked action is ever applied, so a quote reported for
+                // either reason on an earlier reseed still has no row in Quotinator_Quote and would
+                // otherwise look "never-before-seen" again on every later reseed — staging a fresh
+                // duplicate action on top of the still-unresolved one and growing without bound. Checked
+                // first, so an already-reported conflict is recognised before any of the branches below
+                // run. Found live: originally gated on dateNeedsReview alone (the mechanism this check
+                // was first written for), which left the Blocked collision path below completely
+                // unguarded — a real reseed duplicated every Blocked collision action on top of the
+                // still-unresolved one from the previous reseed.
+                if (await connection.ExecuteScalarAsync<int>(Sql.Quotes.SelectHasUnresolvedActionById, new { id = q.Id }, transaction) > 0)
                     continue;
 
                 QuoteActionPayloadDto payload = new QuoteActionPayloadDto
@@ -1029,8 +1040,25 @@ internal static class ImportActionPlanner
             // Falls back to natural-key (title+type): either the entry omits an explicit id (#180's
             // enrichment shape) or it carries one that matches no row yet (a not-yet-migrated row —
             // #162's scope boundary).
-            (string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)? existingByKey = await connection.QuerySingleOrDefaultAsync<(string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
-                Sql.Sources.SelectExistingByTitleAndType, new { title = s.Title, type = typeStr }, transaction);
+            //
+            // #374: found live (T2 Docker, a full-corpus reseed) — once Date joined a Source's natural
+            // key (step 6), more than one row can share (Title, Type), and the single-row
+            // SelectExistingByTitleAndType this branch used unchanged (per step 6's own "every other
+            // Title/Type consumer still expects at most one row" assumption) crashed with "Sequence
+            // contains more than one element" the moment a real title here — an enrichment entry with
+            // no date of its own — matched two already-dated variants created by an earlier file's
+            // quotes. Uses the same SelectAllExistingByTitleAndType + PickSourceVariant machinery
+            // ResolveSourceAsync already established for exactly this ambiguity, rather than a second,
+            // divergent resolution rule for the same problem: an entry with no date claim (absent or
+            // explicit null both collapse to no claim here) picks the nearest variant; a dated entry
+            // matches its exact variant or falls back to a date-less one to backfill.
+            IEnumerable<(string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)> keyVariantRows = await connection.QueryAsync<(string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)>(
+                Sql.Sources.SelectAllExistingByTitleAndType, new { title = s.Title, type = typeStr }, transaction);
+            List<SourceVariant> keyVariants = [.. keyVariantRows.Select(r => new SourceVariant(r.Id, r.Date, r.SeriesId, r.SeasonId, r.CompletenessStatus))];
+            SourceVariant? pickedKeyVariant = PickSourceVariant(keyVariants, s.Date.HasValue ? s.Date.Value : null);
+            (string Id, string? Date, string? SeriesId, string? SeasonId, SafeValue<CompletenessStatus?> CompletenessStatus)? existingByKey = pickedKeyVariant is { } picked
+                ? (picked.Id, picked.Date, picked.SeriesId, picked.SeasonId, picked.CompletenessStatus)
+                : null;
 
             if (existingByKey is { } keyRow)
             {
