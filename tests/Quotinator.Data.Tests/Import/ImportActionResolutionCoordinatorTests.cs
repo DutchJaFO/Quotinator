@@ -30,7 +30,7 @@ public class ImportActionResolutionCoordinatorTests
         _tempDir = Directory.CreateTempSubdirectory("quotinator_action_coordinator_test_").FullName;
         _dbPath  = Path.Combine(_tempDir, "test.db");
 
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         conn.Execute("""
             CREATE TABLE Import_Action (
@@ -135,12 +135,12 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task StageAsync_WritesEveryActionSupplied()
     {
-        var a1 = BuildDecidedAdd("BATCH-1");
-        var a2 = BuildPendingModify("BATCH-1");
+        ImportActionEntity a1 = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity a2 = BuildPendingModify("BATCH-1");
 
         await _coordinator.StageAsync([a1, a2]);
 
-        var batch = await _reader.GetAllForBatchAsync("BATCH-1");
+        IReadOnlyList<ImportActionEntity> batch = await _reader.GetAllForBatchAsync("BATCH-1");
         Assert.HasCount(2, batch);
     }
 
@@ -149,7 +149,7 @@ public class ImportActionResolutionCoordinatorTests
     {
         await _coordinator.StageAsync([]);
 
-        var batch = await _reader.GetAllForBatchAsync("BATCH-1");
+        IReadOnlyList<ImportActionEntity> batch = await _reader.GetAllForBatchAsync("BATCH-1");
         Assert.IsEmpty(batch);
     }
 
@@ -163,13 +163,13 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task DecideAsync_PendingAction_StagesDecisionAndNeverInvokesApplyCallback()
     {
-        var entry = BuildPendingModify("BATCH-1");
+        ImportActionEntity entry = BuildPendingModify("BATCH-1");
         await _writer.WriteAsync(entry);
 
-        var callbackInvoked = false;
+        bool callbackInvoked = false;
         await _coordinator.DecideAsync(entry.Id, "\"my-decision\"");
 
-        var found = await _reader.GetByIdAsync(entry.Id);
+        ImportActionEntity? found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
         Assert.AreEqual("\"my-decision\"", found.MergedFields);
         Assert.IsFalse(callbackInvoked, "DecideAsync must never touch any domain table.");
@@ -178,9 +178,9 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task DecideAsync_AlreadyAppliedAction_ThrowsImportActionStateException()
     {
-        var entry = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity entry = BuildDecidedAdd("BATCH-1");
         await _writer.WriteAsync(entry);
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             conn.Open();
             await _writer.MarkAppliedAsync(entry.Id, conn);
@@ -192,13 +192,13 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task UndoDecisionAsync_DecidedAction_RevertsToPending()
     {
-        var entry = BuildPendingModify("BATCH-1");
+        ImportActionEntity entry = BuildPendingModify("BATCH-1");
         await _writer.WriteAsync(entry);
         await _coordinator.DecideAsync(entry.Id, "\"decision\"");
 
         await _coordinator.UndoDecisionAsync(entry.Id);
 
-        var found = await _reader.GetByIdAsync(entry.Id);
+        ImportActionEntity? found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Pending, found!.Status.Parsed);
         Assert.IsNull(found.MergedFields);
     }
@@ -206,7 +206,7 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task UndoDecisionAsync_StillPendingAction_ThrowsImportActionStateException()
     {
-        var entry = BuildPendingModify("BATCH-1");
+        ImportActionEntity entry = BuildPendingModify("BATCH-1");
         await _writer.WriteAsync(entry);
 
         await Assert.ThrowsExactlyAsync<ImportActionStateException>(() => _coordinator.UndoDecisionAsync(entry.Id));
@@ -217,13 +217,13 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task TryApplyBatchAsync_SomeActionsStillPending_ReturnsPendingIdsAndNeverInvokesCallback()
     {
-        var decided = BuildDecidedAdd("BATCH-1");
-        var pending = BuildPendingModify("BATCH-1");
+        ImportActionEntity decided = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity pending = BuildPendingModify("BATCH-1");
         await _writer.WriteAsync(decided);
         await _writer.WriteAsync(pending);
 
-        var callbackInvocations = 0;
-        var result = await _coordinator.TryApplyBatchAsync("BATCH-1", (_, _, _) =>
+        int callbackInvocations = 0;
+        IReadOnlyList<Guid>? result = await _coordinator.TryApplyBatchAsync("BATCH-1", (_, _, _) =>
         {
             callbackInvocations++;
             return Task.CompletedTask;
@@ -233,21 +233,21 @@ public class ImportActionResolutionCoordinatorTests
         Assert.AreSequenceEqual([pending.Id], [.. result!]);
         Assert.AreEqual(0, callbackInvocations, "Nothing should be applied while any action in the batch is still pending.");
 
-        var stillDecided = await _reader.GetByIdAsync(decided.Id);
+        ImportActionEntity? stillDecided = await _reader.GetByIdAsync(decided.Id);
         Assert.AreEqual(ImportActionStatus.Decided, stillDecided!.Status.Parsed, "The already-decided action must not be applied either — all-or-nothing.");
     }
 
     [TestMethod]
     public async Task TryApplyBatchAsync_EveryActionDecided_InvokesCallbackOncePerActionAndMarksAllApplied()
     {
-        var first  = BuildDecidedAdd("BATCH-1");
-        var second = BuildPendingModify("BATCH-1");
+        ImportActionEntity first  = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity second = BuildPendingModify("BATCH-1");
         await _writer.WriteAsync(first);
         await _writer.WriteAsync(second);
         await _coordinator.DecideAsync(second.Id, "\"decision-2\"");
 
-        var appliedIds = new List<Guid>();
-        var result = await _coordinator.TryApplyBatchAsync("BATCH-1", (action, connection, transaction) =>
+        List<Guid> appliedIds = [];
+        IReadOnlyList<Guid>? result = await _coordinator.TryApplyBatchAsync("BATCH-1", (action, connection, transaction) =>
         {
             Assert.IsNotNull(connection);
             Assert.IsNotNull(transaction);
@@ -258,8 +258,8 @@ public class ImportActionResolutionCoordinatorTests
         Assert.IsNull(result, "A fully-decided batch must apply successfully (null return).");
         Assert.AreSequenceEqual([first.Id, second.Id], appliedIds, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
 
-        var firstAfter  = await _reader.GetByIdAsync(first.Id);
-        var secondAfter = await _reader.GetByIdAsync(second.Id);
+        ImportActionEntity? firstAfter  = await _reader.GetByIdAsync(first.Id);
+        ImportActionEntity? secondAfter = await _reader.GetByIdAsync(second.Id);
         Assert.AreEqual(ImportActionStatus.Applied, firstAfter!.Status.Parsed);
         Assert.AreEqual(ImportActionStatus.Applied, secondAfter!.Status.Parsed);
         Assert.IsNotNull(firstAfter.AppliedAt);
@@ -268,26 +268,26 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task TryApplyBatchAsync_CallbackThrows_RollsBackAndLeavesActionsDecided()
     {
-        var entry = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity entry = BuildDecidedAdd("BATCH-1");
         await _writer.WriteAsync(entry);
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             _coordinator.TryApplyBatchAsync("BATCH-1", (_, _, _) => throw new InvalidOperationException("boom"), TestContext.CancellationToken));
 
-        var found = await _reader.GetByIdAsync(entry.Id);
+        ImportActionEntity? found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed, "A failed apply must not leave the action marked Applied.");
     }
 
     [TestMethod]
     public async Task TryApplyBatchAsync_BlockedActionInBatch_HoldsEntireBatch()
     {
-        var decided = BuildDecidedAdd("BATCH-1");
-        var blocked = BuildBlockedModify("BATCH-1");
+        ImportActionEntity decided = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity blocked = BuildBlockedModify("BATCH-1");
         await _writer.WriteAsync(decided);
         await _writer.WriteAsync(blocked);
 
-        var callbackInvocations = 0;
-        var result = await _coordinator.TryApplyBatchAsync("BATCH-1", (_, _, _) =>
+        int callbackInvocations = 0;
+        IReadOnlyList<Guid>? result = await _coordinator.TryApplyBatchAsync("BATCH-1", (_, _, _) =>
         {
             callbackInvocations++;
             return Task.CompletedTask;
@@ -297,20 +297,20 @@ public class ImportActionResolutionCoordinatorTests
         Assert.AreSequenceEqual([blocked.Id], [.. result!]);
         Assert.AreEqual(0, callbackInvocations, "A Blocked action must hold the whole batch, including otherwise-ready actions.");
 
-        var stillDecided = await _reader.GetByIdAsync(decided.Id);
+        ImportActionEntity? stillDecided = await _reader.GetByIdAsync(decided.Id);
         Assert.AreEqual(ImportActionStatus.Decided, stillDecided!.Status.Parsed, "An unrelated Decided action must not apply while a Blocked action shares its batch.");
     }
 
     [TestMethod]
     public async Task TryApplyBatchAsync_PendingModifyFromSameBatch_DoesNotHoldTheRestOfTheBatch()
     {
-        var decided = BuildDecidedAdd("BATCH-1");
-        var sameBatchCollision = BuildPendingModifyFromSameBatch("BATCH-1");
+        ImportActionEntity decided = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity sameBatchCollision = BuildPendingModifyFromSameBatch("BATCH-1");
         await _writer.WriteAsync(decided);
         await _writer.WriteAsync(sameBatchCollision);
 
-        var appliedIds = new List<Guid>();
-        var result = await _coordinator.TryApplyBatchAsync("BATCH-1", (action, _, _) =>
+        List<Guid> appliedIds = [];
+        IReadOnlyList<Guid>? result = await _coordinator.TryApplyBatchAsync("BATCH-1", (action, _, _) =>
         {
             appliedIds.Add(action.Id);
             return Task.CompletedTask;
@@ -319,21 +319,21 @@ public class ImportActionResolutionCoordinatorTests
         Assert.IsNull(result, "A Pending Modify whose existing side is this same batch protects nothing that already exists — it must not hold unrelated actions the way a genuine DB-backed Modify would.");
         Assert.AreSequenceEqual([decided.Id], appliedIds);
 
-        var stillPending = await _reader.GetByIdAsync(sameBatchCollision.Id);
+        ImportActionEntity? stillPending = await _reader.GetByIdAsync(sameBatchCollision.Id);
         Assert.AreEqual(ImportActionStatus.Pending, stillPending!.Status.Parsed, "The same-batch collision itself stays Pending — only its exemption from gating changes, not its own resolution.");
     }
 
     [TestMethod]
     public async Task TryApplyBatchAsync_BlockedActionResolved_UnrelatedActionsThenApply()
     {
-        var decided = BuildDecidedAdd("BATCH-1");
-        var blocked = BuildBlockedModify("BATCH-1");
+        ImportActionEntity decided = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity blocked = BuildBlockedModify("BATCH-1");
         await _writer.WriteAsync(decided);
         await _writer.WriteAsync(blocked);
         await _coordinator.DecideAsync(blocked.Id, "\"resolved\"");
 
-        var appliedIds = new List<Guid>();
-        var result = await _coordinator.TryApplyBatchAsync("BATCH-1", (action, _, _) =>
+        List<Guid> appliedIds = [];
+        IReadOnlyList<Guid>? result = await _coordinator.TryApplyBatchAsync("BATCH-1", (action, _, _) =>
         {
             appliedIds.Add(action.Id);
             return Task.CompletedTask;
@@ -346,32 +346,32 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task DecideAsync_MarkCompletenessAsProvided_PersistsOnTheAction()
     {
-        var entry = BuildPendingModify("BATCH-1");
+        ImportActionEntity entry = BuildPendingModify("BATCH-1");
         await _writer.WriteAsync(entry);
 
         await _coordinator.DecideAsync(entry.Id, "\"decision\"", CompletenessStatus.Complete);
 
-        var found = await _reader.GetByIdAsync(entry.Id);
+        ImportActionEntity? found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(CompletenessStatus.Complete, found!.MarkCompletenessAs.Parsed);
     }
 
     [TestMethod]
     public async Task DecideAsync_MarkCompletenessAsOmitted_StaysNull()
     {
-        var entry = BuildPendingModify("BATCH-1");
+        ImportActionEntity entry = BuildPendingModify("BATCH-1");
         await _writer.WriteAsync(entry);
 
         await _coordinator.DecideAsync(entry.Id, "\"decision\"");
 
-        var found = await _reader.GetByIdAsync(entry.Id);
+        ImportActionEntity? found = await _reader.GetByIdAsync(entry.Id);
         Assert.IsNull(found!.MarkCompletenessAs.Parsed);
     }
 
     [TestMethod]
     public async Task TryApplyBatchAsync_NoActionsForBatch_ReturnsNullWithoutInvokingCallback()
     {
-        var callbackInvoked = false;
-        var result = await _coordinator.TryApplyBatchAsync("NO-SUCH-BATCH", (_, _, _) =>
+        bool callbackInvoked = false;
+        IReadOnlyList<Guid>? result = await _coordinator.TryApplyBatchAsync("NO-SUCH-BATCH", (_, _, _) =>
         {
             callbackInvoked = true;
             return Task.CompletedTask;
@@ -391,15 +391,15 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task DiscardBatchAsync_StagedBatch_MarksEveryActionDiscardedWithoutTouchingDomainTables()
     {
-        var a1 = BuildDecidedAdd("BATCH-1");
-        var a2 = BuildPendingModify("BATCH-1");
+        ImportActionEntity a1 = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity a2 = BuildPendingModify("BATCH-1");
         await _writer.WriteAsync(a1);
         await _writer.WriteAsync(a2);
 
         await _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken);
 
-        var a1After = await _reader.GetByIdAsync(a1.Id);
-        var a2After = await _reader.GetByIdAsync(a2.Id);
+        ImportActionEntity? a1After = await _reader.GetByIdAsync(a1.Id);
+        ImportActionEntity? a2After = await _reader.GetByIdAsync(a2.Id);
         Assert.AreEqual(ImportActionStatus.Discarded, a1After!.Status.Parsed);
         Assert.AreEqual(ImportActionStatus.Discarded, a2After!.Status.Parsed);
     }
@@ -407,9 +407,9 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task DiscardBatchAsync_AlreadyAppliedBatch_ThrowsImportBatchStateException()
     {
-        var entry = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity entry = BuildDecidedAdd("BATCH-1");
         await _writer.WriteAsync(entry);
-        using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             conn.Open();
             await _writer.MarkAppliedAsync(entry.Id, conn);
@@ -421,7 +421,7 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task DiscardBatchAsync_AlreadyDiscardedBatch_ThrowsImportBatchStateException()
     {
-        var entry = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity entry = BuildDecidedAdd("BATCH-1");
         await _writer.WriteAsync(entry);
         await _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken);
 
@@ -432,7 +432,7 @@ public class ImportActionResolutionCoordinatorTests
 
     private async Task MarkAppliedAsync(Guid id)
     {
-        using var conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         await _writer.MarkAppliedAsync(id, conn);
     }
@@ -440,16 +440,16 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task TryReverseBatchAsync_AllApplied_InvokesCallbackOnceWithWholeBatchAndReturnsNull()
     {
-        var a1 = BuildDecidedAdd("BATCH-1");
-        var a2 = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity a1 = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity a2 = BuildDecidedAdd("BATCH-1");
         await _writer.WriteAsync(a1);
         await _writer.WriteAsync(a2);
         await MarkAppliedAsync(a1.Id);
         await MarkAppliedAsync(a2.Id);
 
-        var invocationCount = 0;
+        int invocationCount = 0;
         IReadOnlyList<ImportActionEntity>? seenBatch = null;
-        var result = await _coordinator.TryReverseBatchAsync("BATCH-1", (actions, connection, transaction) =>
+        IReadOnlyList<Guid>? result = await _coordinator.TryReverseBatchAsync("BATCH-1", (actions, connection, transaction) =>
         {
             invocationCount++;
             seenBatch = actions;
@@ -466,15 +466,15 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task TryReverseBatchAsync_ActionNotApplied_ReturnsBlockingIdsAndNeverInvokesCallback()
     {
-        var applied = BuildDecidedAdd("BATCH-1");
-        var decided = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity applied = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity decided = BuildDecidedAdd("BATCH-1");
         await _writer.WriteAsync(applied);
         await _writer.WriteAsync(decided);
         await MarkAppliedAsync(applied.Id);
         // decided stays Decided, never Applied.
 
-        var callbackInvoked = false;
-        var result = await _coordinator.TryReverseBatchAsync("BATCH-1", (_, _, _) =>
+        bool callbackInvoked = false;
+        IReadOnlyList<Guid>? result = await _coordinator.TryReverseBatchAsync("BATCH-1", (_, _, _) =>
         {
             callbackInvoked = true;
             return Task.CompletedTask;
@@ -488,8 +488,8 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task TryReverseBatchAsync_NoActionsForBatch_ReturnsNullWithoutInvokingCallback()
     {
-        var callbackInvoked = false;
-        var result = await _coordinator.TryReverseBatchAsync("NO-SUCH-BATCH", (_, _, _) =>
+        bool callbackInvoked = false;
+        IReadOnlyList<Guid>? result = await _coordinator.TryReverseBatchAsync("NO-SUCH-BATCH", (_, _, _) =>
         {
             callbackInvoked = true;
             return Task.CompletedTask;
@@ -502,14 +502,14 @@ public class ImportActionResolutionCoordinatorTests
     [TestMethod]
     public async Task TryReverseBatchAsync_CallbackThrows_RollsBackAndBatchRemainsQueryable()
     {
-        var entry = BuildDecidedAdd("BATCH-1");
+        ImportActionEntity entry = BuildDecidedAdd("BATCH-1");
         await _writer.WriteAsync(entry);
         await MarkAppliedAsync(entry.Id);
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             _coordinator.TryReverseBatchAsync("BATCH-1", (_, _, _) => throw new InvalidOperationException("boom"), TestContext.CancellationToken));
 
-        var found = await _reader.GetByIdAsync(entry.Id);
+        ImportActionEntity? found = await _reader.GetByIdAsync(entry.Id);
         Assert.AreEqual(ImportActionStatus.Applied, found!.Status.Parsed, "A failed reversal must leave the action exactly as it was.");
     }
 

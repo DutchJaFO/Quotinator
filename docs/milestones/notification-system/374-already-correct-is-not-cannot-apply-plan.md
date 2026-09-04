@@ -853,6 +853,22 @@ Full solution: `dotnet build --configuration Release` → 0 Warning(s), 0 Error(
 green (`Quotinator.Core.Tests` 1560, `Quotinator.Data.Tests` 1337, full solution `dotnet test -m:1`
 green end to end).
 
+**Re-verified 2026-09-04, per the developer's own observation that step 12's later work needed the same
+pass repeated** — this step's own scope is "every file this issue touched," and step 12 touched many
+more after 2026-09-03. `QuoteFieldMerge.cs` and `Quotinator.Core/Logging/LogMessages.cs` added to the
+`IDE0008` scoped list (no pre-existing `var` in either — 0 warnings on build). `ImportActionResolutionCoordinatorTests.cs`
+added to the same list and had genuine pre-existing `var` usage (132 raw warning lines, 66 distinct
+sites) — `dotnet format style --diagnostics IDE0008` converged to zero after three passes, matching this
+project's own documented "one pass is not enough" pattern. That conversion exposed the expected
+follow-ons in the same file — `IDE0090` (6 sites) and `IDE0028` (3 sites) — fixed the same way, and
+`ImportActionResolutionCoordinatorTests.cs` added to the (separately scoped) `IDE0090` list alongside
+them. Every other file step 12 touched (`ImportActionPlanner.cs`, `FieldMergeResolver.cs`,
+`QuotinatorDatabaseInitializer.cs`, `IDatabaseInitializer.cs`, `AdminEndpoints.cs`,
+`NotificationTable.razor.cs`, `ReseedEntityCountDto.cs`, `OpenApiSpecEndpointTests.cs`, and the other
+touched test files) was already in the scoped list from earlier in this issue or from #375 — confirmed
+0 new warnings in all of them. Full solution re-confirmed clean afterward: `dotnet build` → 0
+Warning(s), 0 Error(s); `dotnet test -m:1` → all ten projects green, 0 failures.
+
 ---
 
 ## Verification checklist
