@@ -1,6 +1,8 @@
 # #372 — Reseed should only import the designated files, not delete data first
 
-**Status:** In progress (step 6) — blocked on [#373](https://github.com/DutchJaFO/Quotinator/issues/373); steps 1–5 done
+**Status:** In progress (step 8) — steps 1–7 done (steps 6–7 found already/newly complete 2026-09-04,
+during [#374](https://github.com/DutchJaFO/Quotinator/issues/374)'s own step 12 cascade); every
+checklist row is ✅ except row 21 (T1, the developer's own)
 **GitHub issue:** #372
 **Tiers required:** T1, T2
 **Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), found by this issue's own step 6. **Blocks #302**, whose final T2 and T1 wait on this
@@ -260,7 +262,11 @@ surface them separately rather than sweeping.
 
 ### 6. Repair the tests that assumed reseed re-applies everything
 
-**Status:** 🚧 Blocked on [#373](https://github.com/DutchJaFO/Quotinator/issues/373) — turns row 12 green
+**Status:** ✅ Done — found already complete, never marked so. #373's own commit `ad4f3fd3`
+(2026-09-03) rewrote the affected tests as part of landing its own behaviour change, rather than as a
+separate pass — this step's own status was simply never updated when that landed. Confirmed passing
+2026-09-04 as part of the full-solution run; see #373's own plan doc, step 8, for the specific renamed
+tests.
 
 Cross-check finding 4, which turned out to have one cause rather than being ten separate repairs.
 
@@ -283,17 +289,24 @@ I inferred twice instead.
 
 ### 7. Update the four documentation surfaces and ADR 014
 
-**Status:** ⬜ Not started — turns rows 13–14 green
-
-Cross-check findings 1 and 2, all in the same commit as the behaviour change per CLAUDE.md.
+**Status:** ✅ Done, 2026-09-04 — found undone during #374's own step 12 cascade, not in the same commit
+as the behaviour change as this step originally intended, but fixed now rather than left further. All
+four surfaces corrected: `AdminEndpoints.cs`'s `WithDescription` for `/database/reseed`,
+`docs/api-endpoints.md`'s matching row, and `addon/DOCS.md` + `addon-beta/DOCS.md` (mirrored, per
+CLAUDE.md). ADR 014's own factual description of Reseed (`TruncateDataAsync`, "wiped-and-reimported")
+revised in place per this project's ADR convention — its decision is unchanged, only the mechanism
+description. `docs/data-import.md` and `IDatabaseInitializer.cs`'s own `ReseedAsync`/`ResetAsync` XML
+docs, plus a live log message (`LogMessages.LogReseedRequested`) still saying "clearing all data",
+were found carrying the same stale claim during the same sweep and corrected together — a wider set
+than this step's own four, found by grepping the whole repository rather than only touching the four
+named.
 
 ### 8. Run the T2 documents green, then hand over T1
 
-**Status:** ⬜ Not started — turns rows 15–17 green
-
-This issue's own document, plus a re-run of #302's `11-clean-reseed-confirmation.md`, whose step 2
-measures a reseed against a populated database and is the reason #302 is blocked on this. T1 is the
-developer's own.
+**Status:** In progress. This issue's own document (`21-reseed-preserves-existing-data.md`) and
+#302's `11-clean-reseed-confirmation.md` have both been run live, twice, by #374's own step 12
+(2026-09-04) — see that issue's plan doc for the full account. T1 (the developer's own action, per
+CLAUDE.md) is the only remaining part of this step.
 
 ---
 
@@ -310,18 +323,18 @@ developer's own.
 | 7 | ❌ | The `Obsolete` dismissal either has a live trigger under test, or no longer exists | Unit test **or** removal | Whichever way step 4 resolves, the result verifies itself: a surviving path gets a test naming the trigger that still reaches it; a dead one is deleted, and deleted code cannot be called. Deliberately not "a finding is recorded" — that is the shape `process.md` refuses |
 | 8 | ❌ | An explicit reseed does not consult whether content exists | Unit test | `DatabaseInitializerTests.Reseed_OnPopulatedDatabase_ImportsRegardlessOfExistingContent` — proven by mutation: restoring the count gate makes it fail |
 | 9 | ❌ | Cold start still seeds only a database with no content | Unit test | `DatabaseInitializerTests.Initialise_OnPopulatedDatabase_SeedsNothing` — the gate stays where it belongs, and stays a *content* check |
-| 10 | ❌ | Emptiness is decided on content, not on any table having rows | Unit test | `DatabaseInitializerTests.Initialise_WithNonContentRowsOnly_StillSeeds` — a database holding reference-shaped rows but no quotes is still seeded. Guards the broadening that [#310](https://github.com/DutchJaFO/Quotinator/issues/310) would otherwise turn into a silent skip on every new install |
-| 11 | ❌ | No `Quotinator_*.DeleteAll` constant survives without a caller | Guard test **or** removal | Removed constants verify themselves by absence. Any kept constant is named by an assertion over `Sql.*` requiring a caller, so "kept for later" cannot pass silently — the guard tests already enumerate these constants, so an unused one is scanned on every run rather than being free |
-| 12 | ❌ | #302's confirmations still describe what a reseed actually did | Unit test | `DatabaseInitializerTests.Reseed_AfterDismissal_...`, rewritten per step 6, each stating whether the old form was over-broad or the behaviour changed |
-| 13 | ❌ | Reset then Reseed still produces a from-scratch database | Unit test | `DatabaseInitializerTests.ResetThenReseed_ProducesAFromScratchDatabase` — the composition that replaces what reseed used to do alone, and the only remaining route to that outcome |
-| 14 | ❌ | Every surface describing reseed as deleting is corrected | Unit test | `RepositoryStructureTests`-style assertion over `AdminEndpoints`' own description text, so a future edit reintroducing "clears all data" fails rather than being caught by eye |
-| 15 | ❌ | ADR 014's account of Reseed matches the code | Manual, then asserted | Revised in place; row 14's assertion covers the endpoint text, and the ADR is checked as part of step 7 rather than left to a reader |
-| 16 | ❌ | A live reseed against a populated database preserves and reports correctly | Automated (T2) | new `docs/automated-testing/import-and-staged-actions/NN-reseed-preserves-existing-data.md` |
-| 17 | ❌ | The new T2 document goes red before it goes green | Canary run | written and run at step 1 against the pre-work build, which is `HEAD` at that moment — no worktree needed |
-| 18 | ❌ | #302's own document passes against the reseed that ships | Automated (T2) | re-run of `11-clean-reseed-confirmation.md`, unblocking #302's rows 38–39 |
-| 19 | ❌ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
-| 20 | ❌ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
-| 21 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | reset, reseed, reseed again — the second adding nothing and reporting so |
+| 10 | ✅ | Emptiness is decided on content, not on any table having rows | Unit test | `DatabaseInitializerTests.Initialise_WithNonContentRowsOnly_StillSeeds` — confirmed passing 2026-09-04 |
+| 11 | ✅ | No `Quotinator_*.DeleteAll` constant survives without a caller | Guard test **or** removal | The guard tests enumerating these constants run as part of the full solution suite, confirmed 0 failures 2026-09-04 |
+| 12 | ✅ | #302's confirmations still describe what a reseed actually did | Unit test | `DatabaseInitializerTests.Reseed_AfterDismissal_WritesTheConfirmationAgain` and siblings, rewritten by #373's own commit `ad4f3fd3` per that issue's step 8 — confirmed passing 2026-09-04 |
+| 13 | ✅ | Reset then Reseed still produces a from-scratch database | Unit test | `DatabaseInitializerTests.ResetThenReseed_ProducesAFromScratchDatabase` |
+| 14 | ✅ | Every surface describing reseed as deleting is corrected | Unit test | `OpenApiSpecEndpointTests.ReseedEndpoint_LiveDescription_NeverClaimsItDeletesFirst` (new, 2026-09-04, confirmed red before the fix and green after) — asserts against the live `/openapi/v1.json`, which reflects `AdminEndpoints.cs`'s own `WithDescription`. `docs/api-endpoints.md`, `addon/DOCS.md`, `addon-beta/DOCS.md`, `docs/data-import.md`, `IDatabaseInitializer.cs`'s XML docs, and `LogMessages.LogReseedRequested`'s live log line were also found stale during the same sweep and corrected, though only the endpoint description has a mechanical guard |
+| 15 | ✅ | ADR 014's account of Reseed matches the code | Manual, then asserted | Revised in place 2026-09-04 — its factual description of Reseed (`TruncateDataAsync`, "wiped-and-reimported") corrected; its decision (audit-trail tables never purge dangling references) is unaffected |
+| 16 | ✅ | A live reseed against a populated database preserves and reports correctly | Automated (T2) | `docs/automated-testing/import-and-staged-actions/21-reseed-preserves-existing-data.md` — run live 2026-09-04 by #374's own step 12 |
+| 17 | ✅ | The new T2 document goes red before it goes green | Canary run | Recorded in the document's own Canary section, run 2026-09-02 against `quotinator:local` at `3e9bb19c` (pre-#372) |
+| 18 | ✅ | #302's own document passes against the reseed that ships | Automated (T2) | `11-clean-reseed-confirmation.md`, run live 2026-09-04 by #374's own step 12 — see that issue's plan doc for the one further, distinct, pre-existing gap found and recorded (not this issue's) during that run |
+| 19 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors, confirmed 2026-09-04 |
+| 20 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` → all green, 0 failures, confirmed 2026-09-04 |
+| 21 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | reset, reseed, reseed again — the second adding nothing and reporting so. **T1 is the developer's own action, not the assistant's — see CLAUDE.md** |
 
 **Rows 2 and 4 exist because this issue's assertions are unusually easy to satisfy by accident.** Most
 rows here assert that something was *preserved*, and a build that imports nothing preserves everything.

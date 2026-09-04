@@ -49,11 +49,13 @@ bigger loss than the "purge dangling rows" question #151 originally asked, and i
 audit/history record of everything that happened before that Reset is gone unless it was captured
 somewhere else first.
 
-Reseed (`TruncateDataAsync`) is unaffected by any of this — confirmed by #156's own research, it only
-ever deletes rows from named *domain* tables (Quotes, Sources, Characters, ...) and never touches a
-`System_`-prefixed table at all. The dangling-reference scenario above (content change/removal across
-a reimport) still applies to audit-trail rows referencing Reseed-wiped-and-reimported domain entities,
-regardless of how #156 resolves — only Reset's own wholesale-loss behaviour is new.
+Reseed is unaffected by any of this. **Corrected 2026-09-04, per #372:** Reseed no longer deletes
+domain rows at all — it imports the configured source files without a prior wipe, adding what is
+missing and reconciling what disagrees, and never touches a `System_`-prefixed table either way. The
+dangling-reference scenario above (an entity's content genuinely changing between the audit-trail row
+being written and a later reimport) still applies to audit-trail rows referencing domain entities a
+reseed later modifies — only the mechanism changed (reconciliation in place, not a wipe-and-reimport);
+only Reset's own wholesale-loss behaviour is new.
 
 A related clarification (2026-08-01): #156's Reset will not automatically reimport bundled/imported
 domain content (quotes, sources, ...) afterward either — per CLAUDE.md's "Endpoint side-effect policy

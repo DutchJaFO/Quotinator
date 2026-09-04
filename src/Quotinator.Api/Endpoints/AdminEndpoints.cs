@@ -209,7 +209,9 @@ internal static class AdminEndpoints
         .Produces<DatabaseSeedSummaryResponse>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status401Unauthorized)
         .WithDescription(
-            "Clears all data tables and reimports every quote from the configured source files. " +
+            "Imports the configured source files without deleting anything first (issue #372): adds what is missing, " +
+            "leaves already-correct content untouched, and raises a decision where content disagrees. " +
+            "Content the operator added themselves and that no configured file describes is never touched. " +
             "The schema version history is preserved — no migrations are re-applied. " +
             "Auto-updated sources are refreshed from the network first if stale (or unconditionally when `forceSourceRefresh=true`), " +
             "unless `Quotinator:AutoUpdateSources` is `false`, in which case `forceSourceRefresh` has no effect. " +

@@ -2342,9 +2342,10 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #68: reseeding (clear + reimport from source) reproduces the same conversation/stage-direction/
-    /// sound-cue counts, not doubled — exercises the parse-plan-apply path a second time from a clean
-    /// slate. Live re-import-without-clearing dedup (Add-detection by explicit id) is covered
+    /// #68: reseeding (re-import from source, without deleting first — #372) reproduces the same
+    /// conversation/stage-direction/sound-cue counts, not doubled — exercises the parse-plan-apply path
+    /// a second time against already-populated data. Live re-import dedup (Add-detection by explicit
+    /// id) is covered
     /// directly against <c>SqliteQuoteImportService</c> in
     /// <c>QuoteImportServiceTests.ImportAsync_SameExtendedFormatFileImportedTwice_DoesNotDuplicateConversationOrStageDirection</c>,
     /// since <see cref="QuotinatorDatabaseInitializer"/>'s own seeding is a no-op once any quote

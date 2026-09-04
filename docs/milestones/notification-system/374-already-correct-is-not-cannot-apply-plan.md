@@ -1,6 +1,7 @@
 # #374 — A conflict rule cannot tell "already correct" from "cannot apply"
 
-**Status:** In progress (step 12)
+**Status:** In progress. All 13 steps done; every checklist row is ✅ except row 43 (T1, the developer's
+own action)
 **GitHub issue:** #374
 **Tiers required:** T1, T2
 **Depends on:** [#375](https://github.com/DutchJaFO/Quotinator/issues/375) (done in code, released separately)
@@ -650,7 +651,7 @@ vocabulary (`ConflictRuleOutcome`) added to `docs/vocabulary.md` in the same com
 
 ### 12. Re-measure the reproduction, and unblock #373
 
-**Status:** In progress. The reproduction re-measurement is done. Both of #373's own T2 documents have
+**Status:** ✅ Done, 2026-09-04. The reproduction re-measurement is done. Both of #373's own T2 documents have
 been run live (2026-09-04), twice — once before and once after the sixth defect below — against a
 freshly rebuilt image each time: doc 21 passes except one already-known, separately-scoped issue and one
 stale-document assertion (both noted below); doc 11 initially found a real regression (reseed
@@ -661,9 +662,17 @@ re-verified live: the duplication the developer's own report described is gone, 
 distinct, pre-existing gap found and recorded (not fixed) rather than left silent. Five defects found by
 this step's own earlier T2 pass, plus the developer-reported sixth (case-sensitivity) and everything it
 led to, are all documented below with their regression guards. Full solution green throughout
-(`dotnet test -m:1`, 0 failures, 0 warnings). **Not yet done:** #373's own step 9 needs the same live
-confirmation the two documents above already got. #373's step 8 (its own remaining "unblock #372's step
-6" work) is unaffected by this issue and stays #373's to do.
+(`dotnet test -m:1`, 0 failures, 0 warnings). **Update:** #373's own step 9 (and #372's steps 6–8, found
+in the same pass to be either already done or fixable by the same sweep — four more live-facing surfaces
+found still claiming a reseed deletes data, corrected together) are now brought up to date in their own
+plan docs — see those documents directly rather than duplicating their status here. **Genuinely still
+not done:** two gaps this step's own live T2 pass found are filed as their own issues rather than fixed
+here, since fixing either is broader than this issue's own scope (the case-sensitivity defect the
+developer reported) — [#376](https://github.com/DutchJaFO/Quotinator/issues/376) (the Source-level
+Modify accumulation, a different code path from the sixth defect's own fix) and
+[#377](https://github.com/DutchJaFO/Quotinator/issues/377) (a no-op Modify still counted as `Modified`,
+found on doc 11's re-verification run). Everything else this step promised (re-measure the reproduction,
+unblock #373) is done.
 
 `DatabaseInitializerTests.Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows` (new; renamed
 from `_LeavesNothingPending` per row 33's correction below — this paragraph was not updated when that
@@ -750,9 +759,9 @@ mechanism as step 7 finding 5's `nikhilnamal17-quote-exclusions.json`) excludes 
 above:** `Pending` grows unbounded across reseeds (`3 → 4 → 5`, live-verified) for a genuine field-level
 Source Modify conflict ("Silence of the Lambs", a title/date disagreement between the two bundled files
 with no covering rule). The Modify-path accumulation fix below (dedup point 3) covers a Quote's own
-Modify branch only, not `PlanSourcesAsync`'s; a Modify conflict's identity there is `(entity, field)`,
-which nothing currently dedups against. Not fixed here — recorded so it is not lost, and left for its
-own issue.
+Modify branch only, not `PlanSourcesAsync`'s; a Modify conflict's identity there may need to be
+`(entity, field)` rather than just `(entity)`, which nothing currently dedups against. Not fixed here —
+filed as [#376](https://github.com/DutchJaFO/Quotinator/issues/376) rather than left an unnumbered note.
 
 **A sixth defect, reported by the developer directly (not found by this step's own live T2 pass):
 "if the quote, title or character are identical except for case then that needs to be reviewed as it
@@ -822,9 +831,9 @@ fixed here: a Review-policy Modify whose full resolution is a complete no-op (`e
 field differences) is still classified `Modify` and counted in `Modified`, the same "hides what happened"
 shape as the `Skip`-only fix above but for `Review`'s own auto-resolve path — this is what still produces
 one settling, non-repeating confirmation duplicate per fresh install (stable after the first reseed, not
-growing further). Recorded here rather than fixed, since it is architecturally deeper — it would need a
-"no-op Modify" classification threaded through every entity's own Modify branch, not just Quote's — and
-is a plausible candidate for its own issue.
+growing further). Not fixed here — filed as [#377](https://github.com/DutchJaFO/Quotinator/issues/377),
+since it is architecturally deeper than this issue's own scope: it would need a "no-op Modify"
+classification threaded through every entity's own Modify branch, not just Quote's.
 
 ### 13. Boyscout: explicit types, and the `.editorconfig` list
 
@@ -888,7 +897,7 @@ green end to end).
 | 36 | ✅ | The bundled counts still match after the schema change | Unit test | `InitialiseAsync_AllSourceFiles_SeedsExpectedCounts` — Source/Quote totals asserted at their actual measured values (798→792 Quote, 501→497 Source, the second move being the tv-conflict fix's own effect), never adjusted to whatever number a passing run happened to produce |
 | 37 | ✅ | Every new test is red against the pre-fix build | Test run | Done at step 3, 2026-09-03 — ten tests confirmed red against the step-3 stub (see step 3's own list); row left ❌ after the fact, corrected 2026-09-04 to reflect that this already happened |
 | 38 | ✅ | The schema and the model say which snapshot is read and which is not | Live | **Corrected 2026-09-04 — downgraded from "Unit test" to "Live":** no precedent exists anywhere in this codebase for asserting on XML-doc/schema-description prose text (checked `SourceDataIntegrityTests` and every other schema test), and building one solely for this would be exactly the kind of validation-for-its-own-sake CLAUDE.md warns against. Verified by direct reading instead: `ConflictResolutionRule.IncomingRecord`'s XML doc and `conflict-resolution-rules.schema.json`'s `incomingRecord` description both correctly state it is read for staleness/retirement detection (step 11) |
-| 39 | ❌ | #373's two T2 documents pass | Automated (T2) | Not yet exercised in this session's T2 pass — #373's own remaining scope. Must be confirmed before this issue's own closing comment cites T2 as complete |
+| 39 | ✅ | #373's two T2 documents pass | Automated (T2) | Exercised live 2026-09-04 by step 12 — see row 52 and step 12's own text. The developer-reported duplication was found and fixed during this pass; two further, distinct gaps (#376, #377) were found and filed rather than fixed, out of this issue's own scope |
 | 40 | ✅ | An existing database survives the upgrade with its data intact | Automated (T2) | Live Docker run, 2026-09-04: seeded a database with the pre-#374 image (`quotinator:old`, built from `HEAD` via `git stash`) — schema v7, 800 quotes, 467 sources. Ran the new image (`quotinator:local`) against that same volume: automatic pre-migration backup taken, "applying 2 pending App migration(s) (version 7 → 9)" with zero errors/warnings, final state 796 quotes (4 genuine content duplicates collapsed by Migration009, consistent with the known Inigo Montoya and Shawshank duplicates), 467 sources (no Source duplicated by Migration008's rebuild). Confirmed via `GET /api/v1/version` and container logs |
 | 41 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s), confirmed 2026-09-04 |
 | 42 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` → all green, 0 failures, confirmed 2026-09-04 (`Quotinator.Core.Tests` 1570, `Quotinator.Data.Tests` 1337, full solution) |
@@ -901,7 +910,7 @@ green end to end).
 | 49 | ✅ | A quote's `source` field is excluded from the case-sensitivity rule | Live | Docker T2 against the real bundled corpus: 14 case-only `source` differences in NikhilNamal17 alone, all routine upstream-data noise with a correctly-resolved Source regardless of casing — `source` removed from `QuoteFieldMerge.CaseSensitiveContentFields` after this finding |
 | 50 | ✅ | A same-batch collision on a newly-ambiguous field does not hold the rest of the batch to zero writes | Unit test | `ImportActionResolutionCoordinatorTests.TryApplyBatchAsync_PendingModifyFromSameBatch_DoesNotHoldTheRestOfTheBatch`, confirmed red before the `ExistingBatchId == BatchId` gating exemption |
 | 51 | ✅ | A case-only Pending Modify does not re-stage a duplicate on a later reseed | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithACaseOnlyPendingModify_PendingCountNeverGrows` — extends the Add branch's existing `SelectHasUnresolvedActionById` dedup to Modify |
-| 52 | ✅ | Both of #373's own T2 documents run clean against the fixed build, with the developer-reported duplication actually gone | Automated (T2) | Live Docker, 2026-09-04, rebuilt image: doc 21 steps 1–4/6 pass (step 5 can't execute — no `DELETE /quotes/{id}` endpoint exists, a document defect not a product one); doc 11 steps 1–3/5/6/8 pass, step 4/7 duplication confirmed gone (`4 → 5` fixed to stable) — one distinct, pre-existing no-op-Modify gap found and recorded, not fixed (see step 12's own text) |
+| 52 | ✅ | Both of #373's own T2 documents run clean against the fixed build, with the developer-reported duplication actually gone | Automated (T2) | Live Docker, 2026-09-04, rebuilt image: doc 21 steps 1–4/6 pass (step 5 can't execute — no `DELETE /quotes/{id}` endpoint exists, a document defect not a product one); doc 11 steps 1–3/5/6/8 pass, step 4/7 duplication confirmed gone (`4 → 5` fixed to stable) — one distinct, pre-existing no-op-Modify gap found, not fixed, filed as [#377](https://github.com/DutchJaFO/Quotinator/issues/377) |
 
 **A live T2 run against real data found a sixth defect no unit test caught** (see step 7's own new
 finding above): `GET /import/actions` 500'd on a genuine Pending-Add row. Fixed and reverified live —

@@ -11,7 +11,7 @@ namespace Quotinator.Core.Logging;
 internal static partial class LogMessages
 {
     /// <summary>Logs that a reseed was requested and how many source files will be reimported.</summary>
-    [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Seed] reseed requested — clearing all data and reimporting from {Count} source file(s)...")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "[Database - Seed] reseed requested — importing from {Count} source file(s), deleting nothing first...")]
     public static partial void LogReseedRequested(this ILogger logger, int count);
 
     /// <summary>Logs the start of importing quotes from a single seed file.</summary>

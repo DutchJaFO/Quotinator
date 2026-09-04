@@ -30,7 +30,7 @@ A few common examples to get started:
 | `GET /api/v1/masterdata/sources` | Paginated list of Sources (films, TV series, books, etc.) |
 | `GET /api/v1/health` | Health check |
 | `POST /api/v1/import` | Import a source file (requires `X-Api-Key`) |
-| `POST /api/v1/admin/database/reseed` | Clear all data and reimport from the bundled source files (requires `X-Api-Key`) |
+| `POST /api/v1/admin/database/reseed` | Import the bundled source files without deleting anything first (requires `X-Api-Key`) |
 
 Admin endpoints require the `X-Api-Key: <key>` request header matching the `admin_api_key` set in the add-on configuration. Requests without the header, or with an incorrect key, receive `401 Unauthorized`.
 

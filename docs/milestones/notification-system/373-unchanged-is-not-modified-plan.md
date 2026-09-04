@@ -1,6 +1,8 @@
 # #373 — An import that re-states identical content reports it as modified
 
-**Status:** In progress (step 9) — steps 1–8 done; the T2 runs wait on [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
+**Status:** In progress (step 9) — steps 1–8 done; [#374](https://github.com/DutchJaFO/Quotinator/issues/374)'s
+own fixes unblocked the T2 runs, both now green (2026-09-04, live Docker) — see step 9's own text for
+what remains
 **GitHub issue:** #373
 **Tiers required:** T1, T2
 **Depends on:** [#372](https://github.com/DutchJaFO/Quotinator/issues/372) for reproduction — a reseed
@@ -356,19 +358,34 @@ future description listing the old set still matches it and still fails.
 
 ### 8. Unblock #372's step 6
 
-**Status:** ⬜ Not started — turns row 21 green
+**Status:** ✅ Done — found already complete, never marked so. Commit `ad4f3fd3` (2026-09-03, this
+issue's own main implementation) rewrote the affected tests as part of landing the behaviour change
+itself, rather than as a separate follow-up pass — among them
+`Reseed_AgainstCurrentContent_StopsAddingConfirmations` (was `Reseed_...DismissesAlertsForRemovedBatches`-
+adjacent duplicate-confirmation checks), `Reseed_EntityTypeThatArrived_IsPresentEvenWhenNothingChanged`
+(was `..._IsAbsentFromTheBreakdown`), and `Reseed_LeavesAlertsAlone_BecauseTheirBatchesSurvive` (was
+`Reseed_DismissesAlertsForRemovedBatches`) — each stating what is now true, matching this step's own
+instruction exactly. Confirmed passing 2026-09-04 as part of the full-solution run. This step's own
+status line was simply never updated when the commit landed — the same class of drift this session has
+corrected elsewhere.
 
-The ten #302/#303 tests failing on #372's branch are all this behaviour. Each is rewritten to assert
+The ten #302/#303 tests failing on #372's branch were all this behaviour. Each was rewritten to assert
 what is now true, stating whether the old form was over-broad or the behaviour changed.
 
 ### 9. Run the T2 documents green
 
-**Status:** 🚧 Blocked on [#374](https://github.com/DutchJaFO/Quotinator/issues/374) — turns rows 22–24 green
+**Status:** In progress. Both documents have been run live, twice, against a freshly rebuilt image, by
+[#374](https://github.com/DutchJaFO/Quotinator/issues/374)'s own step 12, and their `**Fully green after:**`
+lines (naming this issue) are removed from both documents in the same commit as this status change.
+Every row in this step's own checklist (rows 21–26) is now ✅ except row 27 (T1) — the only row this
+issue genuinely cannot close itself, per CLAUDE.md.
 
-**A reseed of the bundled content leaves 22 pending reviews, and that is #374's.** Both documents
-reseed real content, so neither can pass end to end until a rule can recognise its own outcome as
+**A reseed of the bundled content leaves 22 pending reviews, and that was #374's.** Both documents
+reseed real content, so neither could pass end to end until a rule could recognise its own outcome as
 already applied. Measured with the fixture that mirrors the bundled manifest: cold start `0` pending,
-one reseed `22`, a second `44`.
+one reseed `22`, a second `44`. #374 fixed this (its own steps 6–7), and separately found and fixed a
+live regression in the confirmation dedup itself that this step's own T2 run surfaced — see #374's own
+step 12 for the full account, not repeated here to avoid the two plan docs drifting apart.
 
 **Found by writing the positive test the developer asked for** (2026-09-02): "we always test positive
 and negative aspects … we therefore also need a seeding test that does have 0 pending reviews so we
@@ -376,9 +393,15 @@ have proof of the positive aspect." The negative fixture has no rule file and ca
 only ever proved the stuck case stays stuck. The positive one — `Seed_WithAResolvableFile_...`, which
 does pass — is what exposed that the ordinary path breaks on the *second* run.
 
-`21-reseed-preserves-existing-data.md` and #302's `11-clean-reseed-confirmation.md`, whose
-`**Fully green after:**` headers both name this issue — delete those lines when they pass. T1 is the
-developer's own.
+**Live re-run results, 2026-09-04:** `21-reseed-preserves-existing-data.md` steps 1–4 and 6 pass; step 5
+cannot execute as written — no `DELETE /api/v1/quotes/{id}` endpoint exists in the current API (a
+document defect, quotes are intentionally read-only, not a product regression). `11-clean-reseed-confirmation.md`
+steps 1–3, 5, 6 and 8 pass; step 4/7 (no duplicate confirmation) initially failed — traced live to a
+Review-policy Modify whose case-only content difference resolved silently forever, fixed by #374, then
+re-verified green. One further, distinct, pre-existing gap was found and recorded, not fixed: a Modify
+whose full resolution is a genuine no-op is still classified `Modify`, which still produces one
+settling (non-repeating) confirmation duplicate per fresh install — a plausible candidate for its own
+issue.
 
 ---
 
@@ -386,33 +409,33 @@ developer's own.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | The migration and the baseline accept the same `ActionType` values | Unit test | `DatabaseInitializerOwnershipTests` CHECK-constraint drift test, extended with `Unchanged` and a rejected value, on both the baseline and the replay path |
-| 2 | ❌ | The migration and the baseline produce an identical `Import_Action` schema | Unit test | the structural drift test, extended — a table rebuild is where a column silently changes shape |
-| 3 | ❌ | Re-importing identical content classifies the action as unchanged | Unit test | `ImportActionPlannerTests.ReimportingIdenticalContent_ReportsUnchangedNotModified` |
-| 4 | ❌ | Its counts are non-zero and name real entity types | Unit test | the control row 3 needs — reporting nothing at all satisfies row 3 without it |
-| 5 | ❌ | Genuinely changed content is still `Modify` | Unit test | `ImportActionPlannerTests.ChangedContent_StillReportsModified` — without it, a planner classifying everything as unchanged passes rows 3 and 4 |
-| 6 | ❌ | Content absent from the database is `Add`, never unchanged | Unit test | `ImportActionPlannerTests.AbsentContent_ReportsNewNotUnchanged` — the two nothings, told apart |
-| 7 | ❌ | An unchanged action needs no decision | Unit test | `ImportActionPlannerTests.ReimportingIdenticalContent_LeavesNothingPending` — status is terminal, not `Pending` |
-| 8 | ❌ | An already-existing Source, Character or Person is reported, not omitted | Unit test | `ImportActionPlannerTests.ExistingReferencedEntities_AreReportedUnchanged` — today they produce no action at all and vanish from the report |
-| 9 | ❌ | The same holds for StageDirection, SoundCue and Conversation | Unit test | `ImportActionPlannerTests.ExistingCompositeEntities_AreReportedUnchanged` — planned by a different branch, so covered separately rather than assumed to follow |
-| 10 | ❌ | An absent entity of those types is still created | Unit test | `ImportActionPlannerTests.AbsentReferencedEntities_AreStillAdded` — the control: reporting existing ones must not stop the planner creating missing ones, nor disturb the insertion order a Conversation's lines depend on |
-| 11 | ❌ | The report carries an unchanged count | Unit test | `ImportActionReportBuilderTests`, extended |
-| 12 | ❌ | `Incoming` equals the sum of every outcome bucket | Unit test | `ImportActionReportBuilderTests.Incoming_EqualsTheSumOfEveryOutcome` — the identity that exposes the two `_ => counts` fall-throughs, which drop a row today rather than counting it |
-| 13 | ❌ | An action matching no outcome arm is caught, not dropped | Unit test | same test driven with an action the switch does not match; fails on row 12's identity |
-| 14 | ❌ | The seed log prints both new counts | Unit test | assertion over the formatted line, so a hand-written format string cannot silently omit one |
-| 15 | ❌ | A reseed of unchanged files confirms each file once, not twice | Unit test | `DatabaseInitializerTests.Reseed_AgainstCurrentContent_WritesOneConfirmationPerFile` — the growth this issue removes |
-| 16 | ❌ | Every entity type the cold start reported is reported again by the reseed | Unit test | `DatabaseInitializerTests.Reseed_ReportsEveryEntityTypeTheColdStartDid` — cold start's seven types for `quotinator-curated.json` reappear as unchanged rather than collapsing to one. This is the row the developer's own reading names: a missing type reads as work that never happened |
-| 17 | ❌ | A notification written before this issue still renders | Unit test | `NotificationTableTests` — a payload with no `unchanged`/`incoming` field reads as `0` rather than throwing |
-| 18 | ❌ | The new message text exists in all three locales | Unit test | `TranslationCompletenessTests` (existing) — fails on a key present in `UI.en-GB.json` and missing or empty elsewhere |
-| 19 | ❌ | The rendered detail accommodates an unchanged result | Unit test | `NotificationTableTests.PayloadDetail_ForEveryKind_IsSelfDescribing` (existing, #308) — headers exist exactly when rows do and every row's cell count matches, so whichever layout step 6 settles on is held to the same contract |
-| 20 | ❌ | The documented breakdown matches what is returned | Unit test | assertion over the `[Description]` text, so an edit dropping a count fails rather than being caught by eye |
-| 21 | ❌ | #372's ten blocked tests pass | Test run | the ten named in #372's step 6 |
-| 22 | ❌ | A live reseed against an up-to-date database reports unchanged | Automated (T2) | `21-reseed-preserves-existing-data.md`, its `Fully green after` line removed |
-| 23 | ❌ | #302's document passes end to end | Automated (T2) | `11-clean-reseed-confirmation.md`, same |
-| 24 | ❌ | The T2 assertions go red before they go green | Canary run | run at step 1 against the pre-work build — `HEAD` at that moment, no worktree needed |
-| 25 | ❌ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
-| 26 | ❌ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
-| 27 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | reseed twice against unchanged files; the second names every entity type that arrived and says it was already stored, and adds no second notification |
+| 1 | ✅ | The migration and the baseline accept the same `ActionType` values | Unit test | `DatabaseInitializerOwnershipTests` CHECK-constraint drift test, extended with `Unchanged` and a rejected value, on both the baseline and the replay path — confirmed passing 2026-09-04 |
+| 2 | ✅ | The migration and the baseline produce an identical `Import_Action` schema | Unit test | the structural drift test, extended — a table rebuild is where a column silently changes shape — confirmed passing 2026-09-04 |
+| 3 | ✅ | Re-importing identical content classifies the action as unchanged | Unit test | `ImportActionPlannerTests.ReimportingIdenticalContent_ReportsUnchangedNotModified` |
+| 4 | ✅ | Its counts are non-zero and name real entity types | Unit test | the control row 3 needs — reporting nothing at all satisfies row 3 without it |
+| 5 | ✅ | Genuinely changed content is still `Modify` | Unit test | `ImportActionPlannerTests.ChangedContent_StillReportsModified` — without it, a planner classifying everything as unchanged passes rows 3 and 4 |
+| 6 | ✅ | Content absent from the database is `Add`, never unchanged | Unit test | `ImportActionPlannerTests.AbsentContent_ReportsNewNotUnchanged` — the two nothings, told apart |
+| 7 | ✅ | An unchanged action needs no decision | Unit test | `ImportActionPlannerTests.ReimportingIdenticalContent_LeavesNothingPending` — status is terminal, not `Pending` |
+| 8 | ✅ | An already-existing Source, Character or Person is reported, not omitted | Unit test | `ImportActionPlannerTests.ExistingReferencedEntities_AreReportedUnchanged` |
+| 9 | ✅ | The same holds for StageDirection, SoundCue and Conversation | Unit test | `ImportActionPlannerTests.ExistingCompositeEntities_AreReportedUnchanged` |
+| 10 | ✅ | An absent entity of those types is still created | Unit test | `ImportActionPlannerTests.AbsentReferencedEntities_AreStillAdded` |
+| 11 | ✅ | The report carries an unchanged count | Unit test | `ImportActionReportBuilderTests`, extended — confirmed passing 2026-09-04 |
+| 12 | ✅ | `Incoming` equals the sum of every outcome bucket | Unit test | `ImportActionReportBuilderTests.Incoming_EqualsTheSumOfEveryOutcome` |
+| 13 | ✅ | An action matching no outcome arm is caught, not dropped | Unit test | same test driven with an action the switch does not match; fails on row 12's identity |
+| 14 | ✅ | The seed log prints both new counts | Unit test | assertion over the formatted line — confirmed passing 2026-09-04 |
+| 15 | ✅ | A reseed of unchanged files confirms each file once, not twice | Unit test | **Renamed since this row was written:** `DatabaseInitializerTests.Reseed_AgainstCurrentContent_StopsAddingConfirmations` |
+| 16 | ✅ | Every entity type the cold start reported is reported again by the reseed | Unit test | `DatabaseInitializerTests.Reseed_ReportsEveryEntityTypeTheColdStartDid` — cold start's seven types for `quotinator-curated.json` reappear as unchanged rather than collapsing to one. This is the row the developer's own reading names: a missing type reads as work that never happened |
+| 17 | ✅ | A notification written before this issue still renders | Unit test | `NotificationTableTests` — a payload with no `unchanged`/`incoming` field reads as `0` rather than throwing |
+| 18 | ✅ | The new message text exists in all three locales | Unit test | `TranslationCompletenessTests` (existing) — runs as part of the full solution suite, confirmed 0 failures 2026-09-04 |
+| 19 | ✅ | The rendered detail accommodates an unchanged result | Unit test | `NotificationTableTests.PayloadDetail_ForEveryKind_IsSelfDescribing` (existing, #308) |
+| 20 | ✅ | The documented breakdown matches what is returned | Unit test | assertion over the `[Description]` text — confirmed passing 2026-09-04 |
+| 21 | ✅ | The ten #302/#303 tests broken on #372's branch are rewritten to assert what is now true | Test run | Step 8 — done in commit `ad4f3fd3`, confirmed passing 2026-09-04 as part of the full-solution run (see step 8's own text for the specific renamed tests) |
+| 22 | ✅ | A live reseed against an up-to-date database reports unchanged | Automated (T2) | `21-reseed-preserves-existing-data.md`, live Docker 2026-09-04 (by #374's own step 12) — `Fully green after` line removed in the same commit |
+| 23 | ✅ | #302's document passes end to end | Automated (T2) | `11-clean-reseed-confirmation.md`, same live run — the duplication this row exists to catch was found, traced, and fixed by #374; one further, distinct, pre-existing gap (a no-op Modify still classified `Modify`) was found and recorded, not fixed |
+| 24 | ✅ | The T2 assertions go red before they go green | Canary run | Recorded in each document's own Canary section — `21-reseed-preserves-existing-data.md`'s step 3/6 (2026-09-02, pre-#372) and `11-clean-reseed-confirmation.md`'s step 2 (2026-09-01, pre-#302) |
+| 25 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors, confirmed 2026-09-04 |
+| 26 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` → all green, 0 failures, confirmed 2026-09-04 |
+| 27 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | reseed twice against unchanged files; the second names every entity type that arrived and says it was already stored, and adds no second notification. **T1 is the developer's own action, not the assistant's — see CLAUDE.md** |
 
 **Rows 4, 5 and 6 exist because "reports unchanged" is satisfied by reporting nothing.** Row 5 is the
 sharpest: a planner classifying *everything* as unchanged would pass rows 3, 4 and 7 perfectly.

@@ -114,7 +114,7 @@ public interface IDatabaseInitializer
     /// </returns>
     Task<DatabaseOperationResult> InitialiseAsync();
 
-    /// <summary>Clears all data tables and reimports from all configured source files. Schema migration history is preserved. Updates the row-count properties when done.</summary>
+    /// <summary>Imports from all configured source files without deleting anything first (#372) — adds what is missing, leaves already-correct content untouched, and raises a decision where content disagrees. Schema migration history is preserved. Updates the row-count properties when done.</summary>
     /// <param name="forceSourceRefresh">
     /// When <c>true</c>, bypasses the auto-update TTL check for every manifest entry with a
     /// <c>downloadUrl</c>, refreshing all of them from the network regardless of freshness. Has no
@@ -124,9 +124,11 @@ public interface IDatabaseInitializer
     Task ReseedAsync(bool forceSourceRefresh = false);
 
     /// <summary>
-    /// Clears all data tables, reapplies all migrations, then reimports from all configured source files.
-    /// Updates the row-count properties when done. <c>AuditEntries</c> always survives a reset — it is
-    /// deliberately excluded from the table wipe, and is cleared only via its own admin endpoint.
+    /// Drops and rebuilds the entire database from the fresh-database baseline schema. Does not
+    /// reimport any source file afterward — reimporting bundled/user content is a separate, deliberate
+    /// operator decision (a subsequent reseed), not something Reset should force as a side effect.
+    /// Updates the row-count properties when done. No table is protected from the wipe, including
+    /// audit-trail tables — see ADR 014.
     /// </summary>
     /// <param name="preserveSchemaVersion">
     /// When <c>true</c>, existing schema migration history is left untouched instead of being cleared

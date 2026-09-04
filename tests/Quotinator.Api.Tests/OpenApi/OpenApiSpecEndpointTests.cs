@@ -76,6 +76,33 @@ public class OpenApiSpecEndpointTests
     }
 
     /// <summary>
+    /// #372's own cross-check finding 2's guard: the reseed endpoint's live description must never
+    /// again claim it deletes/clears data first. Found stale during #374's own step 12 cascade — the
+    /// text had said "clears all data tables" since before #372 landed the actual no-delete behaviour,
+    /// and nothing asserted on it. Checked as specific stale phrases, not a bare substring on "delete"/
+    /// "clear" — the correct text legitimately says "without deleting anything first", so a bare
+    /// substring check would fail against its own fix.
+    /// </summary>
+    [TestMethod]
+    public async Task ReseedEndpoint_LiveDescription_NeverClaimsItDeletesFirst()
+    {
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client = factory.CreateClient();
+
+        JsonDocument? doc = await client.GetFromJsonAsync<JsonDocument>("/openapi/v1.json", TestContext.CancellationToken);
+
+        string description = doc!.RootElement
+            .GetProperty("paths").GetProperty("/api/v1/admin/database/reseed")
+            .GetProperty("post").GetProperty("description").GetString()!;
+
+        foreach (string forbidden in new[] { "clears all data", "clear all data", "wipes all data", "wipe all data", "deletes all data" })
+        {
+            Assert.DoesNotContain(forbidden, description, StringComparison.OrdinalIgnoreCase,
+                $"The reseed endpoint's own description must never claim it '{forbidden}' first (#372) — found: \"{description}\"");
+        }
+    }
+
+    /// <summary>
     /// Every tag an endpoint carries is declared at the document's top level with a description, so no
     /// group renders in Scalar without one.
     /// </summary>
