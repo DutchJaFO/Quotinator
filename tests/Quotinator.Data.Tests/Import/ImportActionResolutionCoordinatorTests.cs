@@ -109,6 +109,27 @@ public class ImportActionResolutionCoordinatorTests
         DetectedAt    = DateTime.UtcNow,
     };
 
+    /// <summary>
+    /// A Pending/Blocked Modify whose "existing" side is itself an earlier row from the same batch
+    /// (#374) — e.g. two lines within one import file that hash to the same id and disagree only by
+    /// case, one becoming a same-batch stand-in "existing" for the other. Distinguished from a genuine
+    /// DB-backed Modify by <see cref="ImportActionEntity.ExistingBatchId"/> equalling the action's own
+    /// <see cref="ImportActionEntity.BatchId"/> — a real prior row's <c>ExistingBatchId</c> names
+    /// whichever earlier batch actually wrote it, never the current one.
+    /// </summary>
+    private static ImportActionEntity BuildPendingModifyFromSameBatch(string batchId) => new()
+    {
+        BatchId         = batchId,
+        ActionType      = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+        EntityType      = "Widget",
+        EntityId        = Guid.NewGuid().ToString(),
+        ExistingBatchId = batchId,
+        ExistingValue   = "{}",
+        IncomingValue   = "{}",
+        Status          = new SafeValue<ImportActionStatus?>(ImportActionStatus.Pending.ToString(), ImportActionStatus.Pending),
+        DetectedAt      = DateTime.UtcNow,
+    };
+
     // ── StageAsync ────────────────────────────────────────────────────────────
 
     [TestMethod]
@@ -278,6 +299,28 @@ public class ImportActionResolutionCoordinatorTests
 
         var stillDecided = await _reader.GetByIdAsync(decided.Id);
         Assert.AreEqual(ImportActionStatus.Decided, stillDecided!.Status.Parsed, "An unrelated Decided action must not apply while a Blocked action shares its batch.");
+    }
+
+    [TestMethod]
+    public async Task TryApplyBatchAsync_PendingModifyFromSameBatch_DoesNotHoldTheRestOfTheBatch()
+    {
+        var decided = BuildDecidedAdd("BATCH-1");
+        var sameBatchCollision = BuildPendingModifyFromSameBatch("BATCH-1");
+        await _writer.WriteAsync(decided);
+        await _writer.WriteAsync(sameBatchCollision);
+
+        var appliedIds = new List<Guid>();
+        var result = await _coordinator.TryApplyBatchAsync("BATCH-1", (action, _, _) =>
+        {
+            appliedIds.Add(action.Id);
+            return Task.CompletedTask;
+        }, TestContext.CancellationToken);
+
+        Assert.IsNull(result, "A Pending Modify whose existing side is this same batch protects nothing that already exists — it must not hold unrelated actions the way a genuine DB-backed Modify would.");
+        Assert.AreSequenceEqual([decided.Id], appliedIds);
+
+        var stillPending = await _reader.GetByIdAsync(sameBatchCollision.Id);
+        Assert.AreEqual(ImportActionStatus.Pending, stillPending!.Status.Parsed, "The same-batch collision itself stays Pending — only its exemption from gating changes, not its own resolution.");
     }
 
     [TestMethod]

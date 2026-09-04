@@ -92,9 +92,20 @@ public sealed class ImportActionResolutionCoordinator(IImportActionReader reader
         // — unrelated Adds/Modifies elsewhere in the same batch have no logical dependency on it and
         // must not wait on it. Found live: without this extended to Pending too, three tv-date-conflict
         // quotes held an entire 1,200+-quote reseed to nothing applied at all.
+        //
+        // #374 (second exception): a Blocked or Pending *Modify* whose ExistingBatchId equals its own
+        // BatchId protects nothing that already exists either — its "existing" side is itself just an
+        // earlier row from this same batch (e.g. two lines in one import file that hash to the same id
+        // and disagree only by case), not a genuinely stored, previously-committed row. A real
+        // DB-backed Modify's ExistingBatchId always names whichever earlier batch actually wrote that
+        // row, so this can never be mistaken for the protection the general rule above exists to give.
+        // Found live: a case-only same-file duplicate newly staged as Pending (per the case-sensitive
+        // content-field rule) held an entire cold-start seed to zero rows written.
         List<Guid> pending = [.. actions
             .Where(a => a.Status.Parsed is ImportActionStatus.Stale
-                || (a.Status.Parsed is ImportActionStatus.Blocked or ImportActionStatus.Pending && a.ActionType.Parsed is not ImportActionKind.Add))
+                || (a.Status.Parsed is ImportActionStatus.Blocked or ImportActionStatus.Pending
+                    && a.ActionType.Parsed is not ImportActionKind.Add
+                    && a.ExistingBatchId != a.BatchId))
             .Select(a => a.Id)];
         if (pending.Count > 0)
             return pending;

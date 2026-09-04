@@ -444,7 +444,7 @@ public class ConflictRuleLookupTests
         Assert.AreEqual(ConflictRuleOutcome.AlreadyApplied, outcome);
     }
 
-    /// <summary>Proves the already-applied comparison goes through <see cref="FieldMergeResolver.ValuesEqual"/>,
+    /// <summary>Proves the already-applied comparison goes through <see cref="FieldMergeResolver.ValuesEqual(object?, object?)"/>,
     /// not <c>Equals</c> — a casing-only difference between the stored value and the rule's wanted value
     /// must still report already-applied.</summary>
     [TestMethod]

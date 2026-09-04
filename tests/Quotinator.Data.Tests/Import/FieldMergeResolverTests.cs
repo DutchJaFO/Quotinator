@@ -174,6 +174,92 @@ public class FieldMergeResolverTests
         Assert.AreEqual("Star Wars", result.MergedFields["source"]);
     }
 
+    // ── Per-field case-sensitive override (#374) ─────────────────────────────
+    //
+    // Found live (T2 Docker, 2026-09-04): a case-only difference on a quote's own quoteText/source/
+    // character was silently treated as "equal, keep existing" by every path above — the same
+    // case-insensitive-by-default rule these three fields have always used. That silence is what let
+    // vilaboim's "Gone with the Wind" vs the stored "Gone With the Wind" resolve to keep-existing on
+    // every single reseed, forever, with nobody ever told a source disagreed on casing. Developer
+    // decision (2026-09-04): a case-only difference on quote/title/character content is genuinely
+    // ambiguous — it could be a correction (an upstream typo finally fixed) or an unwanted downgrade
+    // (a lower-quality source overwriting a curated correction), and only a human can tell which. An
+    // unstable result across repeated reseeds is itself proof the existing rule was wrong, not proof
+    // the data is flaky. These four fields (default case-insensitive, per the existing tests above)
+    // are unaffected — this is an opt-in per caller, not a global reversal of the case-insensitive-by-
+    // default convention; the caller (`Quotinator.Core`'s `QuoteFieldMerge.CaseSensitiveContentFields`)
+    // decides which of its own fields need this, since `FieldMergeResolver` itself stays domain-agnostic
+    // (ADR 004) and never hardcodes a quote-specific field name.
+
+    [TestMethod]
+    public void ValuesEqual_FieldInCaseSensitiveSet_DiffersOnlyByCase_ReturnsFalse()
+        => Assert.IsFalse(FieldMergeResolver.ValuesEqual("source", "Gone With the Wind", "Gone with the Wind", new HashSet<string> { "source" }));
+
+    [TestMethod]
+    public void ValuesEqual_FieldNotInCaseSensitiveSet_DiffersOnlyByCase_ReturnsTrue()
+        => Assert.IsTrue(FieldMergeResolver.ValuesEqual("date", "1994", "1994", new HashSet<string> { "source" }));
+
+    [TestMethod]
+    public void ValuesEqual_FieldInCaseSensitiveSet_ExactMatch_ReturnsTrue()
+        => Assert.IsTrue(FieldMergeResolver.ValuesEqual("source", "Gone With the Wind", "Gone With the Wind", new HashSet<string> { "source" }));
+
+    [TestMethod]
+    public void ValuesEqual_FieldInCaseSensitiveSet_OneSideNull_ReturnsFalse()
+        => Assert.IsFalse(FieldMergeResolver.ValuesEqual("source", "Gone With the Wind", null, new HashSet<string> { "source" }));
+
+    [TestMethod]
+    public void Resolve_FieldInCaseSensitiveSet_DiffersOnlyByCase_MergeTheirsTakesIncomingAsGenuineConflict()
+    {
+        Dictionary<string, object?> existing = new() { ["source"] = "Star Wars" };
+        Dictionary<string, object?> incoming = new() { ["source"] = "star wars" };
+
+        FieldMergeResult result = FieldMergeResolver.Resolve(
+            existing, incoming, DuplicateResolutionPolicy.MergeTheirs, new HashSet<string> { "source" });
+
+        Assert.AreEqual("star wars", result.MergedFields["source"],
+            "A case-only difference on a case-sensitive field is a true conflict — the tie-break policy decides, not silent case-folding");
+        Assert.Contains("source", [.. result.FieldsFromIncoming]);
+    }
+
+    [TestMethod]
+    public void ResolveWithDecisions_FieldInCaseSensitiveSet_DiffersOnlyByCase_ThrowsWithFieldName()
+    {
+        Dictionary<string, object?> existing = new() { ["source"] = "Gone With the Wind" };
+        Dictionary<string, object?> incoming = new() { ["source"] = "Gone with the Wind" };
+
+        UnresolvedFieldConflictException ex = Assert.ThrowsExactly<UnresolvedFieldConflictException>(() =>
+            FieldMergeResolver.ResolveWithDecisions(
+                existing, incoming, new Dictionary<string, FieldMergeDecision>(), new HashSet<string> { "source" }));
+
+        Assert.AreSequenceEqual(["source"], [.. ex.FieldNames]);
+    }
+
+    [TestMethod]
+    public void ResolveWithDecisions_FieldInCaseSensitiveSet_WithExplicitDecision_StillResolves()
+    {
+        Dictionary<string, object?> existing = new() { ["source"] = "Gone With the Wind" };
+        Dictionary<string, object?> incoming = new() { ["source"] = "Gone with the Wind" };
+        Dictionary<string, FieldMergeDecision> decisions = new() { ["source"] = new FieldMergeDecision(FieldResolutionChoice.Replace, null) };
+
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(
+            existing, incoming, decisions, new HashSet<string> { "source" });
+
+        Assert.AreEqual("Gone with the Wind", result.MergedFields["source"],
+            "An explicit decision always wins regardless of case-sensitivity — a curator's own resolution is not second-guessed");
+    }
+
+    [TestMethod]
+    public void ResolveWithDecisions_FieldInCaseSensitiveSet_ExactMatch_AutoResolvesNoDecisionNeeded()
+    {
+        Dictionary<string, object?> existing = new() { ["source"] = "Gone With the Wind" };
+        Dictionary<string, object?> incoming = new() { ["source"] = "Gone With the Wind" };
+
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(
+            existing, incoming, new Dictionary<string, FieldMergeDecision>(), new HashSet<string> { "source" });
+
+        Assert.AreEqual("Gone With the Wind", result.MergedFields["source"]);
+    }
+
     // ── ResolveWithDecisions (#149) ──────────────────────────────────────────
 
     [TestMethod]

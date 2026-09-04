@@ -21,6 +21,37 @@ internal static class QuoteFieldMerge
     private const string GenresField           = "genres";
 
     /// <summary>
+    /// The quote-content fields where a difference in letter case alone is a genuine, ambiguous
+    /// difference rather than this project's usual case-insensitive-by-default equality (#374,
+    /// developer decision 2026-09-04) — a case-only change could be a correction (an upstream typo
+    /// finally fixed) or an unwanted downgrade (a lower-quality source overwriting a curated
+    /// correction), and only a human can tell which.
+    /// <para>
+    /// <see cref="SourceField"/> is deliberately excluded, despite being named directly in the
+    /// developer's own wording ("quote, title or character") — found live, 2026-09-04, against the real
+    /// bundled corpus: this field is never independently persisted per quote (<c>Sql.Quotes.SelectRawById</c>
+    /// builds it from <c>s.Title AS Source</c>, a join to the Source row a quote has already resolved
+    /// to, matched case-insensitively per this project's identity-matching convention). Two quote lines
+    /// for the same film routinely spell its title with different, inconsequential casing in real
+    /// upstream data — measured 14 such cases in the bundled NikhilNamal17 corpus alone (e.g. "The Dark
+    /// Knight" vs "the dark knight") — and every one of them resolves to the identical, correct Source
+    /// regardless. Making this field case-sensitive turned every one of those into a permanent false
+    /// "needs review" conflict with nothing genuine to decide, which is the opposite of what the
+    /// developer's decision was for. The genuine case this decision targets — the same quote's own
+    /// content disagreeing with itself in a way that could be a real correction — is exactly what
+    /// <see cref="QuoteTextField"/> and <see cref="CharacterField"/> already cover, since both are
+    /// stored per quote, never derived from a join.
+    /// </para>
+    /// <para>
+    /// <see cref="OriginalLanguageField"/>, <see cref="DateField"/>, <see cref="AuthorField"/>,
+    /// <see cref="TypeField"/>, and <see cref="GenresField"/> are also excluded — none of them carry
+    /// free-text content where casing itself is part of what the field means to a reader.
+    /// </para>
+    /// </summary>
+    public static readonly IReadOnlySet<string> CaseSensitiveContentFields =
+        new HashSet<string> { QuoteTextField, CharacterField };
+
+    /// <summary>
     /// Maps the mergeable fields of a <see cref="SourceQuoteDto"/> to a field-name → value dictionary.
     /// <c>Id</c> and <c>Translations</c> are deliberately excluded — <c>Id</c> is the join key (both
     /// sides always share it), and per-language translation merging is a distinct, unspecced feature;

@@ -721,6 +721,97 @@ public class ImportActionPlannerTests
         Assert.AreEqual("Marvel's The Avengers", payload.Title, "With no alias lookup provided, the raw incoming title is used unchanged — regression guard matching pre-#181 behaviour");
     }
 
+    // ── #374: a case-only difference on a quote's own content is genuinely ambiguous ────
+    //
+    // Found live (T2 Docker, 2026-09-04): a case-only quote/character difference was silently resolved
+    // by the old case-insensitive-everywhere comparison. Developer decision, same day: this is
+    // genuinely ambiguous — a correction or an unwanted downgrade — and only a human can tell which, so
+    // it must be surfaced for review rather than silently resolved.
+    //
+    // Scoped to quoteText/character, not source: the developer's own wording named "quote, title or
+    // character", but source was found live (against the real bundled corpus) to be the wrong field for
+    // this — it is never independently persisted per quote (`Sql.Quotes.SelectRawById` builds it from
+    // `s.Title AS Source`, a join to the already-resolved Source row), and real upstream data routinely
+    // spells the same film's title with different, harmless casing across different quote lines (14
+    // such cases measured in NikhilNamal17 alone). Making it case-sensitive turned every one into a
+    // permanent false "needs review" conflict with nothing genuine to decide. See
+    // `QuoteFieldMerge.CaseSensitiveContentFields`'s own XML doc for the full account.
+
+    /// <summary>
+    /// Reproduces the shape of the live defect: a quote's own <c>character</c> field differs from what
+    /// is stored only by case, with nothing else genuinely ambiguous. Before the fix this resolved
+    /// silently (kept the existing casing) and the action reached <c>Decided</c>; after the fix it must
+    /// stage <c>Pending</c> so a human decides whether the incoming casing is a correction or a mistake.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_QuoteCharacterDiffersOnlyByCase_StagesPendingForReview()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string quoteId = "f1111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteWithCharacterAsync(conn, quoteId, "Frankly, my dear, I don't give a damn.", "Rhett Butler");
+
+        SourceQuoteDto quote = BuildQuote(quoteId, source: "Casablanca", character: "rhett butler",
+            quoteText: "Frankly, my dear, I don't give a damn.");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionKind.Modify, quoteAction.ActionType.Parsed,
+            "A case-only difference is a real difference — not Unchanged");
+        Assert.AreEqual(ImportActionStatus.Pending, quoteAction.Status.Parsed,
+            "A case-only difference on quoteText/character must be surfaced for a human decision, not silently resolved");
+    }
+
+    /// <summary>Control for the row above: an exact match (same casing) must not become ambiguous.</summary>
+    [TestMethod]
+    public async Task PlanAsync_QuoteCharacterExactMatch_StaysUnchanged()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string quoteId = "f2111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteWithCharacterAsync(conn, quoteId, "Frankly, my dear, I don't give a damn.", "Rhett Butler");
+
+        SourceQuoteDto quote = BuildQuote(quoteId, source: "Casablanca", character: "Rhett Butler",
+            quoteText: "Frankly, my dear, I don't give a damn.");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionKind.Unchanged, quoteAction.ActionType.Parsed);
+    }
+
+    /// <summary>
+    /// A curator who has already decided a specific casing correction can still resolve it via a
+    /// <c>ConflictResolutionRule</c> — the field is only ambiguous by *default*, not permanently
+    /// unresolvable. This is the "or add it as a rule" escape hatch #153's own mechanism already
+    /// provides for every other field.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_QuoteCharacterDiffersOnlyByCase_MatchingConflictRuleStillResolves()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string quoteId = "f3111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteWithCharacterAsync(conn, quoteId, "Frankly, my dear, I don't give a damn.", "Rhett Butler");
+
+        SourceQuoteDto quote = BuildQuote(quoteId, source: "Casablanca", character: "rhett butler",
+            quoteText: "Frankly, my dear, I don't give a damn.");
+        ConflictRuleLookup rules = new ConflictRuleLookup([new ConflictResolutionRule
+        {
+            EntityId = quoteId,
+            ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":"Rhett Butler"}"""),
+            IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":"rhett butler"}"""),
+            Fields = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Replace }],
+        }]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Decided, quoteAction.Status.Parsed,
+            "A rule that already covers this exact casing correction resolves it — ambiguous by default, not unresolvable");
+    }
+
     // ── #153: SourceAliasRule staleness ──────────────────────────────────────────
 
     /// <summary>

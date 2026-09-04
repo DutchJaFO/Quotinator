@@ -1410,8 +1410,8 @@ public class DatabaseInitializerTests
             "The positive control: a resolvable file actually applies, so its quotes are in the database. "
             + "Without this, 'nothing pending' would also be true of a run that imported nothing at all.");
 
-        Assert.AreEqual(3, await StagedActionCountAsync(),
-            "A file whose conflicts its rule file resolves leaves only the three known, genuine tv-season ambiguities waiting.");
+        Assert.AreEqual(KnownUnresolvedNikhilNamal17QuoteIds.Count, await StagedActionCountAsync(),
+            "A file whose conflicts its rule file resolves leaves only the known, genuine ambiguities waiting — see KnownUnresolvedNikhilNamal17QuoteIds for what each one is.");
 
         Assert.IsNotEmpty((await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending && !n.IsDismissed),
@@ -1436,6 +1436,16 @@ public class DatabaseInitializerTests
     /// awaiting review (found live: without the dedup check in `ImportActionPlanner`'s Add-branch, this
     /// grew `3 → 6 → 9` — the exact accumulation pattern this whole issue exists to fix, just for a
     /// newly-introduced mechanism rather than the original conflict-rule one).
+    /// <para>
+    /// **Corrected again, same day — 3 became 4.** A quote/title/character case-only difference is now
+    /// its own genuine ambiguity (developer decision: "if the quote, title or character are identical
+    /// except for case then that needs to be reviewed as it could be a correction or an unwanted
+    /// update"), found live when "an unstable result on the second run" (vilaboim's own case-only
+    /// content silently flip-flopping between confirmed-changed and confirmed-unchanged across reseeds)
+    /// turned out to be exactly the kind of proof the developer described: "proof that the rules were
+    /// incomplete or incorrect." NikhilNamal17's own fourth exception ("The Simpsons movie" vs "The
+    /// Simpsons Movie") is the same class of defect, caught by the same fix.
+    /// </para>
     /// </remarks>
     [TestMethod]
     public async Task Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows()
@@ -1450,7 +1460,7 @@ public class DatabaseInitializerTests
         await db.ReseedAsync();
         int reseed2 = await StagedActionCountAsync();
 
-        Assert.AreEqual(3, cold, "Three genuine, permanent tv-season ambiguities are correctly reported as conflicts on cold start");
+        Assert.AreEqual(KnownUnresolvedNikhilNamal17QuoteIds.Count, cold, "Every genuine, permanent ambiguity — see KnownUnresolvedNikhilNamal17QuoteIds — is correctly reported as a conflict on cold start");
         Assert.AreEqual(cold, reseed1, "Reseeding unchanged content must not add anything beyond what is already correctly pending");
         Assert.AreEqual(cold, reseed2, "A second reseed must not accumulate anything further");
     }
@@ -1499,6 +1509,45 @@ public class DatabaseInitializerTests
         await connection.OpenAsync(TestContext.CancellationToken);
         return await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Import_Action WHERE Status = 'Blocked';");
+    }
+
+    /// <summary>
+    /// #374 — found live (T2 Docker, a real reseed): a case-only quote/title/character difference is now
+    /// its own genuine, permanent ambiguity (developer decision), but nothing recognised an already-
+    /// reported one on a later reseed — the accumulation-prevention check the Add branch already had was
+    /// never extended to Modify, since before this fix a Modify's own ambiguous fields either
+    /// auto-resolved or blocked a Complete row, never stayed genuinely Pending release over release.
+    /// Measured live: a single known case-only conflict, left unresolved, made the real corpus's staged
+    /// count grow 4 → 19 in one reseed once every other case-only disagreement in it was counted too.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithACaseOnlyPendingModify_PendingCountNeverGrows()
+    {
+        string caseOnlyFile = Path.Combine(_tempDir, "case-only-modify.json");
+        File.WriteAllText(caseOnlyFile,
+            """
+            {"quotes":[
+                {"id":"e6311111-1111-4111-8111-111111111111","quote":"Frankly, my dear, I don't give a damn.","originalLanguage":"en","source":"Gone With the Wind","date":"1939","character":"Rhett Butler","author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"e6311111-1111-4111-8111-111111111111","quote":"Frankly, my dear, I don't give a damn.","originalLanguage":"en","source":"Gone With the Wind","date":"1939","character":"rhett butler","author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(caseOnlyFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
+            ManifestPolicy.HardcodedDefault, "case-only-modify-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+        int cold = await StagedActionCountAsync();
+
+        await db.ReseedAsync();
+        int reseed1 = await StagedActionCountAsync();
+
+        await db.ReseedAsync();
+        int reseed2 = await StagedActionCountAsync();
+
+        Assert.AreEqual(1, cold, "The second, differently-cased occurrence is correctly staged Pending for review on cold start");
+        Assert.AreEqual(cold, reseed1, "Reseeding unchanged content must not stage a duplicate Pending action on top of the still-unresolved one");
+        Assert.AreEqual(cold, reseed2, "A second reseed must not accumulate anything further");
     }
 
     /// <summary>
@@ -1712,26 +1761,45 @@ public class DatabaseInitializerTests
     /// silently merged into the first (which would erase a difference that might, once Series data
     /// exists, turn out to matter).
     /// </remarks>
+    /// <summary>
+    /// Every quote id in the real bundled NikhilNamal17 corpus that is expected to stay genuinely
+    /// unresolved under Review with the real rule file applied — the single source of truth for this
+    /// number across every test that depends on it
+    /// (<see cref="InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions"/>,
+    /// <see cref="Seed_WithAResolvableFile_LeavesOnlyKnownConflictsPendingAndOneAlert"/>,
+    /// <see cref="Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows"/>), so that updating it
+    /// when the bundled data changes is one edit, not three independently-drifting ones. This is
+    /// unavoidably tied to the real corpus's current content and will need a new entry (or a removed
+    /// one) whenever that content changes — see this field's own history for the pattern (three tv-season
+    /// entries originally, a fourth case-only one added by #374).
+    /// </summary>
+    private static readonly HashSet<string> KnownUnresolvedNikhilNamal17QuoteIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "779f3b34-37f6-8b48-864e-42d262129a3d", // Pending: Mr. Robot, disagreeing year
+        "e69951f1-4d01-964d-86d5-13f80f5bfd8a", // Pending: Mr. Robot, disagreeing year
+        "e41d0f7a-a39a-4346-a0dd-ca08efd75724", // Pending: Arrow, disagreeing year
+        // Not "The Simpsons movie" (2007) vs "The Simpsons Movie" (2019): briefly a 4th exception here
+        // while #374's case-sensitivity fix incorrectly covered the quote's own `source` field — that
+        // field is never independently persisted per quote (it's a join to the already-resolved Source
+        // row), so a case-only difference there is routine, harmless upstream-data noise, not a genuine
+        // conflict. With `source` correctly excluded (see `QuoteFieldMerge.CaseSensitiveContentFields`),
+        // this pair cleanly resolves as two same-title, different-date Source variants (step 6's own
+        // mechanism) with no quote-level ambiguity at all.
+    };
+
     [TestMethod]
     public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
 
-        HashSet<string> knownExceptionQuoteIds = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "779f3b34-37f6-8b48-864e-42d262129a3d", // Pending: Mr. Robot, disagreeing year
-            "e69951f1-4d01-964d-86d5-13f80f5bfd8a", // Pending: Mr. Robot, disagreeing year
-            "e41d0f7a-a39a-4346-a0dd-ca08efd75724", // Pending: Arrow, disagreeing year
-        };
-
         IReadOnlyList<ImportActionEntity> allActions = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items;
         List<ImportActionEntity> unresolved = [.. allActions
             .Where(a => a.Status.Parsed is not (ImportActionStatus.Decided or ImportActionStatus.Applied))
-            .Where(a => !knownExceptionQuoteIds.Contains(a.EntityId))];
+            .Where(a => !KnownUnresolvedNikhilNamal17QuoteIds.Contains(a.EntityId))];
 
         Assert.IsEmpty(unresolved,
-            $"Every action must auto-resolve under Review with the real rule file (the three known exceptions excepted) — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
+            $"Every action must auto-resolve under Review with the real rule file (the known exceptions excepted) — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
 
         Assert.DoesNotContain(a => a.EntityId == "7e53658c-0c3a-6546-8c12-c5e4af23c9f8", allActions,
             "The Shawshank duplicate is now excluded outright (#219) — it must produce no action at all, not merely an ignored Blocked one");

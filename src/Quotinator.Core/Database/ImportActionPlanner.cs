@@ -337,8 +337,24 @@ internal static class ImportActionPlanner
             string? existingBatchId = existing.Value.ImportBatchId;
             IReadOnlyDictionary<string, object?> incomingFields = QuoteFieldMerge.ToFieldMap(q);
 
+            // #374: the same accumulation-prevention check the Add branch above already makes, extended
+            // to Modify. Before the quote/title/character case-sensitivity rule, a Modify's own ambiguous
+            // fields either auto-resolved or (rarely) blocked a Complete row — nothing stayed genuinely
+            // Pending release over release the way an Add-branch tv-date conflict could. Once a case-only
+            // difference became its own permanent ambiguity, that stopped being true: a quote already
+            // reported this way is never applied, so the *stored* row a later reseed compares against
+            // never changes, and every reseed re-staged a fresh duplicate Pending action on top of the
+            // one still awaiting review. Found live: a single already-known conflict, left unresolved,
+            // made the staged count grow 4 → 19 in one reseed once the real corpus's other case-only
+            // disagreements were counted too. Skipped only for a same-batch collision
+            // (`existingBatchId == batchIdStr`, via `seenQuotes` above) — nothing can be in
+            // `Import_Action` yet for a row this same `PlanAsync` call hasn't finished staging.
+            if (existingBatchId != batchIdStr
+                && await connection.ExecuteScalarAsync<int>(Sql.Quotes.SelectHasUnresolvedActionById, new { id = q.Id }, transaction) > 0)
+                continue;
+
             bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-            FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+            FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy, QuoteFieldMerge.CaseSensitiveContentFields) : null;
             // Skip's resolved payload is the existing row's own values (nothing changes) — not the
             // incoming row's, which is what "resolved" would otherwise default to. The applier's Quote
             // case checks AppliedPolicy==Skip and skips the write/changelog entirely regardless, but
@@ -355,7 +371,7 @@ internal static class ImportActionPlanner
             // written), so Skip can never block a Complete quote; a merge policy only blocks on
             // fields the merge itself would actually change.
             IReadOnlyDictionary<string, object?> resolvedFields = QuoteFieldMerge.ToFieldMap(resolved);
-            HashSet<string> effectiveChanged = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
+            HashSet<string> effectiveChanged = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Key, kv.Value, resolvedFields.GetValueOrDefault(kv.Key), QuoteFieldMerge.CaseSensitiveContentFields)).Select(kv => kv.Key)];
 
             // #373: the row arrived and already matches. Reported as Unchanged rather than Modify,
             // which claims a write that never happens, and rather than nothing at all, which leaves a
@@ -369,7 +385,7 @@ internal static class ImportActionPlanner
             bool contentIsIdentical = existingFields.Keys
                 .Union(incomingFields.Keys)
                 .All(field => FieldMergeResolver.ValuesEqual(
-                    existingFields.GetValueOrDefault(field), incomingFields.GetValueOrDefault(field)));
+                    field, existingFields.GetValueOrDefault(field), incomingFields.GetValueOrDefault(field), QuoteFieldMerge.CaseSensitiveContentFields));
 
             if (contentIsIdentical)
             {
@@ -426,7 +442,7 @@ internal static class ImportActionPlanner
                     // the rule anyway would compare its recorded snapshot (describing the field's
                     // pre-correction shape) against the now-already-corrected value and spuriously
                     // flag it stale, blocking the whole action for a field that needed no resolution.
-                    if (FieldMergeResolver.ValuesEqual(existingFields[field], incomingFields.GetValueOrDefault(field)))
+                    if (FieldMergeResolver.ValuesEqual(field, existingFields[field], incomingFields.GetValueOrDefault(field), QuoteFieldMerge.CaseSensitiveContentFields))
                         continue;
 
                     if (!conflictRules.TryResolve(q.Id, field, existingFields[field], incomingFields.GetValueOrDefault(field), out FieldMergeDecision decision, out ConflictRuleOutcome outcome))
@@ -468,7 +484,7 @@ internal static class ImportActionPlanner
                 // equal fields auto-resolve, and only a genuinely ambiguous field with no decision throws.
                 try
                 {
-                    ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions);
+                    ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions, QuoteFieldMerge.CaseSensitiveContentFields);
                 }
                 catch (UnresolvedFieldConflictException)
                 {

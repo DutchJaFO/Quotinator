@@ -19,10 +19,22 @@ public static class FieldMergeResolver
     /// <paramref name="incoming"/>'s value. Scalar and array/list values are treated identically — arrays
     /// are never unioned, only replaced wholesale on a true conflict.
     /// </summary>
+    /// <param name="existing">The stored side's field-name → value map.</param>
+    /// <param name="incoming">The imported side's field-name → value map.</param>
+    /// <param name="policy"><see cref="DuplicateResolutionPolicy.MergeOurs"/> or <see cref="DuplicateResolutionPolicy.MergeTheirs"/> — any other value throws.</param>
+    /// <param name="caseSensitiveFields">
+    /// Field names for which a difference in letter case alone is a genuine conflict rather than the
+    /// project's usual case-insensitive-by-default equality (#374) — never populated by this project's
+    /// own code (<see cref="Quotinator.Data"/> stays domain-agnostic, ADR 004), only by a caller that
+    /// knows which of its own fields carry meaningful content (e.g. a quote's <c>quoteText</c>,
+    /// <c>source</c>, or <c>character</c>). <see langword="null"/> or omitted preserves this method's
+    /// original fully-case-insensitive behaviour for every field.
+    /// </param>
     public static FieldMergeResult Resolve(
         IReadOnlyDictionary<string, object?> existing,
         IReadOnlyDictionary<string, object?> incoming,
-        DuplicateResolutionPolicy policy)
+        DuplicateResolutionPolicy policy,
+        IReadOnlySet<string>? caseSensitiveFields = null)
     {
         if (policy is not (DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs))
             throw new ArgumentOutOfRangeException(nameof(policy), policy, "FieldMergeResolver only supports MergeOurs and MergeTheirs.");
@@ -50,7 +62,7 @@ public static class FieldMergeResolver
                 // Both empty — nothing to fill from either side.
                 merged[field] = existingValue;
             }
-            else if (ValuesEqual(existingValue, incomingValue))
+            else if (ValuesEqual(field, existingValue, incomingValue, caseSensitiveFields))
             {
                 merged[field] = existingValue;
             }
@@ -78,6 +90,16 @@ public static class FieldMergeResolver
     /// <see cref="UnresolvedFieldConflictException"/> once every field has been examined — mirroring a
     /// git merge refusing to complete while unresolved conflicts remain.
     /// </summary>
+    /// <param name="existing">The stored side's field-name → value map.</param>
+    /// <param name="incoming">The imported side's field-name → value map.</param>
+    /// <param name="decisions">A caller-supplied resolution per ambiguous field, keyed by field name. A field absent here auto-resolves.</param>
+    /// <param name="caseSensitiveFields">
+    /// Field names for which a difference in letter case alone is a genuine, ambiguous conflict rather
+    /// than the project's usual case-insensitive-by-default equality (#374) — see <see cref="Resolve"/>'s
+    /// own parameter doc for the full rationale and the domain-agnostic reason this is caller-supplied.
+    /// An explicit <paramref name="decisions"/> entry for the field always wins regardless — this only
+    /// affects a field with no supplied decision.
+    /// </param>
     /// <exception cref="UnresolvedFieldConflictException">
     /// One or more fields are ambiguous and have no decision. <see cref="UnresolvedFieldConflictException.FieldNames"/>
     /// lists every such field, not just the first one found.
@@ -85,7 +107,8 @@ public static class FieldMergeResolver
     public static FieldMergeResult ResolveWithDecisions(
         IReadOnlyDictionary<string, object?> existing,
         IReadOnlyDictionary<string, object?> incoming,
-        IReadOnlyDictionary<string, FieldMergeDecision> decisions)
+        IReadOnlyDictionary<string, FieldMergeDecision> decisions,
+        IReadOnlySet<string>? caseSensitiveFields = null)
     {
         Dictionary<string, object?> merged       = new(existing.Count);
         List<string> fromIncoming = [];
@@ -130,7 +153,7 @@ public static class FieldMergeResolver
             {
                 merged[field] = existingValue;
             }
-            else if (ValuesEqual(existingValue, incomingValue))
+            else if (ValuesEqual(field, existingValue, incomingValue, caseSensitiveFields))
             {
                 merged[field] = existingValue;
             }
@@ -188,6 +211,22 @@ public static class FieldMergeResolver
             return new HashSet<object?>(ea.Cast<object?>(), ScalarComparer.Instance).SetEquals(eb.Cast<object?>());
 
         return ScalarComparer.Instance.Equals(a, b);
+    }
+
+    /// <summary>
+    /// As <see cref="ValuesEqual(object?, object?)"/>, except a field named in
+    /// <paramref name="caseSensitiveFields"/> compares two scalar strings ordinally — a difference in
+    /// case alone is not equality for that field (#374). Every other field, and every non-string value,
+    /// is unaffected and falls through to the case-insensitive comparison above. See
+    /// <see cref="Resolve"/>'s parameter doc for why the set is always caller-supplied rather than a
+    /// fixed list here.
+    /// </summary>
+    public static bool ValuesEqual(string field, object? a, object? b, IReadOnlySet<string>? caseSensitiveFields)
+    {
+        if (caseSensitiveFields is not null && caseSensitiveFields.Contains(field) && a is string sa && b is string sb)
+            return string.Equals(sa, sb, StringComparison.Ordinal);
+
+        return ValuesEqual(a, b);
     }
 
     /// <summary>Scalar equality with case-insensitive string comparison; delegates to <see cref="object.Equals(object)"/> for every other type.</summary>

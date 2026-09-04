@@ -650,17 +650,29 @@ vocabulary (`ConflictRuleOutcome`) added to `docs/vocabulary.md` in the same com
 
 ### 12. Re-measure the reproduction, and unblock #373
 
-**Status:** ⬜ Not started — the reproduction re-measurement below is done; #373's own two T2 documents
-are the remaining, outstanding part of this step
+**Status:** In progress. The reproduction re-measurement is done. Both of #373's own T2 documents have
+been run live (2026-09-04), twice — once before and once after the sixth defect below — against a
+freshly rebuilt image each time: doc 21 passes except one already-known, separately-scoped issue and one
+stale-document assertion (both noted below); doc 11 initially found a real regression (reseed
+confirmations duplicating instead of deduping), traced to a case-only content difference silently
+resolving forever, fixed (`quoteText`/`character` case-sensitivity, corrected mid-flight to exclude
+`source` after live evidence showed it was the wrong field — see the sixth defect below), and
+re-verified live: the duplication the developer's own report described is gone, with one further,
+distinct, pre-existing gap found and recorded (not fixed) rather than left silent. Five defects found by
+this step's own earlier T2 pass, plus the developer-reported sixth (case-sensitivity) and everything it
+led to, are all documented below with their regression guards. Full solution green throughout
+(`dotnet test -m:1`, 0 failures, 0 warnings). **Not yet done:** #373's own step 9 needs the same live
+confirmation the two documents above already got. #373's step 8 (its own remaining "unblock #372's step
+6" work) is unaffected by this issue and stays #373's to do.
 
-`DatabaseInitializerTests.Reseed_Repeatedly_WithAResolvableFile_LeavesNothingPending` (new) runs the
+`DatabaseInitializerTests.Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows` (new; renamed
+from `_LeavesNothingPending` per row 33's correction below — this paragraph was not updated when that
+correction was made, and stated the old name and the old `0/0/0` assertion until fixed here) runs the
 issue's own three calls — cold start, reseed, reseed — against `NikhilNamal17WithRuleFileBatch` and
-asserts `0 / 0 / 0`, confirmed passing. `StagedActionCountAsync` only counts `Pending`, so the one
-already-documented `Blocked` exception (step 7's finding 5) doesn't affect this count.
-**Not yet done:** #373's two T2 documents (`21-reseed-preserves-existing-data.md`,
-`11-clean-reseed-confirmation.md`) and its own step 9 need an actual live Docker run to confirm green
-end to end — a real container, not a unit-test fixture. #373's step 8 (its own remaining "unblock
-#372's step 6" work) is unaffected by this issue and stays #373's to do.
+asserts `3 / 3 / 3`: three genuine, permanent tv-season conflicts are correct by design (row 19), and
+stability — not zero — is what this test actually proves. `StagedActionCountAsync` only counts
+`Pending`, so the one already-documented `Blocked` exception (step 7's finding 5) doesn't affect this
+count.
 
 **Four more defects found only by this step's own live T2 pass, none caught by any unit test above
 because none of the fixtures those tests use combine a full multi-file corpus with a Review-policy
@@ -736,11 +748,83 @@ mechanism as step 7 finding 5's `nikhilnamal17-quote-exclusions.json`) excludes 
 
 **Confirmed still open, and explicitly out of this issue's scope — a different bug class from every one
 above:** `Pending` grows unbounded across reseeds (`3 → 4 → 5`, live-verified) for a genuine field-level
-Modify conflict ("Silence of the Lambs", a title/date disagreement between the two bundled files with no
-covering rule). None of the accumulation-prevention mechanisms above cover this, because they all key on
-*entity* identity (`SelectHasUnresolvedActionById` checks by quote id); a Modify conflict's identity is
-`(entity, field)`, which nothing currently dedups against. Not fixed here — recorded so it is not lost,
-and left for its own issue.
+Source Modify conflict ("Silence of the Lambs", a title/date disagreement between the two bundled files
+with no covering rule). The Modify-path accumulation fix below (dedup point 3) covers a Quote's own
+Modify branch only, not `PlanSourcesAsync`'s; a Modify conflict's identity there is `(entity, field)`,
+which nothing currently dedups against. Not fixed here — recorded so it is not lost, and left for its
+own issue.
+
+**A sixth defect, reported by the developer directly (not found by this step's own live T2 pass):
+"if the quote, title or character are identical except for case then that needs to be reviewed as it
+could be a correction or an unwanted update" — a case-only difference must not be silently resolved,
+because only a human can tell a correction from an unwanted downgrade. Also: "an unstable result on the
+second run is proof that the rules were incomplete or incorrect" — endorsing the diagnostic method that
+led here (a value that changes shape between one reseed and the next, on genuinely unchanged input, is
+itself evidence, not noise to explain away).** `FieldMergeResolver` gains a `caseSensitiveFields`
+parameter (`Resolve`, `ResolveWithDecisions`, and a new `ValuesEqual(field, a, b, caseSensitiveFields)`
+overload) — domain-agnostic per ADR 004, so the actual field names are supplied by the caller, never
+hardcoded in `Quotinator.Data`. `Quotinator.Core`'s `QuoteFieldMerge.CaseSensitiveContentFields` is that
+caller-supplied set, threaded through every comparison in the Quote-Modify branch of
+`ImportActionPlanner.PlanAsync` (`contentIsIdentical`, `effectiveChanged`, the rule-consulting loop's
+skip-check, and the `Resolve`/`ResolveWithDecisions` calls themselves).
+
+**First attempt included `source` — the field named directly in the developer's own wording — and a live
+T2 run against the real bundled corpus found this was wrong, not merely incomplete.** A quote's `source`
+field is never independently persisted (`Sql.Quotes.SelectRawById` builds it from `s.Title AS Source`, a
+join to the Source row the quote has already resolved to, matched case-insensitively as identity always
+is in this project). Real upstream data routinely spells one film's title with different, harmless
+casing across different quote lines — measured **14 such cases in the bundled NikhilNamal17 corpus
+alone** (e.g. "The Dark Knight" / "the dark knight" / "The Dark knight", all the same film). Making
+`source` case-sensitive turned every one into a permanent false "needs review" conflict with nothing
+genuine to decide, and — far more seriously — a single such case-only in-file duplicate held an entire
+cold-start seed to **zero rows written** (see dedup point below). `source` was removed from
+`CaseSensitiveContentFields`; only `quoteText` and `character` remain, since both are genuinely stored
+per quote and never derived from a join. See `QuoteFieldMerge.CaseSensitiveContentFields`'s own XML doc
+for the full account, and `ImportActionPlannerTests.PlanAsync_QuoteCharacterDiffersOnlyByCase_StagesPendingForReview`
+(with `..._ExactMatch_StaysUnchanged` and `..._MatchingConflictRuleStillResolves` as controls) for the
+regression guards.
+
+**Two further defects surfaced only by testing the first (too-broad) attempt against the real corpus and
+a live Docker reseed, both fixed in the same pass:**
+
+1. **A same-batch, in-file collision on a now-ambiguous field could hold an entire cold-start seed to
+   zero rows written.** Two lines in one import file that hash to the same id and disagree only on a
+   case-sensitive field go through the Quote-Modify branch against each other (`seenQuotes`, an
+   in-memory same-batch stand-in for "existing"), correctly staging `Pending` — but
+   `ImportActionResolutionCoordinator.TryApplyBatchAsync`'s existing gating rule (a Blocked/Pending
+   *Modify* holds the whole batch, since every other one protects a genuinely stored row) doesn't know
+   the difference between that and a real, previously-committed row. A same-batch collision protects
+   nothing that already exists, exactly like the pre-existing Blocked/Pending-*Add* exception already
+   established — widened to also exempt a Blocked/Pending Modify whose `ExistingBatchId` equals its own
+   `BatchId` (the marker `QuoteSeedWriter`'s same-batch branch stamps, always different from a real prior
+   row's `ExistingBatchId`). `ImportActionResolutionCoordinatorTests.TryApplyBatchAsync_PendingModifyFromSameBatch_DoesNotHoldTheRestOfTheBatch`
+   is the regression guard, confirmed red before the fix.
+2. **The accumulation-prevention check the Add branch already had was never extended to Modify** —
+   before a case-only difference became its own permanent ambiguity, a Modify's own ambiguous fields
+   either auto-resolved or (rarely) blocked a Complete row, never stayed genuinely `Pending` release over
+   release the way an Add-branch conflict could. Once one could, nothing stopped a later reseed from
+   comparing the same still-unresolved quote against its (unchanged) stored row and re-staging a fresh
+   duplicate `Pending` action on top of the one already awaiting review — measured live: a single known
+   conflict, left unresolved, grew the real corpus's staged count `4 → 19` in one reseed. Fixed with the
+   same query the Add branch already uses (`Sql.Quotes.SelectHasUnresolvedActionById`), added to the top
+   of the Modify branch, skipped only when `ExistingBatchId == BatchId` (a same-batch collision, which by
+   definition can have nothing in `Import_Action` yet).
+   `DatabaseInitializerTests.Reseed_Repeatedly_WithACaseOnlyPendingModify_PendingCountNeverGrows` is the
+   regression guard.
+
+**Re-verified live end to end after both corrections**, against a freshly rebuilt image: doc 11's own
+step 4 (reseed twice, confirm no duplicate confirmation) and step 7 (four seeding variants) both showed
+the exact duplication the developer's original report described — `4 → 5` confirmations on one file,
+`8`/`2`/`10` instead of `4`/`1`/`5` across the variants — with the *first* corrected build (source still
+excluded, dedup fixes in place). One further, distinct, pre-existing gap remains and was traced but not
+fixed here: a Review-policy Modify whose full resolution is a complete no-op (`existingFields`,
+`incomingFields` and `mergedFields` all identical — found on a `Quotinator_Source` row with zero actual
+field differences) is still classified `Modify` and counted in `Modified`, the same "hides what happened"
+shape as the `Skip`-only fix above but for `Review`'s own auto-resolve path — this is what still produces
+one settling, non-repeating confirmation duplicate per fresh install (stable after the first reseed, not
+growing further). Recorded here rather than fixed, since it is architecturally deeper — it would need a
+"no-op Modify" classification threaded through every entity's own Modify branch, not just Quote's — and
+is a plausible candidate for its own issue.
 
 ### 13. Boyscout: explicit types, and the `.editorconfig` list
 
@@ -813,6 +897,11 @@ green end to end).
 | 45 | ✅ | A Review-policy row that auto-resolved cleanly counts as modified, not silently excluded | Unit test | `DatabaseInitializerTests.Reseed_ReviewPolicyFileWithOneGenuineModify_ConfirmationCountsAddUpToIncoming` — the "107 items, 106 added, 0 updated" defect |
 | 46 | ✅ | A Skip-policy row that genuinely differed is reported as skipped, not folded silently into another bucket or dropped from the UI | Unit test | `DatabaseInitializerTests.Reseed_SkipPolicyFileWithADifferingRow_ReportsItAsSkippedRatherThanVanishing` (payload) and `NotificationTableTests.SkippedOnlyRow_StillRenders` (UI table) — both confirmed red before the fix, green after |
 | 47 | ✅ | Two further vilaboim/NikhilNamal17 cross-file duplicates (surfaced by NikhilNamal17's own alias file matching vilaboim's raw spelling) are excluded | Live | Docker T2: `Blocked` count 2 → 0 on cold start, stable at 0 across two reseeds, after adding `data/sources/vilaboim-quote-exclusions.json` |
+| 48 | ✅ | A quote's `quoteText`/`character` differing only by case from what is stored stages Pending, not a silent resolve | Unit test | `ImportActionPlannerTests.PlanAsync_QuoteCharacterDiffersOnlyByCase_StagesPendingForReview`, with `..._ExactMatch_StaysUnchanged` and `..._MatchingConflictRuleStillResolves` as controls |
+| 49 | ✅ | A quote's `source` field is excluded from the case-sensitivity rule | Live | Docker T2 against the real bundled corpus: 14 case-only `source` differences in NikhilNamal17 alone, all routine upstream-data noise with a correctly-resolved Source regardless of casing — `source` removed from `QuoteFieldMerge.CaseSensitiveContentFields` after this finding |
+| 50 | ✅ | A same-batch collision on a newly-ambiguous field does not hold the rest of the batch to zero writes | Unit test | `ImportActionResolutionCoordinatorTests.TryApplyBatchAsync_PendingModifyFromSameBatch_DoesNotHoldTheRestOfTheBatch`, confirmed red before the `ExistingBatchId == BatchId` gating exemption |
+| 51 | ✅ | A case-only Pending Modify does not re-stage a duplicate on a later reseed | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithACaseOnlyPendingModify_PendingCountNeverGrows` — extends the Add branch's existing `SelectHasUnresolvedActionById` dedup to Modify |
+| 52 | ✅ | Both of #373's own T2 documents run clean against the fixed build, with the developer-reported duplication actually gone | Automated (T2) | Live Docker, 2026-09-04, rebuilt image: doc 21 steps 1–4/6 pass (step 5 can't execute — no `DELETE /quotes/{id}` endpoint exists, a document defect not a product one); doc 11 steps 1–3/5/6/8 pass, step 4/7 duplication confirmed gone (`4 → 5` fixed to stable) — one distinct, pre-existing no-op-Modify gap found and recorded, not fixed (see step 12's own text) |
 
 **A live T2 run against real data found a sixth defect no unit test caught** (see step 7's own new
 finding above): `GET /import/actions` 500'd on a genuine Pending-Add row. Fixed and reverified live —
