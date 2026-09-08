@@ -1,13 +1,13 @@
 # #377 — A Modify action whose resolution is a genuine no-op is still counted as Modified
 
-**Status:** In progress (step 1)
+**Status:** In progress (step 3)
 **GitHub issue:** #377
 **Tiers required:** T1, T2
 **Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
 
-**Next action: finish step 1's remaining rows, then step 2.** Every design decision is taken (see
-*Decisions taken*) and the scope is measured rather than predicted (see *Measurement*), so no step below
-rests on an assumption about what the corpus contains.
+**Next action: answer the open question below, then step 4.** Steps 1–3 are done. Execution surfaced one
+question the plan did not anticipate — a fourth counting surface, on a public API response — and step 4
+cannot be finished without deciding it; see *Open question raised during execution*.
 
 ---
 
@@ -139,6 +139,21 @@ row can therefore be Blocked over a field a rule was about to resolve away.
 Decision B keeps this out of #377: step 3 computes a *second*, post-resolution field set for its own
 no-op test and leaves `ShouldBlock`'s existing input untouched, so this issue changes no blocking
 behaviour at all. Step 8 files the defect as its own issue.
+
+### Nothing has to be fixed before this issue can run
+
+Checked rather than assumed, 2026-09-08. `#373` and `#374` are `Waiting for release` — their code is on
+this branch already, so the dependency is satisfied, not pending. The `ShouldBlock` defect above is
+explicitly not a prerequisite (decision B). `#376` is sequenced *after* this issue, not before it.
+
+**The one that needed proving is [#381](https://github.com/DutchJaFO/Quotinator/issues/381)**, because
+step 1's fixture work showed a quote re-stated without its character produces a Modify whose merged
+payload keeps the character *name* while dropping `CharacterId`. If #377's detection swallowed that row
+it would classify it terminal, stop applying it, and mask an open defect behind this fix. It does not:
+stored and resolved differ on `CharacterId`, so the row is not payload-identical and is never a no-op.
+`ImportActionPlannerTests.PlanAsync_IncomingOmitsTheCharacterLink_IsNotAResolvedToExistingNoOp` asserts
+exactly that — green today and required to stay green — which turns the independence claim into a
+checked one rather than a reasoned one. #381 stays independently visible and independently fixable.
 
 ---
 
@@ -302,10 +317,24 @@ every row.
 
 ### 1. Write every test first, and run them red
 
-**Status:** 🚧 In progress, 2026-09-08 — rows 1, 3–9 and 14–16 written and confirmed red on their own
-assertions (full `Quotinator.Core.Tests` run: 10 failed, 1641 passed, every failure one of this issue's
-own positives; `ImportActionKind.ResolvedToExisting` added and confirmed behaviour-neutral against the
-existing suite, matching what #373's step 2 recorded for `Unchanged`). Rows 2, 10–13 and 17–20 remain.
+**Status:** ✅ Done, 2026-09-08 — every row has its pair, each positive confirmed red on its own
+assertion and each negative green. `ImportActionKind.ResolvedToExisting` and the two count properties
+landed here as signatures only (the report builder stubbed to `0`), confirmed behaviour-neutral against
+the existing suite — the same call #373's step 2 recorded for `Unchanged`.
+
+Rows 2 and 19 needed no new test: `DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemImportActionsSchema`
+and `TranslationCompletenessTests` already own them and are green guards that must stay green.
+
+**One fixture was red for the wrong reason and was corrected before step 3 relied on it.** The
+mechanism-1 planner test passed `conflictRules: null`, which sends a Review Modify down the *Pending*
+path — production always supplies at least an empty `ConflictRuleLookup`, so the action never reaches
+the Decided path the classification acts on. It would have stayed red no matter how correct the fix
+was. This is exactly the failure `docs/testing-policy.md` warns about under red-first: a red status is
+not evidence until its *message* has been read.
+
+**An extra test was added that the checklist does not list**, answering a question step 1 raised rather
+than one it planned: `PlanAsync_IncomingOmitsTheCharacterLink_IsNotAResolvedToExistingNoOp`. See
+*Nothing has to be fixed before this issue can run*.
 
 **Owns rows 1–20.** Per `docs/testing-policy.md`'s signature-first rule, the signature lands before the
 tests: `ImportActionKind.ResolvedToExisting` is added in this step, not step 2, because a test naming it
@@ -349,7 +378,10 @@ image and worktree.
 
 ### 2. Add the migration and update the baseline
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-08 — migration 21
+(`ImportActionResolvedToExistingMigrations.WidenActionTypeForResolvedToExisting`), baseline widened in
+the same commit, rows 1–2 green: both the CHECK-constraint drift test and the structural one agree
+across the baseline and incremental-replay paths.
 
 **Owns rows 1–2.** The ADR 008 checklist in one commit: a full table rebuild of `Import_Action` widening
 `CHECK (ActionType IN ('Add', 'Modify', 'Unchanged', 'ResolvedToExisting'))`, the baseline's own
@@ -359,7 +391,57 @@ valid after. Migrations 15, 17, 18 and 20 all took this shape for the same SQLit
 
 ### 3. Detect the no-op after resolution, at every Modify site
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-08 — all ten sites converted through one shared helper
+(`ImportActionPlanner.ResolvesToExisting`). Rows 3–9 and 14–16 green; build clean at 0 warnings.
+
+**The comparison is of serialized payloads, not of merged fields**, and that is a decision rather than
+convenience: the payload is what the apply path writes, and it carries the links a field map does not
+(a Quote's `SourceId`/`CharacterId`/`PersonId`). A field-level test would call a row a no-op while its
+`CharacterId` was being dropped — #381's shape, which must stay visible rather than be masked.
+
+**Season needed one thing the other nine did not, and the plan did not anticipate it.** Its payload
+carries `SeriesName`, which comes from the import entry rather than from either side's stored data, and
+the existing-side payload is built without it — so a straight payload comparison called every Season a
+real change. The no-op test uses an existing-side copy carrying the same non-written metadata, leaving
+the action's own `ExistingValue` untouched, since that record is not this issue's to change. Worth
+stating because it is the general hazard: the rule is *compare what would be written*, and a payload
+that carries anything else needs that field neutralised on both sides.
+
+**Three sibling tests asserted `Decided` for what is now `ResolvedToExisting`/`Applied`** — the Universe,
+Series and Season `..._ReviewPolicy_MatchingRule_StagesDecidedNotPending` trio. Each keeps the claim it
+was written for (a matching rule auto-resolves rather than leaving the row for a human), asserted
+directly as "not `Pending`" with the new terminal outcome beside it, rather than having its old value
+flipped to whatever now passes.
+
+---
+
+## Open question raised during execution — step 4 is blocked on it
+
+**A fourth counting surface exists that this plan never enumerated:
+`ImportResultResponse.Summary`, the response body of `POST /api/v1/import`.**
+
+Found by `QuoteImportServiceTests.ImportAsync_MergeOurs_TrueConflictKeepsExisting`, which imports a
+quote, re-imports a conflicting version under `MergeOurs`, and asserts both that the stored text is
+unchanged *and* that `Summary.Updated == 1`. Those two assertions are the defect this issue exists to
+fix, on a surface the plan did not scope: nothing was written, and the summary reported a write.
+
+The classification now makes `Updated` come back `0`, which is why the test fails. That is arguably
+correct — but it leaves the row unaccounted for. `ImportSummary` carries `Total`, `Imported`, `Updated`,
+`Skipped` and a failure count; with `Updated` dropping to `0` and no bucket of its own, a no-op row is in
+`Total` and in nothing else, so the summary stops adding up. That is precisely the "two different
+nothings" problem #373 solved for the reseed report, reappearing on the import endpoint.
+
+It needs a decision because `ImportSummary` is a **public API response shape**, documented in
+`docs/api-endpoints.md`, and every option changes an existing contract:
+
+| | What it means |
+|---|---|
+| **A** | Add `resolvedToExisting` to `ImportSummary`, matching what steps 4–5 do for the other surfaces. Additive to the response, keeps the total adding up, costs a documented contract change and its own tests. |
+| **B** | Fold a no-op into the existing `Skipped` count, whose documented meaning is already "matched an existing quote and was left unchanged (`skip`/`review`)". No new field; blurs a distinction #374 spent an issue drawing, since a `Skip` row is a discarded difference and this one is a resolved one. |
+| **C** | Leave `Updated` counting no-ops on this endpoint only. No contract change; the endpoint keeps reporting a write that did not happen, and the two counting surfaces disagree about the same row. |
+
+Until this is answered, `ImportAsync_MergeOurs_TrueConflictKeepsExisting` stays red — deliberately, and
+recorded here rather than adjusted to whatever currently passes.
 
 **Owns rows 3–9 and 14–16.** The classification test is *the resolved payload equals the stored payload*, computed
 **after** any rule resolution has been applied — which is why a second field set is needed rather than
