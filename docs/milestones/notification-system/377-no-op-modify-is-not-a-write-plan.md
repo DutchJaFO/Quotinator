@@ -1,13 +1,13 @@
 # #377 — A Modify action whose resolution is a genuine no-op is still counted as Modified
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 10)
 **GitHub issue:** #377
 **Tiers required:** T1, T2
 **Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
 
-**Next action: step 8.** Steps 1–7 are done; the full solution is green (4013 passed, 0 failed) at 0
-warnings. What remains is filing the `ShouldBlock` defect and #377's own correction comment (step 8),
-teaching the external-data sentinel (step 9), and the T2/T1 runs (step 10).
+**Next action: T1, which is the developer's own run** — row 27, and the only row left. Steps 1–9 are
+done and step 10's T2 half is green against real Docker images; the full solution is green (4013
+passed, 0 failed) at 0 warnings. Once T1 confirms, this issue is `Waiting for release`.
 
 ---
 
@@ -576,12 +576,30 @@ symptom is the cold-start→reseed transition rather than this defect.
 
 ### 9. Teach the external-data sentinel to reveal a missing rule
 
-**Status:** 🚧 Written, not yet run —
-`14-fresh-seed-produces-zero-pending-actions.md` gains a step 6 asserting that the
-`ResolvedToExisting` population is non-zero *and* that none of it is undeclared, in step 4C's
-assert-don't-list shape. Row 22 stays ❌ until it is executed against a real container, and row 23 (its
-canary, against a pre-fix image) with it — writing a document is not running one, which is the
-distinction `docs/testing-policy.md` draws for T2 in the first place.
+**Status:** ✅ Done, 2026-09-09 — rows 22–23 green.
+`14-fresh-seed-produces-zero-pending-actions.md` gained a step 6 asserting the `ResolvedToExisting`
+population is non-zero *and* that every member falls into one of the two shapes we understand, in step
+4C's assert-don't-list form.
+
+**Its first draft could not have worked, and running it is what showed that.** It read
+`GET /import/actions` from the shared smoke environment — where
+`Quotinator__AutoPurgeBundledImportActions=true` deletes a cleanly-applied batch's action rows the
+moment it applies, so the list came back empty. The step now creates its own environment with that
+setting off. Writing a T2 document and running one are different activities, which is the whole reason
+this project canaries them.
+
+**"Accounted for" needed a real definition, not a placeholder.** The draft tested for a rule covering
+the entity or an absent `mergedFields`, and the second half was simply wrong — `mergedFields` is always
+present on these. The check now matches the taxonomy the measurement actually found: either a rule
+covers the entity (an `AlreadyApplied` rule, permanent and not retirable per #374), or every differing
+field is one the incoming side left empty (vilaboim carrying no year where NikhilNamal17 does).
+Anything else is a new shape and fails.
+
+**Live results.** Canary, against an image built from `18418c29`: `resolvedToExisting = 0` and two
+confirmations reporting `modified: 21` and `modified: 56` — red for the right reason, the concept not
+existing yet. Post-fix, same corpus: **24 `ResolvedToExisting` actions**, matching this plan's own
+fixture-derived prediction of 24 per reseed exactly, with `modified: 21` becoming
+`resolvedToExisting: 21` on the file that produced it.
 
 **Owns rows 22–23.** The half of this issue that only the bundled corpus can answer, and therefore the
 half that belongs in `docs/automated-testing/import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md`
@@ -618,7 +636,15 @@ rows are still classified `Modify` and the new assertion therefore cannot pass.
 
 ### 10. Run the T2 documents green, then hand T1 to the developer
 
-**Status:** ⬜ Not started
+**Status:** 🚧 Rows 24–25 done, 2026-09-09; row 27 (T1) is the developer's own and is all that remains.
+
+`11-clean-reseed-confirmation.md`'s step 2 gained the #377 assertion — `resolvedToExisting` non-zero,
+and each entity type's own parts adding up to its `incoming`. Canary red against the `18418c29` image
+(`resolvedToExisting total = 0`, those rows counted as `modified`); green against the post-fix image,
+with one confirmation reporting `resolvedToExisting = 21` where the pre-fix run reported
+`modified = 21` for the same file.
+
+Both images, both containers and the canary worktree were removed afterwards.
 
 **Owns rows 24–27.** `11-clean-reseed-confirmation.md` and the extended `14-…` re-run live against a
 freshly built image, each with its own *Canary* section recording the red run. T1 is the developer's own
@@ -658,10 +684,10 @@ counted as `Modified`", which a planner that classified *everything* as a no-op 
 | 19 | ✅ | The new message text exists in all three locales | Unit test | `TranslationCompletenessTests` (existing). **Positive:** the new key resolves in `en-GB`, `nl` and `de`. **Negative:** the test still fails on a key deliberately emptied in one file — it catches missing *and* empty, and only the second half proves it |
 | 20 | ✅ | The documented breakdown matches what is returned | Unit test | assertion over `docs/api-endpoints.md` and the endpoint `[Description]` text — #373's row 20, extended. **Positive:** the new bucket is named in both. **Negative:** the assertion still fails against a description listing the old set, which is what #373 recorded its selector being wrong about twice |
 | 21 | ✅ | The `ShouldBlock` ordering defect is filed with a label and a milestone | Issue | the new issue exists and is linked from this plan's Description — decision B |
-| 22 | ❌ | The bundled corpus reveals a no-op nobody has accounted for | Automated (T2) | `14-fresh-seed-produces-zero-pending-actions.md`, extended per step 9 — the suite's external-data sentinel and, per `docs/testing-policy.md`, the only place allowed to read `data/sources/` at run time. **Positive:** the known no-op population is present, non-zero, and names the entity types it covers. **Negative:** undeclared no-ops = 0 — asserted, not listed, following that document's own step 4C. Without the positive half a build that broke the import outright and produced no actions at all would pass |
-| 23 | ❌ | That sentinel assertion goes red before it goes green | Canary run | recorded in `14-…`'s own *Canary* section, run against a pre-fix image where the rows are still `Modify` |
-| 24 | ❌ | The confirmation behaviour holds end to end | Automated (T2) | `11-clean-reseed-confirmation.md`, extended with a no-op assertion |
-| 25 | ❌ | That assertion goes red before it goes green | Canary run | recorded in that document's own *Canary* section, run against a pre-fix build per step 1 |
+| 22 | ✅ | The bundled corpus reveals a no-op nobody has accounted for | Automated (T2) | `14-fresh-seed-produces-zero-pending-actions.md`, extended per step 9 — the suite's external-data sentinel and, per `docs/testing-policy.md`, the only place allowed to read `data/sources/` at run time. **Positive:** the known no-op population is present, non-zero, and names the entity types it covers. **Negative:** undeclared no-ops = 0 — asserted, not listed, following that document's own step 4C. Without the positive half a build that broke the import outright and produced no actions at all would pass |
+| 23 | ✅ | That sentinel assertion goes red before it goes green | Canary run | recorded in `14-…`'s own *Canary* section, run against a pre-fix image where the rows are still `Modify` |
+| 24 | ✅ | The confirmation behaviour holds end to end | Automated (T2) | `11-clean-reseed-confirmation.md`, extended with a no-op assertion |
+| 25 | ✅ | That assertion goes red before it goes green | Canary run | recorded in that document's own *Canary* section, run against a pre-fix build per step 1 |
 | 26 | ✅ | Build is clean and no regression | Build + test run | `dotnet build --configuration Release` → 0 warnings, 0 errors; `dotnet test --configuration Release -m:1` → all green |
 | 27 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
 

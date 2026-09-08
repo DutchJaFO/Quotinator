@@ -119,6 +119,31 @@ exercised here against a real reseed.
 an unattributed notification was indistinguishable from an attributed one from outside the database. An
 empty value means the initializer wrote without establishing the version first.
 
+**#377: a confirmation must not claim a write that did not happen.**
+
+```powershell
+$counts = $confirmations | ForEach-Object { ($_.metadata | ConvertFrom-Json).counts } | Where-Object { $_ }
+"modified total           = $(($counts | Measure-Object -Property modified -Sum).Sum)"
+"resolvedToExisting total = $(($counts | Measure-Object -Property resolvedToExisting -Sum).Sum)"
+$counts | Where-Object { $_.incoming -gt 0 } | ForEach-Object {
+  "  $($_.entityType): incoming=$($_.incoming) added=$($_.added) modified=$($_.modified) unchanged=$($_.unchanged) resolvedToExisting=$($_.resolvedToExisting) skipped=$($_.skipped)"
+}
+```
+
+**Expected:** `resolvedToExisting total` is **non-zero**, and every listed row's own parts add up —
+`incoming = added + modified + unchanged + resolvedToExisting + skipped`.
+
+Both halves are needed, for the same reason as everywhere else in this suite: a non-zero count alone is
+satisfied by a build that classified *everything* as a no-op, and the adding-up check alone by a build
+that produced no actions at all.
+
+**Measured 2026-09-09 against a freshly built image:** one confirmation reports
+`resolvedToExisting = 21` where the pre-fix run reported `modified = 21` for the same file.
+
+**Canary, 2026-09-08, against a pre-fix image built from `18418c29`:** red —
+`resolvedToExisting total = 0`, because the field did not exist and those rows were counted as
+`modified`. The assertion cannot pass without the fix.
+
 ### 3. Confirm the breakdown covers more than quotes
 
 ```powershell

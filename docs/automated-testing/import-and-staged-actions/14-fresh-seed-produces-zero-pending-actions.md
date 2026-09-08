@@ -232,30 +232,60 @@ population instead of being hidden inside the modified count. Each one is either
 declare, or legitimately nothing; the two answers are both present in the bundled corpus today and
 neither is currently written down anywhere.
 
+**This step needs its own environment, with the batch auto-purge turned off.** The smoke profile sets
+`Quotinator__AutoPurgeBundledImportActions=true`, so a cleanly-applied batch's `Import_Action` rows are
+deleted the moment it applies — which is correct behaviour and exactly what makes these rows invisible
+to `GET /import/actions` in the shared environment. Found by running this step as first written against
+the shared container and getting an empty list.
+
 ```powershell
-$actions = dotnet script scripts/testing/http.csx -- --url "$base/import/actions?pageSize=0" --expect 200 | ConvertFrom-Json
+dotnet script scripts/testing/test-env.csx -- create --name qt-import-14-noop --port 18653 `
+  --env Quotinator__AutoPurgeBundledImportActions=false
+$noopBase = "http://localhost:18653/api/v1"
+dotnet script scripts/testing/http.csx -- --url "$noopBase/admin/database/reseed" --method POST --header "X-Api-Key: smoketest" --expect 200 | Out-Null
+
+$actions = dotnet script scripts/testing/http.csx -- --url "$noopBase/import/actions?pageSize=0" --expect 200 | ConvertFrom-Json
 $noOps   = @($actions.items | Where-Object { $_.actionType -eq 'ResolvedToExisting' })
 
 "resolvedToExisting = $($noOps.Count)"
 $noOps | Group-Object entityType | ForEach-Object { "  $($_.Name) = $($_.Count)" }
 
-# Every no-op must be accounted for by a declaration. Two things account for one today:
-#   - a ConflictResolutionRule whose outcome is already stored (an AlreadyApplied rule, still doing
-#     work — it is what stops the incoming file re-imposing the wrong value, so it is permanent and
-#     not retirable, per #374); or
-#   - an incoming file that simply does not carry the field, where the stored value legitimately wins.
+# Every no-op must fall into one of the two shapes we understand. Anything else is a new one, and the
+# question this step exists to ask is whether it wants a rule nobody has written yet.
+#
+#   1. A rule already covers this entity — an AlreadyApplied ConflictResolutionRule. Still doing work
+#      (it is what stops the incoming file re-imposing the wrong value), so permanent and not
+#      retirable, per #374.
+#   2. The incoming side simply does not carry the field, and the stored value legitimately wins —
+#      vilaboim's raw format has no year where NikhilNamal17's does. No rule is wanted or needed.
 $declaredRuleIds = @{}
 Get-ChildItem data/sources/*conflict-rules.json | ForEach-Object {
   (Get-Content $_.FullName -Raw | ConvertFrom-Json).rules | ForEach-Object { $declaredRuleIds[$_.entityId.ToLower()] = $true }
 }
 
-$undeclared = @($noOps | Where-Object { -not $declaredRuleIds[$_.entityId.ToLower()] -and -not $_.mergedFields })
-"undeclared no-ops = $($undeclared.Count)"
-$undeclared | Select-Object -First 10 | ForEach-Object { "  $($_.entityType) $($_.entityId)" }
+$unexplained = @($noOps | Where-Object {
+  if ($declaredRuleIds[$_.entityId.ToLower()]) { return $false }        # shape 1
+  $existing = $_.existingValue | ConvertFrom-Json
+  $incoming = $_.incomingValue | ConvertFrom-Json
+  $differing = @($existing.fields.PSObject.Properties | Where-Object {
+    "$($incoming.fields.($_.Name))" -ne "$($_.Value)" })
+  # shape 2: every difference is a field the incoming side left empty
+  @($differing | Where-Object { "$($incoming.fields.($_.Name))" -ne "" }).Count -gt 0
+})
+
+"unexplained no-ops = $($unexplained.Count)"
+$unexplained | Select-Object -First 10 | ForEach-Object { "  $($_.entityType) $($_.entityId)" }
+
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-14-noop
 ```
 
 **Expected:** `resolvedToExisting` is **non-zero** and names real entity types, and
-`undeclared no-ops = 0`.
+`unexplained no-ops = 0`.
+
+**Measured 2026-09-09 against a freshly built image:** 24 no-ops on the first reseed — the same figure
+#377's own planning measurement predicted from a fixture, which is what makes this a regression guard
+rather than a fresh discovery each time. Pre-fix the same run reported them as `modified`, with two
+confirmations naming `modified: 21` and `modified: 56`.
 
 **Both halves matter and neither substitutes for the other.** The `= 0` assertion alone is satisfied by
 a build that produces no actions at all — including one where the classification broke the import
@@ -267,11 +297,14 @@ a document rather than a unit test.
 reason. A row a human is asked to eyeball is a promise rather than a verification, and this document's
 own history records nine wrong dates sitting in the database while a listing passed.
 
-**On failure:** a new undeclared no-op after a source refresh means the outside world moved in a way our
-rules do not yet cover — read the row's `existingValue`/`mergedFields` via
-`GET /import/actions?entityId=<id>` and decide whether it wants a `ConflictResolutionRule`, a
-`SourceAliasRule`, or nothing at all. Deciding "nothing at all" is a legitimate outcome; leaving it
-undecided is not.
+**On failure:** a new unexplained no-op after a source refresh means the outside world moved in a way
+our rules do not yet cover — read the row's `existingValue`/`incomingValue` and decide whether it wants
+a `ConflictResolutionRule`, a `SourceAliasRule`, or nothing at all. Deciding "nothing at all" is a
+legitimate outcome; leaving it undecided is not.
+
+**Canary, 2026-09-08, against a pre-fix image built from `18418c29`:** red, and for the right reason —
+`resolvedToExisting = 0`, because the classification did not exist yet and every one of these rows was
+reported as `modified`. The assertion cannot pass on a build without the fix.
 
 ## Observed effect
 
