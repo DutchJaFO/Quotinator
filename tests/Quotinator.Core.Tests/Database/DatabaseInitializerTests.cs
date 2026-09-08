@@ -1144,6 +1144,119 @@ public class DatabaseInitializerTests
             new { entityId });
     }
 
+    /// <summary>The ids a Source-link fixture needs once the cold start has created them.</summary>
+    private readonly record struct SourceFixtureIds(string SourceId, string StoredSeriesId, string IncomingSeriesId);
+
+    /// <summary>
+    /// #377: a Source linked to one Series, with a second Series present for the incoming side to point
+    /// at. `seriesId` is the field to differ on — `date` joined the Source's natural key in #374, so
+    /// changing that creates a second variant rather than a Modify.
+    /// </summary>
+    private static void WriteSourceFixtureFile(string path, string quoteId, string seriesName) =>
+        File.WriteAllText(path,
+            $$$"""
+            {"series":[{"name":"Stored Series"},{"name":"Incoming Series"}],
+             "sources":[{"title":"Fixture Film","type":"movie","date":"1942","seriesName":"{{{seriesName}}}"}],
+             "quotes":[{"id":"{{{quoteId}}}","quote":"A test line.","originalLanguage":"en","source":"Fixture Film","date":"1942","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
+            """);
+
+    private static void WriteSeriesLinkRule(string ruleFile, SourceFixtureIds ids, FieldResolutionChoice resolution) =>
+        File.WriteAllText(ruleFile,
+            $$$"""
+            {"rules":[{"entityId":"{{{ids.SourceId}}}",
+                       "existingRecord":{"seriesId":"{{{ids.StoredSeriesId}}}"},
+                       "incomingRecord":{"seriesId":"{{{ids.IncomingSeriesId}}}"},
+                       "fields":[{"field":"seriesId","resolution":"{{{resolution}}}"}]}]}
+            """);
+
+    private async Task<(QuotinatorDatabaseInitializer Db, string QuoteFile, string RuleFile, SourceFixtureIds Ids)>
+        SeedSourceWithSeriesLinkAsync(string name, string quoteId)
+    {
+        string quoteFile = Path.Combine(_tempDir, $"{name}.json");
+        string ruleFile  = Path.Combine(_tempDir, $"{name}-rules.json");
+
+        // The rule file must exist before the cold start but resolve nothing yet — the ids it needs are
+        // only knowable once the rows have been created.
+        File.WriteAllText(ruleFile, """{"rules":[]}""");
+        WriteSourceFixtureFile(quoteFile, quoteId, "Stored Series");
+
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
+            ManifestPolicy.HardcodedDefault, $"{name}-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        SourceFixtureIds ids = new(
+            await conn.ExecuteScalarAsync<string>("SELECT Id FROM Quotinator_Source WHERE Title = 'Fixture Film';"),
+            await conn.ExecuteScalarAsync<string>("SELECT Id FROM Quotinator_Series WHERE Name = 'Stored Series';"),
+            await conn.ExecuteScalarAsync<string>("SELECT Id FROM Quotinator_Series WHERE Name = 'Incoming Series';"));
+
+        return (db, quoteFile, ruleFile, ids);
+    }
+
+    /// <summary>
+    /// #377, the scenario the issue itself names: a Source whose Modify resolves to exactly the values
+    /// already stored must not be counted in a reseed confirmation's <c>Modified</c>.
+    /// <para>
+    /// End-to-end at the reporting surface, which the planner-level pairs do not reach: it is the
+    /// confirmation an operator actually reads. The fixture reproduces the shape the bundled corpus
+    /// produces (a rule whose outcome is already stored — `AlreadyApplied`) without reading
+    /// `data/sources/`, per `docs/testing-policy.md`.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_SourceModifyResolvesToExactlyExistingValues_NotCountedAsModified()
+    {
+        (QuotinatorDatabaseInitializer db, string quoteFile, string ruleFile, SourceFixtureIds ids) =
+            await SeedSourceWithSeriesLinkAsync("source-noop", "77f22222-2222-4222-8222-222222222222");
+
+        // The file now links the Source to a different Series, and a Keep rule sends the resolution
+        // straight back to the stored link — so the Source differs, resolves, and writes nothing.
+        // Date is deliberately left alone: it joined the Source's natural key in #374, so changing it
+        // creates a second variant rather than a Modify, and no Modify means nothing to classify.
+        WriteSeriesLinkRule(ruleFile, ids, FieldResolutionChoice.Keep);
+        WriteSourceFixtureFile(quoteFile, "77f22222-2222-4222-8222-222222222222", "Incoming Series");
+
+        await db.ReseedAsync();
+
+        ReseedEntityCountDto sourceCounts = AllConfirmationCounts(await NotificationsAsync())
+            .Single(c => c.EntityType == ImportActionEntityTypes.Source && c.ResolvedToExisting > 0);
+
+        Assert.AreEqual(0, sourceCounts.Modified,
+            "The rule keeps the stored date, so nothing is written — counting it as modified is the defect this issue exists for.");
+        Assert.AreEqual(1, sourceCounts.ResolvedToExisting,
+            "…and it is still accounted for, in the bucket that says what actually happened.");
+        Assert.AreEqual(sourceCounts.Incoming,
+            sourceCounts.Added + sourceCounts.Modified + sourceCounts.Unchanged + sourceCounts.ResolvedToExisting + sourceCounts.Skipped,
+            "The breakdown must add up, which is what stops a reclassified row vanishing from the report.");
+    }
+
+    /// <summary>
+    /// #377: the control the test above needs. The same fixture with a `Replace` rule writes the
+    /// incoming date, and must still be counted as modified — without this, a build counting every
+    /// rule-resolved Source as a no-op passes the positive perfectly.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_SourceModifyResolvesToADifferentValue_StillCountedAsModified()
+    {
+        (QuotinatorDatabaseInitializer db, string quoteFile, string ruleFile, SourceFixtureIds ids) =
+            await SeedSourceWithSeriesLinkAsync("source-genuine", "77f33333-3333-4333-8333-333333333333");
+
+        WriteSeriesLinkRule(ruleFile, ids, FieldResolutionChoice.Replace);
+        WriteSourceFixtureFile(quoteFile, "77f33333-3333-4333-8333-333333333333", "Incoming Series");
+
+        await db.ReseedAsync();
+
+        ReseedEntityCountDto sourceCounts = AllConfirmationCounts(await NotificationsAsync())
+            .Single(c => c.EntityType == ImportActionEntityTypes.Source && c.Modified > 0);
+
+        Assert.AreEqual(1, sourceCounts.Modified, "Replace takes the incoming date — a real write, and still reported as one.");
+        Assert.AreEqual(0, sourceCounts.ResolvedToExisting, "A real write is not a no-op.");
+    }
+
     /// <summary>#377 row 14, positive half.</summary>
     [TestMethod]
     public async Task Reseed_NoOpModify_WritesNoChangeEntry()

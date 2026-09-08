@@ -9,8 +9,9 @@
 done, both T2 documents are green against real Docker images, the full solution is green (4013 passed,
 0 failed) at 0 warnings, and the changelog entry is in `unreleased` in all three locales.
 
-**The GitHub issue's own Definition of done is not ticked yet, and one box cannot be ticked as
-written** — see *The issue names a test that was deliberately not written* below.
+**The GitHub issue's own Definition of done is not ticked yet** — the first four boxes are now all
+honestly tickable, including the named test (see *The test the issue names* below); the closing-comment
+box becomes true only when the issue is closed.
 
 ---
 
@@ -655,28 +656,34 @@ action and is the one row this issue cannot close itself, per CLAUDE.md.
 
 ---
 
-## The issue names a test that was deliberately not written
+## The test the issue names — written, after misreading its name
 
-#377's own *Failing tests* table names
-`DatabaseInitializerTests.Reseed_SourceModifyResolvesToExactlyExistingValues_NotCountedAsModified`, and
-no test of that name exists. Recorded here rather than silently dropped, per `process.md`'s rule that a
-named test is written or the reason it was not is recorded at the time.
+#377's *Failing tests* table names
+`DatabaseInitializerTests.Reseed_SourceModifyResolvesToExactlyExistingValues_NotCountedAsModified`. This
+plan first recorded it as deliberately unwritten, on the reading that "the Source whose Modify resolves
+to exactly existing values" meant *the Star Wars row in `data/sources/`* — making it a bundled-corpus
+assertion that `docs/testing-policy.md` forbids.
 
-**Why not:** as named it is a bundled-corpus assertion — it identifies its subject as *the Source* whose
-Modify resolves to the existing values, which is the Star Wars row in `data/sources/`. A unit test
-asserting that would read `data/sources/` at run time, which `docs/testing-policy.md` forbids outright
-(the rule landed in `18418c29`, one commit before this plan was written).
+**That reading was wrong** (developer, 2026-09-09): the name describes a *scenario and its result*, not
+a data source. It is a test that produces that outcome, on whatever fixture produces it. Written, and it
+covered a genuine gap — nothing else asserted at the confirmation level, the surface an operator
+actually reads, that a **Source** no-op stays out of `Modified`. The planner rows prove the
+classification; this proves the report.
 
-**What replaced it, and why the coverage is stronger rather than merely different:** the same behaviour
-is asserted on fixtures at the planner level for every branch and every mechanism (rows 3–9), at the
-initializer level for the write side (rows 14–16), and against the real corpus where such a check
-belongs — the external-data sentinel, step 9 — which additionally catches a *new* no-op shape appearing
-after a source refresh, something a single pinned Source id never could.
+**Two things the fixture had to get right, both found by running it:**
 
-**Consequence for closing:** the first Definition-of-done box ("failing tests listed above are red
-before the fix is written") cannot be honestly ticked against that name. Either the issue's table is
-corrected to name the tests that were actually written, or the box is left unticked with this section
-as the reason. That is the developer's call, not this document's.
+1. **`date` cannot be the differing field.** It joined a Source's natural key in #374, so an entry
+   claiming a different date creates a second variant rather than a Modify — and with no Modify there is
+   nothing to classify. The fixture differs on `seriesId`, which is not a key field.
+2. **The rule file has to exist before the cold start and resolve nothing yet**, because the ids it
+   references only exist once the rows do. It is written empty, then rewritten with the real ids before
+   the reseed.
+
+**Red-first was satisfied by mutation, since the fix had already landed**: with
+`ResolvesToExisting` forced to `false`, the positive fails and the control still passes — so the pair
+discriminates on the behaviour rather than tracking it. `docs/testing-policy.md` treats mutation and a
+positive control as answering different questions; here the control is the `Replace` half, which passes
+either way by design.
 
 ---
 
@@ -717,7 +724,8 @@ counted as `Modified`", which a planner that classified *everything* as a no-op 
 | 24 | ✅ | The confirmation behaviour holds end to end | Automated (T2) | `11-clean-reseed-confirmation.md`, extended with a no-op assertion |
 | 25 | ✅ | That assertion goes red before it goes green | Canary run | recorded in that document's own *Canary* section, run against a pre-fix build per step 1 |
 | 26 | ✅ | Build is clean and no regression | Build + test run | `dotnet build --configuration Release` → 0 warnings, 0 errors; `dotnet test --configuration Release -m:1` → all green |
-| 27 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
+| 27 | ✅ | A Source whose Modify resolves to exactly the stored values is not counted as `Modified` in the confirmation | Unit test | The scenario #377's own *Failing tests* table names, asserted at the reporting surface rather than the planner. **Positive:** `DatabaseInitializerTests.Reseed_SourceModifyResolvesToExactlyExistingValues_NotCountedAsModified` — `Modified = 0`, `ResolvedToExisting = 1`, and the breakdown's parts still summing to `Incoming`. **Negative:** `Reseed_SourceModifyResolvesToADifferentValue_StillCountedAsModified`. Discrimination confirmed by mutation: forcing `ResolvesToExisting` to `false` fails the positive and leaves the control green |
+| 28 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
 
 **The negative halves are not ceremony; three of them are the only thing standing between this fix and a
 worse defect.** Row 3's would catch a fix that stops applying genuine enrichment. Row 14's would catch
