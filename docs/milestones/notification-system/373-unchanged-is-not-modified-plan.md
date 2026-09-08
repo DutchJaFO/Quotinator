@@ -1,8 +1,10 @@
 # #373 — An import that re-states identical content reports it as modified
 
-**Status:** In progress (step 9) — steps 1–8 done; [#374](https://github.com/DutchJaFO/Quotinator/issues/374)'s
-own fixes unblocked the T2 runs, both now green (2026-09-04, live Docker) — see step 9's own text for
-what remains
+**Status:** In progress (step 10) — steps 1–9 done. T1 (developer, 2026-09-08) found step 4 fixed nine
+of thirteen sites: the four **natural-key** match paths still `continue` without emitting anything, and
+for Season/Series/Person silently discard a changed field as well. The design question that blocked
+this is **decided** (option 2, all four sites — see step 10); **next action is to execute step 10's
+four listed steps, starting with the red tests.**
 **GitHub issue:** #373
 **Tiers required:** T1, T2
 **Depends on:** [#372](https://github.com/DutchJaFO/Quotinator/issues/372) for reproduction — a reseed
@@ -400,8 +402,82 @@ steps 1–3, 5, 6 and 8 pass; step 4/7 (no duplicate confirmation) initially fai
 Review-policy Modify whose case-only content difference resolved silently forever, fixed by #374, then
 re-verified green. One further, distinct, pre-existing gap was found and recorded, not fixed: a Modify
 whose full resolution is a genuine no-op is still classified `Modify`, which still produces one
-settling (non-repeating) confirmation duplicate per fresh install — a plausible candidate for its own
-issue.
+settling (non-repeating) confirmation duplicate per fresh install — filed as
+[#377](https://github.com/DutchJaFO/Quotinator/issues/377).
+
+### 10. The four natural-key match paths, which step 4 did not reach
+
+**Status:** ⬜ Not started — **blocked on the design decision below.**
+
+**Found by T1** (developer, 2026-09-08: cold start, then reset → reseed → reseed). On the second and
+third reseed, `quotinator-seasons.json` reported only `Source`, `Character` and `Quote`; its
+`Universe`, `Series` and `Season` lines were absent entirely, and `quotinator-series-universe.json`
+likewise dropped `Universe` and `Series`, reporting only `Source`. The entities were matched, not
+missing — they simply produced no action, and `FileImportReport` omits an entity type with no actions.
+
+**Step 4 fixed nine of thirteen sites.** Its own text quotes the comment the code carried at each one —
+*"Unchanged — silent reuse, same as a natural-key match"* — and then fixed the id-matched branches
+while leaving untouched the natural-key branches that comment was comparing them **to**. Four sites,
+identical in shape, each resolving an id and `continue`-ing:
+
+| Entity | Site | Natural key |
+|---|---|---|
+| Person | `PlanPeopleAsync`, `ImportActionPlanner.cs:1456` | Name |
+| Universe | `PlanUniverseAsync`, `:1808` | Name |
+| Series | `PlanSeriesAsync`, `:1998` | Name |
+| Season | `PlanSeasonsAsync`, `:2131` | (SeriesId, Number) |
+
+**This is worse than under-reporting: for three of the four it is silent data loss.** Each site calls
+`ExecuteScalarAsync<Guid?>`, which by construction returns an id and nothing else — so no field is ever
+compared on this path. `Sql.Season.SelectIdBySeriesAndNumber` selects `Id`; `Sql.Season.SelectExistingById`
+selects `Number, Title, Subtitle, SeriesId, CompletenessStatus`. An id-less `seasons[]` entry whose
+`title` or `subtitle` changed is therefore not merely unreported — the correction is **discarded**,
+silently, on every reseed. The same holds for Series (`universeName`) and Person (`dateOfBirth`/
+`dateOfDeath`). Universe alone is benign: its natural key *is* its only field, so nothing can differ.
+
+This is the path `quotinator-seasons.json` always takes, because CLAUDE.md's import-file minimalism
+rule correctly forbids it from hand-authoring the deterministic id that would route it elsewhere.
+
+**The design decision, which is the developer's:** the natural-key path currently resolves an id and
+stops. Three options —
+
+1. **Emit `Unchanged`.** Smallest change, restores reporting. But it *asserts* nothing changed on a
+   path that never compared anything, so it is a claim the code has not earned — and it would leave
+   the Season/Series/Person field-drop untouched.
+2. **Resolve the id first, then run the one existing comparison block.** Collapses two lookup paths
+   into one and fixes reporting and the field-drop together; the duplicate path is the root cause. For
+   Person this reverses a boundary #173 recorded deliberately (`"Name/DateOfBirth/DateOfDeath
+   correction isn't available on it yet — #173's scope boundary, same as #162's"`), which is not the
+   assistant's to reverse.
+3. **A distinct classification meaning "matched, not compared."** Honest about what happened, but adds
+   a fourth outcome to a set #373 has just finished settling, and still leaves the field-drop.
+
+**Decided (developer, 2026-09-08): option 2, all four — "Person joins the other three; #173's boundary
+was never validated."** So the natural-key path resolves an id and then runs the same comparison block
+an explicit id already takes, at every site. #173's Person boundary is not carried forward: it was
+recorded as a scope limit, never as a validated decision, and nothing rests on it.
+
+**Steps, in order:**
+
+1. Write the four red tests of row 28 — one per site — asserting a second import of identical content
+   still names that entity type in the report with an `Unchanged` action. The existing
+   `PlanUniverseAsync_ExistingByName_NoActionStaged` and its siblings do **not** cover this: they
+   assert `count(non-Unchanged) == 0`, which emitting nothing already satisfies. Row 29's control
+   comes with them.
+2. Write the three red tests of row 30 — Season `title`/`subtitle`, Series `universeName`, Person
+   `dateOfBirth` — each changed on a second import under the same natural key, asserted to reach the
+   database. These are the data-loss half and cannot pass under options 1 or 3.
+3. Restructure each of the four planners: resolve `matchedId` (explicit id, else natural key) *before*
+   the `SelectExistingById` lookup, so one comparison block serves both; delete the trailing
+   `matchesByKey → continue` block. The comparison block already populates the index, so the index
+   write the deleted block performed is preserved rather than lost.
+4. Re-run T1 (developer): reset → reseed → reseed, with every entity type named on every reseed.
+
+**No `SeasonEntryDto` test coverage exists in `ImportActionPlannerTests.cs` at all** (confirmed by
+grep, 2026-09-08 — the file has no `Season` reference of any kind). Step 1 therefore adds Season's
+first planner-level tests along with its `BuildSeasonEntry`/`SeedExistingSeasonAsync` helpers, matching
+the existing `BuildUniverseEntry`/`SeedExistingUniverseAsync` pattern. That absence is itself why this
+site was never noticed.
 
 ---
 
@@ -435,7 +511,10 @@ issue.
 | 24 | ✅ | The T2 assertions go red before they go green | Canary run | Recorded in each document's own Canary section — `21-reseed-preserves-existing-data.md`'s step 3/6 (2026-09-02, pre-#372) and `11-clean-reseed-confirmation.md`'s step 2 (2026-09-01, pre-#302) |
 | 25 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors, confirmed 2026-09-04 |
 | 26 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` → all green, 0 failures, confirmed 2026-09-04 |
-| 27 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | reseed twice against unchanged files; the second names every entity type that arrived and says it was already stored, and adds no second notification. **T1 is the developer's own action, not the assistant's — see CLAUDE.md** |
+| 27 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Run by the developer 2026-09-08 (cold start, then reset → reseed → reseed). **Failed** — the second and third reseed omitted Universe, Series and Season from two files' reports entirely. Surfaced rows 28–30; re-run required once step 10 lands |
+| 28 | ❌ | An entity matched by natural key reports itself rather than vanishing | Unit test | One test per site — Person, Universe, Series, Season — asserting the second import of identical content still names that entity type in the report. Red first: all four currently emit nothing |
+| 29 | ❌ | That report cannot be satisfied by an entity that was never matched | Unit test | The positive control row 28 requires — an entity absent from the file stages nothing, so "names every entity type" is not passable by naming them unconditionally |
+| 30 | ❌ | A field change on an id-less entry is applied, not discarded | Unit test | Season `title`/`subtitle`, Series `universeName`, Person `dateOfBirth` — each changed on a second import of the same natural key, asserted to reach the database. **Depends on step 10's option-2 decision**; unreachable under option 1 or 3 |
 
 **Rows 4, 5 and 6 exist because "reports unchanged" is satisfied by reporting nothing.** Row 5 is the
 sharpest: a planner classifying *everything* as unchanged would pass rows 3, 4 and 7 perfectly.
