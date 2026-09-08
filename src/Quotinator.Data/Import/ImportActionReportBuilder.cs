@@ -13,7 +13,7 @@ public static class ImportActionReportBuilder
     /// </summary>
     public static FileImportReport Build(string fileName, IReadOnlyList<ImportActionEntity> actions)
     {
-        var byEntityType = new Dictionary<string, (int Incoming, int New, int Unchanged, int Modified, int Blocked, int Discarded, int Pending, int Stale)>();
+        var byEntityType = new Dictionary<string, (int Incoming, int New, int Unchanged, int ResolvedToExisting, int Modified, int Blocked, int Discarded, int Pending, int Stale)>();
 
         foreach (var action in actions)
         {
@@ -32,10 +32,14 @@ public static class ImportActionReportBuilder
                 ImportActionStatus.Stale     => counts with { Stale     = counts.Stale + 1 },
                 ImportActionStatus.Decided or ImportActionStatus.Applied => action.ActionType.Parsed switch
                 {
-                    ImportActionKind.Add       => counts with { New       = counts.New + 1 },
-                    ImportActionKind.Modify    => counts with { Modified  = counts.Modified + 1 },
-                    ImportActionKind.Unchanged => counts with { Unchanged = counts.Unchanged + 1 },
-                    _                          => counts,
+                    ImportActionKind.Add                => counts with { New                = counts.New + 1 },
+                    ImportActionKind.Modify             => counts with { Modified           = counts.Modified + 1 },
+                    ImportActionKind.Unchanged          => counts with { Unchanged          = counts.Unchanged + 1 },
+                    // #377: a resolution that settled on the stored values wrote nothing, so it is
+                    // neither Modified (which claims a write) nor Unchanged (which says the two sides
+                    // never differed).
+                    ImportActionKind.ResolvedToExisting => counts with { ResolvedToExisting = counts.ResolvedToExisting + 1 },
+                    _                                   => counts,
                 },
                 _ => counts,
             };
@@ -49,10 +53,7 @@ public static class ImportActionReportBuilder
             {
                 Incoming  = kv.Value.Incoming,
                 Unchanged = kv.Value.Unchanged,
-                // #377: signature only at this point — the switch above has no arm for the new kind
-                // yet, so it still falls through to `_ => counts` and the Incoming identity is what
-                // reports that. Wired in step 4.
-                ResolvedToExisting = 0,
+                ResolvedToExisting = kv.Value.ResolvedToExisting,
                 New       = kv.Value.New,
                 Modified  = kv.Value.Modified,
                 Blocked   = kv.Value.Blocked,

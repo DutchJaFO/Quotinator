@@ -65,6 +65,18 @@ public sealed class ImportSummary
     /// <summary>Rows that matched an existing quote and were left unchanged (<c>skip</c>/<c>review</c>).</summary>
     public required int Skipped { get; init; }
 
+    /// <summary>
+    /// Rows that matched an existing quote, differed from it, and whose resolution settled on the values
+    /// already stored — so nothing was written differently (#377).
+    /// <para>
+    /// Its own count rather than a fold into <see cref="Updated"/> or <see cref="Skipped"/>: counting it
+    /// as updated claims a write that never happened, and counting it as skipped says the difference was
+    /// discarded by policy when it was actually resolved away. Without it a no-op row would appear in
+    /// <see cref="Total"/> and in no other count, leaving the summary not adding up.
+    /// </para>
+    /// </summary>
+    public required int ResolvedToExisting { get; init; }
+
     /// <summary>Rows that failed validation and were not written at all.</summary>
     public required int Errors { get; init; }
 }

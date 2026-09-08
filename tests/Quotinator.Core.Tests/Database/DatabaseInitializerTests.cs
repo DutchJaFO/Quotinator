@@ -1231,8 +1231,11 @@ public class DatabaseInitializerTests
     {
         using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
+        // Ordered by rowid, not AppliedAt: both timestamps are second-resolution, so a cold start and
+        // the reseed that follows it within the same second tie, and the cold start's own RecordCount
+        // comes back instead. Insertion order is unambiguous.
         return await conn.ExecuteScalarAsync<int>(
-            "SELECT RecordCount FROM Import_Batch WHERE AppliedAt IS NOT NULL ORDER BY AppliedAt DESC, DateCreated DESC LIMIT 1;");
+            "SELECT RecordCount FROM Import_Batch WHERE AppliedAt IS NOT NULL ORDER BY rowid DESC LIMIT 1;");
     }
 
     /// <summary>

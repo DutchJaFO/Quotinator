@@ -208,6 +208,10 @@ public sealed class QuotinatorDatabaseInitializer(
                 // from the breakdown while still counting toward Incoming.
                 Skipped    = group.Count(a => a.ActionType.Parsed == ImportActionKind.Modify
                                            && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip),
+                // #377: a row that differed and whose resolution settled back onto the stored values.
+                // Neither Modified (no write happened) nor Unchanged (the two sides did differ) nor
+                // Skipped (the difference was resolved away, not discarded by policy).
+                ResolvedToExisting = group.Count(a => a.ActionType.Parsed == ImportActionKind.ResolvedToExisting),
                 // #373: every remaining outcome, recorded whether or not it can occur on this branch.
                 // A confirmation is written from the clean-apply path, so these are normally zero — and
                 // a non-zero one is precisely the thing worth finding quickly, which is why they are
@@ -922,7 +926,7 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <param name="report">The per-file report to render.</param>
     internal static string FormatReport(FileImportReport report)
         => string.Join(" ", report.EntityTypes.Select(kv =>
-            $"{kv.Key}[incoming={kv.Value.Incoming} new={kv.Value.New} unchanged={kv.Value.Unchanged} modified={kv.Value.Modified} blocked={kv.Value.Blocked} discarded={kv.Value.Discarded} pending={kv.Value.Pending} stale={kv.Value.Stale}]"));
+            $"{kv.Key}[incoming={kv.Value.Incoming} new={kv.Value.New} unchanged={kv.Value.Unchanged} resolvedToExisting={kv.Value.ResolvedToExisting} modified={kv.Value.Modified} blocked={kv.Value.Blocked} discarded={kv.Value.Discarded} pending={kv.Value.Pending} stale={kv.Value.Stale}]"));
 
     private static readonly JsonSerializerOptions ConflictRuleReadOptions = new() { PropertyNameCaseInsensitive = true };
 

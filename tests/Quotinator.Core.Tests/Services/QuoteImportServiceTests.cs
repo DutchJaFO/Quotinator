@@ -221,7 +221,14 @@ public class QuoteImportServiceTests
         ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        Assert.AreEqual(1, result.Summary.Updated);
+        // #377: MergeOurs keeps the existing side on a true conflict, so nothing is written — and this
+        // test's own second assertion has always said so. Reporting it as Updated claimed a write that
+        // the same test proves did not happen; it now has a count of its own instead.
+        Assert.AreEqual(0, result.Summary.Updated, "Nothing was written, so nothing was updated.");
+        Assert.AreEqual(1, result.Summary.ResolvedToExisting, "…and the row is still accounted for, rather than appearing in Total and nowhere else.");
+        Assert.AreEqual(result.Summary.Total,
+            result.Summary.Imported + result.Summary.Updated + result.Summary.Skipped + result.Summary.ResolvedToExisting + result.Summary.Errors,
+            "The summary must add up — the reason this count exists rather than being folded into a neighbour.");
         Assert.AreEqual("Original.", await ReadQuoteTextAsync());
     }
 
@@ -234,7 +241,10 @@ public class QuoteImportServiceTests
         ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeTheirs } };
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
+        // #377's negative half for ImportAsync_MergeOurs_TrueConflictKeepsExisting: the same fixture
+        // under the opposite merge direction is a genuine write, and must still count as one.
         Assert.AreEqual(1, result.Summary.Updated);
+        Assert.AreEqual(0, result.Summary.ResolvedToExisting, "A real write is not a no-op.");
         Assert.AreEqual("Updated.", await ReadQuoteTextAsync());
         Assert.AreEqual("merge-theirs", result.Conflicts.Single().AppliedPolicy, "Response-facing wire value must be kebab-case, matching every other DuplicateResolutionPolicy JSON value in this API");
     }

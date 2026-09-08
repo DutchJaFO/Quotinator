@@ -106,6 +106,11 @@ public sealed class SqliteQuoteImportService(
                                        && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
         int skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
+        // #377: a row that differed and resolved back onto the stored values needs a count of its own,
+        // or it appears in Total and nowhere else. It is already excluded from `updated` by construction
+        // (its ActionType is no longer Modify) — this is what stops it vanishing instead.
+        int resolvedToExisting = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote
+                                                 && a.ActionType.Parsed == ImportActionKind.ResolvedToExisting);
 
         IReadOnlyList<Guid> pendingActionIds = [.. actions
             .Where(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale)
@@ -137,6 +142,7 @@ public sealed class SqliteQuoteImportService(
                 Imported = imported,
                 Updated  = updated,
                 Skipped  = skipped,
+                ResolvedToExisting = resolvedToExisting,
                 Errors   = errors.Count
             },
             Conflicts        = BuildConflictEntries(actions),
@@ -164,6 +170,11 @@ public sealed class SqliteQuoteImportService(
                                        && a.AppliedPolicy.Parsed is not (DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review));
         int skipped  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                        && a.AppliedPolicy.Parsed is DuplicateResolutionPolicy.Skip or DuplicateResolutionPolicy.Review);
+        // #377: a row that differed and resolved back onto the stored values needs a count of its own,
+        // or it appears in Total and nowhere else. It is already excluded from `updated` by construction
+        // (its ActionType is no longer Modify) — this is what stops it vanishing instead.
+        int resolvedToExisting = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote
+                                                 && a.ActionType.Parsed == ImportActionKind.ResolvedToExisting);
         int totalQuotes = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote);
 
         ImportActionBatchStatusResponse? applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Import, purgeOnSuccess, cancellationToken: cancellationToken);
@@ -190,6 +201,7 @@ public sealed class SqliteQuoteImportService(
                 Imported = imported,
                 Updated  = updated,
                 Skipped  = skipped,
+                ResolvedToExisting = resolvedToExisting,
                 Errors   = 0
             },
             Conflicts        = BuildConflictEntries(actions),

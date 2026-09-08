@@ -201,7 +201,7 @@ public class ImportEndpointTests
                 BatchId        = Guid.NewGuid(),
                 Preview        = path.EndsWith("preview"),
                 ConflictPolicy = "review",
-                Summary        = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 0, Updated = 0, Skipped = 1, Errors = 0 },
+                Summary        = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 0, Updated = 0, Skipped = 1, ResolvedToExisting = 0, Errors = 0 },
                 Conflicts =
                 [
                     new Quotinator.Core.Models.ImportConflictEntry
@@ -243,7 +243,7 @@ public class ImportEndpointTests
                 BatchId          = Guid.NewGuid(),
                 Preview          = path.EndsWith("preview"),
                 ConflictPolicy   = "newest-wins",
-                Summary          = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 1, Updated = 0, Skipped = 0, Errors = 0 },
+                Summary          = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 1, Updated = 0, Skipped = 0, ResolvedToExisting = 0, Errors = 0 },
                 Conflicts        = [],
                 PendingActionIds = [Guid.NewGuid()],
                 Report           = new FileImportReport { FileName = "test", EntityTypes = new Dictionary<string, EntityTypeActionCounts>() }
@@ -267,7 +267,7 @@ public class ImportEndpointTests
                 BatchId        = Guid.NewGuid(),
                 Preview        = path.EndsWith("preview"),
                 ConflictPolicy = "newest-wins",
-                Summary        = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 0, Updated = 1, Skipped = 0, Errors = 0 },
+                Summary        = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 0, Updated = 1, Skipped = 0, ResolvedToExisting = 0, Errors = 0 },
                 Conflicts =
                 [
                     new Quotinator.Core.Models.ImportConflictEntry
@@ -395,7 +395,7 @@ public class ImportEndpointTests
                 BatchId        = batchId,
                 Preview        = false,
                 ConflictPolicy = "review",
-                Summary        = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 0, Updated = 0, Skipped = 1, Errors = 0 },
+                Summary        = new Quotinator.Core.Models.ImportSummary { Total = 1, Imported = 0, Updated = 0, Skipped = 1, ResolvedToExisting = 0, Errors = 0 },
                 Conflicts =
                 [
                     new Quotinator.Core.Models.ImportConflictEntry
