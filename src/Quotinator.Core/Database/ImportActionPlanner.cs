@@ -977,6 +977,11 @@ internal static class ImportActionPlanner
         SqliteTransaction? transaction, ConflictRuleLookup? conflictRules = null,
         List<RetirableRuleFinding>? retirableRuleFindings = null)
     {
+        // Dates already known for each (title, type) in this batch — seeded per key from the rows
+        // already in the database, then grown as declarations are staged. See the Add path's own
+        // remark for why the declaration path needs its own variant tracking.
+        Dictionary<string, HashSet<string?>> declaredDatesByKey = [];
+
         foreach (SourceEntryDto s in sources)
         {
             string typeStr = s.Type.ToString();
@@ -1324,7 +1329,23 @@ internal static class ImportActionPlanner
             // EntityIdentity-derived stable id is used: the same value ResolveSourceAsync would
             // independently compute for a quote referencing this same title/type, so both resolve to
             // one row rather than two.
-            string addId = canonicalId ?? EntityIdentity.SourceId(s.Title, typeStr);
+            // #374's variant convention, which this path never had: the first declaration of a
+            // (title, type) keeps the date-less id every existing Source already carries, and a
+            // second-or-later one claiming a *different* date folds that date in. Without this, two
+            // declarations of one title computed the identical id and collided, so a genuinely
+            // two-version title — The Lion King, 1994 and 2019, both correct — could not be declared
+            // at all. Same date as an earlier declaration still collapses onto it, which is what keeps
+            // a repeated entry idempotent.
+            string declKey = $"{s.Title}|{typeStr}";
+            string? declDate = s.Date.HasValue ? s.Date.Value : null;
+            if (!declaredDatesByKey.TryGetValue(declKey, out HashSet<string?>? seenDates))
+                declaredDatesByKey[declKey] = seenDates = [.. keyVariants.Select(v => v.Date)];
+
+            string addId = canonicalId
+                ?? (seenDates.Count > 0 && !seenDates.Contains(declDate)
+                        ? EntityIdentity.SourceId(s.Title, typeStr, declDate)
+                        : EntityIdentity.SourceId(s.Title, typeStr));
+            seenDates.Add(declDate);
 
             // Indexed so a same-batch quote referencing this exact title/type resolves to this same
             // new row, instead of ResolveSourceAsync independently deriving its own EntityIdentity

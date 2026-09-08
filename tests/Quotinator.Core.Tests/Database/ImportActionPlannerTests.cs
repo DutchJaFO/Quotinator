@@ -1023,6 +1023,70 @@ public class ImportActionPlannerTests
         Assert.Contains("2019", dates);
     }
 
+    /// <summary>
+    /// Two <c>sources[]</c> declarations sharing a title but carrying different dates each get their
+    /// own Source, with nothing left pending — the mechanism by which a genuinely two-version title is
+    /// <em>explicitly permitted</em> rather than reported as a duplicate.
+    /// </summary>
+    /// <remarks>
+    /// The Lion King is the live case: the bundled corpus carries quotes dated 1994 and 2019, and both
+    /// are correct — they are two films. Nothing about that is a defect, but until a declaration says
+    /// so, the pair is indistinguishable from one film with one wrong date. Declaring both is what
+    /// separates the two, and this proves the declaration resolves rather than collides.
+    /// </remarks>
+    [TestMethod]
+    public async Task PlanSourcesAsync_TwoDeclarationsSameTitleDifferentDates_StageTwoSourcesWithNothingPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources:
+            [
+                BuildSourceEntry(null, title: "The Lion King", date: "1994"),
+                BuildSourceEntry(null, title: "The Lion King", date: "2019"),
+            ]);
+
+        List<ImportActionEntity> sourceActions = [.. actions.Where(a => a.EntityType == ImportActionEntityTypes.Source)];
+        Assert.HasCount(2, sourceActions, "Each declared date is its own Source — a declaration must not collapse onto the other");
+        Assert.AreNotEqual(sourceActions[0].EntityId, sourceActions[1].EntityId);
+        Assert.IsEmpty(actions.Where(a => a.Status.Parsed == ImportActionStatus.Pending),
+            "An explicit declaration resolves outright — nothing is left for a curator to decide");
+        List<string?> dates = [.. sourceActions.Select(a => System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(a.IncomingValue!)!.Date)];
+        Assert.Contains("1994", dates);
+        Assert.Contains("2019", dates);
+    }
+
+    /// <summary>
+    /// The negative half: declaring a title's versions bounds it. A quote claiming a date no
+    /// declaration covers adopts a declared Source rather than opening a third one, so declarations
+    /// cap how many Sources one title can produce.
+    /// </summary>
+    /// <remarks>
+    /// This asserts #374's pre-resolved-adoption rule, not a guess — <c>ResolveSourceAsync</c> states
+    /// that a key already resolved by a curated declaration "must never be treated as 'no variant
+    /// found' and duplicated". The first draft of this test expected a third Source and was wrong about
+    /// the design, not about the code.
+    /// </remarks>
+    [TestMethod]
+    public async Task PlanSourcesAsync_QuoteDateCoveredByNoDeclaration_AdoptsADeclaredSourceRatherThanOpeningAThird()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto undeclared = BuildQuote("6a111111-1111-4111-8111-111111111111", source: "The Lion King", date: "1888");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [undeclared], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources:
+            [
+                BuildSourceEntry(null, title: "The Lion King", date: "1994"),
+                BuildSourceEntry(null, title: "The Lion King", date: "2019"),
+            ]);
+
+        List<ImportActionEntity> sourceActions = [.. actions.Where(a => a.EntityType == ImportActionEntityTypes.Source)];
+        Assert.HasCount(2, sourceActions,
+            "Declaring both versions bounds the title — an uncovered date joins one of them instead of opening a third");
+        Assert.IsEmpty(actions.Where(a => a.Status.Parsed == ImportActionStatus.Pending),
+            "And it resolves outright, leaving nothing pending");
+    }
+
     /// <summary>The control for <see cref="SameTitleDifferentDate_ResolvesToTwoSources"/> — a second
     /// quote for the SAME title and the SAME date within one batch must still be recognised as the same
     /// Source, not treated as yet another new variant.</summary>
