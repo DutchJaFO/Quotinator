@@ -389,6 +389,17 @@ identical (`795 quotes 473 sources 15 characters 3 people 31 series 3 seasons 8 
 naming every entity type that arrived and reporting it already stored. The 478 → 473 Source drop is the
 five dated aliases merging their wrong-dated rows, not data loss.
 
+**Re-run the same day on the build carrying the warning fix** — reset → reseed, and the six
+`claims 2 different dates` warnings are gone while everything else is unchanged: `pending=0` on all
+five files, and the counts reconcile exactly (`7 + 76 + 1 + 351 + 38 = 473` Sources,
+`13 + 1 + 720 + 61 = 795` Quotes, 3 Seasons). `series-universe.json` now reports `incoming=77` rather
+than `70` — the seven declaration rows the six two-version titles required.
+
+**That re-run is a single reseed, so it does not re-establish the idempotency half**, and it does not
+need to: `ReportSelfContradictingSources` is reporting-only by construction ("changes nothing about
+which rows get created, only whether anyone is told"), and the fix only added a skip condition inside
+its warning loop. The reseed → reseed evidence above stands on the run that produced it.
+
 ---
 
 ## Verification checklist
