@@ -1,19 +1,9 @@
 # #372 — Reseed should only import the designated files, not delete data first
 
-**Status:** Waiting for release — steps 1–8 done, every checklist row ✅. T1 confirmed green by the
-developer 2026-09-08 once step 4's smoke gate cleared; a reseed of the bundled corpus leaves zero
-pending, stale, blocked or discarded items, and every date variant in the database is one a rule or a
-declaration accounts for.
-
-**Rows 1–9 carried ❌ until 2026-09-08 while this status line already claimed them green** — the table
-was never updated after steps 2 and 3 turned them, so the doc contradicted itself for four days. Each
-was re-verified before ticking rather than flipped to match the claim: the eight named tests were run
-(`Reseed_OnPopulatedDatabase_DeletesNothing` and siblings, 8 passed 2026-09-08), and row 7's "or
-removal" branch confirmed by reading the code — `BatchIdsAsync`/`DismissAlertsForRemovedBatchesAsync`
-are gone, with the reasoning recorded at `QuotinatorDatabaseInitializer.cs`'s own comment.
+**Status:** Waiting for release
 **GitHub issue:** #372
 **Tiers required:** T1, T2
-**Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), found by this issue's own step 6. **Blocks #302**, whose final T2 and T1 wait on this
+**Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373)
 
 ---
 
@@ -311,7 +301,7 @@ named.
 
 ### 8. Run the T2 documents green, then hand over T1
 
-**Status:** In progress (T1 only). Both documents re-run 2026-09-08 against `quotinator:local` built
+**Status:** ✅ Done. Both documents re-run 2026-09-08 against `quotinator:local` built
 from `f67eb95b`; the earlier 2026-09-04 runs predated #373's step 10 and #375's step 12 and no longer
 described the shipping code.
 

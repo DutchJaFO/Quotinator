@@ -1,22 +1,6 @@
 # #302 — Notification: confirm files that reseed cleanly with no review needed
 
-**Status:** In progress (step 12, T1 only) — steps 1–11 done. #372's behaviour has landed, so the T2
-half of step 12 was re-run 2026-09-08 and is green (row 38); row 39 (T1) is the developer's own and is
-all that remains.
-
-**[#372](https://github.com/DutchJaFO/Quotinator/issues/372) is no longer a blocker** (2026-09-08): it
-reached Waiting for release with its own T1 green and a reseed leaving zero pending items, which is the
-state this issue's confirmations are counted against. Row 39 can be run whenever the developer chooses;
-nothing upstream is outstanding.
-
-**Two marks in this table were outside `process.md`'s vocabulary until 2026-09-08.** The Status column
-is `❌ / ✅` — nothing else — and this table carried `⬜` on rows 2, 31 and 35–37 and `🚧` on rows 38–39,
-so a reader could not tell an unverified row from a retired one. Each was resolved by verifying it, not
-by relabelling: rows 35–37 by running the three named tests (3 passed, 2026-09-08), row 38 by re-running
-the T2 document end to end. **Rows 2 and 31 are retired requirements — reversed and superseded by rows
-35–37 — and `process.md` does not say how a retired row is marked.** They are ✅ on the reading that
-nothing is outstanding, with the strike-through and reason kept; if the convention should instead be to
-delete and renumber, say so and it is a two-minute change.
+**Status:** In progress (step 12)
 **GitHub issue:** #302
 **Tiers required:** T1, T2
 **Depends on:** #278, #304, #312, #319, #372
@@ -433,7 +417,7 @@ are then ungated for the same reason, which is what the comment should say.
 
 ### 12. Re-run T2, and re-verify T1
 
-**Status:** ✅ T2 done, 2026-09-08 — row 38 green. Row 39 (T1) is the developer's own and remains open.
+**Status:** In progress — T2 done 2026-09-08 (row 38 green); row 39 (T1) is the developer's own and remains open.
 
 Both marks reverted to unverified: the behaviour under test changed, so neither the prior T1 pass
 (2026-09-01) nor the prior T2 run still describes what ships. T1 is the developer's own.
@@ -559,6 +543,11 @@ things the run established that no unit test had:
 - The document's own Cleanup step named a `remove` verb the harness does not have (it is `destroy`),
   and its step 3 required a `Quote` line on every file, which the fourth file does not have. Both were
   found by running it and are fixed in the document.
+
+**Rows 2 and 31 are retired requirements, struck through and marked ✅.** Both were reversed and
+superseded by rows 35–37, so nothing about them is outstanding — but `process.md` defines the Status
+column as `❌ / ✅` without saying how a retired row is marked. ✅ is the reading that no work remains;
+if the convention should instead be to delete and renumber, this is the row set to change.
 
 **Row 7 is verified at the payload level, not through a live reseed** — recorded rather than left as a
 silent substitution. The row was planned as `Reseed_WithDifferentCounts_WritesASecondNotification`, but
