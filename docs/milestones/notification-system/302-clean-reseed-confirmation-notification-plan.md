@@ -1,6 +1,6 @@
 # #302 — Notification: confirm files that reseed cleanly with no review needed
 
-**Status:** In progress (step 12)
+**Status:** Waiting for release
 **GitHub issue:** #302
 **Tiers required:** T1, T2
 **Depends on:** #278, #304, #312, #319, #372
@@ -417,7 +417,7 @@ are then ungated for the same reason, which is what the comment should say.
 
 ### 12. Re-run T2, and re-verify T1
 
-**Status:** In progress — T2 done 2026-09-08 (row 38 green); row 39 (T1) is the developer's own and remains open.
+**Status:** ✅ Done — rows 38 and 39 green, both re-run 2026-09-08 on the build that ships.
 
 Both marks reverted to unverified: the behaviour under test changed, so neither the prior T1 pass
 (2026-09-01) nor the prior T2 run still describes what ships. T1 is the developer's own.
@@ -503,7 +503,7 @@ neither in this issue's code:
 | 36 | ✅ | It writes one confirmation per file, not one for the run | Unit test | `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesOnePerFile` — presence and count fail for different reasons, and the count is what catches a loop confirming four files once |
 | 37 | ✅ | Cold start and reseed produce the same confirmations | Unit test | `DatabaseInitializerTests.ReseedAndColdStart_ProduceTheSameNotifications` — the finding asserted directly, rather than inferred from two tests that happen to agree |
 | 38 | ✅ | A cold start with no database shows the same confirmations a UI reseed does | Automated (T2) | `11-clean-reseed-confirmation.md` steps 1–6, re-run 2026-09-08 against `quotinator:local` built from `f67eb95b`: `quotes seeded = 795`, 5 confirmations naming each bundled file; dismiss → `0`, reseed → `5`, every row `type=success` with a non-empty `appVersionId`; second reseed still `5`; dismiss-then-reseed back to `5`; all `isDismissed=False` with empty `expiresAt`. The 2026-09-02 run this row previously cited predated #372, #373 and #375 and no longer described the shipping code |
-| 39 | ❌ | Every layout still renders correctly on the developer's own machine | Live (T1) | Not yet re-run. Rows 22 and 23 describe behaviour that changed under #372/#373; the developer's 2026-09-08 T1 covered the reseed reports and the statistics surfaces, not this issue's notification layouts. **T1 is the developer's own action — see CLAUDE.md** |
+| 39 | ✅ | Every layout still renders correctly on the developer's own machine | Live (T1) | Re-run and confirmed by the developer 2026-09-08 on the build carrying #372, #373 and #375. Reset → reseed leaves `pending=0 stale=0 blocked=0 discarded=0` on all five files, and the per-file confirmation renders with its breakdown — captured directly from the running app ("Source file reseeded cleanly — the bundled file `quotinator-curated.json` was reseeded with nothing left to review: 37 items came in, 37 added, 0 updated…"), alongside the Statistics page. Rows 22 and 23 hold on the behaviour that shipss and the statistics surfaces, not this issue's notification layouts. **T1 is the developer's own action — see CLAUDE.md** |
 
 **The two surfaces need different sequences, which row 22 originally ran together as one step.**
 `StartupSuccessModal` is shown once per process run after a healthy startup, so a reseed — which

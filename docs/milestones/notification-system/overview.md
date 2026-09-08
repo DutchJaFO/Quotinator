@@ -41,7 +41,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#313](https://github.com/DutchJaFO/Quotinator/issues/313) | Api tests can silently assert against the startup wait page instead of the endpoint under test | Waiting for release | T1 ✅ T2 ⬜ | [313-api-test-startup-race-plan.md](313-api-test-startup-race-plan.md) |
 | [#83](https://github.com/DutchJaFO/Quotinator/issues/83) | Research: notification system design | Waiting for release | T1 ✅ T2 ⬜ T3 ⬜ | [83-notification-system-design-research-plan.md](83-notification-system-design-research-plan.md) |
 | [#81](https://github.com/DutchJaFO/Quotinator/issues/81) | Startup notification: import warnings and what's new after upgrade | Waiting for release | T1 ✅ T2 ✅ | [81-startup-whats-new-notification-plan.md](81-startup-whats-new-notification-plan.md) |
-| [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed | In progress | T1 ⬜ T2 ✅ | [302-clean-reseed-confirmation-notification-plan.md](302-clean-reseed-confirmation-notification-plan.md) |
+| [#302](https://github.com/DutchJaFO/Quotinator/issues/302) | Notification: confirm files that reseed cleanly with no review needed | Waiting for release | T1 ✅ T2 ✅ | [302-clean-reseed-confirmation-notification-plan.md](302-clean-reseed-confirmation-notification-plan.md) |
 | [#303](https://github.com/DutchJaFO/Quotinator/issues/303) | Notification + minimal review page: alert when a reseed leaves import actions pending review | Waiting for release | T1 ⬜ T2 ✅ | [303-pending-review-alert-and-review-page-plan.md](303-pending-review-alert-and-review-page-plan.md) |
 | [#304](https://github.com/DutchJaFO/Quotinator/issues/304) | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) | Waiting for release | T1 ✅ T2 ✅ | [304-reseed-notification-action-plan.md](304-reseed-notification-action-plan.md) |
 | [#307](https://github.com/DutchJaFO/Quotinator/issues/307) | Changelog highlights: mark specific entries as notification-worthy | Waiting for release | T1 ✅ T2 ✅ | [307-changelog-notification-audience-key-plan.md](307-changelog-notification-audience-key-plan.md) |
@@ -90,7 +90,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #83  ─── (none) — Waiting for release
 #81  ─── depends on #278, #80, #309, #307, #312; soft-depends on #308 — Waiting for release
 #304 ─── depends on #278, #156, #312, #319 — Waiting for release
-#302 ─── depends on #278, #312, #372 — In progress
+#302 ─── depends on #278, #312, #372 — Waiting for release
 #303 ─── depends on #278, #312 — Waiting for release
 #307 ─── depends on #80; soft-depends on #309 — Waiting for release
 #308 ─── depends on #278, #312; soft-depends on #302, #303, #304 — Waiting for release
@@ -150,7 +150,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 11 | **#307** ✅ | Waiting for release |
 | 12 | **#319** ✅ | Waiting for release; gateway for the producers below |
 | 13 | **#304** ✅ | Waiting for release |
-| 14 | **#302** 🚧 | In progress — T1 outstanding |
+| 14 | **#302** ✅ | Waiting for release |
 | 15 | **#303** ✅ | Waiting for release — T1 outstanding |
 | 16 | **#367** ✅ | Waiting for release — moved up so #308 designs against the finished status set |
 | 17 | **#308** ✅ | Waiting for release — T1 outstanding |
