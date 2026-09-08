@@ -80,21 +80,106 @@ docker cp qt-import-14:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-s
 docker start qt-import-14
 dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --status
 
+# A: exact duplicates — the same work stored twice under the same date.
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
-  --sql "SELECT Title, Type, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING c > 1"
+  --sql "SELECT Title, Type, Date, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type, COALESCE(Date,'') HAVING c > 1"
+
+# B: casing-only duplicates — the alias mechanism's own job, and never legitimate.
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
+  --sql "SELECT LOWER(Title) AS t, Type, COUNT(DISTINCT Title) AS spellings FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING spellings > 1"
+
+# C: date variants — legitimate, but listed so a wrong date is visible rather than silent.
+dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
+  --sql "SELECT Title, Type, GROUP_CONCAT(Date) AS dates FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING COUNT(*) > 1"
 ```
 
-**Expected:** the duplicate query returns **no rows**. Any row is a genuine duplicate Source that
-slipped through both the rule and alias mechanisms.
+**Expected:** **A** and **B** return **no rows**. **C** is not an assertion — it is a listing, and every
+row in it needs a human to confirm the dates name genuinely distinct works.
+
+**A** is a true duplicate: nothing legitimises the same title, type *and* date stored twice.
+**B** is an alias failure: two spellings of one title that `sourceAliasFile` should have merged onto a
+canonical form. Neither is confounded by dates, which is what makes them assertable.
+
+**Rewritten 2026-09-08, because the previous query could not pass.** It grouped on
+`(LOWER(Title), Type)` alone and expected no rows — an assertion that
+[#374](https://github.com/DutchJaFO/Quotinator/issues/374) had already made unsatisfiable:
+`ImportActionPlanner`'s `ResolveSourceAsync` deliberately gives a second-or-later variant with a
+different date its own Source row, *"to avoid colliding with the first"*. The proof it was the query
+and not the data: **The Lion King** (1994 / 2019) is two genuinely distinct films, and the seed log
+*warns about it by name* asking for exactly the confirmation **C** now collects — so the test failed on
+behaviour the application announces as expected.
+
+Measured on a fresh container the same day: the old query returned **11 rows**, of which **0** were
+true duplicates (**A** is empty), **2** were casing failures (**B**: `Back to the future` beside
+`Back to the Future`, `The Silence of the lambs` beside `The Silence of the Lambs`) and the rest were
+date variants. Eleven rows of mixed signal, where two of them were the real finding.
 
 The container is stopped for the copy, which this step did not do before: a copy taken while the app
 holds the database open can omit rows the WAL has not yet checkpointed, and a *missing* duplicate reads
 as a pass.
 
+### 5. Confirm each bundled file still matches what its own converter produces
+
+**This is the step that makes this document the suite's external-data sentinel**, and the only place in
+the project allowed to go red because the outside world changed rather than because this project broke.
+Developer rule, 2026-09-08: *tests should not rely on bundled data to stay green, with the exception of
+the feature smoke test that exists purely to be aware of changes in the external data that may affect
+our rules.* Unit tests therefore use fixtures; this step watches the real thing.
+
+```powershell
+$manifest = Get-Content data/sources/manifest.json -Raw | ConvertFrom-Json
+foreach ($entry in $manifest.sources | Where-Object { $_.converter -and $_.github }) {
+  $raw = "scripts/cache/$($entry.file)"
+  if (-not (Test-Path $raw)) { "$($entry.file): no cached raw — skipped"; continue }
+
+  $out = Join-Path $env:TEMP "regen-$($entry.file)"
+  dotnet run --project src/Quotinator.Api -- --convert $raw $out --converter $entry.converter 2>$null
+
+  $regen = (Get-Content $out -Raw | ConvertFrom-Json)
+  $live  = (Get-Content "data/sources/$($entry.file)" -Raw | ConvertFrom-Json)
+  $liveByKey = @{}; foreach ($q in $live.quotes ?? $live) { $liveByKey["$($q.quote) $($q.source)"] = $q.date }
+
+  $drift = foreach ($q in ($regen.quotes ?? $regen)) {
+    $k = "$($q.quote) $($q.source)"
+    if ($liveByKey.ContainsKey($k) -and $liveByKey[$k] -ne $q.date) {
+      "  $($q.source): checked-in=$($liveByKey[$k]) upstream=$($q.date)"
+    }
+  }
+  "$($entry.file): $(@($drift).Count) diverging date(s)"
+  $drift
+}
+```
+
+**Expected:** `0 diverging date(s)` for every file.
+
+**A divergence is not a converter bug — it means a correction was put somewhere that does not survive.**
+`Quotinator:AutoUpdateSources` defaults to `true`, so a running container re-downloads the raw upstream
+file and re-runs the converter over it at startup, overwriting the checked-in copy. Anything hand-edited
+into `data/sources/` is discarded at runtime while still reading as fixed in the repository. The
+supported mechanism is a `ConflictResolutionRule` in that file's own `ruleFile`, which survives
+regeneration.
+
+**Measured 2026-09-08 — five divergences in `NikhilNamal17_popular-movie-quotes.json`,** and in three
+of them the checked-in value is the *correct* year while upstream's is wrong, so the live container
+seeds worse data than the repository appears to hold:
+
+| Quote / Source | Checked in | Seeded |
+|---|---|---|
+| "Do, or do not…" — Empire Strikes Back | `null` | 1890 |
+| "Life is a banquet…" — Auntie Mame | 2005 | 1958 |
+| "Even the smallest person…" — LOTR Fellowship | 2002 | 2001 |
+| "Following's not really my style." — The Avengers | 2019 | 2012 |
+| "I have nothing to prove to you" — Captain Marvel | 2019 | 2013 |
+
+**Written as a unit test first, and that was the wrong place.** It lived in
+`BasicJsonArrayConverterTests` for one commit; pinned to bundled and upstream-derived data, it would go
+red whenever the outside world moved rather than when this project regressed. The converter's own
+behaviour stays covered there by fixtures.
+
 ## Observed effect
 
-Not yet established as a captured record beyond the empty pending list and the empty duplicate query —
-both of which are the observation this test exists for.
+Not yet established as a captured record beyond the empty pending list, the two duplicate queries and
+the drift listing — which are the observations this test exists for.
 
 ## Cleanup
 

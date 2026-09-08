@@ -1,6 +1,17 @@
 # #302 — Notification: confirm files that reseed cleanly with no review needed
 
-**Status:** In progress (step 12) — blocked on [#372](https://github.com/DutchJaFO/Quotinator/issues/372); steps 10 and 11 are done
+**Status:** In progress (step 12, T1 only) — steps 1–11 done. #372's behaviour has landed, so the T2
+half of step 12 was re-run 2026-09-08 and is green (row 38); row 39 (T1) is the developer's own and is
+all that remains.
+
+**Two marks in this table were outside `process.md`'s vocabulary until 2026-09-08.** The Status column
+is `❌ / ✅` — nothing else — and this table carried `⬜` on rows 2, 31 and 35–37 and `🚧` on rows 38–39,
+so a reader could not tell an unverified row from a retired one. Each was resolved by verifying it, not
+by relabelling: rows 35–37 by running the three named tests (3 passed, 2026-09-08), row 38 by re-running
+the T2 document end to end. **Rows 2 and 31 are retired requirements — reversed and superseded by rows
+35–37 — and `process.md` does not say how a retired row is marked.** They are ✅ on the reading that
+nothing is outstanding, with the strike-through and reason kept; if the convention should instead be to
+delete and renumber, say so and it is a two-minute change.
 **GitHub issue:** #302
 **Tiers required:** T1, T2
 **Depends on:** #278, #304, #312, #319, #372
@@ -402,7 +413,9 @@ that produces one.
 
 ### 11. Remove the gate and the flag it reads
 
-**Status:** ⬜ Not started — turns rows 35–37 green
+**Status:** ✅ Done — turns rows 35–37 green. (This line read "⬜ Not started" until 2026-09-08 while
+the doc header already said step 11 was done; `isReseed` has no occurrence anywhere in `src/`,
+confirmed by grep, so the header was right and this line was stale.)
 
 `if (isReseed)` at the clean-apply branch goes. Nothing else reads the flag — confirmed by grep, six
 occurrences in `src/`, one of them a read — so `isReseed` is removed from
@@ -415,10 +428,26 @@ are then ungated for the same reason, which is what the comment should say.
 
 ### 12. Re-run T2, and re-verify T1
 
-**Status:** 🚧 Blocked on [#372](https://github.com/DutchJaFO/Quotinator/issues/372) — turns rows 38–39 green
+**Status:** ✅ T2 done, 2026-09-08 — row 38 green. Row 39 (T1) is the developer's own and remains open.
 
-Both marks revert to unverified: the behaviour under test changed, so neither the prior T1 pass
+Both marks reverted to unverified: the behaviour under test changed, so neither the prior T1 pass
 (2026-09-01) nor the prior T2 run still describes what ships. T1 is the developer's own.
+
+**T2 re-run 2026-09-08**, against `quotinator:local` built from `f67eb95b` (so it includes #372, #373's
+step 10 and #375's step 12). `11-clean-reseed-confirmation.md` steps 1–6 all green — figures in row 38.
+
+**Step 7 of that document was not run**, and this row does not claim it was. It builds four containers
+with their own bind directories to cover the seeding variants (`IncludeDefaultSources=false`, a
+user-imports file, and so on); steps 1–6 are what rows 38's assertions are written against.
+
+**Step 3's stated assertion is now wrong, and that is a defect in the document, not in the code.** It
+requires that "No line may read `added=0 modified=0`", written when a `counts` entry held only those two
+fields. #374 widened the payload — an entry now carries `incoming`, `unchanged`, `skipped`, `blocked`,
+`pending`, `discarded` and `stale` as well — so on an unchanged reseed every line legitimately reads
+`added=0 modified=0` while carrying `incoming=3 unchanged=3`, which is exactly the "already stored"
+reporting #373 exists to produce. The document's own print statement shows only `added` and `modified`,
+which is why it reads as a row of zeros. Raised rather than fixed here: the document belongs to the T2
+suite, not to this issue.
 
 **Steps 1–8 of the document were run green on 2026-09-02 and two of them found defects — but the
 final pass waits for #372.** Under #372 a reseed stops deleting, so a reseed against a populated
@@ -448,7 +477,7 @@ neither in this issue's code:
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | One `Success` notification per file that reseeds with nothing left to review | Unit test | `DatabaseInitializerTests.Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile` |
-| 2 | ⬜ | ~~No per-file notification on the first empty-database seed~~ **Reversed 2026-09-02** — see rows 35–37 | Unit test | ~~`DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification`~~ deleted with the gate it guarded |
+| 2 | ✅ | ~~No per-file notification on the first empty-database seed~~ **Reversed 2026-09-02** — see rows 35–37 | Unit test | ~~`DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification`~~ deleted with the gate it guarded |
 | 3 | ✅ | No per-file notification for a file left awaiting review | Unit test | `DatabaseInitializerTests.Reseed_FileLeftAwaitingReview_WritesNoSuccessNotification` |
 | 4 | ✅ | No notification for a reseed that touches zero files | Unit test | `DatabaseInitializerTests.Reseed_NoConfiguredFiles_WritesNoNotification` |
 | 5 | ✅ | An identical per-file result is not written again while the first notification is still active | Unit test | `DatabaseInitializerTests.Reseed_TwiceWithNoChange_DoesNotRewriteTheActiveNotification` |
@@ -477,15 +506,15 @@ neither in this issue's code:
 | 28 | ✅ | Origin survives the `Metadata` column round-trip | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown` |
 | 29 | ✅ | All four seeding variants behave correctly against real configuration | Automated (T2) | `11-clean-reseed-confirmation.md` step 7 |
 | 30 | ✅ | The document goes red before it goes green | Canary run | `11-clean-reseed-confirmation.md`'s *Canary* section — built `aed54b2d` under `quotinator:canary302`: step 2 fails (`0` confirmations after a reseed). Step 1 passes on a build with no producer, so it proves nothing alone — recorded there |
-| 31 | ⬜ | ~~Row 2's first-seed suppression is wired, not incidental~~ **Retired 2026-09-02** — it proved the gate was wired, and the gate is gone | Mutation | ~~Replacing the `if (isReseed)` gate with `if (true)`~~ |
+| 31 | ✅ | ~~Row 2's first-seed suppression is wired, not incidental~~ **Retired 2026-09-02** — it proved the gate was wired, and the gate is gone | Mutation | ~~Replacing the `if (isReseed)` gate with `if (true)`~~ |
 | 32 | ✅ | Row 27's per-origin identity is wired | Mutation | Removing `Origin` from `ReseedFileAppliedMetadataDto.IdentityComponents` fails `ReseedFileAppliedMetadataTests.Identity_DiffersByOrigin_ForTheSameFileNameAndBreakdown` |
 | 33 | ✅ | Every named test is wired to behaviour, not passing incidentally | Mutation sweep | All 29 #302-referenced tests swept 2026-09-01 — disabling `ConfirmFileAppliedCleanlyAsync` fails 12; the rest by targeted mutation (first-seed gate, staged-branch confirm, identity components, wire names, response field, constructor optionality, baseline CHECK and structural drift) |
 | 34 | ✅ | The stored JSON keeps its wire property names | Unit test | `ReseedFileAppliedMetadataTests.Payload_RoundTripsFileNameAndBreakdown`'s `AssertWireNames` — added 2026-09-01 after the round-trip assertions were measured to survive renaming `[JsonPropertyName]` on both sides |
-| 35 | ⬜ | The first seed of an empty database confirms each file that applied cleanly | Unit test | `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesAPerFileNotification` — replaces row 2, which asserted the opposite |
-| 36 | ⬜ | It writes one confirmation per file, not one for the run | Unit test | `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesOnePerFile` — presence and count fail for different reasons, and the count is what catches a loop confirming four files once |
-| 37 | ⬜ | Cold start and reseed produce the same confirmations | Unit test | `DatabaseInitializerTests.ReseedAndColdStart_ProduceTheSameNotifications` — the finding asserted directly, rather than inferred from two tests that happen to agree |
-| 38 | 🚧 | A cold start with no database shows the same confirmations a UI reseed does | Automated (T2) | `11-clean-reseed-confirmation.md` step 1, inverted — **run green 2026-09-02**: `quotes seeded = 799`, four confirmations naming each bundled file, against a red run of `0` on the gated build. Held open pending [#372](https://github.com/DutchJaFO/Quotinator/issues/372), which changes what step 2 measures |
-| 39 | 🚧 | Every layout still renders correctly on the developer's own machine | Live (T1) | reverted from ✅ — rows 22 and 23 describe behaviour that has changed. Blocked on #372 for the same reason: T1 should see the reseed that ships, not this intermediate one |
+| 35 | ✅ | The first seed of an empty database confirms each file that applied cleanly | Unit test | `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesAPerFileNotification` — replaces row 2, which asserted the opposite |
+| 36 | ✅ | It writes one confirmation per file, not one for the run | Unit test | `DatabaseInitializerTests.Initialise_FirstEmptyDatabaseSeed_WritesOnePerFile` — presence and count fail for different reasons, and the count is what catches a loop confirming four files once |
+| 37 | ✅ | Cold start and reseed produce the same confirmations | Unit test | `DatabaseInitializerTests.ReseedAndColdStart_ProduceTheSameNotifications` — the finding asserted directly, rather than inferred from two tests that happen to agree |
+| 38 | ✅ | A cold start with no database shows the same confirmations a UI reseed does | Automated (T2) | `11-clean-reseed-confirmation.md` steps 1–6, re-run 2026-09-08 against `quotinator:local` built from `f67eb95b`: `quotes seeded = 795`, 5 confirmations naming each bundled file; dismiss → `0`, reseed → `5`, every row `type=success` with a non-empty `appVersionId`; second reseed still `5`; dismiss-then-reseed back to `5`; all `isDismissed=False` with empty `expiresAt`. The 2026-09-02 run this row previously cited predated #372, #373 and #375 and no longer described the shipping code |
+| 39 | ❌ | Every layout still renders correctly on the developer's own machine | Live (T1) | Not yet re-run. Rows 22 and 23 describe behaviour that changed under #372/#373; the developer's 2026-09-08 T1 covered the reseed reports and the statistics surfaces, not this issue's notification layouts. **T1 is the developer's own action — see CLAUDE.md** |
 
 **The two surfaces need different sequences, which row 22 originally ran together as one step.**
 `StartupSuccessModal` is shown once per process run after a healthy startup, so a reseed — which

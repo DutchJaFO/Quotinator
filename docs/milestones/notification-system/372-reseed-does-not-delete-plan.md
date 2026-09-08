@@ -2,7 +2,14 @@
 
 **Status:** In progress (step 8) — steps 1–7 done (steps 6–7 found already/newly complete 2026-09-04,
 during [#374](https://github.com/DutchJaFO/Quotinator/issues/374)'s own step 12 cascade); every
-checklist row is ✅ except row 21 (T1, the developer's own)
+checklist row is ✅ except row 21 (T1, the developer's own).
+
+**Rows 1–9 carried ❌ until 2026-09-08 while this status line already claimed them green** — the table
+was never updated after steps 2 and 3 turned them, so the doc contradicted itself for four days. Each
+was re-verified before ticking rather than flipped to match the claim: the eight named tests were run
+(`Reseed_OnPopulatedDatabase_DeletesNothing` and siblings, 8 passed 2026-09-08), and row 7's "or
+removal" branch confirmed by reading the code — `BatchIdsAsync`/`DismissAlertsForRemovedBatchesAsync`
+are gone, with the reasoning recorded at `QuotinatorDatabaseInitializer.cs`'s own comment.
 **GitHub issue:** #372
 **Tiers required:** T1, T2
 **Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), found by this issue's own step 6. **Blocks #302**, whose final T2 and T1 wait on this
@@ -303,10 +310,58 @@ named.
 
 ### 8. Run the T2 documents green, then hand over T1
 
-**Status:** In progress. This issue's own document (`21-reseed-preserves-existing-data.md`) and
-#302's `11-clean-reseed-confirmation.md` have both been run live, twice, by #374's own step 12
-(2026-09-04) — see that issue's plan doc for the full account. T1 (the developer's own action, per
-CLAUDE.md) is the only remaining part of this step.
+**Status:** In progress (T1 only). Both documents re-run 2026-09-08 against `quotinator:local` built
+from `f67eb95b`; the earlier 2026-09-04 runs predated #373's step 10 and #375's step 12 and no longer
+described the shipping code.
+
+**`21-reseed-preserves-existing-data.md`, 2026-09-08.** Steps 1, 2, 3 and 6 green — `baseline
+quotes = 795`, the locally-imported quote survives (`local quote survived reseed: True`, `796` before
+and after), and 21 import batches survive four reseeds. Step 4's first half green: `quotes before =
+796, after = 796`, `pending actions = 0`.
+
+**Step 4's second half is half green, and the failing half is not this issue's.** Its expectation is
+that every entity type the file contains is listed *and* `modified` reads `0`. The first is now true —
+all seven types of `quotinator-curated.json`, all six of `quotinator-seasons.json` including `Season`,
+where before #373's step 10 the natural-key-matched types vanished from the report entirely. The second
+is still false: `modified` reads `1`, `1`, `1` and `21` across four files on a reseed that changed
+nothing, which is [#377](https://github.com/DutchJaFO/Quotinator/issues/377)'s no-op-Modify
+misclassification. **The document's `**Fully green after:** #373` header is therefore wrong — it needs
+#377 too**, and it is still present in the file despite #373's step 9 claiming both such headers were
+removed.
+
+**Step 5 still cannot execute as written**, re-confirmed by running it: `DELETE
+/api/v1/quotes/{id}` returns `405 MethodNotAllowed`. Quotes are intentionally read-only, so this is a
+defect in the document rather than a product regression — unchanged from the 2026-09-04 finding.
+
+**The designated smoke set was run in full, 2026-09-08** — `docs/automated-testing/README.md` puts it
+under every end-of-issue T2 pass, and it had been skipped on the grounds that the issue-relevant
+documents were the interesting ones. It is the floor, not an optional extra.
+
+| # | Test | Result |
+|---|---|---|
+| 1 | `api-surface/01-baseline` | ✅ all 9 steps — `healthy`, version matches `Directory.Build.props` (`1.9.0-alpha`), random `Ok`, scoped searches correct |
+| 2 | `api-surface/02-pagination-contract` | ✅ `pageSize=0` returns every row on all three endpoints; `501`, `page` beyond last → `422`; defaults `20` |
+| 3 | `import-and-staged-actions/01-staged-action-review-workflow` | ✅ decide → undo → decide-all → apply, `/import/conflicts` still `404` |
+| 4 | `import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions` | ❌ **step 4** — see below. Steps 1–3 green (`zeroCounts` empty, `pending=0`) |
+| 5 | `import-and-staged-actions/19-per-file-import-report` | ✅ `missingTypes=[]`, removed fields absent with a live control |
+| 6 | `database-lifecycle/03-reset-is-a-full-wipe` | ✅ every count `0`, audit `1` self-trace, both version counters preserved |
+| 7 | `startup-and-degradation/03-startup-wait-page` | ✅ `503`/`starting`/self-contained wait page, then ready; `kestrelFirst=True` |
+| 8 | `notifications-and-changelog/01-notification-system` | ✅ including both browser driver steps — `Expired` computed correctly, Cancel left `795` quotes untouched, Confirm dropped them to `0` |
+| 9 | `notifications-and-changelog/07-changelog-served-from-its-own-database` | ✅ own `quotinatorchangelog.db`, 126 entries, `fallbacks=0`, no duplication on restart |
+
+**Smoke 4 step 4 fails: 11 duplicate Sources**, where it expects none. Every pair differs only by
+`Date` — `Star Wars: Episode V` at `1890` beside `1980`, `The Silence of the lambs` at `1998` beside
+`1991`, the three Lord of the Rings films each a year out, and so on — so one row of each pair carries
+a wrong date from a bundled file and the alias/rule mechanisms did not merge it.
+
+**Not caused by this milestone's work, and established rather than assumed:** the diff from `84d4e5b7`
+to `HEAD` touches zero lines mentioning `PlanSources` or `Sql.Sources`, and
+[#376](https://github.com/DutchJaFO/Quotinator/issues/376)'s own body already describes the Silence of
+the Lambs pair as a live defect on 2026-09-04. `The Lion King` (1994 / 2019) is the one legitimate pair
+— the seed log warns about it by name and asks for exactly this verification. Raised here, not fixed:
+it is neither this issue's subject nor #377's.
+
+T1 (the developer's own action, per CLAUDE.md) is the only remaining part of this step.
 
 ---
 
@@ -314,24 +369,24 @@ CLAUDE.md) is the only remaining part of this step.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A reseed against a populated database deletes no domain row | Unit test | `DatabaseInitializerTests.Reseed_OnPopulatedDatabase_DeletesNothing` — per-table counts before and after, with the table set read from the schema's `Quotinator_` tables rather than a list, so a future entity is covered without anyone remembering |
-| 2 | ❌ | That row-count assertion cannot pass against a reseed that does nothing | Unit test | `DatabaseInitializerTests.Reseed_OnPopulatedDatabase_IsNotANoOp` — the positive control row 1 requires |
-| 3 | ❌ | A row deleted since the last import is re-added, and only that row | Unit test | `DatabaseInitializerTests.Reseed_WithARowRemoved_ReAddsOnlyThatRow` |
-| 4 | ❌ | Locally changed content raises a conflict rather than being overwritten | Unit test | `DatabaseInitializerTests.Reseed_WithLocallyChangedContent_StagesAConflictRatherThanOverwriting` — asserts both that the stored value survived and that an action was staged; either alone is satisfiable by doing nothing |
-| 5 | ❌ | No orphaned `Quotinator_CharacterSource` rows survive a reseed | Unit test | `DatabaseInitializerTests.Reseed_OnPopulatedDatabase_LeavesNoOrphanedCharacterSourceRows` — every link row still resolves to a live Character and Source |
-| 6 | ❌ | Import batches survive a reseed | Unit test | `DatabaseInitializerTests.Reseed_PreservesImportBatches` |
-| 7 | ❌ | The `Obsolete` dismissal either has a live trigger under test, or no longer exists | Unit test **or** removal | Whichever way step 4 resolves, the result verifies itself: a surviving path gets a test naming the trigger that still reaches it; a dead one is deleted, and deleted code cannot be called. Deliberately not "a finding is recorded" — that is the shape `process.md` refuses |
-| 8 | ❌ | An explicit reseed does not consult whether content exists | Unit test | `DatabaseInitializerTests.Reseed_OnPopulatedDatabase_ImportsRegardlessOfExistingContent` — proven by mutation: restoring the count gate makes it fail |
-| 9 | ❌ | Cold start still seeds only a database with no content | Unit test | `DatabaseInitializerTests.Initialise_OnPopulatedDatabase_SeedsNothing` — the gate stays where it belongs, and stays a *content* check |
+| 1 | ✅ | A reseed against a populated database deletes no domain row | Unit test | `DatabaseInitializerTests.Reseed_OnPopulatedDatabase_DeletesNothing` — per-table counts before and after, with the table set read from the schema's `Quotinator_` tables rather than a list, so a future entity is covered without anyone remembering |
+| 2 | ✅ | That row-count assertion cannot pass against a reseed that does nothing | Unit test | `DatabaseInitializerTests.Reseed_OnPopulatedDatabase_IsNotANoOp` — the positive control row 1 requires |
+| 3 | ✅ | A row deleted since the last import is re-added, and only that row | Unit test | `DatabaseInitializerTests.Reseed_WithARowRemoved_ReAddsOnlyThatRow` |
+| 4 | ✅ | Locally changed content raises a conflict rather than being overwritten | Unit test | `DatabaseInitializerTests.Reseed_WithLocallyChangedContent_StagesAConflictRatherThanOverwriting` — asserts both that the stored value survived and that an action was staged; either alone is satisfiable by doing nothing |
+| 5 | ✅ | No orphaned `Quotinator_CharacterSource` rows survive a reseed | Unit test | `DatabaseInitializerTests.Reseed_OnPopulatedDatabase_LeavesNoOrphanedCharacterSourceRows` — every link row still resolves to a live Character and Source |
+| 6 | ✅ | Import batches survive a reseed | Unit test | `DatabaseInitializerTests.Reseed_PreservesImportBatches` |
+| 7 | ✅ | The `Obsolete` dismissal either has a live trigger under test, or no longer exists | Unit test **or** removal | Whichever way step 4 resolves, the result verifies itself: a surviving path gets a test naming the trigger that still reaches it; a dead one is deleted, and deleted code cannot be called. Deliberately not "a finding is recorded" — that is the shape `process.md` refuses |
+| 8 | ✅ | An explicit reseed does not consult whether content exists | Unit test | `DatabaseInitializerTests.Reseed_OnPopulatedDatabase_ImportsRegardlessOfExistingContent` — proven by mutation: restoring the count gate makes it fail |
+| 9 | ✅ | Cold start still seeds only a database with no content | Unit test | `DatabaseInitializerTests.Initialise_OnPopulatedDatabase_SeedsNothing` — the gate stays where it belongs, and stays a *content* check |
 | 10 | ✅ | Emptiness is decided on content, not on any table having rows | Unit test | `DatabaseInitializerTests.Initialise_WithNonContentRowsOnly_StillSeeds` — confirmed passing 2026-09-04 |
 | 11 | ✅ | No `Quotinator_*.DeleteAll` constant survives without a caller | Guard test **or** removal | The guard tests enumerating these constants run as part of the full solution suite, confirmed 0 failures 2026-09-04 |
 | 12 | ✅ | #302's confirmations still describe what a reseed actually did | Unit test | `DatabaseInitializerTests.Reseed_AfterDismissal_WritesTheConfirmationAgain` and siblings, rewritten by #373's own commit `ad4f3fd3` per that issue's step 8 — confirmed passing 2026-09-04 |
 | 13 | ✅ | Reset then Reseed still produces a from-scratch database | Unit test | `DatabaseInitializerTests.ResetThenReseed_ProducesAFromScratchDatabase` |
 | 14 | ✅ | Every surface describing reseed as deleting is corrected | Unit test | `OpenApiSpecEndpointTests.ReseedEndpoint_LiveDescription_NeverClaimsItDeletesFirst` (new, 2026-09-04, confirmed red before the fix and green after) — asserts against the live `/openapi/v1.json`, which reflects `AdminEndpoints.cs`'s own `WithDescription`. `docs/api-endpoints.md`, `addon/DOCS.md`, `addon-beta/DOCS.md`, `docs/data-import.md`, `IDatabaseInitializer.cs`'s XML docs, and `LogMessages.LogReseedRequested`'s live log line were also found stale during the same sweep and corrected, though only the endpoint description has a mechanical guard |
 | 15 | ✅ | ADR 014's account of Reseed matches the code | Manual, then asserted | Revised in place 2026-09-04 — its factual description of Reseed (`TruncateDataAsync`, "wiped-and-reimported") corrected; its decision (audit-trail tables never purge dangling references) is unaffected |
-| 16 | ✅ | A live reseed against a populated database preserves and reports correctly | Automated (T2) | `docs/automated-testing/import-and-staged-actions/21-reseed-preserves-existing-data.md` — run live 2026-09-04 by #374's own step 12 |
+| 16 | ✅ | A live reseed against a populated database preserves and reports correctly | Automated (T2) | `docs/automated-testing/import-and-staged-actions/21-reseed-preserves-existing-data.md` — re-run 2026-09-08 against `quotinator:local` at `f67eb95b`. Steps 1, 2, 3, 6 and step 4's first half green (`796` quotes before and after, local quote survives, `0` pending, 21 batches survive). Step 4's "every entity type listed" now green; its "`modified` at `0`" clause fails (`1`/`1`/`1`/`21`) and is [#377](https://github.com/DutchJaFO/Quotinator/issues/377)'s, not this issue's — see step 8. Step 5 unexecutable (`DELETE /quotes/{id}` → `405`), a document defect |
 | 17 | ✅ | The new T2 document goes red before it goes green | Canary run | Recorded in the document's own Canary section, run 2026-09-02 against `quotinator:local` at `3e9bb19c` (pre-#372) |
-| 18 | ✅ | #302's own document passes against the reseed that ships | Automated (T2) | `11-clean-reseed-confirmation.md`, run live 2026-09-04 by #374's own step 12 — see that issue's plan doc for the one further, distinct, pre-existing gap found and recorded (not this issue's) during that run |
+| 18 | ✅ | #302's own document passes against the reseed that ships | Automated (T2) | `11-clean-reseed-confirmation.md` steps 1–6, re-run 2026-09-08 against `quotinator:local` at `f67eb95b`: 5 confirmations on cold start, dismiss → `0`, reseed → `5`, second reseed still `5`, dismiss-then-reseed back to `5`, all `isDismissed=False`. Step 7 (the four seeding variants) not run. Step 3's "no line may read `added=0 modified=0`" assertion is stale rather than failing — see #302's own step 12 |
 | 19 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors, confirmed 2026-09-04 |
 | 20 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` → all green, 0 failures, confirmed 2026-09-04 |
 | 21 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | reset, reseed, reseed again — the second adding nothing and reporting so. **T1 is the developer's own action, not the assistant's — see CLAUDE.md** |
