@@ -1149,6 +1149,84 @@ public class ImportActionPlannerTests
         Assert.AreEqual(sourceId, sourceAction.EntityId, "The existing row's real id must be reused, never recomputed");
     }
 
+    /// <summary>
+    /// A quote naming its source in different casing, with an agreeing date, resolves to the existing
+    /// row rather than creating a second one — the quote-path counterpart of
+    /// <see cref="PlanSourcesAsync_NoExplicitId_DifferingCasing_MatchesExistingNaturalKey"/>, which
+    /// only covers an explicit <c>sources[]</c> declaration.
+    /// </summary>
+    /// <remarks>
+    /// The gap this closes was found in real data by
+    /// <c>import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md</c>'s duplicate
+    /// check, which lists <c>Back to the future</c> beside <c>Back to the Future</c> and
+    /// <c>The Silence of the lambs</c> beside <c>The Silence of the Lambs</c> — both reached through a
+    /// quote's own <c>source</c> field, not through a declaration. Nothing at unit level asserted that
+    /// path was case-insensitive.
+    /// </remarks>
+    [TestMethod]
+    public async Task ResolveSourceAsync_QuoteWithDifferentlyCasedTitle_SameDate_ReusesTheExistingSource()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Back to the Future", type: "Movie", date: "1985");
+        SourceQuoteDto quote = BuildQuote("c5111111-1111-4111-8111-111111111111", source: "back to the FUTURE", date: "1985");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == ImportActionEntityTypes.Source);
+        Assert.AreEqual(sourceId, sourceAction.EntityId, "A case-only title difference must resolve to the existing row, never a second Source");
+        Assert.IsEmpty(actions.Where(a => a.EntityType == ImportActionEntityTypes.Source && a.ActionType.Parsed == ImportActionKind.Add),
+            "No Add may be staged — that is the duplicate this assertion exists to prevent");
+    }
+
+    /// <summary>
+    /// The negative half of the pair above, and the one that makes it mean something: a case-only
+    /// difference is reused, but a genuinely different <em>title</em> is not. Without this, "reuses the
+    /// existing row" is satisfiable by a build that collapses every Source onto the first one it finds.
+    /// </summary>
+    [TestMethod]
+    public async Task ResolveSourceAsync_QuoteWithGenuinelyDifferentTitle_StagesItsOwnSource()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Back to the Future", type: "Movie", date: "1985");
+        SourceQuoteDto quote = BuildQuote("c6111111-1111-4111-8111-111111111111", source: "Back to the Future Part II", date: "1989");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == ImportActionEntityTypes.Source);
+        Assert.AreEqual(ImportActionKind.Add, sourceAction.ActionType.Parsed, "A different film is a different Source");
+        Assert.AreNotEqual(sourceId, sourceAction.EntityId);
+    }
+
+    /// <summary>
+    /// A date variant of an existing Source stores the existing row's title casing, not the raw casing
+    /// the incoming quote happened to use.
+    /// </summary>
+    /// <remarks>
+    /// This is the exact shape the smoke suite's duplicate check reports as a casing failure, and the
+    /// two assertions above prove it is not a matching failure: when the dates agree, a case-only
+    /// difference resolves to the existing row. It is only when the date *also* differs — so a variant
+    /// is legitimately created — that the raw spelling can reach the database and stand beside the
+    /// canonical one. Live example: <c>Back to the future</c> (1958) beside <c>Back to the Future</c>
+    /// (1985), which is one film with one wrong date, presenting as two differently-spelled Sources.
+    /// </remarks>
+    [TestMethod]
+    public async Task ResolveSourceAsync_DateVariantOfDifferentlyCasedTitle_StoresTheCanonicalCasing()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Back to the Future", type: "Movie", date: "1985");
+        SourceQuoteDto quote = BuildQuote("c7111111-1111-4111-8111-111111111111", source: "Back to the future", date: "1958");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity variant = actions.Single(a => a.EntityType == ImportActionEntityTypes.Source);
+        SourceActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(variant.IncomingValue!)!;
+        Assert.AreEqual("Back to the Future", payload.Title,
+            "A variant of a known title must adopt that title's stored casing — otherwise one film stands in the database under two spellings");
+    }
+
     [TestMethod]
     public async Task ResolveSourceAsync_ExistingCompleteNullDatedSource_QuoteWithDate_StagesBlockedNotBackfill()
     {
