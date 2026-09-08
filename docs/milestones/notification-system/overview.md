@@ -72,7 +72,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#369](https://github.com/DutchJaFO/Quotinator/issues/369) | A review row whose batch is gone offers decisions that cannot be carried out | Planning | T1 ⬜ T2 ⬜ | [369-orphaned-review-rows-plan.md](369-orphaned-review-rows-plan.md) |
 | [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | Planning | T1 ⬜ T2 ⬜ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Planning | T1 ⬜ T2 ⬜ | — |
-| [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | In progress | T1 ⬜ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
+| [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
 | [#373](https://github.com/DutchJaFO/Quotinator/issues/373) | An import that re-states identical content reports it as modified | Waiting for release | T1 ✅ T2 ✅ | [373-unchanged-is-not-modified-plan.md](373-unchanged-is-not-modified-plan.md) |
 | [#374](https://github.com/DutchJaFO/Quotinator/issues/374) | A conflict rule cannot tell "already correct" from "cannot apply" | Waiting for release | T1 ✅ T2 ✅ | [374-already-correct-is-not-cannot-apply-plan.md](374-already-correct-is-not-cannot-apply-plan.md) |
 | [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | Waiting for release | T1 ✅ T2 ✅ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
@@ -90,7 +90,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #83  ─── (none) — Waiting for release
 #81  ─── depends on #278, #80, #309, #307, #312; soft-depends on #308 — Waiting for release
 #304 ─── depends on #278, #156, #312, #319 — Waiting for release
-#302 ─── depends on #278, #312, #372 — In progress; its own T2 re-run is green, but T1 waits on the same smoke 4 step 4 gate #372 does
+#302 ─── depends on #278, #312, #372 (all ✅) — In progress, T1 outstanding and unblocked
 #303 ─── depends on #278, #312 — Waiting for release
 #307 ─── depends on #80; soft-depends on #309 — Waiting for release
 #308 ─── depends on #278, #312; soft-depends on #302, #303, #304 — Waiting for release
@@ -118,7 +118,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #313 ─── (none) — Waiting for release
 #370 ─── (none) — Planning
 #369 ─── depends on #303 — Planning
-#372 ─── (none); blocks #302; T1 gated on smoke 4 step 4's check C asserting; row 21's "reporting so" clause still open against #377 — In progress
+#372 ─── (none); blocked #302 until 2026-09-08 — Waiting for release
 #373 ─── depends on #372; blocks #302 (via #372), #372's row 21 — Waiting for release
 #375 ─── (none); blocks #374; its import-report half landed with #373's step 10 — Waiting for release
 #374 ─── depends on #375 — Waiting for release
@@ -150,7 +150,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 11 | **#307** ✅ | Waiting for release |
 | 12 | **#319** ✅ | Waiting for release; gateway for the producers below |
 | 13 | **#304** ✅ | Waiting for release |
-| 14 | **#302** 🚧 | In progress — T2 green 2026-09-08; T1 outstanding |
+| 14 | **#302** 🚧 | In progress — T2 green 2026-09-08; unblocked by #372, T1 outstanding |
 | 15 | **#303** ✅ | Waiting for release — T1 outstanding |
 | 16 | **#367** ✅ | Waiting for release — moved up so #308 designs against the finished status set |
 | 17 | **#308** ✅ | Waiting for release — T1 outstanding |
@@ -158,7 +158,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 19 | **#374** ✅ | Waiting for release |
 | 20 | **#378** ✅ | Waiting for release — found live while verifying #374, fixed same session |
 | 21 | **#373** ✅ | Waiting for release — T1 green after the natural-key fix |
-| 22 | **#372** 🚧 | In progress — #302 cannot finish until this lands |
+| 22 | **#372** ✅ | Waiting for release — T1 green; a reseed leaves zero pending items |
 | 23 | **#377** | Planning — the same `ImportActionPlanner` branches #373's silent-skip fix touches; #372's row 21 needs it |
 | 24 | **#376** | Planning — sequenced with #377, same file |
 | 25 | **#369** | Planning — depends on #303 |

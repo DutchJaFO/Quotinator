@@ -1,8 +1,9 @@
 # #372 — Reseed should only import the designated files, not delete data first
 
-**Status:** In progress (step 8) — steps 1–7 done (steps 6–7 found already/newly complete 2026-09-04,
-during [#374](https://github.com/DutchJaFO/Quotinator/issues/374)'s own step 12 cascade); every
-checklist row is ✅ except row 21 (T1, the developer's own).
+**Status:** Waiting for release — steps 1–8 done, every checklist row ✅. T1 confirmed green by the
+developer 2026-09-08 once step 4's smoke gate cleared; a reseed of the bundled corpus leaves zero
+pending, stale, blocked or discarded items, and every date variant in the database is one a rule or a
+declaration accounts for.
 
 **Rows 1–9 carried ❌ until 2026-09-08 while this status line already claimed them green** — the table
 was never updated after steps 2 and 3 turned them, so the doc contradicted itself for four days. Each
@@ -342,7 +343,7 @@ documents were the interesting ones. It is the floor, not an optional extra.
 | 1 | `api-surface/01-baseline` | ✅ all 9 steps — `healthy`, version matches `Directory.Build.props` (`1.9.0-alpha`), random `Ok`, scoped searches correct |
 | 2 | `api-surface/02-pagination-contract` | ✅ `pageSize=0` returns every row on all three endpoints; `501`, `page` beyond last → `422`; defaults `20` |
 | 3 | `import-and-staged-actions/01-staged-action-review-workflow` | ✅ decide → undo → decide-all → apply, `/import/conflicts` still `404` |
-| 4 | `import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions` | ⚠️ steps 1–3 green (`zeroCounts` empty, `pending=0`); step 4's **A** and **B** green after the alias fix; its **C** asserts nothing — see below |
+| 4 | `import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions` | ✅ steps 1–3 green (`zeroCounts` empty, `pending=0`); step 4's **A**, **B** and **C** all assert and all pass — `undeclared date variants = 0`, re-measured 2026-09-08 — see below |
 | 5 | `import-and-staged-actions/19-per-file-import-report` | ✅ `missingTypes=[]`, removed fields absent with a live control |
 | 6 | `database-lifecycle/03-reset-is-a-full-wipe` | ✅ every count `0`, audit `1` self-trace, both version counters preserved |
 | 7 | `startup-and-degradation/03-startup-wait-page` | ✅ `503`/`starting`/self-contained wait page, then ready; `kestrelFirst=True` |
@@ -356,29 +357,37 @@ rewritten into three separated checks, and two of them are now genuinely green: 
 share title + type + date) and **B** (no title stored under two spellings), the latter closed by
 declaring the two canonical spellings in `nikhilnamal17-source-aliases.json`.
 
-**C is not green — it does not assert.** It lists the 11 date-variant groups for a human to confirm,
-which under `process.md`'s own rule is a promise rather than a verification. So step 4 currently passes
-while nine known-wrong dates sit in the database, and it passes **because an assertion was removed**.
-That is the same shape as normalising the casing away: the check stops complaining without the problem
-being resolved.
+**C now asserts, and that is what forced the eleven cases to be resolved.** It was a listing — 11
+date-variant groups for a human to eyeball — which under `process.md`'s own rule is a promise rather
+than a verification, so step 4 passed while nine wrong dates sat in the database. It now checks that
+every date variant corresponds to a declared `sources[]` entry and fails on any that does not.
 
-**The permission mechanism already exists and C should assert against it.** A legitimate date variant
-is one someone declared: `quotinator-series-universe.json` already carries
-`{ "title": "Back to the Future", "type": "movie", "date": "1985" }`. Its `1958` sibling is declared
-nowhere, and neither is either half of `The Lion King` (1994 / 2019) — the one pair that genuinely is
-two films. Making C assert *"every date variant must correspond to a declared `sources[]` entry"* would
-turn all nine wrong dates red and give the two real ones an explicit home, exactly as the alias file
-does for casing. **Not built — it changes what this smoke test demands and needs the nine dates
-verified per `docs/workflow/source-verification.md`, so it is the developer's call.**
+**All eleven resolved, none by silence** (2026-09-08):
+
+| Reading | Mechanism | Cases |
+|---|---|---|
+| One of the two dates is wrong | dated `SourceAliasRule` (`date` → `canonicalDate`) | 5 — Empire Strikes Back `1890→1980`, Back to the future `1958→1985`, Silence of the lambs `1998→1991`, X-Men `2015→2014`, Fast & Furious 8 `2013→2017` |
+| The title names two works | paired `sources[]` declarations | 6 — The Lion King, Deathly Hallows, the three Lord of the Rings films, The Wolf of Wall Street |
+
+**Measured on a fresh container, current build:** `pending = 0`, A/B/C all empty
+(`undeclared date variants = 0`), and zero `different dates` warnings — the six that fired against the
+declarations were a defect in the check, now fixed, since a declaration *is* the verification that
+warning asks for.
 
 **Not caused by this milestone's work, and established rather than assumed:** the diff from `84d4e5b7`
 to `HEAD` touches zero lines mentioning `PlanSources` or `Sql.Sources`, and
 [#376](https://github.com/DutchJaFO/Quotinator/issues/376)'s own body already describes the Silence of
 the Lambs pair as a live defect on 2026-09-04.
 
-**T1 cannot be handed over while step 4 is not genuinely green** (developer rule, 2026-09-08: *we can't
-run a T1 test until the marked test succeeds*). A and B pass; C is the outstanding half, and this step
-is not complete until C asserts and holds.
+**T1 could not be handed over while step 4 was not genuinely green** (developer rule, 2026-09-08: *we
+can't run a T1 test until the marked test succeeds*). That gate is now met: A, B and C all assert and
+all hold.
+
+**T1 run by the developer 2026-09-08, after the gate cleared** — reset → reseed → reseed:
+`pending=0 stale=0 blocked=0 discarded=0` on every file of every reseed; the second and third reseeds
+identical (`795 quotes 473 sources 15 characters 3 people 31 series 3 seasons 8 universes`), each
+naming every entity type that arrived and reporting it already stored. The 478 → 473 Source drop is the
+five dated aliases merging their wrong-dated rows, not data loss.
 
 ---
 
@@ -406,7 +415,7 @@ is not complete until C asserts and holds.
 | 18 | ✅ | #302's own document passes against the reseed that ships | Automated (T2) | `11-clean-reseed-confirmation.md` steps 1–6, re-run 2026-09-08 against `quotinator:local` at `f67eb95b`: 5 confirmations on cold start, dismiss → `0`, reseed → `5`, second reseed still `5`, dismiss-then-reseed back to `5`, all `isDismissed=False`. Step 7 (the four seeding variants) not run. Step 3's "no line may read `added=0 modified=0`" assertion is stale rather than failing — see #302's own step 12 |
 | 19 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors, confirmed 2026-09-04 |
 | 20 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` → all green, 0 failures, confirmed 2026-09-04 |
-| 21 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | reset, reseed, reseed again — the second adding nothing and reporting so. **T1 is the developer's own action, not the assistant's — see CLAUDE.md** |
+| 21 | ✅ | The behaviour is correct on the developer's own machine | Live (T1) | Run by the developer 2026-09-08 after step 4's smoke gate cleared: reset → reseed → reseed. The second and third reseeds add nothing (`new=0` on every entity of every file) and report it (`unchanged=N` on every type, every file), with `pending=0 stale=0 blocked=0 discarded=0` throughout and identical statistics across both. See step 8 for the full figures. **T1 is the developer's own action, not the assistant's — see CLAUDE.md** |
 
 **Rows 2 and 4 exist because this issue's assertions are unusually easy to satisfy by accident.** Most
 rows here assert that something was *preserved*, and a build that imports nothing preserves everything.

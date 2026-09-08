@@ -4,6 +4,11 @@
 half of step 12 was re-run 2026-09-08 and is green (row 38); row 39 (T1) is the developer's own and is
 all that remains.
 
+**[#372](https://github.com/DutchJaFO/Quotinator/issues/372) is no longer a blocker** (2026-09-08): it
+reached Waiting for release with its own T1 green and a reseed leaving zero pending items, which is the
+state this issue's confirmations are counted against. Row 39 can be run whenever the developer chooses;
+nothing upstream is outstanding.
+
 **Two marks in this table were outside `process.md`'s vocabulary until 2026-09-08.** The Status column
 is `❌ / ✅` — nothing else — and this table carried `⬜` on rows 2, 31 and 35–37 and `🚧` on rows 38–39,
 so a reader could not tell an unverified row from a retired one. Each was resolved by verifying it, not

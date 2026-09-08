@@ -88,13 +88,37 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/in
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
   --sql "SELECT LOWER(Title) AS t, Type, COUNT(DISTINCT Title) AS spellings FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING spellings > 1"
 
-# C: date variants — legitimate, but listed so a wrong date is visible rather than silent.
-dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
-  --sql "SELECT Title, Type, GROUP_CONCAT(Date) AS dates FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING COUNT(*) > 1"
+# C: every date variant is one somebody declared. An undeclared second date is the ambiguous case.
+$declared = @{}
+Get-ChildItem data/sources/*.json | ForEach-Object {
+  $doc = Get-Content $_.FullName -Raw | ConvertFrom-Json
+  foreach ($s in @($doc.sources)) {
+    if ($s.title) { $declared["$($s.title.ToLower())|$($s.type.ToLower())|$($s.date)"] = $true }
+  }
+}
+
+$variantRows = dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
+  --sql "SELECT Title, Type, Date FROM Quotinator_Source WHERE IsDeleted = 0 AND LOWER(Title) IN (SELECT LOWER(Title) FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING COUNT(*) > 1)"
+
+$undeclared = @($variantRows | Select-Object -Skip 1 | Where-Object { $_ -match '\S' } | ForEach-Object {
+  $cols = ($_ -split '\s{2,}') | Where-Object { $_ -match '\S' }
+  if ($cols.Count -ge 3 -and -not $declared["$($cols[0].Trim().ToLower())|$($cols[1].Trim().ToLower())|$($cols[2].Trim())"]) { $_.Trim() }
+})
+"undeclared date variants = $($undeclared.Count)"
+$undeclared
 ```
 
-**Expected:** **A** and **B** return **no rows**. **C** is not an assertion — it is a listing, and every
-row in it needs a human to confirm the dates name genuinely distinct works.
+**Expected:** **A**, **B** and **C** all return **no rows**. `undeclared date variants = 0`.
+
+**C asserts; it does not list.** A title carrying two dates is ambiguous only while nobody has said
+which reading applies, and there are exactly two ways to say it — a dated `SourceAliasRule` when one of
+the dates is wrong, or a pair of `sources[]` declarations when the title really does name two works.
+Once either is in place the variant is *permitted*, and C passes. Until then it fails, which is the
+point: a wrong date must not reach the database unremarked just because nothing crashed.
+
+**It was a listing until 2026-09-08, and that was the defect.** A row a human is asked to eyeball is a
+promise rather than a verification — `process.md` refuses exactly that shape — so the check passed while
+nine wrong dates sat in the database. Making it assert is what forced them to be resolved.
 
 **A** is a true duplicate: nothing legitimises the same title, type *and* date stored twice.
 **B** is an alias failure: two spellings of one title that `sourceAliasFile` should have merged onto a
