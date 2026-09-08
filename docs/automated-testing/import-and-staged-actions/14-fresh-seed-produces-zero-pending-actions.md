@@ -223,6 +223,56 @@ seeds worse data than the repository appears to hold:
 red whenever the outside world moved rather than when this project regressed. The converter's own
 behaviour stays covered there by fixtures.
 
+### 6. Confirm every no-op resolution is one somebody has accounted for
+
+**This is the step that makes a missing rule visible.** Since [#377](https://github.com/DutchJaFO/Quotinator/issues/377)
+an import action whose resolution settles on the values already stored is classified
+`ResolvedToExisting` rather than `Modify` — so for the first time these rows are a countable
+population instead of being hidden inside the modified count. Each one is either a rule somebody should
+declare, or legitimately nothing; the two answers are both present in the bundled corpus today and
+neither is currently written down anywhere.
+
+```powershell
+$actions = dotnet script scripts/testing/http.csx -- --url "$base/import/actions?pageSize=0" --expect 200 | ConvertFrom-Json
+$noOps   = @($actions.items | Where-Object { $_.actionType -eq 'ResolvedToExisting' })
+
+"resolvedToExisting = $($noOps.Count)"
+$noOps | Group-Object entityType | ForEach-Object { "  $($_.Name) = $($_.Count)" }
+
+# Every no-op must be accounted for by a declaration. Two things account for one today:
+#   - a ConflictResolutionRule whose outcome is already stored (an AlreadyApplied rule, still doing
+#     work — it is what stops the incoming file re-imposing the wrong value, so it is permanent and
+#     not retirable, per #374); or
+#   - an incoming file that simply does not carry the field, where the stored value legitimately wins.
+$declaredRuleIds = @{}
+Get-ChildItem data/sources/*conflict-rules.json | ForEach-Object {
+  (Get-Content $_.FullName -Raw | ConvertFrom-Json).rules | ForEach-Object { $declaredRuleIds[$_.entityId.ToLower()] = $true }
+}
+
+$undeclared = @($noOps | Where-Object { -not $declaredRuleIds[$_.entityId.ToLower()] -and -not $_.mergedFields })
+"undeclared no-ops = $($undeclared.Count)"
+$undeclared | Select-Object -First 10 | ForEach-Object { "  $($_.entityType) $($_.entityId)" }
+```
+
+**Expected:** `resolvedToExisting` is **non-zero** and names real entity types, and
+`undeclared no-ops = 0`.
+
+**Both halves matter and neither substitutes for the other.** The `= 0` assertion alone is satisfied by
+a build that produces no actions at all — including one where the classification broke the import
+outright — which is why the count being non-zero is asserted first. This is
+`docs/testing-policy.md`'s "every test proves the positive result as well as the negative", applied to
+a document rather than a unit test.
+
+**It asserts; it does not list** — the same correction step 4C needed on 2026-09-08, and for the same
+reason. A row a human is asked to eyeball is a promise rather than a verification, and this document's
+own history records nine wrong dates sitting in the database while a listing passed.
+
+**On failure:** a new undeclared no-op after a source refresh means the outside world moved in a way our
+rules do not yet cover — read the row's `existingValue`/`mergedFields` via
+`GET /import/actions?entityId=<id>` and decide whether it wants a `ConflictResolutionRule`, a
+`SourceAliasRule`, or nothing at all. Deciding "nothing at all" is a legitimate outcome; leaving it
+undecided is not.
+
 ## Observed effect
 
 Not yet established as a captured record beyond the empty pending list, the two duplicate queries and

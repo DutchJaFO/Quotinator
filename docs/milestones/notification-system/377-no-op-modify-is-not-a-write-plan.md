@@ -576,7 +576,12 @@ symptom is the cold-start→reseed transition rather than this defect.
 
 ### 9. Teach the external-data sentinel to reveal a missing rule
 
-**Status:** ⬜ Not started
+**Status:** 🚧 Written, not yet run —
+`14-fresh-seed-produces-zero-pending-actions.md` gains a step 6 asserting that the
+`ResolvedToExisting` population is non-zero *and* that none of it is undeclared, in step 4C's
+assert-don't-list shape. Row 22 stays ❌ until it is executed against a real container, and row 23 (its
+canary, against a pre-fix image) with it — writing a document is not running one, which is the
+distinction `docs/testing-policy.md` draws for T2 in the first place.
 
 **Owns rows 22–23.** The half of this issue that only the bundled corpus can answer, and therefore the
 half that belongs in `docs/automated-testing/import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md`
