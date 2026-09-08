@@ -1,13 +1,13 @@
 # #377 — A Modify action whose resolution is a genuine no-op is still counted as Modified
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 8)
 **GitHub issue:** #377
 **Tiers required:** T1, T2
 **Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
 
-**Next action: answer the open question below, then step 4.** Steps 1–3 are done. Execution surfaced one
-question the plan did not anticipate — a fourth counting surface, on a public API response — and step 4
-cannot be finished without deciding it; see *Open question raised during execution*.
+**Next action: step 8.** Steps 1–7 are done; the full solution is green (4013 passed, 0 failed) at 0
+warnings. What remains is filing the `ShouldBlock` defect and #377's own correction comment (step 8),
+teaching the external-data sentinel (step 9), and the T2/T1 runs (step 10).
 
 ---
 
@@ -317,8 +317,10 @@ every row.
 
 ### 1. Write every test first, and run them red
 
-**Status:** ✅ Done, 2026-09-08 — every row has its pair, each positive confirmed red on its own
-assertion and each negative green. `ImportActionKind.ResolvedToExisting` and the two count properties
+**Status:** ✅ Done for every unit-test row, 2026-09-08 — each positive confirmed red on its own
+assertion and each negative green. **The two T2 canaries (rows 23 and 25) are not run and are owned by
+steps 9 and 10**, since both need a pre-fix Docker image; they stay ❌ until then rather than being
+ticked on the strength of the unit tests. `ImportActionKind.ResolvedToExisting` and the two count properties
 landed here as signatures only (the report builder stubbed to `0`), confirmed behaviour-neutral against
 the existing suite — the same call #373's step 2 recorded for `Unchanged`.
 
@@ -415,10 +417,15 @@ flipped to whatever now passes.
 
 ---
 
-## Open question raised during execution — step 4 is blocked on it
+## A fourth counting surface, found during execution — decided and delivered
 
-**A fourth counting surface exists that this plan never enumerated:
-`ImportResultResponse.Summary`, the response body of `POST /api/v1/import`.**
+**Decision G (developer, 2026-09-08): option A.** `ImportSummary` gains its own `ResolvedToExisting`
+count, matching what steps 4–5 do for the other surfaces. Delivered with step 4;
+`ImportAsync_MergeOurs_TrueConflictKeepsExisting` now asserts `Updated = 0`, `ResolvedToExisting = 1`
+and — the point of the decision — that the summary's own parts still sum to `Total`.
+
+**`ImportResultResponse.Summary`, the response body of `POST /api/v1/import`, is a counting surface this
+plan never enumerated.**
 
 Found by `QuoteImportServiceTests.ImportAsync_MergeOurs_TrueConflictKeepsExisting`, which imports a
 quote, re-imports a conflicting version under `MergeOurs`, and asserts both that the stored text is
@@ -440,8 +447,14 @@ It needs a decision because `ImportSummary` is a **public API response shape**, 
 | **B** | Fold a no-op into the existing `Skipped` count, whose documented meaning is already "matched an existing quote and was left unchanged (`skip`/`review`)". No new field; blurs a distinction #374 spent an issue drawing, since a `Skip` row is a discarded difference and this one is a resolved one. |
 | **C** | Leave `Updated` counting no-ops on this endpoint only. No contract change; the endpoint keeps reporting a write that did not happen, and the two counting surfaces disagree about the same row. |
 
-Until this is answered, `ImportAsync_MergeOurs_TrueConflictKeepsExisting` stays red — deliberately, and
-recorded here rather than adjusted to whatever currently passes.
+**B and C were rejected on the reasoning that produced #373 and #374**: B blurs a distinction #374 spent
+a whole issue drawing, and C leaves one endpoint reporting a write that did not happen while the other
+surfaces disagree about the same row.
+
+**The general lesson, recorded because it will recur:** the plan enumerated counting surfaces by reading
+the reseed path, and missed one reachable only from the import path. A classification change has as many
+reporting surfaces as there are callers, and the way to find them is to change the classification and
+see what fails — which is what happened here.
 
 **Owns rows 3–9 and 14–16.** The classification test is *the resolved payload equals the stored payload*, computed
 **after** any rule resolution has been applied — which is why a second field set is needed rather than
@@ -489,7 +502,18 @@ recorded, never flipped to pass.
 
 ### 4. Report the new outcome
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-08 — rows 10–13 green. `ImportActionReportBuilder` gained its arm,
+`EntityTypeActionCounts` and `ReseedEntityCountDto` their field, and `FormatReport` its printed count.
+`ImportBatch.RecordCount` needed no change: its `updated` tally counts `Modify` actions, and the new
+kind falls out of it by construction.
+
+Also delivered here, per decision G: `ImportSummary.ResolvedToExisting`, the fourth counting surface
+found during execution — see the section above.
+
+**Row 13 was red for a fixture reason, not a product one, and it is worth recording.**
+`LatestBatchRecordCountAsync` ordered by `AppliedAt`, which is second-resolution — a cold start and the
+reseed that follows it inside the same second tie, and the cold start's own `RecordCount` came back.
+Re-ordered by `rowid`, which is insertion order and unambiguous.
 
 **Owns rows 10–13.** `ImportActionReportBuilder` gains its arm (cross-check 10),
 `EntityTypeActionCounts` and `ReseedEntityCountDto` each gain the field, and
@@ -499,7 +523,9 @@ and this is not one.
 
 ### 5. Widen the confirmation dedupe key to the full breakdown
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-08 — rows 17–18 green. `IdentityComponents` carries every outcome bucket,
+not `Added:Modified`; the `OrderBy(EntityType)` is untouched. An older stored payload still compares and
+still reads its absent count as `0`.
 
 **Owns rows 17–18.** Per decisions E and F, `IdentityComponents`' flattened tuple carries every outcome,
 not `Added:Modified`. The `OrderBy(EntityType)` stays — its own doc comment explains why it is
@@ -508,7 +534,8 @@ this change must still compare, reading absent fields as `0` rather than throwin
 
 ### 6. Say it in the notification's own words
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-08 — row 19 green. `bodyArgs` gained the count and both body keys state it,
+in `UI.en-GB.json`, `UI.nl.json` and `UI.de.json` in one commit.
 
 **Owns row 19.** `ConfirmFileAppliedCleanlyAsync`'s `bodyArgs` gains the count and the body key states
 it, in `UI.en-GB.json`, `UI.nl.json` and `UI.de.json` in the same commit. A body assembled in English
@@ -516,7 +543,11 @@ renders half-translated for a Dutch or German reader, which is what #319 exists 
 
 ### 7. Update the documented shape
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-08 — row 20 green. `docs/api-endpoints.md` (both occurrences), the three
+endpoint `[Description]` attributes and `docs/vocabulary.md`'s new entry. Kept with the code rather than
+split into its own `docs` commit, because CLAUDE.md's API-doc rule requires `api-endpoints.md` and the
+`[Description]` attributes to move together and `vocabulary.md` to land with the term it defines — the
+more specific rule wins over the general docs-separate-from-code one.
 
 **Owns row 20.** `docs/api-endpoints.md` (both occurrences), the endpoint `[Description]` attributes, and
 `docs/vocabulary.md`'s new entry (cross-check 8) — all in one commit, and as a `docs` commit separate
@@ -592,32 +623,32 @@ counted as `Modified`", which a planner that classified *everything* as a no-op 
 
 | # | Status | Requirement | Method | Verification — **positive** / **negative** |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | The `ActionType` CHECK admits the new member and nothing more | Unit test | `DatabaseInitializerOwnershipTests`' CHECK-constraint drift test, extended, on both the baseline and the replay path. **Positive:** `ResolvedToExisting` inserts. **Negative:** an unknown value is still rejected — a CHECK widened to admit anything would pass the positive alone |
-| 2 | ❌ | The migration and the baseline produce an identical `Import_Action` schema | Unit test | the structural drift test, extended. **Positive:** baseline and incremental replay agree after the rebuild. **Negative:** the same test still fails on an introduced column difference — a table rebuild is where a column silently changes shape |
-| 3 | ❌ | A field the incoming side omits and the stored row has resolves to a no-op, while the reverse still writes | Unit test | Mechanism 1 — 22 of every reseed's 24, on a two-file fixture (one seeding a dated quote, one re-stating the same id with `date: null`). **Positive:** `PlanAsync_IncomingOmitsAFieldTheStoredRowHas_StagesResolvedToExisting`. **Negative:** `PlanAsync_IncomingSuppliesAFieldTheStoredRowLacks_StillStagesModify` — the mirror direction genuinely writes (`FieldMergeResolver.cs:147`), and a fix keying on "a field was empty" rather than "the resolution changed nothing" would silently stop applying real enrichment |
-| 4 | ❌ | A rule reporting `AlreadyApplied` on a Source is a no-op, while a rule that changes something is not | Unit test | Mechanism 2, on a fixture rule file — not the bundled one. **Positive:** `PlanSourcesAsync_RuleResolvesToExactlyExistingValues_StagesResolvedToExisting`. **Negative:** `PlanSourcesAsync_RuleResolvesToADifferentValue_StillStagesModify` — without it, a planner treating every rule-resolved row as a no-op passes the positive perfectly |
-| 5 | ❌ | The same pair holds at the other four rule-consulting sites | Unit test | `PlanSourcesAsync_ByNaturalKey_…`, `PlanUniverseAsync_…`, `PlanSeriesAsync_…`, `PlanSeasonsAsync_…`, each with **both** halves — `Modify` is decided per branch independently, so a per-site positive without its per-site negative proves only that site was touched, not that it was touched correctly |
-| 6 | ❌ | Season, the one site already computing post-rule, is not regressed | Unit test | **Positive:** `PlanSeasonsAsync_RuleResolvesToExactlyExistingValues_StagesResolvedToExisting`. **Negative:** `PlanSeasonsAsync_RuleResolvesToADifferentValue_StillStagesModify` — the guard against step 3 "making every branch consistent" by breaking the one branch that was already right |
-| 7 | ❌ | A merge policy resolving back to the existing values is a no-op at a branch no rule reaches | Unit test | Mechanism 3, and the pair proving the fix is not rule-specific. **Positive:** `PlanCharactersAsync_MergeOursResolvesToExistingValues_StagesResolvedToExisting`. **Negative:** `PlanCharactersAsync_MergeOursResolvesToADifferentValue_StillStagesModify` |
-| 8 | ❌ | Skip and no-op stay separate buckets in both directions | Unit test | Cross-check 11 — a Skip resolves to the existing values by construction, so a naive "merged equals existing" test swallows it. **Positive:** `SkipPolicyModify_IsStillSkipped_NotResolvedToExisting`. **Negative:** `ReviewPolicyNoOp_IsNotCountedAsSkipped` — the reverse confusion, which would erase #374's distinction from the other side |
-| 9 | ❌ | Only a would-be-`Decided` Modify is reclassified | Unit test | **Positive:** `DecidedNoOpModify_IsReclassified`. **Negative:** `BlockedPendingOrStaleNoOpModify_IsNotReclassified` — a gate that never reclassified anything would pass the negative alone, and reclassifying one of these would hide a row a human is waiting on |
-| 10 | ❌ | The report counts a no-op in its own bucket and a real change in `Modified` | Unit test | `ImportActionReportBuilderTests`, extended. **Positive:** a no-op lands in the new bucket. **Negative:** a genuine Modify still lands in `Modified` — a builder routing everything to the new bucket satisfies the positive |
-| 11 | ❌ | `Incoming` still equals the sum of every outcome bucket | Unit test | `ImportActionReportBuilderTests.Incoming_EqualsTheSumOfEveryOutcome` (existing). **Positive:** the identity holds with the new bucket populated. **Negative:** the same test still fails when driven with an action matching no arm — the guard against `_ => counts` silently dropping the new kind |
-| 12 | ❌ | The seed log line prints the new bucket alongside the others | Unit test | assertion over the formatted line, as #373's row 14. **Positive:** the new count appears. **Negative:** the six existing counts still appear and still carry their own values |
-| 13 | ❌ | `ImportBatch.RecordCount` counts real writes only | Unit test | assertion over the batch row after a reseed — `QuotinatorDatabaseInitializer.cs:691`. **Positive:** a no-op does not increment it. **Negative:** a genuine update still does — a count stuck at zero would pass the positive |
-| 14 | ❌ | The change log records real modifications and only those | Unit test | `DatabaseInitializerTests`, wired with the real `ChangeWriter` per cross-check 12. **Positive:** `Reseed_NoOpModify_WritesNoChangeEntry`. **Negative:** `Reseed_GenuineModify_StillWritesItsChangeEntry` — with `NoOpChangeWriter` in place, or an apply path that logged nothing at all, the positive passes without the fix |
-| 15 | ❌ | `Audit_Change` stops growing on unchanged content but still grows on changed content | Unit test | The measured defect: +25 per reseed today, 24 of them false. **Positive:** `Reseed_Repeatedly_ChangeEntryCountNeverGrows`. **Negative:** `Reseed_WithGenuinelyChangedContent_DoesAddChangeEntries` |
-| 16 | ❌ | A no-op leaves `DateModified` and `ImportBatchId` alone, a real write does not | Unit test | `UpdateOnNewestWins` rewrites both unconditionally today, and the batch re-attribution is a real data change rather than a metadata bump. **Positive:** `ResolvedToExistingAction_DoesNotRestampTheRow`. **Negative:** `GenuineModify_StillRestampsTheRow` |
-| 17 | ❌ | The dedupe key distinguishes a different result and still suppresses an identical one | Unit test | `ReseedFileAppliedMetadataDtoTests`, decisions E and F. **Positive:** two payloads differing only in `Unchanged` are no longer the same notification. **Negative:** two payloads with an identical breakdown still are — an identity that never matches would announce a confirmation on every reseed, which is the defect #302 was filed for |
-| 18 | ❌ | A confirmation written before this issue still compares and still renders | Unit test | `NotificationTableTests` plus the dedupe comparison. **Positive:** a stored payload with no such field reads it as `0`. **Negative:** it renders rather than throwing. #302's confirmations are already persisted on the developer's own database; a payload change that cannot read them is a regression in reading history |
-| 19 | ❌ | The new message text exists in all three locales | Unit test | `TranslationCompletenessTests` (existing). **Positive:** the new key resolves in `en-GB`, `nl` and `de`. **Negative:** the test still fails on a key deliberately emptied in one file — it catches missing *and* empty, and only the second half proves it |
-| 20 | ❌ | The documented breakdown matches what is returned | Unit test | assertion over `docs/api-endpoints.md` and the endpoint `[Description]` text — #373's row 20, extended. **Positive:** the new bucket is named in both. **Negative:** the assertion still fails against a description listing the old set, which is what #373 recorded its selector being wrong about twice |
+| 1 | ✅ | The `ActionType` CHECK admits the new member and nothing more | Unit test | `DatabaseInitializerOwnershipTests`' CHECK-constraint drift test, extended, on both the baseline and the replay path. **Positive:** `ResolvedToExisting` inserts. **Negative:** an unknown value is still rejected — a CHECK widened to admit anything would pass the positive alone |
+| 2 | ✅ | The migration and the baseline produce an identical `Import_Action` schema | Unit test | the structural drift test, extended. **Positive:** baseline and incremental replay agree after the rebuild. **Negative:** the same test still fails on an introduced column difference — a table rebuild is where a column silently changes shape |
+| 3 | ✅ | A field the incoming side omits and the stored row has resolves to a no-op, while the reverse still writes | Unit test | Mechanism 1 — 22 of every reseed's 24, on a two-file fixture (one seeding a dated quote, one re-stating the same id with `date: null`). **Positive:** `PlanAsync_IncomingOmitsAFieldTheStoredRowHas_StagesResolvedToExisting`. **Negative:** `PlanAsync_IncomingSuppliesAFieldTheStoredRowLacks_StillStagesModify` — the mirror direction genuinely writes (`FieldMergeResolver.cs:147`), and a fix keying on "a field was empty" rather than "the resolution changed nothing" would silently stop applying real enrichment |
+| 4 | ✅ | A rule reporting `AlreadyApplied` on a Source is a no-op, while a rule that changes something is not | Unit test | Mechanism 2, on a fixture rule file — not the bundled one. **Positive:** `PlanSourcesAsync_RuleResolvesToExactlyExistingValues_StagesResolvedToExisting`. **Negative:** `PlanSourcesAsync_RuleResolvesToADifferentValue_StillStagesModify` — without it, a planner treating every rule-resolved row as a no-op passes the positive perfectly |
+| 5 | ✅ | The same pair holds at the other four rule-consulting sites | Unit test | `PlanSourcesAsync_ByNaturalKey_…`, `PlanUniverseAsync_…`, `PlanSeriesAsync_…`, `PlanSeasonsAsync_…`, each with **both** halves — `Modify` is decided per branch independently, so a per-site positive without its per-site negative proves only that site was touched, not that it was touched correctly |
+| 6 | ✅ | Season, the one site already computing post-rule, is not regressed | Unit test | **Positive:** `PlanSeasonsAsync_RuleResolvesToExactlyExistingValues_StagesResolvedToExisting`. **Negative:** `PlanSeasonsAsync_RuleResolvesToADifferentValue_StillStagesModify` — the guard against step 3 "making every branch consistent" by breaking the one branch that was already right |
+| 7 | ✅ | A merge policy resolving back to the existing values is a no-op at a branch no rule reaches | Unit test | Mechanism 3, and the pair proving the fix is not rule-specific. **Positive:** `PlanCharactersAsync_MergeOursResolvesToExistingValues_StagesResolvedToExisting`. **Negative:** `PlanCharactersAsync_MergeOursResolvesToADifferentValue_StillStagesModify` |
+| 8 | ✅ | Skip and no-op stay separate buckets in both directions | Unit test | Cross-check 11 — a Skip resolves to the existing values by construction, so a naive "merged equals existing" test swallows it. **Positive:** `SkipPolicyModify_IsStillSkipped_NotResolvedToExisting`. **Negative:** `ReviewPolicyNoOp_IsNotCountedAsSkipped` — the reverse confusion, which would erase #374's distinction from the other side |
+| 9 | ✅ | Only a would-be-`Decided` Modify is reclassified | Unit test | **Positive:** `DecidedNoOpModify_IsReclassified`. **Negative:** `BlockedPendingOrStaleNoOpModify_IsNotReclassified` — a gate that never reclassified anything would pass the negative alone, and reclassifying one of these would hide a row a human is waiting on |
+| 10 | ✅ | The report counts a no-op in its own bucket and a real change in `Modified` | Unit test | `ImportActionReportBuilderTests`, extended. **Positive:** a no-op lands in the new bucket. **Negative:** a genuine Modify still lands in `Modified` — a builder routing everything to the new bucket satisfies the positive |
+| 11 | ✅ | `Incoming` still equals the sum of every outcome bucket | Unit test | `ImportActionReportBuilderTests.Incoming_EqualsTheSumOfEveryOutcome` (existing). **Positive:** the identity holds with the new bucket populated. **Negative:** the same test still fails when driven with an action matching no arm — the guard against `_ => counts` silently dropping the new kind |
+| 12 | ✅ | The seed log line prints the new bucket alongside the others | Unit test | assertion over the formatted line, as #373's row 14. **Positive:** the new count appears. **Negative:** the six existing counts still appear and still carry their own values |
+| 13 | ✅ | `ImportBatch.RecordCount` counts real writes only | Unit test | assertion over the batch row after a reseed — `QuotinatorDatabaseInitializer.cs:691`. **Positive:** a no-op does not increment it. **Negative:** a genuine update still does — a count stuck at zero would pass the positive |
+| 14 | ✅ | The change log records real modifications and only those | Unit test | `DatabaseInitializerTests`, wired with the real `ChangeWriter` per cross-check 12. **Positive:** `Reseed_NoOpModify_WritesNoChangeEntry`. **Negative:** `Reseed_GenuineModify_StillWritesItsChangeEntry` — with `NoOpChangeWriter` in place, or an apply path that logged nothing at all, the positive passes without the fix |
+| 15 | ✅ | `Audit_Change` stops growing on unchanged content but still grows on changed content | Unit test | The measured defect: +25 per reseed today, 24 of them false. **Positive:** `Reseed_Repeatedly_ChangeEntryCountNeverGrows`. **Negative:** `Reseed_WithGenuinelyChangedContent_DoesAddChangeEntries` |
+| 16 | ✅ | A no-op leaves `DateModified` and `ImportBatchId` alone, a real write does not | Unit test | `UpdateOnNewestWins` rewrites both unconditionally today, and the batch re-attribution is a real data change rather than a metadata bump. **Positive:** `ResolvedToExistingAction_DoesNotRestampTheRow`. **Negative:** `GenuineModify_StillRestampsTheRow` |
+| 17 | ✅ | The dedupe key distinguishes a different result and still suppresses an identical one | Unit test | `ReseedFileAppliedMetadataDtoTests`, decisions E and F. **Positive:** two payloads differing only in `Unchanged` are no longer the same notification. **Negative:** two payloads with an identical breakdown still are — an identity that never matches would announce a confirmation on every reseed, which is the defect #302 was filed for |
+| 18 | ✅ | A confirmation written before this issue still compares and still renders | Unit test | `NotificationTableTests` plus the dedupe comparison. **Positive:** a stored payload with no such field reads it as `0`. **Negative:** it renders rather than throwing. #302's confirmations are already persisted on the developer's own database; a payload change that cannot read them is a regression in reading history |
+| 19 | ✅ | The new message text exists in all three locales | Unit test | `TranslationCompletenessTests` (existing). **Positive:** the new key resolves in `en-GB`, `nl` and `de`. **Negative:** the test still fails on a key deliberately emptied in one file — it catches missing *and* empty, and only the second half proves it |
+| 20 | ✅ | The documented breakdown matches what is returned | Unit test | assertion over `docs/api-endpoints.md` and the endpoint `[Description]` text — #373's row 20, extended. **Positive:** the new bucket is named in both. **Negative:** the assertion still fails against a description listing the old set, which is what #373 recorded its selector being wrong about twice |
 | 21 | ❌ | The `ShouldBlock` ordering defect is filed with a label and a milestone | Issue | the new issue exists and is linked from this plan's Description — decision B |
 | 22 | ❌ | The bundled corpus reveals a no-op nobody has accounted for | Automated (T2) | `14-fresh-seed-produces-zero-pending-actions.md`, extended per step 9 — the suite's external-data sentinel and, per `docs/testing-policy.md`, the only place allowed to read `data/sources/` at run time. **Positive:** the known no-op population is present, non-zero, and names the entity types it covers. **Negative:** undeclared no-ops = 0 — asserted, not listed, following that document's own step 4C. Without the positive half a build that broke the import outright and produced no actions at all would pass |
 | 23 | ❌ | That sentinel assertion goes red before it goes green | Canary run | recorded in `14-…`'s own *Canary* section, run against a pre-fix image where the rows are still `Modify` |
 | 24 | ❌ | The confirmation behaviour holds end to end | Automated (T2) | `11-clean-reseed-confirmation.md`, extended with a no-op assertion |
 | 25 | ❌ | That assertion goes red before it goes green | Canary run | recorded in that document's own *Canary* section, run against a pre-fix build per step 1 |
-| 26 | ❌ | Build is clean and no regression | Build + test run | `dotnet build --configuration Release` → 0 warnings, 0 errors; `dotnet test --configuration Release -m:1` → all green |
+| 26 | ✅ | Build is clean and no regression | Build + test run | `dotnet build --configuration Release` → 0 warnings, 0 errors; `dotnet test --configuration Release -m:1` → all green |
 | 27 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
 
 **The negative halves are not ceremony; three of them are the only thing standing between this fix and a
