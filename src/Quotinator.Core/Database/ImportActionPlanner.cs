@@ -307,7 +307,7 @@ internal static class ImportActionPlanner
                 }
             }
 
-            (string sourceId, bool dateNeedsReview) = await ResolveSourceAsync(connection, q, sourceIndex, sourceVariantsByKey, stagedSourceVariantIds, batchIdStr, actions, now, transaction);
+            (string sourceId, bool dateNeedsReview) = await ResolveSourceAsync(connection, q, sourceIndex, sourceVariantsByKey, stagedSourceVariantIds, batchIdStr, actions, now, transaction, policy);
             string? characterId = await ResolveCharacterAsync(connection, q, sourceId, characterIndex, batchIdStr, actions, now, transaction);
             string? personId = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
 
@@ -719,7 +719,8 @@ internal static class ImportActionPlanner
     private static async Task<SourceResolution> ResolveSourceAsync(
         SqliteConnection connection, SourceQuoteDto q, Dictionary<string, string> index,
         Dictionary<string, List<SourceVariant>> variantsByKey, HashSet<string> stagedVariantIds,
-        string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction)
+        string batchId, List<ImportActionEntity> actions, DateTime now, SqliteTransaction? transaction,
+        DuplicateResolutionPolicy policy = DuplicateResolutionPolicy.Review)
     {
         string typeStr = q.Type.ToString();
         string key = $"{q.Source}|{typeStr}";
@@ -850,6 +851,14 @@ internal static class ImportActionPlanner
         string stableId = variants.Count == 0
             ? EntityIdentity.SourceId(q.Source, typeStr)
             : EntityIdentity.SourceId(q.Source, typeStr, q.Date);
+        // A second-or-later date for a title already seen is genuinely ambiguous: either one of the two
+        // dates is wrong, or the title names two works. Creating the variant silently picks the second
+        // reading without saying so. Under Review the choice is staged Pending instead, and the two
+        // answers are the two mechanisms that resolve it — a dated SourceAliasRule ("one date is
+        // wrong") or explicit sources[] declarations ("two distinct works"). Under an auto-resolving
+        // policy the caller has already said not to ask.
+        bool dateIsAmbiguous = variants.Count > 0 && policy == DuplicateResolutionPolicy.Review;
+
         variants.Add(new SourceVariant(stableId, q.Date, null, null, SafeValue<CompletenessStatus?>.Empty));
         stagedVariantIds.Add(stableId);
         index[key] = stableId;
@@ -865,7 +874,7 @@ internal static class ImportActionPlanner
             DetectedAt = now,
         });
 
-        return new SourceResolution(stableId, DateNeedsReview: false);
+        return new SourceResolution(stableId, dateIsAmbiguous);
     }
 
     private static async Task<string?> ResolveCharacterAsync(

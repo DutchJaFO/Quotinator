@@ -101,6 +101,13 @@
     {
       "title": "Harry Potter and the Deathly Hallows",
       "type": "movie",
+      "date": "2010",
+      "seriesName": "Harry Potter"
+    },
+    {
+      "title": "Harry Potter and the Deathly Hallows",
+      "type": "movie",
+      "date": "2011",
       "seriesName": "Harry Potter"
     },
     {
@@ -306,16 +313,37 @@
     {
       "title": "The Lord of the Rings: Return of the King",
       "type": "movie",
+      "date": "2003",
+      "seriesName": "The Lord of the Rings"
+    },
+    {
+      "title": "The Lord of the Rings: Return of the King",
+      "type": "movie",
+      "date": "2004",
       "seriesName": "The Lord of the Rings"
     },
     {
       "title": "The Lord of the Rings: The Fellowship of the Ring",
       "type": "movie",
+      "date": "2001",
+      "seriesName": "The Lord of the Rings"
+    },
+    {
+      "title": "The Lord of the Rings: The Fellowship of the Ring",
+      "type": "movie",
+      "date": "2002",
       "seriesName": "The Lord of the Rings"
     },
     {
       "title": "The Lord of the Rings: The Two Towers",
       "type": "movie",
+      "date": "2002",
+      "seriesName": "The Lord of the Rings"
+    },
+    {
+      "title": "The Lord of the Rings: The Two Towers",
+      "type": "movie",
+      "date": "2003",
       "seriesName": "The Lord of the Rings"
     },
     {
@@ -351,6 +379,21 @@
       "title": "The Wolf of Wall Street",
       "type": "movie",
       "date": "2013"
+    },
+    {
+      "title": "The Wolf of Wall Street",
+      "type": "movie",
+      "date": "2014"
+    },
+    {
+      "title": "The Lion King",
+      "type": "movie",
+      "date": "1994"
+    },
+    {
+      "title": "The Lion King",
+      "type": "movie",
+      "date": "2019"
     },
     {
       "title": "The Silence of the Lambs",

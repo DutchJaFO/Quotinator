@@ -1024,6 +1024,55 @@ public class ImportActionPlannerTests
     }
 
     /// <summary>
+    /// Under <c>Review</c>, a second quote claiming a different date for a title already seen is a
+    /// Pending decision, not a silent second Source.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The situation is genuinely ambiguous from the import alone: either one of the two dates is
+    /// wrong, or the title really does name two works. Creating the variant silently picks the second
+    /// reading without saying so. Staging it Pending is what puts the choice in front of a curator, and
+    /// it is what the two resolution mechanisms then answer —
+    /// <see cref="PlanAsync_DatedAliasCorrectsWrongDate_ResolvesToCanonicalDatedSource"/> for "one date
+    /// is wrong", <see cref="PlanSourcesAsync_TwoDeclarationsSameTitleDifferentDates_StageTwoSourcesWithNothingPending"/>
+    /// for "two distinct works".
+    /// </para>
+    /// <para>
+    /// Gated on <c>Review</c>. Under an auto-resolving policy the caller has already said not to ask.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task ResolveSourceAsync_ReviewPolicy_SecondDateForAKnownTitle_StagesPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto first  = BuildQuote("6b111111-1111-4111-8111-111111111111", source: "The Lion King", date: "1994");
+        SourceQuoteDto second = BuildQuote("6b211111-1111-4111-8111-111111111111", source: "The Lion King", date: "2019", quoteText: "Remember who you are.");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [first, second], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+
+        ImportActionEntity secondQuote = actions.Single(a => a.EntityType == ImportActionEntityTypes.Quote && a.EntityId == "6b211111-1111-4111-8111-111111111111");
+        Assert.AreEqual(ImportActionStatus.Pending, secondQuote.Status.Parsed,
+            "A second date for a known title is ambiguous — either date could be wrong, or they are two works. That choice belongs to a curator");
+    }
+
+    /// <summary>
+    /// The control: the same title at the <em>same</em> date is not ambiguous and must not be dragged
+    /// into review. Without this, "stages Pending" would be satisfiable by staging every quote Pending.
+    /// </summary>
+    [TestMethod]
+    public async Task ResolveSourceAsync_ReviewPolicy_SameDateForAKnownTitle_StagesNothingPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto first  = BuildQuote("6c111111-1111-4111-8111-111111111111", source: "The Lion King", date: "1994");
+        SourceQuoteDto second = BuildQuote("6c211111-1111-4111-8111-111111111111", source: "The Lion King", date: "1994", quoteText: "Remember who you are.");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [first, second], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+
+        Assert.IsEmpty(actions.Where(a => a.Status.Parsed == ImportActionStatus.Pending),
+            "One title, one date, no ambiguity — nothing to decide");
+    }
+
+    /// <summary>
     /// Two <c>sources[]</c> declarations sharing a title but carrying different dates each get their
     /// own Source, with nothing left pending — the mechanism by which a genuinely two-version title is
     /// <em>explicitly permitted</em> rather than reported as a duplicate.

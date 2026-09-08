@@ -1828,8 +1828,25 @@ public class DatabaseInitializerTests
     /// <summary>#153: mirrors production's manifest-driven wiring — NikhilNamal17 seeded under its own
     /// Review policy with its real ruleFile, matching what ManifestSeedPlanner actually builds (unlike
     /// <see cref="AllFilesBatch"/>, which never wires a rule file at all).</summary>
+    /// <summary>
+    /// The NikhilNamal17 corpus preceded by <c>quotinator-series-universe.json</c>, mirroring the order
+    /// the real manifest loads them in.
+    /// </summary>
+    /// <remarks>
+    /// The declarations file is not decoration here. A title carrying two different dates is ambiguous
+    /// — either one date is wrong, or it names two works — and since 2026-09-08 that is staged
+    /// <c>Pending</c> rather than resolved by silently creating a second Source. The answer "these are
+    /// two distinct works" is a <c>sources[]</c> declaration, and those live in this shared file rather
+    /// than in the raw corpus that happens to contain the quotes. Seeding the corpus without it
+    /// therefore leaves genuinely unresolvable Pendings, which is a property of the fixture rather than
+    /// of the data — production always loads both.
+    /// </remarks>
     private static SeedBatch NikhilNamal17WithRuleFileBatch() => new(
         [
+            new SeedFile(
+                Path.Combine(SourcesDir, "quotinator-series-universe.json"),
+                null,
+                Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
             new SeedFile(
                 NikhilNamal17File,
                 "https://github.com/NikhilNamal17/popular-movie-quotes",
