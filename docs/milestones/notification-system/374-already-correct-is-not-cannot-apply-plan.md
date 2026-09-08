@@ -1,7 +1,6 @@
 # #374 — A conflict rule cannot tell "already correct" from "cannot apply"
 
-**Status:** Waiting for release. All 13 steps done; every checklist row is ✅, including row 43 (T1,
-confirmed by the developer 2026-09-08)
+**Status:** Waiting for release
 **GitHub issue:** #374
 **Tiers required:** T1, T2
 **Depends on:** [#375](https://github.com/DutchJaFO/Quotinator/issues/375) (done in code, released separately)

@@ -1,9 +1,6 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** Waiting for release — steps 1–12 done, T1 confirmed green by the developer 2026-09-08 after
-two rounds: the first re-run found the Blazor statistics page still missing its Seasons row (a seventh
-surface step 12 had missed), the second showed `Seasons 3` on the page, `3 seasons` in the
-`[Database - Stats]` line and the ready banner, and `Season[... unchanged=3 ...]` on every repeat reseed
+**Status:** Waiting for release
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing

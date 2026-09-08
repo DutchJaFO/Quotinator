@@ -1,6 +1,6 @@
 # #378 — A Keep/Replace resolution on a Quote's date field never actually takes effect
 
-**Status:** Waiting for release. Fix implemented and verified; every checklist row is ✅.
+**Status:** Waiting for release
 **GitHub issue:** #378
 **Tiers required:** T1, T2
 **Depends on:** none — found live while verifying [#374](https://github.com/DutchJaFO/Quotinator/issues/374)'s own conflict-rule mechanism against the real bundled corpus

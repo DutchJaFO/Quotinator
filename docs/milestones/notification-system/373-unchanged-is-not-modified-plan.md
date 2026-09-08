@@ -1,8 +1,6 @@
 # #373 — An import that re-states identical content reports it as modified
 
-**Status:** Waiting for release — steps 1–10 done. Step 10's T1 re-run confirmed green by the developer
-2026-09-08: every repeat reseed names every entity type that arrived, including the Universe/Series/Season
-lines that had vanished entirely from two files' reports.
+**Status:** Waiting for release
 **GitHub issue:** #373
 **Tiers required:** T1, T2
 **Depends on:** [#372](https://github.com/DutchJaFO/Quotinator/issues/372) for reproduction — a reseed
