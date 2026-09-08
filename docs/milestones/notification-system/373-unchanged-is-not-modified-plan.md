@@ -1,8 +1,8 @@
 # #373 — An import that re-states identical content reports it as modified
 
-**Status:** In progress (step 10, T1 only) — steps 1–9 done; step 10's own steps 1–3 done 2026-09-08
-(all four sites restructured, 3949 tests green, 0 warnings). **Next action is step 10's step 4: the
-developer's T1 re-run** — reset → reseed → reseed, with every entity type named on every reseed.
+**Status:** Waiting for release — steps 1–10 done. Step 10's T1 re-run confirmed green by the developer
+2026-09-08: every repeat reseed names every entity type that arrived, including the Universe/Series/Season
+lines that had vanished entirely from two files' reports.
 **GitHub issue:** #373
 **Tiers required:** T1, T2
 **Depends on:** [#372](https://github.com/DutchJaFO/Quotinator/issues/372) for reproduction — a reseed
@@ -536,7 +536,7 @@ assertion flipped to pass:
 | 24 | ✅ | The T2 assertions go red before they go green | Canary run | Recorded in each document's own Canary section — `21-reseed-preserves-existing-data.md`'s step 3/6 (2026-09-02, pre-#372) and `11-clean-reseed-confirmation.md`'s step 2 (2026-09-01, pre-#302) |
 | 25 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors, confirmed 2026-09-04 |
 | 26 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` → all green, 0 failures, confirmed 2026-09-04 |
-| 27 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Run by the developer 2026-09-08 (cold start, then reset → reseed → reseed). **Failed** — the second and third reseed omitted Universe, Series and Season from two files' reports entirely. Surfaced rows 28–30; re-run required once step 10 lands |
+| 27 | ✅ | The behaviour is correct on the developer's own machine | Live (T1) | Re-run by the developer 2026-09-08 after step 10 landed. Every repeat reseed now names every entity type that arrived and reports it as already stored — `Universe[... unchanged=7]`, `Series[... unchanged=30]`, `Season[... unchanged=3]` where all three had vanished from the report in the failing run. The row's second clause (no duplicate confirmation) is not observable in this log and is verified separately by `11-clean-reseed-confirmation.md`'s steps 4/7, green 2026-09-04 — see step 9 |
 | 28 | ✅ | An entity matched by natural key reports itself rather than vanishing | Unit test | `PlanUniverseAsync_ExistingByName_StagesUnchangedAction`, `PlanSeriesAsync_...`, `PlanSeasonsAsync_ExistingByNaturalKey_...`, `PlanPeopleAsync_ExistingByNameOnly_...` — all four confirmed red 2026-09-08 before the fix, green after |
 | 29 | ✅ | That report cannot be satisfied by an entity that was never matched | Unit test | `PlanSeasonsAsync_NoMatchAtAll_StagesAddNotUnchanged` — the positive control row 28 requires. Green throughout, including while row 28's four were red, so it discriminates rather than tracking them |
 | 30 | ✅ | A field change on an id-less entry is applied, not discarded | Unit test | `PlanSeasonsAsync_ExistingByNaturalKey_TitleDiffers_StagesModifyAction`, `PlanSeriesAsync_ExistingByName_UniverseNameDiffers_...`, `PlanPeopleAsync_ExistingByNameOnly_DateOfBirthDiffers_...` — all three red before, green after |

@@ -1,8 +1,9 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (T1 re-run only) — steps 1–12 done. T1 on 2026-09-08 found Season absent from
-every statistics surface and silently skipped in the import report; both halves are fixed (step 12 here,
-and #373's step 10 for the skip). Awaiting the developer's T1 re-run
+**Status:** Waiting for release — steps 1–12 done, T1 confirmed green by the developer 2026-09-08 after
+two rounds: the first re-run found the Blazor statistics page still missing its Seasons row (a seventh
+surface step 12 had missed), the second showed `Seasons 3` on the page, `3 seasons` in the
+`[Database - Stats]` line and the ready banner, and `Season[... unchanged=3 ...]` on every repeat reseed
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -674,7 +675,7 @@ covered the Season→Series direction with a real database from the start.
 | 25 | ✅ | A real container serves an episode-attached quote through the API | Automated (T2) | [`docs/automated-testing/import-and-staged-actions/22-season-attached-quote-served-through-the-api.md`](../../automated-testing/import-and-staged-actions/22-season-attached-quote-served-through-the-api.md) — run live 2026-09-03 against a freshly built image. Found and fixed a genuine defect in the process (see the section above this table) that no unit test had caught |
 | 26 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s), run 2026-09-03 after the row-25 fix |
 | 27 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` — all 10 projects green, 3859 tests passed, 0 failed, run 2026-09-03 after the row-25 fix |
-| 28 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Run by the developer 2026-09-08 (cold start, then reset → reseed → reseed). **Failed** — surfaced rows 29–31 below. Re-run required once step 12 and #373's step 10 have both landed |
+| 28 | ✅ | The behaviour is correct on the developer's own machine | Live (T1) | Run by the developer 2026-09-08, three rounds. Round 1 (cold start, then reset → reseed → reseed) failed and surfaced rows 29–31. Round 2 failed on the Blazor page alone, surfacing rows 33–34. Round 3 green: `Seasons 3` rendered on the Statistics page, `3 seasons` in `[Database - Stats]` and the ready banner, `Season[incoming=3 new=0 unchanged=3 ...]` on each repeat reseed |
 | 29 | ✅ | Every `IDatabaseInitializer` count property is published by `/version` | Unit test | `VersionEndpointTests.GetVersion_DatabaseStats_IncludesEveryEntityTypeCount` — confirmed red 2026-09-08 (`database.seasons` missing) before the fix, green after |
 | 30 | ✅ | That completeness claim cannot silently fall behind a newly added entity | Unit test | `VersionEndpointTests.GetVersion_DatabaseStats_MapCoversEveryCountProperty` — reflects over `IDatabaseInitializer`'s `*Count` properties; the positive control row 29 requires, since row 29's own map would otherwise be the hand-maintained list it replaced |
 | 33 | ✅ | The Blazor statistics page renders every count property, not just the ones someone remembered | Unit test | `RepositoryStructureTests.DatabaseStatsSummary_RendersEveryEntityTypeCount` — the surface rows 29/30 do not reach. Confirmed red against the pre-fix markup 2026-09-08 (`git stash` of that one file), green after |
