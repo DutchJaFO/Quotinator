@@ -2411,6 +2411,69 @@ public class DatabaseInitializerTests
             "A file claiming two dates for the same title must be reported at cold start, not left silent until a later reseed");
     }
 
+    /// <summary>
+    /// A file that <em>declares</em> both dated versions is not contradicting itself, and must not be
+    /// asked to verify what it has just stated.
+    /// </summary>
+    /// <remarks>
+    /// Found by T1 on 2026-09-08: after declaring the six genuinely-two-version titles in
+    /// <c>quotinator-series-universe.json</c>, the reseed warned six times that each "claims 2 different
+    /// dates … verify this is genuinely 2 distinct works". The declaration is that verification. A
+    /// warning that fires on the answer as well as the question is one a reader learns to skip, which
+    /// costs the warning its value on the case that is still genuinely ambiguous — the one below it.
+    /// </remarks>
+    [TestMethod]
+    public async Task ColdStart_WithBothDatedVersionsDeclared_ReportsNoContradiction()
+    {
+        string declaredFile = Path.Combine(_tempDir, "declared-two-versions.json");
+        File.WriteAllText(declaredFile,
+            """
+            {"quotes":[
+                {"id":"e2411111-1111-4111-8111-111111111111","quote":"It is time.","originalLanguage":"en","source":"The Lion King","date":"1994","character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"e2511111-1111-4111-8111-111111111111","quote":"Remember who you are.","originalLanguage":"en","source":"The Lion King","date":"2019","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[
+                {"title":"The Lion King","type":"movie","date":"1994"},
+                {"title":"The Lion King","type":"movie","date":"2019"}
+            ]}
+            """);
+        SeedBatch batch = new SeedBatch([new SeedFile(declaredFile, null)], ManifestPolicy.HardcodedDefault, "declared-two-versions-test");
+        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], logger: logger);
+        await db.InitialiseAsync();
+
+        Assert.DoesNotContain(m => m.Contains("different dates", StringComparison.OrdinalIgnoreCase), logger.Messages,
+            "Both versions are declared — the warning asks a question this file has already answered");
+    }
+
+    /// <summary>
+    /// The negative half of the pair above: declaring <em>one</em> of the two dates does not license the
+    /// other, so the warning still fires. Without this, "declared titles do not warn" would be
+    /// satisfiable by never warning once a file has any declaration at all.
+    /// </summary>
+    [TestMethod]
+    public async Task ColdStart_WithOnlyOneOfTwoDatesDeclared_StillReportsTheContradiction()
+    {
+        string partialFile = Path.Combine(_tempDir, "partly-declared.json");
+        File.WriteAllText(partialFile,
+            """
+            {"quotes":[
+                {"id":"e2611111-1111-4111-8111-111111111111","quote":"It is time.","originalLanguage":"en","source":"The Lion King","date":"1994","character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"e2711111-1111-4111-8111-111111111111","quote":"Remember who you are.","originalLanguage":"en","source":"The Lion King","date":"2019","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[
+                {"title":"The Lion King","type":"movie","date":"1994"}
+            ]}
+            """);
+        SeedBatch batch = new SeedBatch([new SeedFile(partialFile, null)], ManifestPolicy.HardcodedDefault, "partly-declared-test");
+        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], logger: logger);
+        await db.InitialiseAsync();
+
+        Assert.Contains(m => m.Contains("different dates", StringComparison.OrdinalIgnoreCase), logger.Messages,
+            "An undeclared second date is still exactly the ambiguity this warning exists for");
+    }
+
     /// <summary>The control for <see cref="ColdStart_WithAFileThatContradictsItself_ReportsIt"/> — a file with no such disagreement must not report one.</summary>
     [TestMethod]
     public async Task ColdStart_WithNoSelfContradiction_ReportsNothing()

@@ -335,8 +335,18 @@ public sealed class QuotinatorDatabaseInitializer(
     /// </summary>
     /// <param name="fileName">The seed file whose own actions are being checked.</param>
     /// <param name="actions">Every action this file's import staged.</param>
-    private void ReportSelfContradictingSources(string fileName, IReadOnlyList<ImportActionEntity> actions)
+    /// <param name="declaredSources">
+    /// This file's own <c>sources[]</c> entries. A title whose every dated variant was declared here is
+    /// not a contradiction — the declaration *is* the answer this warning asks for, so repeating the
+    /// question would train a reader to ignore it. Only an undeclared second date still warns.
+    /// </param>
+    private void ReportSelfContradictingSources(
+        string fileName, IReadOnlyList<ImportActionEntity> actions, IReadOnlyList<SourceEntryDto> declaredSources)
     {
+        HashSet<(string Title, string Type, string? Date)> declared = new(new TitleTypeDateComparer());
+        foreach (SourceEntryDto declaredSource in declaredSources)
+            declared.Add((declaredSource.Title, declaredSource.Type.ToString(), declaredSource.Date.HasValue ? declaredSource.Date.Value : null));
+
         IEnumerable<IGrouping<(string Title, string Type), SourceActionPayloadDto>> addedSources = actions
             .Where(a => a.EntityType == ImportActionEntityTypes.Source && a.ActionType.Parsed == ImportActionKind.Add)
             .Select(a => JsonSerializer.Deserialize<SourceActionPayloadDto>(a.IncomingValue!)!)
@@ -345,8 +355,20 @@ public sealed class QuotinatorDatabaseInitializer(
         foreach (IGrouping<(string Title, string Type), SourceActionPayloadDto> group in addedSources)
         {
             if (group.Count() <= 1) continue;
+            if (group.All(s => declared.Contains((s.Title, s.Type, s.Date)))) continue;
             Logger.LogSourceDateContradiction(fileName, group.Key.Title, group.Key.Type, group.Count());
         }
+    }
+
+    private sealed class TitleTypeDateComparer : IEqualityComparer<(string Title, string Type, string? Date)>
+    {
+        public bool Equals((string Title, string Type, string? Date) x, (string Title, string Type, string? Date) y) =>
+            string.Equals(x.Title, y.Title, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.Type, y.Type, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.Date, y.Date, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string Title, string Type, string? Date) obj) => HashCode.Combine(
+            obj.Title.ToLowerInvariant(), obj.Type.ToLowerInvariant(), obj.Date?.ToLowerInvariant());
     }
 
     private sealed class TitleTypeComparer : IEqualityComparer<(string Title, string Type)>
@@ -642,7 +664,7 @@ public sealed class QuotinatorDatabaseInitializer(
                 reports.Add(report);
                 if (Logger.IsEnabled(LogLevel.Information))
                     Logger.LogFileReport(fileName, FormatReport(report));
-                ReportSelfContradictingSources(fileName, actions);
+                ReportSelfContradictingSources(fileName, actions, parsed.Sources);
                 foreach (RetirableRuleFinding finding in retirableRuleFindings)
                     Logger.LogRetirableRule(fileName, finding.EntityType, finding.EntityId, finding.Field);
 
