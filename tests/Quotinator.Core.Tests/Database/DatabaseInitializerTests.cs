@@ -1218,12 +1218,12 @@ public class DatabaseInitializerTests
         string id = "77e44444-4444-4444-8444-444444444444";
         QuotinatorDatabaseInitializer db = await SeedThenRestateWithoutGenresAsync(id,"noop-no-restamp.json");
 
-        (string? DateModified, string? ImportBatchId) before = await QuoteStampAsync(id);
+        (string? beforeModified, string? beforeBatch) = await QuoteStampAsync(id);
         await db.ReseedAsync();
-        (string? DateModified, string? ImportBatchId) after = await QuoteStampAsync(id);
+        (string? afterModified, string? afterBatch) = await QuoteStampAsync(id);
 
-        Assert.AreEqual(before.DateModified, after.DateModified, "Nothing was written, so nothing was modified at");
-        Assert.AreEqual(before.ImportBatchId, after.ImportBatchId, "and the row still belongs to the batch that actually wrote it");
+        Assert.AreEqual(beforeModified, afterModified, "Nothing was written, so nothing was modified at");
+        Assert.AreEqual(beforeBatch, afterBatch, "and the row still belongs to the batch that actually wrote it");
     }
 
     /// <summary>The RecordCount of the most recently applied batch — what a reseed claims it wrote.</summary>

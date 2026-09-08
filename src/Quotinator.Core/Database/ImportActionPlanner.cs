@@ -589,18 +589,31 @@ internal static class ImportActionPlanner
                 ? sourceId
                 : ReresolveSourceIdForDecidedDate(sourceId, resolved.Date, q.Source, q.Type.ToString(), sourceVariantsByKey);
 
+            string quoteExistingJson = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId });
+            string? quoteMergedJson  = isUnresolved ? null : JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(resolved), SourceId = effectiveSourceId, CharacterId = characterId, PersonId = personId });
+
+            // #377: the resolution settled on what is already stored, so this writes nothing. Staged
+            // Applied rather than Decided — TryApplyBatchAsync only applies Decided rows, and that is
+            // what stops the apply re-stamping DateModified, re-attributing ImportBatchId, deleting and
+            // re-inserting the genre rows, and writing an Audit_Change entry claiming a modification.
+            bool quoteIsNoOp = ResolvesToExisting(status, policy, quoteExistingJson, quoteMergedJson);
+            ImportActionKind quoteKind = quoteIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+            ImportActionStatus quoteStatus = quoteIsNoOp ? ImportActionStatus.Applied : status;
+
             actions.Add(new ImportActionEntity
             {
                 BatchId = batchIdStr,
                 ExistingBatchId = existingBatchId,
-                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                ActionType = new SafeValue<ImportActionKind?>(quoteKind.ToString(), quoteKind),
                 EntityType = ImportActionEntityTypes.Quote,
                 EntityId = q.Id,
-                ExistingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                ExistingValue = quoteExistingJson,
                 IncomingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                MergedFields = isUnresolved ? null : JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(resolved), SourceId = effectiveSourceId, CharacterId = characterId, PersonId = personId }),
+                // Kept even for a no-op: GET /import/actions must still be able to show what the
+                // resolution decided, which is the traceability a derived count could not give.
+                MergedFields = quoteMergedJson,
                 AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                Status = new SafeValue<ImportActionStatus?>(quoteStatus.ToString(), quoteStatus),
                 DetectedAt = now,
             });
 
@@ -643,6 +656,38 @@ internal static class ImportActionPlanner
         Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Applied.ToString(), ImportActionStatus.Applied),
         DetectedAt = now,
     };
+
+    /// <summary>
+    /// #377: whether a would-be <c>Modify</c> writes nothing — its resolved payload is identical to the
+    /// stored one, so applying it would change no value.
+    /// </summary>
+    /// <param name="status">The status the action would otherwise carry; only a terminal <c>Decided</c> is eligible.</param>
+    /// <param name="policy">The file's duplicate-resolution policy; <c>Skip</c> is excluded (see remarks).</param>
+    /// <param name="existingJson">The stored row, serialised as this action's <c>ExistingValue</c>.</param>
+    /// <param name="mergedJson">What the resolution decided to write, or <c>null</c> when nothing is resolved yet.</param>
+    /// <remarks>
+    /// Compared as serialised payloads rather than field-by-field, deliberately: the payload is what the
+    /// apply path actually writes, and it carries more than the merged fields (a Quote's
+    /// <c>SourceId</c>/<c>CharacterId</c>/<c>PersonId</c> links among them). A field-level comparison
+    /// would call a row a no-op while its <c>CharacterId</c> was being dropped — the shape of
+    /// <see href="https://github.com/DutchJaFO/Quotinator/issues/381">#381</see>, which must stay visible
+    /// rather than being masked by this classification.
+    /// <para>
+    /// Both sides are produced by the same serializer from the same DTO type in the same order, so
+    /// ordinal equality is exact rather than incidental.
+    /// </para>
+    /// <para>
+    /// Only a terminal, would-be-<c>Decided</c> action is eligible: <c>Blocked</c>/<c>Pending</c>/
+    /// <c>Stale</c> are still waiting on a human, and reclassifying one would hide it. <c>Skip</c> is
+    /// excluded because it resolves to the existing values *by construction* — a real difference arrived
+    /// and was discarded by policy, which #374 counts in its own bucket and this must not swallow.
+    /// </para>
+    /// </remarks>
+    private static bool ResolvesToExisting(ImportActionStatus status, DuplicateResolutionPolicy policy, string existingJson, string? mergedJson) =>
+        status == ImportActionStatus.Decided
+        && policy != DuplicateResolutionPolicy.Skip
+        && mergedJson is not null
+        && string.Equals(existingJson, mergedJson, StringComparison.Ordinal);
 
     /// <summary>
     /// #374: one Source row matching a (Title, Type) pair — since Date joined the natural key, more
@@ -1163,17 +1208,23 @@ internal static class ImportActionPlanner
                 bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
+                string srcExistingJson = JsonSerializer.Serialize(existingPayload);
+                string? srcMergedJson  = isPending ? null : JsonSerializer.Serialize(resolved);
+                bool srcIsNoOp = ResolvesToExisting(status, policy, srcExistingJson, srcMergedJson);
+                ImportActionKind srcKind = srcIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+                ImportActionStatus srcStatus = srcIsNoOp ? ImportActionStatus.Applied : status;
+
                 actions.Add(new ImportActionEntity
                 {
                     BatchId = batchId,
-                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    ActionType = new SafeValue<ImportActionKind?>(srcKind.ToString(), srcKind),
                     EntityType = ImportActionEntityTypes.Source,
                     EntityId = matchedId,
-                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    ExistingValue = srcExistingJson,
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = srcMergedJson,
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    Status = new SafeValue<ImportActionStatus?>(srcStatus.ToString(), srcStatus),
                     DetectedAt = now,
                 });
                 continue;
@@ -1318,17 +1369,23 @@ internal static class ImportActionPlanner
                 bool keyIsPending = policy == DuplicateResolutionPolicy.Review && keyRuleResolved is null;
                 ImportActionStatus keyStatus = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
+                string keyExistingJson = JsonSerializer.Serialize(keyExistingPayload);
+                string? keyMergedJson  = keyIsPending ? null : JsonSerializer.Serialize(resolved);
+                bool keyIsNoOp = ResolvesToExisting(keyStatus, policy, keyExistingJson, keyMergedJson);
+                ImportActionKind keyKind = keyIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+                ImportActionStatus keyFinalStatus = keyIsNoOp ? ImportActionStatus.Applied : keyStatus;
+
                 actions.Add(new ImportActionEntity
                 {
                     BatchId = batchId,
-                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    ActionType = new SafeValue<ImportActionKind?>(keyKind.ToString(), keyKind),
                     EntityType = ImportActionEntityTypes.Source,
                     EntityId = keyRow.Id,
-                    ExistingValue = JsonSerializer.Serialize(keyExistingPayload),
+                    ExistingValue = keyExistingJson,
                     IncomingValue = JsonSerializer.Serialize(keyIncomingPayload),
-                    MergedFields = keyIsPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = keyMergedJson,
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status = new SafeValue<ImportActionStatus?>(keyStatus.ToString(), keyStatus),
+                    Status = new SafeValue<ImportActionStatus?>(keyFinalStatus.ToString(), keyFinalStatus),
                     DetectedAt = now,
                 });
                 continue;
@@ -1483,17 +1540,23 @@ internal static class ImportActionPlanner
                 bool isPending = policy == DuplicateResolutionPolicy.Review;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
+                string personExistingJson = JsonSerializer.Serialize(existingPayload);
+                string? personMergedJson  = isPending ? null : JsonSerializer.Serialize(resolved);
+                bool personIsNoOp = ResolvesToExisting(status, policy, personExistingJson, personMergedJson);
+                ImportActionKind personKind = personIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+                ImportActionStatus personStatus = personIsNoOp ? ImportActionStatus.Applied : status;
+
                 actions.Add(new ImportActionEntity
                 {
                     BatchId = batchId,
-                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    ActionType = new SafeValue<ImportActionKind?>(personKind.ToString(), personKind),
                     EntityType = ImportActionEntityTypes.Person,
                     EntityId = resolvedId,
-                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    ExistingValue = personExistingJson,
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = personMergedJson,
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    Status = new SafeValue<ImportActionStatus?>(personStatus.ToString(), personStatus),
                     DetectedAt = now,
                 });
                 continue;
@@ -1680,17 +1743,23 @@ internal static class ImportActionPlanner
             bool isPending = policy == DuplicateResolutionPolicy.Review;
             ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
+            string charExistingJson = JsonSerializer.Serialize(existingPayload);
+            string? charMergedJson  = isPending ? null : JsonSerializer.Serialize(resolved);
+            bool charIsNoOp = ResolvesToExisting(status, policy, charExistingJson, charMergedJson);
+            ImportActionKind charKind = charIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+            ImportActionStatus charStatus = charIsNoOp ? ImportActionStatus.Applied : status;
+
             actions.Add(new ImportActionEntity
             {
                 BatchId = batchId,
-                ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                ActionType = new SafeValue<ImportActionKind?>(charKind.ToString(), charKind),
                 EntityType = ImportActionEntityTypes.Character,
                 EntityId = matchedId,
-                ExistingValue = JsonSerializer.Serialize(existingPayload),
+                ExistingValue = charExistingJson,
                 IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
+                MergedFields = charMergedJson,
                 AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                Status = new SafeValue<ImportActionStatus?>(charStatus.ToString(), charStatus),
                 DetectedAt = now,
             });
         }
@@ -1838,17 +1907,23 @@ internal static class ImportActionPlanner
                 bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
+                string uniExistingJson = JsonSerializer.Serialize(existingPayload);
+                string? uniMergedJson  = isPending ? null : JsonSerializer.Serialize(resolved);
+                bool uniIsNoOp = ResolvesToExisting(status, policy, uniExistingJson, uniMergedJson);
+                ImportActionKind uniKind = uniIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+                ImportActionStatus uniStatus = uniIsNoOp ? ImportActionStatus.Applied : status;
+
                 actions.Add(new ImportActionEntity
                 {
                     BatchId = batchId,
-                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    ActionType = new SafeValue<ImportActionKind?>(uniKind.ToString(), uniKind),
                     EntityType = ImportActionEntityTypes.Universe,
                     EntityId = matchedId,
-                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    ExistingValue = uniExistingJson,
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = uniMergedJson,
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    Status = new SafeValue<ImportActionStatus?>(uniStatus.ToString(), uniStatus),
                     DetectedAt = now,
                 });
                 continue;
@@ -2030,17 +2105,23 @@ internal static class ImportActionPlanner
                 bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
+                string seriesExistingJson = JsonSerializer.Serialize(existingPayload);
+                string? seriesMergedJson  = isPending ? null : JsonSerializer.Serialize(resolved);
+                bool seriesIsNoOp = ResolvesToExisting(status, policy, seriesExistingJson, seriesMergedJson);
+                ImportActionKind seriesKind = seriesIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+                ImportActionStatus seriesStatus = seriesIsNoOp ? ImportActionStatus.Applied : status;
+
                 actions.Add(new ImportActionEntity
                 {
                     BatchId = batchId,
-                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    ActionType = new SafeValue<ImportActionKind?>(seriesKind.ToString(), seriesKind),
                     EntityType = ImportActionEntityTypes.Series,
                     EntityId = matchedId,
-                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    ExistingValue = seriesExistingJson,
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = seriesMergedJson,
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    Status = new SafeValue<ImportActionStatus?>(seriesStatus.ToString(), seriesStatus),
                     DetectedAt = now,
                 });
                 continue;
@@ -2188,17 +2269,32 @@ internal static class ImportActionPlanner
                     : policy == DuplicateResolutionPolicy.Review && ruleResolved is null ? ImportActionStatus.Pending
                     : ImportActionStatus.Decided;
 
+                string seasonExistingJson = JsonSerializer.Serialize(existingPayload);
+                string? seasonMergedJson  = modifyStatus == ImportActionStatus.Decided ? JsonSerializer.Serialize(resolved) : null;
+                // #377: Season is the one payload carrying a field that is never written — SeriesName
+                // comes from the import entry, not from either side's stored data, and `existingPayload`
+                // is built without it while `resolved` always carries it. Comparing the two as-is would
+                // therefore call every Season a real change. The no-op test uses an existing-side copy
+                // holding the same non-written metadata, so only written values are compared; the
+                // action's own ExistingValue is left exactly as it was, since that record is not this
+                // issue's to change.
+                string seasonExistingForComparison = JsonSerializer.Serialize(
+                    new SeasonActionPayloadDto(row.Number, row.Title, row.Subtitle, row.SeriesId, se.SeriesName));
+                bool seasonIsNoOp = ResolvesToExisting(modifyStatus, policy, seasonExistingForComparison, seasonMergedJson);
+                ImportActionKind seasonKind = seasonIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+                ImportActionStatus seasonStatus = seasonIsNoOp ? ImportActionStatus.Applied : modifyStatus;
+
                 actions.Add(new ImportActionEntity
                 {
                     BatchId = batchId,
-                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    ActionType = new SafeValue<ImportActionKind?>(seasonKind.ToString(), seasonKind),
                     EntityType = ImportActionEntityTypes.Season,
                     EntityId = matchedId,
-                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    ExistingValue = seasonExistingJson,
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields = modifyStatus == ImportActionStatus.Decided ? JsonSerializer.Serialize(resolved) : null,
+                    MergedFields = seasonMergedJson,
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status = new SafeValue<ImportActionStatus?>(modifyStatus.ToString(), modifyStatus),
+                    Status = new SafeValue<ImportActionStatus?>(seasonStatus.ToString(), seasonStatus),
                     DetectedAt = now,
                 });
                 continue;
@@ -2303,17 +2399,23 @@ internal static class ImportActionPlanner
                 bool isPending = policy == DuplicateResolutionPolicy.Review;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
+                string sdExistingJson = JsonSerializer.Serialize(existingPayload);
+                string? sdMergedJson  = isPending ? null : JsonSerializer.Serialize(resolved);
+                bool sdIsNoOp = ResolvesToExisting(status, policy, sdExistingJson, sdMergedJson);
+                ImportActionKind sdKind = sdIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+                ImportActionStatus sdStatus = sdIsNoOp ? ImportActionStatus.Applied : status;
+
                 actions.Add(new ImportActionEntity
                 {
                     BatchId = batchId,
-                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    ActionType = new SafeValue<ImportActionKind?>(sdKind.ToString(), sdKind),
                     EntityType = ImportActionEntityTypes.StageDirection,
                     EntityId = canonicalId,
-                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    ExistingValue = sdExistingJson,
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = sdMergedJson,
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    Status = new SafeValue<ImportActionStatus?>(sdStatus.ToString(), sdStatus),
                     DetectedAt = now,
                 });
                 continue;
@@ -2399,17 +2501,23 @@ internal static class ImportActionPlanner
                 bool isPending = policy == DuplicateResolutionPolicy.Review;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
+                string scExistingJson = JsonSerializer.Serialize(existingPayload);
+                string? scMergedJson  = isPending ? null : JsonSerializer.Serialize(resolved);
+                bool scIsNoOp = ResolvesToExisting(status, policy, scExistingJson, scMergedJson);
+                ImportActionKind scKind = scIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+                ImportActionStatus scStatus = scIsNoOp ? ImportActionStatus.Applied : status;
+
                 actions.Add(new ImportActionEntity
                 {
                     BatchId = batchId,
-                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    ActionType = new SafeValue<ImportActionKind?>(scKind.ToString(), scKind),
                     EntityType = ImportActionEntityTypes.SoundCue,
                     EntityId = canonicalId,
-                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    ExistingValue = scExistingJson,
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = scMergedJson,
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    Status = new SafeValue<ImportActionStatus?>(scStatus.ToString(), scStatus),
                     DetectedAt = now,
                 });
                 continue;
@@ -2505,17 +2613,23 @@ internal static class ImportActionPlanner
                 bool isPending = policy == DuplicateResolutionPolicy.Review;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
+                string convExistingJson = JsonSerializer.Serialize(existingPayload);
+                string? convMergedJson  = isPending ? null : JsonSerializer.Serialize(resolved);
+                bool convIsNoOp = ResolvesToExisting(status, policy, convExistingJson, convMergedJson);
+                ImportActionKind convKind = convIsNoOp ? ImportActionKind.ResolvedToExisting : ImportActionKind.Modify;
+                ImportActionStatus convStatus = convIsNoOp ? ImportActionStatus.Applied : status;
+
                 actions.Add(new ImportActionEntity
                 {
                     BatchId = batchId,
-                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    ActionType = new SafeValue<ImportActionKind?>(convKind.ToString(), convKind),
                     EntityType = ImportActionEntityTypes.Conversation,
                     EntityId = canonicalId,
-                    ExistingValue = JsonSerializer.Serialize(existingPayload),
+                    ExistingValue = convExistingJson,
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
-                    MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
+                    MergedFields = convMergedJson,
                     AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
-                    Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
+                    Status = new SafeValue<ImportActionStatus?>(convStatus.ToString(), convStatus),
                     DetectedAt = now,
                 });
                 continue;

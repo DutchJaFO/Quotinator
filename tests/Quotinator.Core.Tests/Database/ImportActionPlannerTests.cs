@@ -515,8 +515,12 @@ public class ImportActionPlannerTests
 
         SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "Original text", character: null, date: null);
 
+        // An empty rule lookup, not null — that is what production always supplies, including for a file
+        // with no ruleFile of its own. It matters: with null, the Review branch never calls
+        // ResolveWithDecisions at all and the action falls through to Pending, so a fixture passing null
+        // would stay red no matter how correct the classification is.
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
-            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: new ConflictRuleLookup([]));
 
         ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionKind.ResolvedToExisting, quoteAction.ActionType.Parsed,
@@ -540,7 +544,7 @@ public class ImportActionPlannerTests
         SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "Original text", character: null, date: "1942");
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
-            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: new ConflictRuleLookup([]));
 
         ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
         Assert.AreEqual(ImportActionKind.Modify, quoteAction.ActionType.Parsed,
@@ -2481,7 +2485,11 @@ public class ImportActionPlannerTests
             seasons: [BuildSeasonEntry(1, "Avatar: The Last Airbender", "Book One (corrected)", "Water", seasonId)], conflictRules: rules);
 
         ImportActionEntity seasonAction = actions.Single(a => a.EntityType == ImportActionEntityTypes.Season);
-        Assert.AreEqual(ImportActionStatus.Decided, seasonAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
+        // #377: same rewrite as its Universe and Series siblings — the auto-resolve claim is kept and
+        // asserted directly; the terminal status it now reaches is asserted beside it, not instead.
+        Assert.AreNotEqual(ImportActionStatus.Pending, seasonAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
+        Assert.AreEqual(ImportActionStatus.Applied, seasonAction.Status.Parsed, "and a resolution that writes nothing is terminal on the spot");
+        Assert.AreEqual(ImportActionKind.ResolvedToExisting, seasonAction.ActionType.Parsed);
         SeasonActionPayloadDto merged = System.Text.Json.JsonSerializer.Deserialize<SeasonActionPayloadDto>(seasonAction.MergedFields!)!;
         Assert.AreEqual("Book One", merged.Title, "Keep must resolve to the existing side's value");
     }
@@ -2505,7 +2513,15 @@ public class ImportActionPlannerTests
             universe: [new UniverseEntryDto { Id = id, Name = "Middle-earth (corrected)" }], conflictRules: rules);
 
         ImportActionEntity universeAction = actions.Single(a => a.EntityType == "Universe");
-        Assert.AreEqual(ImportActionStatus.Decided, universeAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
+        // #377: this test's claim is that a matching rule auto-resolves rather than leaving the action
+        // for a human, and that claim still holds — the status is terminal, not Pending. What changed is
+        // *which* terminal status: a Keep rule resolving to the stored name writes nothing, so the
+        // action is now ResolvedToExisting/Applied rather than Modify/Decided. Asserted as
+        // "not Pending" plus the specific outcome, rather than flipping the old value, so the original
+        // guard survives intact alongside the new one.
+        Assert.AreNotEqual(ImportActionStatus.Pending, universeAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
+        Assert.AreEqual(ImportActionStatus.Applied, universeAction.Status.Parsed, "and a resolution that writes nothing is terminal on the spot");
+        Assert.AreEqual(ImportActionKind.ResolvedToExisting, universeAction.ActionType.Parsed);
         UniverseActionPayloadDto merged = System.Text.Json.JsonSerializer.Deserialize<UniverseActionPayloadDto>(universeAction.MergedFields!)!;
         Assert.AreEqual("Middle Earth", merged.Name, "Keep must resolve to the existing side's value");
     }
@@ -2685,7 +2701,12 @@ public class ImportActionPlannerTests
             series: [new SeriesEntryDto { Id = id, Name = "The Hobbit Trilogy" }], conflictRules: rules);
 
         ImportActionEntity seriesAction = actions.Single(a => a.EntityType == "Series");
-        Assert.AreEqual(ImportActionStatus.Decided, seriesAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
+        // #377: same rewrite as PlanUniverseAsync_ReviewPolicy_MatchingRule_StagesDecidedNotPending —
+        // the "auto-resolves rather than waiting for a human" claim is kept and asserted directly, and
+        // the terminal status it now reaches is asserted alongside it rather than replacing it.
+        Assert.AreNotEqual(ImportActionStatus.Pending, seriesAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
+        Assert.AreEqual(ImportActionStatus.Applied, seriesAction.Status.Parsed, "and a resolution that writes nothing is terminal on the spot");
+        Assert.AreEqual(ImportActionKind.ResolvedToExisting, seriesAction.ActionType.Parsed);
         SeriesActionPayloadDto merged = System.Text.Json.JsonSerializer.Deserialize<SeriesActionPayloadDto>(seriesAction.MergedFields!)!;
         Assert.AreEqual("The Hobbit", merged.Name, "Keep must resolve to the existing side's value");
     }
