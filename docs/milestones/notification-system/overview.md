@@ -73,9 +73,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | Planning | T1 ⬜ T2 ⬜ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Planning | T1 ⬜ T2 ⬜ | — |
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | In progress | T1 ⬜ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
-| [#373](https://github.com/DutchJaFO/Quotinator/issues/373) | An import that re-states identical content reports it as modified | In progress | T1 ⬜ T2 ✅ | [373-unchanged-is-not-modified-plan.md](373-unchanged-is-not-modified-plan.md) |
+| [#373](https://github.com/DutchJaFO/Quotinator/issues/373) | An import that re-states identical content reports it as modified | In progress | T1 ❌ T2 ✅ | [373-unchanged-is-not-modified-plan.md](373-unchanged-is-not-modified-plan.md) |
 | [#374](https://github.com/DutchJaFO/Quotinator/issues/374) | A conflict rule cannot tell "already correct" from "cannot apply" | Waiting for release | T1 ✅ T2 ✅ | [374-already-correct-is-not-cannot-apply-plan.md](374-already-correct-is-not-cannot-apply-plan.md) |
-| [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | Waiting for release | T1 ⬜ T2 ✅ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
+| [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | In progress | T1 ❌ T2 ✅ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
+| [#376](https://github.com/DutchJaFO/Quotinator/issues/376) | A Source-level Modify conflict stages a new Pending action on every reseed instead of staying stable | Planning | T1 ⬜ T2 ⬜ | — |
+| [#377](https://github.com/DutchJaFO/Quotinator/issues/377) | A Modify action whose resolution is a genuine no-op is still counted as Modified | Planning | T1 ⬜ T2 ⬜ | — |
 | [#378](https://github.com/DutchJaFO/Quotinator/issues/378) | A "Keep"/"Replace" resolution on a Quote's date field never actually takes effect — the linked Source variant silently wins instead | Waiting for release | T1 ✅ T2 ✅ | [378-keep-replace-source-link-plan.md](378-keep-replace-source-link-plan.md) |
 | [#381](https://github.com/DutchJaFO/Quotinator/issues/381) | A cross-file duplicate quote's CharacterId/PersonId silently reverts to null on every reseed | Planning | T1 ⬜ T2 ⬜ | [381-character-personid-toggle-plan.md](381-character-personid-toggle-plan.md) |
 
@@ -116,10 +118,12 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #313 ─── (none) — Waiting for release
 #370 ─── (none) — Planning
 #369 ─── depends on #303 — Planning
-#372 ─── (none); blocks #302 — In progress
-#373 ─── depends on #372; blocks #302 (via #372) — In progress
-#375 ─── (none); blocks #374 — Waiting for release
+#372 ─── (none); blocks #302; row 21's "reporting so" clause blocked by #373, #377 — In progress
+#373 ─── depends on #372; blocks #302 (via #372), #372's row 21 — In progress
+#375 ─── (none); blocks #374; shares #373's silent-skip fix — In progress
 #374 ─── depends on #375 — Waiting for release
+#376 ─── (none); found live while verifying #374 — Planning
+#377 ─── (none); found live while verifying #374; blocks #372's row 21 — Planning
 #378 ─── (none); found live while verifying #374 — Waiting for release
 #381 ─── (none); found live while verifying #374/#378 — Planning, deliberately deferred
 #367 ─── depends on #278, #312; blocks #308 — Waiting for release
@@ -150,36 +154,38 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 15 | **#303** ✅ | Waiting for release — T1 outstanding |
 | 16 | **#367** ✅ | Waiting for release — moved up so #308 designs against the finished status set |
 | 17 | **#308** ✅ | Waiting for release — T1 outstanding |
-| 18 | **#375** ✅ | Waiting for release — T1 outstanding |
+| 18 | **#375** 🚧 | In progress — T1 found Season absent from every statistics surface and silently skipped in the import report |
 | 19 | **#374** ✅ | Waiting for release |
 | 20 | **#378** ✅ | Waiting for release — found live while verifying #374, fixed same session |
-| 21 | **#373** 🚧 | In progress |
+| 21 | **#373** 🚧 | In progress — T1 found the natural-key match path still skips silently |
 | 22 | **#372** 🚧 | In progress — #302 cannot finish until this lands |
-| 23 | **#369** | Planning — depends on #303 |
-| 24 | **#370** | Planning — sequenced with #369, same page |
-| 25 | **#371** | Planning — before #351/#360, which each add migrations |
-| 26 | **#350** | Planning |
-| 27 | **#327** 🚧 | In progress — depends on #326 (done), #348 |
-| 28 | **#328** | Planning |
-| 29 | **#339** 🚧 | In progress — blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
-| 30 | **#329** | Planning — before #324, which consumes its statistics |
-| 31 | **#330** | Planning — #331 depends on it |
-| 32 | **#331** | Planning — depends on #330 |
-| 33 | **#324** | Planning — after #329/#330/#331 |
-| 34 | **#305** | Planning — independent |
-| 35 | **#306** | Planning — independent |
-| 36 | **#351** | Planning — independent, placed late |
-| 37 | **#381** | Planning — independent, deliberately deferred (found live while verifying #374/#378) |
-| 38 | **#352** | Planning — after #349 |
-| 39 | **#353** | Planning — after #352 |
-| 40 | **#360** | Planning — before end-of-milestone migration consolidation |
-| 41 | **#368** | Planning — depends on #303, #304 |
+| 23 | **#377** | Planning — the same `ImportActionPlanner` branches #373's silent-skip fix touches; #372's row 21 needs it |
+| 24 | **#376** | Planning — sequenced with #377, same file |
+| 25 | **#369** | Planning — depends on #303 |
+| 26 | **#370** | Planning — sequenced with #369, same page |
+| 27 | **#371** | Planning — before #351/#360, which each add migrations |
+| 28 | **#350** | Planning |
+| 29 | **#327** 🚧 | In progress — depends on #326 (done), #348 |
+| 30 | **#328** | Planning |
+| 31 | **#339** 🚧 | In progress — blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
+| 32 | **#329** | Planning — before #324, which consumes its statistics |
+| 33 | **#330** | Planning — #331 depends on it |
+| 34 | **#331** | Planning — depends on #330 |
+| 35 | **#324** | Planning — after #329/#330/#331 |
+| 36 | **#305** | Planning — independent |
+| 37 | **#306** | Planning — independent |
+| 38 | **#351** | Planning — independent, placed late |
+| 39 | **#381** | Planning — independent, deliberately deferred (found live while verifying #374/#378) |
+| 40 | **#352** | Planning — after #349 |
+| 41 | **#353** | Planning — after #352 |
+| 42 | **#360** | Planning — before end-of-milestone migration consolidation |
+| 43 | **#368** | Planning — depends on #303, #304 |
 
 ---
 
 ## PR merge plan
 
-All thirty issues are self-contained on top of already-released infrastructure (#278, #80, #154,
+Every issue in this milestone is self-contained on top of already-released infrastructure (#278, #80, #154,
 #156) — none leave anything half-wired if merged independently, except #81 (which genuinely cannot
 merge before #309 and #307), #319 (which cannot merge before #312), #331 (which cannot merge before
 #330), #328 (which cannot merge before #339), and #327 (which cannot merge before #339 for its
