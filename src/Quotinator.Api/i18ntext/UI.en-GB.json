@@ -83,6 +83,7 @@
   "NotificationsDetailUpdatedColumn": "Updated",
   "NotificationsDetailSkippedColumn": "Skipped",
   "NotificationsDetailUnchangedColumn": "Unchanged",
+  "NotificationsDetailResolvedToExistingColumn": "Resolved",
   "NotificationsDetailStatusColumn": "Status",
   "NotificationsDetailCountColumn": "Count",
   "NotificationDetailEntityCount": "{0}: {1} added, {2} updated",

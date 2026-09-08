@@ -83,6 +83,7 @@
   "NotificationsDetailUpdatedColumn": "Bijgewerkt",
   "NotificationsDetailSkippedColumn": "Overgeslagen",
   "NotificationsDetailUnchangedColumn": "Ongewijzigd",
+  "NotificationsDetailResolvedToExistingColumn": "Teruggevallen",
   "NotificationsDetailStatusColumn": "Status",
   "NotificationsDetailCountColumn": "Aantal",
   "NotificationDetailEntityCount": "{0}: {1} toegevoegd, {2} bijgewerkt",

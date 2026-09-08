@@ -155,24 +155,30 @@ public partial class NotificationTable
                  text?.NotificationsDetailAddedColumn  ?? "Added",
                  text?.NotificationsDetailUpdatedColumn ?? "Updated",
                  text?.NotificationsDetailSkippedColumn ?? "Skipped",
-                 text?.NotificationsDetailUnchangedColumn ?? "Unchanged"],
+                 text?.NotificationsDetailUnchangedColumn ?? "Unchanged",
+                 text?.NotificationsDetailResolvedToExistingColumn ?? "Resolved"],
                 // #373: the payload carries Incoming and Unchanged alongside Added/Modified/Skipped — the
                 // complete record the API, the log and any audit read.
                 // #378: Unchanged is now its own column (developer, 2026-09-08: the summary sentence
                 // already states it, so showing it here is a display change, not a new computation) — a
                 // row with only Unchanged now renders as real information ("N item(s) already matched"),
                 // not the "states nothing" all-zero row #373 originally filtered out, so every entity type
-                // with any incoming rows is shown; per ReseedEntityCountDto's own invariant
-                // (Incoming == Added + Modified + Unchanged + Skipped), a row is only ever excluded here
-                // when it had no incoming rows to report on at all.
+                // with any incoming rows is shown.
+                // #377: ResolvedToExisting joins them for the same reason, and found the same way — T1
+                // showed a body reading "…and 1 resolved back to what was already stored" above a table
+                // with nowhere to put it, so the summary and its own detail disagreed. Every bucket the
+                // sentence states has a column; the invariant is now
+                // Incoming == Added + Modified + Unchanged + Skipped + ResolvedToExisting, so a row is
+                // still only excluded when it had no incoming rows at all.
                 [.. applied.Counts
-                    .Where(c => c.Added > 0 || c.Modified > 0 || c.Skipped > 0 || c.Unchanged > 0)
+                    .Where(c => c.Added > 0 || c.Modified > 0 || c.Skipped > 0 || c.Unchanged > 0 || c.ResolvedToExisting > 0)
                     .Select(IReadOnlyList<string> (c) =>
                     [c.EntityType,
                      c.Added.ToString(CultureInfo.CurrentCulture),
                      c.Modified.ToString(CultureInfo.CurrentCulture),
                      c.Skipped.ToString(CultureInfo.CurrentCulture),
-                     c.Unchanged.ToString(CultureInfo.CurrentCulture)])]),
+                     c.Unchanged.ToString(CultureInfo.CurrentCulture),
+                     c.ResolvedToExisting.ToString(CultureInfo.CurrentCulture)])]),
 
             ImportReviewPendingMetadataDto review => new PayloadTable(
                 [text?.NotificationsDetailStatusColumn ?? "Status",

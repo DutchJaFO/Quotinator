@@ -1189,10 +1189,19 @@ public class DatabaseInitializerTests
 
         using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
+        // Null here would mean the cold start never created the row, which makes the rest of the test
+        // meaningless rather than merely awkward — asserted rather than null-forgiven.
+        async Task<string> RequiredIdAsync(string sql, string what)
+        {
+            string? id = await conn.ExecuteScalarAsync<string?>(sql);
+            Assert.IsNotNull(id, $"The cold start must have created {what}, or this fixture proves nothing.");
+            return id;
+        }
+
         SourceFixtureIds ids = new(
-            await conn.ExecuteScalarAsync<string>("SELECT Id FROM Quotinator_Source WHERE Title = 'Fixture Film';"),
-            await conn.ExecuteScalarAsync<string>("SELECT Id FROM Quotinator_Series WHERE Name = 'Stored Series';"),
-            await conn.ExecuteScalarAsync<string>("SELECT Id FROM Quotinator_Series WHERE Name = 'Incoming Series';"));
+            await RequiredIdAsync("SELECT Id FROM Quotinator_Source WHERE Title = 'Fixture Film';", "the fixture Source"),
+            await RequiredIdAsync("SELECT Id FROM Quotinator_Series WHERE Name = 'Stored Series';", "the stored Series"),
+            await RequiredIdAsync("SELECT Id FROM Quotinator_Series WHERE Name = 'Incoming Series';", "the incoming Series"));
 
         return (db, quoteFile, ruleFile, ids);
     }

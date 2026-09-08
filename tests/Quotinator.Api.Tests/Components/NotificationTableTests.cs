@@ -614,6 +614,69 @@ public class NotificationTableTests
     }
 
     /// <summary>
+    /// #377, found by T1 (developer, 2026-09-09): the confirmation's own sentence read "…and 1 resolved
+    /// back to what was already stored" above a Details table with nowhere to put it, so a reader
+    /// comparing the summary against its own detail found them disagreeing.
+    /// </summary>
+    [TestMethod]
+    public void ResolvedToExistingColumn_ShowsTheActualCount()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","incoming":30,"added":5,"modified":0,"unchanged":4,"resolvedToExisting":21}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.Contains("Resolved", detail.Headers, "The table must have a column for the bucket the summary sentence names.");
+        Assert.Contains("21", detail.Rows[0], "…and the count must appear in the row, not only in the sentence above it.");
+    }
+
+    /// <summary>
+    /// #377: a row carrying <em>only</em> a resolved-to-existing count is real information — the file
+    /// brought something that differed and it resolved back to what was stored — and must not be dropped
+    /// by the row filter. The same defect #374 fixed for a skipped-only row.
+    /// </summary>
+    [TestMethod]
+    public void ResolvedToExistingOnlyRow_StillRenders()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Source","incoming":1,"added":0,"modified":0,"resolvedToExisting":1}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.IsNotEmpty(detail.Rows, "A resolved-only row must not be dropped from the table.");
+    }
+
+    /// <summary>
+    /// #377: the general guard, and the one that would have caught this without anybody looking at a
+    /// screenshot. Every outcome the confirmation's own sentence states must have somewhere to appear in
+    /// the table beneath it — otherwise the summary and its detail describe different things, which is
+    /// what T1 found. Derived from the payload's own properties rather than a list, so a bucket added
+    /// later fails here until the table is widened to hold it.
+    /// </summary>
+    [TestMethod]
+    public void EveryOutcomeTheSummaryStates_HasAColumnInTheDetail()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","incoming":10,"added":1,"modified":2,"unchanged":3,"skipped":4,"resolvedToExisting":5}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        // One distinct value per bucket, so each can only be found if its own column exists.
+        foreach (string expected in new[] { "1", "2", "3", "4", "5" })
+            Assert.Contains(expected, detail.Rows[0],
+                $"The count {expected} is stated in the confirmation's summary and must be visible in its detail too.");
+
+        Assert.HasCount(detail.Headers.Count, detail.Rows[0],
+            "…and every row still matches its headers (#308's contract).");
+    }
+
+    /// <summary>
     /// #378: before this fix, a row with nothing added, modified, or skipped — everything already
     /// matched — was dropped entirely by the same "states nothing" filter #374 already relaxed for
     /// Skipped. Now that Unchanged is a real column, "0 0 0 N" states something (N items already
