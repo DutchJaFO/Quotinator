@@ -1,7 +1,8 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** In progress (step 12) — steps 1–11 done; T1 run 2026-09-08 found Season absent from every
-statistics surface and silently skipped in the import report, reopening this issue
+**Status:** In progress (T1 re-run only) — steps 1–12 done. T1 on 2026-09-08 found Season absent from
+every statistics surface and silently skipped in the import report; both halves are fixed (step 12 here,
+and #373's step 10 for the skip). Awaiting the developer's T1 re-run
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -544,8 +545,8 @@ than only test code.
 
 ### 12. Season reports itself everywhere the other nine entities do
 
-**Status:** ✅ Statistics surfaces done, 2026-09-08. Import-report half is #373's silent-skip fix —
-see that plan's step 10; this issue is not closable until both land.
+**Status:** ✅ Done, 2026-09-08. Statistics surfaces here; the import-report half landed with #373's
+step 10 the same day. Only the T1 re-run remains.
 
 **Found by T1, not by any test** (developer's own run, 2026-09-08). The reseed reported
 `Season[incoming=3 new=3 …]` and the database held three Season rows, while `[Database - Stats]` and
@@ -567,6 +568,25 @@ matches the entity hierarchy (`Universe → Series → Season → Source`) alrea
 | `Quotinator.Api`'s `LogReadyBanner` + `StartupSummaryLogger` | `{SeasonCount} seasons` in the ready banner |
 | `Program.cs`'s `/version` | `seasons` in the `database` object |
 | `DatabaseSeedSummaryResponse` + both `AdminEndpoints` sites | `Seasons` on the reseed/reset response |
+| `DatabaseStatsSummary.razor` + `UI.{en-GB,de,nl}.json` | the Blazor statistics page's own row — **missed on the first pass, see below** |
+
+**A seventh surface was missed, and the miss is more instructive than the fix.** The first pass wired
+six surfaces and declared recurrence structurally impossible. The developer then opened the Statistics
+page and saw nine rows with no Seasons among them — while the very same run's `[Database - Stats]` line
+correctly read `3 seasons`.
+
+The cause: the surface list was derived by grepping `ConversationCount` across `src/` with
+`--include="*.cs"`, which cannot match `DatabaseStatsSummary.razor`. CLAUDE.md's own **Razor caveat**
+warns for a different reason that `.razor` files fall outside checks that look like they cover the
+codebase; it applies just as well to a grep as to a build. **A file-type filter is a silent
+scope limit — it reports success over the files it agreed to look at.**
+
+Worse, the guard added in the same pass had the same blind spot: it asserts `/version` publishes every
+count, so it was green while the page a human actually reads was wrong.
+`RepositoryStructureTests.DatabaseStatsSummary_RendersEveryEntityTypeCount` now reflects the same
+`*Count` set against the Razor markup as text. Confirmed red against the pre-fix markup (via
+`git stash` of that one file, 2026-09-08) rather than assumed, since a guard written after its fix
+proves nothing until it has been seen to fail.
 
 **The existing guard did not catch this, and that is the more important finding.**
 `VersionEndpointTests.GetVersion_DatabaseStats_IncludesEveryEntityTypeCount` carried a summary claiming
@@ -657,8 +677,10 @@ covered the Season→Series direction with a real database from the start.
 | 28 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Run by the developer 2026-09-08 (cold start, then reset → reseed → reseed). **Failed** — surfaced rows 29–31 below. Re-run required once step 12 and #373's step 10 have both landed |
 | 29 | ✅ | Every `IDatabaseInitializer` count property is published by `/version` | Unit test | `VersionEndpointTests.GetVersion_DatabaseStats_IncludesEveryEntityTypeCount` — confirmed red 2026-09-08 (`database.seasons` missing) before the fix, green after |
 | 30 | ✅ | That completeness claim cannot silently fall behind a newly added entity | Unit test | `VersionEndpointTests.GetVersion_DatabaseStats_MapCoversEveryCountProperty` — reflects over `IDatabaseInitializer`'s `*Count` properties; the positive control row 29 requires, since row 29's own map would otherwise be the hand-maintained list it replaced |
-| 31 | ❌ | A Season matched by natural key reports itself in the import report | Unit test | Owned by #373's step 10 — the natural-key path `continue`s without emitting an action, so Season vanishes from the reseed report after first import. Not fixable in this issue alone; the same skip affects Person, Series and Universe |
-| 32 | ❌ | Build is clean and no regression, after step 12 | Build + test run | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s), and `dotnet test --configuration Release -m:1` → 3941 passed, 0 failed, all 10 projects green, run 2026-09-08. **Row stays ❌ until #373's step 10 lands**, since row 31 is still open |
+| 33 | ✅ | The Blazor statistics page renders every count property, not just the ones someone remembered | Unit test | `RepositoryStructureTests.DatabaseStatsSummary_RendersEveryEntityTypeCount` — the surface rows 29/30 do not reach. Confirmed red against the pre-fix markup 2026-09-08 (`git stash` of that one file), green after |
+| 34 | ✅ | The new UI label exists in every locale | Unit test | `TranslationCompletenessTests` — `StartupSummarySeasonsLabel` added to `UI.en-GB.json` ("Seasons"), `UI.de.json` ("Staffeln") and `UI.nl.json` ("Seizoenen") in the same commit, per CLAUDE.md's localisation checklist |
+| 31 | ✅ | A Season matched by natural key reports itself in the import report | Unit test | Owned by #373's step 10, landed 2026-09-08 — `PlanSeasonsAsync_ExistingByNaturalKey_StagesUnchangedAction`, plus `..._TitleDiffers_StagesModifyAction` for the field-drop half. Season's first planner-level tests: `ImportActionPlannerTests` had no `Season` reference at all before this, which is why the site went unnoticed |
+| 32 | ✅ | Build is clean and no regression, after step 12 | Build + test run | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release -m:1` → 3949 passed, 0 failed, all 10 projects green, 2026-09-08 (re-run after #373's step 10 landed) |
 
 **Row 6 is the rejected design asserted as a guard.** Making a quote's parent nullable was considered
 and overruled; a test that fails the moment `SourceId` becomes nullable or the join becomes a `LEFT

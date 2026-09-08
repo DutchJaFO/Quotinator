@@ -118,9 +118,9 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #313 ─── (none) — Waiting for release
 #370 ─── (none) — Planning
 #369 ─── depends on #303 — Planning
-#372 ─── (none); blocks #302; row 21's "reporting so" clause blocked by #373, #377 — In progress
-#373 ─── depends on #372; blocks #302 (via #372), #372's row 21 — In progress
-#375 ─── (none); blocks #374; shares #373's silent-skip fix — In progress
+#372 ─── (none); blocks #302; row 21's "reporting so" clause still blocked by #377 — In progress
+#373 ─── depends on #372; blocks #302 (via #372), #372's row 21 — In progress, T1 re-run outstanding
+#375 ─── (none); blocks #374; its import-report half landed with #373's step 10 — In progress, T1 re-run outstanding
 #374 ─── depends on #375 — Waiting for release
 #376 ─── (none); found live while verifying #374 — Planning
 #377 ─── (none); found live while verifying #374; blocks #372's row 21 — Planning
@@ -154,10 +154,10 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 15 | **#303** ✅ | Waiting for release — T1 outstanding |
 | 16 | **#367** ✅ | Waiting for release — moved up so #308 designs against the finished status set |
 | 17 | **#308** ✅ | Waiting for release — T1 outstanding |
-| 18 | **#375** 🚧 | In progress — T1 found Season absent from every statistics surface and silently skipped in the import report |
+| 18 | **#375** 🚧 | In progress — statistics and import-report gaps both fixed; awaiting the T1 re-run |
 | 19 | **#374** ✅ | Waiting for release |
 | 20 | **#378** ✅ | Waiting for release — found live while verifying #374, fixed same session |
-| 21 | **#373** 🚧 | In progress — T1 found the natural-key match path still skips silently |
+| 21 | **#373** 🚧 | In progress — all four natural-key sites fixed; awaiting the T1 re-run |
 | 22 | **#372** 🚧 | In progress — #302 cannot finish until this lands |
 | 23 | **#377** | Planning — the same `ImportActionPlanner` branches #373's silent-skip fix touches; #372's row 21 needs it |
 | 24 | **#376** | Planning — sequenced with #377, same file |

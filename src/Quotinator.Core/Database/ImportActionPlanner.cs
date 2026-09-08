@@ -1376,8 +1376,21 @@ internal static class ImportActionPlanner
             // captured — PersonEntryDto.Id is required, so there is no absent case to preserve.
             string canonicalId = EntityIdCanonicalizer.TryCanonicalizeLowercase(p.Id, out string? pIdCanonical) ? pIdCanonical! : p.Id;
 
+            string resolvedId = canonicalId;
             (string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = await connection.QuerySingleOrDefaultAsync<(string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                 Sql.People.SelectExistingById, new { id = canonicalId }, transaction);
+
+            // #373: PersonEntryDto.Id is required, so this reaches the natural key only when a declared
+            // id matched nothing while the Name matched — the not-yet-migrated row #173 scoped out.
+            // Developer decision 2026-09-08: Person joins the other three, that boundary was never
+            // validated. It now takes the same comparison path rather than resolving an id and returning.
+            if (existing is null
+                && await connection.ExecuteScalarAsync<Guid?>(Sql.People.SelectIdByName, new { name = p.Name }, transaction) is { } byKey)
+            {
+                resolvedId = byKey.ToCanonicalId();
+                existing   = await connection.QuerySingleOrDefaultAsync<(string Name, string? DateOfBirth, string? DateOfDeath, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                    Sql.People.SelectExistingById, new { id = resolvedId }, transaction);
+            }
 
             if (existing is { } row)
             {
@@ -1390,13 +1403,13 @@ internal static class ImportActionPlanner
                 Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
                 Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
-                personIndex[p.Name] = canonicalId;
+                personIndex[p.Name] = resolvedId;
 
                 HashSet<string> changedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, incomingFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
                 // #373: reported as Unchanged rather than silently reused.
                 if (changedFields.Count == 0)
                 {
-                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Person, canonicalId, incomingPayload, now));
+                    actions.Add(UnchangedAction(batchId, ImportActionEntityTypes.Person, resolvedId, incomingPayload, now));
                     continue;
                 }
 
@@ -1423,7 +1436,7 @@ internal static class ImportActionPlanner
                         BatchId = batchId,
                         ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                         EntityType = ImportActionEntityTypes.Person,
-                        EntityId = canonicalId,
+                        EntityId = resolvedId,
                         ExistingValue = JsonSerializer.Serialize(existingPayload),
                         IncomingValue = JsonSerializer.Serialize(incomingPayload),
                         Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
@@ -1440,7 +1453,7 @@ internal static class ImportActionPlanner
                     BatchId = batchId,
                     ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
                     EntityType = ImportActionEntityTypes.Person,
-                    EntityId = canonicalId,
+                    EntityId = resolvedId,
                     ExistingValue = JsonSerializer.Serialize(existingPayload),
                     IncomingValue = JsonSerializer.Serialize(incomingPayload),
                     MergedFields = isPending ? null : JsonSerializer.Serialize(resolved),
@@ -1448,16 +1461,6 @@ internal static class ImportActionPlanner
                     Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
                     DetectedAt = now,
                 });
-                continue;
-            }
-
-            // Falls back to natural-key: a not-yet-migrated row found only by Name — Name/DateOfBirth/
-            // DateOfDeath correction isn't available on it yet (#173's scope boundary, same as #162's).
-            Guid? matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
-                Sql.People.SelectIdByName, new { name = p.Name }, transaction);
-            if (matchesByKey is not null)
-            {
-                personIndex[p.Name] = matchesByKey.Value.ToCanonicalId();
                 continue;
             }
 
@@ -1683,14 +1686,26 @@ internal static class ImportActionPlanner
                 ? uIdCanonical
                 : u.Id;
 
-            (string Name, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = canonicalId is { } explicitId
+            string? resolvedId = canonicalId;
+            (string Name, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = resolvedId is { } explicitId
                 ? await connection.QuerySingleOrDefaultAsync<(string Name, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                     Sql.Universe.SelectExistingById, new { id = explicitId }, transaction)
                 : null;
 
+            // #373: an id-less entry, or a declared id that matched nothing, resolves by natural key
+            // and then takes the same comparison path an explicit id does. Two lookup paths — only one
+            // of which read any field — is what let a changed field be discarded rather than staged.
+            if (existing is null
+                && await connection.ExecuteScalarAsync<Guid?>(Sql.Universe.SelectIdByName, new { name = u.Name }, transaction) is { } byKey)
+            {
+                resolvedId = byKey.ToCanonicalId();
+                existing   = await connection.QuerySingleOrDefaultAsync<(string Name, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                    Sql.Universe.SelectExistingById, new { id = resolvedId }, transaction);
+            }
+
             if (existing is { } row)
             {
-                string matchedId = canonicalId!;
+                string matchedId = resolvedId!;
                 UniverseActionPayloadDto existingPayload = new UniverseActionPayloadDto(row.Name);
                 UniverseActionPayloadDto incomingPayload = new UniverseActionPayloadDto(u.Name);
                 Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
@@ -1804,15 +1819,6 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            // Falls back to natural-key: an id-less entry, or a declared id that matched nothing.
-            Guid? matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
-                Sql.Universe.SelectIdByName, new { name = u.Name }, transaction);
-            if (matchesByKey is not null)
-            {
-                universeIndex[u.Name] = matchesByKey.Value.ToCanonicalId();
-                continue;
-            }
-
             string stableId = canonicalId ?? EntityIdentity.UniverseId(u.Name);
             universeIndex[u.Name] = stableId;
 
@@ -1858,14 +1864,25 @@ internal static class ImportActionPlanner
                             ? found.ToCanonicalId()
                             : null;
 
-            (string Name, string? UniverseId, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = canonicalId is { } explicitId
+            string? resolvedId = canonicalId;
+            (string Name, string? UniverseId, SafeValue<CompletenessStatus?> CompletenessStatus)? existing = resolvedId is { } explicitId
                 ? await connection.QuerySingleOrDefaultAsync<(string Name, string? UniverseId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
                     Sql.Series.SelectExistingById, new { id = explicitId }, transaction)
                 : null;
 
+            // #373: see PlanUniverseAsync's own remark — the natural-key match takes the same
+            // comparison path an explicit id does, rather than resolving an id and returning.
+            if (existing is null
+                && await connection.ExecuteScalarAsync<Guid?>(Sql.Series.SelectIdByName, new { name = s.Name }, transaction) is { } byKey)
+            {
+                resolvedId = byKey.ToCanonicalId();
+                existing   = await connection.QuerySingleOrDefaultAsync<(string Name, string? UniverseId, SafeValue<CompletenessStatus?> CompletenessStatus)?>(
+                    Sql.Series.SelectExistingById, new { id = resolvedId }, transaction);
+            }
+
             if (existing is { } row)
             {
-                string matchedId = canonicalId!;
+                string matchedId = resolvedId!;
                 string? incomingUniverseId = await ResolveUniverseIdAsync(s.UniverseName);
                 // UniverseName is only ever carried on the incoming side: EnsureUniverseExistsAsync's
                 // defensive re-insert (guarding against Series applying before its own Universe within
@@ -1994,15 +2011,6 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            // Falls back to natural-key: an id-less entry, or a declared id that matched nothing.
-            Guid? matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
-                Sql.Series.SelectIdByName, new { name = s.Name }, transaction);
-            if (matchesByKey is not null)
-            {
-                seriesIndex[s.Name] = matchesByKey.Value.ToCanonicalId();
-                continue;
-            }
-
             string? universeId = await ResolveUniverseIdAsync(s.UniverseName);
             string stableId = canonicalId ?? EntityIdentity.SeriesId(s.Name);
             seriesIndex[s.Name] = stableId;
@@ -2054,15 +2062,27 @@ internal static class ImportActionPlanner
 
             SeasonActionPayloadDto incomingPayload = new(se.Number, se.Title, se.Subtitle, seriesId, se.SeriesName);
 
+            string? resolvedId = canonicalId;
             (int Number, string? Title, string? Subtitle, string? SeriesId, SafeValue<CompletenessStatus?> CompletenessStatus)? existing =
-                canonicalId is { } explicitId
+                resolvedId is { } explicitId
                     ? await connection.QuerySingleOrDefaultAsync<(int, string?, string?, string?, SafeValue<CompletenessStatus?>)?>(
                         Sql.Season.SelectExistingById, new { id = explicitId }, transaction)
                     : null;
 
+            // #373: see PlanUniverseAsync's own remark. Season is the sharpest case of it — its
+            // natural-key query selects Id alone while SelectExistingById reads Number/Title/Subtitle/
+            // SeriesId, so a corrected title on an id-less entry was read by nothing and discarded.
+            if (existing is null
+                && await connection.ExecuteScalarAsync<Guid?>(Sql.Season.SelectIdBySeriesAndNumber, new { seriesId, number = se.Number }, transaction) is { } byKey)
+            {
+                resolvedId = byKey.ToCanonicalId();
+                existing   = await connection.QuerySingleOrDefaultAsync<(int, string?, string?, string?, SafeValue<CompletenessStatus?>)?>(
+                    Sql.Season.SelectExistingById, new { id = resolvedId }, transaction);
+            }
+
             if (existing is { } row)
             {
-                string matchedId = canonicalId!;
+                string matchedId = resolvedId!;
                 SeasonActionPayloadDto existingPayload = new(row.Number, row.Title, row.Subtitle, row.SeriesId);
                 Dictionary<string, object?> existingFields = ToSeasonFieldMap(existingPayload);
                 Dictionary<string, object?> incomingFields = ToSeasonFieldMap(incomingPayload);
@@ -2124,15 +2144,6 @@ internal static class ImportActionPlanner
                     Status = new SafeValue<ImportActionStatus?>(modifyStatus.ToString(), modifyStatus),
                     DetectedAt = now,
                 });
-                continue;
-            }
-
-            // Natural key: an id-less entry, or a declared id that matched nothing.
-            Guid? matchesByKey = await connection.ExecuteScalarAsync<Guid?>(
-                Sql.Season.SelectIdBySeriesAndNumber, new { seriesId, number = se.Number }, transaction);
-            if (matchesByKey is not null)
-            {
-                seasonIndex[SeasonKey(seriesId, se.Number)] = matchesByKey.Value.ToCanonicalId();
                 continue;
             }
 

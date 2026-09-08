@@ -1,10 +1,8 @@
 # #373 — An import that re-states identical content reports it as modified
 
-**Status:** In progress (step 10) — steps 1–9 done. T1 (developer, 2026-09-08) found step 4 fixed nine
-of thirteen sites: the four **natural-key** match paths still `continue` without emitting anything, and
-for Season/Series/Person silently discard a changed field as well. The design question that blocked
-this is **decided** (option 2, all four sites — see step 10); **next action is to execute step 10's
-four listed steps, starting with the red tests.**
+**Status:** In progress (step 10, T1 only) — steps 1–9 done; step 10's own steps 1–3 done 2026-09-08
+(all four sites restructured, 3949 tests green, 0 warnings). **Next action is step 10's step 4: the
+developer's T1 re-run** — reset → reseed → reseed, with every entity type named on every reseed.
 **GitHub issue:** #373
 **Tiers required:** T1, T2
 **Depends on:** [#372](https://github.com/DutchJaFO/Quotinator/issues/372) for reproduction — a reseed
@@ -407,7 +405,8 @@ settling (non-repeating) confirmation duplicate per fresh install — filed as
 
 ### 10. The four natural-key match paths, which step 4 did not reach
 
-**Status:** ⬜ Not started — **blocked on the design decision below.**
+**Status:** ✅ Steps 1–3 done, 2026-09-08 — all four sites restructured, 3949 tests green, 0 warnings.
+Step 4 (T1 re-run) is the developer's own action and is all that remains.
 
 **Found by T1** (developer, 2026-09-08: cold start, then reset → reseed → reseed). On the second and
 third reseed, `quotinator-seasons.json` reported only `Source`, `Character` and `Quote`; its
@@ -473,11 +472,37 @@ recorded as a scope limit, never as a validated decision, and nothing rests on i
    write the deleted block performed is preserved rather than lost.
 4. Re-run T1 (developer): reset → reseed → reseed, with every entity type named on every reseed.
 
-**No `SeasonEntryDto` test coverage exists in `ImportActionPlannerTests.cs` at all** (confirmed by
-grep, 2026-09-08 — the file has no `Season` reference of any kind). Step 1 therefore adds Season's
+**No `SeasonEntryDto` test coverage existed in `ImportActionPlannerTests.cs` at all** (confirmed by
+grep, 2026-09-08 — the file had no `Season` reference of any kind). Step 1 therefore added Season's
 first planner-level tests along with its `BuildSeasonEntry`/`SeedExistingSeasonAsync` helpers, matching
 the existing `BuildUniverseEntry`/`SeedExistingUniverseAsync` pattern. That absence is itself why this
 site was never noticed.
+
+**Outcome, 2026-09-08.** Seven tests written red, one control green — the split confirmed before any
+production change: all four `..._StagesUnchangedAction` and all three `..._StagesModifyAction` failed,
+while `PlanSeasonsAsync_NoMatchAtAll_StagesAddNotUnchanged` passed, so the new assertions could not
+have been satisfied by staging `Unchanged` unconditionally.
+
+Each of the four sites now resolves `resolvedId` (explicit id, else natural key) *before* the
+`SelectExistingById` lookup and falls into the one comparison block; the trailing
+`matchesByKey → continue` is deleted at all four. The index write that block performed is preserved —
+the comparison block already writes it, which is why deleting the block loses nothing.
+
+**Two existing Person tests had to change, and neither was a regression.** Both encoded the boundary
+this step retired, and each was rewritten to keep the thing it actually proved rather than having its
+assertion flipped to pass:
+
+- `..._NoIdMatch_FallsBackToNaturalKey_NoActionStaged` asserted two things at once — no re-keying, and
+  nothing staged. The first still holds and is now asserted *directly* (the action targets the existing
+  row's id, not the id the file declared), which the old "count == 0" form never actually checked. It
+  is renamed `..._StagesAgainstTheExistingIdNotTheFilesOwn`.
+- `..._NoIdMatch_DifferingCasing_FallsBackToNaturalKey_NoActionStaged` exists for #216's
+  case-insensitivity, and its real claim is "no duplicate **Add**". Narrowed to exactly that, plus a
+  row-count control proving the match was real rather than a second insert. Renamed
+  `..._StagesNoDuplicateAdd`.
+
+**What T1 should now show:** every entity type named on every reseed, including `Season`, `Series` and
+`Universe` on the second and third — the lines that vanished in the 2026-09-08 run.
 
 ---
 
@@ -512,9 +537,10 @@ site was never noticed.
 | 25 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors, confirmed 2026-09-04 |
 | 26 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` → all green, 0 failures, confirmed 2026-09-04 |
 | 27 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Run by the developer 2026-09-08 (cold start, then reset → reseed → reseed). **Failed** — the second and third reseed omitted Universe, Series and Season from two files' reports entirely. Surfaced rows 28–30; re-run required once step 10 lands |
-| 28 | ❌ | An entity matched by natural key reports itself rather than vanishing | Unit test | One test per site — Person, Universe, Series, Season — asserting the second import of identical content still names that entity type in the report. Red first: all four currently emit nothing |
-| 29 | ❌ | That report cannot be satisfied by an entity that was never matched | Unit test | The positive control row 28 requires — an entity absent from the file stages nothing, so "names every entity type" is not passable by naming them unconditionally |
-| 30 | ❌ | A field change on an id-less entry is applied, not discarded | Unit test | Season `title`/`subtitle`, Series `universeName`, Person `dateOfBirth` — each changed on a second import of the same natural key, asserted to reach the database. **Depends on step 10's option-2 decision**; unreachable under option 1 or 3 |
+| 28 | ✅ | An entity matched by natural key reports itself rather than vanishing | Unit test | `PlanUniverseAsync_ExistingByName_StagesUnchangedAction`, `PlanSeriesAsync_...`, `PlanSeasonsAsync_ExistingByNaturalKey_...`, `PlanPeopleAsync_ExistingByNameOnly_...` — all four confirmed red 2026-09-08 before the fix, green after |
+| 29 | ✅ | That report cannot be satisfied by an entity that was never matched | Unit test | `PlanSeasonsAsync_NoMatchAtAll_StagesAddNotUnchanged` — the positive control row 28 requires. Green throughout, including while row 28's four were red, so it discriminates rather than tracking them |
+| 30 | ✅ | A field change on an id-less entry is applied, not discarded | Unit test | `PlanSeasonsAsync_ExistingByNaturalKey_TitleDiffers_StagesModifyAction`, `PlanSeriesAsync_ExistingByName_UniverseNameDiffers_...`, `PlanPeopleAsync_ExistingByNameOnly_DateOfBirthDiffers_...` — all three red before, green after |
+| 31 | ✅ | Build is clean and no regression, after step 10 | Build + test run | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s); `dotnet test --configuration Release -m:1` → 3949 passed, 0 failed, all 10 projects green, 2026-09-08 |
 
 **Rows 4, 5 and 6 exist because "reports unchanged" is satisfied by reporting nothing.** Row 5 is the
 sharpest: a planner classifying *everything* as unchanged would pass rows 3, 4 and 7 perfectly.

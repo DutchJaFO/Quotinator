@@ -12,6 +12,7 @@ using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
+using Quotinator.Core.Helpers;
 using Quotinator.Core.Services;
 
 namespace Quotinator.Core.Tests.Database;
@@ -1465,6 +1466,154 @@ public class ImportActionPlannerTests
         return id;
     }
 
+    private static SeasonEntryDto BuildSeasonEntry(int number = 1, string? seriesName = "Avatar: The Last Airbender", string? title = "Book One", string? subtitle = "Water", string? id = null) => new()
+    {
+        Id         = id,
+        Number     = number,
+        SeriesName = seriesName,
+        Title      = title,
+        Subtitle   = subtitle,
+    };
+
+    private static async Task<string> SeedExistingSeasonAsync(SqliteConnection conn, string seriesId, int number = 1, string? title = "Book One", string? subtitle = "Water")
+    {
+        string id  = Guid.NewGuid().ToString("D");
+        string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        await conn.ExecuteAsync(
+            "INSERT INTO Quotinator_Season (Id, Number, Title, Subtitle, SeriesId, CompletenessStatus, DateCreated) VALUES (@Id, @Number, @Title, @Subtitle, @SeriesId, 'Incomplete', @now)",
+            new { Id = id, Number = number, Title = title, Subtitle = subtitle, SeriesId = seriesId, now });
+        return id;
+    }
+
+    // ── #373 step 10: the four natural-key match paths ──────────────────────
+    // Each of these four sites resolved an id and returned, emitting nothing. The pre-existing
+    // "..._ExistingByName_NoActionStaged" tests do not cover this: they assert
+    // count(EntityType == X && ActionType != Unchanged) == 0, which emitting nothing already
+    // satisfies. These assert the positive — that an Unchanged action is actually staged.
+
+    [TestMethod]
+    public async Task PlanUniverseAsync_ExistingByName_StagesUnchangedAction()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        await SeedExistingUniverseAsync(conn, "Middle Earth");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            universe: [BuildUniverseEntry("Middle Earth")]);
+
+        Assert.ContainsSingle(actions.Where(a => a.EntityType == ImportActionEntityTypes.Universe && a.ActionType.Parsed == ImportActionKind.Unchanged),
+            "A Universe matched by its natural key must report itself as Unchanged, not vanish from the report");
+    }
+
+    [TestMethod]
+    public async Task PlanSeriesAsync_ExistingByName_StagesUnchangedAction()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        await SeedExistingSeriesAsync(conn, "The Lord of the Rings");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            series: [BuildSeriesEntry("The Lord of the Rings")]);
+
+        Assert.ContainsSingle(actions.Where(a => a.EntityType == ImportActionEntityTypes.Series && a.ActionType.Parsed == ImportActionKind.Unchanged),
+            "A Series matched by its natural key must report itself as Unchanged, not vanish from the report");
+    }
+
+    [TestMethod]
+    public async Task PlanSeasonsAsync_ExistingByNaturalKey_StagesUnchangedAction()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
+        await SeedExistingSeasonAsync(conn, seriesId, 1, "Book One", "Water");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            seasons: [BuildSeasonEntry(1, "Avatar: The Last Airbender", "Book One", "Water")]);
+
+        Assert.ContainsSingle(actions.Where(a => a.EntityType == ImportActionEntityTypes.Season && a.ActionType.Parsed == ImportActionKind.Unchanged),
+            "A Season matched by (SeriesId, Number) must report itself as Unchanged, not vanish from the report");
+    }
+
+    /// <summary>
+    /// Person's own natural-key path differs in shape: <c>PersonEntryDto.Id</c> is required, so this
+    /// path is reached only by a declared id that matched nothing while the Name did — the
+    /// "not-yet-migrated row found only by Name" case #173 scoped out. Developer decision 2026-09-08:
+    /// Person joins the other three; that boundary was never validated.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanPeopleAsync_ExistingByNameOnly_StagesUnchangedAction()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        await SeedExplicitPersonAsync(conn, Guid.NewGuid().ToString("D"), "Ada Lovelace");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [BuildPersonEntry(Guid.NewGuid().ToString("D"), "Ada Lovelace")]);
+
+        Assert.ContainsSingle(actions.Where(a => a.EntityType == ImportActionEntityTypes.Person && a.ActionType.Parsed == ImportActionKind.Unchanged),
+            "A Person matched by Name after its declared id missed must report itself as Unchanged, not vanish from the report");
+    }
+
+    /// <summary>
+    /// Row 29's control. Every assertion above is satisfied by a build that stages <c>Unchanged</c>
+    /// unconditionally; this is the case that must NOT produce one, so "names every entity type" cannot
+    /// be passed by naming them regardless of whether anything matched.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSeasonsAsync_NoMatchAtAll_StagesAddNotUnchanged()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            seasons: [BuildSeasonEntry(3, "Avatar: The Last Airbender", "Book Three", "Fire")]);
+
+        Assert.ContainsSingle(actions.Where(a => a.EntityType == ImportActionEntityTypes.Season && a.ActionType.Parsed == ImportActionKind.Add));
+        Assert.IsEmpty(actions.Where(a => a.EntityType == ImportActionEntityTypes.Season && a.ActionType.Parsed == ImportActionKind.Unchanged),
+            "A Season that matched nothing is an Add — never Unchanged");
+    }
+
+    // ── #373 step 10, row 30: the data-loss half ────────────────────────────
+    // The natural-key lookups are ExecuteScalarAsync<Guid?> — they return an id and compare no field,
+    // so a changed field on an id-less entry was discarded rather than merely unreported.
+
+    [TestMethod]
+    public async Task PlanSeasonsAsync_ExistingByNaturalKey_TitleDiffers_StagesModifyAction()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
+        await SeedExistingSeasonAsync(conn, seriesId, 1, "Book One", "Water");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            seasons: [BuildSeasonEntry(1, "Avatar: The Last Airbender", "Book One: Water", "Water")]);
+
+        Assert.ContainsSingle(actions.Where(a => a.EntityType == ImportActionEntityTypes.Season && a.ActionType.Parsed == ImportActionKind.Modify),
+            "A corrected Season title on an id-less entry must stage a Modify, not be silently discarded");
+    }
+
+    [TestMethod]
+    public async Task PlanSeriesAsync_ExistingByName_UniverseNameDiffers_StagesModifyAction()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        await SeedExistingSeriesAsync(conn, "The Lord of the Rings");
+        await SeedExistingUniverseAsync(conn, "Middle Earth");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            series: [BuildSeriesEntry("The Lord of the Rings", "Middle Earth")]);
+
+        Assert.ContainsSingle(actions.Where(a => a.EntityType == ImportActionEntityTypes.Series && a.ActionType.Parsed == ImportActionKind.Modify),
+            "A Series gaining its Universe link on an id-less entry must stage a Modify, not be silently discarded");
+    }
+
+    [TestMethod]
+    public async Task PlanPeopleAsync_ExistingByNameOnly_DateOfBirthDiffers_StagesModifyAction()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        await SeedExplicitPersonAsync(conn, Guid.NewGuid().ToString("D"), "Ada Lovelace", dateOfBirth: null, dateOfDeath: null);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
+            people: [BuildPersonEntry(Guid.NewGuid().ToString("D"), "Ada Lovelace", "1815-12-10", null)]);
+
+        Assert.ContainsSingle(actions.Where(a => a.EntityType == ImportActionEntityTypes.Person && a.ActionType.Parsed == ImportActionKind.Modify),
+            "A Person's corrected dateOfBirth must stage a Modify once the id missed and the Name matched — #173's boundary was never validated");
+    }
+
     [TestMethod]
     public async Task PlanUniverseAsync_NoMatchAtAll_StagesAddAction()
     {
@@ -2311,30 +2460,43 @@ public class ImportActionPlannerTests
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Person" && a.ActionType.Parsed != ImportActionKind.Unchanged), "Nothing differs — silent reuse, no action staged");
     }
 
+    /// <summary>
+    /// A not-yet-migrated row found only by Name keeps its own id — the file's declared id never
+    /// re-keys it. That half of #173's boundary stands. The other half — that nothing at all is staged
+    /// — was retired by the developer's 2026-09-08 decision (#373 step 10): the correction the file
+    /// carries is now applied rather than discarded, so this stages a Modify against the *existing*
+    /// row's id.
+    /// </summary>
     [TestMethod]
-    public async Task PlanPeopleAsync_NoIdMatch_FallsBackToNaturalKey_NoActionStaged()
+    public async Task PlanPeopleAsync_NoIdMatch_FallsBackToNaturalKey_StagesAgainstTheExistingIdNotTheFilesOwn()
     {
         using SqliteConnection conn = await OpenConnectionAsync();
         // A pre-existing row found only by natural key (Name) — never declared an explicit id before.
+        string existingId = Guid.NewGuid().ToString("D");
         string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
         await conn.ExecuteAsync("INSERT INTO Quotinator_Person (Id, Name, DateCreated) VALUES (@Id, 'Ada Lovelace', @now)",
-            new { Id = Guid.NewGuid(), now });
+            new { Id = existingId, now });
 
         string newFileId = "e3111111-1111-4111-8111-111111111173";
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [BuildPersonEntry(newFileId, name: "Ada Lovelace")]);
 
-        Assert.IsEmpty(actions.Where(a => a.ActionType.Parsed != ImportActionKind.Unchanged),
-            "Not-yet-migrated row found via natural key — no re-keying, nothing staged (#173 scope boundary, same as #162's)");
+        ImportActionEntity personAction = actions.Single(a => a.EntityType == ImportActionEntityTypes.Person);
+        Assert.AreEqual(existingId.ToLowerInvariant(), personAction.EntityId.ToLowerInvariant(),
+            "No re-keying — the action targets the row that already exists, never the id the file declared");
+        Assert.IsEmpty(actions.Where(a => a.ActionType.Parsed == ImportActionKind.Add),
+            "A natural-key match is never a duplicate Add");
     }
 
     /// <summary>
     /// #216 fix: Sql.People.SelectIdByName is now case-insensitive, matching #180's own
     /// Sql.Sources.SelectIdByTitleAndType precedent — a case-only difference must still find the
-    /// existing row via natural key, not stage a duplicate Add.
+    /// existing row via natural key, not stage a duplicate Add. That is what this test proves, and it
+    /// is unaffected by #373 step 10; the assertion is narrowed from "no action at all" to "no Add"
+    /// because the natural-key path now stages the correction it used to discard.
     /// </summary>
     [TestMethod]
-    public async Task PlanPeopleAsync_NoIdMatch_DifferingCasing_FallsBackToNaturalKey_NoActionStaged()
+    public async Task PlanPeopleAsync_NoIdMatch_DifferingCasing_FallsBackToNaturalKey_StagesNoDuplicateAdd()
     {
         using SqliteConnection conn = await OpenConnectionAsync();
         string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
@@ -2345,8 +2507,10 @@ public class ImportActionPlannerTests
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [BuildPersonEntry(newFileId, name: "ADA LOVELACE")]);
 
-        Assert.IsEmpty(actions.Where(a => a.ActionType.Parsed != ImportActionKind.Unchanged),
+        Assert.IsEmpty(actions.Where(a => a.ActionType.Parsed == ImportActionKind.Add),
             "Differing casing must still match the existing row via natural key, not stage a duplicate Add");
+        Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Person"),
+            "The positive control: still exactly one Person row, so the match was real and not a second insert");
     }
 
     [TestMethod]
