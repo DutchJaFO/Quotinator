@@ -209,32 +209,74 @@ internal static class ImportActionPlanner
                 }
             }
 
-            // #153: a matching ConflictResolutionRule's Custom-value field applies to q itself, before
-            // Source/Character/Person resolution ever runs — not just on a later Modify. Without this,
-            // a rule correcting e.g. "character" would only ever take effect if this exact quote id is
+            // #378: existing must be known before Source/Character/Person resolution runs — a matching
+            // rule's Keep/Replace decision needs the true existing value to correct q's own field before
+            // ResolveSourceAsync ever sees it, the same reason Custom already needed to run early (#153,
+            // below). Moved from its original position (after Source/Character/Person resolution) — this
+            // lookup is a pure read by q.Id and does not depend on anything Source/Character/Person
+            // resolution computes.
+            QuoteSeedWriter.ExistingQuoteFields? existing = seenQuotes.TryGetValue(q.Id, out SourceQuoteDto? firstInFile)
+                ? new QuoteSeedWriter.ExistingQuoteFields(QuoteFieldMerge.ToFieldMap(firstInFile), batchIdStr, seenQuoteStatus.GetValueOrDefault(q.Id, CompletenessStatus.Incomplete))
+                : await QuoteSeedWriter.TryGetExistingFieldsAsync(connection, q.Id, transaction);
+
+            // #153/#378: a matching ConflictResolutionRule's decided field applies to q itself, before
+            // Source/Character/Person resolution ever runs — not just on a later Modify. Without this, a
+            // rule correcting e.g. "character" would only ever take effect if this exact quote id is
             // re-encountered (in-file or cross-file) after its first Add, since the Modify branch below
-            // is the only other place a rule is consulted; a quote appearing exactly once anywhere in
-            // the bundled corpus would never see its Custom correction at all. Running this before
-            // resolution also means Character/Person resolve against the corrected value, not the raw
-            // one — the same reasoning as the SourceAliasRule substitution just above. Keep/Replace
-            // resolutions are meaningless with no second side yet to compare against and are silently
-            // no-ops here, since ResolveWithDecisions is given the same value on both sides.
+            // is the only other place a rule is consulted; a quote appearing exactly once anywhere in the
+            // bundled corpus would never see its correction at all. Running this before resolution also
+            // means Character/Person/Source resolve against the corrected value, not the raw one — the
+            // same reasoning as the SourceAliasRule substitution just above, and (#378) the reason
+            // Keep/Replace must run here too now that existing is available: ResolveSourceAsync
+            // resolves/creates a Source variant per *raw* incoming date, independently of what the
+            // field-merge later decides, so a Keep that only takes effect afterward leaves the quote
+            // linked to whichever variant its own raw date happened to match — and, for date
+            // specifically, creates a second, spurious Source variant for the date Keep rejects, which
+            // nothing ever cleans up even though no quote ends up referencing it. A brand-new quote
+            // (existing is null) still has nothing for Keep/Replace to compare against — Custom remains
+            // the only resolution meaningful there, using the same raw-value-on-both-sides value this
+            // block always used before existing was available this early.
             if (conflictRules is not null && !sourceAliasStale)
             {
                 IReadOnlyDictionary<string, object?> rawFields = QuoteFieldMerge.ToFieldMap(q);
-                Dictionary<string, FieldMergeDecision>? customDecisions = null;
+                IReadOnlyDictionary<string, object?>? existingFieldsForEarlyRule = existing?.Fields;
+                Dictionary<string, FieldMergeDecision>? earlyDecisions = null;
                 foreach (string field in rawFields.Keys)
                 {
-                    if (conflictRules.TryResolve(q.Id, field, rawFields[field], rawFields[field], out FieldMergeDecision decision, out ConflictRuleOutcome outcome)
-                        && outcome is ConflictRuleOutcome.Apply or ConflictRuleOutcome.AlreadyApplied && decision.Choice == FieldResolutionChoice.Custom)
+                    object? earlyExistingValue = existingFieldsForEarlyRule?.GetValueOrDefault(field) ?? rawFields[field];
+
+                    // #153: a field already equal on both sides needs no decision — consulting the rule
+                    // anyway would compare its recorded snapshot against an already-agreeing pair and
+                    // spuriously flag it Stale/Retirable. Only meaningful once existing is known; a
+                    // brand-new quote has no "already equal" to detect.
+                    if (existingFieldsForEarlyRule is not null
+                        && FieldMergeResolver.ValuesEqual(field, earlyExistingValue, rawFields[field], QuoteFieldMerge.CaseSensitiveContentFields))
+                        continue;
+
+                    if (conflictRules.TryResolve(q.Id, field, earlyExistingValue, rawFields[field], out FieldMergeDecision decision, out ConflictRuleOutcome outcome)
+                        && outcome is ConflictRuleOutcome.Apply or ConflictRuleOutcome.AlreadyApplied
+                        && (existingFieldsForEarlyRule is not null || decision.Choice == FieldResolutionChoice.Custom))
                     {
-                        (customDecisions ??= new Dictionary<string, FieldMergeDecision>(StringComparer.OrdinalIgnoreCase))[field] = decision;
+                        (earlyDecisions ??= new Dictionary<string, FieldMergeDecision>(StringComparer.OrdinalIgnoreCase))[field] = decision;
                     }
                 }
 
-                if (customDecisions is { Count: > 0 })
+                if (earlyDecisions is { Count: > 0 })
                 {
-                    FieldMergeResult corrected = FieldMergeResolver.ResolveWithDecisions(rawFields, rawFields, customDecisions);
+                    // ApplyMergedFields indexes every field unconditionally, so ResolveWithDecisions
+                    // must be given the full field set — but only the decided fields' "existing" side
+                    // is the true existing value; every other field uses the same value on both sides
+                    // (trivially not ambiguous, auto-resolves straight through) so an unrelated field
+                    // genuinely ambiguous between existing and incoming (no matching rule at all, e.g.
+                    // "character") never throws here — that stays the later Modify branch's own job.
+                    Dictionary<string, object?> blendedExisting = new(StringComparer.OrdinalIgnoreCase);
+                    foreach (string field in rawFields.Keys)
+                        blendedExisting[field] = earlyDecisions.ContainsKey(field)
+                            ? existingFieldsForEarlyRule?.GetValueOrDefault(field) ?? rawFields[field]
+                            : rawFields[field];
+
+                    FieldMergeResult corrected = FieldMergeResolver.ResolveWithDecisions(
+                        blendedExisting, rawFields, earlyDecisions, QuoteFieldMerge.CaseSensitiveContentFields);
                     q = QuoteFieldMerge.ApplyMergedFields(corrected.MergedFields, q);
                 }
             }
@@ -242,10 +284,6 @@ internal static class ImportActionPlanner
             (string sourceId, bool dateNeedsReview) = await ResolveSourceAsync(connection, q, sourceIndex, sourceVariantsByKey, stagedSourceVariantIds, batchIdStr, actions, now, transaction);
             string? characterId = await ResolveCharacterAsync(connection, q, sourceId, characterIndex, batchIdStr, actions, now, transaction);
             string? personId = await ResolvePersonAsync(connection, q, personIndex, batchIdStr, actions, now, transaction);
-
-            QuoteSeedWriter.ExistingQuoteFields? existing = seenQuotes.TryGetValue(q.Id, out SourceQuoteDto? firstInFile)
-                ? new QuoteSeedWriter.ExistingQuoteFields(QuoteFieldMerge.ToFieldMap(firstInFile), batchIdStr, seenQuoteStatus.GetValueOrDefault(q.Id, CompletenessStatus.Incomplete))
-                : await QuoteSeedWriter.TryGetExistingFieldsAsync(connection, q.Id, transaction);
 
             if (existing is null)
             {
@@ -505,6 +543,19 @@ internal static class ImportActionPlanner
             ImportActionStatus status = sourceAliasStale ? ImportActionStatus.Stale : isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
             bool isUnresolved = isPending || sourceAliasStale;
 
+            // #378: `sourceId` was resolved against q's own raw incoming date, before this field-merge
+            // decision was known — correct for Replace (which keeps the incoming date) and for Custom
+            // (already folded into q before ResolveSourceAsync ever ran), but wrong the moment Keep
+            // settles on a *different* date than the one Source resolution saw. Re-picking from the same
+            // variant cache ResolveSourceAsync already populated for this title is safe unconditionally:
+            // when resolved.Date matches what ResolveSourceAsync already saw, this finds the same variant
+            // right back. A resolved date with no matching variant (should not happen for Keep/Replace —
+            // both only ever produce a value some occurrence already established a variant for) falls
+            // back to the original sourceId rather than risk misassigning to nothing.
+            string effectiveSourceId = isUnresolved
+                ? sourceId
+                : ReresolveSourceIdForDecidedDate(sourceId, resolved.Date, q.Source, q.Type.ToString(), sourceVariantsByKey);
+
             actions.Add(new ImportActionEntity
             {
                 BatchId = batchIdStr,
@@ -514,7 +565,7 @@ internal static class ImportActionPlanner
                 EntityId = q.Id,
                 ExistingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
                 IncomingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                MergedFields = isUnresolved ? null : JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(resolved), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                MergedFields = isUnresolved ? null : JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(resolved), SourceId = effectiveSourceId, CharacterId = characterId, PersonId = personId }),
                 AppliedPolicy = new SafeValue<DuplicateResolutionPolicy?>(policy.ToString(), policy),
                 Status = new SafeValue<ImportActionStatus?>(status.ToString(), status),
                 DetectedAt = now,
@@ -591,6 +642,29 @@ internal static class ImportActionPlanner
         }
 
         return variants.Count > 0 ? variants[0] : null;
+    }
+
+    /// <summary>
+    /// #378: a quote's own Source is resolved against its raw incoming date before any field-merge
+    /// decision for that quote's own <c>date</c> field is known — correct for Replace (which keeps the
+    /// incoming value the resolution already saw) and for Custom (folded into the quote before
+    /// <see cref="ResolveSourceAsync"/> ever ran), but wrong the moment Keep settles on a *different*
+    /// date. Re-picks from <paramref name="variantsByKey"/> — the same cache <see cref="ResolveSourceAsync"/>
+    /// already populated for <paramref name="sourceTitle"/>/<paramref name="typeStr"/> — using
+    /// <paramref name="decidedDate"/> instead of the quote's raw date. Safe to call unconditionally: when
+    /// <paramref name="decidedDate"/> already matches what <see cref="ResolveSourceAsync"/> saw, this
+    /// finds the same variant right back. Falls back to <paramref name="originalSourceId"/> when no
+    /// variant matches at all (should not happen for Keep/Replace — both only ever produce a value some
+    /// occurrence already established a variant for) rather than risk misassigning to nothing.
+    /// </summary>
+    private static string ReresolveSourceIdForDecidedDate(
+        string originalSourceId, string? decidedDate, string sourceTitle, string typeStr,
+        Dictionary<string, List<SourceVariant>> variantsByKey)
+    {
+        if (!variantsByKey.TryGetValue($"{sourceTitle}|{typeStr}", out List<SourceVariant>? variants))
+            return originalSourceId;
+
+        return PickSourceVariant(variants, decidedDate)?.Id ?? originalSourceId;
     }
 
     /// <summary>

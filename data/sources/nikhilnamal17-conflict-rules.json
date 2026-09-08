@@ -50,6 +50,102 @@
       ]
     },
     {
+      "entityId": "d7b89241-e095-cc49-b16e-78a4bf17811a",
+      "existingRecord": {
+        "quoteText": "The past can't hurt you anymore, unless you let it.",
+        "source": "V for Vendetta",
+        "date": "2006",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "The past can't hurt you anymore, unless you let it.",
+        "source": "V for Vendetta",
+        "date": "2006",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Custom", "customValue": "2005" }
+      ]
+    },
+    {
+      "entityId": "55807649-a69f-054a-b435-e4ba91f71458",
+      "existingRecord": {
+        "quoteText": "So many times in my life I screwed up: I've talked when I should've listened, I've been harsh when I should've been tender.",
+        "source": "Ad Astra",
+        "date": "2014",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "So many times in my life I screwed up: I've talked when I should've listened, I've been harsh when I should've been tender.",
+        "source": "Ad Astra",
+        "date": "2014",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Custom", "customValue": "2019" }
+      ]
+    },
+    {
+      "entityId": "6f93fe0c-159a-c847-a631-512d82461216",
+      "existingRecord": {
+        "quoteText": "This is Sparta!",
+        "source": "300",
+        "date": "2006",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "This is Sparta!",
+        "source": "300",
+        "date": "2006",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Custom", "customValue": "2007" }
+      ]
+    },
+    {
+      "entityId": "1eaeb671-3266-234d-9059-87354f060c58",
+      "existingRecord": {
+        "quoteText": "Manners maketh man",
+        "source": "KINGSMAN: The Secret Service",
+        "date": "2015",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Manners maketh man",
+        "source": "KINGSMAN: The Secret Service",
+        "date": "2015",
+        "character": null,
+        "author": null,
+        "type": "movie",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Custom", "customValue": "2014" }
+      ]
+    },
+    {
       "entityId": "c124e692-04fc-7b49-af53-b6bcc0692dbe",
       "existingRecord": {
         "quoteText": "Even the smallest person can change the course of the future.",
@@ -168,6 +264,78 @@
       },
       "fields": [
         { "field": "date", "resolution": "Custom", "customValue": "1991" }
+      ]
+    },
+    {
+      "entityId": "779f3b34-37f6-8b48-864e-42d262129a3d",
+      "existingRecord": {
+        "quoteText": "When we lose our principles, we invite chaos.",
+        "source": "Mr. Robot",
+        "date": "2017",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "When we lose our principles, we invite chaos.",
+        "source": "Mr. Robot",
+        "date": "2017",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Custom", "customValue": "2015" }
+      ]
+    },
+    {
+      "entityId": "e69951f1-4d01-964d-86d5-13f80f5bfd8a",
+      "existingRecord": {
+        "quoteText": "People walk around, act like they know what hate means. Nah, no one does, until you hate yourself. I mean truly hate yourself. That’s power.",
+        "source": "Mr. Robot",
+        "date": "2017",
+        "character": "Fernando Vera",
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "People walk around, act like they know what hate means. Nah, no one does, until you hate yourself. I mean truly hate yourself. That’s power.",
+        "source": "Mr. Robot",
+        "date": "2017",
+        "character": "Fernando Vera",
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Custom", "customValue": "2015" }
+      ]
+    },
+    {
+      "entityId": "e41d0f7a-a39a-4346-a0dd-ca08efd75724",
+      "existingRecord": {
+        "quoteText": "Love's the most powerful emotion and that makes it the most dangerous",
+        "source": "Arrow",
+        "date": "2017",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "incomingRecord": {
+        "quoteText": "Love's the most powerful emotion and that makes it the most dangerous",
+        "source": "Arrow",
+        "date": "2017",
+        "character": null,
+        "author": null,
+        "type": "tv",
+        "genres": []
+      },
+      "fields": [
+        { "field": "date", "resolution": "Custom", "customValue": "2015" }
       ]
     },
     {

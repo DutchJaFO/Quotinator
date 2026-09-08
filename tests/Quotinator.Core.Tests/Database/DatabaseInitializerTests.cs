@@ -1379,108 +1379,6 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// The positive counterpart to <see cref="Reseed_Repeatedly_LeavesEveryActiveAlertPointingAtALiveBatch"/>
-    /// (developer, 2026-09-02): "we always test positive and negative aspects … we therefore also need a
-    /// seeding test that does have 0 pending reviews so we have proof of the positive aspect."
-    /// <para>
-    /// The negative test's fixture deliberately has no rule file, so its batch can never apply and every
-    /// reseed re-stages the whole thing. That is a real state — an upstream change introducing conflicts
-    /// nobody has resolved — but on its own it proves only that the stuck case stays stuck. This uses the
-    /// fixture that mirrors production's manifest wiring, where the rule file resolves the file's
-    /// conflicts, and shows the ordinary path: content lands, nothing waits, and repeating the reseed
-    /// adds nothing to review.
-    /// </para>
-    /// </summary>
-    /// <remarks>
-    /// #374 (developer decision, 2026-09-04): 3, not 0. Three Mr. Robot/Arrow quotes carry a per-quote
-    /// year that disagrees with their show's other quotes — a series-capable type with no Series data
-    /// cannot tell that apart from a genuinely new season, so these three are now correctly reported as
-    /// conflicts rather than silently resolved. This is the intended behaviour, not a residual defect —
-    /// see <see cref="InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions"/>'s own
-    /// documented exceptions and <see cref="Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows"/>
-    /// for what actually matters now: the count stays stable, not that it reaches zero.
-    /// </remarks>
-    [TestMethod]
-    public async Task Seed_WithAResolvableFile_LeavesOnlyKnownConflictsPendingAndOneAlert()
-    {
-        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
-        await db.InitialiseAsync();
-
-        Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
-            "The positive control: a resolvable file actually applies, so its quotes are in the database. "
-            + "Without this, 'nothing pending' would also be true of a run that imported nothing at all.");
-
-        Assert.AreEqual(KnownUnresolvedNikhilNamal17QuoteIds.Count, await StagedActionCountAsync(),
-            "A file whose conflicts its rule file resolves leaves only the known, genuine ambiguities waiting — see KnownUnresolvedNikhilNamal17QuoteIds for what each one is.");
-
-        Assert.IsNotEmpty((await NotificationsAsync())
-            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending && !n.IsDismissed),
-            "With three genuine conflicts to review, an alert must be raised — that is the entire point of reporting them.");
-    }
-
-    /// <summary>
-    /// #374's own reproduction, run to completion: stable, not growing, across a cold start and two
-    /// reseeds of the same, unchanged file. Before steps 6-7, this was `0 / 22 / 44` — every reseed
-    /// re-staged the same conflicts because a rule that had already resolved something could never be
-    /// recognised as already applied, and a shared Source row could only hold one date.
-    /// </summary>
-    /// <remarks>
-    /// **Corrected 2026-09-04 — the count is 3, not 0, and that is correct, not a residual defect.**
-    /// The developer's own design decision the same day: "every time we don't know what to do with the
-    /// data that means we have a conflict to report." NikhilNamal17's three remaining Mr. Robot/Arrow
-    /// quotes (see <see cref="InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions"/>'s
-    /// own documented exceptions) carry a per-quote year that cannot be told apart from a genuinely new
-    /// season without Series data — a real, permanent ambiguity a curator must resolve, not a bug to
-    /// drive to zero. What actually matters, and what this test asserts, is that the count is *stable*:
-    /// reseeding unchanged content must never re-stage a duplicate Pending action on top of one already
-    /// awaiting review (found live: without the dedup check in `ImportActionPlanner`'s Add-branch, this
-    /// grew `3 → 6 → 9` — the exact accumulation pattern this whole issue exists to fix, just for a
-    /// newly-introduced mechanism rather than the original conflict-rule one).
-    /// <para>
-    /// **Corrected again, same day — 3 became 4.** A quote/title/character case-only difference is now
-    /// its own genuine ambiguity (developer decision: "if the quote, title or character are identical
-    /// except for case then that needs to be reviewed as it could be a correction or an unwanted
-    /// update"), found live when "an unstable result on the second run" (vilaboim's own case-only
-    /// content silently flip-flopping between confirmed-changed and confirmed-unchanged across reseeds)
-    /// turned out to be exactly the kind of proof the developer described: "proof that the rules were
-    /// incomplete or incorrect." NikhilNamal17's own fourth exception ("The Simpsons movie" vs "The
-    /// Simpsons Movie") is the same class of defect, caught by the same fix.
-    /// </para>
-    /// </remarks>
-    [TestMethod]
-    public async Task Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows()
-    {
-        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
-        await db.InitialiseAsync();
-        int cold = await StagedActionCountAsync();
-        int coldStale = await StaleActionCountAsync();
-
-        await db.ReseedAsync();
-        int reseed1 = await StagedActionCountAsync();
-        int reseed1Stale = await StaleActionCountAsync();
-
-        await db.ReseedAsync();
-        int reseed2 = await StagedActionCountAsync();
-        int reseed2Stale = await StaleActionCountAsync();
-
-        Assert.AreEqual(KnownUnresolvedNikhilNamal17QuoteIds.Count, cold, "Every genuine, permanent ambiguity — see KnownUnresolvedNikhilNamal17QuoteIds — is correctly reported as a conflict on cold start");
-        Assert.AreEqual(cold, reseed1, "Reseeding unchanged content must not add anything beyond what is already correctly pending");
-        Assert.AreEqual(cold, reseed2, "A second reseed must not accumulate anything further");
-
-        // #374 — found live (T1, the developer's own run against the real bundled corpus, 2026-09-04):
-        // this test only ever checked Pending, and the real corpus also carries genuine Stale conflicts
-        // (a conflict rule whose recorded snapshot matches only one raw occurrence of an in-file
-        // duplicated quote id — see Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows for
-        // the isolated reproduction). Cold start genuinely does not detect these (the same-batch
-        // collision mechanism compares the file's own two entries against each other, never against a
-        // stored row), so coldStale is not asserted against reseed1Stale here — only that reseed1 does
-        // not keep growing on top of itself, which is what a real reseed measured live: 0 → 4 → 4 → 4.
-        Assert.AreEqual(0, coldStale, "The same-batch collision mechanism resolves the file's own two entries against each other, not against a stored row, so no staleness is detected yet");
-        Assert.IsGreaterThan(0, reseed1Stale, "The real corpus's own Stale conflicts (e.g. the Galadriel quote's date rule) are genuinely detected once a reseed compares each entry against the stored row");
-        Assert.AreEqual(reseed1Stale, reseed2Stale, "A second reseed must not accumulate anything further beyond whatever the first reseed already found");
-    }
-
-    /// <summary>
     /// #374 — found live (T2 Docker, a real full-corpus reseed): the accumulation-prevention check
     /// (<c>Sql.Quotes.SelectHasUnresolvedActionById</c>) was originally gated on <c>dateNeedsReview</c>
     /// alone, the one mechanism it was first written for — leaving step 7's own <c>Blocked</c>
@@ -1569,12 +1467,26 @@ public class DatabaseInitializerTests
     /// #374 — found live (T1, the developer's own run against the real bundled corpus, 2026-09-04):
     /// `Sql.Quotes.SelectHasUnresolvedActionById`'s accumulation-prevention check only recognises
     /// `Pending`/`Blocked`, never `Stale` — so a quote whose conflict rule genuinely cannot resolve it
-    /// (the rule's own recorded incoming snapshot matches a *different* raw occurrence of the same
-    /// in-file-duplicated id than the one actually being compared) stages a fresh `Stale` action on
-    /// every single reseed, unbounded. Measured live against the real corpus: `0 → 4 → 8 → 12`, exactly
-    /// +4 per reseed, while `Pending` itself stayed flat — the exact accumulation class this whole issue
-    /// exists to fix, in the one status this session's own extension of the check never covered.
+    /// stages a fresh `Stale` action on every single reseed, unbounded. Measured live against the real
+    /// corpus: `0 → 4 → 8 → 12`, exactly +4 per reseed, while `Pending` itself stayed flat — the exact
+    /// accumulation class this whole issue exists to fix, in the one status this session's own extension
+    /// of the check never covered.
     /// </summary>
+    /// <remarks>
+    /// **Corrected 2026-09-04, same day — the original fixture stopped reproducing Stale at all.** It
+    /// used two in-file duplicate quotes (an id shared by two raw occurrences differing only in
+    /// `date`) with a `Keep` rule whose own recorded snapshot matched the raw pairing — exactly the
+    /// shape #378 fixed (a Keep/Replace resolution now correctly re-links the quote to the *decided*
+    /// date's own Source variant, not whichever raw occurrence happened to resolve last), so this
+    /// fixture now resolves cleanly on every reseed instead of going Stale. The fixture was changed to a
+    /// rule whose recorded snapshot can never match any real incoming value at all (`"9999"`) — a
+    /// genuinely, permanently unresolvable conflict independent of #378. This also changed cold start's
+    /// own count from 0 to 1: the old fixture's recorded incoming value happened to match one of the two
+    /// real raw occurrences, so only a reseed comparing against a stored row ever saw a mismatch;
+    /// `"9999"` matches neither, so even the same-batch comparison at cold start detects it immediately.
+    /// What this test keeps proving either way: a real Stale conflict doesn't accumulate on repeat
+    /// reseeds — not that this specific fixture goes Stale for a reason #378 has since fixed.
+    /// </remarks>
     [TestMethod]
     public async Task Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows()
     {
@@ -1592,7 +1504,7 @@ public class DatabaseInitializerTests
             {"rules":[{
                 "entityId":"e6411111-1111-4111-8111-111111111111",
                 "existingRecord":{"date":"1990"},
-                "incomingRecord":{"date":"1991"},
+                "incomingRecord":{"date":"9999"},
                 "fields":[{"field":"date","resolution":"keep"}]
             }]}
             """);
@@ -1610,14 +1522,14 @@ public class DatabaseInitializerTests
         await db.ReseedAsync();
         int reseed2 = await StaleActionCountAsync();
 
-        // Cold start genuinely does not detect this: the same-batch collision mechanism (seenQuotes)
-        // compares the two in-file entries against each other, not against a stored row, so the rule's
-        // own staleness check never fires there. A real reseed compares each entry independently against
-        // what actually got stored — this is a one-time, correct transition (matching the real corpus
-        // exactly: cold=0, reseed1=4, then stable), not a bug in its own right. What matters, and what
-        // this test exists to prove, is that reseed1 does not keep growing afterward.
-        Assert.AreEqual(0, cold, "The same-batch collision mechanism resolves the two in-file entries against each other, not against a stored row, so no staleness is detected yet");
-        Assert.IsGreaterThan(0, reseed1, "The stale conflict is genuinely detected once a reseed compares each entry against the stored row");
+        // Unlike the original fixture (whose recorded incoming value matched one of the two real raw
+        // occurrences, so only a reseed comparing against a stored row ever saw a mismatch), "9999" can
+        // never match either raw occurrence — so even the same-batch comparison at cold start already
+        // detects it, and this conflict stays genuinely, permanently Stale on every reseed by
+        // construction. What matters, and what this test exists to prove, is that reseed1 does not
+        // double the count already correctly staged at cold start.
+        Assert.IsGreaterThan(0, cold, "A rule whose recorded incoming snapshot can never match any real incoming value is genuinely Stale from the first pass");
+        Assert.AreEqual(cold, reseed1, "Reseeding unchanged content must not stage a duplicate Stale action on top of the still-unresolved one");
         Assert.AreEqual(reseed1, reseed2, "A second reseed must not accumulate anything further beyond whatever the first reseed already found");
     }
 
@@ -1627,6 +1539,63 @@ public class DatabaseInitializerTests
         await connection.OpenAsync(TestContext.CancellationToken);
         return await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Import_Action WHERE Status = 'Stale';");
+    }
+
+    /// <summary>
+    /// #378: a "Keep" resolution on a Quote's own <c>date</c> field must control which Source variant
+    /// the quote actually links to, not just its reported/serialized field. Found live while verifying
+    /// #374's own conflict-rule mechanism against the real bundled corpus (Auntie Mame's pre-existing
+    /// <c>Keep</c> rule): <c>date</c> is not a genuine <c>Quotinator_Quote</c> column — it is read back
+    /// via a join to whichever <c>Quotinator_Source</c> row the quote's <c>SourceId</c> points at — and
+    /// <c>ImportActionPlanner.ResolveSourceAsync</c> resolves/creates a distinct Source variant per *raw*
+    /// incoming date, independently of what the field-merge later decides. Fixed by
+    /// <c>ReresolveSourceIdForDecidedDate</c>: re-picking the Source variant against the field-merge's
+    /// own decided date before staging <c>MergedFields</c>, rather than leaving whichever variant the
+    /// last-processed in-file occurrence's own raw date happened to resolve.
+    /// </summary>
+    [TestMethod]
+    public async Task Seed_WithADuplicateQuoteKeepRule_QuoteLinksToTheKeptDateNotTheLastOccurrences()
+    {
+        string keepFile = Path.Combine(_tempDir, "keep-rule-source-link.json");
+        File.WriteAllText(keepFile,
+            """
+            {"quotes":[
+                {"id":"e6511111-1111-4111-8111-111111111111","quote":"Life is a banquet, and most poor suckers are starving to death!","originalLanguage":"en","source":"Auntie Mame Test Fixture","date":"1958","character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"e6511111-1111-4111-8111-111111111111","quote":"Life is a banquet, and most poor suckers are starving to death!","originalLanguage":"en","source":"Auntie Mame Test Fixture","date":"2005","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        string ruleFile = Path.Combine(_tempDir, "keep-rule-source-link-rules.json");
+        File.WriteAllText(ruleFile,
+            """
+            {"rules":[{
+                "entityId":"e6511111-1111-4111-8111-111111111111",
+                "existingRecord":{"date":"1958"},
+                "incomingRecord":{"date":"2005"},
+                "fields":[{"field":"date","resolution":"keep"}]
+            }]}
+            """);
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(keepFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
+            ManifestPolicy.HardcodedDefault, "keep-rule-source-link-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        string? linkedSourceDate = await QuoteLinkedSourceDateAsync("e6511111-1111-4111-8111-111111111111");
+
+        Assert.AreEqual("1958", linkedSourceDate,
+            "A 'Keep' resolution on a Quote's date field must control which Source variant the quote " +
+            "links to, not just the reported/serialized field — otherwise the resolution has no real " +
+            "effect and a later reseed compares against the wrong stored value forever.");
+    }
+
+    private async Task<string?> QuoteLinkedSourceDateAsync(string quoteId)
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<string?>(
+            "SELECT s.Date FROM Quotinator_Quote q JOIN Quotinator_Source s ON s.Id = q.SourceId WHERE q.Id = @id;",
+            new { id = quoteId });
     }
 
     /// <summary>
@@ -1843,45 +1812,79 @@ public class DatabaseInitializerTests
     /// <summary>
     /// Every quote id in the real bundled NikhilNamal17 corpus that is expected to stay genuinely
     /// unresolved under Review with the real rule file applied — the single source of truth for this
-    /// number across every test that depends on it
-    /// (<see cref="InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions"/>,
-    /// <see cref="Seed_WithAResolvableFile_LeavesOnlyKnownConflictsPendingAndOneAlert"/>,
-    /// <see cref="Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows"/>), so that updating it
-    /// when the bundled data changes is one edit, not three independently-drifting ones. This is
-    /// unavoidably tied to the real corpus's current content and will need a new entry (or a removed
-    /// one) whenever that content changes — see this field's own history for the pattern (three tv-season
-    /// entries originally, a fourth case-only one added by #374).
+    /// number, consulted by
+    /// <see cref="NikhilNamal17RealCorpusWithCurrentRuleFile_ResolvesCompletelyAndStaysStable"/>, the one
+    /// test in this class allowed to depend on the real bundled corpus. This is unavoidably tied to the
+    /// real corpus's current content and will need a new entry (or a removed one) whenever that content
+    /// changes.
     /// </summary>
-    private static readonly HashSet<string> KnownUnresolvedNikhilNamal17QuoteIds = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "779f3b34-37f6-8b48-864e-42d262129a3d", // Pending: Mr. Robot, disagreeing year
-        "e69951f1-4d01-964d-86d5-13f80f5bfd8a", // Pending: Mr. Robot, disagreeing year
-        "e41d0f7a-a39a-4346-a0dd-ca08efd75724", // Pending: Arrow, disagreeing year
-        // Not "The Simpsons movie" (2007) vs "The Simpsons Movie" (2019): briefly a 4th exception here
-        // while #374's case-sensitivity fix incorrectly covered the quote's own `source` field — that
-        // field is never independently persisted per quote (it's a join to the already-resolved Source
-        // row), so a case-only difference there is routine, harmless upstream-data noise, not a genuine
-        // conflict. With `source` correctly excluded (see `QuoteFieldMerge.CaseSensitiveContentFields`),
-        // this pair cleanly resolves as two same-title, different-date Source variants (step 6's own
-        // mechanism) with no quote-level ambiguity at all.
-    };
+    /// <remarks>
+    /// **Emptied 2026-09-07/08.** The three tv-season entries (two Mr. Robot, one Arrow) that lived here
+    /// were never actually unresolvable — each show's own existing Source variant in the bundled corpus
+    /// is a single blanket date (2015) rather than one variant per season, so a `Custom` rule matching
+    /// each quote's own date to that existing bucket resolves them the same way the movie-date rules do
+    /// (developer directive: get reseed to zero pending now via the existing mechanism; per-season/
+    /// per-episode date precision for these shows is separate future work, once an automated
+    /// quote-enrichment method exists — not a reason to leave a resolvable conflict sitting Pending).
+    /// Left as an empty set, not deleted, so the very next genuine exception this corpus produces has
+    /// an obvious, already-wired place to go.
+    /// </remarks>
+    private static readonly HashSet<string> KnownUnresolvedNikhilNamal17QuoteIds = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The one deliberate exception to this file's own rule that a feature test must use a synthetic
+    /// fixture, never the real bundled corpus (developer directive, 2026-09-07/08): every other test in
+    /// this class proves a specific mechanism works via a made-up scenario built to trigger it, isolated
+    /// from whatever the real corpus happens to contain at any given time. This one test instead answers
+    /// a different, narrower, corpus-specific question — "does the real bundled data, combined with the
+    /// rule file actually shipped today, resolve completely?" — so that a future change to either one
+    /// that reopens a conflict is caught here, not discovered live. It covers cold start, two repeated
+    /// reseeds (the accumulation-prevention mechanism itself is proven synthetically elsewhere — see
+    /// <see cref="Reseed_Repeatedly_WithABlockedCollision_BlockedCountNeverGrows"/>,
+    /// <see cref="Reseed_Repeatedly_WithACaseOnlyPendingModify_PendingCountNeverGrows"/>,
+    /// <see cref="Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows"/> — this test only needs
+    /// to confirm the real corpus doesn't regress against it), and that no review alert fires when
+    /// nothing is left to review. Also the positive counterpart to
+    /// <see cref="Reseed_Repeatedly_LeavesEveryActiveAlertPointingAtALiveBatch"/> (developer, 2026-09-02):
+    /// "we always test positive and negative aspects ... we therefore also need a seeding test that does
+    /// have 0 pending reviews so we have proof of the positive aspect." That negative test's fixture
+    /// deliberately has no rule file, so its batch can never apply — a real state, but on its own it
+    /// proves only that the stuck case stays stuck; this test is the ordinary path, with production's own
+    /// data and rule file.
+    /// </summary>
     [TestMethod]
-    public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions()
+    public async Task NikhilNamal17RealCorpusWithCurrentRuleFile_ResolvesCompletelyAndStaysStable()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
 
-        IReadOnlyList<ImportActionEntity> allActions = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items;
-        List<ImportActionEntity> unresolved = [.. allActions
-            .Where(a => a.Status.Parsed is not (ImportActionStatus.Decided or ImportActionStatus.Applied))
-            .Where(a => !KnownUnresolvedNikhilNamal17QuoteIds.Contains(a.EntityId))];
+        Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
+            "The positive control: the file actually applies, so its quotes are in the database. "
+            + "Without this, 'nothing pending' would also be true of a run that imported nothing at all.");
 
-        Assert.IsEmpty(unresolved,
-            $"Every action must auto-resolve under Review with the real rule file (the known exceptions excepted) — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
+        async Task AssertFullyResolvedAsync(string when)
+        {
+            IReadOnlyList<ImportActionEntity> allActions = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items;
+            List<ImportActionEntity> unresolved = [.. allActions
+                .Where(a => a.Status.Parsed is not (ImportActionStatus.Decided or ImportActionStatus.Applied))
+                .Where(a => !KnownUnresolvedNikhilNamal17QuoteIds.Contains(a.EntityId))];
 
-        Assert.DoesNotContain(a => a.EntityId == "7e53658c-0c3a-6546-8c12-c5e4af23c9f8", allActions,
-            "The Shawshank duplicate is now excluded outright (#219) — it must produce no action at all, not merely an ignored Blocked one");
+            Assert.IsEmpty(unresolved,
+                $"{when}: every action must auto-resolve under Review with the real rule file (the known exceptions excepted) — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
+
+            Assert.DoesNotContain(a => a.EntityId == "7e53658c-0c3a-6546-8c12-c5e4af23c9f8", allActions,
+                "The Shawshank duplicate is now excluded outright (#219) — it must produce no action at all, not merely an ignored Blocked one");
+        }
+
+        await AssertFullyResolvedAsync("cold start");
+        await db.ReseedAsync();
+        await AssertFullyResolvedAsync("first reseed");
+        await db.ReseedAsync();
+        await AssertFullyResolvedAsync("second reseed");
+
+        Assert.IsEmpty((await NotificationsAsync())
+            .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending && !n.IsDismissed),
+            "With nothing genuinely unresolved, no review alert should be raised at all.");
     }
 
     /// <summary>#153: the Galadriel Custom rule (nikhilnamal17-conflict-rules.json) must correct the
@@ -1937,73 +1940,49 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #375: the one quote resolved by character alone would, absent any other issue, keep the
-    /// show-level Source and gain only its speaker.
+    /// #375: a series-capable quote whose own claimed year disagrees with its show's other quotes, with
+    /// no Series data to tell a genuinely new season apart from a simply-wrong year (#374 developer
+    /// decision), is reported as a conflict (`Pending`) rather than silently applied — and its staged
+    /// payload's nearest-Source fallback still attaches to the show-level Source, carrying whatever
+    /// character it already claims, exactly as it would for a quote with no year disagreement at all.
     /// </summary>
     /// <remarks>
-    /// #374 (developer decision, 2026-09-04): this specific quote's own claimed year (2017) disagrees
-    /// with the show's other quotes (2015) — a series-capable Source with no Series data cannot tell
-    /// that apart from a genuinely new season, so it is now correctly reported as a conflict (`Pending`)
-    /// rather than silently applied. The quote is not in `Quotinator_Quote` at all until a curator
-    /// resolves it; this test now asserts the *staged* payload instead of a database row — the nearest
-    /// Source it would attach to, and the character it already carries, are both visible there.
+    /// **Rewritten 2026-09-07/08 to a synthetic fixture.** Originally exercised via three specific real
+    /// NikhilNamal17 quotes (two Mr. Robot, one Arrow) — but a feature test must prove a mechanism via a
+    /// scenario built to trigger it, not via whichever real quotes happen to disagree with their show's
+    /// other quotes on a given day; those three were themselves resolved to zero Pending by #374's rule
+    /// additions in the same session that added this rewrite (see
+    /// <see cref="KnownUnresolvedNikhilNamal17QuoteIds"/>). The one test allowed to depend on the real
+    /// bundled corpus is <see cref="NikhilNamal17RealCorpusWithCurrentRuleFile_ResolvesCompletelyAndStaysStable"/>.
     /// </remarks>
     [TestMethod]
-    public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_VeraQuoteGetsCharacterButKeepsShowLevelSource()
+    public async Task InitialiseAsync_TvQuoteWithDisagreeingYear_StagesPendingButKeepsShowLevelSourceAndCharacter()
     {
-        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
+        string tvFile = Path.Combine(_tempDir, "tv-disagreeing-year.json");
+        File.WriteAllText(tvFile,
+            """
+            {"quotes":[
+                {"id":"e7011111-1111-4111-8111-111111111111","quote":"The first episode's own line.","originalLanguage":"en","source":"Test Show","date":"2015","character":null,"author":null,"type":"tv","genres":[],"translations":{}},
+                {"id":"e7021111-1111-4111-8111-111111111111","quote":"A line from an unattributable, disagreeing year.","originalLanguage":"en","source":"Test Show","date":"2020","character":"Test Character","author":null,"type":"tv","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        SeedBatch batch = new SeedBatch([new SeedFile(tvFile, null)], ManifestPolicy.HardcodedDefault, "tv-disagreeing-year-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        const string quoteId = "e69951f1-4d01-964d-86d5-13f80f5bfd8a";
         ImportActionEntity action = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items
-            .Single(a => a.EntityId.Equals(quoteId, StringComparison.OrdinalIgnoreCase) && a.EntityType == "Quote");
+            .Single(a => a.EntityId.Equals("e7021111-1111-4111-8111-111111111111", StringComparison.OrdinalIgnoreCase) && a.EntityType == "Quote");
 
-        Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, "A disagreeing year must be reported as a conflict, not silently applied");
+        Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, "A disagreeing year with no Series data must be reported as a conflict, not silently applied");
         QuoteActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
-        Assert.AreEqual("Fernando Vera", payload.Fields.Character);
+        Assert.AreEqual("Test Character", payload.Fields.Character, "The character it already claims must still be visible in the staged payload");
 
         using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         string? title = await conn.ExecuteScalarAsync<string?>(
             "SELECT Title FROM Quotinator_Source WHERE Id = @sourceId AND IsDeleted = 0;", new { sourceId = payload.SourceId });
-        Assert.AreEqual("Mr. Robot", title, "Nearest-Source rule: no episode was identifiable, so the staged payload points at the show-level Source.");
-    }
-
-    /// <summary>
-    /// #375: the two quotes step 7 could not attribute to any episode would, absent any other issue,
-    /// keep the ordinary show-level Source — the control proving the five rules above are additive, not
-    /// a change to every Mr. Robot or Arrow quote.
-    /// </summary>
-    /// <remarks>#374: both quotes' own years disagree with their show's other quotes — see
-    /// <see cref="InitialiseAsync_NikhilNamal17WithRealRuleFile_VeraQuoteGetsCharacterButKeepsShowLevelSource"/>'s
-    /// own remarks for why this is now a reported `Pending` conflict, checked via the staged payload
-    /// rather than a database row.</remarks>
-    [TestMethod]
-    public async Task InitialiseAsync_NikhilNamal17WithRealRuleFile_UnattributedQuotesKeepShowLevelSource()
-    {
-        QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
-        await db.InitialiseAsync();
-
-        (string QuoteId, string ExpectedTitle)[] cases =
-        [
-            ("779f3b34-37f6-8b48-864e-42d262129a3d", "Mr. Robot"),
-            ("e41d0f7a-a39a-4346-a0dd-ca08efd75724", "Arrow"),
-        ];
-
-        IReadOnlyList<ImportActionEntity> allActions = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items;
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
-        await conn.OpenAsync(TestContext.CancellationToken);
-
-        foreach ((string quoteId, string expectedTitle) in cases)
-        {
-            ImportActionEntity action = allActions.Single(a => a.EntityId.Equals(quoteId, StringComparison.OrdinalIgnoreCase) && a.EntityType == "Quote");
-            Assert.AreEqual(ImportActionStatus.Pending, action.Status.Parsed, $"Quote '{quoteId}' has no episode-attribution rule and a disagreeing year — reported as a conflict, not silently applied");
-
-            QuoteActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
-            string? title = await conn.ExecuteScalarAsync<string?>(
-                "SELECT Title FROM Quotinator_Source WHERE Id = @sourceId AND IsDeleted = 0;", new { sourceId = payload.SourceId });
-            Assert.AreEqual(expectedTitle, title, $"Quote '{quoteId}' must still point at the show-level Source in its staged payload.");
-        }
+        Assert.AreEqual("Test Show", title, "Nearest-Source rule: no episode was identifiable, so the staged payload points at the show-level Source.");
     }
 
     // ── Seeding ───────────────────────────────────────────────────────────────
@@ -2086,8 +2065,9 @@ public class DatabaseInitializerTests
         // #374: 6, not 0 — a genuinely new season and a wrong per-quote year look identical without
         // Series data, so this is reported as a conflict regardless of DuplicateResolutionPolicy (a
         // fundamentally different ambiguity than the one that policy resolves). AllFilesBatch wires no
-        // rule file, so more of NikhilNamal17's tv quotes hit this than under the curated
-        // NikhilNamal17WithRuleFileBatch fixture (3 — see InitialiseAsync_NikhilNamal17WithRealRuleFile_ProducesNoUnresolvedActions).
+        // rule file at all, so this count is independent of nikhilnamal17-conflict-rules.json's own
+        // content and unaffected by what that file resolves to zero under Review (see
+        // NikhilNamal17RealCorpusWithCurrentRuleFile_ResolvesCompletelyAndStaysStable).
         Assert.AreEqual(6, pending, "Series-capable Sources with no Series data and a disagreeing year are reported as conflicts, independent of policy");
         Assert.AreEqual(0, blocked, "NewestWins never blocks — no Complete rows exist yet to block against");
     }
@@ -2143,10 +2123,10 @@ public class DatabaseInitializerTests
             "And 71 genuinely differ — the cross-file overlap where two source files disagree about the same quote");
         // #374: 0, not 6 — a quote already reported as a Pending conflict by the earlier real seed is
         // recognised as already-known (Sql.Quotes.SelectHasUnresolvedActionById) and never re-staged, even
-        // during a preview — the same dedup that keeps a real reseed from accumulating duplicates
-        // (Reseed_Repeatedly_WithAResolvableFile_PendingCountNeverGrows) applies here too. The six known
-        // tv quotes are therefore omitted from this preview's report entirely, not counted as Pending in
-        // it — there is nothing new to preview about a conflict already on record.
+        // during a preview — the same dedup that keeps a real reseed from accumulating duplicates (see
+        // Reseed_Repeatedly_WithABlockedCollision_BlockedCountNeverGrows and its siblings) applies here
+        // too. The six known tv quotes are therefore omitted from this preview's report entirely, not
+        // counted as Pending in it — there is nothing new to preview about a conflict already on record.
         Assert.AreEqual(0, pending, "An already-known Pending conflict has nothing new to preview and is omitted, not re-reported");
         Assert.AreEqual(838, unchanged + modified + pending,
             "798 unique quotes plus 46 cross-file duplicate occurrences, minus the six already-known tv conflicts this preview omits");
