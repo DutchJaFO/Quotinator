@@ -77,6 +77,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#374](https://github.com/DutchJaFO/Quotinator/issues/374) | A conflict rule cannot tell "already correct" from "cannot apply" | Waiting for release | T1 ✅ T2 ✅ | [374-already-correct-is-not-cannot-apply-plan.md](374-already-correct-is-not-cannot-apply-plan.md) |
 | [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | Waiting for release | T1 ⬜ T2 ✅ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
 | [#378](https://github.com/DutchJaFO/Quotinator/issues/378) | A "Keep"/"Replace" resolution on a Quote's date field never actually takes effect — the linked Source variant silently wins instead | Waiting for release | T1 ✅ T2 ✅ | [378-keep-replace-source-link-plan.md](378-keep-replace-source-link-plan.md) |
+| [#381](https://github.com/DutchJaFO/Quotinator/issues/381) | A cross-file duplicate quote's CharacterId/PersonId silently reverts to null on every reseed | Planning | T1 ⬜ T2 ⬜ | [381-character-personid-toggle-plan.md](381-character-personid-toggle-plan.md) |
 
 ---
 
@@ -120,6 +121,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #375 ─── (none); blocks #374 — Waiting for release
 #374 ─── depends on #375 — Waiting for release
 #378 ─── (none); found live while verifying #374 — Waiting for release
+#381 ─── (none); found live while verifying #374/#378 — Planning, deliberately deferred
 #367 ─── depends on #278, #312; blocks #308 — Waiting for release
 #371 ─── (none) — Planning
 #368 ─── depends on #303, #304 — Planning
@@ -167,10 +169,11 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 34 | **#305** | Planning — independent |
 | 35 | **#306** | Planning — independent |
 | 36 | **#351** | Planning — independent, placed late |
-| 37 | **#352** | Planning — after #349 |
-| 38 | **#353** | Planning — after #352 |
-| 39 | **#360** | Planning — before end-of-milestone migration consolidation |
-| 40 | **#368** | Planning — depends on #303, #304 |
+| 37 | **#381** | Planning — independent, deliberately deferred (found live while verifying #374/#378) |
+| 38 | **#352** | Planning — after #349 |
+| 39 | **#353** | Planning — after #352 |
+| 40 | **#360** | Planning — before end-of-milestone migration consolidation |
+| 41 | **#368** | Planning — depends on #303, #304 |
 
 ---
 
