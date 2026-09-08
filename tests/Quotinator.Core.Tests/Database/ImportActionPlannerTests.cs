@@ -1200,19 +1200,27 @@ public class ImportActionPlannerTests
     }
 
     /// <summary>
-    /// A date variant of an existing Source stores the existing row's title casing, not the raw casing
-    /// the incoming quote happened to use.
+    /// A date variant keeps the incoming spelling rather than being absorbed into the first-seen row's
+    /// casing, so a casing divergence stays visible instead of being silently normalised away.
     /// </summary>
     /// <remarks>
-    /// This is the exact shape the smoke suite's duplicate check reports as a casing failure, and the
-    /// two assertions above prove it is not a matching failure: when the dates agree, a case-only
-    /// difference resolves to the existing row. It is only when the date *also* differs — so a variant
-    /// is legitimately created — that the raw spelling can reach the database and stand beside the
-    /// canonical one. Live example: <c>Back to the future</c> (1958) beside <c>Back to the Future</c>
-    /// (1985), which is one film with one wrong date, presenting as two differently-spelled Sources.
+    /// <para>
+    /// Normalising here was implemented and then reverted the same day. It cleared the smoke suite's
+    /// casing check, but by hiding the disagreement rather than resolving it: whichever spelling
+    /// happened to be stored first would become canonical, so a first-seen <c>the mOvie Title</c> would
+    /// silently swallow every later, correct <c>The Movie Title</c> with nothing left to notice.
+    /// Developer rule, 2026-09-08: <em>casing duplicates need to be explicitly permitted; they should
+    /// not be hidden.</em>
+    /// </para>
+    /// <para>
+    /// Explicit permission is a <c>SourceAliasRule</c> naming the canonical spelling — a reviewed line
+    /// in a file, not a guess made mid-import. Until one exists, both spellings reach the database and
+    /// <c>14-fresh-seed-produces-zero-pending-actions.md</c>'s check B reports them, which is the
+    /// intended outcome rather than a defect.
+    /// </para>
     /// </remarks>
     [TestMethod]
-    public async Task ResolveSourceAsync_DateVariantOfDifferentlyCasedTitle_StoresTheCanonicalCasing()
+    public async Task ResolveSourceAsync_DateVariantOfDifferentlyCasedTitle_KeepsBothSpellingsVisible()
     {
         using SqliteConnection conn = await OpenConnectionAsync();
         string sourceId = Guid.NewGuid().ToString("D");
@@ -1223,8 +1231,43 @@ public class ImportActionPlannerTests
 
         ImportActionEntity variant = actions.Single(a => a.EntityType == ImportActionEntityTypes.Source);
         SourceActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(variant.IncomingValue!)!;
-        Assert.AreEqual("Back to the Future", payload.Title,
-            "A variant of a known title must adopt that title's stored casing — otherwise one film stands in the database under two spellings");
+        Assert.AreEqual("Back to the future", payload.Title,
+            "The incoming spelling must survive — absorbing it into the stored casing would make a wrong first-seen title permanent and invisible");
+        Assert.AreNotEqual(sourceId, variant.EntityId, "A differing date is still a distinct variant");
+    }
+
+    /// <summary>
+    /// An explicitly declared <c>SourceAliasRule</c> is what resolves a casing divergence — the
+    /// permitted path the test above deliberately leaves open.
+    /// </summary>
+    [TestMethod]
+    public async Task ResolveSourceAsync_DifferentlyCasedTitle_WithAliasDeclared_ResolvesToTheCanonicalSpelling()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string sourceId = Guid.NewGuid().ToString("D");
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Back to the Future", type: "Movie", date: "1985");
+        SourceQuoteDto quote = BuildQuote("c8111111-1111-4111-8111-111111111111", source: "Back to the future", date: "1958");
+        SourceAliasLookup aliases = new(
+        [
+            new SourceAliasRule
+            {
+                Title          = "Back to the future",
+                Type           = "movie",
+                CanonicalTitle = "Back to the Future",
+                CanonicalType  = "movie",
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
+
+        Assert.IsEmpty(actions.Where(a =>
+            {
+                if (a.EntityType != ImportActionEntityTypes.Source || a.IncomingValue is null) return false;
+                SourceActionPayloadDto p = System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(a.IncomingValue)!;
+                return p.Title == "Back to the future";
+            }),
+            "With the alias declared, the raw spelling must never reach the database");
     }
 
     [TestMethod]

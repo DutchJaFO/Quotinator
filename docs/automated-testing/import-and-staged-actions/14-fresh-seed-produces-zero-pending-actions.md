@@ -114,18 +114,28 @@ true duplicates (**A** empty), **2** were casing failures (**B**: `Back to the f
 `Back to the Future`, `The Silence of the lambs` beside `The Silence of the Lambs`) and the rest were
 date variants. Eleven rows of mixed signal, where two of them were the real finding.
 
-**Those two were then fixed, and B now returns no rows** (re-measured 2026-09-08 against a rebuilt
-image). The cause was not the alias mechanism: a quote naming an existing title in different casing
-resolves to the existing row correctly *when the dates agree*, which
-`ResolveSourceAsync_QuoteWithDifferentlyCasedTitle_SameDate_ReusesTheExistingSource` proves. It is only
-when the date also differs — so a variant is legitimately created — that the raw spelling reached the
-database and stood beside the canonical one. `ResolveSourceAsync` now adopts the stored title's own
-spelling when creating a variant, asserted by
-`ResolveSourceAsync_DateVariantOfDifferentlyCasedTitle_StoresTheCanonicalCasing`.
+**Those two were then resolved, and B now returns no rows** (re-measured 2026-09-08 against a rebuilt
+image). Not by changing how the importer behaves — by **declaring the canonical spelling**, two new
+entries in `nikhilnamal17-source-aliases.json`.
+
+**A code fix was written first and reverted, and the reason it was wrong is the rule this check now
+enforces.** `ResolveSourceAsync` was made to adopt the stored title's casing when creating a variant.
+That cleared B, but by hiding the disagreement: whichever spelling was stored first would become
+canonical, so a first-seen `the mOvie Title` would silently absorb every later, correct
+`The Movie Title` with nothing left to notice. Developer rule, 2026-09-08: **casing duplicates need to
+be explicitly permitted; they must not be hidden.** The importer therefore keeps the incoming spelling
+(`ResolveSourceAsync_DateVariantOfDifferentlyCasedTitle_KeepsBothSpellingsVisible`), both spellings
+reach the database, this check reports them, and a reviewed `SourceAliasRule` is what resolves it
+(`ResolveSourceAsync_DifferentlyCasedTitle_WithAliasDeclared_ResolvesToTheCanonicalSpelling`).
+
+That is also why the matching itself was never at fault: with agreeing dates a case-only difference
+already resolves to the existing row, proved by
+`ResolveSourceAsync_QuoteWithDifferentlyCasedTitle_SameDate_ReusesTheExistingSource`. Only a
+legitimately-created date variant could carry a second spelling into the database.
 
 **C still lists 11 rows and is expected to**, because a wrong date is a data question, not a code one.
-`Back to the future` (1958) and `The Silence of the Lambs` (1998) are one film each with one wrong
-date, and they now present under a single spelling — visible in C rather than misreported by B.
+`Back to the Future` (`1985,1958`) and `The Silence of the Lambs` (`1991,1998`) are one film each with
+one wrong date — now under a single spelling, visible in C rather than misreported by B.
 
 The container is stopped for the copy, which this step did not do before: a copy taken while the app
 holds the database open can omit rows the WAL has not yet checkpointed, and a *missing* duplicate reads

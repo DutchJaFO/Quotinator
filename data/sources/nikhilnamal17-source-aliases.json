@@ -30,6 +30,8 @@
     { "title": "Star Wars: The Force Awakens", "type": "movie", "canonicalTitle": "Star Wars: Episode VII - The Force Awakens", "canonicalType": "movie" },
     { "title": "Airplane", "type": "movie", "canonicalTitle": "Airplane!", "canonicalType": "movie" },
     { "title": "When Harry Met Sally", "type": "movie", "canonicalTitle": "When Harry Met Sally...", "canonicalType": "movie" },
-    { "title": "Avengers - Age of Ultron", "type": "movie", "canonicalTitle": "Avengers: Age of Ultron", "canonicalType": "movie" }
+    { "title": "Avengers - Age of Ultron", "type": "movie", "canonicalTitle": "Avengers: Age of Ultron", "canonicalType": "movie" },
+    { "title": "Back to the future", "type": "movie", "canonicalTitle": "Back to the Future", "canonicalType": "movie" },
+    { "title": "The Silence of the lambs", "type": "movie", "canonicalTitle": "The Silence of the Lambs", "canonicalType": "movie" }
   ]
 }

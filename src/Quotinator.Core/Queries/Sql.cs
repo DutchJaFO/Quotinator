@@ -469,17 +469,6 @@ internal static class Sql
             $"SELECT {IdClauses.SelectColumn("Id")}, Date, {IdClauses.SelectColumn("SeriesId")}, {IdClauses.SelectColumn("SeasonId")}, CompletenessStatus FROM Quotinator_Source WHERE {TextClauses.Equals("Title", "title")} AND {TextClauses.Equals("Type", "type")} AND IsDeleted = 0;";
 
         /// <summary>
-        /// The stored spelling of a title already known under this case-insensitive natural key, so a
-        /// newly-created date variant adopts it rather than the raw casing the incoming quote used.
-        /// Deliberately its own query rather than a column added to
-        /// <see cref="SelectAllExistingByTitleAndType"/>: that one is consumed positionally as a tuple
-        /// in <c>ImportActionPlanner</c>'s <c>sources[]</c> path, where an extra SELECT column would
-        /// mis-map silently rather than fail to compile.
-        /// </summary>
-        internal static readonly string SelectCanonicalTitleByTitleAndType =
-            $"SELECT Title FROM Quotinator_Source WHERE {TextClauses.Equals("Title", "title")} AND {TextClauses.Equals("Type", "type")} AND IsDeleted = 0 ORDER BY DateCreated LIMIT 1;";
-
-        /// <summary>
         /// #162's id-first lookup for an explicit <c>sources[]</c> entry — a row already migrated to
         /// the explicit-id model. Distinct from <see cref="SelectIdByTitleAndType"/>'s natural-key
         /// fallback. SeriesId added by #180.

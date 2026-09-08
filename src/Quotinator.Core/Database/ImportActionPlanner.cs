@@ -842,19 +842,14 @@ internal static class ImportActionPlanner
         // id every existing Source already has, even when this quote itself carries a date — the
         // overwhelmingly common case, and the one every pre-#374 id must keep resolving to. Only a
         // second-or-later variant needs the date folded into its id, to avoid colliding with the first.
-        // A variant of a title already stored adopts that title's own spelling. The natural key is
-        // case-insensitive, so the raw casing carries no information — but it does reach the database
-        // on this path, and one film then stands under two spellings, which the smoke suite's
-        // duplicate check reports as an alias failure it is not.
-        string variantTitle = variants.Count == 0
-            ? q.Source
-            : await connection.ExecuteScalarAsync<string?>(
-                  Sql.Sources.SelectCanonicalTitleByTitleAndType, new { title = q.Source, type = typeStr }, transaction)
-              ?? q.Source;
-
+        // The raw spelling is kept deliberately. Normalising it onto the first-seen row's casing was
+        // tried and reverted (2026-09-08): it made a casing divergence invisible, so a first-seen
+        // "the mOvie Title" would silently become canonical and every later, correct spelling would be
+        // absorbed into it with nothing to notice. A casing duplicate must be explicitly permitted —
+        // declared as a SourceAliasRule naming the canonical spelling — never hidden by the importer.
         string stableId = variants.Count == 0
-            ? EntityIdentity.SourceId(variantTitle, typeStr)
-            : EntityIdentity.SourceId(variantTitle, typeStr, q.Date);
+            ? EntityIdentity.SourceId(q.Source, typeStr)
+            : EntityIdentity.SourceId(q.Source, typeStr, q.Date);
         variants.Add(new SourceVariant(stableId, q.Date, null, null, SafeValue<CompletenessStatus?>.Empty));
         stagedVariantIds.Add(stableId);
         index[key] = stableId;
@@ -865,7 +860,7 @@ internal static class ImportActionPlanner
             ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Add.ToString(), ImportActionKind.Add),
             EntityType = ImportActionEntityTypes.Source,
             EntityId = stableId,
-            IncomingValue = JsonSerializer.Serialize(new SourceActionPayloadDto(variantTitle, typeStr, q.Date)),
+            IncomingValue = JsonSerializer.Serialize(new SourceActionPayloadDto(q.Source, typeStr, q.Date)),
             Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Decided.ToString(), ImportActionStatus.Decided),
             DetectedAt = now,
         });
