@@ -177,6 +177,91 @@ public class ReseedFileAppliedMetadataTests
             "Same bare file name, same empty breakdown, different directory — two files, so two confirmations.");
     }
 
+    /// <summary>
+    /// #377 row 17. The identity tuple carried only <c>Added:Modified</c>, so a reseed whose result
+    /// differed <em>only</em> in an outcome that wrote nothing was suppressed as a duplicate.
+    /// <para>
+    /// Developer decision, 2026-09-08, overruling the assistant's recommendation to keep these out:
+    /// "knowing that items have not changed and why they have not changed is valuable information
+    /// (period)." So every outcome bucket joins the identity, not just the new one — leaving
+    /// <c>Unchanged</c> and <c>Skipped</c> out would keep three of five in on no stated principle.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public void Identity_DiffersByAnOutcomeThatWroteNothing()
+    {
+        ReseedFileAppliedMetadataDto threeUnchanged = FullPayload("a.json", unchanged: 3, resolvedToExisting: 0, skipped: 0);
+        ReseedFileAppliedMetadataDto twoUnchanged   = FullPayload("a.json", unchanged: 2, resolvedToExisting: 0, skipped: 0);
+        ReseedFileAppliedMetadataDto oneResolved    = FullPayload("a.json", unchanged: 3, resolvedToExisting: 1, skipped: 0);
+        ReseedFileAppliedMetadataDto oneSkipped     = FullPayload("a.json", unchanged: 3, resolvedToExisting: 0, skipped: 1);
+
+        Assert.IsFalse(threeUnchanged.IsSameNotificationAs(twoUnchanged),
+            "A different Unchanged count is a different result — and knowing what did not change is the point of reporting it.");
+        Assert.IsFalse(threeUnchanged.IsSameNotificationAs(oneResolved),
+            "A row whose resolution settled back onto what was stored is a distinct outcome from one that never differed.");
+        Assert.IsFalse(threeUnchanged.IsSameNotificationAs(oneSkipped),
+            "and so is a difference discarded by policy (#374).");
+    }
+
+    /// <summary>
+    /// #377 row 17, negative half. An identity that never matches is not a fix — it re-announces a
+    /// confirmation the operator already dismissed on every single reseed, which is the defect #302
+    /// was filed for in the first place.
+    /// </summary>
+    [TestMethod]
+    public void Identity_StillSuppressesAnIdenticalBreakdown()
+    {
+        ReseedFileAppliedMetadataDto first  = FullPayload("a.json", unchanged: 3, resolvedToExisting: 1, skipped: 2);
+        ReseedFileAppliedMetadataDto second = FullPayload("a.json", unchanged: 3, resolvedToExisting: 1, skipped: 2);
+
+        Assert.IsTrue(first.IsSameNotificationAs(second),
+            "Reseeding twice with nothing changed in between must still produce one confirmation, not two.");
+    }
+
+    /// <summary>
+    /// #377 row 18: #302's confirmations are already persisted on the developer's own database, written
+    /// before this field existed. A payload change that cannot read them back is a regression in reading
+    /// history — and because the identity tuple now includes the new bucket, an unreadable old row would
+    /// also re-announce a confirmation that was already dismissed.
+    /// </summary>
+    [TestMethod]
+    public void OlderStoredPayload_WithoutTheNewBucket_ReadsAsZeroRatherThanThrowing()
+    {
+        const string storedBeforeThisIssue = """
+            {"kind":"ReseedFileApplied","releaseState":"NotApplicable","fileName":"a.json","origin":"System",
+             "counts":[{"entityType":"Quote","incoming":10,"added":4,"modified":0,"unchanged":6,"skipped":0}]}
+            """;
+
+        NotificationMetadataDto? read = NotificationMetadataKinds.TryDeserialize(
+            NotificationMetadataKind.ReseedFileApplied, storedBeforeThisIssue);
+
+        Assert.IsNotNull(read, "An older payload must still deserialize, not come back null.");
+        ReseedFileAppliedMetadataDto payload = (ReseedFileAppliedMetadataDto)read;
+        Assert.AreEqual(0, payload.Counts[0].ResolvedToExisting, "An absent count reads as zero.");
+        Assert.AreEqual(6, payload.Counts[0].Unchanged, "and the counts it does carry survive intact.");
+    }
+
+    private static ReseedFileAppliedMetadataDto FullPayload(
+        string fileName, int unchanged, int resolvedToExisting, int skipped) => new()
+    {
+        FileName = fileName,
+        Origin   = FileResourceOrigin.System,
+        Counts   =
+        [
+            new ReseedEntityCountDto
+            {
+                EntityType = "Quote",
+                Incoming   = 10,
+                Added      = 4,
+                Modified   = 0,
+                Unchanged  = unchanged,
+                Skipped    = skipped,
+                ResolvedToExisting = resolvedToExisting,
+            },
+        ],
+        ReleaseState = NotificationReleaseState.NotApplicable,
+    };
+
     private static ReseedFileAppliedMetadataDto Payload(string fileName, params (string Type, int Added, int Modified)[] counts) =>
         Payload(fileName, FileResourceOrigin.System, counts);
 

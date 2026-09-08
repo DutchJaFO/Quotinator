@@ -238,6 +238,13 @@ public class OpenApiSpecEndpointTests
                 "A description listing what the report returns must list the unchanged count too.");
             Assert.Contains("incoming", description, StringComparison.OrdinalIgnoreCase,
                 "…and how many items arrived, which is what the outcome counts are measured against.");
+            // #377 row 20, positive half: the new bucket joins the hand-written enumeration.
+            Assert.Contains("resolvedToExisting", description, StringComparison.OrdinalIgnoreCase,
+                "…and rows whose resolution settled back onto what was stored, which is a distinct outcome from both.");
+            // #377 row 20, negative half: the counts already documented must survive the addition —
+            // a description rewritten to name only the new bucket would pass the assertion above.
+            Assert.Contains("modified", description, StringComparison.OrdinalIgnoreCase,
+                "…without dropping the count that reports real writes.");
         }
     }
 

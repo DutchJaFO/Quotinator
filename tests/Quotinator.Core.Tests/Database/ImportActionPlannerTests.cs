@@ -548,6 +548,35 @@ public class ImportActionPlannerTests
     }
 
     /// <summary>
+    /// #377 / #381 independence control. A quote re-stated without its character is *not* a no-op, even
+    /// though its merged <em>fields</em> keep the character name: the merged payload's `CharacterId` is
+    /// computed from the incoming side and comes back null, so stored and resolved differ and a real
+    /// write happens (the link is dropped — [#381](https://github.com/DutchJaFO/Quotinator/issues/381)).
+    /// <para>
+    /// This matters beyond the fixture that found it: if #377's detection swallowed this row it would
+    /// classify it terminal, stop applying it, and thereby <em>mask</em> an open defect rather than
+    /// leave it visible. Asserting it here is what makes "#377 does not depend on #381" a checked claim
+    /// instead of a reasoned one. Green today and must stay green.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_IncomingOmitsTheCharacterLink_IsNotAResolvedToExistingNoOp()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "77f11111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteWithCharacterAsync(conn, id, quoteText: "Original text", characterName: "Rick Blaine");
+
+        SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "Original text", character: null);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreNotEqual(ImportActionKind.ResolvedToExisting, quoteAction.ActionType.Parsed,
+            "The resolved payload drops CharacterId, so this row genuinely changes — reclassifying it would hide #381 behind #377's fix");
+    }
+
+    /// <summary>
     /// #377 row 8: a Skip-policy Modify resolves to the existing values by construction, so a naive
     /// "merged equals existing" test swallows it — erasing #374's distinction that under Skip a real
     /// difference arrived and was deliberately discarded.

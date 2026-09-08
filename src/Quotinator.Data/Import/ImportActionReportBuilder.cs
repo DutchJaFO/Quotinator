@@ -49,6 +49,10 @@ public static class ImportActionReportBuilder
             {
                 Incoming  = kv.Value.Incoming,
                 Unchanged = kv.Value.Unchanged,
+                // #377: signature only at this point — the switch above has no arm for the new kind
+                // yet, so it still falls through to `_ => counts` and the Incoming identity is what
+                // reports that. Wired in step 4.
+                ResolvedToExisting = 0,
                 New       = kv.Value.New,
                 Modified  = kv.Value.Modified,
                 Blocked   = kv.Value.Blocked,

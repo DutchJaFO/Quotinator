@@ -120,6 +120,40 @@ public class ImportActionReportBuilderTests
         Assert.AreEqual(0, counts.Modified, "Reporting it as modified is the defect this issue exists for.");
     }
 
+    // ── #377: a resolution that wrote nothing is its own outcome, not a modification ───────────────
+
+    /// <summary>
+    /// #377 row 10, positive half: an action whose resolution settled on the stored values is counted
+    /// in its own bucket, never in <c>Modified</c> — which claims a write that never happened.
+    /// </summary>
+    [TestMethod]
+    public void Build_ResolvedToExistingApplied_CountsInItsOwnBucket()
+    {
+        var report = ImportActionReportBuilder.Build("file.json",
+            [Action("Quote", ImportActionKind.ResolvedToExisting, ImportActionStatus.Applied)]);
+
+        var counts = report.EntityTypes["Quote"];
+        Assert.AreEqual(1, counts.ResolvedToExisting);
+        Assert.AreEqual(0, counts.Modified, "Counting it as modified is the defect this issue exists for.");
+        Assert.AreEqual(0, counts.Unchanged, "and it is not Unchanged either — the file and the database did disagree.");
+        Assert.AreEqual(0, counts.New);
+    }
+
+    /// <summary>
+    /// #377 row 10, negative half. Without it a builder routing every outcome into the new bucket
+    /// satisfies the positive perfectly while erasing the count that reports real work.
+    /// </summary>
+    [TestMethod]
+    public void Build_GenuineModify_StillCountsAsModified()
+    {
+        var report = ImportActionReportBuilder.Build("file.json",
+            [Action("Quote", ImportActionKind.Modify, ImportActionStatus.Applied)]);
+
+        var counts = report.EntityTypes["Quote"];
+        Assert.AreEqual(1, counts.Modified);
+        Assert.AreEqual(0, counts.ResolvedToExisting);
+    }
+
     /// <summary>
     /// #373: `Incoming` is every action for the entity type, so it must equal the sum of the outcome
     /// buckets. That identity is the point — the builder has two `_ => counts` fall-through arms that
@@ -131,19 +165,21 @@ public class ImportActionReportBuilderTests
     {
         var report = ImportActionReportBuilder.Build("file.json",
         [
-            Action("Quote", ImportActionKind.Add,       ImportActionStatus.Decided),
-            Action("Quote", ImportActionKind.Modify,    ImportActionStatus.Applied),
-            Action("Quote", ImportActionKind.Unchanged, ImportActionStatus.Applied),
-            Action("Quote", ImportActionKind.Modify,    ImportActionStatus.Pending),
-            Action("Quote", ImportActionKind.Modify,    ImportActionStatus.Blocked),
-            Action("Quote", ImportActionKind.Modify,    ImportActionStatus.Discarded),
-            Action("Quote", ImportActionKind.Add,       ImportActionStatus.Stale),
+            Action("Quote", ImportActionKind.Add,                ImportActionStatus.Decided),
+            Action("Quote", ImportActionKind.Modify,             ImportActionStatus.Applied),
+            Action("Quote", ImportActionKind.Unchanged,          ImportActionStatus.Applied),
+            // #377: the new kind joins the identity, which is what catches it matching no arm.
+            Action("Quote", ImportActionKind.ResolvedToExisting, ImportActionStatus.Applied),
+            Action("Quote", ImportActionKind.Modify,             ImportActionStatus.Pending),
+            Action("Quote", ImportActionKind.Modify,             ImportActionStatus.Blocked),
+            Action("Quote", ImportActionKind.Modify,             ImportActionStatus.Discarded),
+            Action("Quote", ImportActionKind.Add,                ImportActionStatus.Stale),
         ]);
 
         var counts = report.EntityTypes["Quote"];
-        Assert.AreEqual(7, counts.Incoming, "Seven actions arrived for this entity type.");
+        Assert.AreEqual(8, counts.Incoming, "Eight actions arrived for this entity type.");
         Assert.AreEqual(
-            counts.New + counts.Modified + counts.Unchanged + counts.Blocked + counts.Discarded + counts.Pending + counts.Stale,
+            counts.New + counts.Modified + counts.Unchanged + counts.ResolvedToExisting + counts.Blocked + counts.Discarded + counts.Pending + counts.Stale,
             counts.Incoming,
             "Every incoming action lands in exactly one bucket. A shortfall means the builder silently dropped one.");
     }

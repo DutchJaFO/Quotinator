@@ -55,6 +55,16 @@ public sealed class ReseedEntityCountDto
     public int Skipped { get; init; }
 
     /// <summary>
+    /// How many arrived with a real field difference whose <em>resolution</em> settled on the values
+    /// already stored, so nothing was written differently (#377). Distinct from <see cref="Unchanged"/>
+    /// (the file and the database agreed to begin with), from <see cref="Modified"/> (a write actually
+    /// happened) and from <see cref="Skipped"/> (a difference discarded by policy rather than resolved
+    /// away).
+    /// </summary>
+    [JsonPropertyName("resolvedToExisting")]
+    public int ResolvedToExisting { get; init; }
+
+    /// <summary>
     /// How many were held because the stored row is marked Complete and the import would change it
     /// (#373).
     /// </summary>

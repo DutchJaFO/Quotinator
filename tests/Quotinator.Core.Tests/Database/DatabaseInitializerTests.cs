@@ -527,7 +527,7 @@ public class DatabaseInitializerTests
             {
                 ["Quote"] = new EntityTypeActionCounts
                 {
-                    Incoming = 5, New = 2, Unchanged = 3, Modified = 0,
+                    Incoming = 8, New = 2, Unchanged = 3, ResolvedToExisting = 3, Modified = 0,
                     Blocked = 0, Discarded = 0, Pending = 0, Stale = 0,
                 },
             },
@@ -535,9 +535,15 @@ public class DatabaseInitializerTests
 
         string line = QuotinatorDatabaseInitializer.FormatReport(report);
 
-        Assert.Contains("incoming=5", line, "The line must say what arrived, not only what became of it.");
+        Assert.Contains("incoming=8", line, "The line must say what arrived, not only what became of it.");
         Assert.Contains("unchanged=3", line, "Three rows were already correct — omitting that is the defect.");
         Assert.Contains("new=2", line);
+        // #377 row 12, positive half: the hand-written line is exactly the shape that omits a count
+        // added later, which is why it is asserted rather than read.
+        Assert.Contains("resolvedToExisting=3", line, "Three rows resolved back onto what was stored — a count that exists but is never printed reports nothing.");
+        // #377 row 12, negative half: the counts that were already there must survive the addition.
+        Assert.Contains("modified=0", line, "and the pre-existing counts still appear with their own values");
+        Assert.Contains("stale=0", line);
     }
 
     /// <summary>
@@ -1218,6 +1224,61 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(before.DateModified, after.DateModified, "Nothing was written, so nothing was modified at");
         Assert.AreEqual(before.ImportBatchId, after.ImportBatchId, "and the row still belongs to the batch that actually wrote it");
+    }
+
+    /// <summary>The RecordCount of the most recently applied batch — what a reseed claims it wrote.</summary>
+    private async Task<int> LatestBatchRecordCountAsync()
+    {
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        return await conn.ExecuteScalarAsync<int>(
+            "SELECT RecordCount FROM Import_Batch WHERE AppliedAt IS NOT NULL ORDER BY AppliedAt DESC, DateCreated DESC LIMIT 1;");
+    }
+
+    /// <summary>
+    /// #377 row 13, positive half: <c>RecordCount</c> counts writes, and a resolution that settled on
+    /// the stored values is not one (<c>QuotinatorDatabaseInitializer</c>'s own <c>updated</c> tally).
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_NoOpModify_IsNotCountedInRecordCount()
+    {
+        string id = "77e55555-5555-4555-8555-555555555555";
+        QuotinatorDatabaseInitializer db = await SeedThenRestateWithoutGenresAsync(id, "noop-record-count.json");
+
+        await db.ReseedAsync();
+
+        Assert.AreEqual(0, await LatestBatchRecordCountAsync(),
+            "Nothing was added and nothing was written differently, so the batch wrote no records");
+    }
+
+    /// <summary>
+    /// #377 row 13, negative half — a RecordCount stuck at zero would pass the positive half while
+    /// under-reporting every genuine reseed.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_GenuineModify_IsStillCountedInRecordCount()
+    {
+        string id = "77e66666-6666-4666-8666-666666666666";
+        string quoteFile = Path.Combine(_tempDir, "genuine-record-count.json");
+        File.WriteAllText(quoteFile,
+            $$$"""
+            {"quotes":[{"id":"{{{id}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
+            """);
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
+            ManifestPolicy.HardcodedDefault, "genuine-record-count-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        File.WriteAllText(quoteFile,
+            $$$"""
+            {"quotes":[{"id":"{{{id}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":["drama"],"translations":{}}]}
+            """);
+        await db.ReseedAsync();
+
+        Assert.AreEqual(1, await LatestBatchRecordCountAsync(),
+            "Filling an empty genres list is a real write and must still be counted");
     }
 
     private async Task<(string? DateModified, string? ImportBatchId)> QuoteStampAsync(string id)

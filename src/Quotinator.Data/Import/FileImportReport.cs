@@ -35,6 +35,14 @@ public sealed class EntityTypeActionCounts
     /// </summary>
     public required int Unchanged { get; init; }
 
+    /// <summary>
+    /// Actions whose fields differed from what arrived but whose resolution settled on the values
+    /// already stored, so nothing was written differently (#377). Distinct from <see cref="Unchanged"/>,
+    /// where the file and the database agreed in the first place, and from <see cref="Modified"/>,
+    /// which claims a write that never happened.
+    /// </summary>
+    public required int ResolvedToExisting { get; init; }
+
     /// <summary>Modify actions that resolved cleanly.</summary>
     public required int Modified { get; init; }
 
