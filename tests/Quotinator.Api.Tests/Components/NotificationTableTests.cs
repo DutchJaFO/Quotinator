@@ -594,6 +594,46 @@ public class NotificationTableTests
     }
 
     /// <summary>
+    /// #378 (developer, 2026-09-08): the payload has always carried `Unchanged` (#373), and the summary
+    /// sentence already states its total — the table just never showed it per entity type, hiding real
+    /// information a curator reading the detail popup for a "reseeded cleanly" file would otherwise have
+    /// to take on faith. Purely a display change: no new computation, `Unchanged` was already there.
+    /// </summary>
+    [TestMethod]
+    public void UnchangedColumn_ShowsTheActualCount()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","added":5,"modified":0,"unchanged":82}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.Contains("Unchanged", detail.Headers, "The table must have an Unchanged column heading.");
+        Assert.Contains("82", detail.Rows[0], "The unchanged count must appear in the row, not just the summary sentence's total.");
+    }
+
+    /// <summary>
+    /// #378: before this fix, a row with nothing added, modified, or skipped — everything already
+    /// matched — was dropped entirely by the same "states nothing" filter #374 already relaxed for
+    /// Skipped. Now that Unchanged is a real column, "0 0 0 N" states something (N items already
+    /// matched), so the row must render rather than vanish.
+    /// </summary>
+    [TestMethod]
+    public void UnchangedOnlyRow_NowRenders()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Source","added":0,"modified":0,"unchanged":38}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.IsNotEmpty(detail.Rows, "An unchanged-only row must not be dropped from the table.");
+        Assert.Contains("38", detail.Rows[0], "The unchanged count must appear somewhere in the row.");
+    }
+
+    /// <summary>
     /// Negative case for the row above: a row whose payload cannot be read still renders. Rows written
     /// by an older build, or with metadata this build does not recognise, must degrade to the body
     /// rather than throwing a whole page away.

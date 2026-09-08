@@ -154,21 +154,25 @@ public partial class NotificationTable
                 [text?.NotificationsDetailEntityColumn ?? "Entity",
                  text?.NotificationsDetailAddedColumn  ?? "Added",
                  text?.NotificationsDetailUpdatedColumn ?? "Updated",
-                 text?.NotificationsDetailSkippedColumn ?? "Skipped"],
-                // #373: the payload now also carries Incoming and Unchanged, and keeps them — it is the
-                // complete record the API, the log and any audit read. This table stays a view of what
-                // *changed*, so a row that only arrived and matched is omitted rather than rendered as
-                // "0  0  0", which states nothing and reads as a fault. The body carries those totals.
-                // #374: Skipped counts as "changed" for this filter too — a row a Skip policy kept as-is
-                // despite a real incoming difference is exactly the kind of outcome this table exists to
-                // surface, not one to drop silently the way the underlying confirmation used to.
+                 text?.NotificationsDetailSkippedColumn ?? "Skipped",
+                 text?.NotificationsDetailUnchangedColumn ?? "Unchanged"],
+                // #373: the payload carries Incoming and Unchanged alongside Added/Modified/Skipped — the
+                // complete record the API, the log and any audit read.
+                // #378: Unchanged is now its own column (developer, 2026-09-08: the summary sentence
+                // already states it, so showing it here is a display change, not a new computation) — a
+                // row with only Unchanged now renders as real information ("N item(s) already matched"),
+                // not the "states nothing" all-zero row #373 originally filtered out, so every entity type
+                // with any incoming rows is shown; per ReseedEntityCountDto's own invariant
+                // (Incoming == Added + Modified + Unchanged + Skipped), a row is only ever excluded here
+                // when it had no incoming rows to report on at all.
                 [.. applied.Counts
-                    .Where(c => c.Added > 0 || c.Modified > 0 || c.Skipped > 0)
+                    .Where(c => c.Added > 0 || c.Modified > 0 || c.Skipped > 0 || c.Unchanged > 0)
                     .Select(IReadOnlyList<string> (c) =>
                     [c.EntityType,
                      c.Added.ToString(CultureInfo.CurrentCulture),
                      c.Modified.ToString(CultureInfo.CurrentCulture),
-                     c.Skipped.ToString(CultureInfo.CurrentCulture)])]),
+                     c.Skipped.ToString(CultureInfo.CurrentCulture),
+                     c.Unchanged.ToString(CultureInfo.CurrentCulture)])]),
 
             ImportReviewPendingMetadataDto review => new PayloadTable(
                 [text?.NotificationsDetailStatusColumn ?? "Status",
