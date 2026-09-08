@@ -138,7 +138,7 @@ row can therefore be Blocked over a field a rule was about to resolve away.
 
 Decision B keeps this out of #377: step 3 computes a *second*, post-resolution field set for its own
 no-op test and leaves `ShouldBlock`'s existing input untouched, so this issue changes no blocking
-behaviour at all. Step 8 files the defect as its own issue.
+behaviour at all. Filed as [#382](https://github.com/DutchJaFO/Quotinator/issues/382).
 
 ### Nothing has to be fixed before this issue can run
 
@@ -555,7 +555,16 @@ from the code that motivated it, per `process.md`'s own rule on that split.
 
 ### 8. File the `ShouldBlock` ordering defect, and correct #377's impact paragraph
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, 2026-09-09 — filed as
+[#382](https://github.com/DutchJaFO/Quotinator/issues/382) (`bug`, Notification system), and the
+measurement corrections posted as a comment on #377 rather than as a body edit, per decision C.
+
+**This step should not have existed.** `process.md` requires a defect found during a milestone session
+to be filed *immediately, while the context is fresh* — it makes no exception for one already written
+up in another issue's plan. Scheduling it as this plan's eighth step left a real `main` defect living
+only as prose inside #377's plan doc for the whole of steps 1–7, and left decision B's "filed
+separately" pointing at nothing. Recorded here rather than quietly corrected, because the rule was read
+and then not followed.
 
 **Owns row 21.** Per decisions B and C. The new issue covers the pre-rule field set feeding
 `CompletenessGuard.ShouldBlock` at `:445`, `:1115`, `:1271`, `:1791` and `:1977` — with Season named as
@@ -643,7 +652,7 @@ counted as `Modified`", which a planner that classified *everything* as a no-op 
 | 18 | ✅ | A confirmation written before this issue still compares and still renders | Unit test | `NotificationTableTests` plus the dedupe comparison. **Positive:** a stored payload with no such field reads it as `0`. **Negative:** it renders rather than throwing. #302's confirmations are already persisted on the developer's own database; a payload change that cannot read them is a regression in reading history |
 | 19 | ✅ | The new message text exists in all three locales | Unit test | `TranslationCompletenessTests` (existing). **Positive:** the new key resolves in `en-GB`, `nl` and `de`. **Negative:** the test still fails on a key deliberately emptied in one file — it catches missing *and* empty, and only the second half proves it |
 | 20 | ✅ | The documented breakdown matches what is returned | Unit test | assertion over `docs/api-endpoints.md` and the endpoint `[Description]` text — #373's row 20, extended. **Positive:** the new bucket is named in both. **Negative:** the assertion still fails against a description listing the old set, which is what #373 recorded its selector being wrong about twice |
-| 21 | ❌ | The `ShouldBlock` ordering defect is filed with a label and a milestone | Issue | the new issue exists and is linked from this plan's Description — decision B |
+| 21 | ✅ | The `ShouldBlock` ordering defect is filed with a label and a milestone | Issue | the new issue exists and is linked from this plan's Description — decision B |
 | 22 | ❌ | The bundled corpus reveals a no-op nobody has accounted for | Automated (T2) | `14-fresh-seed-produces-zero-pending-actions.md`, extended per step 9 — the suite's external-data sentinel and, per `docs/testing-policy.md`, the only place allowed to read `data/sources/` at run time. **Positive:** the known no-op population is present, non-zero, and names the entity types it covers. **Negative:** undeclared no-ops = 0 — asserted, not listed, following that document's own step 4C. Without the positive half a build that broke the import outright and produced no actions at all would pass |
 | 23 | ❌ | That sentinel assertion goes red before it goes green | Canary run | recorded in `14-…`'s own *Canary* section, run against a pre-fix image where the rows are still `Modify` |
 | 24 | ❌ | The confirmation behaviour holds end to end | Automated (T2) | `11-clean-reseed-confirmation.md`, extended with a no-op assertion |
