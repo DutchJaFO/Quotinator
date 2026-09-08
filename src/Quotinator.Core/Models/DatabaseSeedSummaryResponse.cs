@@ -23,6 +23,9 @@ public sealed class DatabaseSeedSummaryResponse
     /// <summary>Row count in the <c>Series</c> table after the operation completed.</summary>
     public required int Series { get; init; }
 
+    /// <summary>Row count in the <c>Season</c> table after the operation completed.</summary>
+    public required int Seasons { get; init; }
+
     /// <summary>Row count in the <c>Universes</c> table after the operation completed.</summary>
     public required int Universes { get; init; }
 

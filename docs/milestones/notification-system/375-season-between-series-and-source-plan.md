@@ -1,6 +1,7 @@
 # #375 — A quote from a multi-season TV series cannot say which season it is from
 
-**Status:** Waiting for release
+**Status:** In progress (step 12) — steps 1–11 done; T1 run 2026-09-08 found Season absent from every
+statistics surface and silently skipped in the import report, reopening this issue
 **GitHub issue:** #375
 **Tiers required:** T1, T2
 **Depends on:** nothing
@@ -541,6 +542,47 @@ the 43 files — and a full solution rebuild plus test run (0 warnings, every pr
 conversion touched live logic files (`ImportActionPlanner.cs`, `SqliteQuoteImportService.cs`) rather
 than only test code.
 
+### 12. Season reports itself everywhere the other nine entities do
+
+**Status:** ✅ Statistics surfaces done, 2026-09-08. Import-report half is #373's silent-skip fix —
+see that plan's step 10; this issue is not closable until both land.
+
+**Found by T1, not by any test** (developer's own run, 2026-09-08). The reseed reported
+`Season[incoming=3 new=3 …]` and the database held three Season rows, while `[Database - Stats]` and
+the ready banner listed nine entity types with no seasons among them. `Sql.Season.CountActive` already
+existed and was never called — the query was written by step 3 and never wired to a consumer.
+
+The developer's rule, stated when this was raised: *we always log all details in notifications and logs
+when adding features like this.* Season is a first-class masterdata entity with its own table,
+endpoints and count query; nothing justified it being the one entity absent from the count surfaces.
+
+Wired into all five, `SeasonCount` sitting between Series and Universe everywhere so the ordering
+matches the entity hierarchy (`Universe → Series → Season → Source`) already used by the import report:
+
+| Surface | Change |
+|---|---|
+| `IDatabaseInitializer` / `DatabaseInitializer` | new `SeasonCount` property |
+| `QuotinatorDatabaseInitializer.LogDatabaseStatsAsync` | populates it from the pre-existing `Sql.Season.CountActive` |
+| `Quotinator.Core`'s `LogDatabaseStats` | `{Seasons} seasons` in the `[Database - Stats]` line |
+| `Quotinator.Api`'s `LogReadyBanner` + `StartupSummaryLogger` | `{SeasonCount} seasons` in the ready banner |
+| `Program.cs`'s `/version` | `seasons` in the `database` object |
+| `DatabaseSeedSummaryResponse` + both `AdminEndpoints` sites | `Seasons` on the reseed/reset response |
+
+**The existing guard did not catch this, and that is the more important finding.**
+`VersionEndpointTests.GetVersion_DatabaseStats_IncludesEveryEntityTypeCount` carried a summary claiming
+it asserts "every entity-type count `IDatabaseInitializer` exposes" while its body checked a
+hand-typed array of ten field names. It is the same defect one layer down that CLAUDE.md's ADR 020 note
+warns about — "a maintained list would reproduce the same manual step one layer down" — and it is why
+#221's five counts reached production unpublished and #375's Season then repeated it verbatim.
+
+Replaced with a two-test pair so the recurrence is structurally impossible rather than remembered:
+`GetVersion_DatabaseStats_MapCoversEveryCountProperty` reflects over `IDatabaseInitializer`'s own
+`*Count` properties and fails if the field map has drifted in either direction, and
+`..._IncludesEveryEntityTypeCount` then drives the live `/version` response from that map. A new entity
+now cannot be added without both tests failing until it is published. The irregular pluralisation
+(`PeopleCount → people`, `SeriesCount → series`, `UniverseCount → universes`) is why the map still
+exists at all — no mechanical transform derives it — but the map can no longer fall behind silently.
+
 ---
 
 ## A genuine defect found by row 25's own live verification, 2026-09-03
@@ -612,7 +654,11 @@ covered the Season→Series direction with a real database from the start.
 | 25 | ✅ | A real container serves an episode-attached quote through the API | Automated (T2) | [`docs/automated-testing/import-and-staged-actions/22-season-attached-quote-served-through-the-api.md`](../../automated-testing/import-and-staged-actions/22-season-attached-quote-served-through-the-api.md) — run live 2026-09-03 against a freshly built image. Found and fixed a genuine defect in the process (see the section above this table) that no unit test had caught |
 | 26 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s), run 2026-09-03 after the row-25 fix |
 | 27 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` — all 10 projects green, 3859 tests passed, 0 failed, run 2026-09-03 after the row-25 fix |
-| 28 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Not performed by the assistant — CLAUDE.md reserves T1 (Visual Studio, `dotnet run`) exclusively for the developer's own action, never replicated locally by the assistant. Remains open until the developer confirms it directly |
+| 28 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Run by the developer 2026-09-08 (cold start, then reset → reseed → reseed). **Failed** — surfaced rows 29–31 below. Re-run required once step 12 and #373's step 10 have both landed |
+| 29 | ✅ | Every `IDatabaseInitializer` count property is published by `/version` | Unit test | `VersionEndpointTests.GetVersion_DatabaseStats_IncludesEveryEntityTypeCount` — confirmed red 2026-09-08 (`database.seasons` missing) before the fix, green after |
+| 30 | ✅ | That completeness claim cannot silently fall behind a newly added entity | Unit test | `VersionEndpointTests.GetVersion_DatabaseStats_MapCoversEveryCountProperty` — reflects over `IDatabaseInitializer`'s `*Count` properties; the positive control row 29 requires, since row 29's own map would otherwise be the hand-maintained list it replaced |
+| 31 | ❌ | A Season matched by natural key reports itself in the import report | Unit test | Owned by #373's step 10 — the natural-key path `continue`s without emitting an action, so Season vanishes from the reseed report after first import. Not fixable in this issue alone; the same skip affects Person, Series and Universe |
+| 32 | ❌ | Build is clean and no regression, after step 12 | Build + test run | `dotnet build --configuration Release` → 0 Warning(s), 0 Error(s), and `dotnet test --configuration Release -m:1` → 3941 passed, 0 failed, all 10 projects green, run 2026-09-08. **Row stays ❌ until #373's step 10 lands**, since row 31 is still open |
 
 **Row 6 is the rejected design asserted as a guard.** Making a quote's parent nullable was considered
 and overruled; a test that fails the moment `SourceId` becomes nullable or the join becomes a `LEFT

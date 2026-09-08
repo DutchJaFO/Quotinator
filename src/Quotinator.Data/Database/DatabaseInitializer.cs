@@ -421,6 +421,9 @@ public class DatabaseInitializer(
     public int SeriesCount { get; protected set; }
 
     /// <inheritdoc/>
+    public int SeasonCount { get; protected set; }
+
+    /// <inheritdoc/>
     public int UniverseCount { get; protected set; }
 
     /// <inheritdoc/>

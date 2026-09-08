@@ -116,6 +116,7 @@ public class ProgramNotificationSeedingRegressionTests
         public int CharacterCount => 0;
         public int PeopleCount => 0;
         public int SeriesCount => 0;
+        public int SeasonCount => 0;
         public int UniverseCount => 0;
         public int StageDirectionCount => 0;
         public int SoundCueCount => 0;
@@ -176,6 +177,7 @@ public class ProgramNotificationSeedingRegressionTests
         public int CharacterCount => 0;
         public int PeopleCount => 0;
         public int SeriesCount => 0;
+        public int SeasonCount => 0;
         public int UniverseCount => 0;
         public int StageDirectionCount => 0;
         public int SoundCueCount => 0;

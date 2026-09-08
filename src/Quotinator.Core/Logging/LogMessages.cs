@@ -59,8 +59,8 @@ internal static partial class LogMessages
     /// <summary>Logs the final per-entity-type row-count statistics after seeding.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message =
         "[Database - Stats] {Quotes} quotes  {Sources} sources  {Characters} characters  {People} people  " +
-        "{Series} series  {Universes} universes  {StageDirections} stage directions  {SoundCues} sound cues  {Conversations} conversations")]
+        "{Series} series  {Seasons} seasons  {Universes} universes  {StageDirections} stage directions  {SoundCues} sound cues  {Conversations} conversations")]
     public static partial void LogDatabaseStats(
         this ILogger logger, int quotes, int sources, int characters, int people,
-        int series, int universes, int stageDirections, int soundCues, int conversations);
+        int series, int seasons, int universes, int stageDirections, int soundCues, int conversations);
 }

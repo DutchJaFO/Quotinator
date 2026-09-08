@@ -209,6 +209,7 @@ internal sealed class BackupTestHarness : IDisposable
         public int PeopleCount => _inner.PeopleCount;
         /// <inheritdoc/>
         public int SeriesCount => _inner.SeriesCount;
+        public int SeasonCount => _inner.SeasonCount;
         /// <inheritdoc/>
         public int UniverseCount => _inner.UniverseCount;
         /// <inheritdoc/>

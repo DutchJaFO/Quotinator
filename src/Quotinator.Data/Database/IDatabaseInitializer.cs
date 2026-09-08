@@ -35,6 +35,9 @@ public interface IDatabaseInitializer
     /// <summary>Total non-deleted series rows (#221). Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
     int SeriesCount { get; }
 
+    /// <summary>Total non-deleted season rows (#375). Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
+    int SeasonCount { get; }
+
     /// <summary>Total non-deleted universe rows (#221). Updated by <see cref="InitialiseAsync"/>, <see cref="ReseedAsync"/>, and <see cref="ResetAsync"/>.</summary>
     int UniverseCount { get; }
 

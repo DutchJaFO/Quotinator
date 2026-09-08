@@ -74,7 +74,7 @@ internal sealed class StartupSummaryLogger(
         _logger.LogReadyBanner(
             _version.Version, _dataDir, _dbPath, _db.SchemaVersion, _db.DataSchemaVersion, migLine,
             _db.QuoteCount, _db.SourceCount, _db.CharacterCount, _db.PeopleCount, _db.SeriesCount,
-            _db.UniverseCount, _db.StageDirectionCount, _db.SoundCueCount, _db.ConversationCount,
+            _db.SeasonCount, _db.UniverseCount, _db.StageDirectionCount, _db.SoundCueCount, _db.ConversationCount,
             _backupsDir, _keysDir, _logLevel, _logRequests ? "on" : "off", _sslEnabled ? "on" : "off",
             _adminKeyConfigured ? "set" : "not set", restApi, openApiUi, openApiSpec);
     }

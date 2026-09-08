@@ -838,6 +838,7 @@ app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDat
                 characters      = db.CharacterCount,
                 people          = db.PeopleCount,
                 series          = db.SeriesCount,
+                seasons         = db.SeasonCount,
                 universes       = db.UniverseCount,
                 stageDirections = db.StageDirectionCount,
                 soundCues       = db.SoundCueCount,

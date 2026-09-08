@@ -786,6 +786,7 @@ public sealed class QuotinatorDatabaseInitializer(
         CharacterCount      = await connection.ExecuteScalarAsync<int>(Sql.Characters.CountActive);
         PeopleCount         = await connection.ExecuteScalarAsync<int>(Sql.People.CountActive);
         SeriesCount         = await connection.ExecuteScalarAsync<int>(Sql.Series.CountActive);
+        SeasonCount         = await connection.ExecuteScalarAsync<int>(Sql.Season.CountActive);
         UniverseCount       = await connection.ExecuteScalarAsync<int>(Sql.Universe.CountActive);
         StageDirectionCount = await connection.ExecuteScalarAsync<int>(Sql.StageDirections.CountActive);
         SoundCueCount       = await connection.ExecuteScalarAsync<int>(Sql.SoundCues.CountActive);
@@ -793,7 +794,7 @@ public sealed class QuotinatorDatabaseInitializer(
 
         Logger.LogDatabaseStats(
             QuoteCount, SourceCount, CharacterCount, PeopleCount,
-            SeriesCount, UniverseCount, StageDirectionCount, SoundCueCount, ConversationCount);
+            SeriesCount, SeasonCount, UniverseCount, StageDirectionCount, SoundCueCount, ConversationCount);
     }
 
     private async Task<ImportBatchEntity> CreateImportBatchAsync(SeedBatch seedBatch, SeedFile seedFile, ManifestPolicy filePolicy)

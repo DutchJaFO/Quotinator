@@ -32,6 +32,9 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public int SeriesCount => 0;
 
     /// <inheritdoc/>
+    public int SeasonCount => 0;
+
+    /// <inheritdoc/>
     public int UniverseCount => 0;
 
     /// <inheritdoc/>

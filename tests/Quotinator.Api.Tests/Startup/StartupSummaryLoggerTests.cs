@@ -72,6 +72,7 @@ public class StartupSummaryLoggerTests
         public int    CharacterCount   => 42;
         public int    PeopleCount      => 12;
         public int    SeriesCount      => 0;
+        public int    SeasonCount      => 0;
         public int    UniverseCount    => 0;
         public int    StageDirectionCount => 0;
         public int    SoundCueCount    => 0;

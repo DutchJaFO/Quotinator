@@ -118,6 +118,7 @@ internal static partial class LogMessages
                         {CharacterCount} characters
                         {PeopleCount} people
                         {SeriesCount} series
+                        {SeasonCount} seasons
                         {UniverseCount} universes
                         {StageDirectionCount} stage directions
                         {SoundCueCount} sound cues
@@ -140,7 +141,7 @@ internal static partial class LogMessages
         this ILogger logger,
         string version, string dataDir, string dbPath, int schemaVersion, int dataSchemaVersion, string migLine,
         int quoteCount, int sourceCount, int characterCount, int peopleCount, int seriesCount,
-        int universeCount, int stageDirectionCount, int soundCueCount, int conversationCount,
+        int seasonCount, int universeCount, int stageDirectionCount, int soundCueCount, int conversationCount,
         string backupsDir, string keysDir, string configuredLogLevel, string logRequests, string ssl,
         string adminApiKey, string restApi, string openApiUi, string openApiSpec);
 }
