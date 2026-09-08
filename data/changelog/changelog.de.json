@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 378],
+    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 377, 378],
     "highlights": [
       "Benachrichtigungen zeigen ihre Überschrift und ihren Text jetzt getrennt an, und ein mehrzeilig geschriebener Text bleibt mehrzeilig, statt zu einem Absatz zusammenzulaufen. Hat eine Benachrichtigung weitere Einzelheiten — welche Dateien sich geändert haben und in welchem Umfang —, lassen sich diese öffnen, ohne die Liste zu verlassen. Aktionsschaltflächen benennen jetzt, was sie tun, statt nur \"Ausführen\", und nach der Ausführung nennt die Benachrichtigung, wie sie erledigt wurde, statt nur dass sie fertig ist.",
       "Eine Benachrichtigung, deren Aktion länger dauert, zeigt jetzt an, dass sie läuft, und ihre Schaltflächen verschwinden bis zum Abschluss — ein langer Neuaufbau sieht damit nicht mehr wie ein wirkungsloser Klick aus und lässt sich nicht mehr versehentlich zweimal starten.",
@@ -56,6 +56,7 @@
       "`github/codeql-action` von 4.37.7 auf 4.37.9 aktualisiert (nur CI)"
     ],
     "fixed": [
+      "Beim erneuten Laden Ihrer Zitate wurden Einträge als aktualisiert gemeldet, obwohl sich an ihnen tatsächlich nichts geändert hatte — meist deshalb, weil die eine Zitatdatei eine Angabe schlicht nicht enthält, die eine andere führt, etwa eine Jahreszahl. Solche Einträge werden jetzt als auf den bereits gespeicherten Stand zurückgeführt gemeldet und nicht mehr beschrieben, sodass der Bericht des erneuten Ladens keine Änderungen mehr behauptet, die nie stattgefunden haben (issue #377)",
       "Eine Benachrichtigung, deren empfohlene Aktion Sie ausgeführt hatten, wurde dennoch als verworfen angezeigt, als hätten Sie sie abgelehnt. Quotinator hält jetzt fest, ob eine Benachrichtigung beiseitegelegt oder tatsächlich erledigt wurde, und zeigt sie im zweiten Fall als erledigt an (issue #304)",
       "Zeitangaben in der Oberfläche wurden in UTC statt in der lokalen Zeitzone angezeigt, sodass ein Ereignis um 16:17 als 14:17 erschien. Jede Zeitangabe in der Oberfläche entspricht jetzt der Uhr, auf der die Anwendung läuft (issue #304)",
       "Ein Zitat aus Star Wars war in den mitgelieferten Daten The Lord of the Rings zugeordnet; es ist jetzt korrekt zugeordnet, samt ergänzter Figur",

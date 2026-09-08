@@ -1,13 +1,16 @@
 # #377 — A Modify action whose resolution is a genuine no-op is still counted as Modified
 
-**Status:** In progress (step 10)
+**Status:** Waiting for release
 **GitHub issue:** #377
 **Tiers required:** T1, T2
 **Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
 
-**Next action: T1, which is the developer's own run** — row 27, and the only row left. Steps 1–9 are
-done and step 10's T2 half is green against real Docker images; the full solution is green (4013
-passed, 0 failed) at 0 warnings. Once T1 confirms, this issue is `Waiting for release`.
+**Next action: T1, which is the developer's own run** — row 27, and the only row left. Every step is
+done, both T2 documents are green against real Docker images, the full solution is green (4013 passed,
+0 failed) at 0 warnings, and the changelog entry is in `unreleased` in all three locales.
+
+**The GitHub issue's own Definition of done is not ticked yet, and one box cannot be ticked as
+written** — see *The issue names a test that was deliberately not written* below.
 
 ---
 
@@ -649,6 +652,31 @@ Both images, both containers and the canary worktree were removed afterwards.
 **Owns rows 24–27.** `11-clean-reseed-confirmation.md` and the extended `14-…` re-run live against a
 freshly built image, each with its own *Canary* section recording the red run. T1 is the developer's own
 action and is the one row this issue cannot close itself, per CLAUDE.md.
+
+---
+
+## The issue names a test that was deliberately not written
+
+#377's own *Failing tests* table names
+`DatabaseInitializerTests.Reseed_SourceModifyResolvesToExactlyExistingValues_NotCountedAsModified`, and
+no test of that name exists. Recorded here rather than silently dropped, per `process.md`'s rule that a
+named test is written or the reason it was not is recorded at the time.
+
+**Why not:** as named it is a bundled-corpus assertion — it identifies its subject as *the Source* whose
+Modify resolves to the existing values, which is the Star Wars row in `data/sources/`. A unit test
+asserting that would read `data/sources/` at run time, which `docs/testing-policy.md` forbids outright
+(the rule landed in `18418c29`, one commit before this plan was written).
+
+**What replaced it, and why the coverage is stronger rather than merely different:** the same behaviour
+is asserted on fixtures at the planner level for every branch and every mechanism (rows 3–9), at the
+initializer level for the write side (rows 14–16), and against the real corpus where such a check
+belongs — the external-data sentinel, step 9 — which additionally catches a *new* no-op shape appearing
+after a source refresh, something a single pinned Source id never could.
+
+**Consequence for closing:** the first Definition-of-done box ("failing tests listed above are red
+before the fix is written") cannot be honestly ticked against that name. Either the issue's table is
+corrected to name the tests that were actually written, or the box is left unticked with this section
+as the reason. That is the developer's call, not this document's.
 
 ---
 

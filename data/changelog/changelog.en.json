@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 378],
+    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 377, 378],
     "highlights": [
       "Notifications now show their headline and their message as separate things, and a message written on several lines stays on several lines instead of running together into one paragraph. Where a notification has more detail — which files changed and by how much — you can open it without leaving the list. Action buttons now say what they will do rather than just \"Run\", and once an action has been carried out the notification says how it was resolved instead of only that it is finished.",
       "A notification whose action takes a while now says it is running, and its buttons disappear until it finishes — so a long reseed no longer looks like a click that did nothing, and it can no longer be started twice by accident.",
@@ -49,6 +49,7 @@
       "`github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)"
     ],
     "fixed": [
+      "Reloading your quotes reported entries as updated when nothing about them had actually changed — most often where one quote file simply does not carry a detail another one does, such as a year. Those entries are now reported as resolved to what was already stored, and are no longer written to, so the reload's own record of what it did stops claiming changes it never made (issue #377)",
       "A notification whose recommended action you carried out was still shown as dismissed, as though you had turned it down. Quotinator now records whether a notification was set aside or actually dealt with, and shows it as done in the second case (issue #304)",
       "Times shown in the interface were displayed in UTC instead of the local time zone, so something that happened at 16:17 appeared as 14:17. Every time shown in the interface now matches the clock the application is running against (issue #304)",
       "A quote from Star Wars was attributed to The Lord of the Rings in the bundled data, and is now correctly attributed, with its character filled in",

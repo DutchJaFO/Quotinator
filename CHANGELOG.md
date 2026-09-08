@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-09-08 00:31 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-09-08 22:50 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -49,6 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)
 
 ### Fixed
+- Reloading your quotes reported entries as updated when nothing about them had actually changed — most often where one quote file simply does not carry a detail another one does, such as a year. Those entries are now reported as resolved to what was already stored, and are no longer written to, so the reload's own record of what it did stops claiming changes it never made (issue #377)
 - A notification whose recommended action you carried out was still shown as dismissed, as though you had turned it down. Quotinator now records whether a notification was set aside or actually dealt with, and shows it as done in the second case (issue #304)
 - Times shown in the interface were displayed in UTC instead of the local time zone, so something that happened at 16:17 appeared as 14:17. Every time shown in the interface now matches the clock the application is running against (issue #304)
 - A quote from Star Wars was attributed to The Lord of the Rings in the bundled data, and is now correctly attributed, with its character filled in
