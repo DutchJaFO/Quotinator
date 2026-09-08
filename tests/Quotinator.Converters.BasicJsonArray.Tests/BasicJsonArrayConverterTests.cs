@@ -10,12 +10,6 @@ namespace Quotinator.Converters.BasicJsonArray.Tests;
 [TestClass]
 public class BasicJsonArrayConverterTests
 {
-    private static readonly string RepoRoot =
-        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-
-    private static string BaselineFile =>
-        Path.Combine(RepoRoot, "data", "sources", "NikhilNamal17_popular-movie-quotes.json");
-
     private static readonly string[] DramaSciFiGenres = ["drama", "sci-fi"];
     private static readonly string[] DramaGenre        = ["drama"];
 
@@ -174,13 +168,36 @@ public class BasicJsonArrayConverterTests
     // -------------------------------------------------------------------------
     #region ID stability
 
-    // The single most important test in this project: proves the generic converter, configured to
-    // reproduce NikhilNamal17's raw shape, produces the exact same id the committed, already-shipped
-    // canonical file already has for this quote/source pair.
+    /// <summary>
+    /// The single most important test in this project: the generic converter, configured to reproduce
+    /// NikhilNamal17's raw shape, produces the exact id this quote/source pair already carries in every
+    /// shipped database.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The id is pinned as a literal, and that is the assertion.</b> It was previously read out of
+    /// <c>data/sources/NikhilNamal17_popular-movie-quotes.json</c> at run time, which made the test
+    /// self-referential: regenerate that file under a changed id algorithm and both sides move
+    /// together, so the one thing it exists to catch — an id change that orphans every existing row —
+    /// passes silently. A literal cannot move.
+    /// </para>
+    /// <para>
+    /// It also removed the last dependency this suite had on bundled data. Developer rule, 2026-09-08:
+    /// <em>tests should not rely on bundled data to stay green, with the exception of the feature smoke
+    /// test that exists purely to be aware of changes in the external data.</em> That exception is
+    /// <c>import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md</c>; this is a unit
+    /// test and gets a fixture.
+    /// </para>
+    /// <para>
+    /// <b>If this fails, do not update the literal.</b> It means `QuoteIdentity.StableId`'s inputs or
+    /// normalisation changed, and every id in every deployed database is about to be orphaned — which
+    /// needs a migration and a decision, not a new expected value.
+    /// </para>
+    /// </remarks>
     [TestMethod]
     public async Task ConvertAsync_AgainstCommittedNikhilNamal17Fixture_IdsMatchExactly()
     {
-        string expectedId = FindBaselineId("Do, or do not. There is no try.", "Star Wars: Episode V - The Empire Strikes Back");
+        const string expectedId = "62465c4f-d0c1-2648-a658-7bc8e4f70b0f";
         string inputPath  = WriteInput("""
             [{"quote":"Do, or do not. There is no try.","movie":"Star Wars: Episode V - The Empire Strikes Back","type":"movie","year":1980}]
             """);
@@ -220,13 +237,6 @@ public class BasicJsonArrayConverterTests
         string path = Path.Combine(_tempDir, "input.json");
         File.WriteAllText(path, content);
         return path;
-    }
-
-    private static string FindBaselineId(string quote, string source)
-    {
-        string text = File.ReadAllText(BaselineFile);
-        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out List<SourceQuoteDto>? quotes));
-        return quotes!.Single(q => q.QuoteText == quote && q.Source == source).Id;
     }
 
     private static async Task<SourceQuoteDto> ReadSingle(string outputPath)

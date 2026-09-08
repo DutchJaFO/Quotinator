@@ -12,11 +12,6 @@ public class RegexArrayConverterTests
 {
     private const string VilaboimPattern = """^"(.+?)"\s+(.+)$""";
 
-    private static readonly string RepoRoot =
-        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-
-    private static string VilaboimBaselineFile => Path.Combine(RepoRoot, "data", "sources", "vilaboim_movie-quotes.json");
-
     private string _tempDir = null!;
 
     [TestInitialize]
@@ -151,13 +146,35 @@ public class RegexArrayConverterTests
     // -------------------------------------------------------------------------
     #region ID stability
 
-    // The single most important test in this project: proves the generic converter, configured to
-    // reproduce Vilaboim's raw shape, produces the exact same id the committed, already-shipped
-    // canonical file already has for this quote/source pair.
+    /// <summary>
+    /// The single most important test in this project: the generic converter, configured to reproduce
+    /// Vilaboim's raw shape, produces the exact id this quote/source pair already carries in every
+    /// shipped database.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>The id is pinned as a literal, and that is the assertion.</b> It was previously read out of
+    /// <c>data/sources/vilaboim_movie-quotes.json</c> at run time, which made the test
+    /// self-referential: regenerate that file under a changed id algorithm and both sides move
+    /// together, so the one thing it exists to catch passes silently. The same value is pinned
+    /// independently by <c>QuoteIdentityTests.StableId_KnownQuoteSourcePair_MatchesCommittedProductionId</c>,
+    /// which is what corroborates it.
+    /// </para>
+    /// <para>
+    /// Developer rule, 2026-09-08: <em>tests should not rely on bundled data to stay green, with the
+    /// exception of the feature smoke test that exists purely to be aware of changes in the external
+    /// data.</em> That exception is
+    /// <c>import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md</c>.
+    /// </para>
+    /// <para>
+    /// <b>If this fails, do not update the literal</b> — it means every id in every deployed database
+    /// is about to be orphaned, which needs a migration and a decision, not a new expected value.
+    /// </para>
+    /// </remarks>
     [TestMethod]
     public async Task ConvertAsync_AgainstCommittedVilaboimFixture_IdsMatchExactly()
     {
-        var expectedId = FindBaselineId("Frankly, my dear, I don't give a damn.", "Gone with the Wind");
+        const string expectedId = "1aa241c0-9a8f-e348-9d67-fdae91c0f33b";
         var inputPath  = WriteInput("[\"\\\"Frankly, my dear, I don't give a damn.\\\" Gone with the Wind\"]");
         var outputPath = Path.Combine(_tempDir, "output.json");
 
@@ -181,13 +198,6 @@ public class RegexArrayConverterTests
         var path = Path.Combine(_tempDir, "input.json");
         File.WriteAllText(path, content);
         return path;
-    }
-
-    private static string FindBaselineId(string quote, string source)
-    {
-        var text = File.ReadAllText(VilaboimBaselineFile);
-        Assert.IsTrue(SourceQuoteFileReader.TryParse(text, out var quotes));
-        return quotes!.Single(q => q.QuoteText == quote && q.Source == source).Id;
     }
 
     private static async Task<SourceQuoteDto> ReadSingle(string outputPath)

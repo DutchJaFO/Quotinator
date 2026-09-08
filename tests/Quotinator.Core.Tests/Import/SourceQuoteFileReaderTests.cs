@@ -321,22 +321,91 @@ public class SourceQuoteFileReaderTests
         Assert.IsNull(parsed);
     }
 
+    /// <summary>
+    /// The extended format parses conversations whose lines mix quotes with a stage direction and a
+    /// sound cue, and resolves each line to its declared type.
+    /// </summary>
+    /// <remarks>
+    /// Previously read <c>data/sources/quotinator-curated.json</c> and asserted it held exactly four
+    /// conversations — so curating a fifth would have turned this red without anything being broken.
+    /// Developer rule, 2026-09-08: <em>tests should not rely on bundled data to stay green, with the
+    /// exception of the feature smoke test that exists purely to be aware of changes in the external
+    /// data.</em> The fixture below reproduces the shape the curated file actually uses (a
+    /// <c>sound_cue</c>-opening conversation and a <c>stage_direction</c>-opening one) without
+    /// depending on how much of it exists.
+    /// </remarks>
     [TestMethod]
-    public void TryParseExtended_CuratedFile_ParsesRealFourConversationsWithStageDirectionAndSoundCue()
+    public void TryParseExtended_ConversationsMixingQuotesStageDirectionsAndSoundCues_ParsesEachLineType()
     {
-        var repoRoot    = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-        var curatedFile = Path.Combine(repoRoot, "data", "sources", "quotinator-curated.json");
-        var json        = File.ReadAllText(curatedFile);
+        const string json = """
+            {
+              "quotes": [
+                { "id": "11111111-1111-4111-8111-111111111111", "quote": "A line.", "source": "A Film", "type": "movie" },
+                { "id": "22222222-2222-4222-8222-222222222222", "quote": "Another line.", "source": "A Film", "type": "movie" }
+              ],
+              "stageDirections": [
+                { "id": "33333333-3333-4333-8333-333333333333", "text": "[he draws his sword]", "imageUrl": null, "translations": {} }
+              ],
+              "soundCues": [
+                { "id": "44444444-4444-4444-8444-444444444444", "text": "[clang of swords]", "soundFileUrl": null, "imageUrl": null, "translations": {} }
+              ],
+              "conversations": [
+                {
+                  "id": "55555555-5555-4555-8555-555555555555",
+                  "description": "Opens on a sound cue",
+                  "lines": [
+                    { "order": 1, "type": "sound_cue", "soundCueId": "44444444-4444-4444-8444-444444444444" },
+                    { "order": 2, "type": "quote", "quoteId": "11111111-1111-4111-8111-111111111111" }
+                  ]
+                },
+                {
+                  "id": "66666666-6666-4666-8666-666666666666",
+                  "description": "Opens on a stage direction",
+                  "lines": [
+                    { "order": 1, "type": "stage_direction", "stageDirectionId": "33333333-3333-4333-8333-333333333333" },
+                    { "order": 2, "type": "quote", "quoteId": "22222222-2222-4222-8222-222222222222" }
+                  ]
+                }
+              ]
+            }
+            """;
 
-        var result = SourceQuoteFileReader.TryParseExtended(json, out var parsed);
+        bool result = SourceQuoteFileReader.TryParseExtended(json, out ParsedSourceFileDto? parsed);
 
         Assert.IsTrue(result);
-        Assert.HasCount(4, parsed!.Conversations);
-        Assert.IsGreaterThanOrEqualTo(1, parsed.StageDirections.Count);
-        Assert.IsGreaterThanOrEqualTo(1, parsed.SoundCues.Count);
+        Assert.HasCount(2, parsed!.Conversations);
+        Assert.HasCount(1, parsed.StageDirections);
+        Assert.HasCount(1, parsed.SoundCues);
         Assert.Contains(c => c.Lines.Any(l => l.Type == ConversationLineType.StageDirection), parsed.Conversations,
             "At least one conversation should use a stage direction");
         Assert.Contains(c => c.Lines.Any(l => l.Type == ConversationLineType.SoundCue), parsed.Conversations,
             "At least one conversation should use a sound cue");
+        Assert.Contains(c => c.Lines.Any(l => l.Type == ConversationLineType.Quote), parsed.Conversations,
+            "Quote lines must still parse alongside the other two types");
+    }
+
+    /// <summary>The control the assertion above needs: an unrecognised line type is not silently accepted as one of the three.</summary>
+    [TestMethod]
+    public void TryParseExtended_ConversationLineWithUnknownType_DoesNotParseAsAKnownLineType()
+    {
+        const string json = """
+            {
+              "quotes": [ { "id": "11111111-1111-4111-8111-111111111111", "quote": "A line.", "source": "A Film", "type": "movie" } ],
+              "conversations": [
+                {
+                  "id": "55555555-5555-4555-8555-555555555555",
+                  "description": "Carries a line type that does not exist",
+                  "lines": [ { "order": 1, "type": "interpretive_dance", "quoteId": "11111111-1111-4111-8111-111111111111" } ]
+                }
+              ]
+            }
+            """;
+
+        bool parsedOk = SourceQuoteFileReader.TryParseExtended(json, out ParsedSourceFileDto? parsed);
+
+        bool anyKnown = parsedOk && parsed!.Conversations
+            .SelectMany(c => c.Lines)
+            .Any(l => l.Type is ConversationLineType.Quote or ConversationLineType.StageDirection or ConversationLineType.SoundCue);
+        Assert.IsFalse(anyKnown, "An unknown line type must not be admitted as one of the three real ones");
     }
 }
