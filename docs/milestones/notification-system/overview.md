@@ -77,7 +77,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#374](https://github.com/DutchJaFO/Quotinator/issues/374) | A conflict rule cannot tell "already correct" from "cannot apply" | Waiting for release | T1 ✅ T2 ✅ | [374-already-correct-is-not-cannot-apply-plan.md](374-already-correct-is-not-cannot-apply-plan.md) |
 | [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | Waiting for release | T1 ✅ T2 ✅ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
 | [#376](https://github.com/DutchJaFO/Quotinator/issues/376) | A Source-level Modify conflict stages a new Pending action on every reseed instead of staying stable | Planning | T1 ⬜ T2 ⬜ | — |
-| [#377](https://github.com/DutchJaFO/Quotinator/issues/377) | A Modify action whose resolution is a genuine no-op is still counted as Modified | Planning | T1 ⬜ T2 ⬜ | [377-no-op-modify-is-not-a-write-plan.md](377-no-op-modify-is-not-a-write-plan.md) |
+| [#377](https://github.com/DutchJaFO/Quotinator/issues/377) | A Modify action whose resolution is a genuine no-op is still counted as Modified | In progress | T1 ⬜ T2 ⬜ | [377-no-op-modify-is-not-a-write-plan.md](377-no-op-modify-is-not-a-write-plan.md) |
 | [#378](https://github.com/DutchJaFO/Quotinator/issues/378) | A "Keep"/"Replace" resolution on a Quote's date field never actually takes effect — the linked Source variant silently wins instead | Waiting for release | T1 ✅ T2 ✅ | [378-keep-replace-source-link-plan.md](378-keep-replace-source-link-plan.md) |
 | [#381](https://github.com/DutchJaFO/Quotinator/issues/381) | A cross-file duplicate quote's CharacterId/PersonId silently reverts to null on every reseed | Planning | T1 ⬜ T2 ⬜ | [381-character-personid-toggle-plan.md](381-character-personid-toggle-plan.md) |
 
@@ -123,7 +123,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #375 ─── (none); blocks #374; its import-report half landed with #373's step 10 — Waiting for release
 #374 ─── depends on #375 — Waiting for release
 #376 ─── (none); found live while verifying #374 — Planning
-#377 ─── (none); found live while verifying #374; blocks #372's row 21 — Planning
+#377 ─── (none); found live while verifying #374; blocks #372's row 21 — In progress
 #378 ─── (none); found live while verifying #374 — Waiting for release
 #381 ─── (none); found live while verifying #374/#378 — Planning, deliberately deferred
 #367 ─── depends on #278, #312; blocks #308 — Waiting for release
@@ -159,7 +159,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 20 | **#378** ✅ | Waiting for release — found live while verifying #374, fixed same session |
 | 21 | **#373** ✅ | Waiting for release — T1 green after the natural-key fix |
 | 22 | **#372** ✅ | Waiting for release — T1 green; a reseed leaves zero pending items |
-| 23 | **#377** | Planning — the same `ImportActionPlanner` branches #373's silent-skip fix touches; #372's row 21 needs it |
+| 23 | **#377** 🚧 | In progress — the same `ImportActionPlanner` branches #373's silent-skip fix touches; #372's row 21 needs it |
 | 24 | **#376** | Planning — sequenced with #377, same file |
 | 25 | **#369** | Planning — depends on #303 |
 | 26 | **#370** | Planning — sequenced with #369, same page |
