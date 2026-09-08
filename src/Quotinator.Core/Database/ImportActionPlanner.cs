@@ -2124,6 +2124,28 @@ internal static class ImportActionPlanner
                 }
 
                 SeasonActionPayloadDto resolved = policy == DuplicateResolutionPolicy.Skip ? existingPayload : incomingPayload;
+
+                // A matching rule resolves the conflict outright instead of falling through to Pending —
+                // the same branch Series, Universe and Character each carry. Season shipped without it
+                // (#375), so no ConflictResolutionRule could ever settle a Season disagreement and it
+                // would stay Pending on every reseed, forever. Found by the Pending/rule-resolved pair
+                // this entity had never had.
+                FieldMergeResult? ruleResolved = null;
+                if (ruleDecisions.Count > 0)
+                {
+                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
+                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                }
+                if (ruleResolved is not null)
+                {
+                    resolved = new SeasonActionPayloadDto(
+                        Convert.ToInt32(ruleResolved.MergedFields["number"], System.Globalization.CultureInfo.InvariantCulture),
+                        (string?)ruleResolved.MergedFields["title"],
+                        (string?)ruleResolved.MergedFields["subtitle"],
+                        (string?)ruleResolved.MergedFields["seriesId"],
+                        se.SeriesName);
+                }
+
                 Dictionary<string, object?> resolvedFields = ToSeasonFieldMap(resolved);
                 HashSet<string> effectiveChangedFields = [.. existingFields
                     .Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key)))
@@ -2133,7 +2155,7 @@ internal static class ImportActionPlanner
                 ImportActionStatus modifyStatus =
                     CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields) ? ImportActionStatus.Blocked
                     : hasStaleRule ? ImportActionStatus.Stale
-                    : policy == DuplicateResolutionPolicy.Review ? ImportActionStatus.Pending
+                    : policy == DuplicateResolutionPolicy.Review && ruleResolved is null ? ImportActionStatus.Pending
                     : ImportActionStatus.Decided;
 
                 actions.Add(new ImportActionEntity

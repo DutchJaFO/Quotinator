@@ -342,26 +342,43 @@ documents were the interesting ones. It is the floor, not an optional extra.
 | 1 | `api-surface/01-baseline` | ✅ all 9 steps — `healthy`, version matches `Directory.Build.props` (`1.9.0-alpha`), random `Ok`, scoped searches correct |
 | 2 | `api-surface/02-pagination-contract` | ✅ `pageSize=0` returns every row on all three endpoints; `501`, `page` beyond last → `422`; defaults `20` |
 | 3 | `import-and-staged-actions/01-staged-action-review-workflow` | ✅ decide → undo → decide-all → apply, `/import/conflicts` still `404` |
-| 4 | `import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions` | ❌ **step 4** — see below. Steps 1–3 green (`zeroCounts` empty, `pending=0`) |
+| 4 | `import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions` | ⚠️ steps 1–3 green (`zeroCounts` empty, `pending=0`); step 4's **A** and **B** green after the alias fix; its **C** asserts nothing — see below |
 | 5 | `import-and-staged-actions/19-per-file-import-report` | ✅ `missingTypes=[]`, removed fields absent with a live control |
 | 6 | `database-lifecycle/03-reset-is-a-full-wipe` | ✅ every count `0`, audit `1` self-trace, both version counters preserved |
 | 7 | `startup-and-degradation/03-startup-wait-page` | ✅ `503`/`starting`/self-contained wait page, then ready; `kestrelFirst=True` |
 | 8 | `notifications-and-changelog/01-notification-system` | ✅ including both browser driver steps — `Expired` computed correctly, Cancel left `795` quotes untouched, Confirm dropped them to `0` |
 | 9 | `notifications-and-changelog/07-changelog-served-from-its-own-database` | ✅ own `quotinatorchangelog.db`, 126 entries, `fallbacks=0`, no duplication on restart |
 
-**Smoke 4 step 4 fails: 11 duplicate Sources**, where it expects none. Every pair differs only by
-`Date` — `Star Wars: Episode V` at `1890` beside `1980`, `The Silence of the lambs` at `1998` beside
-`1991`, the three Lord of the Rings films each a year out, and so on — so one row of each pair carries
-a wrong date from a bundled file and the alias/rule mechanisms did not merge it.
+**Smoke 4 step 4 originally failed with 11 duplicate Sources.** Its query grouped on
+`(LOWER(Title), Type)` and expected none — an assertion [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
+had already made unsatisfiable by giving a differently-dated variant its own row on purpose. It was
+rewritten into three separated checks, and two of them are now genuinely green: **A** (no two rows
+share title + type + date) and **B** (no title stored under two spellings), the latter closed by
+declaring the two canonical spellings in `nikhilnamal17-source-aliases.json`.
+
+**C is not green — it does not assert.** It lists the 11 date-variant groups for a human to confirm,
+which under `process.md`'s own rule is a promise rather than a verification. So step 4 currently passes
+while nine known-wrong dates sit in the database, and it passes **because an assertion was removed**.
+That is the same shape as normalising the casing away: the check stops complaining without the problem
+being resolved.
+
+**The permission mechanism already exists and C should assert against it.** A legitimate date variant
+is one someone declared: `quotinator-series-universe.json` already carries
+`{ "title": "Back to the Future", "type": "movie", "date": "1985" }`. Its `1958` sibling is declared
+nowhere, and neither is either half of `The Lion King` (1994 / 2019) — the one pair that genuinely is
+two films. Making C assert *"every date variant must correspond to a declared `sources[]` entry"* would
+turn all nine wrong dates red and give the two real ones an explicit home, exactly as the alias file
+does for casing. **Not built — it changes what this smoke test demands and needs the nine dates
+verified per `docs/workflow/source-verification.md`, so it is the developer's call.**
 
 **Not caused by this milestone's work, and established rather than assumed:** the diff from `84d4e5b7`
 to `HEAD` touches zero lines mentioning `PlanSources` or `Sql.Sources`, and
 [#376](https://github.com/DutchJaFO/Quotinator/issues/376)'s own body already describes the Silence of
-the Lambs pair as a live defect on 2026-09-04. `The Lion King` (1994 / 2019) is the one legitimate pair
-— the seed log warns about it by name and asks for exactly this verification. Raised here, not fixed:
-it is neither this issue's subject nor #377's.
+the Lambs pair as a live defect on 2026-09-04.
 
-T1 (the developer's own action, per CLAUDE.md) is the only remaining part of this step.
+**T1 cannot be handed over while step 4 is not genuinely green** (developer rule, 2026-09-08: *we can't
+run a T1 test until the marked test succeeds*). A and B pass; C is the outstanding half, and this step
+is not complete until C asserts and holds.
 
 ---
 

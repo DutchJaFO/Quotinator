@@ -1797,6 +1797,92 @@ public class ImportActionPlannerTests
         Assert.AreEqual("Middle-earth (corrected)", merged.Name);
     }
 
+    /// <summary>
+    /// The negative half of <see cref="PlanUniverseAsync_ReviewPolicy_MatchingRule_StagesDecidedNotPending"/>:
+    /// the same disagreement, with no rule declared, is left Pending for a curator rather than resolved
+    /// by guesswork.
+    /// </summary>
+    /// <remarks>
+    /// Universe, Series and Season each had the "a rule resolves it" half and not this one, so nothing
+    /// proved a rule was doing the resolving — an implementation that auto-resolved every conflict
+    /// would have passed all three. Written after a reseed of the bundled corpus was required to leave
+    /// zero pending items: that guarantee only means something if an *undeclared* conflict still
+    /// produces one.
+    /// </remarks>
+    [TestMethod]
+    public async Task PlanUniverseAsync_ReviewPolicy_NoRuleDeclared_StagesPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle-earth (corrected)" }]);
+
+        ImportActionEntity universeAction = actions.Single(a => a.EntityType == ImportActionEntityTypes.Universe);
+        Assert.AreEqual(ImportActionStatus.Pending, universeAction.Status.Parsed,
+            "Without a declared rule the disagreement must reach a curator, never be resolved silently");
+    }
+
+    /// <summary>The Series counterpart of the pair above — no rule declared, so the change stays Pending.</summary>
+    [TestMethod]
+    public async Task PlanSeriesAsync_ReviewPolicy_NoRuleDeclared_StagesPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = await SeedExistingSeriesAsync(conn, "The Lord of the Rings");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            series: [new SeriesEntryDto { Id = id, Name = "The Lord of the Rings (corrected)" }]);
+
+        ImportActionEntity seriesAction = actions.Single(a => a.EntityType == ImportActionEntityTypes.Series);
+        Assert.AreEqual(ImportActionStatus.Pending, seriesAction.Status.Parsed,
+            "Without a declared rule the disagreement must reach a curator, never be resolved silently");
+    }
+
+    /// <summary>
+    /// The Season pair, both halves — Season had no planner-level coverage at all before #373's step 10,
+    /// so neither the Pending nor the rule-resolved side existed.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSeasonsAsync_ReviewPolicy_NoRuleDeclared_StagesPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
+        string seasonId = await SeedExistingSeasonAsync(conn, seriesId, 1, "Book One", "Water");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            seasons: [BuildSeasonEntry(1, "Avatar: The Last Airbender", "Book One (corrected)", "Water", seasonId)]);
+
+        ImportActionEntity seasonAction = actions.Single(a => a.EntityType == ImportActionEntityTypes.Season);
+        Assert.AreEqual(ImportActionStatus.Pending, seasonAction.Status.Parsed,
+            "Without a declared rule the disagreement must reach a curator, never be resolved silently");
+    }
+
+    /// <summary>The other half: with a rule declared for that exact field, the same Season conflict resolves outright.</summary>
+    [TestMethod]
+    public async Task PlanSeasonsAsync_ReviewPolicy_MatchingRule_StagesDecidedNotPending()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
+        string seasonId = await SeedExistingSeasonAsync(conn, seriesId, 1, "Book One", "Water");
+        ConflictRuleLookup rules = new([
+            new ConflictResolutionRule
+            {
+                EntityId       = seasonId,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One (corrected)"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            seasons: [BuildSeasonEntry(1, "Avatar: The Last Airbender", "Book One (corrected)", "Water", seasonId)], conflictRules: rules);
+
+        ImportActionEntity seasonAction = actions.Single(a => a.EntityType == ImportActionEntityTypes.Season);
+        Assert.AreEqual(ImportActionStatus.Decided, seasonAction.Status.Parsed, "A matching rule must auto-resolve instead of leaving it Pending");
+        SeasonActionPayloadDto merged = System.Text.Json.JsonSerializer.Deserialize<SeasonActionPayloadDto>(seasonAction.MergedFields!)!;
+        Assert.AreEqual("Book One", merged.Title, "Keep must resolve to the existing side's value");
+    }
+
     [TestMethod]
     public async Task PlanUniverseAsync_ReviewPolicy_MatchingRule_StagesDecidedNotPending()
     {

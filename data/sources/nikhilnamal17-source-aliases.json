@@ -32,6 +32,12 @@
     { "title": "When Harry Met Sally", "type": "movie", "canonicalTitle": "When Harry Met Sally...", "canonicalType": "movie" },
     { "title": "Avengers - Age of Ultron", "type": "movie", "canonicalTitle": "Avengers: Age of Ultron", "canonicalType": "movie" },
     { "title": "Back to the future", "type": "movie", "canonicalTitle": "Back to the Future", "canonicalType": "movie" },
-    { "title": "The Silence of the lambs", "type": "movie", "canonicalTitle": "The Silence of the Lambs", "canonicalType": "movie" }
+    { "title": "The Silence of the lambs", "type": "movie", "canonicalTitle": "The Silence of the Lambs", "canonicalType": "movie" },
+
+    { "title": "Back to the future", "type": "movie", "date": "1958", "canonicalTitle": "Back to the Future", "canonicalType": "movie", "canonicalDate": "1985" },
+    { "title": "The Silence of the lambs", "type": "movie", "date": "1998", "canonicalTitle": "The Silence of the Lambs", "canonicalType": "movie", "canonicalDate": "1991" },
+    { "title": "Star Wars: Episode V - The Empire Strikes Back", "type": "movie", "date": "1890", "canonicalTitle": "Star Wars: Episode V - The Empire Strikes Back", "canonicalType": "movie", "canonicalDate": "1980" },
+    { "title": "X-Men: Days of Future Past", "type": "movie", "date": "2015", "canonicalTitle": "X-Men: Days of Future Past", "canonicalType": "movie", "canonicalDate": "2014" },
+    { "title": "The Fast and The Furious 8", "type": "movie", "date": "2013", "canonicalTitle": "The Fate of the Furious", "canonicalType": "movie", "canonicalDate": "2017" }
   ]
 }

@@ -90,7 +90,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #83  ─── (none) — Waiting for release
 #81  ─── depends on #278, #80, #309, #307, #312; soft-depends on #308 — Waiting for release
 #304 ─── depends on #278, #156, #312, #319 — Waiting for release
-#302 ─── depends on #278, #312, #372 — In progress, T1 outstanding
+#302 ─── depends on #278, #312, #372 — In progress; its own T2 re-run is green, but T1 waits on the same smoke 4 step 4 gate #372 does
 #303 ─── depends on #278, #312 — Waiting for release
 #307 ─── depends on #80; soft-depends on #309 — Waiting for release
 #308 ─── depends on #278, #312; soft-depends on #302, #303, #304 — Waiting for release
@@ -118,7 +118,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #313 ─── (none) — Waiting for release
 #370 ─── (none) — Planning
 #369 ─── depends on #303 — Planning
-#372 ─── (none); blocks #302; row 21's "reporting so" clause still blocked by #377 — In progress
+#372 ─── (none); blocks #302; T1 gated on smoke 4 step 4's check C asserting; row 21's "reporting so" clause still open against #377 — In progress
 #373 ─── depends on #372; blocks #302 (via #372), #372's row 21 — Waiting for release
 #375 ─── (none); blocks #374; its import-report half landed with #373's step 10 — Waiting for release
 #374 ─── depends on #375 — Waiting for release
