@@ -249,6 +249,10 @@ public sealed class QuotinatorDatabaseInitializer(
             counts.Sum(c => c.Modified),
             counts.Sum(c => c.Unchanged),
             counts.Sum(c => c.Skipped),
+            // #377: stated in its own right for the same reason Skipped is — a row that differed and
+            // resolved back onto what was stored is neither updated nor already-correct, and folding it
+            // into either would hide that the file wanted to change it.
+            counts.Sum(c => c.ResolvedToExisting),
         ];
 
         // One key per origin rather than an origin word passed as an argument: bodyArgs is a single

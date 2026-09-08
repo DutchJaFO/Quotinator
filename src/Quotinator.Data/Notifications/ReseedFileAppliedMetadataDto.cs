@@ -52,6 +52,15 @@ public sealed class ReseedFileAppliedMetadataDto() : NotificationMetadataDto(Not
     /// the planner emitted them in. Left as produced, one unchanged file could yield two different
     /// identities across two reseeds and re-announce a confirmation the operator already dismissed.
     /// </para>
+    /// <para>
+    /// #377: every outcome bucket takes part, not just <see cref="ReseedEntityCountDto.Added"/> and
+    /// <see cref="ReseedEntityCountDto.Modified"/>. Developer decision, 2026-09-08: "knowing that items
+    /// have not changed and why they have not changed is valuable information (period)" — so a reseed
+    /// whose result differs only in an outcome that wrote nothing is a different result, and says so,
+    /// rather than being suppressed as a duplicate. The cost is accepted deliberately: a bundled file
+    /// gaining one quote shifts <c>Unchanged</c> as well as <c>Added</c>, and now re-announces where it
+    /// previously deduplicated silently.
+    /// </para>
     /// </summary>
     protected override IEnumerable<object?> IdentityComponents =>
     [
@@ -59,6 +68,6 @@ public sealed class ReseedFileAppliedMetadataDto() : NotificationMetadataDto(Not
         Origin,
         string.Join('\n', Counts
             .OrderBy(c => c.EntityType, StringComparer.OrdinalIgnoreCase)
-            .Select(c => $"{c.EntityType}:{c.Added}:{c.Modified}")),
+            .Select(c => $"{c.EntityType}:{c.Added}:{c.Modified}:{c.Unchanged}:{c.ResolvedToExisting}:{c.Skipped}:{c.Blocked}:{c.Pending}:{c.Discarded}:{c.Stale}")),
     ];
 }
