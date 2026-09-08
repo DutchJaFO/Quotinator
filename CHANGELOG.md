@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-09-02 12:11 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-09-08 00:31 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -62,6 +62,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Fixed Quotinator shutting down before it began serving when the folder holding its encryption keys could not be created — the same class of failure, one step earlier, where nothing at all was reachable afterwards (issue #326)
 - Fixed the limited-state pages failing to draw when the database was unavailable: the home page and the notifications page each queried it while rendering, producing an error page in place of the explanation they exist to show (issue #326)
 - Fixed the changelog store quietly going out of service a few minutes after startup, after which the About page was served from the original files for the rest of the session. It is now kept on disk rather than only in memory, so it stays available for as long as Quotinator is running (issue #309)
+- Re-importing the bundled quote data no longer repeatedly flags the same already-resolved conflicts for review on every reseed — a correction that already fixed a conflict on one reseed is now correctly recognised as still fixed on the next, instead of being flagged as broken again every time (issue #374)
+- A curator's decision to keep a quote's original date when two conflicting copies of it exist now actually takes effect. Previously it could be silently overridden by whichever copy was processed last, so the quote could keep showing the wrong date even after the conflict was supposedly resolved (issue #378)
 
 ### Removed
 - The `Quotinator__NotificationDefaultExpiryHours` setting has been removed. It set how long a notification stayed visible before expiring, which no longer applies now that notifications only expire when the one that created it says so — the setting had nothing left to control (issue #312)

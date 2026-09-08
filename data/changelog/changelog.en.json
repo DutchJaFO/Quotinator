@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367],
+    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 378],
     "highlights": [
       "Notifications now show their headline and their message as separate things, and a message written on several lines stays on several lines instead of running together into one paragraph. Where a notification has more detail — which files changed and by how much — you can open it without leaving the list. Action buttons now say what they will do rather than just \"Run\", and once an action has been carried out the notification says how it was resolved instead of only that it is finished.",
       "A notification whose action takes a while now says it is running, and its buttons disappear until it finishes — so a long reseed no longer looks like a click that did nothing, and it can no longer be started twice by accident.",
@@ -61,7 +61,9 @@
       "Fixed Quotinator shutting down instead of starting when its data folder could not be written to. One startup step was left unprotected and ended the process before anything was serving, taking the status page, the API documentation and the recovery options with it; startup now continues in a limited state that reports the problem (issue #326)",
       "Fixed Quotinator shutting down before it began serving when the folder holding its encryption keys could not be created — the same class of failure, one step earlier, where nothing at all was reachable afterwards (issue #326)",
       "Fixed the limited-state pages failing to draw when the database was unavailable: the home page and the notifications page each queried it while rendering, producing an error page in place of the explanation they exist to show (issue #326)",
-      "Fixed the changelog store quietly going out of service a few minutes after startup, after which the About page was served from the original files for the rest of the session. It is now kept on disk rather than only in memory, so it stays available for as long as Quotinator is running (issue #309)"
+      "Fixed the changelog store quietly going out of service a few minutes after startup, after which the About page was served from the original files for the rest of the session. It is now kept on disk rather than only in memory, so it stays available for as long as Quotinator is running (issue #309)",
+      "Re-importing the bundled quote data no longer repeatedly flags the same already-resolved conflicts for review on every reseed — a correction that already fixed a conflict on one reseed is now correctly recognised as still fixed on the next, instead of being flagged as broken again every time (issue #374)",
+      "A curator's decision to keep a quote's original date when two conflicting copies of it exist now actually takes effect. Previously it could be silently overridden by whichever copy was processed last, so the quote could keep showing the wrong date even after the conflict was supposedly resolved (issue #378)"
     ],
     "removed": [
       "The `Quotinator__NotificationDefaultExpiryHours` setting has been removed. It set how long a notification stayed visible before expiring, which no longer applies now that notifications only expire when the one that created it says so — the setting had nothing left to control (issue #312)"

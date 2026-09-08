@@ -325,6 +325,7 @@
     <File Path="docs/milestones/notification-system/373-unchanged-is-not-modified-plan.md" />
     <File Path="docs/milestones/notification-system/374-already-correct-is-not-cannot-apply-plan.md" />
     <File Path="docs/milestones/notification-system/375-season-between-series-and-source-plan.md" />
+    <File Path="docs/milestones/notification-system/378-keep-replace-source-link-plan.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/">
     <File Path="docs/automated-testing/README.md" />

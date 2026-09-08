@@ -77,6 +77,15 @@ internal static class ImportActionPlanner
         Dictionary<string, string> seasonIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, SourceQuoteDto> seenQuotes = new Dictionary<string, SourceQuoteDto>(StringComparer.Ordinal);
         Dictionary<string, CompletenessStatus> seenQuoteStatus = new Dictionary<string, CompletenessStatus>(StringComparer.Ordinal);
+        // #378: a Pending Add is never registered into seenQuotes (its resolution is provisional, not a
+        // confirmed same-batch reference — see the comment at its own check below), so two in-file
+        // occurrences of the same id that both need review (dateNeedsReview or a Keep/Replace rule
+        // matching against nothing) would otherwise each independently see "nothing exists yet" and each
+        // stage their own Pending Add — found live via four real `quoteText` "Keep" rules whose two
+        // byte-identical raw occurrences both triggered review. Tracked here, separately from seenQuotes,
+        // specifically so the second occurrence recognises the first's Pending Add within this same batch,
+        // before either has reached a database `SelectHasUnresolvedActionById` could see.
+        HashSet<string> stagedPendingReviewAddIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         string batchIdStr = batchId.ToCanonicalId();
         DateTime now = DateTime.UtcNow;
@@ -233,9 +242,20 @@ internal static class ImportActionPlanner
             // linked to whichever variant its own raw date happened to match — and, for date
             // specifically, creates a second, spurious Source variant for the date Keep rejects, which
             // nothing ever cleans up even though no quote ends up referencing it. A brand-new quote
-            // (existing is null) still has nothing for Keep/Replace to compare against — Custom remains
-            // the only resolution meaningful there, using the same raw-value-on-both-sides value this
-            // block always used before existing was available this early.
+            // (existing is null) is not a reason to exclude Keep/Replace: "no existing value" is a real,
+            // well-defined `null` on the existing side, not an absence of meaning — Keep(null) resolves
+            // the field to null (a deliberate, if possibly-accidental-looking, curator choice) and
+            // Replace(null) resolves to whatever the incoming side already says (a harmless no-op). Both
+            // are genuine outcomes `FieldMergeResolver.ResolveWithDecisions` already defines correctly for
+            // a null existing side; there is no reason to special-case them out here.
+            // #378 (found live against the real corpus, 2026-09-08): a Keep/Replace rule that matches
+            // while nothing exists yet is not silently applied (Keep would resolve to null — a possible
+            // authoring mistake, e.g. a role-reversed or vestigial recorded snapshot, exactly what four
+            // real `quoteText` "Keep" rules whose existingRecord/incomingRecord are already identical
+            // turned out to be) and not silently ignored either — it holds the Add for review, the same
+            // way an unresolved Source date already does, so a curator confirms whether it is a genuine
+            // fix or a mistake before anything is written.
+            bool keepOrReplaceAgainstNothing = false;
             if (conflictRules is not null && !sourceAliasStale)
             {
                 IReadOnlyDictionary<string, object?> rawFields = QuoteFieldMerge.ToFieldMap(q);
@@ -243,7 +263,10 @@ internal static class ImportActionPlanner
                 Dictionary<string, FieldMergeDecision>? earlyDecisions = null;
                 foreach (string field in rawFields.Keys)
                 {
-                    object? earlyExistingValue = existingFieldsForEarlyRule?.GetValueOrDefault(field) ?? rawFields[field];
+                    // Null (not rawFields[field]) when nothing exists yet — a genuine "no value", not a
+                    // stand-in for the incoming value. This is what lets Keep resolve to null instead of
+                    // silently matching whatever the incoming side happens to say.
+                    object? earlyExistingValue = existingFieldsForEarlyRule?.GetValueOrDefault(field);
 
                     // #153: a field already equal on both sides needs no decision — consulting the rule
                     // anyway would compare its recorded snapshot against an already-agreeing pair and
@@ -254,10 +277,12 @@ internal static class ImportActionPlanner
                         continue;
 
                     if (conflictRules.TryResolve(q.Id, field, earlyExistingValue, rawFields[field], out FieldMergeDecision decision, out ConflictRuleOutcome outcome)
-                        && outcome is ConflictRuleOutcome.Apply or ConflictRuleOutcome.AlreadyApplied
-                        && (existingFieldsForEarlyRule is not null || decision.Choice == FieldResolutionChoice.Custom))
+                        && outcome is ConflictRuleOutcome.Apply or ConflictRuleOutcome.AlreadyApplied)
                     {
-                        (earlyDecisions ??= new Dictionary<string, FieldMergeDecision>(StringComparer.OrdinalIgnoreCase))[field] = decision;
+                        if (existingFieldsForEarlyRule is not null || decision.Choice == FieldResolutionChoice.Custom)
+                            (earlyDecisions ??= new Dictionary<string, FieldMergeDecision>(StringComparer.OrdinalIgnoreCase))[field] = decision;
+                        else
+                            keepOrReplaceAgainstNothing = true;
                     }
                 }
 
@@ -265,14 +290,15 @@ internal static class ImportActionPlanner
                 {
                     // ApplyMergedFields indexes every field unconditionally, so ResolveWithDecisions
                     // must be given the full field set — but only the decided fields' "existing" side
-                    // is the true existing value; every other field uses the same value on both sides
-                    // (trivially not ambiguous, auto-resolves straight through) so an unrelated field
-                    // genuinely ambiguous between existing and incoming (no matching rule at all, e.g.
-                    // "character") never throws here — that stays the later Modify branch's own job.
+                    // is the true existing value (null when nothing exists yet); every other field uses
+                    // the same value on both sides (trivially not ambiguous, auto-resolves straight
+                    // through) so an unrelated field genuinely ambiguous between existing and incoming
+                    // (no matching rule at all, e.g. "character") never throws here — that stays the
+                    // later Modify branch's own job.
                     Dictionary<string, object?> blendedExisting = new(StringComparer.OrdinalIgnoreCase);
                     foreach (string field in rawFields.Keys)
                         blendedExisting[field] = earlyDecisions.ContainsKey(field)
-                            ? existingFieldsForEarlyRule?.GetValueOrDefault(field) ?? rawFields[field]
+                            ? existingFieldsForEarlyRule?.GetValueOrDefault(field)
                             : rawFields[field];
 
                     FieldMergeResult corrected = FieldMergeResolver.ResolveWithDecisions(
@@ -299,6 +325,13 @@ internal static class ImportActionPlanner
                 if (await connection.ExecuteScalarAsync<int>(Sql.Quotes.SelectHasUnresolvedActionById, new { id = q.Id }, transaction) > 0)
                     continue;
 
+                // #378: the same accumulation-prevention reasoning as the check just above, extended to
+                // this same batch's own earlier occurrences — the database check above can never see a
+                // Pending Add this same PlanAsync call staged moments ago, since staging happens only
+                // after planning finishes.
+                if ((dateNeedsReview || keepOrReplaceAgainstNothing) && !stagedPendingReviewAddIds.Add(q.Id))
+                    continue;
+
                 QuoteActionPayloadDto payload = new QuoteActionPayloadDto
                 {
                     Fields = QuoteFieldMerge.ToDto(q),
@@ -317,7 +350,7 @@ internal static class ImportActionPlanner
                 // reason on top would only obscure which one actually needs the curator's attention.
                 bool collidesWithinBatch = false;
                 string? collidingExistingId = null;
-                if (!sourceAliasStale && !dateNeedsReview)
+                if (!sourceAliasStale && !dateNeedsReview && !keepOrReplaceAgainstNothing)
                 {
                     string quoteTextKey = $"{sourceId}|{q.QuoteText}";
                     collidesWithinBatch = !stagedQuoteTextsBySource.Add(quoteTextKey);
@@ -348,12 +381,12 @@ internal static class ImportActionPlanner
                 // (matching how a Pending Modify is never registered either), so a later quote in this
                 // same batch referencing this id re-checks against real DB state rather than this
                 // unconfirmed one.
-                if (!sourceAliasStale && !dateNeedsReview)
+                if (!sourceAliasStale && !dateNeedsReview && !keepOrReplaceAgainstNothing)
                 {
                     seenQuotes[q.Id] = q;
                     seenQuoteStatus[q.Id] = CompletenessStatus.Incomplete;
                 }
-                ImportActionStatus addStatus = dateNeedsReview ? ImportActionStatus.Pending
+                ImportActionStatus addStatus = dateNeedsReview || keepOrReplaceAgainstNothing ? ImportActionStatus.Pending
                     : sourceAliasStale ? ImportActionStatus.Stale
                     : ImportActionStatus.Decided;
 

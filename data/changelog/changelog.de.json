@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367],
+    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 378],
     "highlights": [
       "Benachrichtigungen zeigen ihre Überschrift und ihren Text jetzt getrennt an, und ein mehrzeilig geschriebener Text bleibt mehrzeilig, statt zu einem Absatz zusammenzulaufen. Hat eine Benachrichtigung weitere Einzelheiten — welche Dateien sich geändert haben und in welchem Umfang —, lassen sich diese öffnen, ohne die Liste zu verlassen. Aktionsschaltflächen benennen jetzt, was sie tun, statt nur \"Ausführen\", und nach der Ausführung nennt die Benachrichtigung, wie sie erledigt wurde, statt nur dass sie fertig ist.",
       "Eine Benachrichtigung, deren Aktion länger dauert, zeigt jetzt an, dass sie läuft, und ihre Schaltflächen verschwinden bis zum Abschluss — ein langer Neuaufbau sieht damit nicht mehr wie ein wirkungsloser Klick aus und lässt sich nicht mehr versehentlich zweimal starten.",
@@ -68,7 +68,9 @@
       "Quotinator beendete sich, statt zu starten, wenn sein Datenverzeichnis nicht beschreibbar war. Ein Startschritt war ungeschützt und beendete den Prozess, bevor irgendetwas ausgeliefert wurde — samt Statusseite, API-Dokumentation und Wiederherstellungsmöglichkeiten; der Start läuft jetzt in einem eingeschränkten Zustand weiter, der das Problem meldet (issue #326)",
       "Quotinator beendete sich, bevor es mit der Auslieferung begann, wenn das Verzeichnis für seine Verschlüsselungsschlüssel nicht angelegt werden konnte — dieselbe Art von Fehler, einen Schritt früher, wonach überhaupt nichts mehr erreichbar war (issue #326)",
       "Die Seiten im eingeschränkten Zustand wurden nicht dargestellt, wenn die Datenbank nicht verfügbar war: Startseite und Benachrichtigungsseite fragten sie beide während des Renderns ab, was eine Fehlerseite anstelle der Erklärung ergab, für die sie gedacht sind (issue #326)",
-      "Der Changelog-Speicher fiel wenige Minuten nach dem Start unbemerkt aus, woraufhin die Über-Seite für den Rest der Sitzung aus den ursprünglichen Dateien bereitgestellt wurde. Er liegt jetzt auf der Festplatte statt nur im Arbeitsspeicher und bleibt damit verfügbar, solange Quotinator läuft (issue #309)"
+      "Der Changelog-Speicher fiel wenige Minuten nach dem Start unbemerkt aus, woraufhin die Über-Seite für den Rest der Sitzung aus den ursprünglichen Dateien bereitgestellt wurde. Er liegt jetzt auf der Festplatte statt nur im Arbeitsspeicher und bleibt damit verfügbar, solange Quotinator läuft (issue #309)",
+      "Das erneute Einlesen der mitgelieferten Zitatdaten markiert dieselben, bereits gelösten Konflikte nicht mehr bei jedem erneuten Einlesen zur Überprüfung — eine Korrektur, die einen Konflikt beim einen Durchlauf bereits behoben hat, wird beim nächsten jetzt korrekt als weiterhin behoben erkannt, statt jedes Mal erneut als fehlerhaft markiert zu werden (issue #374)",
+      "Die Entscheidung eines Kurators, das ursprüngliche Datum eines Zitats beizubehalten, wenn zwei widersprüchliche Kopien davon existieren, wirkt sich jetzt tatsächlich aus. Zuvor konnte sie stillschweigend von der zuletzt verarbeiteten Kopie überschrieben werden, sodass das Zitat weiterhin das falsche Datum anzeigen konnte, selbst nachdem der Konflikt angeblich gelöst war (issue #378)"
     ],
     "removed": [
       "Die Einstellung `Quotinator__NotificationDefaultExpiryHours` wurde entfernt. Sie legte fest, wie lange eine Benachrichtigung sichtbar blieb, bevor sie ablief — was nicht mehr zutrifft, da Benachrichtigungen nur noch ablaufen, wenn die erzeugende Stelle es angibt; die Einstellung hatte damit nichts mehr zu steuern (issue #312)"

@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367],
+    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 378],
     "highlights": [
       "Meldingen tonen hun kop en hun bericht nu als aparte onderdelen, en een bericht dat op meerdere regels is geschreven blijft op meerdere regels staan in plaats van tot één alinea samen te lopen. Heeft een melding meer details — welke bestanden zijn gewijzigd en hoeveel — dan kun je die openen zonder de lijst te verlaten. Actieknoppen zeggen nu wat ze doen in plaats van alleen \"Uitvoeren\", en zodra een actie is uitgevoerd vermeldt de melding hoe die is afgehandeld in plaats van alleen dat hij klaar is.",
       "Een melding waarvan de actie even duurt geeft nu aan dat hij bezig is, en de knoppen verdwijnen tot hij klaar is — zo lijkt een lange herinlezing niet langer op een klik die niets deed, en kan hij niet meer per ongeluk twee keer worden gestart.",
@@ -68,7 +68,9 @@
       "Quotinator sloot af in plaats van te starten wanneer er niet naar de datamap geschreven kon worden. Eén opstartstap was onbeschermd en beëindigde het proces voordat er iets werd bediend, waarmee ook de statuspagina, de API-documentatie en de herstelmogelijkheden verdwenen; het opstarten gaat nu verder in een beperkte toestand die het probleem meldt (issue #326)",
       "Quotinator sloot af voordat het begon te bedienen wanneer de map met de versleutelingssleutels niet aangemaakt kon worden — dezelfde soort fout, één stap eerder, waarna helemaal niets meer bereikbaar was (issue #326)",
       "De pagina's in beperkte toestand werden niet getekend wanneer de database niet beschikbaar was: de startpagina en de meldingenpagina bevroegen die allebei tijdens het renderen, wat een foutpagina opleverde in plaats van de uitleg waarvoor ze bestaan (issue #326)",
-      "De changelog-opslag viel enkele minuten na het opstarten stilzwijgend uit, waarna de Over-pagina de rest van de sessie vanuit de oorspronkelijke bestanden werd geleverd. De opslag staat nu op schijf in plaats van alleen in het geheugen, zodat deze beschikbaar blijft zolang Quotinator draait (issue #309)"
+      "De changelog-opslag viel enkele minuten na het opstarten stilzwijgend uit, waarna de Over-pagina de rest van de sessie vanuit de oorspronkelijke bestanden werd geleverd. De opslag staat nu op schijf in plaats van alleen in het geheugen, zodat deze beschikbaar blijft zolang Quotinator draait (issue #309)",
+      "Het opnieuw inladen van de meegeleverde quotegegevens markeert dezelfde, al opgeloste conflicten niet langer bij elke herlaadbeurt opnieuw voor beoordeling — een correctie die een conflict bij de ene herlaadbeurt al oploste, wordt bij de volgende nu correct herkend als nog steeds opgelost, in plaats van elke keer opnieuw als kapot te worden gemarkeerd (issue #374)",
+      "De keuze van een beheerder om de oorspronkelijke datum van een quote te behouden wanneer twee tegenstrijdige kopieën ervan bestaan, heeft nu daadwerkelijk effect. Voorheen kon dit stilzwijgend worden overschreven door welke kopie het laatst werd verwerkt, waardoor de quote de verkeerde datum kon blijven tonen, ook nadat het conflict zogenaamd was opgelost (issue #378)"
     ],
     "removed": [
       "De instelling `Quotinator__NotificationDefaultExpiryHours` is verwijderd. Deze bepaalde hoe lang een melding zichtbaar bleef voordat hij verliep, wat niet meer van toepassing is nu meldingen alleen nog verlopen wanneer degene die de melding aanmaakt dat aangeeft — de instelling had niets meer om te regelen (issue #312)"

@@ -1599,6 +1599,61 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
+    /// #378 (found live against the real bundled corpus, 2026-09-08, while verifying the fix above): a
+    /// `Keep`/`Replace` rule that matches a field while nothing exists yet must not be silently applied —
+    /// `Keep` would resolve the field to null, which is well-defined per `FieldMergeResolver` but can just
+    /// as easily be a role-reversed or vestigial rule authored against a snapshot that no longer applies
+    /// (developer: "we should flag that as a possible issue as it may be an accident"). Four real
+    /// `nikhilnamal17-conflict-rules.json` `quoteText` "Keep" rules turned out to be exactly this — their
+    /// own recorded `existingRecord`/`incomingRecord` were already byte-identical, so the rule never did
+    /// anything at all and was deleted as vestigial cruft, not fixed. This test proves the general case:
+    /// such a rule now holds the Add for review (`Pending`) instead of either corrupting the field or
+    /// silently ignoring the rule.
+    /// </summary>
+    [TestMethod]
+    public async Task Seed_WithAKeepRuleMatchingABrandNewQuote_StagesPendingForReviewRatherThanApplyingOrIgnoring()
+    {
+        string keepFile = Path.Combine(_tempDir, "keep-rule-against-nothing.json");
+        File.WriteAllText(keepFile,
+            """
+            {"quotes":[
+                {"id":"e6611111-1111-4111-8111-111111111111","quote":"A line worth keeping exactly as it already is.","originalLanguage":"en","source":"Keep Rule Test Fixture","date":"2020","character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"e6611111-1111-4111-8111-111111111111","quote":"A line worth keeping exactly as it already is.","originalLanguage":"en","source":"Keep Rule Test Fixture","date":"2020","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        string ruleFile = Path.Combine(_tempDir, "keep-rule-against-nothing-rules.json");
+        File.WriteAllText(ruleFile,
+            """
+            {"rules":[{
+                "entityId":"e6611111-1111-4111-8111-111111111111",
+                "existingRecord":{"quoteText":"A line worth keeping exactly as it already is."},
+                "incomingRecord":{"quoteText":"A line worth keeping exactly as it already is."},
+                "fields":[{"field":"quoteText","resolution":"keep"}]
+            }]}
+            """);
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(keepFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
+            ManifestPolicy.HardcodedDefault, "keep-rule-against-nothing-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+
+        List<ImportActionEntity> actions = [.. (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, null, null, 1, 0)).Items
+            .Where(a => a.EntityId.Equals("e6611111-1111-4111-8111-111111111111", StringComparison.OrdinalIgnoreCase) && a.EntityType == "Quote")];
+
+        Assert.HasCount(1, actions,
+            "Exactly one action for this id — not two, even though both in-file occurrences independently see nothing existing yet");
+        Assert.AreEqual(ImportActionStatus.Pending, actions[0].Status.Parsed,
+            "A Keep rule matching against nothing must hold the Add for review, not silently apply it or silently ignore it");
+
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        int quoteRowCount = await conn.QuerySingleAsync<int>(
+            "SELECT COUNT(*) FROM Quotinator_Quote WHERE Id = @id;", new { id = "e6611111-1111-4111-8111-111111111111" });
+        Assert.AreEqual(0, quoteRowCount, "Nothing is written until a curator resolves the Pending review");
+    }
+
+    /// <summary>
     /// Every active alert describes a review that can actually be performed.
     /// <para>
     /// **Reversed by #372, and the original mechanism is worth stating.** This asserted exactly one
