@@ -214,6 +214,29 @@ Unit tests must never write to or overwrite the source data they read. Tests mus
 
 This applies to reference files, seed data, JSON fixtures, and any other file a test reads as its expected input. If a test needs a known starting state, that state is created explicitly at the start of the test (e.g. in `[TestInitialize]` or as a local temp file) and torn down at the end. It is never written to a shared file that other tests or tools also depend on.
 
+## Tests must not depend on bundled data to stay green
+
+**A unit test must not read `data/sources/` or `scripts/cache/` at run time.** Those files change when
+the outside world changes — a source is refreshed upstream, a curated file gains an entry — and a test
+pinned to them goes red for reasons that have nothing to do with this project regressing. Reading such
+a file while *writing* a test, to obtain a value, is fine; reading it while *running* one is not.
+
+**The single exception is the suite's external-data sentinel**,
+[`import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md`](automated-testing/import-and-staged-actions/14-fresh-seed-produces-zero-pending-actions.md).
+Being aware of changes in external data that may affect our rules is the entire purpose of that test,
+so depending on the real bundled corpus is the point there rather than a liability. No other test gets
+that licence.
+
+**Pin the value as a literal and use a fixture.** A literal is also strictly stronger than a lookup for
+the id-stability tests: reading the expected id back out of the file the converter produced makes the
+test self-referential — regenerate that file under a changed id algorithm and both sides move together,
+so the one thing the test exists to catch (an id change orphaning every deployed row) passes silently.
+When a literal fails, **do not update it**; that is a migration and a decision, not a new expected value.
+
+Found live 2026-09-08 with four violations: both converter test projects read their expected id out of
+`data/sources/`, and `SourceQuoteFileReaderTests` asserted the curated file held exactly four
+conversations — so curating a fifth would have failed a test with nothing broken.
+
 ## Bug fixes
 
 Every bug fix must be accompanied by tests that close the gap the bug exposed. The requirement applies whether the bug was found in production or during development.

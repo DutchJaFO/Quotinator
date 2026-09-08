@@ -1064,6 +1064,31 @@ hand-computed `id` on every entry (friction the project could generate for itsel
 `"date": null` that actively meant "reset this source's date" on every row, which is what caused
 spurious Pending actions the file's author never intended.
 
+### An ambiguity is explicitly permitted, never hidden
+
+**When the importer cannot tell two readings apart, it stages the ambiguity as `Pending` and a declared
+rule resolves it. It never picks a reading silently.** The canonical case is one title carrying two
+dates: either one of the dates is wrong, or the title names two distinct works, and nothing in the raw
+import distinguishes them. There are exactly two ways to say which applies, and both are a reviewed
+line in a file:
+
+- **One value is wrong** → a `SourceAliasRule`, dated (`date` → `canonicalDate`) when it corrects a date.
+- **They are genuinely distinct** → paired `sources[]` declarations, one per dated version.
+
+**Normalising the ambiguity away is the failure mode, not the fix.** Found live (2026-09-08): a casing
+duplicate was "fixed" by making a new Source variant adopt the first-seen row's spelling. It cleared
+the check by hiding the disagreement — whichever spelling happened to be stored first would have become
+canonical forever, so a first-seen `the mOvie Title` would silently swallow every later, correct
+`The Movie Title` with nothing left to notice. Reverted; the importer keeps the incoming spelling and
+an alias declares the canonical one.
+
+**A check must not re-ask a question a declaration has already answered.** The same day, after the six
+genuinely-two-version titles were declared, the reseed still warned *"claims 2 different dates … verify
+this is genuinely 2 distinct works"* for every one of them. The declaration **is** that verification. A
+warning that fires on the answer as well as the question is one a reader learns to skip, which costs it
+the case that is still genuinely ambiguous — so `ReportSelfContradictingSources` now consults the
+file's own `sources[]` and stays silent on a title whose every dated variant is declared.
+
 ### Verifying title/date corrections (`*-conflict-rules.json`, `*-source-aliases.json`)
 
 A `ConflictResolutionRule` or `SourceAliasRule` entry encodes a factual claim about a real film, show,
