@@ -67,10 +67,11 @@ public class DatabaseInitializerTests
         IAuditEntryWriter? auditWriter = null,
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
         ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false,
-        IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null)
+        IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null,
+        IChangeWriter? changeWriter = null)
         => CreateInitializer(batches, QuotinatorMigrations.All, useBaseline, ruleFileOverridePathResolver, sourceFileOverrideRegistry,
             autoPurgeBundledImportActions, autoPurgeUserImportActions, auditWriter, diskSpaceProvider, maxBackupStorageGb,
-            sourceCacheUpdater, autoUpdateSources, appVersionTracker, logger);
+            sourceCacheUpdater, autoUpdateSources, appVersionTracker, logger, changeWriter);
 
     private QuotinatorDatabaseInitializer CreateInitializer(
         IReadOnlyList<SeedBatch> batches, IReadOnlyList<SchemaMigration> migrations, bool useBaseline,
@@ -79,7 +80,8 @@ public class DatabaseInitializerTests
         IAuditEntryWriter? auditWriter = null,
         IDiskSpaceProvider? diskSpaceProvider = null, int? maxBackupStorageGb = null,
         ISourceCacheUpdater? sourceCacheUpdater = null, bool autoUpdateSources = false,
-        IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null)
+        IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null,
+        IChangeWriter? changeWriter = null)
     {
         SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
         DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1 };
@@ -88,7 +90,10 @@ public class DatabaseInitializerTests
         ImportActionReader actionReader   = new ImportActionReader(factory);
         ImportActionWriter actionWriter   = new ImportActionWriter(factory);
         ImportActionResolutionCoordinator coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        SqliteImportActionService actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        // #377: defaults to NoOpChangeWriter as every existing test expects — but a test asserting what
+        // an apply does or does not write to Audit_Change must pass the real ChangeWriter, or it passes
+        // whether or not the behaviour is correct, because nothing writes a change entry at all.
+        SqliteImportActionService actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, changeWriter ?? NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -1088,6 +1093,139 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, counts.Modified, "The character fill-in is a genuine, non-ambiguous change under Review — it must count as modified, not vanish");
         Assert.AreEqual(counts.Incoming, counts.Added + counts.Modified + counts.Unchanged + counts.Skipped,
                 $"Incoming={counts.Incoming} must equal Added({counts.Added}) + Modified({counts.Modified}) + Unchanged({counts.Unchanged}) + Skipped({counts.Skipped}) — the confirmation's own numbers must add up");
+    }
+
+    // ── #377: a no-op Modify is not a write, and must leave no trace of one ─────────────────────
+
+    /// <summary>
+    /// #377: seeds a quote carrying a character, then re-states it without one — the exact asymmetry
+    /// mechanism 1 produces in the bundled corpus, where vilaboim's raw format has no year and
+    /// NikhilNamal17's does. <c>FieldMergeResolver</c> keeps the stored value, so the resolution writes
+    /// nothing; the planner stages a Modify anyway.
+    /// <para>
+    /// The real <see cref="ChangeWriter"/> is passed deliberately — with the class default
+    /// (<c>NoOpChangeWriter</c>) nothing writes an <c>Audit_Change</c> row at all, so both halves of
+    /// these assertions would pass whether or not the fix works.
+    /// </para>
+    /// </summary>
+    private async Task<QuotinatorDatabaseInitializer> SeedThenRestateWithoutGenresAsync(string quoteId, string fileName)
+    {
+        string quoteFile = Path.Combine(_tempDir, fileName);
+        File.WriteAllText(quoteFile,
+            $$$"""
+            {"quotes":[{"id":"{{{quoteId}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":["drama"],"translations":{}}]}
+            """);
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
+            ManifestPolicy.HardcodedDefault, "noop-modify-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], changeWriter: new ChangeWriter(new SqliteConnectionFactory(_dbPath)));
+        await db.InitialiseAsync();
+
+        File.WriteAllText(quoteFile,
+            $$$"""
+            {"quotes":[{"id":"{{{quoteId}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
+            """);
+        return db;
+    }
+
+    private async Task<int> ModifiedChangeEntryCountAsync(string entityId)
+    {
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        return await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Audit_Change WHERE LOWER(EntityId) = LOWER(@entityId) AND LOWER(Action) = 'modified';",
+            new { entityId });
+    }
+
+    /// <summary>#377 row 14, positive half.</summary>
+    [TestMethod]
+    public async Task Reseed_NoOpModify_WritesNoChangeEntry()
+    {
+        string id = "77e11111-1111-4111-8111-111111111111";
+        QuotinatorDatabaseInitializer db = await SeedThenRestateWithoutGenresAsync(id,"noop-no-change-entry.json");
+
+        await db.ReseedAsync();
+
+        Assert.AreEqual(0, await ModifiedChangeEntryCountAsync(id),
+            "Nothing was written differently, so the change log must not claim a modification. ADR 014 forbids ever purging one, so a false entry here is permanent");
+    }
+
+    /// <summary>
+    /// #377 row 14, negative half — the control without which an apply path that logged nothing at all
+    /// would pass the positive.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_GenuineModify_StillWritesItsChangeEntry()
+    {
+        string id = "77e22222-2222-4222-8222-222222222222";
+        string quoteFile = Path.Combine(_tempDir, "genuine-change-entry.json");
+        File.WriteAllText(quoteFile,
+            $$$"""
+            {"quotes":[{"id":"{{{id}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
+            """);
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
+            ManifestPolicy.HardcodedDefault, "genuine-modify-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], changeWriter: new ChangeWriter(new SqliteConnectionFactory(_dbPath)));
+        await db.InitialiseAsync();
+
+        File.WriteAllText(quoteFile,
+            $$$"""
+            {"quotes":[{"id":"{{{id}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":"A Character","author":null,"type":"movie","genres":[],"translations":{}}]}
+            """);
+        await db.ReseedAsync();
+
+        Assert.IsGreaterThan(0, await ModifiedChangeEntryCountAsync(id),
+            "Filling an empty field is a real write and must still be recorded — a fix that silenced the change log entirely would pass row 14's positive half");
+    }
+
+    /// <summary>
+    /// #377 row 15: the accumulating half. Measured against the real corpus at planning time as +25
+    /// `Audit_Change` rows per reseed, 24 of them false — and ADR 014 means none can ever be purged.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_ChangeEntryCountNeverGrows()
+    {
+        string id = "77e33333-3333-4333-8333-333333333333";
+        QuotinatorDatabaseInitializer db = await SeedThenRestateWithoutGenresAsync(id,"noop-never-grows.json");
+
+        await db.ReseedAsync();
+        int afterFirst = await ModifiedChangeEntryCountAsync(id);
+        await db.ReseedAsync();
+        int afterSecond = await ModifiedChangeEntryCountAsync(id);
+
+        Assert.AreEqual(afterFirst, afterSecond,
+            $"Reseeding unchanged content must not add change entries — grew {afterFirst} → {afterSecond}");
+        Assert.AreEqual(0, afterSecond, "and the stable value is zero, not a stable non-zero one");
+    }
+
+    /// <summary>
+    /// #377 row 16: <c>UpdateOnNewestWins</c> rewrites <c>DateModified</c> <em>and</em>
+    /// <c>ImportBatchId</c> unconditionally, so a no-op does not merely restamp a timestamp — it
+    /// re-attributes which import batch owns the row, which is a real data change.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_NoOpModify_DoesNotRestampTheRow()
+    {
+        string id = "77e44444-4444-4444-8444-444444444444";
+        QuotinatorDatabaseInitializer db = await SeedThenRestateWithoutGenresAsync(id,"noop-no-restamp.json");
+
+        (string? DateModified, string? ImportBatchId) before = await QuoteStampAsync(id);
+        await db.ReseedAsync();
+        (string? DateModified, string? ImportBatchId) after = await QuoteStampAsync(id);
+
+        Assert.AreEqual(before.DateModified, after.DateModified, "Nothing was written, so nothing was modified at");
+        Assert.AreEqual(before.ImportBatchId, after.ImportBatchId, "and the row still belongs to the batch that actually wrote it");
+    }
+
+    private async Task<(string? DateModified, string? ImportBatchId)> QuoteStampAsync(string id)
+    {
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        return await conn.QuerySingleAsync<(string? DateModified, string? ImportBatchId)>(
+            "SELECT DateModified, ImportBatchId FROM Quotinator_Quote WHERE LOWER(Id) = LOWER(@id);", new { id });
     }
 
     /// <summary>

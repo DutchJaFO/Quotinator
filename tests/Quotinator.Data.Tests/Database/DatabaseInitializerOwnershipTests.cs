@@ -455,6 +455,16 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'B', 'Unchanged', 'Widget', @id, '{}', 'Applied', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
+            // #377: ActionType gains 'ResolvedToExisting' — a record whose fields differed from what
+            // arrived but whose resolution settled on the stored values, so nothing is written
+            // differently. Same rebuild hazard as 'Unchanged' above, and the same both-paths check.
+            await conn.ExecuteAsync(
+                "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'ResolvedToExisting', 'Widget', @id, '{}', 'Applied', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
+            // The negative half of every accepted-value assertion above: a CHECK widened to admit
+            // anything would pass all of them and only this one catches it.
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
                 "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'NotARealActionType', 'Widget', @id, '{}', 'Pending', @now, @now);",

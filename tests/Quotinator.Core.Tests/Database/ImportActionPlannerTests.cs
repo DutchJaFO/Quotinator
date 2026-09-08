@@ -480,6 +480,467 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionStatus.Blocked, quoteAction.Status.Parsed, "A matching rule must never bypass CompletenessGuard — a Complete row still blocks a silent overwrite");
     }
 
+    // ── #377: a Modify whose resolution settles on the stored values is not a write ──────────────
+
+    /// <summary>
+    /// #377: a quote whose Source carries a date, so the quote's own <c>date</c> field has a stored
+    /// value an incoming file can omit. That asymmetry is mechanism 1 — measured as 22 of every
+    /// reseed's 24 no-ops, because vilaboim's raw format carries no year while NikhilNamal17's does.
+    /// </summary>
+    private static async Task SeedExistingQuoteWithDatedSourceAsync(
+        SqliteConnection conn, string quoteId, string? sourceDate, string completenessStatus = "Incomplete")
+    {
+        string now      = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+        Guid   sourceId = Guid.NewGuid();
+        await conn.ExecuteAsync(
+            "INSERT INTO Quotinator_Source (Id, Title, Type, Date, DateCreated) VALUES (@Id, 'Casablanca', 'Movie', @Date, @now)",
+            new { Id = sourceId, Date = sourceDate, now });
+        await conn.ExecuteAsync(
+            "INSERT INTO Quotinator_Quote (Id, QuoteText, OriginalLanguage, SourceId, CompletenessStatus, DateCreated) " +
+            "VALUES (@Id, 'Original text', 'en', @SourceId, @CompletenessStatus, @now)",
+            new { Id = quoteId, SourceId = sourceId, CompletenessStatus = completenessStatus, now });
+    }
+
+    /// <summary>
+    /// #377 row 3, positive half. No rule and no merge policy is involved: `FieldMergeResolver` resolves
+    /// a field the incoming side leaves empty to the stored value all by itself, so the resolved payload
+    /// equals the stored one and nothing would be written.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_IncomingOmitsAFieldTheStoredRowHas_StagesResolvedToExisting()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "77a11111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteWithDatedSourceAsync(conn, id, sourceDate: "1942");
+
+        SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "Original text", character: null, date: null);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionKind.ResolvedToExisting, quoteAction.ActionType.Parsed,
+            "The stored date survives the resolution untouched, so no write happens — reporting this as Modify claims one that does not");
+        Assert.AreEqual(ImportActionStatus.Applied, quoteAction.Status.Parsed,
+            "Terminal: nothing to decide, nothing to write. This is also what keeps TryApplyBatchAsync (Decided only) from re-stamping the row and writing an Audit_Change entry");
+    }
+
+    /// <summary>
+    /// #377 row 3, negative half — and the sharpest control in the issue. Mechanism 1 and its mirror
+    /// image differ only in which side was empty, so a fix keying on "a field was empty" rather than on
+    /// "the resolution changed nothing" would silently stop applying genuine enrichment.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_IncomingSuppliesAFieldTheStoredRowLacks_StillStagesModify()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "77a22222-2222-4222-8222-222222222222";
+        await SeedExistingQuoteWithDatedSourceAsync(conn, id, sourceDate: null);
+
+        SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "Original text", character: null, date: "1942");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionKind.Modify, quoteAction.ActionType.Parsed,
+            "The incoming side fills a gap the stored row has — that is a real write, and classifying it as a no-op would discard the enrichment");
+    }
+
+    /// <summary>
+    /// #377 row 8: a Skip-policy Modify resolves to the existing values by construction, so a naive
+    /// "merged equals existing" test swallows it — erasing #374's distinction that under Skip a real
+    /// difference arrived and was deliberately discarded.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_SkipPolicyModify_IsStillSkipped_NotResolvedToExisting()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "77a33333-3333-4333-8333-333333333333";
+        await SeedExistingQuoteAsync(conn, id);
+
+        SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.", character: null);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Skip);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionKind.Modify, quoteAction.ActionType.Parsed,
+            "Skip is a policy discarding a real difference, not a resolution that changed nothing — #374 gave it its own count for exactly this reason");
+        Assert.AreEqual(DuplicateResolutionPolicy.Skip, quoteAction.AppliedPolicy.Parsed,
+            "and it stays attributable to the policy that made the decision");
+    }
+
+    /// <summary>
+    /// #377 row 9, negative half: only a would-be-Decided Modify is eligible. Reclassifying a Blocked
+    /// row would hide a row a human is waiting on — and the resolution here genuinely is a no-op, so
+    /// nothing but the status gate stops it being reclassified.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_BlockedNoOpModify_IsNotReclassified()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "77a44444-4444-4444-8444-444444444444";
+        await SeedExistingQuoteWithDatedSourceAsync(conn, id, sourceDate: "1942", completenessStatus: "Complete");
+
+        SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "Original text", character: null, date: null);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Blocked, quoteAction.Status.Parsed,
+            "A Complete row still blocks — the no-op classification must not become a way past CompletenessGuard");
+        Assert.AreEqual(ImportActionKind.Modify, quoteAction.ActionType.Parsed,
+            "and a Blocked action stays a Modify, because it is still waiting on a human rather than being settled");
+    }
+
+    /// <summary>
+    /// #377 row 4, positive half — mechanism 2, the shape the issue itself names and the one the real
+    /// bundled corpus produces once per reseed (the Star Wars <c>seriesId</c> rule). A rule whose
+    /// outcome is already stored reports <c>AlreadyApplied</c>, which still records a decision, which
+    /// still bypasses the branch's "nothing changed" early exit — so a Modify is staged for a
+    /// resolution that writes nothing.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSourcesAsync_RuleResolvesToExactlyExistingValues_StagesResolvedToExisting()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "77b11111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", type: "Movie", date: "1942");
+
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId       = id,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1942"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1943"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [BuildSourceEntry(id, date: "1943")], conflictRules: rules);
+
+        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.ResolvedToExisting, sourceAction.ActionType.Parsed,
+            "The rule keeps the stored date, so the resolved payload equals the stored one and nothing is written");
+        Assert.AreEqual(ImportActionStatus.Applied, sourceAction.Status.Parsed,
+            "Terminal — and what stops TryApplyBatchAsync re-stamping the row and writing a change entry");
+    }
+
+    /// <summary>
+    /// #377 row 4, negative half. Without it, a planner classifying <em>every</em> rule-resolved row as
+    /// a no-op passes the positive perfectly while silently discarding every correction a rule exists
+    /// to make.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSourcesAsync_RuleResolvesToADifferentValue_StillStagesModify()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "77b22222-2222-4222-8222-222222222222";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", type: "Movie", date: "1942");
+
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId       = id,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1942"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1943"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Replace }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [BuildSourceEntry(id, date: "1943")], conflictRules: rules);
+
+        ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, sourceAction.ActionType.Parsed,
+            "Replace takes the incoming date, which differs from what is stored — a real write, and never a no-op");
+    }
+
+    /// <summary>
+    /// #377 row 5, Universe representative — `Modify` is decided per branch independently, so each
+    /// rule-consulting site needs its own pair rather than inheriting Source's.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanUniverseAsync_RuleResolvesToExactlyExistingValues_StagesResolvedToExisting()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
+
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId       = id,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle-earth"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle-earth" }], conflictRules: rules);
+
+        ImportActionEntity universeAction = actions.Single(a => a.EntityType == "Universe");
+        Assert.AreEqual(ImportActionKind.ResolvedToExisting, universeAction.ActionType.Parsed,
+            "Keep resolves to the stored name, so nothing is written");
+        Assert.AreEqual(ImportActionStatus.Applied, universeAction.Status.Parsed, "Terminal");
+    }
+
+    /// <summary>#377 row 5's negative half for the Universe branch.</summary>
+    [TestMethod]
+    public async Task PlanUniverseAsync_RuleResolvesToADifferentValue_StillStagesModify()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
+
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId       = id,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle Earth"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Middle-earth"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Replace }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            universe: [new UniverseEntryDto { Id = id, Name = "Middle-earth" }], conflictRules: rules);
+
+        ImportActionEntity universeAction = actions.Single(a => a.EntityType == "Universe");
+        Assert.AreEqual(ImportActionKind.Modify, universeAction.ActionType.Parsed,
+            "Replace takes the incoming name — a real rename, and never a no-op");
+    }
+
+    /// <summary>
+    /// #377 row 7, positive half — mechanism 3, at a branch no `ConflictResolutionRule` ever reaches.
+    /// `MergeOurs` keeps the existing side on every conflict, so a row whose only differences conflict
+    /// resolves to exactly what is stored. Not present in the bundled corpus (every bundled file is
+    /// `review`) but reachable by any user import that sets a merge policy — and the pair is what
+    /// proves the fix is a property of the resolution, not of the rule mechanism.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanStageDirectionsAsync_MergeOursResolvesToExistingValues_StagesResolvedToExisting()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "77c11111-1111-4111-8111-111111111111";
+        await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.", imageUrl: "https://example.invalid/stored.png");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.MergeOurs,
+            stageDirections: [BuildStageDirectionEntry(id, text: "A shot rings out.", imageUrl: "https://example.invalid/incoming.png")]);
+
+        ImportActionEntity action = actions.Single(a => a.EntityType == "StageDirection");
+        Assert.AreEqual(ImportActionKind.ResolvedToExisting, action.ActionType.Parsed,
+            "MergeOurs keeps the stored imageUrl, so the resolved payload equals the stored one and nothing is written");
+        Assert.AreEqual(ImportActionStatus.Applied, action.Status.Parsed, "Terminal");
+    }
+
+    /// <summary>
+    /// #377 row 7, negative half — the same fixture under the opposite merge direction. Without it, a
+    /// classification keying on "a merge policy was used" rather than on the resolved payload would
+    /// pass the positive while discarding every value MergeTheirs exists to take.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanStageDirectionsAsync_MergeTheirsResolvesToADifferentValue_StillStagesModify()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "77c22222-2222-4222-8222-222222222222";
+        await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.", imageUrl: "https://example.invalid/stored.png");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.MergeTheirs,
+            stageDirections: [BuildStageDirectionEntry(id, text: "A shot rings out.", imageUrl: "https://example.invalid/incoming.png")]);
+
+        ImportActionEntity action = actions.Single(a => a.EntityType == "StageDirection");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed,
+            "MergeTheirs takes the incoming imageUrl — a real write on the same fixture the positive half calls a no-op");
+    }
+
+    /// <summary>#377 row 5, Series branch — positive half.</summary>
+    [TestMethod]
+    public async Task PlanSeriesAsync_RuleResolvesToExactlyExistingValues_StagesResolvedToExisting()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = await SeedExistingSeriesAsync(conn, "The Lord of the Rings");
+
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId       = id,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Lord of the Rings"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Lord of the Rings"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            series: [new SeriesEntryDto { Id = id, Name = "Lord of the Rings" }], conflictRules: rules);
+
+        ImportActionEntity action = actions.Single(a => a.EntityType == "Series");
+        Assert.AreEqual(ImportActionKind.ResolvedToExisting, action.ActionType.Parsed,
+            "Keep resolves to the stored name, so nothing is written");
+        Assert.AreEqual(ImportActionStatus.Applied, action.Status.Parsed, "Terminal");
+    }
+
+    /// <summary>#377 row 5, Series branch — negative half.</summary>
+    [TestMethod]
+    public async Task PlanSeriesAsync_RuleResolvesToADifferentValue_StillStagesModify()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = await SeedExistingSeriesAsync(conn, "The Lord of the Rings");
+
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId       = id,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Lord of the Rings"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Lord of the Rings"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Replace }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            series: [new SeriesEntryDto { Id = id, Name = "Lord of the Rings" }], conflictRules: rules);
+
+        ImportActionEntity action = actions.Single(a => a.EntityType == "Series");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed,
+            "Replace takes the incoming name — a real rename");
+    }
+
+    /// <summary>
+    /// #377 row 6, positive half. Season is the one site that already computes its effective-changed set
+    /// <em>after</em> rule resolution, so it needs its own pair — a change that "makes every branch
+    /// consistent" could regress the branch that was already right.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSeasonsAsync_RuleResolvesToExactlyExistingValues_StagesResolvedToExisting()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
+        string seasonId = await SeedExistingSeasonAsync(conn, seriesId, number: 1, title: "Book One", subtitle: "Water");
+
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId       = seasonId,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book 1"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            seasons: [BuildSeasonEntry(number: 1, seriesName: "Avatar: The Last Airbender", title: "Book 1", subtitle: "Water", id: seasonId)],
+            conflictRules: rules);
+
+        ImportActionEntity action = actions.Single(a => a.EntityType == "Season");
+        Assert.AreEqual(ImportActionKind.ResolvedToExisting, action.ActionType.Parsed,
+            "Keep resolves to the stored title, so nothing is written");
+        Assert.AreEqual(ImportActionStatus.Applied, action.Status.Parsed, "Terminal");
+    }
+
+    /// <summary>#377 row 6, negative half — the guard against regressing the one already-correct site.</summary>
+    [TestMethod]
+    public async Task PlanSeasonsAsync_RuleResolvesToADifferentValue_StillStagesModify()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
+        string seasonId = await SeedExistingSeasonAsync(conn, seriesId, number: 1, title: "Book One", subtitle: "Water");
+
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId       = seasonId,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book 1"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Replace }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            seasons: [BuildSeasonEntry(number: 1, seriesName: "Avatar: The Last Airbender", title: "Book 1", subtitle: "Water", id: seasonId)],
+            conflictRules: rules);
+
+        ImportActionEntity action = actions.Single(a => a.EntityType == "Season");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed,
+            "Replace takes the incoming title — a real retitle");
+    }
+
+    /// <summary>
+    /// #377 row 5, the fourth rule-consulting site: `PlanSourcesAsync`'s natural-key branch, which an
+    /// entry with no explicit id takes (#180's enrichment shape). Separate from the explicit-id branch
+    /// above because the two resolve their existing row differently and each stages its own Modify.
+    /// The differing field is `seriesId` rather than `date`: a natural-key entry states no date claim,
+    /// so `PickSourceVariant` matches the stored variant and a date could not differ here.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanSourcesAsync_ByNaturalKey_RuleResolvesToExactlyExistingValues_StagesResolvedToExisting()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string storedSeriesId   = await SeedExistingSeriesAsync(conn, "Stored Series");
+        string incomingSeriesId = await SeedExistingSeriesAsync(conn, "Incoming Series");
+        string sourceId = "77d11111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: "1942", seriesId: storedSeriesId);
+
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId       = sourceId,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{storedSeriesId}}"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{incomingSeriesId}}"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "Incoming Series")], conflictRules: rules);
+
+        ImportActionEntity action = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.ResolvedToExisting, action.ActionType.Parsed,
+            "Keep retains the stored Series link, so the resolved payload equals the stored one");
+        Assert.AreEqual(ImportActionStatus.Applied, action.Status.Parsed, "Terminal");
+    }
+
+    /// <summary>#377 row 5's negative half for the natural-key branch.</summary>
+    [TestMethod]
+    public async Task PlanSourcesAsync_ByNaturalKey_RuleResolvesToADifferentValue_StillStagesModify()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string storedSeriesId   = await SeedExistingSeriesAsync(conn, "Stored Series");
+        string incomingSeriesId = await SeedExistingSeriesAsync(conn, "Incoming Series");
+        string sourceId = "77d22222-2222-4222-8222-222222222222";
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: "1942", seriesId: storedSeriesId);
+
+        ConflictRuleLookup rules = new ConflictRuleLookup([
+            new ConflictResolutionRule
+            {
+                EntityId       = sourceId,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{storedSeriesId}}"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{incomingSeriesId}}"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Replace }],
+            },
+        ]);
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [BuildEnrichmentEntry(title: "Casablanca", seriesName: "Incoming Series")], conflictRules: rules);
+
+        ImportActionEntity action = actions.Single(a => a.EntityType == "Source");
+        Assert.AreEqual(ImportActionKind.Modify, action.ActionType.Parsed,
+            "Replace re-links the Source to the incoming Series — a real write");
+    }
+
     // ── #153: a Custom-resolution rule also applies to a brand-new Add, not just a later Modify ──
 
     private static ConflictResolutionRule BuildCharacterCustomRule(string quoteId, string customValue) => new()

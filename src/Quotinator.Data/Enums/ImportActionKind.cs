@@ -22,5 +22,25 @@ public enum ImportActionKind
     /// non-Quote entity used to disappear from a report — leaving a reader unable to tell content that
     /// arrived and was already correct from content a file never mentioned.
     /// </summary>
-    Unchanged
+    Unchanged,
+
+    /// <summary>
+    /// An existing record whose fields <em>did</em> differ from what arrived, but whose resolution
+    /// settled on exactly the values already stored, so nothing is written differently (#377).
+    /// <para>
+    /// Distinct from <see cref="Unchanged"/>, which means the file and the database agreed in the first
+    /// place — here they disagreed and the resolution kept the stored side. Distinct from
+    /// <see cref="Modify"/>, which claims a write that never happens. Distinct too from a
+    /// <c>Skip</c>-policy Modify, where a real difference arrived and was discarded by policy rather
+    /// than resolved away; that stays a <see cref="Modify"/> and is counted separately (#374).
+    /// </para>
+    /// <para>
+    /// Terminal, and that is load-bearing: an action of this kind is staged
+    /// <c>ImportActionStatus.Applied</c>, and <c>ImportActionResolutionCoordinator.TryApplyBatchAsync</c>
+    /// applies only <c>Decided</c> rows — so nothing re-stamps <c>DateModified</c>, nothing
+    /// re-attributes <c>ImportBatchId</c>, and nothing writes an <c>Audit_Change</c> row claiming a
+    /// modification that did not happen.
+    /// </para>
+    /// </summary>
+    ResolvedToExisting
 }
