@@ -232,6 +232,18 @@ Per `docs/workflow/process.md`'s Planning step 3.
    `TranslationCompletenessTests` fails on a key missing from `UI.nl.json`/`UI.de.json`. #374 already
    widened this array once, for `Skipped` — the same edit, one argument further.
 
+7a. **The rendered detail table needed a column, and this cross-check said it did not — wrongly.** It
+    stated that `NotificationTable.PayloadDetail` keeps its columns untouched, citing #373's decision
+    that "the payload is the structured detail, the body is the summary". That decision was already
+    superseded: #374 gave `Skipped` a column and #378 gave `Unchanged` one, so by the time this plan was
+    written the table's actual convention was *every bucket the summary sentence states has a column*.
+    The cross-check inherited a precedent instead of reading the current code — the exact failure
+    CLAUDE.md's *"existing code that looks like a pattern is not the same as a validated decision"* warns
+    about, in reverse. **Found by T1** (developer, 2026-09-09): a confirmation reading "…and 1 resolved
+    back to what was already stored" above a table with nowhere to put it. Fixed, with
+    `NotificationTableTests.EveryOutcomeTheSummaryStates_HasAColumnInTheDetail` as the general guard so
+    the next bucket cannot repeat it.
+
 7. **`ReseedFileAppliedMetadataDto.IdentityComponents` changes shape, per decisions E and F**, from
    `{EntityType}:{Added}:{Modified}` to the full breakdown. Its own doc comment explains why the ordering
    is load-bearing (the producer groups by planner emission order); that stays true and the `OrderBy` is
@@ -725,7 +737,8 @@ counted as `Modified`", which a planner that classified *everything* as a no-op 
 | 25 | ✅ | That assertion goes red before it goes green | Canary run | recorded in that document's own *Canary* section, run against a pre-fix build per step 1 |
 | 26 | ✅ | Build is clean and no regression | Build + test run | `dotnet build --configuration Release` → 0 warnings, 0 errors; `dotnet test --configuration Release -m:1` → all green |
 | 27 | ✅ | A Source whose Modify resolves to exactly the stored values is not counted as `Modified` in the confirmation | Unit test | The scenario #377's own *Failing tests* table names, asserted at the reporting surface rather than the planner. **Positive:** `DatabaseInitializerTests.Reseed_SourceModifyResolvesToExactlyExistingValues_NotCountedAsModified` — `Modified = 0`, `ResolvedToExisting = 1`, and the breakdown's parts still summing to `Incoming`. **Negative:** `Reseed_SourceModifyResolvesToADifferentValue_StillCountedAsModified`. Discrimination confirmed by mutation: forcing `ResolvesToExisting` to `false` fails the positive and leaves the control green |
-| 28 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
+| 28 | ✅ | The confirmation's detail table shows every outcome its summary sentence states | Unit test | `NotificationTableTests.ResolvedToExistingColumn_ShowsTheActualCount`, `.ResolvedToExistingOnlyRow_StillRenders`, and the general guard `.EveryOutcomeTheSummaryStates_HasAColumnInTheDetail` — one distinct value per bucket, so each is findable only if its own column exists. **Added after T1 found the body and the detail disagreeing**; see cross-check 7a |
+| 29 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
 
 **The negative halves are not ceremony; three of them are the only thing standing between this fix and a
 worse defect.** Row 3's would catch a fix that stops applying genuine enrichment. Row 14's would catch
