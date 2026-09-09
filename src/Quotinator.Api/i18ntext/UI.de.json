@@ -97,6 +97,7 @@
   "NotificationsDetailResolvedToExistingColumn": "Zurückgeführt",
   "NotificationsDetailStatusColumn": "Status",
   "NotificationsDetailCountColumn": "Anzahl",
+  "NotificationsDetailTotalLabel": "Gesamt",
   "NotificationDetailEntityCount": "{0}: {1} hinzugefügt, {2} aktualisiert",
   "NotificationDetailStatusCount": "{0}: {1}",
   "NotificationResolutionKeptExisting": "Gespeicherte Werte behalten",

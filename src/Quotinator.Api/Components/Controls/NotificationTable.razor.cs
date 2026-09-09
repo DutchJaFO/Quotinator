@@ -121,7 +121,16 @@ public partial class NotificationTable
     /// <summary>A notification's payload detail as a table. #308.</summary>
     /// <param name="Headers">Column headings, already localised.</param>
     /// <param name="Rows">One row per payload entry, cells in the same order as <paramref name="Headers"/>.</param>
-    internal sealed record PayloadTable(IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyList<string>> Rows);
+    /// <param name="Totals">
+    /// A single column-wise summary line, or empty when the payload has none. #383: separate from
+    /// <paramref name="Rows"/> rather than appended to it, so the markup can put it in a table footer —
+    /// a row appended to <paramref name="Rows"/> renders inside the body and reads as an entity named
+    /// "Total", and every render site would have to know the last row is special.
+    /// </param>
+    internal sealed record PayloadTable(
+        IReadOnlyList<string> Headers,
+        IReadOnlyList<IReadOnlyList<string>> Rows,
+        IReadOnlyList<string> Totals);
 
     /// <summary>
     /// The payload detail rendered as a table, with no rows when the type has none. #308.
@@ -150,57 +159,77 @@ public partial class NotificationTable
 
         return payload switch
         {
-            ReseedFileAppliedMetadataDto applied => new PayloadTable(
-                [text?.NotificationsDetailEntityColumn ?? "Entity",
-                 text?.NotificationsDetailIncomingColumn ?? "Incoming",
-                 text?.NotificationsDetailAddedColumn  ?? "Added",
-                 text?.NotificationsDetailUpdatedColumn ?? "Updated",
-                 text?.NotificationsDetailSkippedColumn ?? "Skipped",
-                 text?.NotificationsDetailUnchangedColumn ?? "Unchanged",
-                 text?.NotificationsDetailResolvedToExistingColumn ?? "Resolved"],
-                // #373: the payload carries Incoming and Unchanged alongside Added/Modified/Skipped — the
-                // complete record the API, the log and any audit read.
-                // #378: Unchanged is now its own column (developer, 2026-09-08: the summary sentence
-                // already states it, so showing it here is a display change, not a new computation) — a
-                // row with only Unchanged now renders as real information ("N item(s) already matched"),
-                // not the "states nothing" all-zero row #373 originally filtered out, so every entity type
-                // with any incoming rows is shown.
-                // #377: ResolvedToExisting joins them for the same reason, and found the same way — T1
-                // showed a body reading "…and 1 resolved back to what was already stored" above a table
-                // with nowhere to put it, so the summary and its own detail disagreed. Every bucket the
-                // sentence states has a column; the invariant is now
-                // Incoming == Added + Modified + Unchanged + Skipped + ResolvedToExisting, so a row is
-                // still only excluded when it had no incoming rows at all.
-                [.. applied.Counts
-                    // #377 (developer, 2026-09-09): every value the summary sentence states must be
-                    // findable in the detail — including how many arrived, which the sentence leads
-                    // with and the table had no column for. An entity type that arrived is reported
-                    // whatever became of it, so a row with Incoming and no outcomes is kept: that is
-                    // the case most worth noticing, not one to hide.
-                    //
-                    // Incoming alone is not the test, though, and assuming it was broke reading
-                    // history: #302 persisted payloads before Incoming existed, so those rows carry
-                    // Added/Modified and a defaulted Incoming of 0, and filtering on Incoming alone
-                    // made every one of them render as an empty table.
-                    .Where(c => c.Incoming > 0 || c.Added > 0 || c.Modified > 0
-                             || c.Skipped > 0 || c.Unchanged > 0 || c.ResolvedToExisting > 0)
-                    .Select(IReadOnlyList<string> (c) =>
-                    [c.EntityType,
-                     c.Incoming.ToString(CultureInfo.CurrentCulture),
-                     c.Added.ToString(CultureInfo.CurrentCulture),
-                     c.Modified.ToString(CultureInfo.CurrentCulture),
-                     c.Skipped.ToString(CultureInfo.CurrentCulture),
-                     c.Unchanged.ToString(CultureInfo.CurrentCulture),
-                     c.ResolvedToExisting.ToString(CultureInfo.CurrentCulture)])]),
+            ReseedFileAppliedMetadataDto applied => ReseedTable(applied, text),
 
             ImportReviewPendingMetadataDto review => new PayloadTable(
                 [text?.NotificationsDetailStatusColumn ?? "Status",
                  text?.NotificationsDetailCountColumn  ?? "Count"],
                 [.. review.Counts.Select(IReadOnlyList<string> (c) =>
-                    [c.Status, c.Count.ToString(CultureInfo.CurrentCulture)])]),
+                    [c.Status, c.Count.ToString(CultureInfo.CurrentCulture)])],
+                // #383: no totals here. Two columns, and this payload's own body already states the
+                // sum, so a totals line would restate the sentence directly above it rather than
+                // align anything under a column.
+                []),
 
-            _ => new PayloadTable([], []),
+            _ => new PayloadTable([], [], []),
         };
+    }
+
+    /// <summary>
+    /// The <see cref="ReseedFileAppliedMetadataDto"/> breakdown, one row per entity type plus the
+    /// totals line #383 added.
+    /// </summary>
+    /// <param name="applied">The payload being rendered.</param>
+    /// <param name="text">The resolved UI strings, for the column headings and the totals label.</param>
+    private static PayloadTable ReseedTable(ReseedFileAppliedMetadataDto applied, Quotinator.Api.I18nText.UI? text)
+    {
+        // Filtered once and reused for both the rows and their totals. Summing the payload a second
+        // time independently would let the footer disagree with the table above it the moment the row
+        // filter changes and the sum is not updated to match.
+        List<ReseedEntityCountDto> counted =
+            [.. applied.Counts
+                // #377 (developer, 2026-09-09): every value the summary sentence states must be
+                // findable in the detail — including how many arrived, which the sentence leads
+                // with and the table had no column for. An entity type that arrived is reported
+                // whatever became of it, so a row with Incoming and no outcomes is kept: that is
+                // the case most worth noticing, not one to hide.
+                //
+                // Incoming alone is not the test, though, and assuming it was broke reading
+                // history: #302 persisted payloads before Incoming existed, so those rows carry
+                // Added/Modified and a defaulted Incoming of 0, and filtering on Incoming alone
+                // made every one of them render as an empty table.
+                .Where(c => c.Incoming > 0 || c.Added > 0 || c.Modified > 0
+                         || c.Skipped > 0 || c.Unchanged > 0 || c.ResolvedToExisting > 0)];
+
+        return new PayloadTable(
+            [text?.NotificationsDetailEntityColumn ?? "Entity",
+             text?.NotificationsDetailIncomingColumn ?? "Incoming",
+             text?.NotificationsDetailAddedColumn  ?? "Added",
+             text?.NotificationsDetailUpdatedColumn ?? "Updated",
+             text?.NotificationsDetailSkippedColumn ?? "Skipped",
+             text?.NotificationsDetailUnchangedColumn ?? "Unchanged",
+             text?.NotificationsDetailResolvedToExistingColumn ?? "Resolved"],
+            [.. counted.Select(IReadOnlyList<string> (c) =>
+                [c.EntityType,
+                 c.Incoming.ToString(CultureInfo.CurrentCulture),
+                 c.Added.ToString(CultureInfo.CurrentCulture),
+                 c.Modified.ToString(CultureInfo.CurrentCulture),
+                 c.Skipped.ToString(CultureInfo.CurrentCulture),
+                 c.Unchanged.ToString(CultureInfo.CurrentCulture),
+                 c.ResolvedToExisting.ToString(CultureInfo.CurrentCulture)])],
+            // #383: rendered even when there is only one entity type, where it necessarily repeats
+            // that row. Whether to suppress it there is open until the rendered result has been seen
+            // (developer, 2026-09-09) — a footer that comes and goes may read worse than one whose
+            // shape is fixed, and that is a judgement about the effect rather than about the code.
+            counted.Count == 0
+                ? []
+                : [text?.NotificationsDetailTotalLabel ?? "Total",
+                   counted.Sum(c => c.Incoming).ToString(CultureInfo.CurrentCulture),
+                   counted.Sum(c => c.Added).ToString(CultureInfo.CurrentCulture),
+                   counted.Sum(c => c.Modified).ToString(CultureInfo.CurrentCulture),
+                   counted.Sum(c => c.Skipped).ToString(CultureInfo.CurrentCulture),
+                   counted.Sum(c => c.Unchanged).ToString(CultureInfo.CurrentCulture),
+                   counted.Sum(c => c.ResolvedToExisting).ToString(CultureInfo.CurrentCulture)]);
     }
 
     /// <summary>

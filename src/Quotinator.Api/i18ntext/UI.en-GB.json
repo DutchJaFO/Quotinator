@@ -97,6 +97,7 @@
   "NotificationsDetailResolvedToExistingColumn": "Resolved",
   "NotificationsDetailStatusColumn": "Status",
   "NotificationsDetailCountColumn": "Count",
+  "NotificationsDetailTotalLabel": "Total",
   "NotificationDetailEntityCount": "{0}: {1} added, {2} updated",
   "NotificationDetailStatusCount": "{0}: {1}",
   "NotificationResolutionKeptExisting": "Kept the stored values",

@@ -773,6 +773,105 @@ public class NotificationTableTests
             "A single-outcome action offers no choice — it would be a control with one option.");
     }
 
+    // ── #383: the detail table carries a totals line ────────────────────────────────────────────
+    //
+    // #377 established the invariant Incoming == Added + Modified + Unchanged + Skipped +
+    // ResolvedToExisting, and this table is the only place it can be seen. A reader with several
+    // entity types had to add the columns up by eye to check it.
+
+    /// <summary>
+    /// #383 row 1. Two entity types with deliberately different figures, so a totals line that
+    /// echoed one row, or summed the wrong axis, cannot pass.
+    /// </summary>
+    [TestMethod]
+    public void PayloadDetail_ReseedFileApplied_TotalsRowSumsEveryColumn()
+    {
+        const string payload =
+            """
+            {"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[
+              {"entityType":"Quote","incoming":97,"added":0,"modified":0,"skipped":0,"unchanged":76,"resolvedToExisting":21},
+              {"entityType":"Source","incoming":84,"added":3,"modified":1,"skipped":2,"unchanged":78,"resolvedToExisting":0}]}
+            """;
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.IsNotEmpty(detail.Totals, "The reseed breakdown must carry a totals line.");
+        Assert.HasCount(detail.Headers.Count, detail.Totals,
+            "The totals line has one cell per column, like every row (#308's own contract).");
+
+        // Column 0 is the label, not a number. Every other column is the column-wise sum.
+        string[] expected = ["181", "3", "1", "2", "154", "21"];
+        for (int column = 1; column < detail.Headers.Count; column++)
+        {
+            Assert.AreEqual(expected[column - 1], detail.Totals[column],
+                $"Column '{detail.Headers[column]}' must total its own values across every row.");
+        }
+    }
+
+    /// <summary>
+    /// #383 row 2. A single entity type makes the totals line repeat its only row, and it is rendered
+    /// anyway — for now. Whether to suppress it there is deliberately left open until the rendered
+    /// result has been seen (developer, 2026-09-09), so this test pins today's answer and a later
+    /// change to it is a visible change rather than a silent one.
+    /// </summary>
+    [TestMethod]
+    public void PayloadDetail_ReseedFileApplied_SingleEntityType_StillCarriesTotals()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","incoming":13,"added":13}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.HasCount(1, detail.Rows, "Fixture guard — one entity type, so one data row.");
+        Assert.IsNotEmpty(detail.Totals, "A single-row table still carries its totals line today.");
+        Assert.AreEqual("13", detail.Totals[1], "Incoming totals the single row's own value.");
+    }
+
+    /// <summary>
+    /// #383 row 3. The sibling payload sharing <c>PayloadTable</c> gains nothing: its two columns are
+    /// Status and Count, and its own body already states the sum, so a totals line would restate the
+    /// sentence directly above it.
+    /// </summary>
+    [TestMethod]
+    public void PayloadDetail_ImportReviewPending_HasNoTotals()
+    {
+        // fileName, origin and batchId are `required` on the DTO — omitting them makes the payload
+        // undeserializable, and PayloadDetail then returns an empty table for a reason that has
+        // nothing to do with totals. The fixture guard below is what caught that while writing this.
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","batchId":"7f000000-0000-4000-8000-00000000000b","counts":[{"status":"Pending","count":4},{"status":"Blocked","count":2}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Import needs review", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ImportReviewPending));
+
+        Assert.IsNotEmpty(detail.Rows, "Fixture guard — the sibling payload still renders its own rows.");
+        Assert.IsEmpty(detail.Totals, "Only the reseed breakdown carries totals.");
+    }
+
+    /// <summary>
+    /// #383 row 4. The leading cell is a translated label, never a hardcoded string — the same rule
+    /// every column heading here already follows, and the reason `PayloadDetail` takes the resolved
+    /// text table at all.
+    /// </summary>
+    [TestMethod]
+    public void PayloadDetail_ReseedFileApplied_TotalsLabelComesFromTranslations()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","incoming":1,"added":1}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.AreEqual(BaselineStrings()["NotificationsDetailTotalLabel"], detail.Totals[0],
+            "The label is whatever the English baseline says it is, so a translation change moves it.");
+    }
+
     private static Dictionary<string, string> BaselineStrings()
     {
         string baseline = Path.Combine(

@@ -69,6 +69,18 @@
                                         </tr>
                                     }
                                 </tbody>
+                                @* #383: a footer, not a last row — see PayloadTable.Totals. *@
+                                @if (detail.Totals.Count > 0)
+                                {
+                                    <tfoot>
+                                        <tr>
+                                            @foreach (string cell in detail.Totals)
+                                            {
+                                                <td>@cell</td>
+                                            }
+                                        </tr>
+                                    </tfoot>
+                                }
                             </table>
                             </div>
                         </details>
@@ -201,6 +213,19 @@
                         </tr>
                     }
                 </tbody>
+                @* #383: the same footer as the in-place table above — both render sites, or the
+                   dialog and the popup disagree about the same payload. *@
+                @if (openDetail.Totals.Count > 0)
+                {
+                    <tfoot>
+                        <tr>
+                            @foreach (string cell in openDetail.Totals)
+                            {
+                                <td>@cell</td>
+                            }
+                        </tr>
+                    </tfoot>
+                }
             </table>
             </div>
         </ChildContent>

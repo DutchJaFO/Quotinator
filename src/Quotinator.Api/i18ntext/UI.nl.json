@@ -97,6 +97,7 @@
   "NotificationsDetailResolvedToExistingColumn": "Teruggevallen",
   "NotificationsDetailStatusColumn": "Status",
   "NotificationsDetailCountColumn": "Aantal",
+  "NotificationsDetailTotalLabel": "Totaal",
   "NotificationDetailEntityCount": "{0}: {1} toegevoegd, {2} bijgewerkt",
   "NotificationDetailStatusCount": "{0}: {1}",
   "NotificationResolutionKeptExisting": "Opgeslagen waarden behouden",

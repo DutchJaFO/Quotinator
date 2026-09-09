@@ -82,6 +82,16 @@
     text-align: right;
 }
 
+/* #383: the totals line has to read as a summary of the rows above it rather than as one more of
+   them. A rule above it and a heavier weight are what separate the two — the same pair the header
+   row uses in the opposite direction (a rule below, lighter weight), so the table is bracketed by
+   its own headings and its own totals. */
+.notification-detail-table tfoot td {
+    font-weight: 600;
+    border-top: 1px solid rgba(128, 128, 128, 0.35);
+    padding-top: 0.25rem;
+}
+
 /* #308: the detail popup's own backdrop, dialog, title and scroll region all lived here until the
    third modal made the duplication obvious. `ModalDialog` owns that shell now — including the 95vh cap
    these rules had to be given separately, one message after the startup modals got theirs. */
