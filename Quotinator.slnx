@@ -404,6 +404,7 @@
     <File Path="docs/automated-testing/import-and-staged-actions/20-pending-review-alert.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/21-reseed-preserves-existing-data.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/22-season-attached-quote-served-through-the-api.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/23-complete-row-blocks-only-on-a-real-write.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

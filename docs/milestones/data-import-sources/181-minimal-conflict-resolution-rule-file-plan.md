@@ -233,6 +233,11 @@ lookup runs *after* `CompletenessGuard.ShouldBlock`, never before — a rule nev
 change (`PlanAsync_ReviewPolicy_MatchingRuleButCompletenessGuardBlocks_StillStagesBlockedNotDecided`).
 No staleness detection (that's #153's own later addition).
 
+> **Superseded by [#382](https://github.com/DutchJaFO/Quotinator/issues/382).** The ordering above was
+> reversed: the rule now resolves *before* the guard reads its field set, so a `Complete` row is blocked
+> only when something would actually be written to it. A rule resolving to a *different* value still
+> blocks, which is what remains of this decision. The named test was retired with it.
+
 Four new tests in `ImportActionPlannerTests.cs` cover: full rule coverage → `Decided` with correct
 merged value; partial coverage (one of two ambiguous fields has a rule) → still `Pending`, regression
 guard; a rule for a different quote id → no effect, regression guard matching pre-#181 behaviour; a
