@@ -46,10 +46,28 @@
     border-collapse: collapse;
 }
 
+/* #377: the breakdown reached seven columns once every outcome the summary sentence states had to be
+   findable here too, and the last one was clipped by the dialog's right edge — visible only in the
+   rendered UI, which is why T1 caught it and no test did. Scrolls within its own container rather than
+   widening the dialog without limit or letting a column fall off the edge: a number a reader cannot
+   see is the same defect as a number that was never recorded. */
+.notification-detail-scroll {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
 .notification-detail-table th,
 .notification-detail-table td {
-    padding: 0.1rem 0.75rem 0.1rem 0;
+    /* Tighter than the original 0.75rem: seven numeric columns, and the gap was sized for four. */
+    padding: 0.1rem 0.6rem 0.1rem 0;
     text-align: left;
+    white-space: nowrap;
+}
+
+/* Counts read as a column of figures rather than a ragged left edge; the entity name stays left. */
+.notification-detail-table td + td,
+.notification-detail-table th + th {
+    text-align: right;
 }
 
 .notification-detail-table th {

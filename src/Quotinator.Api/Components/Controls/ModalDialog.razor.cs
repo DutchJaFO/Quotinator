@@ -32,6 +32,20 @@ public partial class ModalDialog
     /// <summary>Maximum dialog width, as a CSS length. Height is fixed at 95vh for every caller.</summary>
     [Parameter] public string MaxWidth { get; set; } = "80vw";
 
+    /// <summary>
+    /// Whether the dialog is only as wide as its content needs, bounded by <see cref="MaxWidth"/>
+    /// (#377). Off by default — Bootstrap's <c>.modal-dialog</c> fills to its maximum, which is what
+    /// every existing caller was laid out against.
+    /// <para>
+    /// Worth setting where the content's width is data-dependent, such as a table whose column count
+    /// grows: sizing to the content means the dialog fits whatever it holds, where a fixed maximum is a
+    /// guess that silently clips the moment the content outgrows it — which is exactly how #377's
+    /// seven-column breakdown lost its last column. <see cref="MaxWidth"/> then serves as a viewport
+    /// guard rather than a layout figure to keep re-tuning.
+    /// </para>
+    /// </summary>
+    [Parameter] public bool FitContent { get; set; }
+
     /// <summary>Whether the header carries a close button.</summary>
     [Parameter] public bool ShowCloseButton { get; set; } = true;
 

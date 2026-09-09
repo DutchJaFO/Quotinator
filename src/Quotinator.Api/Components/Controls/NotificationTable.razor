@@ -48,6 +48,7 @@
                            is parsed as markup, which broke real startup here (#308, 2026-09-02). *@
                         <details class="notification-detail">
                             <summary>@Text.NotificationsDetailToggle</summary>
+                            <div class="notification-detail-scroll">
                             <table class="notification-detail-table">
                                 <thead>
                                     <tr>
@@ -69,6 +70,7 @@
                                     }
                                 </tbody>
                             </table>
+                            </div>
                         </details>
                     }
                     @if (detail.Rows.Count > 0 && DetailAsDialog)
@@ -167,13 +169,18 @@
        ModalDialog rather than a backdrop of its own — this is the third place needing a modal, and the
        two before it had already had to be fixed separately for the same overflow. Backdrop click closes
        here: unlike the startup modals there is nothing to acknowledge, so dismissing it costs nothing. *@
+    @* #377: sized to its content rather than to a fixed maximum. The breakdown's width is data-dependent
+       — it grew to seven columns and the last one sat outside the old 32rem edge — so any figure chosen
+       here is a guess with an expiry date. MaxWidth is now only the viewport guard, and the table
+       scrolls within itself below for the case where even that is not enough. *@
     <ModalDialog OnClose="() => DetailDialogForId = null" CloseOnBackdropClick="true"
-                 MaxWidth="min(32rem, 90vw)" CloseAriaLabel="@Text.NotificationsCloseDetailButton">
+                 FitContent="true" MaxWidth="92vw" CloseAriaLabel="@Text.NotificationsCloseDetailButton">
         <Title>@(open.Title ?? Text.NotificationsDetailToggle)</Title>
         <ChildContent>
             @{
                 NotificationTable.PayloadTable openDetail = PayloadDetail(open, Text);
             }
+            <div class="notification-detail-scroll">
             <table class="notification-detail-table">
                 <thead>
                     <tr>
@@ -195,6 +202,7 @@
                     }
                 </tbody>
             </table>
+            </div>
         </ChildContent>
         <Footer>
             <button type="button" class="btn btn-sm btn-secondary"

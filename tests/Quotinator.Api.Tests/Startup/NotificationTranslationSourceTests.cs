@@ -20,6 +20,10 @@ public class NotificationTranslationSourceTests
     // The non-original languages this project ships, alphabetically — the order .Order() produces.
     private static readonly string[] ExpectedTranslatedLanguages = ["de", "nl"];
 
+    // #377: every shipped language, including the original — a composed fragment has no title/body
+    // pair to exclude English from, so all three must resolve it.
+    private static readonly string[] AllShippedLanguages = ["de", "en", "nl"];
+
     public TestContext TestContext { get; set; } = null!;
 
     /// <summary>Every non-English locale file contributes one translation, resolving no culture at all.</summary>
@@ -314,8 +318,10 @@ public class NotificationTranslationSourceTests
         IReadOnlyDictionary<string, string> composed = Compose(
             (NotificationMessageKeys.ReseedSummaryNothingArrived, []));
 
+        List<string> languages = [.. composed.Keys.Order()];
+
         Assert.AreSequenceEqual(
-            new[] { "de", "en", "nl" }, composed.Keys.Order().ToArray(),
+            AllShippedLanguages, languages,
             "Every shipped language must be able to say it, or a reader in one of them sees nothing at all.");
         Assert.DoesNotContain("0", composed["en"],
             "Said in words rather than as a count — the point is that it is unexpected, not that it is zero.");

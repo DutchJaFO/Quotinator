@@ -8,7 +8,7 @@
 <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);"
      @onclick="HandleBackdropClick">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable"
-         style="max-width: @MaxWidth; max-height: 95vh;"
+         style="max-width: @MaxWidth; max-height: 95vh;@(FitContent ? " width: fit-content;" : null)"
          @onclick:stopPropagation="true">
         <div class="modal-content @ContentClass">
             <div class="modal-header @HeaderClass">
