@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-09-09 13:06 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-09-09 14:52 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - A notification when a quote file leaves changes that need your decision, saying which file and how many, plus a new Import review page listing every such change across all files. Both the notification and the page offer the two basic choices — keep what is stored, or take what the file brought — and a notification whose changes you have dealt with, or whose changes no longer exist, now says which of the two happened instead of just disappearing (issue #303)
 
 ### Changed
+- The details table on a reload confirmation now ends with a totals line, so the figures for every kind of entry add up in front of you instead of having to be added by eye (issue #383)
 - The default handling of a duplicate that disagrees with stored content is now `review` rather than `newest-wins`, in the application itself and stated explicitly in the Docker image. A file dropped in the imports folder without its own manifest previously overwrote stored quotes with no notification and no record; it is now held for a decision and raises a pending-review notification. The bundled manifest's own unused top-level `skip` was corrected to `review` at the same time — every bundled file already overrode it (issue #303)
 - Notifications now appear in the language the interface is set to, instead of always in English. A notification keeps the language it was written in, and Quotinator falls back to that original whenever it has no translation for the language you are reading in — so nothing ever appears blank or half-translated. The API can also be asked for a specific language, and reports which one it actually returned (issue #319)
 - Changelog content (shown on the About page) is now served from a database instead of static JSON files, refreshed automatically at startup — this makes the content queryable and is a step toward future features such as surfacing specific highlights as startup notifications; falls back to the original JSON files if the database is ever unavailable, so nothing changes for anyone reading the About page (issue #309)

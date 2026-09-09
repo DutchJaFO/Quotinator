@@ -1,4 +1,4 @@
-﻿{
+{
   "language": "nl",
   "sourceLanguage": "en",
   "machineTranslated": true,
@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 377, 378, 382],
+    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 377, 378, 382, 383],
     "highlights": [
       "Meldingen tonen hun kop en hun bericht nu als aparte onderdelen, en een bericht dat op meerdere regels is geschreven blijft op meerdere regels staan in plaats van tot één alinea samen te lopen. Heeft een melding meer details — welke bestanden zijn gewijzigd en hoeveel — dan kun je die openen zonder de lijst te verlaten. Actieknoppen zeggen nu wat ze doen in plaats van alleen \"Uitvoeren\", en zodra een actie is uitgevoerd vermeldt de melding hoe die is afgehandeld in plaats van alleen dat hij klaar is.",
       "Een melding waarvan de actie even duurt geeft nu aan dat hij bezig is, en de knoppen verdwijnen tot hij klaar is — zo lijkt een lange herinlezing niet langer op een klik die niets deed, en kan hij niet meer per ongeluk twee keer worden gestart.",
@@ -40,6 +40,7 @@
       "Een melding wanneer een citatenbestand wijzigingen achterlaat die jouw beslissing vragen, met welk bestand en hoeveel, plus een nieuwe pagina Importbeoordeling die al die wijzigingen over alle bestanden toont. Zowel de melding als de pagina bieden de twee basiskeuzes — behoud wat is opgeslagen, of neem over wat het bestand meebracht — en een melding waarvan je de wijzigingen hebt afgehandeld, of waarvan de wijzigingen niet meer bestaan, vermeldt nu welk van beide er gebeurde in plaats van simpelweg te verdwijnen (issue #303)"
     ],
     "changed": [
+      "De detailtabel bij een bevestiging van opnieuw laden sluit nu af met een totaalregel, zodat de aantallen voor elk soort item voor je worden opgeteld in plaats van dat je ze zelf bij elkaar moet optellen (issue #383)",
       "De standaardafhandeling van een duplicaat dat afwijkt van de opgeslagen inhoud is nu `review` in plaats van `newest-wins`, in de applicatie zelf en expliciet vermeld in de Docker-image. Een bestand in de importmap zonder eigen manifest overschreef opgeslagen citaten voorheen zonder melding en zonder registratie; het wordt nu vastgehouden voor een beslissing en levert een melding op. De ongebruikte `skip` bovenaan het meegeleverde manifest is tegelijk gecorrigeerd naar `review` — elk meegeleverd bestand overschreef die waarde al (issue #303)",
       "Meldingen verschijnen nu in de taal waarop de interface staat, in plaats van altijd in het Engels. Een melding behoudt de taal waarin hij is geschreven, en Quotinator valt terug op dat origineel zodra er geen vertaling is voor de taal die je leest — zo blijft er nooit iets leeg of half vertaald. De API kan ook om een specifieke taal vragen en meldt welke taal daadwerkelijk is teruggegeven (issue #319)",
       "Changelog-inhoud (getoond op de Over-pagina) wordt nu geleverd vanuit een database in plaats van statische JSON-bestanden, automatisch vernieuwd bij het opstarten — dit maakt de inhoud doorzoekbaar en is een stap richting toekomstige functies zoals het tonen van specifieke hoogtepunten als opstartmeldingen; valt terug op de oorspronkelijke JSON-bestanden als de database ooit niet beschikbaar is, dus er verandert niets voor wie de Over-pagina bekijkt (issue #309)",
