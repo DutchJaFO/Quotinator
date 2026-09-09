@@ -437,13 +437,6 @@ internal static class ImportActionPlanner
                 _ => q,
             };
 
-            // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved), not
-            // the raw incoming value — Skip's resolved value always equals existingFields (nothing
-            // written), so Skip can never block a Complete quote; a merge policy only blocks on
-            // fields the merge itself would actually change.
-            IReadOnlyDictionary<string, object?> resolvedFields = QuoteFieldMerge.ToFieldMap(resolved);
-            HashSet<string> effectiveChanged = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Key, kv.Value, resolvedFields.GetValueOrDefault(kv.Key), QuoteFieldMerge.CaseSensitiveContentFields)).Select(kv => kv.Key)];
-
             // #373: the row arrived and already matches. Reported as Unchanged rather than Modify,
             // which claims a write that never happens, and rather than nothing at all, which leaves a
             // reader unable to tell it from a row the file never mentioned.
@@ -476,34 +469,21 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            if (CompletenessGuard.ShouldBlock(existing.Value.CompletenessStatus, effectiveChanged))
-            {
-                actions.Add(new ImportActionEntity
-                {
-                    BatchId = batchIdStr,
-                    ExistingBatchId = existingBatchId,
-                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                    EntityType = ImportActionEntityTypes.Quote,
-                    EntityId = q.Id,
-                    ExistingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                    IncomingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                    Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
-                    DetectedAt = now,
-                });
-                continue;
-            }
-
             // #181: a matching per-source rule auto-resolves a field instead of leaving it Pending for
             // a human — either an otherwise-ambiguous field, or (via Custom) a field that's simply
             // wrong/missing on both sides and needs a value neither side actually has. Only relevant
-            // under Review — every other policy already resolves deterministically without one. A rule
-            // never bypasses CompletenessGuard above — a Complete row still blocks regardless of
-            // whether a rule could have resolved the change.
+            // under Review — every other policy already resolves deterministically without one.
+            //
+            // #382: resolved before the field set the guard reads is computed, so CompletenessGuard
+            // sees what would actually be written. #181 ran this after the guard instead — a rule
+            // never bypassing it — which blocked a Complete row over a field the rule was about to
+            // resolve straight back to its stored value. What survives of #181 is that a rule
+            // resolving to a *different* value still blocks.
             FieldMergeResult? ruleResolved = null;
+            bool hasStaleRule = false;
             if (policy == DuplicateResolutionPolicy.Review && conflictRules is not null)
             {
                 Dictionary<string, FieldMergeDecision> ruleDecisions = [];
-                bool hasStaleRule = false;
                 foreach (string field in existingFields.Keys)
                 {
                     // #153: a field already equal on both sides needs no decision at all (matching
@@ -525,26 +505,6 @@ internal static class ImportActionPlanner
                         retirableRuleFindings?.Add(new RetirableRuleFinding(ImportActionEntityTypes.Quote, q.Id, field));
                 }
 
-                // #153: a stale rule holds the whole action for review, the same way a Blocked action
-                // does above — never silently reapplied, and never mixed with a partial auto-resolve
-                // of the action's other fields.
-                if (hasStaleRule)
-                {
-                    actions.Add(new ImportActionEntity
-                    {
-                        BatchId = batchIdStr,
-                        ExistingBatchId = existingBatchId,
-                        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
-                        EntityType = ImportActionEntityTypes.Quote,
-                        EntityId = q.Id,
-                        ExistingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                        IncomingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
-                        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
-                        DetectedAt = now,
-                    });
-                    continue;
-                }
-
                 // #153: always attempt the resolve, even with zero rule decisions — a record with every
                 // field already equal (nothing ambiguous at all, e.g. because the Add-branch's own
                 // early Custom-rule application already made both sides agree) must still resolve
@@ -553,18 +513,69 @@ internal static class ImportActionPlanner
                 // an already-equal field — removing that redundancy (the ValuesEqual skip above) is
                 // what surfaced it. ResolveWithDecisions itself already handles zero decisions safely:
                 // equal fields auto-resolve, and only a genuinely ambiguous field with no decision throws.
-                try
+                //
+                // #382: still skipped for a stale rule. That row is held for review below regardless of
+                // how its other fields would have resolved, so resolving it would change nothing except
+                // which values the guard reads on the way to a hold it takes either way.
+                if (!hasStaleRule)
                 {
-                    ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions, QuoteFieldMerge.CaseSensitiveContentFields);
-                }
-                catch (UnresolvedFieldConflictException)
-                {
-                    // Not every ambiguous field has a matching rule — fall through to normal Pending staging.
+                    try
+                    {
+                        ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions, QuoteFieldMerge.CaseSensitiveContentFields);
+                    }
+                    catch (UnresolvedFieldConflictException)
+                    {
+                        // Not every ambiguous field has a matching rule — fall through to normal Pending staging.
+                    }
                 }
             }
 
             if (ruleResolved is not null)
                 resolved = QuoteFieldMerge.ApplyMergedFields(ruleResolved.MergedFields, q);
+
+            // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved), not
+            // the raw incoming value — Skip's resolved value always equals existingFields (nothing
+            // written), so Skip can never block a Complete quote; a merge policy only blocks on
+            // fields the merge itself would actually change.
+            IReadOnlyDictionary<string, object?> resolvedFields = QuoteFieldMerge.ToFieldMap(resolved);
+            HashSet<string> effectiveChanged = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Key, kv.Value, resolvedFields.GetValueOrDefault(kv.Key), QuoteFieldMerge.CaseSensitiveContentFields)).Select(kv => kv.Key)];
+
+            if (CompletenessGuard.ShouldBlock(existing.Value.CompletenessStatus, effectiveChanged))
+            {
+                actions.Add(new ImportActionEntity
+                {
+                    BatchId = batchIdStr,
+                    ExistingBatchId = existingBatchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Quote,
+                    EntityId = q.Id,
+                    ExistingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                    IncomingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                    Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Blocked.ToString(), ImportActionStatus.Blocked),
+                    DetectedAt = now,
+                });
+                continue;
+            }
+
+            // #153: a stale rule holds the whole action for review, the same way a Blocked action does
+            // above — never silently reapplied, and never mixed with a partial auto-resolve of the
+            // action's other fields. Checked after the guard so Blocked keeps its precedence over Stale.
+            if (hasStaleRule)
+            {
+                actions.Add(new ImportActionEntity
+                {
+                    BatchId = batchIdStr,
+                    ExistingBatchId = existingBatchId,
+                    ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Modify.ToString(), ImportActionKind.Modify),
+                    EntityType = ImportActionEntityTypes.Quote,
+                    EntityId = q.Id,
+                    ExistingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(existingFields), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                    IncomingValue = JsonSerializer.Serialize(new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }),
+                    Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Stale.ToString(), ImportActionStatus.Stale),
+                    DetectedAt = now,
+                });
+                continue;
+            }
 
             // Review is the only policy left Pending; every other policy is Decided at detection
             // time, with the final resolved values already computed so apply never needs policy logic.
@@ -1152,6 +1163,21 @@ internal static class ImportActionPlanner
                     _ => incomingPayload,
                 };
 
+                // #382: resolved before the field set below is computed, so CompletenessGuard sees what
+                // would actually be written. #181 ran this after the guard instead — a rule never
+                // bypassing it — which blocked a Complete row over a field the rule was about to
+                // resolve straight back to its stored value. What survives of #181 is that a rule
+                // resolving to a *different* value still blocks. Still skipped for a stale rule: that
+                // row is held for review regardless, and never resolves.
+                FieldMergeResult? ruleResolved = null;
+                if (ruleDecisions.Count > 0 && !hasStaleRule)
+                {
+                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
+                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                }
+                if (ruleResolved is not null)
+                    resolved = new SourceActionPayloadDto((string)ruleResolved.MergedFields["title"]!, (string)ruleResolved.MergedFields["type"]!, (string?)ruleResolved.MergedFields["date"], (string?)ruleResolved.MergedFields["seriesId"], (string?)ruleResolved.MergedFields["seasonId"]);
+
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above — Skip's resolved
                 // value is always existingPayload (nothing written), so Skip can never block a
@@ -1193,17 +1219,6 @@ internal static class ImportActionPlanner
                     });
                     continue;
                 }
-
-                // #181: a rule never bypasses CompletenessGuard above — only tried once we know this
-                // action isn't Blocked.
-                FieldMergeResult? ruleResolved = null;
-                if (ruleDecisions.Count > 0)
-                {
-                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
-                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
-                }
-                if (ruleResolved is not null)
-                    resolved = new SourceActionPayloadDto((string)ruleResolved.MergedFields["title"]!, (string)ruleResolved.MergedFields["type"]!, (string?)ruleResolved.MergedFields["date"], (string?)ruleResolved.MergedFields["seriesId"], (string?)ruleResolved.MergedFields["seasonId"]);
 
                 bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
@@ -1316,6 +1331,17 @@ internal static class ImportActionPlanner
                     _ => keyIncomingPayload,
                 };
 
+                // #382: resolved before the field set below is computed, so CompletenessGuard sees what
+                // would actually be written — see the explicit-id branch above for the full reasoning.
+                FieldMergeResult? keyRuleResolved = null;
+                if (keyRuleDecisions.Count > 0 && !keyHasStaleRule)
+                {
+                    try { keyRuleResolved = FieldMergeResolver.ResolveWithDecisions(keyExistingFields, keyIncomingFields, keyRuleDecisions); }
+                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                }
+                if (keyRuleResolved is not null)
+                    resolved = new SourceActionPayloadDto((string)keyRuleResolved.MergedFields["title"]!, (string)keyRuleResolved.MergedFields["type"]!, (string?)keyRuleResolved.MergedFields["date"], (string?)keyRuleResolved.MergedFields["seriesId"], (string?)keyRuleResolved.MergedFields["seasonId"]);
+
                 // #168: ShouldBlock is evaluated against what would actually be WRITTEN (resolved),
                 // not the raw incoming value used for the "unchanged" check above.
                 Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
@@ -1354,17 +1380,6 @@ internal static class ImportActionPlanner
                     });
                     continue;
                 }
-
-                // #181: a rule never bypasses CompletenessGuard above — only tried once we know this
-                // action isn't Blocked.
-                FieldMergeResult? keyRuleResolved = null;
-                if (keyRuleDecisions.Count > 0)
-                {
-                    try { keyRuleResolved = FieldMergeResolver.ResolveWithDecisions(keyExistingFields, keyIncomingFields, keyRuleDecisions); }
-                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
-                }
-                if (keyRuleResolved is not null)
-                    resolved = new SourceActionPayloadDto((string)keyRuleResolved.MergedFields["title"]!, (string)keyRuleResolved.MergedFields["type"]!, (string?)keyRuleResolved.MergedFields["date"], (string?)keyRuleResolved.MergedFields["seriesId"], (string?)keyRuleResolved.MergedFields["seasonId"]);
 
                 bool keyIsPending = policy == DuplicateResolutionPolicy.Review && keyRuleResolved is null;
                 ImportActionStatus keyStatus = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
@@ -1856,6 +1871,18 @@ internal static class ImportActionPlanner
                     _ => incomingPayload,
                 };
 
+                // #382: resolved before the field set below is computed, so CompletenessGuard sees what
+                // would actually be written — see PlanSourcesAsync's explicit-id branch for the full
+                // reasoning and what survives of #181.
+                FieldMergeResult? ruleResolved = null;
+                if (ruleDecisions.Count > 0 && !hasStaleRule)
+                {
+                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
+                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                }
+                if (ruleResolved is not null)
+                    resolved = new UniverseActionPayloadDto((string)ruleResolved.MergedFields["name"]!);
+
                 Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
                 HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
@@ -1892,17 +1919,6 @@ internal static class ImportActionPlanner
                     });
                     continue;
                 }
-
-                // #181: a rule never bypasses CompletenessGuard above — only tried once we know this
-                // action isn't Blocked.
-                FieldMergeResult? ruleResolved = null;
-                if (ruleDecisions.Count > 0)
-                {
-                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
-                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
-                }
-                if (ruleResolved is not null)
-                    resolved = new UniverseActionPayloadDto((string)ruleResolved.MergedFields["name"]!);
 
                 bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
@@ -2048,6 +2064,24 @@ internal static class ImportActionPlanner
                     _ => incomingPayload,
                 };
 
+                // #382: resolved before the field set below is computed, so CompletenessGuard sees what
+                // would actually be written — see PlanSourcesAsync's explicit-id branch for the full
+                // reasoning and what survives of #181.
+                FieldMergeResult? ruleResolved = null;
+                if (ruleDecisions.Count > 0 && !hasStaleRule)
+                {
+                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
+                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                }
+                if (ruleResolved is not null)
+                {
+                    string? resolvedUniverseId = (string?)ruleResolved.MergedFields["universeId"];
+                    resolved = new SeriesActionPayloadDto(
+                        (string)ruleResolved.MergedFields["name"]!,
+                        resolvedUniverseId,
+                        resolvedUniverseId == incomingUniverseId ? s.UniverseName : null);
+                }
+
                 Dictionary<string, object?> resolvedFields = ToFieldMap(resolved);
                 HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
@@ -2083,23 +2117,6 @@ internal static class ImportActionPlanner
                         DetectedAt = now,
                     });
                     continue;
-                }
-
-                // #181: a rule never bypasses CompletenessGuard above — only tried once we know this
-                // action isn't Blocked.
-                FieldMergeResult? ruleResolved = null;
-                if (ruleDecisions.Count > 0)
-                {
-                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
-                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
-                }
-                if (ruleResolved is not null)
-                {
-                    string? resolvedUniverseId = (string?)ruleResolved.MergedFields["universeId"];
-                    resolved = new SeriesActionPayloadDto(
-                        (string)ruleResolved.MergedFields["name"]!,
-                        resolvedUniverseId,
-                        resolvedUniverseId == incomingUniverseId ? s.UniverseName : null);
                 }
 
                 bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
@@ -2241,6 +2258,14 @@ internal static class ImportActionPlanner
                 // (#375), so no ConflictResolutionRule could ever settle a Season disagreement and it
                 // would stay Pending on every reseed, forever. Found by the Pending/rule-resolved pair
                 // this entity had never had.
+                //
+                // #382: this branch sits ahead of the effective-changed set below, so CompletenessGuard
+                // already saw what would actually be written here while the other five sites did not.
+                // That was incidental rather than decided — Season simply gained its rule branch last,
+                // and it landed where `resolved` is built. #382 brought the other five into line with
+                // it rather than the reverse, so this ordering is now deliberate. Unlike them, Season
+                // still resolves when a stale rule is present; its status ternary holds the row either
+                // way, and narrowing that was left alone as out of scope.
                 FieldMergeResult? ruleResolved = null;
                 if (ruleDecisions.Count > 0)
                 {
