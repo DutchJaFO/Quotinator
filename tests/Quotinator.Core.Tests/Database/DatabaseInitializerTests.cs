@@ -1874,6 +1874,450 @@ public class DatabaseInitializerTests
             "SELECT COUNT(*) FROM Import_Action WHERE Status = 'Stale';");
     }
 
+    // ── #376: unresolved actions accumulate for every entity type except Quote ───────────────
+    // #374 gave Quote an accumulation check and nothing else got one. Pending/Blocked/Stale are the
+    // three statuses a reseed never applies, so a row carrying one keeps its stored values, the next
+    // reseed compares against the same values, reaches the same conclusion, and stages a duplicate.
+    // The tests below cover all nine remaining entity types; the two controls after them are what
+    // stop a fix that simply stages nothing at all from passing every one of them.
+
+    /// <summary>
+    /// #376: unresolved actions for one entity type. Counted per type, so each fixture's assertion is
+    /// about its own entity rather than about whatever else that file happened to stage alongside it.
+    /// </summary>
+    private async Task<int> UnresolvedActionCountAsync(string entityType)
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM Import_Action WHERE EntityType = @entityType AND Status IN ('Pending', 'Blocked', 'Stale');",
+            new { entityType });
+    }
+
+    /// <summary>
+    /// #376: the fixture shape every accumulation test below shares — two files in one batch, both
+    /// <c>review</c>. The first creates the entity; the second restates it with exactly one field
+    /// different and no covering rule, so the disagreement stages an unresolved action that is never
+    /// applied.
+    /// <para>
+    /// The disagreement has to live <em>between two files</em>. A single file restating its own
+    /// content produces <c>Unchanged</c> on every reseed, so a one-file fixture proves nothing here.
+    /// Actions are staged per file (<c>PlanAsync</c> then <c>StageAsync</c> inside the initializer's
+    /// own <c>foreach (SeedFile …)</c>), which is why the second file's planning already sees the
+    /// first file's applied row.
+    /// </para>
+    /// </summary>
+    private QuotinatorDatabaseInitializer TwoFileConflictInitializer(
+        string name, string firstFileJson, string secondFileJson, string? secondRuleFileJson = null)
+    {
+        string first  = Path.Combine(_tempDir, $"{name}-1.json");
+        string second = Path.Combine(_tempDir, $"{name}-2.json");
+        File.WriteAllText(first, firstFileJson);
+        File.WriteAllText(second, secondFileJson);
+
+        string? ruleFile = null;
+        if (secondRuleFileJson is not null)
+        {
+            ruleFile = Path.Combine(_tempDir, $"{name}-2-rules.json");
+            File.WriteAllText(ruleFile, secondRuleFileJson);
+        }
+
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(first,  null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
+             new SeedFile(second, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
+            ManifestPolicy.HardcodedDefault, $"{name}-test");
+
+        return CreateInitializer([batch]);
+    }
+
+    /// <summary>
+    /// #376: cold start, then two reseeds of unchanged content, asserting the unresolved count for
+    /// each named entity type never grows. The "must actually stage something" assertion comes first
+    /// deliberately — a fixture that stages nothing would otherwise satisfy every equality below.
+    /// </summary>
+    private async Task AssertUnresolvedNeverGrowsAsync(QuotinatorDatabaseInitializer db, params string[] entityTypes)
+    {
+        await db.InitialiseAsync();
+        Dictionary<string, int> cold = [];
+        foreach (string entityType in entityTypes)
+            cold[entityType] = await UnresolvedActionCountAsync(entityType);
+
+        await db.ReseedAsync();
+        Dictionary<string, int> first = [];
+        foreach (string entityType in entityTypes)
+            first[entityType] = await UnresolvedActionCountAsync(entityType);
+
+        await db.ReseedAsync();
+        Dictionary<string, int> second = [];
+        foreach (string entityType in entityTypes)
+            second[entityType] = await UnresolvedActionCountAsync(entityType);
+
+        foreach (string entityType in entityTypes)
+        {
+            Assert.IsGreaterThan(0, cold[entityType],
+                $"The fixture must actually stage an unresolved {entityType} action on cold start, or this test proves nothing");
+            Assert.AreEqual(cold[entityType], first[entityType],
+                $"Reseeding unchanged content must not stage a duplicate unresolved {entityType} action on top of the still-unresolved one — grew {cold[entityType]} → {first[entityType]}");
+            Assert.AreEqual(cold[entityType], second[entityType],
+                $"A second reseed must not accumulate anything further for {entityType} — {cold[entityType]} → {first[entityType]} → {second[entityType]}");
+        }
+    }
+
+    /// <summary>
+    /// #376, the scenario the issue itself names: a Source matched by natural key whose declared date
+    /// disagrees with the stored one. Measured before the fix against this exact shape — 1 → 2 → 3.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithASourceModifyConflict_PendingCountNeverGrows()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("source-natural-key",
+            """
+            {"quotes":[{"id":"37611111-1111-4111-8111-111111111111","quote":"A line.","originalLanguage":"en","source":"Natural Key Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
+            """,
+            """
+            {"quotes":[],"sources":[{"title":"Natural Key Film","type":"movie","date":"1999"}]}
+            """);
+
+        await AssertUnresolvedNeverGrowsAsync(db, ImportActionEntityTypes.Source);
+    }
+
+    /// <summary>
+    /// #376: the same defect through <c>PlanSourcesAsync</c>'s other branch — an entry carrying an
+    /// explicit id is matched by it rather than by title/type, and takes its own separate exit.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithAnExplicitIdSourceModifyConflict_PendingCountNeverGrows()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("source-explicit-id",
+            """
+            {"quotes":[],"sources":[{"id":"37622222-2222-4222-8222-222222222222","title":"Explicit Id Film","type":"movie","date":"1990"}]}
+            """,
+            """
+            {"quotes":[],"sources":[{"id":"37622222-2222-4222-8222-222222222222","title":"Explicit Id Film","type":"movie","date":"1991"}]}
+            """);
+
+        await AssertUnresolvedNeverGrowsAsync(db, ImportActionEntityTypes.Source);
+    }
+
+    /// <summary>
+    /// #376: a rule whose recorded incoming snapshot can never match any real incoming value is
+    /// permanently <c>Stale</c>, and <c>Stale</c> is the status #374's own check was extended to last
+    /// and only for Quote. The <c>"9999"</c> trick is #374's corrected fixture's, for the same reason:
+    /// it makes the conflict genuinely unresolvable rather than resolvable-by-accident.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithAStaleSourceRule_StaleCountNeverGrows()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("source-stale-rule",
+            """
+            {"quotes":[],"sources":[{"id":"37633333-3333-4333-8333-333333333333","title":"Stale Rule Film","type":"movie","date":"1990"}]}
+            """,
+            """
+            {"quotes":[],"sources":[{"id":"37633333-3333-4333-8333-333333333333","title":"Stale Rule Film","type":"movie","date":"1991"}]}
+            """,
+            """
+            {"rules":[{
+                "entityId":"37633333-3333-4333-8333-333333333333",
+                "existingRecord":{"date":"1990"},
+                "incomingRecord":{"date":"9999"},
+                "fields":[{"field":"date","resolution":"keep"}]
+            }]}
+            """);
+
+        await AssertUnresolvedNeverGrowsAsync(db, ImportActionEntityTypes.Source);
+    }
+
+    /// <summary>
+    /// #376: the Source site the issue does not mention — <c>ResolveSourceAsync</c>'s date backfill,
+    /// which stages <c>Blocked</c> when the stored row is <c>Complete</c>, in a different method from
+    /// the two <c>PlanSourcesAsync</c> branches.
+    /// </summary>
+    /// <remarks>
+    /// Cannot use the two-file fixture: <c>CompletenessStatus</c> is human-set only (#382 — every
+    /// table defaults to <c>Incomplete</c>, <c>ComputeNextStatus</c> can only reach <c>NeedsReview</c>,
+    /// and no entry DTO carries a completeness field at all), so no import file can produce the
+    /// <c>Complete</c> row this branch requires. Set directly by SQL as test setup, which is honest
+    /// about what it is rather than pretending a file could reach it.
+    /// </remarks>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithABlockedSourceDateBackfill_BlockedCountNeverGrows()
+    {
+        string quoteFile = Path.Combine(_tempDir, "blocked-backfill.json");
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[{"id":"37644444-4444-4444-8444-444444444444","quote":"An undated line.","originalLanguage":"en","source":"Backfill Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
+            """);
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
+            ManifestPolicy.HardcodedDefault, "blocked-backfill-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+        await MarkSourceCompleteAsync("Backfill Film");
+
+        // A second quote for the same title, now carrying a date, is what puts ResolveSourceAsync on
+        // the backfill path — against a row a curator has confirmed complete, so it must be Blocked.
+        //
+        // The dated quote must come FIRST. #374 settles each Source variant once per pass
+        // (`stagedVariantIds`), so whichever quote reaches the title first is the one whose date
+        // claim is evaluated; with the undated quote leading, the variant is already settled and the
+        // dated one is skipped entirely — which is what the first draft of this fixture did, staging
+        // an Unchanged Source and nothing else.
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[
+                {"id":"37655555-5555-4555-8555-555555555555","quote":"A dated line.","originalLanguage":"en","source":"Backfill Film","date":"1995","character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"37644444-4444-4444-8444-444444444444","quote":"An undated line.","originalLanguage":"en","source":"Backfill Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+
+        await db.ReseedAsync();
+        int first = await UnresolvedActionCountAsync(ImportActionEntityTypes.Source);
+
+        await db.ReseedAsync();
+        int second = await UnresolvedActionCountAsync(ImportActionEntityTypes.Source);
+
+        await db.ReseedAsync();
+        int third = await UnresolvedActionCountAsync(ImportActionEntityTypes.Source);
+
+        Assert.IsGreaterThan(0, first, "A dated quote against a Complete date-less Source must be Blocked for review");
+        Assert.AreEqual(first, second, $"Reseeding unchanged content must not duplicate the still-unresolved Blocked action — grew {first} → {second}");
+        Assert.AreEqual(first, third, $"A further reseed must not accumulate anything more — {first} → {second} → {third}");
+    }
+
+    /// <summary>#376: sets the state no import file can produce — see the Blocked backfill test's own remark.</summary>
+    private async Task MarkSourceCompleteAsync(string title)
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        int updated = await connection.ExecuteAsync(
+            "UPDATE Quotinator_Source SET CompletenessStatus = 'Complete' WHERE Title = @title;", new { title });
+        Assert.AreEqual(1, updated, $"The cold start must have created exactly one '{title}' Source, or this fixture proves nothing");
+    }
+
+    /// <summary>#376: Series diffs <c>name</c> and <c>universeId</c>; the natural key is the name, so the Universe link is what a natural-key fixture can make differ.</summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithASeriesModifyConflict_PendingCountNeverGrows()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("series-conflict",
+            """
+            {"quotes":[],"universe":[{"name":"Universe A"},{"name":"Universe B"}],"series":[{"name":"Fixture Series","universeName":"Universe A"}]}
+            """,
+            """
+            {"quotes":[],"series":[{"name":"Fixture Series","universeName":"Universe B"}]}
+            """);
+
+        await AssertUnresolvedNeverGrowsAsync(db, ImportActionEntityTypes.Series);
+    }
+
+    /// <summary>
+    /// #376: Universe diffs only <c>name</c>, which is also its natural key — so its conflict is
+    /// reachable through the explicit-id branch alone, where the id matches and the name differs.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithAUniverseModifyConflict_PendingCountNeverGrows()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("universe-conflict",
+            """
+            {"quotes":[],"universe":[{"id":"37666666-6666-4666-8666-666666666666","name":"Universe One"}]}
+            """,
+            """
+            {"quotes":[],"universe":[{"id":"37666666-6666-4666-8666-666666666666","name":"Universe Two"}]}
+            """);
+
+        await AssertUnresolvedNeverGrowsAsync(db, ImportActionEntityTypes.Universe);
+    }
+
+    /// <summary>#376: Season's natural key is (SeriesId, Number), leaving <c>title</c> free to differ.</summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithASeasonModifyConflict_PendingCountNeverGrows()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("season-conflict",
+            """
+            {"quotes":[],"series":[{"name":"Season Series"}],"seasons":[{"number":1,"seriesName":"Season Series","title":"First Title"}]}
+            """,
+            """
+            {"quotes":[],"seasons":[{"number":1,"seriesName":"Season Series","title":"Second Title"}]}
+            """);
+
+        await AssertUnresolvedNeverGrowsAsync(db, ImportActionEntityTypes.Season);
+    }
+
+    /// <summary>
+    /// #376: Person diffs <c>name</c>, <c>dateOfBirth</c> and <c>dateOfDeath</c>.
+    /// <c>PersonEntryDto.Id</c> is <c>required</c>, so a <c>people[]</c> entry must state one — and an
+    /// entry omitting it does not merely skip that entry, it throws inside
+    /// <c>SourceQuoteFileReader</c> and discards the entire file silently, which is how the first
+    /// draft of this fixture produced zero actions and zero rows.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithAPersonModifyConflict_PendingCountNeverGrows()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("person-conflict",
+            """
+            {"quotes":[],"people":[{"id":"376eeeee-eeee-4eee-8eee-eeeeeeeeeeee","name":"Fixture Person","dateOfBirth":"1815"}]}
+            """,
+            """
+            {"quotes":[],"people":[{"id":"376eeeee-eeee-4eee-8eee-eeeeeeeeeeee","name":"Fixture Person","dateOfBirth":"1816"}]}
+            """);
+
+        await AssertUnresolvedNeverGrowsAsync(db, ImportActionEntityTypes.Person);
+    }
+
+    /// <summary>
+    /// #376: Character is matched by explicit id only — no natural-key fallback — and diffs only
+    /// <c>name</c> (ADR 013 Decision 9 makes SourceType immutable). Both files restate the Source so
+    /// the Character's own link resolves on each pass.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithACharacterModifyConflict_PendingCountNeverGrows()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("character-conflict",
+            """
+            {"quotes":[],"sources":[{"title":"Character Film","type":"movie"}],"characters":[{"id":"37677777-7777-4777-8777-777777777777","name":"Alpha","sourceTitle":"Character Film","sourceType":"movie"}]}
+            """,
+            """
+            {"quotes":[],"sources":[{"title":"Character Film","type":"movie"}],"characters":[{"id":"37677777-7777-4777-8777-777777777777","name":"Beta","sourceTitle":"Character Film","sourceType":"movie"}]}
+            """);
+
+        await AssertUnresolvedNeverGrowsAsync(db, ImportActionEntityTypes.Character);
+    }
+
+    /// <summary>
+    /// #376: the three id-keyed tail entities in one fixture, since one file reaches all three and
+    /// each is asserted on its own count. Note that <c>ImportActionPlanner</c>'s own #68 comment still
+    /// claims these are "Add-only … no Modify/merge semantics" — that is stale, and this test is what
+    /// pins the Modify branches they actually have.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithAConversationModifyConflict_PendingCountNeverGrows()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("conversation-conflict",
+            """
+            {"quotes":[],
+             "stageDirections":[{"id":"37688888-8888-4888-8888-888888888888","text":"First direction"}],
+             "soundCues":[{"id":"37699999-9999-4999-8999-999999999999","text":"First cue"}],
+             "conversations":[{"id":"376aaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","description":"First description","lines":[]}]}
+            """,
+            """
+            {"quotes":[],
+             "stageDirections":[{"id":"37688888-8888-4888-8888-888888888888","text":"Second direction"}],
+             "soundCues":[{"id":"37699999-9999-4999-8999-999999999999","text":"Second cue"}],
+             "conversations":[{"id":"376aaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","description":"Second description","lines":[]}]}
+            """);
+
+        await AssertUnresolvedNeverGrowsAsync(db,
+            ImportActionEntityTypes.StageDirection, ImportActionEntityTypes.SoundCue, ImportActionEntityTypes.Conversation);
+    }
+
+    /// <summary>
+    /// #376, control: the guard must suppress only conflicts already reported, never a new one. Without
+    /// this, a "fix" that stopped staging unresolved actions altogether would pass every accumulation
+    /// test above. Green before the fix and after.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_WithANewSourceConflict_StillStagesIt()
+    {
+        string quoteFile  = Path.Combine(_tempDir, "new-conflict-1.json");
+        string sourceFile = Path.Combine(_tempDir, "new-conflict-2.json");
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[
+                {"id":"376bbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","quote":"First line.","originalLanguage":"en","source":"First Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"376ccccc-cccc-4ccc-8ccc-cccccccccccc","quote":"Second line.","originalLanguage":"en","source":"Second Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        File.WriteAllText(sourceFile,
+            """
+            {"quotes":[],"sources":[{"title":"First Film","type":"movie","date":"1991"}]}
+            """);
+
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile,  null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
+             new SeedFile(sourceFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
+            ManifestPolicy.HardcodedDefault, "new-conflict-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+        int cold = await DistinctUnresolvedEntityCountAsync(ImportActionEntityTypes.Source);
+
+        // A second, previously undeclared title now disagrees too. The first conflict is already
+        // known; this one is not, and must still be reported.
+        File.WriteAllText(sourceFile,
+            """
+            {"quotes":[],"sources":[{"title":"First Film","type":"movie","date":"1991"},{"title":"Second Film","type":"movie","date":"1992"}]}
+            """);
+        await db.ReseedAsync();
+
+        Assert.AreEqual(1, cold, "Only the first title disagrees on cold start");
+        Assert.AreEqual(2, await DistinctUnresolvedEntityCountAsync(ImportActionEntityTypes.Source),
+            "The newly-disagreeing title must be reported — a guard that suppressed it would be hiding a conflict, not preventing a duplicate");
+    }
+
+    /// <summary>
+    /// #376: how many <em>distinct entities</em> of one type carry an unresolved action, as opposed to
+    /// how many rows do. This is what the "a new conflict is still staged" control has to ask: the row
+    /// count is 3 before the fix (the known conflict duplicated, plus the new one) and 2 after, so an
+    /// assertion on rows cannot be green on both sides and would be measuring the accumulation rather
+    /// than the control's own question.
+    /// </summary>
+    private async Task<int> DistinctUnresolvedEntityCountAsync(string entityType)
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(DISTINCT EntityId) FROM Import_Action WHERE EntityType = @entityType AND Status IN ('Pending', 'Blocked', 'Stale');",
+            new { entityType });
+    }
+
+    /// <summary>
+    /// #376, control for the placement decision: a conflict that becomes resolvable between reseeds
+    /// must be resolved, not skipped. #374's Quote check runs at the top of the branch, before rule
+    /// resolution, so a quote already carrying an unresolved action is passed over even once a rule
+    /// covering it exists — only a decision through the decide endpoint, which changes the action's own
+    /// status, releases it. Expected red before the fix; if it is green, the plan's placement reasoning
+    /// is wrong and must be corrected rather than this test adjusted to agree with it.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_AfterARuleResolvesAKnownConflict_AppliesItInsteadOfSkipping()
+    {
+        string quoteFile = Path.Combine(_tempDir, "becomes-resolvable.json");
+        string ruleFile  = Path.Combine(_tempDir, "becomes-resolvable-rules.json");
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[
+                {"id":"376ddddd-dddd-4ddd-8ddd-dddddddddddd","quote":"Frankly, my dear, I don't give a damn.","originalLanguage":"en","source":"Gone With the Wind","date":"1939","character":"Rhett Butler","author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"376ddddd-dddd-4ddd-8ddd-dddddddddddd","quote":"Frankly, my dear, I don't give a damn.","originalLanguage":"en","source":"Gone With the Wind","date":"1939","character":"rhett butler","author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        // Empty at cold start: the conflict must be genuinely unresolvable first, or there is nothing
+        // for the later rule to release.
+        File.WriteAllText(ruleFile, """{"rules":[]}""");
+
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
+            ManifestPolicy.HardcodedDefault, "becomes-resolvable-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+        int cold = await UnresolvedActionCountAsync(ImportActionEntityTypes.Quote);
+
+        File.WriteAllText(ruleFile,
+            """
+            {"rules":[{
+                "entityId":"376ddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "existingRecord":{"character":"Rhett Butler"},
+                "incomingRecord":{"character":"rhett butler"},
+                "fields":[{"field":"character","resolution":"keep"}]
+            }]}
+            """);
+        await db.ReseedAsync();
+
+        Assert.AreEqual(1, cold, "The case-only difference is genuinely ambiguous with no rule, and must be staged for review");
+        Assert.AreEqual(0, await UnresolvedActionCountAsync(ImportActionEntityTypes.Quote),
+            "A rule now covers the conflict, so the reseed must resolve it — a check that skips the row before consulting rules leaves it unresolved forever");
+    }
+
     /// <summary>
     /// #378: a "Keep" resolution on a Quote's own <c>date</c> field must control which Source variant
     /// the quote actually links to, not just its reported/serialized field. Found live while verifying
