@@ -233,4 +233,91 @@ public class NotificationTranslationSourceTests
             Assert.Contains("9.9.9", translation.Title!,
                 $"The {translation.Language} title dropped its substituted version.");
     }
+
+    // ── #377: the reseed confirmation's summary is composed, not one template per language ─────────
+
+    private static IReadOnlyDictionary<string, string> Compose(params (string Key, object[] Args)[] parts) =>
+        NotificationTranslations.ComposeForEveryLanguage(
+            new ApiLocalizer(I18nDir), parts,
+            NotificationMessageKeys.ReseedSummarySeparator,
+            NotificationMessageKeys.ReseedSummaryFinalJoin);
+
+    /// <summary>
+    /// The point of composing rather than templating: the separator and the final conjunction differ by
+    /// language, so a sentence assembled in English and substituted everywhere would read as English
+    /// punctuation with translated words in it.
+    /// </summary>
+    [TestMethod]
+    public void ComposeForEveryLanguage_JoinsWithEachLanguagesOwnConjunction()
+    {
+        IReadOnlyDictionary<string, string> composed = Compose(
+            (NotificationMessageKeys.ReseedSummaryIncoming, [181]),
+            (NotificationMessageKeys.ReseedSummaryAdded,    [99]),
+            (NotificationMessageKeys.ReseedSummaryUnchanged, [82]));
+
+        Assert.Contains(" and ", composed["en"], "English joins its last two parts with 'and'.");
+        Assert.Contains(" en ",  composed["nl"], "Dutch joins with 'en', not with English's 'and'.");
+        Assert.Contains(" und ", composed["de"], "German joins with 'und'.");
+
+        foreach (KeyValuePair<string, string> language in composed)
+        {
+            Assert.Contains("181", language.Value, $"The {language.Key} summary dropped the incoming count.");
+            Assert.Contains("99",  language.Value, $"The {language.Key} summary dropped the added count.");
+            Assert.Contains("82",  language.Value, $"The {language.Key} summary dropped the unchanged count.");
+        }
+    }
+
+    /// <summary>
+    /// #377 (developer, 2026-09-09): the sentence names only what happened. Omitting a zero clause is
+    /// safe because every count remains visible per entity type in the notification's detail table and
+    /// in the seed log — the completeness work that landed before this change.
+    /// </summary>
+    [TestMethod]
+    public void ComposeForEveryLanguage_OmitsWhatDidNotHappen()
+    {
+        IReadOnlyDictionary<string, string> composed = Compose(
+            (NotificationMessageKeys.ReseedSummaryIncoming, [181]),
+            (NotificationMessageKeys.ReseedSummaryAdded,    [99]));
+
+        Assert.DoesNotContain("kept as-is", composed["en"], "A bucket with nothing in it is not mentioned.");
+        Assert.DoesNotContain("resolved back", composed["en"], "…nor is this one.");
+        Assert.Contains("99 added", composed["en"], "…while what did happen is still stated.");
+    }
+
+    /// <summary>
+    /// #377 (developer, 2026-09-09): "if N items came in and nothing happened then say so in text." A
+    /// sentence that stopped after the incoming count would read as truncated rather than as a finding.
+    /// </summary>
+    [TestMethod]
+    public void ComposeForEveryLanguage_SaysSoWhenNothingHappenedToWhatArrived()
+    {
+        IReadOnlyDictionary<string, string> composed = Compose(
+            (NotificationMessageKeys.ReseedSummaryIncoming,        [7]),
+            (NotificationMessageKeys.ReseedSummaryNothingHappened, []));
+
+        foreach (KeyValuePair<string, string> language in composed)
+        {
+            Assert.Contains("7", language.Value, $"The {language.Key} summary still says how many arrived.");
+            Assert.IsGreaterThan(
+                language.Value.IndexOf('7', StringComparison.Ordinal) + 1, language.Value.Length,
+                $"The {language.Key} summary must continue past the count rather than stopping at it.");
+        }
+    }
+
+    /// <summary>
+    /// #377 (developer, 2026-09-09): a reseed is expected to carry at least one item, so a file that
+    /// brought nothing is an anomaly worth naming rather than a zero to report.
+    /// </summary>
+    [TestMethod]
+    public void ComposeForEveryLanguage_NamesAFileThatBroughtNothing()
+    {
+        IReadOnlyDictionary<string, string> composed = Compose(
+            (NotificationMessageKeys.ReseedSummaryNothingArrived, []));
+
+        Assert.AreSequenceEqual(
+            new[] { "de", "en", "nl" }, composed.Keys.Order().ToArray(),
+            "Every shipped language must be able to say it, or a reader in one of them sees nothing at all.");
+        Assert.DoesNotContain("0", composed["en"],
+            "Said in words rather than as a count — the point is that it is unexpected, not that it is zero.");
+    }
 }

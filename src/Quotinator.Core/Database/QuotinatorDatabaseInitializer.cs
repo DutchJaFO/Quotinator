@@ -236,23 +236,55 @@ public sealed class QuotinatorDatabaseInitializer(
             ReleaseState = NotificationReleaseState.NotApplicable,
         };
 
-        // #373: what arrived leads, then what became of it — the shape the body template now states,
-        // so "0 added, 0 updated" is no longer the whole story a reader gets.
-        // #374: Skipped is stated in its own right rather than folded into Unchanged/Modified — a row a
-        // Skip policy left as-is despite a real incoming difference is neither, and hiding it inside
-        // either bucket is exactly the defect this issue fixed (see ReseedEntityCountDto.Skipped).
+        // #373: what arrived leads, then what became of it.
+        // #374: Skipped is stated in its own right rather than folded into Unchanged/Modified.
+        // #377 (developer, 2026-09-09): the sentence names only the outcomes that actually occurred.
+        // Listing every bucket unconditionally meant a run of zeroes that grew with each one added —
+        // and it is safe to omit them precisely *because* the completeness work landed first: every
+        // count this sentence can state is now visible per entity type in the notification's own detail
+        // table and in the seed log, so a clause left out is a clause the reader can still go and find.
+        int incoming = counts.Sum(c => c.Incoming);
+        (string Key, object[] Args)[] candidates =
+        [
+            (NotificationMessageKeys.ReseedSummaryAdded,     [counts.Sum(c => c.Added)]),
+            (NotificationMessageKeys.ReseedSummaryUpdated,   [counts.Sum(c => c.Modified)]),
+            (NotificationMessageKeys.ReseedSummaryUnchanged, [counts.Sum(c => c.Unchanged)]),
+            (NotificationMessageKeys.ReseedSummarySkipped,   [counts.Sum(c => c.Skipped)]),
+            (NotificationMessageKeys.ReseedSummaryResolved,  [counts.Sum(c => c.ResolvedToExisting)]),
+        ];
+
+        List<(string Key, object[] Args)> parts = [];
+        if (incoming == 0)
+        {
+            // A reseed is expected to carry at least one item (developer, 2026-09-09), so this is an
+            // anomaly to name rather than a zero to report.
+            parts.Add((NotificationMessageKeys.ReseedSummaryNothingArrived, []));
+        }
+        else
+        {
+            parts.Add((NotificationMessageKeys.ReseedSummaryIncoming, [incoming]));
+            parts.AddRange(candidates.Where(c => (int)c.Args[0] > 0));
+
+            // Items arrived and none of them produced an outcome. Said in words, because a sentence
+            // that stopped after the incoming count would read as truncated rather than as a finding.
+            if (parts.Count == 1)
+                parts.Add((NotificationMessageKeys.ReseedSummaryNothingHappened, []));
+        }
+
+        IReadOnlyDictionary<string, string> summaryByLanguage = NotificationTranslations.ComposeForEveryLanguage(
+            _notificationTextSource, parts,
+            NotificationMessageKeys.ReseedSummarySeparator,
+            NotificationMessageKeys.ReseedSummaryFinalJoin);
+
+        Dictionary<string, object[]> bodyArgsByLanguage = summaryByLanguage
+            .ToDictionary(kv => kv.Key, object[] (kv) => [fileName, kv.Value]);
+
         object[] bodyArgs =
         [
             fileName,
-            counts.Sum(c => c.Incoming),
-            counts.Sum(c => c.Added),
-            counts.Sum(c => c.Modified),
-            counts.Sum(c => c.Unchanged),
-            counts.Sum(c => c.Skipped),
-            // #377: stated in its own right for the same reason Skipped is — a row that differed and
-            // resolved back onto what was stored is neither updated nor already-correct, and folding it
-            // into either would hide that the file wanted to change it.
-            counts.Sum(c => c.ResolvedToExisting),
+            summaryByLanguage.TryGetValue(NotificationTranslations.OriginalLanguage, out string? originalSummary)
+                ? originalSummary
+                : string.Empty,
         ];
 
         // One key per origin rather than an origin word passed as an argument: bodyArgs is a single
@@ -269,11 +301,15 @@ public sealed class QuotinatorDatabaseInitializer(
             title: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.ReseedFileAppliedTitle),
             // Deliberately no dismissTrigger: POST /admin/database/reseed dismisses every Reseed-triggered
             // row once ReseedAsync returns, which would wipe out the confirmations that same call wrote.
+            // #377: per-language body arguments, because one of them is the composed summary — its
+            // separator, its final conjunction and its clause order are all language-specific, so it
+            // cannot be one string substituted into every translation.
             translations: NotificationTranslations.Build(
                 _notificationTextSource,
                 NotificationMessageKeys.ReseedFileAppliedTitle,
                 bodyKey,
-                bodyArgs: bodyArgs));
+                titleArgs: null,
+                bodyArgsByLanguage: bodyArgsByLanguage));
     }
 
     /// <summary>

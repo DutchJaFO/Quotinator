@@ -52,6 +52,49 @@ public static class NotificationMessageKeys
     public const string ReseedFileAppliedBundledBody = "NotificationReseedFileAppliedBundledBody";
 
     /// <summary>
+    /// The parts a reseed confirmation's summary sentence is composed from (#377). Only the outcomes
+    /// that actually occurred are included, so the sentence stops listing a run of zeroes — but every
+    /// count it can state remains visible per entity type in the notification's own detail table and in
+    /// the seed log, which is what makes omitting a clause safe rather than lossy.
+    /// </summary>
+    public const string ReseedSummaryIncoming = "NotificationReseedSummaryIncoming";
+
+    /// <inheritdoc cref="ReseedSummaryIncoming"/>
+    public const string ReseedSummaryAdded = "NotificationReseedSummaryAdded";
+
+    /// <inheritdoc cref="ReseedSummaryIncoming"/>
+    public const string ReseedSummaryUpdated = "NotificationReseedSummaryUpdated";
+
+    /// <inheritdoc cref="ReseedSummaryIncoming"/>
+    public const string ReseedSummaryUnchanged = "NotificationReseedSummaryUnchanged";
+
+    /// <inheritdoc cref="ReseedSummaryIncoming"/>
+    public const string ReseedSummarySkipped = "NotificationReseedSummarySkipped";
+
+    /// <inheritdoc cref="ReseedSummaryIncoming"/>
+    public const string ReseedSummaryResolved = "NotificationReseedSummaryResolved";
+
+    /// <summary>
+    /// Said instead of an outcome list when items arrived and none of them produced an outcome (#377,
+    /// developer 2026-09-09: "if N items came in and nothing happened then say so in text"). A sentence
+    /// that simply stopped after the incoming count would read as truncated rather than as a finding.
+    /// </summary>
+    public const string ReseedSummaryNothingHappened = "NotificationReseedSummaryNothingHappened";
+
+    /// <summary>
+    /// Said when a file carried nothing at all. Its own wording rather than "0 items came in" because a
+    /// reseed is expected to carry at least one item (developer, 2026-09-09), so this is an anomaly the
+    /// reader should notice rather than a count to skim past.
+    /// </summary>
+    public const string ReseedSummaryNothingArrived = "NotificationReseedSummaryNothingArrived";
+
+    /// <summary>Separator between all but the last two parts of the composed summary (#377).</summary>
+    public const string ReseedSummarySeparator = "NotificationReseedSummarySeparator";
+
+    /// <summary>Join before the composed summary's final part — language-specific, hence a key (#377).</summary>
+    public const string ReseedSummaryFinalJoin = "NotificationReseedSummaryFinalJoin";
+
+    /// <summary>
     /// Body for the confirmation that one file from the <b>user imports</b> folder reseeded with
     /// nothing left to review. Same arguments as <see cref="ReseedFileAppliedBundledBody"/>.
     /// </summary>

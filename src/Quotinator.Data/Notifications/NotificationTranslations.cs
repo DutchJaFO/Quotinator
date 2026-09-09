@@ -86,4 +86,106 @@ public static class NotificationTranslations
 
         return translations;
     }
+
+    /// <summary>
+    /// Composes one sentence fragment per language from <paramref name="parts"/>, joined with that
+    /// language's own separator and final conjunction (#377).
+    /// </summary>
+    /// <param name="textSource">Resolves each key in every available language.</param>
+    /// <param name="parts">The fragments to include, in reading order — each a key and its arguments. Already filtered by the caller; an empty list yields an empty fragment per language.</param>
+    /// <param name="separatorKey">Key for the separator between all but the last two parts (typically <c>", "</c>).</param>
+    /// <param name="finalJoinKey">Key for the join before the last part (typically <c>" and "</c>).</param>
+    /// <returns>Language code to composed fragment, for every language that could resolve all of it.</returns>
+    /// <remarks>
+    /// A composed list cannot be one template string per language: which fragments appear depends on the
+    /// data, and the separator and the final conjunction are themselves language-specific. Composing
+    /// per language keeps both facts in the translation files rather than hard-coding English
+    /// punctuation and word order into the producer.
+    /// <para>
+    /// Every fragment is resolved for every language *before* joining, so a language missing one of them
+    /// drops out entirely rather than contributing a sentence with an untranslated clause in it — the
+    /// same all-or-nothing rule <see cref="Build(INotificationTextSource, string, string, object[], object[])"/>
+    /// applies to a title/body pair.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyDictionary<string, string> ComposeForEveryLanguage(
+        INotificationTextSource textSource,
+        IReadOnlyList<(string Key, object[] Args)> parts,
+        string separatorKey,
+        string finalJoinKey)
+    {
+        ArgumentNullException.ThrowIfNull(textSource);
+        ArgumentNullException.ThrowIfNull(parts);
+
+        IReadOnlyDictionary<string, string> separators = textSource.ForEveryLanguage(separatorKey);
+        IReadOnlyDictionary<string, string> finalJoins = textSource.ForEveryLanguage(finalJoinKey);
+
+        List<IReadOnlyDictionary<string, string>> resolved =
+            [.. parts.Select(p => textSource.ForEveryLanguage(p.Key, p.Args))];
+
+        Dictionary<string, string> composed = [];
+        foreach (string language in separators.Keys)
+        {
+            if (!finalJoins.TryGetValue(language, out string? finalJoin))
+                continue;
+
+            List<string> fragments = [];
+            bool complete = true;
+            foreach (IReadOnlyDictionary<string, string> part in resolved)
+            {
+                if (!part.TryGetValue(language, out string? fragment)) { complete = false; break; }
+                fragments.Add(fragment);
+            }
+
+            if (!complete) continue;
+
+            composed[language] = fragments.Count switch
+            {
+                0 => string.Empty,
+                1 => fragments[0],
+                _ => string.Join(separators[language], fragments[..^1]) + finalJoin + fragments[^1],
+            };
+        }
+
+        return composed;
+    }
+
+    /// <summary>
+    /// As <see cref="Build(INotificationTextSource, string, string, object[], object[])"/>, but with the
+    /// body's arguments varying per language — needed when one of them is itself composed text (#377).
+    /// </summary>
+    /// <param name="textSource">Resolves each key in every available language.</param>
+    /// <param name="titleKey">Key for the notification's title.</param>
+    /// <param name="bodyKey">Key for the notification's body.</param>
+    /// <param name="titleArgs">Arguments for the title, the same in every language.</param>
+    /// <param name="bodyArgsByLanguage">Body arguments per language code. A language absent here contributes no translation.</param>
+    public static IReadOnlyList<NotificationTranslation> Build(
+        INotificationTextSource textSource,
+        string titleKey,
+        string bodyKey,
+        object[]? titleArgs,
+        IReadOnlyDictionary<string, object[]> bodyArgsByLanguage)
+    {
+        ArgumentNullException.ThrowIfNull(textSource);
+        ArgumentNullException.ThrowIfNull(bodyArgsByLanguage);
+
+        IReadOnlyDictionary<string, string> titles = textSource.ForEveryLanguage(titleKey, titleArgs ?? []);
+
+        List<NotificationTranslation> translations = [];
+        foreach (KeyValuePair<string, object[]> languageArgs in bodyArgsByLanguage)
+        {
+            if (string.Equals(languageArgs.Key, OriginalLanguage, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (!titles.TryGetValue(languageArgs.Key, out string? title))
+                continue;
+
+            if (!textSource.ForEveryLanguage(bodyKey, languageArgs.Value).TryGetValue(languageArgs.Key, out string? body))
+                continue;
+
+            translations.Add(new NotificationTranslation(languageArgs.Key, title, body));
+        }
+
+        return translations;
+    }
 }
