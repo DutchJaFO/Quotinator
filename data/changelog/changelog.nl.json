@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 377, 378],
+    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 377, 378, 382],
     "highlights": [
       "Meldingen tonen hun kop en hun bericht nu als aparte onderdelen, en een bericht dat op meerdere regels is geschreven blijft op meerdere regels staan in plaats van tot één alinea samen te lopen. Heeft een melding meer details — welke bestanden zijn gewijzigd en hoeveel — dan kun je die openen zonder de lijst te verlaten. Actieknoppen zeggen nu wat ze doen in plaats van alleen \"Uitvoeren\", en zodra een actie is uitgevoerd vermeldt de melding hoe die is afgehandeld in plaats van alleen dat hij klaar is.",
       "Een melding waarvan de actie even duurt geeft nu aan dat hij bezig is, en de knoppen verdwijnen tot hij klaar is — zo lijkt een lange herinlezing niet langer op een klik die niets deed, en kan hij niet meer per ongeluk twee keer worden gestart.",
@@ -56,6 +56,7 @@
       "`github/codeql-action` bijgewerkt van 4.37.7 naar 4.37.9 (alleen CI)"
     ],
     "fixed": [
+      "Een citaat of ander item dat je als beoordeeld had gemarkeerd kon worden vastgehouden voor jouw beslissing over een wijziging die nooit zou zijn doorgevoerd — namelijk wanneer het enige verschil in het bestand er een is die Quotinator zelf terugbrengt naar wat al is opgeslagen. Zo'n item wordt nu alleen nog vastgehouden wanneer er werkelijk iets naar weggeschreven zou worden; een item dat echt zou veranderen wordt nog steeds vastgehouden, precies zoals voorheen (issue #382)",
       "Bij het opnieuw laden van je citaten werden vermeldingen als bijgewerkt gemeld terwijl er in werkelijkheid niets aan veranderd was — meestal doordat het ene citaatbestand een gegeven simpelweg niet bevat dat een ander wel heeft, zoals een jaartal. Die vermeldingen worden nu gemeld als teruggevallen op wat al was opgeslagen, en er wordt niets meer naar weggeschreven, zodat het verslag van het opnieuw laden geen wijzigingen meer claimt die nooit hebben plaatsgevonden (issue #377)",
       "De bevestiging van een herlaadactie noemt nu alleen nog wat er daadwerkelijk is gebeurd, in plaats van elke mogelijke uitkomst op te sommen inclusief de uitkomsten die niet voorkwamen — en als er wel items binnenkwamen maar er met geen van alle iets is gebeurd, staat dat er met zoveel woorden in plaats van dat de zin na het aantal ophoudt. De detailtabel toont nu ook de aantallen die het bericht noemde maar nergens kon laten zien, zodat de samenvatting en het bijbehorende detail elkaar niet meer kunnen tegenspreken (issue #377)",
       "Een melding waarvan je de aanbevolen actie had uitgevoerd, werd toch getoond als afgewezen, alsof je hem had geweigerd. Quotinator legt nu vast of een melding opzij is gezet of daadwerkelijk is afgehandeld, en toont in het tweede geval dat hij is uitgevoerd (issue #304)",
