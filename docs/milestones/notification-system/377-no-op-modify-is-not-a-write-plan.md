@@ -657,7 +657,7 @@ rows are still classified `Modify` and the new assertion therefore cannot pass.
 
 ### 10. Run the T2 documents green, then hand T1 to the developer
 
-**Status:** 🚧 Rows 24–25 done, 2026-09-09; row 27 (T1) is the developer's own and is all that remains.
+**Status:** ✅ Done, 2026-09-09 — rows 24–26.
 
 `11-clean-reseed-confirmation.md`'s step 2 gained the #377 assertion — `resolvedToExisting` non-zero,
 and each entity type's own parts adding up to its `incoming`. Canary red against the `18418c29` image
@@ -667,9 +667,35 @@ with one confirmation reporting `resolvedToExisting = 21` where the pre-fix run 
 
 Both images, both containers and the canary worktree were removed afterwards.
 
-**Owns rows 24–27.** `11-clean-reseed-confirmation.md` and the extended `14-…` re-run live against a
-freshly built image, each with its own *Canary* section recording the red run. T1 is the developer's own
-action and is the one row this issue cannot close itself, per CLAUDE.md.
+**Owns rows 24–26.** `11-clean-reseed-confirmation.md` and the extended `14-…` re-run live against a
+freshly built image, each with its own *Canary* section recording the red run.
+
+### 11. Close what T1 found, then re-run it
+
+**Status:** 🚧 Rows 27–30 done, 2026-09-09; row 31 — the developer's own confirmation that T1 is
+green — is all that remains.
+
+Three defects and one design change, none of which the suite could have raised on its own because all
+four live in what a reader *sees* rather than in what is counted. Written up in full under *What T1
+found* and *The summary sentence is composed, not templated*; the steps themselves were:
+
+1. The detail table gained the missing bucket's column (row 28), after the cross-check had wrongly said
+   it needed none.
+2. `skipped` gained a place on the report and `incoming` a column in the table, so every value the
+   summary states can be found in the log and the detail (row 29) — done first, deliberately, because
+   it is what makes step 3 below safe.
+3. The summary sentence became composed rather than templated, naming only the outcomes that occurred
+   (row 30).
+4. The dialog became content-sized rather than capped at a figure that expires whenever a column is
+   added (part of row 28).
+
+Row 27 — the test #377's own *Failing tests* table names — was written in this step too, after the
+misreading recorded below.
+
+**This step exists because the plan did not anticipate needing it**, and that is the finding rather
+than an embarrassment: a classification change has as many reporting surfaces as it has readers, and
+the plan enumerated the ones reachable from the code it was changing rather than the ones a person
+would look at.
 
 ---
 
