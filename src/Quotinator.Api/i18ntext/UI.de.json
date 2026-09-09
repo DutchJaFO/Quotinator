@@ -82,6 +82,7 @@
   "NotificationsDetailAddedColumn": "Hinzugefügt",
   "NotificationsDetailUpdatedColumn": "Aktualisiert",
   "NotificationsDetailSkippedColumn": "Übersprungen",
+  "NotificationsDetailIncomingColumn": "Eingegangen",
   "NotificationsDetailUnchangedColumn": "Unverändert",
   "NotificationsDetailResolvedToExistingColumn": "Zurückgeführt",
   "NotificationsDetailStatusColumn": "Status",

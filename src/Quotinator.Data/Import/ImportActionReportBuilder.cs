@@ -13,7 +13,7 @@ public static class ImportActionReportBuilder
     /// </summary>
     public static FileImportReport Build(string fileName, IReadOnlyList<ImportActionEntity> actions)
     {
-        var byEntityType = new Dictionary<string, (int Incoming, int New, int Unchanged, int ResolvedToExisting, int Modified, int Blocked, int Discarded, int Pending, int Stale)>();
+        var byEntityType = new Dictionary<string, (int Incoming, int New, int Unchanged, int ResolvedToExisting, int Skipped, int Modified, int Blocked, int Discarded, int Pending, int Stale)>();
 
         foreach (var action in actions)
         {
@@ -33,6 +33,11 @@ public static class ImportActionReportBuilder
                 ImportActionStatus.Decided or ImportActionStatus.Applied => action.ActionType.Parsed switch
                 {
                     ImportActionKind.Add                => counts with { New                = counts.New + 1 },
+                    // #374/#377: a Skip-policy Modify discarded a real difference on purpose. It was
+                    // already counted separately on the reseed confirmation; counting it as Modified
+                    // here meant the seed log and the confirmation disagreed about the same row.
+                    ImportActionKind.Modify when action.AppliedPolicy.Parsed == DuplicateResolutionPolicy.Skip
+                                                        => counts with { Skipped            = counts.Skipped + 1 },
                     ImportActionKind.Modify             => counts with { Modified           = counts.Modified + 1 },
                     ImportActionKind.Unchanged          => counts with { Unchanged          = counts.Unchanged + 1 },
                     // #377: a resolution that settled on the stored values wrote nothing, so it is
@@ -54,6 +59,7 @@ public static class ImportActionReportBuilder
                 Incoming  = kv.Value.Incoming,
                 Unchanged = kv.Value.Unchanged,
                 ResolvedToExisting = kv.Value.ResolvedToExisting,
+                Skipped   = kv.Value.Skipped,
                 New       = kv.Value.New,
                 Modified  = kv.Value.Modified,
                 Blocked   = kv.Value.Blocked,

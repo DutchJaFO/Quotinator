@@ -152,6 +152,7 @@ public partial class NotificationTable
         {
             ReseedFileAppliedMetadataDto applied => new PayloadTable(
                 [text?.NotificationsDetailEntityColumn ?? "Entity",
+                 text?.NotificationsDetailIncomingColumn ?? "Incoming",
                  text?.NotificationsDetailAddedColumn  ?? "Added",
                  text?.NotificationsDetailUpdatedColumn ?? "Updated",
                  text?.NotificationsDetailSkippedColumn ?? "Skipped",
@@ -171,9 +172,21 @@ public partial class NotificationTable
                 // Incoming == Added + Modified + Unchanged + Skipped + ResolvedToExisting, so a row is
                 // still only excluded when it had no incoming rows at all.
                 [.. applied.Counts
-                    .Where(c => c.Added > 0 || c.Modified > 0 || c.Skipped > 0 || c.Unchanged > 0 || c.ResolvedToExisting > 0)
+                    // #377 (developer, 2026-09-09): every value the summary sentence states must be
+                    // findable in the detail — including how many arrived, which the sentence leads
+                    // with and the table had no column for. An entity type that arrived is reported
+                    // whatever became of it, so a row with Incoming and no outcomes is kept: that is
+                    // the case most worth noticing, not one to hide.
+                    //
+                    // Incoming alone is not the test, though, and assuming it was broke reading
+                    // history: #302 persisted payloads before Incoming existed, so those rows carry
+                    // Added/Modified and a defaulted Incoming of 0, and filtering on Incoming alone
+                    // made every one of them render as an empty table.
+                    .Where(c => c.Incoming > 0 || c.Added > 0 || c.Modified > 0
+                             || c.Skipped > 0 || c.Unchanged > 0 || c.ResolvedToExisting > 0)
                     .Select(IReadOnlyList<string> (c) =>
                     [c.EntityType,
+                     c.Incoming.ToString(CultureInfo.CurrentCulture),
                      c.Added.ToString(CultureInfo.CurrentCulture),
                      c.Modified.ToString(CultureInfo.CurrentCulture),
                      c.Skipped.ToString(CultureInfo.CurrentCulture),

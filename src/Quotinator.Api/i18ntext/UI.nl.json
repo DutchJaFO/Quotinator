@@ -82,6 +82,7 @@
   "NotificationsDetailAddedColumn": "Toegevoegd",
   "NotificationsDetailUpdatedColumn": "Bijgewerkt",
   "NotificationsDetailSkippedColumn": "Overgeslagen",
+  "NotificationsDetailIncomingColumn": "Aangeboden",
   "NotificationsDetailUnchangedColumn": "Ongewijzigd",
   "NotificationsDetailResolvedToExistingColumn": "Teruggevallen",
   "NotificationsDetailStatusColumn": "Status",

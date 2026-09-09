@@ -82,6 +82,7 @@
   "NotificationsDetailAddedColumn": "Added",
   "NotificationsDetailUpdatedColumn": "Updated",
   "NotificationsDetailSkippedColumn": "Skipped",
+  "NotificationsDetailIncomingColumn": "Incoming",
   "NotificationsDetailUnchangedColumn": "Unchanged",
   "NotificationsDetailResolvedToExistingColumn": "Resolved",
   "NotificationsDetailStatusColumn": "Status",

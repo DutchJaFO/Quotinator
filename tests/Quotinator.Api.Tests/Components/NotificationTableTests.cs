@@ -667,13 +667,35 @@ public class NotificationTableTests
             WithTitle("Source file reseeded cleanly", metadata: payload,
                       metadataKind: NotificationMetadataKind.ReseedFileApplied));
 
-        // One distinct value per bucket, so each can only be found if its own column exists.
-        foreach (string expected in new[] { "1", "2", "3", "4", "5" })
+        // One distinct value per bucket, so each can only be found if its own column exists. `10` is
+        // Incoming, which the sentence leads with ("N items came in") and the table had no column for
+        // until the developer pointed it out on 2026-09-09.
+        foreach (string expected in new[] { "10", "1", "2", "3", "4", "5" })
             Assert.Contains(expected, detail.Rows[0],
                 $"The count {expected} is stated in the confirmation's summary and must be visible in its detail too.");
 
         Assert.HasCount(detail.Headers.Count, detail.Rows[0],
             "…and every row still matches its headers (#308's contract).");
+    }
+
+    /// <summary>
+    /// #377 (developer, 2026-09-09): "we should never be missing any values in the table. Skipping
+    /// values hides potential." An entity type that arrived is reported whatever became of it — a row
+    /// filtered out for having no outcomes hides exactly the case worth noticing, which is content that
+    /// arrived and did nothing.
+    /// </summary>
+    [TestMethod]
+    public void RowThatArrivedButProducedNoOutcome_StillRenders()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","incoming":7,"added":0,"modified":0,"unchanged":0,"skipped":0,"resolvedToExisting":0}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.IsNotEmpty(detail.Rows, "Seven items arrived and nothing is recorded as having happened to them — that is a finding, not a row to hide.");
+        Assert.Contains("7", detail.Rows[0], "…and the incoming count is what says so.");
     }
 
     /// <summary>

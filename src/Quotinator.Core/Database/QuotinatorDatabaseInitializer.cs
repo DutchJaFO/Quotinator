@@ -930,7 +930,7 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <param name="report">The per-file report to render.</param>
     internal static string FormatReport(FileImportReport report)
         => string.Join(" ", report.EntityTypes.Select(kv =>
-            $"{kv.Key}[incoming={kv.Value.Incoming} new={kv.Value.New} unchanged={kv.Value.Unchanged} resolvedToExisting={kv.Value.ResolvedToExisting} modified={kv.Value.Modified} blocked={kv.Value.Blocked} discarded={kv.Value.Discarded} pending={kv.Value.Pending} stale={kv.Value.Stale}]"));
+            $"{kv.Key}[incoming={kv.Value.Incoming} new={kv.Value.New} unchanged={kv.Value.Unchanged} resolvedToExisting={kv.Value.ResolvedToExisting} skipped={kv.Value.Skipped} modified={kv.Value.Modified} blocked={kv.Value.Blocked} discarded={kv.Value.Discarded} pending={kv.Value.Pending} stale={kv.Value.Stale}]"));
 
     private static readonly JsonSerializerOptions ConflictRuleReadOptions = new() { PropertyNameCaseInsensitive = true };
 

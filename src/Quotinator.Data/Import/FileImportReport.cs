@@ -43,6 +43,18 @@ public sealed class EntityTypeActionCounts
     /// </summary>
     public required int ResolvedToExisting { get; init; }
 
+    /// <summary>
+    /// Modify actions a <c>Skip</c> policy left as-is: a real difference arrived and was discarded on
+    /// purpose (#374). Its own count rather than part of <see cref="Modified"/>, which would claim a
+    /// write, or <see cref="Unchanged"/>, which would claim nothing differed.
+    /// <para>
+    /// #377: this count existed on the reseed confirmation's own DTO but not here, so the seed log
+    /// could not print a figure the confirmation's summary sentence states. A value named in one place
+    /// and unavailable in another is what makes two reports of the same import disagree.
+    /// </para>
+    /// </summary>
+    public required int Skipped { get; init; }
+
     /// <summary>Modify actions that resolved cleanly.</summary>
     public required int Modified { get; init; }
 
