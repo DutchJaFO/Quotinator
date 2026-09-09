@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Data;
 using System.Text.Json;
 using Quotinator.Core.Import;
@@ -534,25 +535,25 @@ public class DatabaseInitializerTests
         };
 
         string line = QuotinatorDatabaseInitializer.FormatReport(report);
+        EntityTypeActionCounts counts = report.EntityTypes["Quote"];
 
-        Assert.Contains("incoming=12", line, "The line must say what arrived, not only what became of it.");
-        Assert.Contains("unchanged=3", line, "Three rows were already correct — omitting that is the defect.");
-        Assert.Contains("new=2", line);
-        // #377 row 12, positive half: the hand-written line is exactly the shape that omits a count
-        // added later, which is why it is asserted rather than read.
-        Assert.Contains("resolvedToExisting=4", line, "Rows that resolved back onto what was stored — a count that exists but is never printed reports nothing.");
-        // #377 (developer, 2026-09-09): every value the confirmation's summary states must also be in
-        // the log. `skipped` was stated there and had no counterpart here at all, so the two reports of
-        // one import disagreed about the same rows.
-        Assert.Contains("skipped=5", line, "A Skip policy discarded a real difference — the log must be able to say so.");
-        // #377 row 12, negative half: the counts that were already there must survive each addition.
-        // Distinct values throughout, so a count can only be found if its own field is printed.
-        foreach (string expected in new[] { "modified=6", "blocked=7", "discarded=8", "pending=9", "stale=10" })
-            Assert.Contains(expected, line, $"The pre-existing counts must still appear with their own values — {expected} is missing.");
-        // #377 row 12, positive half: the hand-written line is exactly the shape that omits a count
-        // added later, which is why it is asserted rather than read.
-        Assert.Contains("resolvedToExisting=4", line, "Rows that resolved back onto what was stored — a count that exists but is never printed reports nothing.");
-        // #377 row 12, negative half: the counts that were already there must survive the addition.
+        // #376: derived from the type's own properties, not from a list of assertions written by hand.
+        // The previous shape was that list, and it failed exactly as its own summary predicted: #376
+        // added AlreadyReported, the `required` modifier forced it into the fixture above, and nothing
+        // forced a matching assertion — so the count was omitted from the log line and this test passed
+        // anyway. Found in T1, by reading a real seed log and noticing the field was not there. A
+        // maintained list cannot catch the omission it exists to catch.
+        PropertyInfo[] properties = typeof(EntityTypeActionCounts).GetProperties();
+        int[] values = [.. properties.Select(p => (int)p.GetValue(counts)!)];
+        Assert.HasCount(values.Length, values.Distinct(),
+            "Every count in the fixture must hold a distinct value, or a token could match a different field's number and the assertions below would prove nothing.");
+
+        foreach (PropertyInfo property in properties)
+        {
+            string token = $"{char.ToLowerInvariant(property.Name[0])}{property.Name[1..]}={property.GetValue(counts)}";
+            Assert.Contains(token, line,
+                $"The log line omits {property.Name} — a count that exists but is never printed reports nothing.");
+        }
     }
 
     /// <summary>
