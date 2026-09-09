@@ -2428,6 +2428,122 @@ public class DatabaseInitializerTests
             "…and the stored row is genuinely untouched, which is what makes the action inert rather than merely quiet");
     }
 
+    /// <summary>
+    /// #376: the accumulation had a second face nobody was watching — the notification layer. Before
+    /// this fix, a reseed re-staged the already-known conflict, which raised a *fresh*
+    /// <c>ImportReviewPending</c> alert with its own batch id every single time. Measured against the
+    /// pre-fix build: one alert at cold start, two after the first reseed, three after the second, for
+    /// one unresolved conflict nobody had touched.
+    /// <para>
+    /// Suppressing the duplicate action removes the alert's own cause, so the count stays at one. The
+    /// original alert deliberately stays standing — the decision it points at is still outstanding —
+    /// and this test asserts that too: an alert that vanished would be worse than one that duplicated.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_Repeatedly_WithAnAlreadyReportedConflict_RaisesNoFurtherReviewAlert()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("alert-never-grows",
+            """
+            {"quotes":[{"id":"37799999-9999-4999-8999-999999999999","quote":"A line.","originalLanguage":"en","source":"Alert Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
+            """,
+            """
+            {"quotes":[],"sources":[{"title":"Alert Film","type":"movie","date":"1999"}]}
+            """);
+
+        await db.InitialiseAsync();
+        int cold = ReviewAlertCount(await NotificationsAsync());
+
+        await db.ReseedAsync();
+        int first = ReviewAlertCount(await NotificationsAsync());
+
+        await db.ReseedAsync();
+        int second = ReviewAlertCount(await NotificationsAsync());
+
+        Assert.AreEqual(1, cold, "The declared date disagrees with the stored one, so exactly one alert is raised");
+        Assert.AreEqual(cold, first, $"Reseeding unchanged content must not raise a second alert for a conflict already on the review queue — grew {cold} → {first}");
+        Assert.AreEqual(cold, second, $"A further reseed must not raise another — {cold} → {first} → {second}");
+    }
+
+    /// <summary>
+    /// #376, the negative half of the test above. Without it, a change that stopped raising review
+    /// alerts altogether would pass that one perfectly while hiding every conflict from the operator —
+    /// a far worse outcome than the duplication it was meant to stop. A conflict this reseed is seeing
+    /// for the first time must still reach the review queue.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_WithANewConflict_StillRaisesAReviewAlert()
+    {
+        string quoteFile  = Path.Combine(_tempDir, "alert-new-1.json");
+        string sourceFile = Path.Combine(_tempDir, "alert-new-2.json");
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[
+                {"id":"377aaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","quote":"First line.","originalLanguage":"en","source":"Alert First Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+                {"id":"377bbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","quote":"Second line.","originalLanguage":"en","source":"Alert Second Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+            ],"sources":[]}
+            """);
+        File.WriteAllText(sourceFile,
+            """
+            {"quotes":[],"sources":[{"title":"Alert First Film","type":"movie","date":"1991"}]}
+            """);
+
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile,  null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
+             new SeedFile(sourceFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
+            ManifestPolicy.HardcodedDefault, "alert-new-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
+        await db.InitialiseAsync();
+        int cold = ReviewAlertCount(await NotificationsAsync());
+
+        // A second, previously undeclared title now disagrees too — new information, not a repeat.
+        File.WriteAllText(sourceFile,
+            """
+            {"quotes":[],"sources":[{"title":"Alert First Film","type":"movie","date":"1991"},{"title":"Alert Second Film","type":"movie","date":"1992"}]}
+            """);
+        await db.ReseedAsync();
+
+        Assert.AreEqual(1, cold, "Only the first title disagrees on cold start");
+        Assert.AreEqual(2, ReviewAlertCount(await NotificationsAsync()),
+            "The newly-disagreeing title must raise its own alert — a suppression that swallowed it would be hiding a conflict, not preventing a duplicate");
+    }
+
+    /// <summary>
+    /// #376, the negative half of <see cref="Reseed_AnAlreadyReportedConflict_IsCountedInTheConfirmationRatherThanVanishing"/>.
+    /// That test asserts a file whose conflict is already known reports a clean confirmation carrying
+    /// the already-reported count. This one asserts the word "clean" still means something: a file
+    /// whose conflict is genuinely outstanding — the cold start, where it is first detected — reports
+    /// no confirmation at all, only the review alert.
+    /// </summary>
+    [TestMethod]
+    public async Task ColdStart_AFileWhoseConflictIsGenuinelyPending_ReportsNoCleanConfirmation()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("no-clean-confirmation",
+            """
+            {"quotes":[{"id":"377ccccc-cccc-4ccc-8ccc-cccccccccccc","quote":"A line.","originalLanguage":"en","source":"Pending Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
+            """,
+            """
+            {"quotes":[],"sources":[{"title":"Pending Film","type":"movie","date":"1999"}]}
+            """);
+
+        await db.InitialiseAsync();
+        IReadOnlyList<NotificationEntity> notifications = await NotificationsAsync();
+
+        const string declaringFile = "no-clean-confirmation-2.json";
+        List<string> alertedFiles =
+            [.. notifications.Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending)
+                .Select(n => ((ImportReviewPendingMetadataDto)NotificationMetadataKinds.TryDeserialize(n.MetadataKind.Parsed, n.Metadata)!).FileName)];
+        List<string> confirmedFiles =
+            [.. notifications.Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)
+                .Select(n => ((ReseedFileAppliedMetadataDto)NotificationMetadataKinds.TryDeserialize(n.MetadataKind.Parsed, n.Metadata)!).FileName)];
+
+        Assert.Contains(declaringFile, alertedFiles,
+            "The file carrying the disagreement must raise a review alert on the pass that first detects it");
+        Assert.DoesNotContain(declaringFile, confirmedFiles,
+            "…and must not also report itself reseeded cleanly on that same pass — a confirmation alongside an outstanding first detection is what would make 'clean' meaningless");
+    }
+
     /// <summary>#376: only the Source rows of every reseed confirmation written so far.</summary>
     private static IEnumerable<ReseedEntityCountDto> SourceCountsFrom(IReadOnlyList<NotificationEntity> notifications)
         => AllConfirmationCounts(notifications).Where(c => c.EntityType == ImportActionEntityTypes.Source);
