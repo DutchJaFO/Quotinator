@@ -1,6 +1,6 @@
 # #376 — A Source-level Modify conflict stages a new Pending action on every reseed
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 8)
 **GitHub issue:** #376
 **Tiers required:** T1, T2
 **Depends on:** (none)
@@ -299,10 +299,10 @@ Two controls, without which a fix that simply stops staging anything passes ever
 | A genuinely new conflict is still staged on a later reseed | `Reseed_WithANewSourceConflict_StillStagesIt` | ✅ green — measured before the fix |
 | A conflict that becomes resolvable between reseeds is staged and applied, not skipped | `Reseed_AfterARuleResolvesAKnownConflict_AppliesItInsteadOfSkipping` | ❌ red — confirms decision 2 |
 
-The second control is what decision 2 rests on, and it came back red: a Quote already carrying an
-unresolved action is still unresolved after a reseed in which the rule file covers it. The branch-top
-placement really does hold a resolvable conflict shut, so decision 2 stands as written rather than
-needing the rewrite it was prepared to take.
+The second control is what decision 2 rests on. **Its first form was invalid and its red result was
+not evidence of anything** — see step 5, where running it after the fix exposed that it asserted
+something no mechanism provides. Rewritten to assert the stored row instead, and then proven to
+discriminate by experiment rather than by argument. Decision 2 stands, on the second measurement.
 
 ### 3. Add `ImportActionKind.AlreadyReported` and its widening migration
 
@@ -366,7 +366,35 @@ literal already passes `SqlTextCaseGuard`. Adding the nested class puts it in th
 
 ### 5. Consult it at every site, and stage `AlreadyReported` instead of nothing
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+All ten accumulation tests are green and the full Core suite is clean at 1,679. Three things this step
+found that the plan had wrong or had not anticipated.
+
+**Control B's original form asserted the impossible, and its red result was not evidence.** It asserted
+the unresolved *count* drops to zero once a rule covers the conflict. Nothing provides that:
+`ImportActionResolutionCoordinator` never re-decides an already-staged `Pending` row — only a decision
+through the decide endpoint changes one — so the original action stays exactly where it is regardless
+of placement. It was red before the fix and still red after, for that same reason both times, which
+means the pre-fix red never spoke to the placement at all. Rewritten to assert the **stored row**: a
+`Replace` rule makes the resolution observable, because the stored value moves to the rule's answer.
+
+**And then proven to discriminate, by experiment rather than by argument.** The rewritten control is
+green both before and after the fix (the Source site had no check at all before), so it could not
+prove the placement on its own. `keyWouldBePending` was temporarily changed to
+`policy == Review` — exactly "evaluated before rule resolution" — and the control went red with the
+stored date still `null`. Reverted immediately. That is what decision 2 now rests on.
+
+**The Quote Add branch keeps its branch-top placement, deliberately, and decision 2 is narrower than
+written.** Moving it would need two guards, one per staging point, and the collision check between
+them has same-batch side effects (`stagedQuoteTextsBySource`) that must not run for a quote this pass
+stages nothing new for. The Add branch also runs no rule resolution, so there is nothing there for an
+early check to shut out — the defect decision 2 names is specific to the Modify branch, which is where
+the move happened. Recorded at the call site too.
+
+The stale `#68` comment step 1 found — *"Add-only … no Modify/merge semantics"* — is corrected in the
+same pass, since it was read as authoritative while planning this issue's own fixtures and would have
+excluded three entity types from the work.
 
 One private helper on `ImportActionPlanner`, called immediately before each unresolved staging and
 only when the status about to be staged is unresolved (decision 2). When it fires, the site stages an
@@ -396,7 +424,26 @@ than left unstated, so the next reader does not mistake it for an oversight.
 
 ### 6. Carry the count through the report, the confirmation and the detail table
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Core 1,681 green, Api 914 green, build clean. Two things worth recording.
+
+**A file whose only conflict is already-reported now gets a clean confirmation where it used to raise a
+review alert.** At cold start the declaring file stages a `Pending`, which routes it to the
+review-pending alert and produces no "reseeded cleanly" confirmation at all; on the reseed it stages an
+`AlreadyReported` row, which is clean, so it reports a confirmation of its own. Measured as the Source
+`Incoming` total going 1 → 2 across the two passes. This is *more* information rather than less — and
+the `Reported` column is what stops it reading as "this file is fine now" when the conflict is still on
+the review queue. Flagged rather than treated as settled: whether a file in that state should also keep
+raising the alert is a question about the alert, not about this count.
+
+**The "does not shrink" assertion is `>=`, not `==`, for that reason** — the two counts legitimately
+differ, and pinning them equal would have been pinning an accident. What must never happen is the
+opposite: a suppressed row staging nothing at all and dropping out of `Incoming`, which is
+indistinguishable from content the file stopped mentioning.
+
+Both pre-existing short invariant assertions gained `ResolvedToExisting` as well as `AlreadyReported`,
+as planned.
 
 Following what #377 did for `ResolvedToExisting`, end to end:
 
@@ -419,9 +466,32 @@ Following what #377 did for `ResolvedToExisting`, end to end:
    written correctly, not extra scope. These are edits to passing tests, so each is checked by reading
    rather than by re-running until green.
 
-### 7. T2 document
+### 7. T2 documents
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Two documents, both driven against a `docker build` of `5cf8a154` (the commit before step 5) and then
+against the post-fix tree, per `process.md`'s Implementation step 1. Containers, images and worktree
+all torn down afterwards.
+
+| Document | Pre-fix | Post-fix |
+|---|---|---|
+| [`25`](../../automated-testing/import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md) — an already-reported conflict does not accumulate | ❌ `1 → 2 → 3` | ✅ `1 → 1 → 1`, `AlreadyReported=2` |
+| [`26`](../../automated-testing/import-and-staged-actions/26-a-new-conflict-is-still-staged.md) — a new conflict is still staged | ✅ `1 → 2` distinct | ✅ `1 → 2` distinct |
+
+`26` is green on both images, which is what earns it the name regression guard rather than post-fix
+artefact — and its *row* counts differ across the two (`1 → 3` against `1 → 2`), which is exactly the
+accumulation `25` measures and precisely why `26` counts distinct entities instead.
+
+**Running the documents corrected them, in a way reading them would not have.** Both originally said
+to copy the fixture into `{dataDir}/imports/` and restart. The restart is necessary — `SeedBatchesBuilder`
+only adds the user-imports batch when the directory exists — but it is not sufficient: startup seeding
+runs only against an empty database, and after a restart the database is not empty, so the logs show no
+seeding line at all and the fixture is never read. An explicit reseed is what actually imports it. The
+first live run failed at the Source lookup for exactly this reason. Both documents now reseed before
+asserting, and say why.
+
+Both are in `docs/automated-testing/README.md`'s index and in `Quotinator.slnx`; `Smoke: no`.
 
 The bundled corpus stages nothing unresolved (see *Measurement*), so a live document cannot use it as
 its fixture. The route that works is the one #382 established: a `{dataDir}/imports/` folder carrying
@@ -442,7 +512,16 @@ step 1, then tear down container, image and worktree. Add both to
 
 ### 8. Full build and test run
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+`dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
+both `0 Warning(s)  0 Error(s)`. **4,054 tests across ten projects, 0 failed**, run after step 7 so it
+covers both new documents' index and solution entries.
+
+No `.editorconfig` change was needed. Every file this issue touched that carries `var` conversions —
+`ImportActionPlanner.cs`, `Sql.cs`, `DatabaseInitializerTests.cs`, `NotificationTable.razor.cs`,
+`QuotinatorDatabaseInitializer.cs` — is already in the scoped `IDE0008` list, and the build stays at
+zero warnings without adding any file to the `IDE0090` list.
 
 `dotnet build --configuration Release` and
 `dotnet test --configuration Release --verbosity normal -m:1`, both `0 Warning(s)  0 Error(s)`. Run
@@ -458,30 +537,30 @@ the scoped lists before adding it, per the ratchet's own rule.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A Source natural-key Modify conflict stages once and never accumulates | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithASourceModifyConflict_PendingCountNeverGrows` — cold == reseed1 == reseed2 |
-| 2 | ❌ | Same, Source explicit-id branch | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAnExplicitIdSourceModifyConflict_PendingCountNeverGrows` |
-| 3 | ❌ | Same, `ResolveSourceAsync`'s Blocked date backfill | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithABlockedSourceDateBackfill_BlockedCountNeverGrows` |
-| 4 | ❌ | Same, a Source-level stale rule | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAStaleSourceRule_StaleCountNeverGrows` |
-| 5 | ❌ | Same, Series | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithASeriesModifyConflict_PendingCountNeverGrows` |
-| 6 | ❌ | Same, Universe | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAUniverseModifyConflict_PendingCountNeverGrows` |
-| 7 | ❌ | Same, Season | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithASeasonModifyConflict_PendingCountNeverGrows` |
-| 8 | ❌ | Same, Person | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAPersonModifyConflict_PendingCountNeverGrows` |
-| 9 | ❌ | Same, Character | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithACharacterModifyConflict_PendingCountNeverGrows` |
-| 10 | ❌ | Same, Conversation / StageDirection / SoundCue | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAConversationModifyConflict_PendingCountNeverGrows` |
-| 11 | ✅ | Every test in rows 1–10 was genuinely red before step 5 | Live | Run at `bd7026c9` + the tests only — all ten fail, each growing 1 → 2 on the first reseed; control A green, control B red |
-| 12 | ❌ | A genuinely new conflict is still staged on a later reseed | Unit test | `DatabaseInitializerTests.Reseed_WithANewSourceConflict_StillStagesIt` — green before and after |
-| 13 | ❌ | A conflict that becomes resolvable between reseeds is applied, not skipped — at every site including Quote | Unit test | `DatabaseInitializerTests.Reseed_AfterARuleResolvesAKnownConflict_AppliesItInsteadOfSkipping` |
+| 1 | ✅ | A Source natural-key Modify conflict stages once and never accumulates | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithASourceModifyConflict_PendingCountNeverGrows` — cold == reseed1 == reseed2 |
+| 2 | ✅ | Same, Source explicit-id branch | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAnExplicitIdSourceModifyConflict_PendingCountNeverGrows` |
+| 3 | ✅ | Same, `ResolveSourceAsync`'s Blocked date backfill | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithABlockedSourceDateBackfill_BlockedCountNeverGrows` |
+| 4 | ✅ | Same, a Source-level stale rule | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAStaleSourceRule_StaleCountNeverGrows` |
+| 5 | ✅ | Same, Series | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithASeriesModifyConflict_PendingCountNeverGrows` |
+| 6 | ✅ | Same, Universe | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAUniverseModifyConflict_PendingCountNeverGrows` |
+| 7 | ✅ | Same, Season | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithASeasonModifyConflict_PendingCountNeverGrows` |
+| 8 | ✅ | Same, Person | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAPersonModifyConflict_PendingCountNeverGrows` |
+| 9 | ✅ | Same, Character | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithACharacterModifyConflict_PendingCountNeverGrows` |
+| 10 | ✅ | Same, Conversation / StageDirection / SoundCue | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAConversationModifyConflict_PendingCountNeverGrows` |
+| 11 | ✅ | Every test in rows 1–10 was genuinely red before step 5 | Live | Run at `bd7026c9` + the tests only — all ten fail, each growing 1 → 2 on the first reseed. Control A green. Control B was red too, but for a reason unrelated to the fix — see step 5 |
+| 12 | ✅ | A genuinely new conflict is still staged on a later reseed | Unit test | `DatabaseInitializerTests.Reseed_WithANewSourceConflict_StillStagesIt` — green before and after |
+| 13 | ✅ | A conflict that becomes resolvable between reseeds is applied, not skipped | Unit test + Live | `DatabaseInitializerTests.Reseed_AfterARuleResolvesAKnownConflict_AppliesItInsteadOfSkipping` asserts the stored date becomes `1999`; proven to discriminate by temporarily evaluating the check before rule resolution, which turned it red with the date still `null` |
 | 14 | ✅ | Every site is resolved reachable-or-not, and each fixture shape fixed, before any fixture was written | Live | Step 1 — per-entity table of diffed fields, matching strategy and the field each fixture makes differ |
-| 15 | ❌ | One shared query, no Quote-only duplicate left behind | Live | `grep -rn "SelectHasUnresolvedActionById" src/` → no matches; `Sql.ImportActions.SelectHasUnresolvedActionByEntity` is the only definition |
-| 16 | ❌ | The shared query is case-insensitive on both `EntityType` and `EntityId` | Unit test | `SqlQueryGuardTests` — `SqlTextCaseGuard` and `SqlIdCaseGuard` both clean over the new nested class |
-| 17 | ❌ | Migration 22 widens the CHECK and the baseline matches it exactly | Unit test | The consumer/data schema-drift pair — baseline-created schema and incrementally-replayed schema identical, including CHECK-accepted values |
-| 18 | ❌ | An `AlreadyReported` row is staged `Applied` and never re-applied | Unit test | `ImportActionPlannerTests` — status `Applied`, kind `AlreadyReported`; no `Audit_Change` row and no `DateModified` change for that entity |
-| 19 | ❌ | The already-reported row appears in the reseed confirmation instead of vanishing | Unit test | `DatabaseInitializerTests` — the entity type's `ReseedEntityCountDto.AlreadyReported` is 1 and its `Incoming` does not drop between reseeds |
-| 20 | ❌ | The breakdown still adds up with the new term | Unit test | Every existing `Incoming == Added + Modified + Unchanged + ResolvedToExisting + Skipped` assertion, updated and green |
-| 21 | ❌ | The detail table renders a seventh column and totals it | Unit test | `NotificationTable` column/totals tests — header from `NotificationsDetailAlreadyReportedColumn`, totals cell equals the summed value |
-| 22 | ❌ | The new key exists and is non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
-| 23 | ❌ | Live: an already-reported Source conflict does not accumulate across three reseeds | T2 | `docs/automated-testing/import-and-staged-actions/<N>-…md` — red on the pre-fix image (count grows), green on the post-fix image (count flat) |
-| 24 | ❌ | Live: a genuinely new conflict on a later reseed is still staged | T2 | `docs/automated-testing/import-and-staged-actions/<N+1>-…md` — green on **both** images, which is what makes it a regression guard |
-| 25 | ❌ | Build and full suite clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1` — `0 Warning(s)  0 Error(s)`, 0 failed, run after step 7 |
+| 15 | ✅ | One shared query, no Quote-only duplicate left behind | Live | `grep -rn "SelectHasUnresolvedActionById" src/` → no matches; `Sql.ImportActions.SelectHasUnresolvedActionByEntity` is the only definition |
+| 16 | ✅ | The shared query is case-insensitive on both `EntityType` and `EntityId` | Unit test | `SqlQueryGuardTests` — `SqlTextCaseGuard` and `SqlIdCaseGuard` both clean over the new nested class |
+| 17 | ✅ | Migration 22 widens the CHECK and the baseline matches it exactly | Unit test | The consumer/data schema-drift pair — baseline-created schema and incrementally-replayed schema identical, including CHECK-accepted values |
+| 18 | ✅ | An `AlreadyReported` row is staged `Applied` and never re-applied | Unit test | `DatabaseInitializerTests.Reseed_AnAlreadyReportedConflict_IsAppliedTerminalAndWritesNoChangeEntry` — status `Applied`, no `Audit_Change` row, stored date still null |
+| 19 | ✅ | The already-reported row appears in the reseed confirmation instead of vanishing | Unit test | `DatabaseInitializerTests.Reseed_AnAlreadyReportedConflict_IsCountedInTheConfirmationRatherThanVanishing` — `AlreadyReported` is 1, and Source `Incoming` never shrinks (measured 1 → 2, never down) |
+| 20 | ✅ | The breakdown still adds up with the new term | Unit test | The three `Incoming == …` assertions (`DatabaseInitializerTests:1109`, `:1251`, `:1464`), each now carrying `ResolvedToExisting` **and** `AlreadyReported`, plus the per-row sum inside row 19's own test |
+| 21 | ✅ | The detail table renders a seventh column and totals it | Unit test | `NotificationTableTests.AlreadyReportedColumn_ShowsTheActualCount`, `AlreadyReportedOnlyRow_StillRenders`, and `PayloadDetail_ReseedFileApplied_TotalsRowSumsEveryColumn` widened to seven columns |
+| 22 | ✅ | The new key exists and is non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
+| 23 | ✅ | Live: an already-reported Source conflict does not accumulate across three reseeds | T2 | `import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md` — red on `quotinator:qt376-prefix` (`1 → 2 → 3`), green on `qt376-post` (`1 → 1 → 1`, `AlreadyReported=2`) |
+| 24 | ✅ | Live: a genuinely new conflict on a later reseed is still staged | T2 | `import-and-staged-actions/26-a-new-conflict-is-still-staged.md` — `1 → 2` distinct entities on **both** images, which is what makes it a regression guard |
+| 25 | ✅ | Build and full suite clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1` — `0 Warning(s)  0 Error(s)`, 4,054 tests across ten projects, 0 failed, run after step 7 |
 | 26 | ❌ | T1: the app starts without error | Live | Developer runs it in Visual Studio — clean startup, then a Reset and two reseeds, no errors |
-| 27 | ❌ | The stale reproduction steps and the widened scope are recorded on the issue itself | Live | A comment on #376 carrying the measurement, the site inventory, and the four decisions |
+| 27 | ✅ | The stale reproduction steps and the widened scope are recorded on the issue itself | Live | A comment on #376 carrying the measurement, the site inventory, and the four decisions |

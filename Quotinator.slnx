@@ -408,6 +408,8 @@
     <File Path="docs/automated-testing/import-and-staged-actions/22-season-attached-quote-served-through-the-api.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/23-complete-row-blocks-only-on-a-real-write.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/24-complete-row-still-blocks-a-real-write.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/26-a-new-conflict-is-still-staged.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

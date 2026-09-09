@@ -1122,6 +1122,8 @@ different question in each.
 | 22 | [A season-attached quote is served correctly through a real container](import-and-staged-actions/22-season-attached-quote-served-through-the-api.md) | no |
 | 23 | [A `Complete` row is not blocked when the resolution writes nothing](import-and-staged-actions/23-complete-row-blocks-only-on-a-real-write.md) | no |
 | 24 | [A `Complete` row still blocks when a rule resolves to a different value](import-and-staged-actions/24-complete-row-still-blocks-a-real-write.md) | no |
+| 25 | [An already-reported conflict does not stage a duplicate on every reseed](import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md) | no |
+| 26 | [A conflict seen for the first time is still staged on a later reseed](import-and-staged-actions/26-a-new-conflict-is-still-staged.md) | no |
 
 ---
 
