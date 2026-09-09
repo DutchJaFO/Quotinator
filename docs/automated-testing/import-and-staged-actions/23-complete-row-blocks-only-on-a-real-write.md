@@ -1,8 +1,14 @@
-# A `Complete` row blocks only when something would actually be written
+# A `Complete` row is not blocked when the resolution writes nothing
 
 **Smoke:** no
 **Environment:** Fresh
 **Traces to:** #382
+
+**Pairs with [`24`](24-complete-row-still-blocks-a-real-write.md)**, which asserts the other half — a
+`Complete` row whose rule resolves to a *different* value must still block. The two are separate
+documents on purpose: each builds its own container and its own fixture, so neither can leave state
+that skews the other, and a failure names which half broke without the reader having to work out
+whether an earlier step caused it.
 
 ## Preconditions
 
@@ -40,15 +46,22 @@ initializer and reaches the resolution branch — no rule-file override endpoint
   `FieldMergeResolver` settles it back to the stored value without any rule. It is what the guard reads
   after #382 and did not read before.
 - **The row is made `Complete` with `keep`, not `replace`.** `keep` leaves the stored text exactly as
-  the imports file has it, so the later reseeds disagree on nothing but `date` (positive half) or
-  nothing but the rule's own field (negative half). A `replace` would leave the stored text differing
-  from the file, and every later reseed would block for that reason instead of the one under test.
+  the imports file has it, so the final reseed disagrees on nothing but `date` — the field under test.
+  A `replace` would leave the stored text differing from the file, and the reseed would block for that
+  reason instead of the one this document names.
 - **Every listing is filtered to this test's own `entityId`.** The reseed stages actions for bundled
   content too; an unfiltered tally is satisfied by rows this test did not produce.
-- **The negative half's rule must name both sides exactly.** `existingRecord.quoteText` is the stored
-  text and `incomingRecord.quoteText` the file's new text; a mismatch makes the rule `Stale` and the
-  action stages `Stale` rather than `Blocked` — a different outcome that would read as a failure of the
-  guard. See [`16`](16-conflict-rule-staleness.md).
+- **Read the whole action list, never the count alone.** #374's accumulation guard makes `PlanAsync`
+  skip any quote that already carries an unresolved (`Pending`, `Blocked` or `Stale`) action, so a
+  reseed can stage *nothing at all* for the row. That reads as `blocked=0` — indistinguishable from
+  the guard correctly declining to block. Step 4 ends with its action applied, so nothing is
+  outstanding when step 5 runs; the printed list is what proves it.
+- **The rules file stays empty here.** No `ConflictResolutionRule` is needed: the resolution this
+  document turns on is `FieldMergeResolver` settling an omitted field back to its stored value. The
+  file must still exist and be declared in the manifest, because a `ruleFile` is what makes the seed
+  path build a `ConflictRuleLookup` at all — with none, the `review` branch never resolves and the
+  action falls through to `Pending`. [`24`](24-complete-row-still-blocks-a-real-write.md) is where a
+  real rule is exercised.
 
 ## Steps
 
@@ -175,56 +188,9 @@ the resolved payload equals the stored row and the apply would write nothing. Be
 handed the *unresolved* payload, saw `date` going from `1999` to nothing, and staged `Blocked` — a hold
 an operator had to clear by hand for a change that was never going to be made.
 
-**On failure:** `blocked=1` is this document's whole point failing.
-
-### 6. Swap the rule to `Replace` — the guard still holds
-
-```powershell
-$negQuotes = @'
-{
-  "sources": [
-    { "title": "Quotinator 382 Fixture Film", "type": "movie", "date": "1999" }
-  ],
-  "quotes": [
-    { "id":"a1111382-0000-4000-8000-000000000001", "quote":"Third fixture text.", "originalLanguage":"en", "source":"Quotinator 382 Fixture Film", "character":null, "author":null, "type":"movie", "genres":[], "translations":{} }
-  ]
-}
-'@
-$negRules = @'
-{
-  "rules": [
-    {
-      "entityId": "a1111382-0000-4000-8000-000000000001",
-      "existingRecord": { "quoteText": "Original fixture text." },
-      "incomingRecord": { "quoteText": "Third fixture text." },
-      "fields": [ { "field": "quoteText", "resolution": "Replace" } ]
-    }
-  ]
-}
-'@
-[IO.File]::WriteAllText("$temp\382-imports\382-quotes.json", $negQuotes, [Text.UTF8Encoding]::new($false))
-[IO.File]::WriteAllText("$temp\382-imports\382-rules.json",  $negRules,  [Text.UTF8Encoding]::new($false))
-docker cp "$temp\382-imports\382-quotes.json" qt-import-23:/data/imports/
-docker cp "$temp\382-imports\382-rules.json"  qt-import-23:/data/imports/
-
-Invoke-RestMethod -Method Post -Uri "$base/admin/database/reseed" -Headers $key | Out-Null
-$acts = (Invoke-RestMethod "$base/import/actions?pageSize=0").items |
-          Where-Object { $_.entityId -eq 'a1111382-0000-4000-8000-000000000001' }
-$acts | Select-Object status, actionType
-"blocked=$(@($acts | Where-Object { $_.status -eq 'Blocked' }).Count)"
-(Invoke-RestMethod "$base/quotes/a1111382-0000-4000-8000-000000000001").quote
-```
-
-**Expected:** `blocked=1` — a `Blocked` / `Modify` action — and the quote still reads
-`Original fixture text.` The third text was never written.
-
-This is the half that makes step 5 mean something. #382 narrowed a protection mechanism, and a "fix"
-that simply stopped blocking would pass step 5 and be a straightforward regression; only this step
-tells the two apart.
-
-**On failure:** `blocked=0` means a `Complete` row accepted a genuine overwrite without being held — a
-more serious defect than the one this document was written for. A `Stale` action instead means the
-rule's recorded snapshot does not match both sides; see Determinism.
+**On failure:** `blocked=1` is this document's whole point failing — the guard is still reading the
+unresolved payload. `blocked=0` with *no* new action at all is a different failure: the row was never
+re-evaluated, which the printed action list is there to distinguish.
 
 ## Cleanup
 

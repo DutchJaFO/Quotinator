@@ -294,18 +294,27 @@ reaches the rule-resolution branch with no override endpoint involved at all.
 Wire names verified against the DTOs rather than assumed: `files[].file` and `files[].ruleFile`
 (`ManifestFileEntryDto`).
 
-The document to write:
+**Two documents, not one** (developer, 2026-09-09: *"it is better to have separate test documents
+instead of trying to combine them as one test document. that allows for better diagnosis if a test
+fails"*). A single document holding both halves is stateful across its own steps, and that coupling
+bites concretely rather than theoretically: #374's accumulation guard makes `PlanAsync` skip a quote
+that already carries an unresolved action, so the positive half failing leaves a `Blocked` row that
+makes the negative half stage nothing and report `blocked=0` — which reads exactly like the guard
+wrongly declining to block. A red run would fail twice with only the first failure real. Splitting
+them removes the coupling rather than documenting it; each builds its own container, its own fixture
+and its own entity id.
 
-1. Fresh env; write `manifest.json`, a quotes file (one quote against the bundled dated Source
-   `Airplane!`) and an empty rules file into `/data/imports/`; reseed. The quote is added, `Incomplete`.
-2. Make it `Complete` without changing it: `POST /import` a Modify with a different text → `Pending` →
-   decide `{"quoteText":{"choice":"keep"},"markCompletenessAs":"Complete"}` → apply. Stored text is
-   unchanged; the row is now `Complete`.
-3. Rewrite the imports quotes file so its text disagrees with the stored one, and put a matching `Keep`
-   rule in the rules file. Reseed. The rule resolves the text back to what is stored, so nothing would
-   be written — the action must **not** be `Blocked`.
-4. Swap the rule to `Replace` and reseed again: it must be `Blocked`. That half is what stops the fix
-   being satisfied by removing the guard.
+- **`23-complete-row-blocks-only-on-a-real-write.md`** — the positive. A `Complete` row whose omitted
+  `date` the resolver settles back to the Source's stored value writes nothing, so it must not block.
+  Red pre-fix (`Blocked/Modify`), green post-fix (`blocked=0`, `Applied/ResolvedToExisting`).
+- **`24-complete-row-still-blocks-a-real-write.md`** — the negative, and what stops the narrowing
+  going too far: a `Replace` rule resolving to a different value must still block. Green on **both**
+  images (`blocked=1`, quote unwritten), which is what makes it a regression guard rather than a
+  post-fix artefact.
+
+Both were confirmed red-or-green against a `docker build` of the commit before step 2, per
+`process.md`'s Implementation step 1, then container, image and worktree torn down. Both are added to
+`docs/automated-testing/README.md`'s index and to `Quotinator.slnx`; `Smoke: no`.
 
 Confirm red first against a `docker build` of the commit before step 2, per `process.md`'s
 Implementation step 1, then tear down container, image and worktree. Add the document to
@@ -363,7 +372,8 @@ next tests the ratchet's end state.
 | 15 | ✅ | A content-identical row still stages `Unchanged` and reports no retirable-rule finding | Unit test | Existing `#373` Unchanged tests and the `#153` retirable-finding tests stay green |
 | 16 | ✅ | Every site's comment names the reversal rather than the reversed decision | Live | `grep -n "never bypasses CompletenessGuard" src/Quotinator.Core/Database/ImportActionPlanner.cs` → no matches; six sites cite `#181`/`#382` |
 | 17 | ✅ | #181's plan doc no longer asserts the reversed ordering | Live | `grep -n "382" docs/milestones/data-import-sources/181-minimal-conflict-resolution-rule-file-plan.md` → the supersession sentence |
-| 18 | ✅ | Live: a `Complete` row is not blocked when the resolution writes nothing, and still is when it does | T2 | `docs/automated-testing/import-and-staged-actions/23-complete-row-blocks-only-on-a-real-write.md` — red on `quotinator:qt382-prefix` (`Blocked/Modify`), green on `qt382-post` (`Applied/ResolvedToExisting`, `blocked=0`); negative half `blocked=1` with the quote unwritten |
-| 19 | ✅ | Build and full suite clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1` — `0 Warning(s)  0 Error(s)`, 4,034 tests across ten projects, 0 failed, run after step 5 so it covers the new document's index and solution entries |
-| 20 | ✅ | T1: the app starts without error | Live | Developer ran it in Visual Studio 2026-09-09 — clean startup at 1.9.0-alpha, then a Reset and two reseeds, no errors |
-| 21 | ✅ | The cross-check finding and the decision are recorded on the issue itself | Live | [#382 comment 5601823156](https://github.com/DutchJaFO/Quotinator/issues/382#issuecomment-5601823156) — the #181 supersession, Season being the deviation, the five-locations count, and the measurement |
+| 18 | ✅ | Live: a `Complete` row is not blocked when the resolution writes nothing | T2 | `docs/automated-testing/import-and-staged-actions/23-complete-row-blocks-only-on-a-real-write.md` — red on `quotinator:qt382-prefix` (`Blocked/Modify`), green on `qt382-post` (`blocked=0`, `Applied/ResolvedToExisting`) |
+| 19 | ✅ | Live: a `Complete` row still blocks when a rule resolves to a different value | T2 | `docs/automated-testing/import-and-staged-actions/24-complete-row-still-blocks-a-real-write.md` — `blocked=1` with the quote unwritten on **both** images, proving it a regression guard rather than a post-fix artefact |
+| 20 | ✅ | Build and full suite clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1` — `0 Warning(s)  0 Error(s)`, 4,034 tests across ten projects, 0 failed, run after step 5 so it covers both documents' index and solution entries |
+| 21 | ✅ | T1: the app starts without error | Live | Developer ran it in Visual Studio 2026-09-09 — clean startup at 1.9.0-alpha, then a Reset and two reseeds, no errors |
+| 22 | ✅ | The cross-check finding and the decision are recorded on the issue itself | Live | [#382 comment 5601823156](https://github.com/DutchJaFO/Quotinator/issues/382#issuecomment-5601823156) — the #181 supersession, Season being the deviation, the five-locations count, and the measurement |

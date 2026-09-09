@@ -1120,7 +1120,8 @@ different question in each.
 | 20 | [A file left awaiting review raises an alert, and resolving it retires the alert](import-and-staged-actions/20-pending-review-alert.md) | no |
 | 21 | [A reseed imports the designated files and deletes nothing](import-and-staged-actions/21-reseed-preserves-existing-data.md) | no |
 | 22 | [A season-attached quote is served correctly through a real container](import-and-staged-actions/22-season-attached-quote-served-through-the-api.md) | no |
-| 23 | [A `Complete` row blocks only when something would actually be written](import-and-staged-actions/23-complete-row-blocks-only-on-a-real-write.md) | no |
+| 23 | [A `Complete` row is not blocked when the resolution writes nothing](import-and-staged-actions/23-complete-row-blocks-only-on-a-real-write.md) | no |
+| 24 | [A `Complete` row still blocks when a rule resolves to a different value](import-and-staged-actions/24-complete-row-still-blocks-a-real-write.md) | no |
 
 ---
 
