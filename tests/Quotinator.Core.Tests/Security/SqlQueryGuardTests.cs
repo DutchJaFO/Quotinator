@@ -148,9 +148,9 @@ public class SqlQueryGuardTests
         // None use GROUP BY or HAVING, so none trigger the vulnerability.
         HashSet<string> documented =
         [
+            "ImportActions.SelectHasUnresolvedActionByEntity", // COUNT(*) — #374's dedup check, #376 parameterised it by entity type
             "Quotes.CountAll",                    // COUNT(*)
             "Quotes.CountActive",                 // COUNT(*)
-            "Quotes.SelectHasUnresolvedActionById", // COUNT(*) — #374 tv-date-conflict/quote-collision dedup check
             "Quotes.CountForRandomBase",          // COUNT(*) — private base for CountRandom factory
             "Quotes.CountForGetAllBase",          // COUNT(*) — private base for CountGetAll factory
             "QuoteGenres.CountAll",               // COUNT(*)

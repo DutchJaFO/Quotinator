@@ -322,7 +322,7 @@ internal static class ImportActionPlanner
                 // was first written for), which left the Blocked collision path below completely
                 // unguarded — a real reseed duplicated every Blocked collision action on top of the
                 // still-unresolved one from the previous reseed.
-                if (await connection.ExecuteScalarAsync<int>(Sql.Quotes.SelectHasUnresolvedActionById, new { id = q.Id }, transaction) > 0)
+                if (await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Quote, q.Id, transaction))
                     continue;
 
                 // #378: the same accumulation-prevention reasoning as the check just above, extended to
@@ -421,7 +421,7 @@ internal static class ImportActionPlanner
             // (`existingBatchId == batchIdStr`, via `seenQuotes` above) — nothing can be in
             // `Import_Action` yet for a row this same `PlanAsync` call hasn't finished staging.
             if (existingBatchId != batchIdStr
-                && await connection.ExecuteScalarAsync<int>(Sql.Quotes.SelectHasUnresolvedActionById, new { id = q.Id }, transaction) > 0)
+                && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Quote, q.Id, transaction))
                 continue;
 
             bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
@@ -667,6 +667,21 @@ internal static class ImportActionPlanner
         Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Applied.ToString(), ImportActionStatus.Applied),
         DetectedAt = now,
     };
+
+    /// <summary>
+    /// #376: whether this entity already carries an unresolved <c>Pending</c>/<c>Blocked</c>/<c>Stale</c>
+    /// action from an earlier batch — see <see cref="Sql.ImportActions.SelectHasUnresolvedActionByEntity"/>
+    /// for what goes wrong without the check. Called at every site that stages one of the three, and
+    /// only when the action about to be staged is itself unresolved.
+    /// </summary>
+    /// <param name="connection">The open connection this planning pass is reading through.</param>
+    /// <param name="entityType">The <c>Import_Action.EntityType</c> discriminator for the entity being planned.</param>
+    /// <param name="entityId">The entity's own id, as it would be written to <c>Import_Action.EntityId</c>.</param>
+    /// <param name="transaction">The planning pass's transaction, so the check sees this batch's own earlier files.</param>
+    private static async Task<bool> HasUnresolvedActionAsync(
+        SqliteConnection connection, string entityType, string entityId, SqliteTransaction? transaction) =>
+        await connection.ExecuteScalarAsync<int>(
+            Sql.ImportActions.SelectHasUnresolvedActionByEntity, new { entityType, entityId }, transaction) > 0;
 
     /// <summary>
     /// #377: whether a would-be <c>Modify</c> writes nothing — its resolved payload is identical to the

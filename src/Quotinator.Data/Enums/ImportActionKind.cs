@@ -42,5 +42,34 @@ public enum ImportActionKind
     /// modification that did not happen.
     /// </para>
     /// </summary>
-    ResolvedToExisting
+    ResolvedToExisting,
+
+    /// <summary>
+    /// An existing record whose conflict an earlier pass already staged, and which this pass therefore
+    /// did not stage again (#376).
+    /// <para>
+    /// <see cref="ImportActionStatus.Pending"/>, <see cref="ImportActionStatus.Blocked"/> and
+    /// <see cref="ImportActionStatus.Stale"/> are never applied and never resolve on their own, so a
+    /// record carrying one keeps its stored values — and every later reseed compared against those same
+    /// values, reached the same conclusion, and staged a duplicate on top of the one still awaiting
+    /// review. Suppressing that duplicate is what this kind records: without it the record would simply
+    /// vanish from the file's report, since <c>Incoming</c> is derived from the staged actions
+    /// themselves, and a reader could not tell an already-known conflict from content the file stopped
+    /// mentioning.
+    /// </para>
+    /// <para>
+    /// Distinct from <see cref="Unchanged"/>, which says the file and the database agree — here they
+    /// disagree, and the disagreement is already on someone's review queue. Distinct from
+    /// <see cref="ResolvedToExisting"/>, where a resolution ran and settled on the stored values; here
+    /// no resolution is attempted at all.
+    /// </para>
+    /// <para>
+    /// Terminal, and that is load-bearing for the same reason it is for
+    /// <see cref="ResolvedToExisting"/>: staged <c>ImportActionStatus.Applied</c>, and
+    /// <c>ImportActionResolutionCoordinator.TryApplyBatchAsync</c> applies only <c>Decided</c> rows —
+    /// so nothing re-stamps <c>DateModified</c>, re-attributes <c>ImportBatchId</c>, or writes an
+    /// <c>Audit_Change</c> row claiming a modification that did not happen.
+    /// </para>
+    /// </summary>
+    AlreadyReported
 }

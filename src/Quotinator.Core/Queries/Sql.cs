@@ -24,6 +24,36 @@ namespace Quotinator.Core.Queries;
 /// </remarks>
 internal static class Sql
 {
+    /// <summary>Import_Action reads the planner makes about any entity type, not one in particular.</summary>
+    internal static class ImportActions
+    {
+        /// <summary>
+        /// #376: this entity already has an unresolved <c>Pending</c>, <c>Blocked</c> or <c>Stale</c>
+        /// action staged in an earlier batch.
+        /// <para>
+        /// None of those three is ever applied and none resolves on its own, so the entity keeps its
+        /// stored values — and without this check every reseed compares against those same values,
+        /// reaches the same conclusion, and stages a brand-new duplicate on top of the one still
+        /// awaiting review, growing without bound.
+        /// </para>
+        /// <para>
+        /// #374 introduced this as a Quote-only query and found the same defect four separate times,
+        /// each in whichever mechanism had just been observed live — <c>Pending</c> on the Add branch,
+        /// then <c>Blocked</c> on the same branch, then the Modify branch, then <c>Stale</c>. #376
+        /// parameterised it by entity type rather than adding a second copy, so there is one definition
+        /// of "unresolved" and not two that can drift the way the status list already drifted three
+        /// times inside the Quote-only version. Consulted at every site that stages one of the three.
+        /// </para>
+        /// <para>
+        /// <c>EntityType</c> goes through <see cref="TextClauses"/> now that it is a parameter rather
+        /// than the literal <c>'Quote'</c> — see CLAUDE.md's case-insensitive-by-default rule and
+        /// <see cref="Quotinator.Data.Diagnostics.SqlTextCaseGuard"/>, which enforces it.
+        /// </para>
+        /// </summary>
+        internal static readonly string SelectHasUnresolvedActionByEntity =
+            $"SELECT COUNT(*) FROM Import_Action WHERE {TextClauses.Equals("EntityType", "entityType")} AND {IdClauses.Equals("EntityId", "entityId")} AND Status IN ('Pending', 'Blocked', 'Stale');";
+    }
+
     /// <summary>Quotes table — fixed queries and dynamic-query factory methods.</summary>
     internal static class Quotes
     {
@@ -49,26 +79,6 @@ internal static class Sql
         /// </summary>
         internal static readonly string SelectExistingIdByTextAndSource =
             $"SELECT {IdClauses.SelectColumn("Id")} FROM Quotinator_Quote WHERE {TextClauses.Equals("QuoteText", "quoteText")} AND {IdClauses.Equals("SourceId", "sourceId")} AND IsDeleted = 0 LIMIT 1;";
-
-        /// <summary>
-        /// #374: a quote id already has an unresolved `Pending`, `Blocked`, or `Stale` action staged in
-        /// an earlier batch — a series-capable Source's date conflict (`Pending`, see
-        /// <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s `dateNeedsReview` handling), a
-        /// quote-uniqueness content collision (`Blocked`, step 7's own mechanism), or a conflict rule
-        /// that genuinely cannot resolve this comparison (`Stale`, step 4's own mechanism). #372's reseed
-        /// never truncates `Import_Action`, and none of these ever resolve on their own, so without this
-        /// check a reseed re-plans the same never-before-seen-in-Quotinator_Quote id every time and
-        /// stages a brand-new duplicate action on top of the still-unresolved one, growing without bound
-        /// — exactly the accumulation pattern this issue exists to fix. Found live for the `Blocked`
-        /// case (T2 Docker, a real reseed) after this check had only ever been applied to the `Pending`
-        /// case it was originally written for, and found again live for `Stale` (T1, the developer's own
-        /// run against the real bundled corpus) after this Modify-branch extension covered `Pending`/
-        /// `Blocked` but not `Stale` — the same class of bug recurring a third time in a status this
-        /// check had still never been extended to. Consulted before staging a new Blocked, Pending, or
-        /// Stale action.
-        /// </summary>
-        internal static readonly string SelectHasUnresolvedActionById =
-            $"SELECT COUNT(*) FROM Import_Action WHERE EntityType = 'Quote' AND {IdClauses.Equals("EntityId", "id")} AND Status IN ('Pending', 'Blocked', 'Stale');";
 
         /// <summary>Read before an apply so #165's CompletenessGuard.ComputeNextStatus can see the before-state; also used to read a fresh Add's just-inserted defaults. Case-insensitive — see <see cref="Sources.SelectExistingById"/>'s remark; #210 extends this to Quote.</summary>
         internal static readonly string SelectCompletenessById =

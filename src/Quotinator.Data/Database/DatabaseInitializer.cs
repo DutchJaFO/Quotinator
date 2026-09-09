@@ -144,6 +144,10 @@ public class DatabaseInitializer(
         // but whose resolution settled on the values already stored, so nothing is written differently.
         // A rebuild for the same reason migration 20 needed one: SQLite cannot widen an inline CHECK.
         new SchemaMigration { Version = 21, Sql = ImportActionResolvedToExistingMigrations.WidenActionTypeForResolvedToExisting },
+        // #376: ActionType gains 'AlreadyReported' — a record whose conflict an earlier pass already
+        // staged, and which this pass therefore does not stage again. A rebuild for the same reason
+        // migrations 20 and 21 needed one: SQLite cannot widen an inline CHECK.
+        new SchemaMigration { Version = 22, Sql = ImportActionAlreadyReportedMigrations.WidenActionTypeForAlreadyReported },
     ];
 
     // Data's own baseline fragment — creates every Data-owned table directly under its final,
@@ -213,7 +217,7 @@ public class DatabaseInitializer(
             Id                 TEXT    NOT NULL PRIMARY KEY,
             BatchId            TEXT    NOT NULL,
             ActionType         TEXT    NOT NULL
-                               CHECK (ActionType IN ('Add', 'Modify', 'Unchanged', 'ResolvedToExisting')),
+                               CHECK (ActionType IN ('Add', 'Modify', 'Unchanged', 'ResolvedToExisting', 'AlreadyReported')),
             EntityType         TEXT    NOT NULL,
             EntityId           TEXT    NOT NULL,
             ExistingBatchId    TEXT,

@@ -463,6 +463,14 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'B', 'ResolvedToExisting', 'Widget', @id, '{}', 'Applied', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
+            // #376: ActionType gains 'AlreadyReported' — a record whose conflict an earlier pass
+            // already staged, so this pass reports it rather than staging a duplicate. Same rebuild
+            // hazard, same both-paths check.
+            await conn.ExecuteAsync(
+                "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
+                "VALUES (@id, 'B', 'AlreadyReported', 'Widget', @id, '{}', 'Applied', @now, @now);",
+                new { id = Guid.NewGuid().ToString(), now });
+
             // The negative half of every accepted-value assertion above: a CHECK widened to admit
             // anything would pass all of them and only this one catches it.
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
