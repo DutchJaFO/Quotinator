@@ -5,9 +5,14 @@
 **Tiers required:** T1, T2
 **Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
 
-**Next action: T1, which is the developer's own run** — row 27, and the only row left. Every step is
-done, both T2 documents are green against real Docker images, the full solution is green (4013 passed,
-0 failed) at 0 warnings, and the changelog entry is in `unreleased` in all three locales.
+**Next action: the developer's confirmation that T1 is green** — row 31, and the only row left. Every
+step is done, both T2 documents are green against real Docker images, the full solution is green at 0
+warnings, and the changelog entry is in `unreleased` in all three locales.
+
+**T1 has been run three times and found three real defects** — all in the reporting surfaces, none
+reachable by the suite as it then stood. See *What T1 found*. The third run (2026-09-09) shows the
+composed sentence, the seven-column detail table and the content-sized dialog all rendering correctly,
+but the confirmation of that run is the developer's to give, not this document's to assume.
 
 **The GitHub issue's own Definition of done is not ticked yet** — the first four boxes are now all
 honestly tickable, including the named test (see *The test the issue names* below); the closing-comment
@@ -668,6 +673,74 @@ action and is the one row this issue cannot close itself, per CLAUDE.md.
 
 ---
 
+## What T1 found, and what it cost to have missed it
+
+Three defects, all in the reporting surfaces, none reachable by a unit test as the suite was written.
+Recorded together because they share one cause: **this issue changed what is counted, and I checked the
+counting far more carefully than the places the counts are read.**
+
+**1. The detail table had no column for the new bucket.** The confirmation's sentence read *"…and 1
+resolved back to what was already stored"* above a table with nowhere to put it, so a reader comparing
+the summary against its own detail found them disagreeing. My cross-check had asserted the table needed
+no new column, citing #373 — a decision #374 and #378 had already superseded by giving `Skipped` and
+`Unchanged` columns of their own. I carried a precedent forward instead of reading the current code.
+
+**2. Two values the summary states could not be found anywhere else** (developer, 2026-09-09: *"first we
+make sure that any value mentioned in the summary is in the logs and details. We should never be missing
+any values in the table. Skipping values hides potential."*):
+
+- `skipped` was stated in the sentence and **did not exist on the report at all** — a Skip-policy Modify
+  was folded into `modified`, so the seed log and the confirmation disagreed about the same rows.
+  `EntityTypeActionCounts` gained it and the builder now splits it out.
+- `incoming` was the sentence's opening figure and had **no column in the table**. Added, and the row
+  filter now admits any entity type that arrived rather than only those with an outcome — a row that
+  arrived and did nothing is the case most worth seeing.
+
+**3. The dialog clipped its last column, then clipped it at a different width.** The first fix widened it
+from `32rem` to `46rem`, which is a guess with an expiry date — the same stale-hardcoded-value trap this
+session hit repeatedly. Corrected properly (developer: *"why not make the dialog fit content width?"*):
+`ModalDialog` gained an opt-in `FitContent`, so the dialog is as wide as its content and `MaxWidth` is
+only a viewport guard. The table also scrolls within its own container for the case where even that is
+not enough.
+
+**The lesson worth keeping.** A classification change has as many reporting surfaces as it has readers,
+and this issue found four of them the hard way: the report builder, the confirmation payload, the import
+endpoint's summary (decision G), and the rendered table. Each was found by something running — a test, a
+suite, or a developer looking at a screen — and none by reading the plan. The guard now in place is
+`NotificationTableTests.EveryOutcomeTheSummaryStates_HasAColumnInTheDetail`, which derives its
+expectation from the payload rather than a list, so the next bucket fails it until every surface is
+widened together.
+
+---
+
+## The summary sentence is composed, not templated
+
+Decided 2026-09-09 after T1 showed a sentence ending *"…0 kept as-is by policy and 0 resolved back to
+what was already stored"* — six clauses, four of them zero, above a table showing the same zeros.
+
+**Option A (developer):** the sentence names only the outcomes that occurred — *"181 items came in, 99
+added and 82 already stored."* Explicitly gated on the completeness work above landing first: omitting a
+clause is only safe because every count it could have stated is now findable per entity type in the
+detail table and in the seed log.
+
+**Composed rather than templated**, because which clauses appear is data-dependent and the separator and
+final conjunction are language-specific — an English-assembled sentence substituted into every
+translation would read as English punctuation with translated words in it.
+`NotificationTranslations.ComposeForEveryLanguage` resolves each fragment in every language and joins
+with that language's own `", "` and `" and "` / `" en "` / `" und "`; a language missing any fragment
+drops out rather than emitting a half-translated sentence, matching the all-or-nothing rule `Build`
+already applied to a title/body pair. `Build` gained a per-language-arguments overload, since the
+composed summary cannot be one string shared across translations.
+
+**Two cases stated in words rather than as numbers**, both the developer's call:
+
+- Items arrived and nothing happened to any of them — said outright, because a sentence stopping after
+  the count reads as truncated rather than as a finding.
+- Nothing arrived at all — its own wording, not `0 items came in`, because a reseed is expected to carry
+  at least one item, making this an anomaly to notice rather than a zero to skim.
+
+---
+
 ## The test the issue names — written, after misreading its name
 
 #377's *Failing tests* table names
@@ -738,7 +811,9 @@ counted as `Modified`", which a planner that classified *everything* as a no-op 
 | 26 | ✅ | Build is clean and no regression | Build + test run | `dotnet build --configuration Release` → 0 warnings, 0 errors; `dotnet test --configuration Release -m:1` → all green |
 | 27 | ✅ | A Source whose Modify resolves to exactly the stored values is not counted as `Modified` in the confirmation | Unit test | The scenario #377's own *Failing tests* table names, asserted at the reporting surface rather than the planner. **Positive:** `DatabaseInitializerTests.Reseed_SourceModifyResolvesToExactlyExistingValues_NotCountedAsModified` — `Modified = 0`, `ResolvedToExisting = 1`, and the breakdown's parts still summing to `Incoming`. **Negative:** `Reseed_SourceModifyResolvesToADifferentValue_StillCountedAsModified`. Discrimination confirmed by mutation: forcing `ResolvesToExisting` to `false` fails the positive and leaves the control green |
 | 28 | ✅ | The confirmation's detail table shows every outcome its summary sentence states | Unit test | `NotificationTableTests.ResolvedToExistingColumn_ShowsTheActualCount`, `.ResolvedToExistingOnlyRow_StillRenders`, and the general guard `.EveryOutcomeTheSummaryStates_HasAColumnInTheDetail` — one distinct value per bucket, so each is findable only if its own column exists. **Added after T1 found the body and the detail disagreeing**; see cross-check 7a |
-| 29 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
+| 29 | ✅ | Every value the summary states is also in the seed log and the detail table | Unit test | `FormatReport_NamesEveryCountIncludingIncomingAndUnchanged`, driven with ten distinct values so a count is findable only if its own field is printed; `NotificationTableTests.EveryOutcomeTheSummaryStates_HasAColumnInTheDetail` and `.RowThatArrivedButProducedNoOutcome_StillRenders` for the table |
+| 30 | ✅ | The summary names only what happened, and says so in words when nothing did | Unit test | `ComposeForEveryLanguage_OmitsWhatDidNotHappen`, `.SaysSoWhenNothingHappenedToWhatArrived`, `.NamesAFileThatBroughtNothing`, `.JoinsWithEachLanguagesOwnConjunction` — the last being the reason composition exists rather than one template per language |
+| 31 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
 
 **The negative halves are not ceremony; three of them are the only thing standing between this fix and a
 worse defect.** Row 3's would catch a fix that stops applying genuine enrichment. Row 14's would catch
