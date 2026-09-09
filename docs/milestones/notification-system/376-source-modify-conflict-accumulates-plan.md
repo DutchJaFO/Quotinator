@@ -1,6 +1,6 @@
 # #376 — A Source-level Modify conflict stages a new Pending action on every reseed
 
-**Status:** In progress (step 8)
+**Status:** Waiting for release
 **GitHub issue:** #376
 **Tiers required:** T1, T2
 **Depends on:** (none)
@@ -518,6 +518,17 @@ step 1, then tear down container, image and worktree. Add both to
 both `0 Warning(s)  0 Error(s)`. **4,054 tests across ten projects, 0 failed**, run after step 7 so it
 covers both new documents' index and solution entries.
 
+**T1 found a defect this step had not.** The seed log's per-file report line is a hand-written format
+string naming every count, and `alreadyReported` was not in it — visible immediately in a real seed log,
+invisible to the whole suite. Worse, the test that exists to prevent exactly this
+(`FormatReport_NamesEveryCountIncludingIncomingAndUnchanged`, whose own summary says *"the seed log line
+names every count by hand, which is the shape that silently omits one added later"*) was itself a
+hand-maintained list of assertions: `EntityTypeActionCounts.AlreadyReported` being `required` forced the
+new count into its fixture, but nothing forced a matching assertion, so it passed with the count
+missing. A maintained list cannot catch the omission it exists to catch. Rewritten to derive its
+assertions from the type's own properties, and proven both ways — the old shape passes against the
+omitting line, the new one goes red on it.
+
 No `.editorconfig` change was needed. Every file this issue touched that carries `var` conversions —
 `ImportActionPlanner.cs`, `Sql.cs`, `DatabaseInitializerTests.cs`, `NotificationTable.razor.cs`,
 `QuotinatorDatabaseInitializer.cs` — is already in the scoped `IDE0008` list, and the build stays at
@@ -562,5 +573,6 @@ the scoped lists before adding it, per the ratchet's own rule.
 | 23 | ✅ | Live: an already-reported Source conflict does not accumulate across three reseeds | T2 | `import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md` — red on `quotinator:qt376-prefix` (`1 → 2 → 3`), green on `qt376-post` (`1 → 1 → 1`, `AlreadyReported=2`) |
 | 24 | ✅ | Live: a genuinely new conflict on a later reseed is still staged | T2 | `import-and-staged-actions/26-a-new-conflict-is-still-staged.md` — `1 → 2` distinct entities on **both** images, which is what makes it a regression guard |
 | 25 | ✅ | Build and full suite clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1` — `0 Warning(s)  0 Error(s)`, 4,054 tests across ten projects, 0 failed, run after step 7 |
-| 26 | ❌ | T1: the app starts without error | Live | Developer runs it in Visual Studio — clean startup, then a Reset and two reseeds, no errors |
-| 27 | ✅ | The stale reproduction steps and the widened scope are recorded on the issue itself | Live | A comment on #376 carrying the measurement, the site inventory, and the four decisions |
+| 26 | ✅ | T1: the app starts without error | Live | Developer ran it in Visual Studio 2026-09-09 — clean startup at 1.9.0-alpha, Data v3 → v22 applied incrementally, then a Reset creating v22 directly at baseline, then three reseeds reporting identical figures with zero pending/blocked/stale. Found the row-27 defect |
+| 27 | ✅ | The seed log line names every count, including the one this issue adds | Unit test | `DatabaseInitializerTests.FormatReport_NamesEveryCountIncludingIncomingAndUnchanged` — rewritten to derive its assertions from `EntityTypeActionCounts`' own properties; red when `alreadyReported=` is removed from `FormatReport`, and the hand-written version it replaced passed with the count missing |
+| 28 | ✅ | The stale reproduction steps and the widened scope are recorded on the issue itself | Live | A comment on #376 carrying the measurement, the site inventory, and the four decisions |

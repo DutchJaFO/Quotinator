@@ -76,7 +76,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#373](https://github.com/DutchJaFO/Quotinator/issues/373) | An import that re-states identical content reports it as modified | Waiting for release | T1 ✅ T2 ✅ | [373-unchanged-is-not-modified-plan.md](373-unchanged-is-not-modified-plan.md) |
 | [#374](https://github.com/DutchJaFO/Quotinator/issues/374) | A conflict rule cannot tell "already correct" from "cannot apply" | Waiting for release | T1 ✅ T2 ✅ | [374-already-correct-is-not-cannot-apply-plan.md](374-already-correct-is-not-cannot-apply-plan.md) |
 | [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | Waiting for release | T1 ✅ T2 ✅ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
-| [#376](https://github.com/DutchJaFO/Quotinator/issues/376) | A Source-level Modify conflict stages a new Pending action on every reseed instead of staying stable | In progress | T1 ⬜ T2 ⬜ | [376-source-modify-conflict-accumulates-plan.md](376-source-modify-conflict-accumulates-plan.md) |
+| [#376](https://github.com/DutchJaFO/Quotinator/issues/376) | A Source-level Modify conflict stages a new Pending action on every reseed instead of staying stable | Waiting for release | T1 ✅ T2 ✅ | [376-source-modify-conflict-accumulates-plan.md](376-source-modify-conflict-accumulates-plan.md) |
 | [#377](https://github.com/DutchJaFO/Quotinator/issues/377) | A Modify action whose resolution is a genuine no-op is still counted as Modified | Waiting for release | T1 ✅ T2 ✅ | [377-no-op-modify-is-not-a-write-plan.md](377-no-op-modify-is-not-a-write-plan.md) |
 | [#378](https://github.com/DutchJaFO/Quotinator/issues/378) | A "Keep"/"Replace" resolution on a Quote's date field never actually takes effect — the linked Source variant silently wins instead | Waiting for release | T1 ✅ T2 ✅ | [378-keep-replace-source-link-plan.md](378-keep-replace-source-link-plan.md) |
 | [#381](https://github.com/DutchJaFO/Quotinator/issues/381) | A cross-file duplicate quote's CharacterId/PersonId silently reverts to null on every reseed | Planning | T1 ⬜ T2 ⬜ | [381-character-personid-toggle-plan.md](381-character-personid-toggle-plan.md) |
@@ -124,7 +124,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #373 ─── depends on #372; blocks #302 (via #372), #372's row 21 — Waiting for release
 #375 ─── (none); blocks #374; its import-report half landed with #373's step 10 — Waiting for release
 #374 ─── depends on #375 — Waiting for release
-#376 ─── (none); found live while verifying #374 — In progress
+#376 ─── (none); found live while verifying #374 — Waiting for release
 #377 ─── (none); found live while verifying #374; blocks #372's row 21 — Waiting for release
 #378 ─── (none); found live while verifying #374 — Waiting for release
 #381 ─── (none); found live while verifying #374/#378 — Planning, deliberately deferred
@@ -166,7 +166,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 23 | **#377** ✅ | Waiting for release |
 | 24 | **#382** ✅ | Waiting for release |
 | 25 | **#383** ✅ | Waiting for release |
-| 26 | **#376** | In progress — sequenced with #377, same file |
+| 26 | **#376** ✅ | Waiting for release |
 | 27 | **#369** | Planning — depends on #303 |
 | 28 | **#370** | Planning — sequenced with #369, same page |
 | 29 | **#371** | Planning — before #351/#360, which each add migrations |

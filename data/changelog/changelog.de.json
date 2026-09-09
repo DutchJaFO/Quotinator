@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 377, 378, 382, 383],
+    "issues": [81, 302, 303, 304, 308, 309, 312, 313, 319, 320, 323, 325, 326, 349, 367, 374, 376, 377, 378, 382, 383],
     "highlights": [
       "Benachrichtigungen zeigen ihre Überschrift und ihren Text jetzt getrennt an, und ein mehrzeilig geschriebener Text bleibt mehrzeilig, statt zu einem Absatz zusammenzulaufen. Hat eine Benachrichtigung weitere Einzelheiten — welche Dateien sich geändert haben und in welchem Umfang —, lassen sich diese öffnen, ohne die Liste zu verlassen. Aktionsschaltflächen benennen jetzt, was sie tun, statt nur \"Ausführen\", und nach der Ausführung nennt die Benachrichtigung, wie sie erledigt wurde, statt nur dass sie fertig ist.",
       "Eine Benachrichtigung, deren Aktion länger dauert, zeigt jetzt an, dass sie läuft, und ihre Schaltflächen verschwinden bis zum Abschluss — ein langer Neuaufbau sieht damit nicht mehr wie ein wirkungsloser Klick aus und lässt sich nicht mehr versehentlich zweimal starten.",
@@ -57,6 +57,7 @@
       "`github/codeql-action` von 4.37.7 auf 4.37.9 aktualisiert (nur CI)"
     ],
     "fixed": [
+      "Eine Änderung, die auf Ihre Entscheidung wartete, wurde bei jedem Neuladen Ihrer Zitate erneut gemeldet, sodass sich derselbe offene Eintrag unbegrenzt vervielfachte. Jeder Eintrag wird jetzt einmal gemeldet und bei jedem späteren Neuladen wiedererkannt, und der Bericht des Neuladens nennt, wie viele auf diese Weise wiedererkannt wurden — so überdeckt eine länger offene Entscheidung nicht mehr die Änderungen, die wirklich neu sind (issue #376)",
       "Ein Zitat oder anderer Eintrag, den Sie als geprüft markiert hatten, konnte wegen einer Änderung zurückgehalten werden, die nie vorgenommen worden wäre — nämlich dann, wenn der einzige Unterschied in der Datei einer ist, den Quotinator selbst auf den bereits gespeicherten Stand zurückführt. Ein solcher Eintrag wird jetzt nur noch zurückgehalten, wenn tatsächlich etwas geschrieben würde; ein Eintrag, der wirklich geändert würde, wird weiterhin zurückgehalten, genau wie bisher (issue #382)",
       "Beim erneuten Laden Ihrer Zitate wurden Einträge als aktualisiert gemeldet, obwohl sich an ihnen tatsächlich nichts geändert hatte — meist deshalb, weil die eine Zitatdatei eine Angabe schlicht nicht enthält, die eine andere führt, etwa eine Jahreszahl. Solche Einträge werden jetzt als auf den bereits gespeicherten Stand zurückgeführt gemeldet und nicht mehr beschrieben, sodass der Bericht des erneuten Ladens keine Änderungen mehr behauptet, die nie stattgefunden haben (issue #377)",
       "Die Bestätigung eines erneuten Ladens nennt jetzt nur noch, was tatsächlich geschehen ist, statt jede mögliche Kategorie aufzuzählen einschließlich derer, die nicht eingetreten sind — und wenn Einträge ankamen, mit denen nichts geschehen ist, steht das ausdrücklich da, statt dass der Satz nach der Anzahl abbricht. Die Detailtabelle zeigt jetzt auch die Zahlen, die die Meldung nennt, aber bislang nirgends darstellen konnte, sodass Zusammenfassung und Detail einander nicht mehr widersprechen können (issue #377)",

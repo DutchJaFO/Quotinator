@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-09-09 14:52 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-09-09 21:38 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -50,6 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)
 
 ### Fixed
+- A change waiting for your decision was reported again every time your quotes were reloaded, so the same unresolved item piled up copies of itself without limit. Each is now reported once and recognised on every later reload, and the reload's own record says how many it recognised that way — so a long-standing decision no longer buries the ones that are genuinely new (issue #376)
 - A quote or other record you had marked as reviewed could be held for your decision over a change that would never have been made — where the file's only difference was one Quotinator resolves straight back to what is already stored. Such an entry is now held only when something would genuinely be written to it; one that really would be changed is still held, exactly as before (issue #382)
 - Reloading your quotes reported entries as updated when nothing about them had actually changed — most often where one quote file simply does not carry a detail another one does, such as a year. Those entries are now reported as resolved to what was already stored, and are no longer written to, so the reload's own record of what it did stops claiming changes it never made (issue #377)
 - A reload's confirmation now says only what actually happened, instead of listing every outcome including the ones that did not occur — and where items arrived but nothing happened to any of them, it says so in words rather than trailing off after the count. Its details table gained the counts the message mentions but previously had nowhere to show, so the summary and its own detail can no longer disagree (issue #377)
