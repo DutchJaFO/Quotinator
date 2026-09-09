@@ -5,14 +5,14 @@
 **Tiers required:** T1, T2
 **Depends on:** [#373](https://github.com/DutchJaFO/Quotinator/issues/373), [#374](https://github.com/DutchJaFO/Quotinator/issues/374)
 
-**Next action: the developer's confirmation that T1 is green** — row 31, and the only row left. Every
-step is done, both T2 documents are green against real Docker images, the full solution is green at 0
-warnings, and the changelog entry is in `unreleased` in all three locales.
+**Next action: none — this issue is complete and waiting on a release.** Every step is done and every
+verification row is ✅: the full solution green at 0 warnings, both T2 documents green against real
+Docker images, T1 green on the developer's own machine, and the changelog entry in `unreleased` in all
+three locales.
 
-**T1 has been run three times and found three real defects** — all in the reporting surfaces, none
-reachable by the suite as it then stood. See *What T1 found*. The third run (2026-09-09) shows the
-composed sentence, the seven-column detail table and the content-sized dialog all rendering correctly,
-but the confirmation of that run is the developer's to give, not this document's to assume.
+**T1 was run three times and found three real defects**, all in the reporting surfaces and none
+reachable by the suite as it then stood — see *What T1 found*. That is the single most useful thing
+this issue produced about how it was worked.
 
 **The GitHub issue's own Definition of done is not ticked yet** — the first four boxes are now all
 honestly tickable, including the named test (see *The test the issue names* below); the closing-comment
@@ -672,8 +672,9 @@ freshly built image, each with its own *Canary* section recording the red run.
 
 ### 11. Close what T1 found, then re-run it
 
-**Status:** 🚧 Rows 27–30 done, 2026-09-09; row 31 — the developer's own confirmation that T1 is
-green — is all that remains.
+**Status:** ✅ Done, 2026-09-09 — rows 27–31. T1 re-run green on the developer's own machine: the
+composed sentence in all five of its forms, the seven-column breakdown visible in both the inline table
+and the content-sized dialog, `skipped=` in the seed log, and the reseeds stable at `1 + 1 + 21`.
 
 Three defects and one design change, none of which the suite could have raised on its own because all
 four live in what a reader *sees* rather than in what is counted. Written up in full under *What T1
@@ -839,7 +840,7 @@ counted as `Modified`", which a planner that classified *everything* as a no-op 
 | 28 | ✅ | The confirmation's detail table shows every outcome its summary sentence states | Unit test | `NotificationTableTests.ResolvedToExistingColumn_ShowsTheActualCount`, `.ResolvedToExistingOnlyRow_StillRenders`, and the general guard `.EveryOutcomeTheSummaryStates_HasAColumnInTheDetail` — one distinct value per bucket, so each is findable only if its own column exists. **Added after T1 found the body and the detail disagreeing**; see cross-check 7a |
 | 29 | ✅ | Every value the summary states is also in the seed log and the detail table | Unit test | `FormatReport_NamesEveryCountIncludingIncomingAndUnchanged`, driven with ten distinct values so a count is findable only if its own field is printed; `NotificationTableTests.EveryOutcomeTheSummaryStates_HasAColumnInTheDetail` and `.RowThatArrivedButProducedNoOutcome_StillRenders` for the table |
 | 30 | ✅ | The summary names only what happened, and says so in words when nothing did | Unit test | `ComposeForEveryLanguage_OmitsWhatDidNotHappen`, `.SaysSoWhenNothingHappenedToWhatArrived`, `.NamesAFileThatBroughtNothing`, `.JoinsWithEachLanguagesOwnConjunction` — the last being the reason composition exists rather than one template per language |
-| 31 | ❌ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
+| 31 | ✅ | The behaviour is correct on the developer's own machine | Live (T1) | Developer: cold start → reseed → reseed. **Positive:** the reseed reports one modified Source rather than 25 modified rows, and writes no new `Audit_Change` row for the other 24. **Negative:** the quote counts and every entity type are unchanged from the cold start — a reseed that reports nothing modified because it imported nothing would satisfy the positive |
 
 **The negative halves are not ceremony; three of them are the only thing standing between this fix and a
 worse defect.** Row 3's would catch a fix that stops applying genuine enrichment. Row 14's would catch

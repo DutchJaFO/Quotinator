@@ -77,7 +77,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#374](https://github.com/DutchJaFO/Quotinator/issues/374) | A conflict rule cannot tell "already correct" from "cannot apply" | Waiting for release | T1 ✅ T2 ✅ | [374-already-correct-is-not-cannot-apply-plan.md](374-already-correct-is-not-cannot-apply-plan.md) |
 | [#375](https://github.com/DutchJaFO/Quotinator/issues/375) | A quote from a multi-season TV series cannot say which season it is from | Waiting for release | T1 ✅ T2 ✅ | [375-season-between-series-and-source-plan.md](375-season-between-series-and-source-plan.md) |
 | [#376](https://github.com/DutchJaFO/Quotinator/issues/376) | A Source-level Modify conflict stages a new Pending action on every reseed instead of staying stable | Planning | T1 ⬜ T2 ⬜ | — |
-| [#377](https://github.com/DutchJaFO/Quotinator/issues/377) | A Modify action whose resolution is a genuine no-op is still counted as Modified | Waiting for release | T1 ⬜ T2 ✅ | [377-no-op-modify-is-not-a-write-plan.md](377-no-op-modify-is-not-a-write-plan.md) |
+| [#377](https://github.com/DutchJaFO/Quotinator/issues/377) | A Modify action whose resolution is a genuine no-op is still counted as Modified | Waiting for release | T1 ✅ T2 ✅ | [377-no-op-modify-is-not-a-write-plan.md](377-no-op-modify-is-not-a-write-plan.md) |
 | [#378](https://github.com/DutchJaFO/Quotinator/issues/378) | A "Keep"/"Replace" resolution on a Quote's date field never actually takes effect — the linked Source variant silently wins instead | Waiting for release | T1 ✅ T2 ✅ | [378-keep-replace-source-link-plan.md](378-keep-replace-source-link-plan.md) |
 | [#381](https://github.com/DutchJaFO/Quotinator/issues/381) | A cross-file duplicate quote's CharacterId/PersonId silently reverts to null on every reseed | Planning | T1 ⬜ T2 ⬜ | [381-character-personid-toggle-plan.md](381-character-personid-toggle-plan.md) |
 | [#382](https://github.com/DutchJaFO/Quotinator/issues/382) | CompletenessGuard.ShouldBlock is evaluated against a pre-rule field set at four of five sites | Planning | T1 ⬜ T2 ⬜ | [382-shouldblock-reads-a-pre-rule-field-set-plan.md](382-shouldblock-reads-a-pre-rule-field-set-plan.md) |
@@ -161,7 +161,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 20 | **#378** ✅ | Waiting for release — found live while verifying #374, fixed same session |
 | 21 | **#373** ✅ | Waiting for release — T1 green after the natural-key fix |
 | 22 | **#372** ✅ | Waiting for release — T1 green; a reseed leaves zero pending items |
-| 23 | **#377** ✅ | Waiting for release — T1 outstanding |
+| 23 | **#377** ✅ | Waiting for release |
 | 24 | **#382** | Planning — after #377, whose step 3 touches the adjacent lines; one open design question |
 | 25 | **#376** | Planning — sequenced with #377, same file |
 | 26 | **#369** | Planning — depends on #303 |
