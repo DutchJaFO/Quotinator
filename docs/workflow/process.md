@@ -81,24 +81,28 @@ just because they happened in the same session.
 (tooling/dependency/config, no behaviour change), `refactor` (code-organisation change with no
 behaviour change, e.g. moving a type between projects); `[#N]` is the GitHub issue number, or
 multiple bracketed numbers (`[#69][#157]`) when a commit's work genuinely spans more than one issue.
-Content differs by commit type:
+**The message is the subject line, and nothing else, whenever the committed content already carries
+the information** (developer direction, 2026-09-09). That is the normal case for every commit type,
+`docs` included — so subject-only is the default, not an option:
 
-- **Code commits (`feat`/`fix`/`refactor`/`chore`) are terse.** The diff and the code's own comments
-  already explain *what* changed — a commit message that restates them (`"added X property to Y
-  class"`, `"changed the loop to use LINQ"`) is redundant. State the *why* in one or two sentences,
-  only when it isn't obvious from the diff itself (a bug's root cause, a design trade-off, which
-  issue's requirement this satisfies). If there's nothing non-obvious to say, the title alone is a
-  complete commit message — do not pad it with a body just to have one.
-- **Documentation-only commits (`docs`) are a partial exception — carry the reasoning, not the
-  inventory.** Since ADR/plan-doc headers no longer carry accumulated history (see above), a `docs`
-  commit message is where the *why* survives: what problem the change solves, what was wrong with what
-  it replaced, what was decided and rejected. It is not where the change is re-described.
+- **Code commits (`feat`/`fix`/`refactor`/`chore`).** The diff and the code's own comments carry what
+  changed and why. A body restating them is redundant.
+- **Documentation commits (`docs`).** A plan doc's own step sections record how that step was executed,
+  and an ADR records what was decided and rejected. Both are in the commit. A body explaining the
+  reasoning a second time is the same redundancy in a different file.
 
-  **"Fuller" means one or two paragraphs of reasoning, not a summary of the diff** (developer
-  direction, 2026-08-23). Counts, file lists, per-document tables, renamed identifiers and before/after
-  values are all already in the commit — restating them makes the message longer without making it more
-  useful, and buries the one thing `git log` cannot reconstruct. If the reasoning fits in a sentence,
-  the message is a sentence.
+**A body that wants to exist is a signal that documentation is missing, not that the message is too
+short.** When the urge to explain appears, the reasoning belongs in the durable place a future reader
+will actually look — an ADR, a plan doc step, a code comment, a `CLAUDE.md` section — and the commit
+stays subject-only. Write it there, then commit.
+
+The rare case for a body is reasoning that has no home in the commit at all and no document that
+should own it. That is worth a sentence, not paragraphs — and it is worth asking first whether the
+missing home is the real finding.
+
+**This supersedes the earlier "documentation-only commits are a partial exception — carry the
+reasoning" rule** (2026-08-23), which is what produced repeated multi-paragraph `docs` bodies
+restating plan-doc content the same commit already contained.
 
 **Draft, review, then commit — every time, no exceptions.** Before running `git commit`, write the
 full intended commit message to `.claude/temp/commit-draft.md` **and paste that same text directly
