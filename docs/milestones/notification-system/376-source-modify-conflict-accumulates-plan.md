@@ -1,6 +1,6 @@
 # #376 — A Source-level Modify conflict stages a new Pending action on every reseed
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 5)
 **GitHub issue:** #376
 **Tiers required:** T1, T2
 **Depends on:** (none)
@@ -306,7 +306,12 @@ needing the rewrite it was prepared to take.
 
 ### 3. Add `ImportActionKind.AlreadyReported` and its widening migration
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+Nothing needed bumping beyond the list itself: both schema-version counters derive from
+`DataOwnedMigrations.Count`, so no hardcoded `21` existed to find. `Quotinator.Data.Tests` is green at
+1,358 tests, including the CHECK-value round-trip now asserting `AlreadyReported` on both the baseline
+and incremental paths.
 
 Per decision 3, following `ImportActionUnchangedMigrations` (#373, version 20) and
 `ImportActionResolvedToExistingMigrations` (#377, version 21) as the template — a `Import_Action`
@@ -328,7 +333,17 @@ Never edit versions 20 or 21.
 
 ### 4. Add the shared query and retire the Quote-only one
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
+
+The two Quote call sites now go through a `HasUnresolvedActionAsync` helper rather than an inline
+`ExecuteScalarAsync`, which is what makes step 5's nine further sites a call rather than a copy. Their
+*placement* is unchanged here — that is step 5's own change, kept separate so this step is provably
+behaviour-neutral: the full Core suite reports exactly the eleven failures step 2 measured, no more.
+
+**One thing the plan did not anticipate:** `SqlQueryGuardTests.AggregateQueries_MatchDocumentedInventory`
+keeps a hand-maintained list of every `Sql.*` constant permitted to contain an aggregate, and renaming
+the query moved its entry. The list is what stops an unreviewed `COUNT`/`GROUP BY` appearing (the
+CVE-2025-6965 guard), so the entry was moved rather than dropped.
 
 `Sql.Quotes.SelectHasUnresolvedActionById` becomes
 `Sql.ImportActions.SelectHasUnresolvedActionByEntity` in `src/Quotinator.Core/Queries/Sql.cs` — a new
