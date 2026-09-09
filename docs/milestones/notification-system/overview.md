@@ -162,7 +162,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 21 | **#373** ✅ | Waiting for release — T1 green after the natural-key fix |
 | 22 | **#372** ✅ | Waiting for release — T1 green; a reseed leaves zero pending items |
 | 23 | **#377** ✅ | Waiting for release |
-| 24 | **#382** | Planning — after #377, whose step 3 touches the adjacent lines; one open design question |
+| 24 | **#382** | Planning — after #377, whose step 3 touches the adjacent lines |
 | 25 | **#376** | Planning — sequenced with #377, same file |
 | 26 | **#369** | Planning — depends on #303 |
 | 27 | **#370** | Planning — sequenced with #369, same page |
