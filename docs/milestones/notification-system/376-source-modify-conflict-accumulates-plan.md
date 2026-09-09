@@ -428,14 +428,32 @@ than left unstated, so the next reader does not mistake it for an oversight.
 
 Core 1,681 green, Api 914 green, build clean. Two things worth recording.
 
-**A file whose only conflict is already-reported now gets a clean confirmation where it used to raise a
-review alert.** At cold start the declaring file stages a `Pending`, which routes it to the
-review-pending alert and produces no "reseeded cleanly" confirmation at all; on the reseed it stages an
-`AlreadyReported` row, which is clean, so it reports a confirmation of its own. Measured as the Source
-`Incoming` total going 1 → 2 across the two passes. This is *more* information rather than less — and
-the `Reported` column is what stops it reading as "this file is fine now" when the conflict is still on
-the review queue. Flagged rather than treated as settled: whether a file in that state should also keep
-raising the alert is a question about the alert, not about this count.
+**The accumulation had a second face at the notification layer, and the fix removes it.** Measured by
+running the same two-file fixture against a pre-fix worktree and against this build, reading the
+notifications themselves rather than inferring from counts:
+
+| | Pre-fix | Post-fix |
+|---|---|---|
+| Cold start | 1 review alert for the declaring file, no confirmation | same |
+| Reseed 1 | **a second alert**, its own batch id | the alert stands; a confirmation with `alreadyReported=1` |
+| Reseed 2 | **a third alert** | nothing new at all |
+
+So a single unresolved conflict raised a fresh review alert on every reseed, unbounded — the same
+defect this issue is about, one layer up, and suppressing the duplicate action removes its cause.
+
+**The original alert is not replaced; it stands.** A file in this state carries both a standing alert
+(the decision is still outstanding) and a clean confirmation (this pass wrote nothing new), which is
+the honest reading of both. An earlier draft of this note claimed the confirmation replaced the alert
+and flagged that as a concern — it was inferred from a Source `Incoming` count going 1 → 2, never
+observed, and it was wrong in both directions: nothing is replaced, and the real finding was the alert
+accumulation it missed entirely.
+
+Three tests now hold this, positive and negative:
+`Reseed_Repeatedly_WithAnAlreadyReportedConflict_RaisesNoFurtherReviewAlert`,
+`Reseed_WithANewConflict_StillRaisesAReviewAlert` (without which a change that stopped raising alerts
+altogether would pass the first perfectly while hiding every conflict), and
+`ColdStart_AFileWhoseConflictIsGenuinelyPending_ReportsNoCleanConfirmation` (which keeps the word
+"clean" meaning something).
 
 **The "does not shrink" assertion is `>=`, not `==`, for that reason** — the two counts legitimately
 differ, and pinning them equal would have been pinning an accident. What must never happen is the
@@ -515,7 +533,7 @@ step 1, then tear down container, image and worktree. Add both to
 **Status:** ✅ Done
 
 `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
-both `0 Warning(s)  0 Error(s)`. **4,054 tests across ten projects, 0 failed**, run after step 7 so it
+both `0 Warning(s)  0 Error(s)`. **4,057 tests across ten projects, 0 failed**, run after step 7 so it
 covers both new documents' index and solution entries.
 
 **T1 found a defect this step had not.** The seed log's per-file report line is a hand-written format
@@ -572,7 +590,10 @@ the scoped lists before adding it, per the ratchet's own rule.
 | 22 | ✅ | The new key exists and is non-empty in all three locales | Unit test | `TranslationCompletenessTests` |
 | 23 | ✅ | Live: an already-reported Source conflict does not accumulate across three reseeds | T2 | `import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md` — red on `quotinator:qt376-prefix` (`1 → 2 → 3`), green on `qt376-post` (`1 → 1 → 1`, `AlreadyReported=2`) |
 | 24 | ✅ | Live: a genuinely new conflict on a later reseed is still staged | T2 | `import-and-staged-actions/26-a-new-conflict-is-still-staged.md` — `1 → 2` distinct entities on **both** images, which is what makes it a regression guard |
-| 25 | ✅ | Build and full suite clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1` — `0 Warning(s)  0 Error(s)`, 4,054 tests across ten projects, 0 failed, run after step 7 |
+| 25 | ✅ | Build and full suite clean | Live | `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1` — `0 Warning(s)  0 Error(s)`, 4,057 tests across ten projects, 0 failed, run after step 7 |
 | 26 | ✅ | T1: the app starts without error | Live | Developer ran it in Visual Studio 2026-09-09 — clean startup at 1.9.0-alpha, Data v3 → v22 applied incrementally, then a Reset creating v22 directly at baseline, then three reseeds reporting identical figures with zero pending/blocked/stale. Found the row-27 defect |
 | 27 | ✅ | The seed log line names every count, including the one this issue adds | Unit test | `DatabaseInitializerTests.FormatReport_NamesEveryCountIncludingIncomingAndUnchanged` — rewritten to derive its assertions from `EntityTypeActionCounts`' own properties; red when `alreadyReported=` is removed from `FormatReport`, and the hand-written version it replaced passed with the count missing |
-| 28 | ✅ | The stale reproduction steps and the widened scope are recorded on the issue itself | Live | A comment on #376 carrying the measurement, the site inventory, and the four decisions |
+| 28 | ✅ | A conflict already on the review queue raises no further alert on later reseeds | Unit test | `DatabaseInitializerTests.Reseed_Repeatedly_WithAnAlreadyReportedConflict_RaisesNoFurtherReviewAlert` — 1 → 1 → 1; measured against a pre-fix worktree as 1 → 2 → 3 |
+| 29 | ✅ | A genuinely new conflict still raises its own alert | Unit test | `DatabaseInitializerTests.Reseed_WithANewConflict_StillRaisesAReviewAlert` — the negative half; without it a change that stopped alerting entirely would pass row 28 |
+| 30 | ✅ | A file whose conflict is genuinely outstanding reports no clean confirmation | Unit test | `DatabaseInitializerTests.ColdStart_AFileWhoseConflictIsGenuinelyPending_ReportsNoCleanConfirmation` — the negative half of row 19, keeping "clean" meaningful |
+| 31 | ✅ | The stale reproduction steps and the widened scope are recorded on the issue itself | Live | A comment on #376 carrying the measurement, the site inventory, and the four decisions |
