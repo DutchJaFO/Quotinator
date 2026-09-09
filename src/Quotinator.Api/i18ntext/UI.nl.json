@@ -95,6 +95,7 @@
   "NotificationsDetailIncomingColumn": "Aangeboden",
   "NotificationsDetailUnchangedColumn": "Ongewijzigd",
   "NotificationsDetailResolvedToExistingColumn": "Teruggevallen",
+  "NotificationsDetailAlreadyReportedColumn": "Gemeld",
   "NotificationsDetailStatusColumn": "Status",
   "NotificationsDetailCountColumn": "Aantal",
   "NotificationsDetailTotalLabel": "Totaal",

@@ -95,6 +95,7 @@
   "NotificationsDetailIncomingColumn": "Eingegangen",
   "NotificationsDetailUnchangedColumn": "Unverändert",
   "NotificationsDetailResolvedToExistingColumn": "Zurückgeführt",
+  "NotificationsDetailAlreadyReportedColumn": "Gemeldet",
   "NotificationsDetailStatusColumn": "Status",
   "NotificationsDetailCountColumn": "Anzahl",
   "NotificationsDetailTotalLabel": "Gesamt",

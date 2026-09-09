@@ -212,6 +212,11 @@ public sealed class QuotinatorDatabaseInitializer(
                 // Neither Modified (no write happened) nor Unchanged (the two sides did differ) nor
                 // Skipped (the difference was resolved away, not discarded by policy).
                 ResolvedToExisting = group.Count(a => a.ActionType.Parsed == ImportActionKind.ResolvedToExisting),
+                // #376: a row whose conflict an earlier pass already staged, so this pass deliberately
+                // staged nothing new for it. Its own bucket rather than an absence: reporting nothing
+                // would drop the row from Incoming too, leaving a reader unable to tell an already-known
+                // conflict from content the file stopped mentioning.
+                AlreadyReported = group.Count(a => a.ActionType.Parsed == ImportActionKind.AlreadyReported),
                 // #373: every remaining outcome, recorded whether or not it can occur on this branch.
                 // A confirmation is written from the clean-apply path, so these are normally zero — and
                 // a non-zero one is precisely the thing worth finding quickly, which is why they are

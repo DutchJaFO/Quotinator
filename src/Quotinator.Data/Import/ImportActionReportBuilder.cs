@@ -13,7 +13,7 @@ public static class ImportActionReportBuilder
     /// </summary>
     public static FileImportReport Build(string fileName, IReadOnlyList<ImportActionEntity> actions)
     {
-        var byEntityType = new Dictionary<string, (int Incoming, int New, int Unchanged, int ResolvedToExisting, int Skipped, int Modified, int Blocked, int Discarded, int Pending, int Stale)>();
+        var byEntityType = new Dictionary<string, (int Incoming, int New, int Unchanged, int ResolvedToExisting, int AlreadyReported, int Skipped, int Modified, int Blocked, int Discarded, int Pending, int Stale)>();
 
         foreach (var action in actions)
         {
@@ -44,6 +44,11 @@ public static class ImportActionReportBuilder
                     // neither Modified (which claims a write) nor Unchanged (which says the two sides
                     // never differed).
                     ImportActionKind.ResolvedToExisting => counts with { ResolvedToExisting = counts.ResolvedToExisting + 1 },
+                    // #376: the conflict was already staged by an earlier pass, so this pass staged
+                    // nothing new for it. Bucketed rather than left to the fall-through below, which
+                    // would count it in Incoming and nowhere else — the exact "total stops adding up"
+                    // signal that arm exists to make visible.
+                    ImportActionKind.AlreadyReported    => counts with { AlreadyReported    = counts.AlreadyReported + 1 },
                     _                                   => counts,
                 },
                 _ => counts,
@@ -59,6 +64,7 @@ public static class ImportActionReportBuilder
                 Incoming  = kv.Value.Incoming,
                 Unchanged = kv.Value.Unchanged,
                 ResolvedToExisting = kv.Value.ResolvedToExisting,
+                AlreadyReported = kv.Value.AlreadyReported,
                 Skipped   = kv.Value.Skipped,
                 New       = kv.Value.New,
                 Modified  = kv.Value.Modified,

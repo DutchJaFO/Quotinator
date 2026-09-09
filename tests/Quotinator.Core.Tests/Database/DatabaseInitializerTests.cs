@@ -527,7 +527,7 @@ public class DatabaseInitializerTests
             {
                 ["Quote"] = new EntityTypeActionCounts
                 {
-                    Incoming = 12, New = 2, Unchanged = 3, ResolvedToExisting = 4, Skipped = 5, Modified = 6,
+                    Incoming = 12, New = 2, Unchanged = 3, ResolvedToExisting = 4, AlreadyReported = 11, Skipped = 5, Modified = 6,
                     Blocked = 7, Discarded = 8, Pending = 9, Stale = 10,
                 },
             },
@@ -1106,7 +1106,7 @@ public class DatabaseInitializerTests
         Assert.ContainsSingle(quoteCounts);
         ReseedEntityCountDto counts = quoteCounts[0];
         Assert.AreEqual(1, counts.Modified, "The character fill-in is a genuine, non-ambiguous change under Review — it must count as modified, not vanish");
-        Assert.AreEqual(counts.Incoming, counts.Added + counts.Modified + counts.Unchanged + counts.Skipped,
+        Assert.AreEqual(counts.Incoming, counts.Added + counts.Modified + counts.Unchanged + counts.ResolvedToExisting + counts.AlreadyReported + counts.Skipped,
                 $"Incoming={counts.Incoming} must equal Added({counts.Added}) + Modified({counts.Modified}) + Unchanged({counts.Unchanged}) + Skipped({counts.Skipped}) — the confirmation's own numbers must add up");
     }
 
@@ -1248,7 +1248,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, sourceCounts.ResolvedToExisting,
             "…and it is still accounted for, in the bucket that says what actually happened.");
         Assert.AreEqual(sourceCounts.Incoming,
-            sourceCounts.Added + sourceCounts.Modified + sourceCounts.Unchanged + sourceCounts.ResolvedToExisting + sourceCounts.Skipped,
+            sourceCounts.Added + sourceCounts.Modified + sourceCounts.Unchanged + sourceCounts.ResolvedToExisting + sourceCounts.AlreadyReported + sourceCounts.Skipped,
             "The breakdown must add up, which is what stops a reclassified row vanishing from the report.");
     }
 
@@ -1461,7 +1461,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, counts.Skipped, "A row that genuinely differed and was kept as-is under Skip must be reported as skipped");
         Assert.AreEqual(0, counts.Modified, "Skip never applies a change, so it must not also count as modified");
         Assert.AreEqual(0, counts.Unchanged, "The row did differ — it is not the same as one that arrived identical");
-        Assert.AreEqual(counts.Incoming, counts.Added + counts.Modified + counts.Unchanged + counts.Skipped,
+        Assert.AreEqual(counts.Incoming, counts.Added + counts.Modified + counts.Unchanged + counts.ResolvedToExisting + counts.AlreadyReported + counts.Skipped,
                 $"Incoming={counts.Incoming} must equal Added({counts.Added}) + Modified({counts.Modified}) + Unchanged({counts.Unchanged}) + Skipped({counts.Skipped}) — the confirmation's own numbers must add up");
     }
 
@@ -2272,50 +2272,183 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// #376, control for the placement decision: a conflict that becomes resolvable between reseeds
-    /// must be resolved, not skipped. #374's Quote check runs at the top of the branch, before rule
-    /// resolution, so a quote already carrying an unresolved action is passed over even once a rule
-    /// covering it exists — only a decision through the decide endpoint, which changes the action's own
-    /// status, releases it. Expected red before the fix; if it is green, the plan's placement reasoning
-    /// is wrong and must be corrected rather than this test adjusted to agree with it.
+    /// must be staged and applied, not passed over as already-reported.
+    /// <para>
+    /// This is what makes the check's placement observable. Run at the top of a branch — where #374's
+    /// Quote check sat — it fires before any rule is consulted, so the row is skipped and its stored
+    /// values are never corrected however good the rule is. Run at the point of staging, it fires only
+    /// when the action about to be staged is itself unresolved, so a resolvable one goes through.
+    /// </para>
     /// </summary>
+    /// <remarks>
+    /// <b>This asserts the stored row, not the unresolved count, and the first draft got that wrong.</b>
+    /// It asserted the count drops to zero once a rule covers the conflict, which no mechanism provides:
+    /// <c>ImportActionResolutionCoordinator</c> never re-decides an already-staged <c>Pending</c> row —
+    /// only a decision through the decide endpoint changes one. The original action stays exactly where
+    /// it is; what changes is that the reseed now stages a <em>new</em>, Decided action and applies it.
+    /// A <c>Replace</c> rule makes that observable, because the stored value moves to the rule's answer.
+    /// </remarks>
     [TestMethod]
     public async Task Reseed_AfterARuleResolvesAKnownConflict_AppliesItInsteadOfSkipping()
     {
-        string quoteFile = Path.Combine(_tempDir, "becomes-resolvable.json");
-        string ruleFile  = Path.Combine(_tempDir, "becomes-resolvable-rules.json");
+        string quoteFile  = Path.Combine(_tempDir, "becomes-resolvable-1.json");
+        string sourceFile = Path.Combine(_tempDir, "becomes-resolvable-2.json");
+        string ruleFile   = Path.Combine(_tempDir, "becomes-resolvable-2-rules.json");
         File.WriteAllText(quoteFile,
             """
-            {"quotes":[
-                {"id":"376ddddd-dddd-4ddd-8ddd-dddddddddddd","quote":"Frankly, my dear, I don't give a damn.","originalLanguage":"en","source":"Gone With the Wind","date":"1939","character":"Rhett Butler","author":null,"type":"movie","genres":[],"translations":{}},
-                {"id":"376ddddd-dddd-4ddd-8ddd-dddddddddddd","quote":"Frankly, my dear, I don't give a damn.","originalLanguage":"en","source":"Gone With the Wind","date":"1939","character":"rhett butler","author":null,"type":"movie","genres":[],"translations":{}}
-            ],"sources":[]}
+            {"quotes":[{"id":"376fffff-ffff-4fff-8fff-ffffffffffff","quote":"A line.","originalLanguage":"en","source":"Resolvable Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
+            """);
+        File.WriteAllText(sourceFile,
+            """
+            {"quotes":[],"sources":[{"title":"Resolvable Film","type":"movie","date":"1999"}]}
             """);
         // Empty at cold start: the conflict must be genuinely unresolvable first, or there is nothing
         // for the later rule to release.
         File.WriteAllText(ruleFile, """{"rules":[]}""");
 
         SeedBatch batch = new SeedBatch(
-            [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
+            [new SeedFile(quoteFile,  null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
+             new SeedFile(sourceFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
             ManifestPolicy.HardcodedDefault, "becomes-resolvable-test");
 
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
-        int cold = await UnresolvedActionCountAsync(ImportActionEntityTypes.Quote);
 
+        Assert.AreEqual(1, await UnresolvedActionCountAsync(ImportActionEntityTypes.Source),
+            "The declared date disagrees with the stored one and no rule covers it, so it is staged for review");
+        Assert.IsNull(await SourceDateAsync("Resolvable Film"),
+            "…and nothing is written, which is what leaves the same disagreement for the next reseed to find");
+
+        string sourceId = await SourceIdAsync("Resolvable Film");
         File.WriteAllText(ruleFile,
-            """
+            $$"""
             {"rules":[{
-                "entityId":"376ddddd-dddd-4ddd-8ddd-dddddddddddd",
-                "existingRecord":{"character":"Rhett Butler"},
-                "incomingRecord":{"character":"rhett butler"},
-                "fields":[{"field":"character","resolution":"keep"}]
+                "entityId":"{{sourceId}}",
+                "existingRecord":{"date":null},
+                "incomingRecord":{"date":"1999"},
+                "fields":[{"field":"date","resolution":"replace"}]
             }]}
             """);
         await db.ReseedAsync();
 
-        Assert.AreEqual(1, cold, "The case-only difference is genuinely ambiguous with no rule, and must be staged for review");
-        Assert.AreEqual(0, await UnresolvedActionCountAsync(ImportActionEntityTypes.Quote),
-            "A rule now covers the conflict, so the reseed must resolve it — a check that skips the row before consulting rules leaves it unresolved forever");
+        Assert.AreEqual("1999", await SourceDateAsync("Resolvable Film"),
+            "A rule now covers the conflict, so the reseed must resolve and apply it — a check placed before rule resolution would leave the stored value uncorrected forever");
+    }
+
+    /// <summary>
+    /// #376: suppressing the duplicate must not make the record disappear. `Incoming` is derived from
+    /// the staged actions themselves, so a pass that stages nothing for an already-known conflict drops
+    /// it from the file's own report — and a shrinking total is indistinguishable from content the file
+    /// stopped mentioning. This is why the suppression stages an `AlreadyReported` row instead.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_AnAlreadyReportedConflict_IsCountedInTheConfirmationRatherThanVanishing()
+    {
+        QuotinatorDatabaseInitializer db = TwoFileConflictInitializer("already-reported-counted",
+            """
+            {"quotes":[{"id":"37700000-0000-4000-8000-000000000000","quote":"A line.","originalLanguage":"en","source":"Counted Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
+            """,
+            """
+            {"quotes":[],"sources":[{"title":"Counted Film","type":"movie","date":"1999"}]}
+            """);
+
+        await db.InitialiseAsync();
+        int coldIncoming = SourceCountsFrom(await NotificationsAsync()).Sum(c => c.Incoming);
+
+        await db.ReseedAsync();
+        // Every confirmation ever written, minus what cold start contributed — i.e. what the reseed
+        // itself reported.
+        List<ReseedEntityCountDto> all = [.. SourceCountsFrom(await NotificationsAsync())];
+        int reseedIncoming = all.Sum(c => c.Incoming) - coldIncoming;
+
+        Assert.AreEqual(1, all.Sum(c => c.AlreadyReported),
+            "The already-known conflict must be reported in its own bucket, not silently omitted");
+        // Never fewer, rather than exactly equal: the two counts are legitimately different here.
+        // At cold start the declaring file staged a Pending and so raised a review alert instead of a
+        // clean confirmation, contributing nothing to this total; on the reseed it stages an
+        // AlreadyReported row, which is clean, so it now reports a confirmation of its own. Measured
+        // 1 → 2. What must never happen is the opposite — a suppressed row staging nothing at all and
+        // dropping out of Incoming, since a shrinking total reads as content the file stopped
+        // mentioning.
+        Assert.IsGreaterThanOrEqualTo(coldIncoming, reseedIncoming,
+            $"The reseed must not report fewer incoming Source rows than the cold start ({coldIncoming})");
+        foreach (ReseedEntityCountDto counts in all)
+            Assert.AreEqual(counts.Incoming,
+                counts.Added + counts.Modified + counts.Unchanged + counts.ResolvedToExisting + counts.AlreadyReported + counts.Skipped
+                + counts.Blocked + counts.Pending + counts.Stale + counts.Discarded,
+                "The breakdown must add up with the new bucket in it — a term missing here is exactly how a row goes uncounted");
+    }
+
+    /// <summary>
+    /// #376: the `AlreadyReported` row is terminal and writes nothing. It is staged `Applied`, and
+    /// `ImportActionResolutionCoordinator.TryApplyBatchAsync` applies only `Decided` rows — so nothing
+    /// re-stamps `DateModified`, re-attributes `ImportBatchId`, or writes an `Audit_Change` row claiming
+    /// a modification that did not happen. ADR 014 forbids ever purging a change entry, so a false one
+    /// here would be permanent.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_AnAlreadyReportedConflict_IsAppliedTerminalAndWritesNoChangeEntry()
+    {
+        string quoteFile  = Path.Combine(_tempDir, "already-reported-inert-1.json");
+        string sourceFile = Path.Combine(_tempDir, "already-reported-inert-2.json");
+        File.WriteAllText(quoteFile,
+            """
+            {"quotes":[{"id":"37711111-1111-4111-8111-111111111111","quote":"A line.","originalLanguage":"en","source":"Inert Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
+            """);
+        File.WriteAllText(sourceFile,
+            """
+            {"quotes":[],"sources":[{"title":"Inert Film","type":"movie","date":"1999"}]}
+            """);
+
+        SeedBatch batch = new SeedBatch(
+            [new SeedFile(quoteFile,  null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
+             new SeedFile(sourceFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
+            ManifestPolicy.HardcodedDefault, "already-reported-inert-test");
+
+        QuotinatorDatabaseInitializer db = CreateInitializer([batch], changeWriter: new ChangeWriter(new SqliteConnectionFactory(_dbPath)));
+        await db.InitialiseAsync();
+        string sourceId = await SourceIdAsync("Inert Film");
+        int changesAfterCold = await ModifiedChangeEntryCountAsync(sourceId);
+
+        await db.ReseedAsync();
+
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        IEnumerable<(string ActionType, string Status)> staged =
+            await connection.QueryAsync<(string ActionType, string Status)>(
+                "SELECT ActionType, Status FROM Import_Action WHERE EntityType = 'Source' AND ActionType = 'AlreadyReported';");
+
+        Assert.ContainsSingle(staged, "The reseed must stage exactly one already-reported row for the known conflict");
+        Assert.AreEqual(ImportActionStatus.Applied.ToString(), staged.Single().Status,
+            "Staged Applied, so the coordinator — which applies only Decided rows — never touches it again");
+        Assert.AreEqual(changesAfterCold, await ModifiedChangeEntryCountAsync(sourceId),
+            "Nothing was written, so the change log must not claim a modification — ADR 014 means a false entry here can never be purged");
+        Assert.IsNull(await SourceDateAsync("Inert Film"),
+            "…and the stored row is genuinely untouched, which is what makes the action inert rather than merely quiet");
+    }
+
+    /// <summary>#376: only the Source rows of every reseed confirmation written so far.</summary>
+    private static IEnumerable<ReseedEntityCountDto> SourceCountsFrom(IReadOnlyList<NotificationEntity> notifications)
+        => AllConfirmationCounts(notifications).Where(c => c.EntityType == ImportActionEntityTypes.Source);
+
+    /// <summary>#376: the stored Source date — what "the resolution was actually applied" looks like from outside.</summary>
+    private async Task<string?> SourceDateAsync(string title)
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        return await connection.ExecuteScalarAsync<string?>(
+            "SELECT Date FROM Quotinator_Source WHERE Title = @title;", new { title });
+    }
+
+    /// <summary>#376: a conflict rule is keyed by the entity's own id, which is only knowable once the row exists.</summary>
+    private async Task<string> SourceIdAsync(string title)
+    {
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
+        await connection.OpenAsync(TestContext.CancellationToken);
+        string? id = await connection.ExecuteScalarAsync<string?>(
+            "SELECT Id FROM Quotinator_Source WHERE Title = @title;", new { title });
+        Assert.IsNotNull(id, $"The cold start must have created the '{title}' Source, or this fixture proves nothing");
+        return id;
     }
 
     /// <summary>

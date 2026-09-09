@@ -65,6 +65,18 @@ public sealed class ReseedEntityCountDto
     public int ResolvedToExisting { get; init; }
 
     /// <summary>
+    /// How many carried a conflict an earlier pass had already staged, so this pass deliberately staged
+    /// nothing new for them (#376). Distinct from <see cref="Unchanged"/> (the two sides agree) and from
+    /// <see cref="Pending"/> (the action awaiting review, which is the one this count points back at).
+    /// <para>
+    /// Absent from every notification written before #376, so it deserialises to <c>0</c> for those —
+    /// the same reasoning <see cref="Incoming"/> records for its own introduction.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("alreadyReported")]
+    public int AlreadyReported { get; init; }
+
+    /// <summary>
     /// How many were held because the stored row is marked Complete and the import would change it
     /// (#373).
     /// </summary>

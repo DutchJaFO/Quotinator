@@ -199,7 +199,8 @@ public partial class NotificationTable
                 // Added/Modified and a defaulted Incoming of 0, and filtering on Incoming alone
                 // made every one of them render as an empty table.
                 .Where(c => c.Incoming > 0 || c.Added > 0 || c.Modified > 0
-                         || c.Skipped > 0 || c.Unchanged > 0 || c.ResolvedToExisting > 0)];
+                         || c.Skipped > 0 || c.Unchanged > 0 || c.ResolvedToExisting > 0
+                         || c.AlreadyReported > 0)];
 
         return new PayloadTable(
             [text?.NotificationsDetailEntityColumn ?? "Entity",
@@ -208,7 +209,8 @@ public partial class NotificationTable
              text?.NotificationsDetailUpdatedColumn ?? "Updated",
              text?.NotificationsDetailSkippedColumn ?? "Skipped",
              text?.NotificationsDetailUnchangedColumn ?? "Unchanged",
-             text?.NotificationsDetailResolvedToExistingColumn ?? "Resolved"],
+             text?.NotificationsDetailResolvedToExistingColumn ?? "Resolved",
+             text?.NotificationsDetailAlreadyReportedColumn ?? "Reported"],
             [.. counted.Select(IReadOnlyList<string> (c) =>
                 [c.EntityType,
                  c.Incoming.ToString(CultureInfo.CurrentCulture),
@@ -216,7 +218,8 @@ public partial class NotificationTable
                  c.Modified.ToString(CultureInfo.CurrentCulture),
                  c.Skipped.ToString(CultureInfo.CurrentCulture),
                  c.Unchanged.ToString(CultureInfo.CurrentCulture),
-                 c.ResolvedToExisting.ToString(CultureInfo.CurrentCulture)])],
+                 c.ResolvedToExisting.ToString(CultureInfo.CurrentCulture),
+                 c.AlreadyReported.ToString(CultureInfo.CurrentCulture)])],
             // #383: rendered even when there is only one entity type, where it necessarily repeats
             // that row. Whether to suppress it there is open until the rendered result has been seen
             // (developer, 2026-09-09) — a footer that comes and goes may read worse than one whose
@@ -229,7 +232,8 @@ public partial class NotificationTable
                    counted.Sum(c => c.Modified).ToString(CultureInfo.CurrentCulture),
                    counted.Sum(c => c.Skipped).ToString(CultureInfo.CurrentCulture),
                    counted.Sum(c => c.Unchanged).ToString(CultureInfo.CurrentCulture),
-                   counted.Sum(c => c.ResolvedToExisting).ToString(CultureInfo.CurrentCulture)]);
+                   counted.Sum(c => c.ResolvedToExisting).ToString(CultureInfo.CurrentCulture),
+                   counted.Sum(c => c.AlreadyReported).ToString(CultureInfo.CurrentCulture)]);
     }
 
     /// <summary>

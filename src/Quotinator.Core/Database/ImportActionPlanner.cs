@@ -313,6 +313,14 @@ internal static class ImportActionPlanner
 
             if (existing is null)
             {
+                QuoteActionPayloadDto payload = new QuoteActionPayloadDto
+                {
+                    Fields = QuoteFieldMerge.ToDto(q),
+                    SourceId = sourceId,
+                    CharacterId = characterId,
+                    PersonId = personId,
+                };
+
                 // #374: neither a Pending nor a Blocked action is ever applied, so a quote reported for
                 // either reason on an earlier reseed still has no row in Quotinator_Quote and would
                 // otherwise look "never-before-seen" again on every later reseed — staging a fresh
@@ -322,8 +330,18 @@ internal static class ImportActionPlanner
                 // was first written for), which left the Blocked collision path below completely
                 // unguarded — a real reseed duplicated every Blocked collision action on top of the
                 // still-unresolved one from the previous reseed.
+                //
+                // #376: reports the quote instead of skipping it silently, so it does not vanish from
+                // the file's own report. Deliberately still checked at the top of this branch, unlike
+                // every other site: the Add branch runs no rule resolution that could make an
+                // already-reported conflict newly resolvable, and the collision check below has
+                // same-batch side effects (`stagedQuoteTextsBySource`) that must not run for a quote
+                // this pass is not going to stage anything new for.
                 if (await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Quote, q.Id, transaction))
+                {
+                    actions.Add(AlreadyReportedAction(batchIdStr, ImportActionEntityTypes.Quote, q.Id, payload, now));
                     continue;
+                }
 
                 // #378: the same accumulation-prevention reasoning as the check just above, extended to
                 // this same batch's own earlier occurrences — the database check above can never see a
@@ -331,14 +349,6 @@ internal static class ImportActionPlanner
                 // after planning finishes.
                 if ((dateNeedsReview || keepOrReplaceAgainstNothing) && !stagedPendingReviewAddIds.Add(q.Id))
                     continue;
-
-                QuoteActionPayloadDto payload = new QuoteActionPayloadDto
-                {
-                    Fields = QuoteFieldMerge.ToDto(q),
-                    SourceId = sourceId,
-                    CharacterId = characterId,
-                    PersonId = personId,
-                };
 
                 // #374: this id has never been seen, but its own (QuoteText, SourceId) may already
                 // belong to a different quote — two independently-computed QuoteIdentity.StableId
@@ -408,21 +418,6 @@ internal static class ImportActionPlanner
             string? existingBatchId = existing.Value.ImportBatchId;
             IReadOnlyDictionary<string, object?> incomingFields = QuoteFieldMerge.ToFieldMap(q);
 
-            // #374: the same accumulation-prevention check the Add branch above already makes, extended
-            // to Modify. Before the quote/title/character case-sensitivity rule, a Modify's own ambiguous
-            // fields either auto-resolved or (rarely) blocked a Complete row — nothing stayed genuinely
-            // Pending release over release the way an Add-branch tv-date conflict could. Once a case-only
-            // difference became its own permanent ambiguity, that stopped being true: a quote already
-            // reported this way is never applied, so the *stored* row a later reseed compares against
-            // never changes, and every reseed re-staged a fresh duplicate Pending action on top of the
-            // one still awaiting review. Found live: a single already-known conflict, left unresolved,
-            // made the staged count grow 4 → 19 in one reseed once the real corpus's other case-only
-            // disagreements were counted too. Skipped only for a same-batch collision
-            // (`existingBatchId == batchIdStr`, via `seenQuotes` above) — nothing can be in
-            // `Import_Action` yet for a row this same `PlanAsync` call hasn't finished staging.
-            if (existingBatchId != batchIdStr
-                && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Quote, q.Id, transaction))
-                continue;
 
             bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
             FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy, QuoteFieldMerge.CaseSensitiveContentFields) : null;
@@ -540,7 +535,33 @@ internal static class ImportActionPlanner
             IReadOnlyDictionary<string, object?> resolvedFields = QuoteFieldMerge.ToFieldMap(resolved);
             HashSet<string> effectiveChanged = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Key, kv.Value, resolvedFields.GetValueOrDefault(kv.Key), QuoteFieldMerge.CaseSensitiveContentFields)).Select(kv => kv.Key)];
 
-            if (CompletenessGuard.ShouldBlock(existing.Value.CompletenessStatus, effectiveChanged))
+            bool wouldBlock     = CompletenessGuard.ShouldBlock(existing.Value.CompletenessStatus, effectiveChanged);
+            bool wouldBePending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+
+            // #374: a quote already carrying an unresolved action is never applied, so the *stored* row
+            // a later reseed compares against never changes and every reseed re-staged a fresh
+            // duplicate on top of the one still awaiting review. Found live: a single already-known
+            // conflict made the staged count grow 4 → 19 in one reseed once the corpus's other
+            // case-only disagreements were counted too. Skipped for a same-batch collision
+            // (`existingBatchId == batchIdStr`, via `seenQuotes` above) — nothing can be in
+            // `Import_Action` yet for a row this same `PlanAsync` call hasn't finished staging.
+            //
+            // #376 moved this down from the top of the branch, where it ran before rule resolution and
+            // therefore held a conflict shut even once the rule file covered it: only a decision through
+            // the decide endpoint, which changes the action's own status, could release one. Measured
+            // rather than assumed — `Reseed_AfterARuleResolvesAKnownConflict_AppliesItInsteadOfSkipping`
+            // was red at the old placement. Consulted now only when the action about to be staged is
+            // itself unresolved, so a newly-resolvable conflict is staged and applied as it should be.
+            if ((wouldBlock || hasStaleRule || wouldBePending || sourceAliasStale)
+                && existingBatchId != batchIdStr
+                && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Quote, q.Id, transaction))
+            {
+                actions.Add(AlreadyReportedAction(batchIdStr, ImportActionEntityTypes.Quote, q.Id,
+                    new QuoteActionPayloadDto { Fields = QuoteFieldMerge.ToDto(q), SourceId = sourceId, CharacterId = characterId, PersonId = personId }, now));
+                continue;
+            }
+
+            if (wouldBlock)
             {
                 actions.Add(new ImportActionEntity
                 {
@@ -583,7 +604,7 @@ internal static class ImportActionPlanner
             // human to decide. #153: a stale alias substitution overrides all of that — this quote's
             // Source resolution is unreliable regardless of how cleanly its fields would otherwise
             // have resolved, so it is held for review the same way a stale rule already is above.
-            bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+            bool isPending = wouldBePending;
             ImportActionStatus status = sourceAliasStale ? ImportActionStatus.Stale : isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
             bool isUnresolved = isPending || sourceAliasStale;
 
@@ -661,6 +682,39 @@ internal static class ImportActionPlanner
     {
         BatchId = batchId,
         ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.Unchanged.ToString(), ImportActionKind.Unchanged),
+        EntityType = entityType,
+        EntityId = entityId,
+        IncomingValue = JsonSerializer.Serialize(payload, payload.GetType()),
+        Status = new SafeValue<ImportActionStatus?>(ImportActionStatus.Applied.ToString(), ImportActionStatus.Applied),
+        DetectedAt = now,
+    };
+
+    /// <summary>
+    /// #376: this entity's conflict was already staged by an earlier pass, so this pass reports it
+    /// rather than staging a duplicate of an action still awaiting review.
+    /// <para>
+    /// Reported rather than skipped silently, for the reason #373 established: <c>Incoming</c> is
+    /// derived from the staged actions themselves, so producing nothing would remove the record from
+    /// its file's report entirely and leave a reader unable to tell an already-known conflict from
+    /// content the file stopped mentioning.
+    /// </para>
+    /// <para>
+    /// Terminal by construction — <c>Applied</c>, with no <c>ExistingValue</c> and no
+    /// <c>MergedFields</c>, because nothing is decided, written or reversed here. Shared for the same
+    /// reason <see cref="UnchangedAction"/> is: eleven per-site copies is how the same outcome ends up
+    /// shaped eleven slightly different ways.
+    /// </para>
+    /// </summary>
+    /// <param name="batchId">The batch this planning pass belongs to.</param>
+    /// <param name="entityType">Which entity type was already reported.</param>
+    /// <param name="entityId">The id of the row whose conflict is already staged.</param>
+    /// <param name="payload">The incoming value, serialised as the action's own record of what arrived.</param>
+    /// <param name="now">Detection timestamp for the action.</param>
+    private static ImportActionEntity AlreadyReportedAction(
+        string batchId, string entityType, string entityId, object payload, DateTime now) => new()
+    {
+        BatchId = batchId,
+        ActionType = new SafeValue<ImportActionKind?>(ImportActionKind.AlreadyReported.ToString(), ImportActionKind.AlreadyReported),
         EntityType = entityType,
         EntityId = entityId,
         IncomingValue = JsonSerializer.Serialize(payload, payload.GetType()),
@@ -845,8 +899,14 @@ internal static class ImportActionPlanner
                     SourceActionPayloadDto incomingPayload = new SourceActionPayloadDto(q.Source, typeStr, q.Date, row.SeriesId, row.SeasonId);
                     HashSet<string> changedFields = ["date"];
                     CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
+                    bool wouldBlock = CompletenessGuard.ShouldBlock(currentStatus, changedFields);
 
-                    actions.Add(CompletenessGuard.ShouldBlock(currentStatus, changedFields)
+                    // #376: the only unresolved outcome this branch can reach is Blocked — the
+                    // alternative is Decided, which applies. See PlanSourcesAsync's explicit-id branch
+                    // for why an already-reported one must not be staged a second time.
+                    actions.Add(wouldBlock && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Source, row.Id, transaction)
+                        ? AlreadyReportedAction(batchId, ImportActionEntityTypes.Source, row.Id, incomingPayload, now)
+                        : wouldBlock
                         ? new ImportActionEntity
                         {
                             BatchId = batchId,
@@ -1201,7 +1261,24 @@ internal static class ImportActionPlanner
                 HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                bool wouldBlock   = CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields);
+                bool wouldBePending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+
+                // #376: this Source already has an unresolved action from an earlier pass, and none of
+                // Pending/Blocked/Stale is ever applied — so the stored row still holds the same values
+                // this comparison just re-derived, and staging again would pile a duplicate on top of
+                // the one still awaiting review. Reported rather than skipped, so the row does not
+                // vanish from the file's own report. Checked only when the action about to be staged is
+                // itself unresolved: a conflict that has *become* resolvable since the last reseed must
+                // still be staged and applied.
+                if ((wouldBlock || hasStaleRule || wouldBePending)
+                    && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Source, matchedId, transaction))
+                {
+                    actions.Add(AlreadyReportedAction(batchId, ImportActionEntityTypes.Source, matchedId, incomingPayload, now));
+                    continue;
+                }
+
+                if (wouldBlock)
                 {
                     actions.Add(new ImportActionEntity
                     {
@@ -1235,7 +1312,7 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+                bool isPending = wouldBePending;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 string srcExistingJson = JsonSerializer.Serialize(existingPayload);
@@ -1363,7 +1440,18 @@ internal static class ImportActionPlanner
                 HashSet<string> effectiveChangedFields = [.. keyExistingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 CompletenessStatus keyCurrentStatus = keyRow.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-                if (CompletenessGuard.ShouldBlock(keyCurrentStatus, effectiveChangedFields))
+                bool keyWouldBlock     = CompletenessGuard.ShouldBlock(keyCurrentStatus, effectiveChangedFields);
+                bool keyWouldBePending = policy == DuplicateResolutionPolicy.Review && keyRuleResolved is null;
+
+                // #376: see the explicit-id branch above — same check, same reason.
+                if ((keyWouldBlock || keyHasStaleRule || keyWouldBePending)
+                    && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Source, keyRow.Id, transaction))
+                {
+                    actions.Add(AlreadyReportedAction(batchId, ImportActionEntityTypes.Source, keyRow.Id, keyIncomingPayload, now));
+                    continue;
+                }
+
+                if (keyWouldBlock)
                 {
                     actions.Add(new ImportActionEntity
                     {
@@ -1396,7 +1484,7 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                bool keyIsPending = policy == DuplicateResolutionPolicy.Review && keyRuleResolved is null;
+                bool keyIsPending = keyWouldBePending;
                 ImportActionStatus keyStatus = keyIsPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 string keyExistingJson = JsonSerializer.Serialize(keyExistingPayload);
@@ -1551,7 +1639,18 @@ internal static class ImportActionPlanner
                 HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                bool wouldBlock     = CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields);
+                bool wouldBePending = policy == DuplicateResolutionPolicy.Review;
+
+                // #376: see PlanSourcesAsync's explicit-id branch — same check, same reason.
+                if ((wouldBlock || wouldBePending)
+                    && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Person, resolvedId, transaction))
+                {
+                    actions.Add(AlreadyReportedAction(batchId, ImportActionEntityTypes.Person, resolvedId, incomingPayload, now));
+                    continue;
+                }
+
+                if (wouldBlock)
                 {
                     actions.Add(new ImportActionEntity
                     {
@@ -1567,7 +1666,7 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                bool isPending = policy == DuplicateResolutionPolicy.Review;
+                bool isPending = wouldBePending;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 string personExistingJson = JsonSerializer.Serialize(existingPayload);
@@ -1754,7 +1853,18 @@ internal static class ImportActionPlanner
             HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
             CompletenessStatus currentStatus = row2.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-            if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+            bool wouldBlock     = CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields);
+            bool wouldBePending = policy == DuplicateResolutionPolicy.Review;
+
+            // #376: see PlanSourcesAsync's explicit-id branch — same check, same reason.
+            if ((wouldBlock || wouldBePending)
+                && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Character, matchedId, transaction))
+            {
+                actions.Add(AlreadyReportedAction(batchId, ImportActionEntityTypes.Character, matchedId, incomingPayload, now));
+                continue;
+            }
+
+            if (wouldBlock)
             {
                 actions.Add(new ImportActionEntity
                 {
@@ -1770,7 +1880,7 @@ internal static class ImportActionPlanner
                 continue;
             }
 
-            bool isPending = policy == DuplicateResolutionPolicy.Review;
+            bool isPending = wouldBePending;
             ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
             string charExistingJson = JsonSerializer.Serialize(existingPayload);
@@ -1902,7 +2012,18 @@ internal static class ImportActionPlanner
                 HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                bool wouldBlock     = CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields);
+                bool wouldBePending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+
+                // #376: see PlanSourcesAsync's explicit-id branch — same check, same reason.
+                if ((wouldBlock || hasStaleRule || wouldBePending)
+                    && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Universe, matchedId, transaction))
+                {
+                    actions.Add(AlreadyReportedAction(batchId, ImportActionEntityTypes.Universe, matchedId, incomingPayload, now));
+                    continue;
+                }
+
+                if (wouldBlock)
                 {
                     actions.Add(new ImportActionEntity
                     {
@@ -1935,7 +2056,7 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+                bool isPending = wouldBePending;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 string uniExistingJson = JsonSerializer.Serialize(existingPayload);
@@ -2101,7 +2222,18 @@ internal static class ImportActionPlanner
                 HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                bool wouldBlock     = CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields);
+                bool wouldBePending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+
+                // #376: see PlanSourcesAsync's explicit-id branch — same check, same reason.
+                if ((wouldBlock || hasStaleRule || wouldBePending)
+                    && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Series, matchedId, transaction))
+                {
+                    actions.Add(AlreadyReportedAction(batchId, ImportActionEntityTypes.Series, matchedId, incomingPayload, now));
+                    continue;
+                }
+
+                if (wouldBlock)
                 {
                     actions.Add(new ImportActionEntity
                     {
@@ -2134,7 +2266,7 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                bool isPending = policy == DuplicateResolutionPolicy.Review && ruleResolved is null;
+                bool isPending = wouldBePending;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 string seriesExistingJson = JsonSerializer.Serialize(existingPayload);
@@ -2309,6 +2441,16 @@ internal static class ImportActionPlanner
                     : policy == DuplicateResolutionPolicy.Review && ruleResolved is null ? ImportActionStatus.Pending
                     : ImportActionStatus.Decided;
 
+                // #376: see PlanSourcesAsync's explicit-id branch — same check, same reason. Season is
+                // the one site that already computes its status up front, so the three unresolved
+                // outcomes are read off `modifyStatus` rather than recomposed from their conditions.
+                if (modifyStatus is ImportActionStatus.Blocked or ImportActionStatus.Stale or ImportActionStatus.Pending
+                    && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Season, matchedId, transaction))
+                {
+                    actions.Add(AlreadyReportedAction(batchId, ImportActionEntityTypes.Season, matchedId, incomingPayload, now));
+                    continue;
+                }
+
                 string seasonExistingJson = JsonSerializer.Serialize(existingPayload);
                 string? seasonMergedJson  = modifyStatus == ImportActionStatus.Decided ? JsonSerializer.Serialize(resolved) : null;
                 // #377: Season is the one payload carrying a field that is never written — SeriesName
@@ -2369,9 +2511,14 @@ internal static class ImportActionPlanner
     };
 
     // ── #68: StageDirection/SoundCue/Conversation planning ──────────────────
-    // All three are Add-only and id-keyed (the file supplies an explicit id, like Quote — not a
-    // natural-key-derived EntityIdentity stable id like Source/Character/Person), so planning is
-    // just "does a row with this id already exist" — no Modify/merge semantics.
+    // All three are id-keyed: the file supplies an explicit id, like Quote — not a natural-key-derived
+    // EntityIdentity stable id like Source/Character/Person — so matching is just "does a row with this
+    // id already exist", with no natural-key fallback anywhere.
+    //
+    // #376: this comment used to end "so planning is just ... — no Modify/merge semantics", which
+    // stopped being true once each gained a full Modify branch with its own Blocked and Pending exits.
+    // Corrected here rather than left, because it was read as authoritative while planning this issue's
+    // own fixtures and would have excluded all three from the work.
 
     private static async Task PlanStageDirectionsAsync(
         SqliteConnection connection, IReadOnlyList<SourceStageDirectionDto> stageDirections, string batchId,
@@ -2420,7 +2567,18 @@ internal static class ImportActionPlanner
                 HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                bool wouldBlock     = CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields);
+                bool wouldBePending = policy == DuplicateResolutionPolicy.Review;
+
+                // #376: see PlanSourcesAsync's explicit-id branch — same check, same reason.
+                if ((wouldBlock || wouldBePending)
+                    && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.StageDirection, canonicalId, transaction))
+                {
+                    actions.Add(AlreadyReportedAction(batchId, ImportActionEntityTypes.StageDirection, canonicalId, incomingPayload, now));
+                    continue;
+                }
+
+                if (wouldBlock)
                 {
                     actions.Add(new ImportActionEntity
                     {
@@ -2436,7 +2594,7 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                bool isPending = policy == DuplicateResolutionPolicy.Review;
+                bool isPending = wouldBePending;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 string sdExistingJson = JsonSerializer.Serialize(existingPayload);
@@ -2522,7 +2680,18 @@ internal static class ImportActionPlanner
                 HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                bool wouldBlock     = CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields);
+                bool wouldBePending = policy == DuplicateResolutionPolicy.Review;
+
+                // #376: see PlanSourcesAsync's explicit-id branch — same check, same reason.
+                if ((wouldBlock || wouldBePending)
+                    && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.SoundCue, canonicalId, transaction))
+                {
+                    actions.Add(AlreadyReportedAction(batchId, ImportActionEntityTypes.SoundCue, canonicalId, incomingPayload, now));
+                    continue;
+                }
+
+                if (wouldBlock)
                 {
                     actions.Add(new ImportActionEntity
                     {
@@ -2538,7 +2707,7 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                bool isPending = policy == DuplicateResolutionPolicy.Review;
+                bool isPending = wouldBePending;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 string scExistingJson = JsonSerializer.Serialize(existingPayload);
@@ -2634,7 +2803,18 @@ internal static class ImportActionPlanner
                 HashSet<string> effectiveChangedFields = [.. existingFields.Where(kv => !FieldMergeResolver.ValuesEqual(kv.Value, resolvedFields.GetValueOrDefault(kv.Key))).Select(kv => kv.Key)];
 
                 CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
-                if (CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields))
+                bool wouldBlock     = CompletenessGuard.ShouldBlock(currentStatus, effectiveChangedFields);
+                bool wouldBePending = policy == DuplicateResolutionPolicy.Review;
+
+                // #376: see PlanSourcesAsync's explicit-id branch — same check, same reason.
+                if ((wouldBlock || wouldBePending)
+                    && await HasUnresolvedActionAsync(connection, ImportActionEntityTypes.Conversation, canonicalId, transaction))
+                {
+                    actions.Add(AlreadyReportedAction(batchId, ImportActionEntityTypes.Conversation, canonicalId, incomingPayload, now));
+                    continue;
+                }
+
+                if (wouldBlock)
                 {
                     actions.Add(new ImportActionEntity
                     {
@@ -2650,7 +2830,7 @@ internal static class ImportActionPlanner
                     continue;
                 }
 
-                bool isPending = policy == DuplicateResolutionPolicy.Review;
+                bool isPending = wouldBePending;
                 ImportActionStatus status = isPending ? ImportActionStatus.Pending : ImportActionStatus.Decided;
 
                 string convExistingJson = JsonSerializer.Serialize(existingPayload);

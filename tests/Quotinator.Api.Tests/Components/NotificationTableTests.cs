@@ -633,6 +633,43 @@ public class NotificationTableTests
     }
 
     /// <summary>
+    /// #376: the bucket for a conflict an earlier pass already staged. Without a column of its own it
+    /// would be invisible while still counting toward <c>incoming</c>, so the row's own numbers would
+    /// stop adding up on screen — the same disagreement between summary and detail #377 found.
+    /// </summary>
+    [TestMethod]
+    public void AlreadyReportedColumn_ShowsTheActualCount()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Source","incoming":9,"added":2,"modified":0,"unchanged":4,"alreadyReported":3}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.Contains("Reported", detail.Headers, "The table must have a column for the already-reported bucket.");
+        Assert.Contains("3", detail.Rows[0], "…and the count must appear in the row, not be silently absorbed into incoming.");
+    }
+
+    /// <summary>
+    /// #376: a row carrying <em>only</em> an already-reported count is the whole point of the bucket —
+    /// a file whose every conflict is already on the review queue — and must not be dropped by the row
+    /// filter. Same defect #374 fixed for a skipped-only row and #377 for a resolved-only one.
+    /// </summary>
+    [TestMethod]
+    public void AlreadyReportedOnlyRow_StillRenders()
+    {
+        const string payload =
+            """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Source","incoming":1,"added":0,"modified":0,"alreadyReported":1}]}""";
+
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("Source file reseeded cleanly", metadata: payload,
+                      metadataKind: NotificationMetadataKind.ReseedFileApplied));
+
+        Assert.IsNotEmpty(detail.Rows, "An already-reported-only row must not be dropped from the table.");
+    }
+
+    /// <summary>
     /// #377: a row carrying <em>only</em> a resolved-to-existing count is real information — the file
     /// brought something that differed and it resolved back to what was stored — and must not be dropped
     /// by the row filter. The same defect #374 fixed for a skipped-only row.
@@ -789,8 +826,8 @@ public class NotificationTableTests
         const string payload =
             """
             {"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[
-              {"entityType":"Quote","incoming":97,"added":0,"modified":0,"skipped":0,"unchanged":76,"resolvedToExisting":21},
-              {"entityType":"Source","incoming":84,"added":3,"modified":1,"skipped":2,"unchanged":78,"resolvedToExisting":0}]}
+              {"entityType":"Quote","incoming":97,"added":0,"modified":0,"skipped":0,"unchanged":76,"resolvedToExisting":21,"alreadyReported":0},
+              {"entityType":"Source","incoming":84,"added":3,"modified":1,"skipped":2,"unchanged":73,"resolvedToExisting":0,"alreadyReported":5}]}
             """;
 
         NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
@@ -802,7 +839,7 @@ public class NotificationTableTests
             "The totals line has one cell per column, like every row (#308's own contract).");
 
         // Column 0 is the label, not a number. Every other column is the column-wise sum.
-        string[] expected = ["181", "3", "1", "2", "154", "21"];
+        string[] expected = ["181", "3", "1", "2", "149", "21", "5"];
         for (int column = 1; column < detail.Headers.Count; column++)
         {
             Assert.AreEqual(expected[column - 1], detail.Totals[column],

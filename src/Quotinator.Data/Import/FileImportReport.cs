@@ -55,6 +55,14 @@ public sealed class EntityTypeActionCounts
     /// </summary>
     public required int Skipped { get; init; }
 
+    /// <summary>
+    /// Actions for a record whose conflict an earlier pass already staged, so this pass staged nothing
+    /// new for it (#376). Its own bucket rather than an absence: producing no action would drop the
+    /// record from <see cref="Incoming"/> as well, and a shrinking total is indistinguishable from
+    /// content the file stopped mentioning.
+    /// </summary>
+    public required int AlreadyReported { get; init; }
+
     /// <summary>Modify actions that resolved cleanly.</summary>
     public required int Modified { get; init; }
 
