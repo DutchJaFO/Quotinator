@@ -1,4 +1,4 @@
-﻿# Notification system — Milestone Overview
+# Notification system — Milestone Overview
 
 **GitHub milestone:** [#14](https://github.com/DutchJaFO/Quotinator/milestone/14)
 **Branch:** `feature/notification-system`
@@ -81,6 +81,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#378](https://github.com/DutchJaFO/Quotinator/issues/378) | A "Keep"/"Replace" resolution on a Quote's date field never actually takes effect — the linked Source variant silently wins instead | Waiting for release | T1 ✅ T2 ✅ | [378-keep-replace-source-link-plan.md](378-keep-replace-source-link-plan.md) |
 | [#381](https://github.com/DutchJaFO/Quotinator/issues/381) | A cross-file duplicate quote's CharacterId/PersonId silently reverts to null on every reseed | Planning | T1 ⬜ T2 ⬜ | [381-character-personid-toggle-plan.md](381-character-personid-toggle-plan.md) |
 | [#382](https://github.com/DutchJaFO/Quotinator/issues/382) | CompletenessGuard.ShouldBlock is evaluated against a pre-rule field set at four of five sites | Waiting for release | T1 ✅ T2 ✅ | [382-shouldblock-reads-a-pre-rule-field-set-plan.md](382-shouldblock-reads-a-pre-rule-field-set-plan.md) |
+| [#383](https://github.com/DutchJaFO/Quotinator/issues/383) | Notification detail table has no totals line | Waiting for release | T1 ✅ | [383-notification-detail-totals-line-plan.md](383-notification-detail-totals-line-plan.md) |
 
 ---
 
@@ -128,6 +129,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #378 ─── (none); found live while verifying #374 — Waiting for release
 #381 ─── (none); found live while verifying #374/#378 — Planning, deliberately deferred
 #382 ─── depends on #377; found while planning it, kept out of its scope — Waiting for release
+#383 ─── depends on #377, whose invariant the totals line makes checkable — Waiting for release
 #367 ─── depends on #278, #312; blocks #308 — Waiting for release
 #371 ─── (none) — Planning
 #368 ─── depends on #303, #304 — Planning
@@ -163,26 +165,27 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 22 | **#372** ✅ | Waiting for release — T1 green; a reseed leaves zero pending items |
 | 23 | **#377** ✅ | Waiting for release |
 | 24 | **#382** ✅ | Waiting for release |
-| 25 | **#376** | Planning — sequenced with #377, same file |
-| 26 | **#369** | Planning — depends on #303 |
-| 27 | **#370** | Planning — sequenced with #369, same page |
-| 28 | **#371** | Planning — before #351/#360, which each add migrations |
-| 29 | **#350** | Planning |
-| 30 | **#327** 🚧 | In progress — depends on #326 (done), #348 |
-| 31 | **#328** | Planning |
-| 32 | **#339** 🚧 | In progress — blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
-| 33 | **#329** | Planning — before #324, which consumes its statistics |
-| 34 | **#330** | Planning — #331 depends on it |
-| 35 | **#331** | Planning — depends on #330 |
-| 36 | **#324** | Planning — after #329/#330/#331 |
-| 37 | **#305** | Planning — independent |
-| 38 | **#306** | Planning — independent |
-| 39 | **#351** | Planning — independent, placed late |
-| 40 | **#381** | Planning — independent, deliberately deferred (found live while verifying #374/#378) |
-| 41 | **#352** | Planning — after #349 |
-| 42 | **#353** | Planning — after #352 |
-| 43 | **#360** | Planning — before end-of-milestone migration consolidation |
-| 44 | **#368** | Planning — depends on #303, #304 |
+| 25 | **#383** ✅ | Waiting for release |
+| 26 | **#376** | Planning — sequenced with #377, same file |
+| 27 | **#369** | Planning — depends on #303 |
+| 28 | **#370** | Planning — sequenced with #369, same page |
+| 29 | **#371** | Planning — before #351/#360, which each add migrations |
+| 30 | **#350** | Planning |
+| 31 | **#327** 🚧 | In progress — depends on #326 (done), #348 |
+| 32 | **#328** | Planning |
+| 33 | **#339** 🚧 | In progress — blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
+| 34 | **#329** | Planning — before #324, which consumes its statistics |
+| 35 | **#330** | Planning — #331 depends on it |
+| 36 | **#331** | Planning — depends on #330 |
+| 37 | **#324** | Planning — after #329/#330/#331 |
+| 38 | **#305** | Planning — independent |
+| 39 | **#306** | Planning — independent |
+| 40 | **#351** | Planning — independent, placed late |
+| 41 | **#381** | Planning — independent, deliberately deferred (found live while verifying #374/#378) |
+| 42 | **#352** | Planning — after #349 |
+| 43 | **#353** | Planning — after #352 |
+| 44 | **#360** | Planning — before end-of-milestone migration consolidation |
+| 45 | **#368** | Planning — depends on #303, #304 |
 
 ---
 
