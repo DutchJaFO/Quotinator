@@ -159,7 +159,7 @@ fit alongside the earlier `Planning`/`In progress` phases.
 
 Once the plan doc's Verification table is all ✅:
 
-- [ ] Verify all blocking/related issues in the dependency map are fully closed first
+- [ ] Verify every blocking/related issue in the dependency map has reached `Waiting for release` or later — one still `In progress` means this issue is not ready either, however green its own table. "Closed" is the wrong bar at this phase: a dependency shipping in the same release cannot close before the tag. Every dependency being closed is a *closing* criterion (`process.md` → "Completing an issue"), checked at `Released`
 - [ ] Re-read the **full** issue spec: `gh issue view <N>`
 - [ ] **Plan doc check** — either a plan doc exists, OR the GitHub issue and `overview.md` both contain an explicit note explaining why one was not needed (e.g. "pure content fix, no implementation decisions required"). A missing plan doc with no logged reason is never acceptable.
 - [ ] If any requirement from the spec was deferred to a later issue: confirm a comment exists on the GitHub issue documenting what was deferred, why, and which issue owns it — a silent drop is never acceptable
