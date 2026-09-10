@@ -100,9 +100,13 @@ generator/script behaviour, C# models, project documentation.
     every alert whose batch went with it is dismissed with the `Obsolete` reason", and
     `Sql.SystemImportActions.DeleteAll` has no reference anywhere in the repository.
 
-11. **No `QTN-` code is allocated here**, per #333 requirement 8's precedent (#348, #350): the
-    mechanical sweep comes before any code assignment, and the new label is a UI string rather than an
-    emitted message. The knowledgebase has no entries yet, so there is none to add this issue to.
+11. **This issue produces knowledgebase material, and no `QTN-` code yet.** Both halves are
+    deliberate. The condition it addresses has a concrete action attached — the batch is gone, and
+    dismissing is the only thing left to do — which is exactly what the knowledgebase is meant to
+    carry once it is surfaced to users as its own feature (developer, 2026-09-10). But code
+    allocation still follows #333's mechanical sweep rather than preceding it, and the knowledgebase
+    has no entries yet, so there is nothing to attach this issue to today. Recorded here so the
+    condition is not lost when the sweep runs.
 
 ## Design (developer decisions, 2026-09-01 and 2026-09-10)
 
@@ -118,12 +122,19 @@ a status meaning "superseded". Neither is needed, and neither costs a migration:
 3. **Such a row offers only dismiss.** `IImportActionService.DiscardBatchAsync` already discards a
    whole batch without touching a domain table, and every action in an orphaned batch is equally
    impossible, so they go together.
-4. **The same test applies to the action a notification offers, not only to the page**
-   (developer, 2026-09-10): an action must be able to tell from the metadata alone whether it can
-   execute. `INotificationActionExecutor.CanExecute` currently sees only the trigger and answers
-   `true` unconditionally for `ImportReviewResolved`, so the notification panel offers Keep/Take on a
-   dead batch exactly as the review page does. This is the same defect one surface over, and it is
-   fixed in the same issue rather than left to be found again.
+4. **A notification that depends on volatile data must know whether it can still execute, and must
+   say so to the user in terms they can understand** (developer, 2026-09-10). Three obligations, not
+   one:
+   - **Verify.** `INotificationActionExecutor.CanExecute` currently sees only the trigger and answers
+     `true` unconditionally for `ImportReviewResolved`, so the notification panel offers Keep/Take on
+     a dead batch exactly as the review page does. It must be able to consult the metadata.
+   - **Relay — through the state, not through bespoke text** (developer, 2026-09-10). This is what
+     notification state is for. `NotificationDisplayStatus` gains a member meaning the action can no
+     longer be carried out, and the Status badge renders it like any other. Withdrawing the control
+     alone would leave an empty Action cell, indistinguishable from a row that never had an action.
+   - **Name things humanly.** The row names the file it came from, not its batch id — the same
+     requirement as decision 1 seen from the user's side rather than the data's, and the whole reason
+     the producer writes the name into the metadata at creation.
 
 ---
 
@@ -195,7 +206,30 @@ and 9 prove.
 **Status:** ⬜ Not started
 
 `CanExecute` gains access to the notification's metadata so `ImportReviewResolved` can answer `false`
-when the batch it names is gone, and `NotificationTable` hides the run control for that row.
+when the batch it names is gone.
+
+**The user-facing half is a state, not a sentence bolted onto the Action cell.** `NotificationTable`
+renders nothing there when `CanExecuteAction` is false, so withdrawal alone leaves an empty cell that
+reads exactly like a row which never had an action. `NotificationDisplayStatus` gains a member —
+`ActionUnavailable` — computed by `GetDisplayStatus` and rendered as a Status badge alongside
+`Active`/`Executing`/the rest.
+
+**`Executing` is the precedent this follows exactly.** `NotificationDisplayStatus` is derived at
+render time and never persisted, and `Executing` is already computed from something outside the row
+(`Executing.IsExecuting(notification.Id)`, a session service) rather than from a column. So
+`GetDisplayStatus` takes the new fact the same way it takes `isExecuting`, and design decision 2's
+"no new status and no schema change" is untouched — this is a display state, not an
+`ImportActionStatus`.
+
+**Precedence:** `Dismissed` and its reason-derived variants win, then `Expired`, then `Executing`,
+then `ActionUnavailable`, then `Active`. It applies only to a live, undismissed, unexpired row. It is
+deliberately distinct from the existing `Obsolete`, which means *dismissed because the subject went
+away*; this row is not dismissed and the operator has not decided anything yet.
+
+**Name chosen, not left open:** `ActionUnavailable` breaks the one-word pattern of its siblings
+because the one-word candidates each mean something else here — `Obsolete` is taken, `Superseded` is
+the status this issue explicitly rejected, and `Stale` is an `ImportActionStatus` member. Overridable,
+but not an open question.
 
 The capability check must not become a per-row database query at render time — the page does one read
 and passes it in, the same constraint step 2 works under.
@@ -216,6 +250,42 @@ where one may reappear, and the answer is that it should not: dismissal is the o
 via step 4, not something the page decides on their behalf. Stated so the next reader does not treat
 the omission as an oversight.
 
+### 7. Boyscout pass over every file this issue touched
+
+**Status:** ⬜ Not started
+
+The closing step for the issue, covering the files this work created or touched and no others.
+
+**`NotificationDisplayStatus` moves to its own file.** It is declared inside
+`NotificationTable.razor.cs` (line 70) as a nested type, which ADR 016 and `CLAUDE.md`'s file-placement
+rule both put in an `Enums/` folder instead. Nothing at the declaration states a reason for the
+placement, so it is a deviation rather than a decision, and it is corrected here — this issue is adding
+a member to that very enum. `src/Quotinator.Api/Enums/NotificationDisplayStatus.cs`, namespace
+`Quotinator.Api.Enums`; the folder does not exist yet and this creates it.
+
+**`NotificationFilterMode` moves with it.** Same violation, same shape, declared in
+`Notifications.razor.cs` (line 30) — which is the page this issue's step 5 already touches, so it is
+inside the pass rather than someone else's file.
+
+**`CLAUDE.md`'s Razor caveat applies to both moves.** `NotificationTable.razor`'s status `@switch`
+references the enum unqualified, and a `.razor` file's reference to a moved type is not reliably caught
+by the build. Every `.razor` and `_Imports.razor` touching either name is checked by hand, and the UI
+is loaded to confirm the switch still renders.
+
+**The XML doc comments in `NotificationTable.razor.cs` have come adrift and are re-attached.** The
+summary describing `NotificationDisplayStatus` sits at lines 61–65 followed by a second summary, so it
+lands on `Local` instead of the enum; the same doubling at 72–91 puts `GetDisplayStatus`'s summary onto
+`ShowsRunControl`. The orphaned enum summary also says "three mutually-exclusive display states" for an
+enum that has six today and gains a seventh here. CS1591 cannot catch this — a doc comment exists, it
+is simply on the wrong member.
+
+**`.editorconfig`'s scoped sections gain every file this issue creates or touches**, IDE0008 and
+IDE0090 both, with the `var`→explicit-type and `new(...)` conversions run on them until the counts stop
+dropping. The IDE0008 list already carries most of the existing files here; the IDE0090 list carries
+only four in total, so most of this issue's files are new to it.
+
+**`docs/logging.md`'s `[Subsystem - Phase]` rule** applies to any touched file that emits a log line.
+
 ---
 
 ## Verification checklist
@@ -234,6 +304,10 @@ the omission as an oversight.
 | 10 | ❌ | A notification action declines when its metadata names a batch that is gone | Unit test | `NotificationActionExecutorTests.CanExecute_ImportReviewWhoseBatchIsGone_IsFalse` |
 | 11 | ❌ | A notification action still runs when its batch is live | Unit test | `NotificationActionExecutorTests.CanExecute_ImportReviewWithLiveBatch_IsTrue` — control |
 | 12 | ❌ | The panel asks the executor with the row's own metadata, not the trigger alone | Unit test | `NotificationTableTests.ExecutorCanRun_ImportReviewWhoseBatchIsGone_IsFalse` — needs an `internal static` seam; `ShowsRunControl`'s existing `executorCanRun: false` case already covers the propagation |
-| 13 | ❌ | The unresolved label exists in every locale | Unit test | `TranslationCompletenessTests` — existing, covers the new key automatically |
-| 14 | ❌ | Live: an orphaned row shows its file name, offers only dismiss, and dismissing clears it | Live (T2) | `docs/automated-testing/import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md` |
-| 15 | ❌ | Live: the same row's notification offers no Keep/Take | Live (T2) | Same document, its own section |
+| 13 | ❌ | Such a row reports `ActionUnavailable` rather than `Active` | Unit test | `NotificationTableTests.GetDisplayStatus_ImportReviewWhoseBatchIsGone_IsActionUnavailable` |
+| 14 | ❌ | Dismissed, expired and executing each still win over the new state | Unit test | `NotificationTableTests.GetDisplayStatus_ActionUnavailable_YieldsToDismissedExpiredAndExecuting` |
+| 15 | ❌ | Both new labels exist in every locale | Unit test | `TranslationCompletenessTests` — existing, covers the new key automatically |
+| 16 | ❌ | Live: an orphaned row shows its file name, offers only dismiss, and dismissing clears it | Live (T2) | `docs/automated-testing/import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md` |
+| 17 | ❌ | Live: the same row's notification shows the `ActionUnavailable` badge and names the file | Live (T2) | Same document, its own section |
+| 18 | ❌ | Both display enums live in `Enums/`, not in a `.razor.cs` | Unit test | `RepositoryStructureTests` — extended to assert no enum is declared in a `.razor.cs` file, so the rule holds for the next component too rather than for these two by hand |
+| 19 | ❌ | Live: the status column still renders every state after the enum move | Live (T2) | Same document — the Razor caveat means the build cannot prove this |
