@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Quotinator.Api.Components.Controls;
+using Quotinator.Api.Enums;
 using Quotinator.Api.Services;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
@@ -24,13 +25,6 @@ namespace Quotinator.Api.Components.Pages;
 /// </summary>
 public partial class Notifications
 {
-    #region Public
-
-    /// <summary>The three ways this page can restrict which notifications are shown.</summary>
-    internal enum NotificationFilterMode { Active, All, ExpiredOnly }
-
-    #endregion
-
     #region Protected
 
     /// <inheritdoc/>
@@ -69,16 +63,22 @@ public partial class Notifications
     private DateTime Now;
     private NotificationFilterMode Filter = NotificationFilterMode.Active;
 
+    // #369: replaced on every load. Until the first one there are no rows for it to judge.
+    private NotificationActionAvailability Availability = new([]);
+
     private IReadOnlyList<NotificationEntity> FilteredNotifications =>
         [.. AllNotifications.Where(MatchesFilter)];
 
     private bool MatchesFilter(NotificationEntity notification)
     {
-        NotificationTable.NotificationDisplayStatus status = NotificationTable.GetDisplayStatus(notification, Now);
+        // #369: deliberately without the action-unavailable flag. An alert whose action can no longer run
+        // is still undismissed and still waiting on the operator, so it belongs under Active, where its
+        // own badge says why it cannot be acted on.
+        NotificationDisplayStatus status = NotificationTable.GetDisplayStatus(notification, Now);
         return Filter switch
         {
-            NotificationFilterMode.Active      => status == NotificationTable.NotificationDisplayStatus.Active,
-            NotificationFilterMode.ExpiredOnly => status == NotificationTable.NotificationDisplayStatus.Expired,
+            NotificationFilterMode.Active      => status == NotificationDisplayStatus.Active,
+            NotificationFilterMode.ExpiredOnly => status == NotificationDisplayStatus.Expired,
             _                                   => true,
         };
     }
@@ -91,6 +91,9 @@ public partial class Notifications
             1, 0, CultureInfo.CurrentUICulture.TwoLetterISOLanguageName);
         AllNotifications = page.Items;
         Now = DateTime.UtcNow;
+
+        // #369: one read per load, handed to every row, so the table never queries per row.
+        Availability = await ActionExecutor.GetAvailabilityAsync();
     }
 
     private async Task DismissAsync(Guid id)

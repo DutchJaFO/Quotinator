@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
+using Quotinator.Api.Enums;
 using Quotinator.Api.Formatting;
 using Quotinator.Api.Services;
 using Quotinator.Data.Entities;
@@ -44,7 +45,7 @@ public partial class NotificationTable
     /// <summary>Invoked with a notification's Id when its Dismiss button is clicked. Ignored when <see cref="ShowDismissAction"/> is <see langword="false"/>.</summary>
     [Parameter] public EventCallback<Guid> OnDismiss { get; set; }
 
-    /// <summary>Whether to render an Action column for notifications carrying an executable <c>DismissTriggerKey</c>, per row via <see cref="INotificationActionExecutor.CanExecute"/>.</summary>
+    /// <summary>Whether to render an Action column for notifications carrying an executable <c>DismissTriggerKey</c>, per row via <see cref="INotificationActionExecutor.CanExecute(NotificationDismissTrigger, NotificationMetadataDto, NotificationActionAvailability)"/>.</summary>
     [Parameter] public bool ShowActionColumn { get; set; }
 
     /// <summary>Invoked with a notification's Id once its action has been confirmed. Ignored when <see cref="ShowActionColumn"/> is <see langword="false"/>.</summary>
@@ -59,24 +60,51 @@ public partial class NotificationTable
     [Parameter] public EventCallback<(Guid Id, FieldResolutionChoice Choice)> OnExecuteChoiceAction { get; set; }
 
     /// <summary>
-    /// The three mutually-exclusive display states a notification's Status column/filter can show.
-    /// Not a persisted column — computed from <see cref="NotificationEntity.IsDismissed"/>/
-    /// <see cref="NotificationEntity.ExpiresAt"/> at render time via <see cref="GetDisplayStatus"/>.
+    /// #369: the volatile state this render's actions depend on, read once by the caller and handed to
+    /// every row — so no row runs a query of its own.
     /// </summary>
+    [Parameter, EditorRequired] public NotificationActionAvailability Availability { get; set; } = default!;
+
     /// <summary>Renders a stored UTC timestamp in the host's time zone — see <see cref="LocalTimestamp"/>.</summary>
     /// <param name="utc">The stored UTC value, or <see langword="null"/>.</param>
     internal static string Local(DateTime? utc) => LocalTimestamp.Render(utc);
 
-    internal enum NotificationDisplayStatus { Active, Expired, Dismissed, Resolved, Obsolete, Executing }
+    /// <summary>
+    /// Whether <paramref name="notification"/>'s action can still be run, asked of
+    /// <paramref name="executor"/> with the row's own payload and this render's
+    /// <paramref name="availability"/> (#369).
+    /// </summary>
+    /// <remarks>
+    /// The trigger alone cannot answer this — it says an action is wired up, not that the thing it acts on
+    /// still exists. Static and internal so it can be tested without rendering the component — this
+    /// project has no bUnit.
+    /// </remarks>
+    /// <param name="executor">The executor whose capability check decides.</param>
+    /// <param name="notification">The row being rendered.</param>
+    /// <param name="availability">The volatile state read once for this render.</param>
+    internal static bool ExecutorCanRun(INotificationActionExecutor executor, NotificationEntity notification, NotificationActionAvailability availability) =>
+        notification.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger
+        && executor.CanExecute(
+            trigger,
+            NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata),
+            availability);
 
     /// <summary>
-    /// Classifies a notification's display status: <see cref="NotificationDisplayStatus.Dismissed"/>
-    /// takes priority over expiry (an already-dismissed row's expiry no longer matters for display),
-    /// then <see cref="NotificationDisplayStatus.Expired"/>, then <see cref="NotificationDisplayStatus.Active"/>.
-    /// Mirrors <c>Sql.Notifications.SelectActive</c>'s own active-set definition
-    /// (<c>IsDismissed = 0 AND (ExpiresAt IS NULL OR ExpiresAt > @now)</c>) so "Active" here always
-    /// means the same thing as the startup modals' own active set.
+    /// Whether <paramref name="notification"/> carries an action that exists but can no longer run —
+    /// the fact <see cref="NotificationDisplayStatus.ActionUnavailable"/> reports (#369).
     /// </summary>
+    /// <remarks>
+    /// A row with no action at all is not "unavailable": it never had one to lose. Static and internal so
+    /// it can be tested without rendering the component — this project has no bUnit.
+    /// </remarks>
+    /// <param name="executor">The executor whose capability checks decide.</param>
+    /// <param name="notification">The row being rendered.</param>
+    /// <param name="availability">The volatile state read once for this render.</param>
+    internal static bool ActionIsUnavailable(INotificationActionExecutor executor, NotificationEntity notification, NotificationActionAvailability availability) =>
+        notification.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger
+        && executor.CanExecute(trigger)
+        && !ExecutorCanRun(executor, notification, availability);
+
     /// <summary>
     /// Whether the Run control is offered for <paramref name="notification"/>.
     /// </summary>
@@ -313,7 +341,25 @@ public partial class NotificationTable
         _ => throw new NotSupportedException($"No layout is defined for notification kind '{kind}'."),
     };
 
-    internal static NotificationDisplayStatus GetDisplayStatus(NotificationEntity notification, DateTime now, bool isExecuting = false)
+    /// <summary>
+    /// Classifies a notification's display status (#278). What has already happened to a row outranks
+    /// everything else: <see cref="NotificationDisplayStatus.Dismissed"/> and its reason-derived variants
+    /// first, then <see cref="NotificationDisplayStatus.Expired"/>, then
+    /// <see cref="NotificationDisplayStatus.Executing"/> (#367), then
+    /// <see cref="NotificationDisplayStatus.ActionUnavailable"/> (#369), and only then
+    /// <see cref="NotificationDisplayStatus.Active"/>.
+    /// </summary>
+    /// <remarks>
+    /// Without the two flags, "Active" mirrors <c>Sql.Notifications.SelectActive</c>'s own active-set
+    /// definition (<c>IsDismissed = 0 AND (ExpiresAt IS NULL OR ExpiresAt > @now)</c>), so it means the
+    /// same thing as the startup modals' own active set — which is why the Notifications page's filter
+    /// calls it without them.
+    /// </remarks>
+    /// <param name="notification">The row being classified.</param>
+    /// <param name="now">The time expiry is judged against.</param>
+    /// <param name="isExecuting">Whether this row's action is running right now.</param>
+    /// <param name="actionUnavailable">Whether this row's action exists but can no longer run.</param>
+    internal static NotificationDisplayStatus GetDisplayStatus(NotificationEntity notification, DateTime now, bool isExecuting = false, bool actionUnavailable = false)
     {
         if (notification.IsDismissed)
         {
@@ -337,6 +383,10 @@ public partial class NotificationTable
         // must report what happened to it, not what was happening a moment earlier.
         if (isExecuting)
             return NotificationDisplayStatus.Executing;
+        // #369: after everything that has already happened to the row, for the same reason Executing is.
+        // What its action could still do matters only while nothing has been done yet.
+        if (actionUnavailable)
+            return NotificationDisplayStatus.ActionUnavailable;
         return NotificationDisplayStatus.Active;
     }
 
@@ -423,9 +473,11 @@ public partial class NotificationTable
     private bool CanExecuteAction(NotificationEntity notification) =>
         ShowsRunControl(
             notification,
-            executorCanRun: notification.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger
-                            && ActionExecutor.CanExecute(trigger),
+            executorCanRun: ExecutorCanRun(ActionExecutor, notification, Availability),
             isExecuting: Executing.IsExecuting(notification.Id));
+
+    private bool ActionIsUnavailable(NotificationEntity notification) =>
+        ActionIsUnavailable(ActionExecutor, notification, Availability);
 
     private async Task ConfirmActionAsync(Guid id)
     {

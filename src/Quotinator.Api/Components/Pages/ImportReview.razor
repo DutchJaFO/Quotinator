@@ -28,7 +28,15 @@ else
             @foreach (var action in Actions)
             {
                 <tr>
-                    <td><span class="badge bg-warning text-dark">@action.Status</span></td>
+                    <td>
+                        <span class="badge bg-warning text-dark">@action.Status</span>
+                        @if (BatchIsGone(action.BatchId))
+                        {
+                            @* #369: stored as Pending, but its batch is gone and nothing can be applied
+                               against it — said on the row, not left for the operator to discover. *@
+                            <span class="badge bg-secondary ms-1">@Text.ImportReviewBatchGone</span>
+                        }
+                    </td>
                     <td>@action.EntityType</td>
                     <td>@action.ActionType</td>
                     <td>@FileNameFor(action.BatchId)</td>
@@ -43,7 +51,16 @@ else
                         }
                     </td>
                     <td>
-                        @if (action.AmbiguousFields.Count > 0)
+                        @if (BatchIsGone(action.BatchId))
+                        {
+                            @* #369: dismissing discards the whole batch — every action in it is equally
+                               impossible, so they go together. *@
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                    @onclick="() => DismissAsync(action)">
+                                @Text.ImportReviewDismissButton
+                            </button>
+                        }
+                        @if (CanDecide(action))
                         {
                             <button type="button" class="btn btn-sm btn-outline-secondary me-1"
                                     @onclick="() => DecideAsync(action, FieldResolutionChoice.Keep)">

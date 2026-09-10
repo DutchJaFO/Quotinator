@@ -19,6 +19,28 @@ internal interface INotificationActionExecutor
     bool CanExecute(NotificationDismissTrigger trigger);
 
     /// <summary>
+    /// Whether <paramref name="trigger"/>'s action can still be carried out for the notification whose
+    /// payload is <paramref name="metadata"/> — wired up, <b>and</b> not dependent on something that has
+    /// since gone (#369).
+    /// </summary>
+    /// <remarks>
+    /// A notification outlives the records it names, so a wired-up action can become impossible while its
+    /// notification is still active: an import-review alert whose batch has been removed offers a decision
+    /// there is nothing left to apply against. Answered from the payload plus
+    /// <paramref name="availability"/>, never by a query of its own, so a page rendering many rows reads
+    /// the volatile state once.
+    /// </remarks>
+    /// <param name="trigger">The trigger the notification carries.</param>
+    /// <param name="metadata">The notification's own payload, or <see langword="null"/> when it has none.</param>
+    /// <param name="availability">The volatile state read once for this render, via <see cref="GetAvailabilityAsync"/>.</param>
+    bool CanExecute(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability);
+
+    /// <summary>
+    /// Reads, once, every piece of volatile state a trigger's capability check depends on (#369).
+    /// </summary>
+    Task<NotificationActionAvailability> GetAvailabilityAsync();
+
+    /// <summary>
     /// Executes the action associated with <paramref name="trigger"/>, given the originating
     /// notification's own payload.
     /// </summary>

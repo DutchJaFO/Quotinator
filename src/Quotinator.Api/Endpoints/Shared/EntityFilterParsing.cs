@@ -1,23 +1,8 @@
+using Quotinator.Api.Enums;
 using Quotinator.Constants.Api;
 using Quotinator.Core.Services;
 
 namespace Quotinator.Api.Endpoints.Shared;
-
-/// <summary>Which of the two mutually-exclusive filter forms <see cref="EntityFilterParsing.ResolveAsync"/> resolved to.</summary>
-internal enum EntityFilterOutcome
-{
-    /// <summary>Neither the id-valued nor the name-valued parameter was supplied.</summary>
-    NoFilter,
-
-    /// <summary>An id was resolved — either supplied directly or found by name.</summary>
-    Resolved,
-
-    /// <summary>A name-valued filter was supplied but no matching entity exists — a legitimate zero-results case, not an error.</summary>
-    NotFound,
-
-    /// <summary>Both parameters were supplied, or the id-valued one was malformed.</summary>
-    Error,
-}
 
 /// <summary>The parameter and entity names used to build <see cref="EntityFilterParsing.ResolveAsync"/>'s localised messages.</summary>
 internal readonly record struct EntityFilterNames(string EntityType, string IdParam, string NameParam);
@@ -50,7 +35,7 @@ internal static class EntityFilterParsing
 
         if (idValue is not null)
         {
-            if (!Guid.TryParse(idValue, out var parsed))
+            if (!Guid.TryParse(idValue, out Guid parsed))
                 return new EntityFilterResult(EntityFilterOutcome.Error, null, null, Results.Problem(
                     detail: localizer.Format(ApiMessages.InvalidEntityFilterId, names.IdParam),
                     statusCode: StatusCodes.Status422UnprocessableEntity));
@@ -60,7 +45,7 @@ internal static class EntityFilterParsing
 
         if (nameValue is not null)
         {
-            var resolvedId = await resolveIdByName(nameValue);
+            Guid? resolvedId = await resolveIdByName(nameValue);
             return resolvedId is null
                 ? new EntityFilterResult(EntityFilterOutcome.NotFound, null,
                     localizer.Format(ApiMessages.EntityFilterNoMatch, names.EntityType, nameValue), null)

@@ -1,7 +1,10 @@
 using Quotinator.Api.Components.Controls;
+using Quotinator.Api.Enums;
+using Quotinator.Api.Services;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 
 namespace Quotinator.Api.Tests.Components;
 
@@ -96,7 +99,7 @@ public class NotificationTableTests
         notification.DismissReason = new SafeValue<NotificationDismissReason?>(
             NotificationDismissReason.Resolved.ToString(), NotificationDismissReason.Resolved);
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Resolved,
+        Assert.AreEqual(NotificationDisplayStatus.Resolved,
             NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow));
     }
 
@@ -112,7 +115,7 @@ public class NotificationTableTests
         notification.DismissReason = new SafeValue<NotificationDismissReason?>(
             NotificationDismissReason.Obsolete.ToString(), NotificationDismissReason.Obsolete);
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Obsolete,
+        Assert.AreEqual(NotificationDisplayStatus.Obsolete,
             NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow));
     }
 
@@ -124,7 +127,7 @@ public class NotificationTableTests
         notification.DismissReason = new SafeValue<NotificationDismissReason?>(
             NotificationDismissReason.Dismissed.ToString(), NotificationDismissReason.Dismissed);
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Dismissed,
+        Assert.AreEqual(NotificationDisplayStatus.Dismissed,
             NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow));
     }
 
@@ -137,7 +140,7 @@ public class NotificationTableTests
     {
         NotificationEntity notification = Build(isDismissed: true, expiresAt: null);
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Dismissed,
+        Assert.AreEqual(NotificationDisplayStatus.Dismissed,
             NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow));
     }
 
@@ -147,7 +150,7 @@ public class NotificationTableTests
         DateTime now = DateTime.UtcNow;
         NotificationEntity notification = Build(isDismissed: false, expiresAt: null);
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Active, NotificationTable.GetDisplayStatus(notification, now));
+        Assert.AreEqual(NotificationDisplayStatus.Active, NotificationTable.GetDisplayStatus(notification, now));
     }
 
     [TestMethod]
@@ -156,7 +159,7 @@ public class NotificationTableTests
         DateTime now = DateTime.UtcNow;
         NotificationEntity notification = Build(isDismissed: false, expiresAt: now.AddHours(1));
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Active, NotificationTable.GetDisplayStatus(notification, now));
+        Assert.AreEqual(NotificationDisplayStatus.Active, NotificationTable.GetDisplayStatus(notification, now));
     }
 
     [TestMethod]
@@ -165,7 +168,7 @@ public class NotificationTableTests
         DateTime now = DateTime.UtcNow;
         NotificationEntity notification = Build(isDismissed: false, expiresAt: now.AddHours(-1));
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Expired, NotificationTable.GetDisplayStatus(notification, now));
+        Assert.AreEqual(NotificationDisplayStatus.Expired, NotificationTable.GetDisplayStatus(notification, now));
     }
 
     [TestMethod]
@@ -173,8 +176,8 @@ public class NotificationTableTests
     {
         DateTime now = DateTime.UtcNow;
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Dismissed, NotificationTable.GetDisplayStatus(Build(isDismissed: true, expiresAt: null), now));
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Dismissed, NotificationTable.GetDisplayStatus(Build(isDismissed: true, expiresAt: now.AddHours(-1)), now),
+        Assert.AreEqual(NotificationDisplayStatus.Dismissed, NotificationTable.GetDisplayStatus(Build(isDismissed: true, expiresAt: null), now));
+        Assert.AreEqual(NotificationDisplayStatus.Dismissed, NotificationTable.GetDisplayStatus(Build(isDismissed: true, expiresAt: now.AddHours(-1)), now),
             "Dismissed must take priority over expiry — an already-dismissed row's expiry no longer matters for display.");
     }
 
@@ -188,12 +191,12 @@ public class NotificationTableTests
         DateTime now = DateTime.UtcNow;
         NotificationEntity notification = Build(isDismissed: false, expiresAt: null);
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Executing,
+        Assert.AreEqual(NotificationDisplayStatus.Executing,
             NotificationTable.GetDisplayStatus(notification, now, isExecuting: true));
 
         // Positive control on the same row: without it, an implementation that reported Executing
         // unconditionally would satisfy the assertion above.
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Active,
+        Assert.AreEqual(NotificationDisplayStatus.Active,
             NotificationTable.GetDisplayStatus(notification, now, isExecuting: false));
     }
 
@@ -209,7 +212,7 @@ public class NotificationTableTests
         notification.DismissReason = new SafeValue<NotificationDismissReason?>(
             NotificationDismissReason.Resolved.ToString(), NotificationDismissReason.Resolved);
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Resolved,
+        Assert.AreEqual(NotificationDisplayStatus.Resolved,
             NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow, isExecuting: true));
     }
 
@@ -219,7 +222,7 @@ public class NotificationTableTests
     {
         DateTime now = DateTime.UtcNow;
 
-        Assert.AreEqual(NotificationTable.NotificationDisplayStatus.Expired,
+        Assert.AreEqual(NotificationDisplayStatus.Expired,
             NotificationTable.GetDisplayStatus(Build(isDismissed: false, expiresAt: now.AddHours(-1)), now, isExecuting: true));
     }
 
@@ -237,8 +240,8 @@ public class NotificationTableTests
         Dictionary<string, string> keys =
             System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(baseline))!;
 
-        foreach (NotificationTable.NotificationDisplayStatus status
-                 in Enum.GetValues<NotificationTable.NotificationDisplayStatus>())
+        foreach (NotificationDisplayStatus status
+                 in Enum.GetValues<NotificationDisplayStatus>())
         {
             string key = $"Notifications{status}Label";
             Assert.IsTrue(keys.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value),
@@ -281,6 +284,133 @@ public class NotificationTableTests
         Assert.IsFalse(NotificationTable.ShowsDismissControl(Build(isDismissed: true, expiresAt: null), isExecuting: false),
             "An already-dismissed row has no dismiss control — the pre-existing rule, unchanged.");
     }
+
+    #region #369 — an action whose volatile subject is gone
+
+    private const string LiveBatch = "7f00000a-0000-4000-8000-00000000000b";
+    private const string GoneBatch = "7f00000c-0000-4000-8000-00000000000d";
+
+    /// <summary>An import-review alert naming <paramref name="batchId"/>, carrying its real trigger and payload.</summary>
+    private static NotificationEntity ReviewAlert(string batchId) => new()
+    {
+        Type              = new SafeValue<NotificationType?>(nameof(NotificationType.ActionRequired), NotificationType.ActionRequired),
+        Body              = "Your imported file conflicting.json was reseeded, but 1 changes need your decision before they can be applied.",
+        DismissTriggerKey = new SafeValue<NotificationDismissTrigger?>(nameof(NotificationDismissTrigger.ImportReviewResolved), NotificationDismissTrigger.ImportReviewResolved),
+        MetadataKind      = new SafeValue<NotificationMetadataKind?>(nameof(NotificationMetadataKind.ImportReviewPending), NotificationMetadataKind.ImportReviewPending),
+        Metadata          = NotificationMetadataKinds.Serialize(new ImportReviewPendingMetadataDto
+        {
+            FileName     = "conflicting.json",
+            Origin       = FileResourceOrigin.User,
+            BatchId      = batchId,
+            ReleaseState = NotificationReleaseState.NotApplicable,
+        }),
+    };
+
+    /// <summary>
+    /// #369: the panel asks the executor with the row's own payload and this render's availability —
+    /// not with the trigger alone, which says an action is wired up and nothing about whether what it
+    /// acts on still exists. A trigger-only check is exactly how the notification offered Keep/Take on a
+    /// batch that was gone.
+    /// </summary>
+    [TestMethod]
+    public void ExecutorCanRun_ImportReviewWhoseBatchIsGone_IsFalse()
+    {
+        NotificationActionAvailability availability = new([LiveBatch]);
+        AnsweringExecutor executor = new();
+
+        Assert.IsFalse(NotificationTable.ExecutorCanRun(executor, ReviewAlert(GoneBatch), availability),
+            "The batch this alert names is gone, so its action cannot run.");
+        Assert.AreEqual(GoneBatch, (executor.ReceivedMetadata as ImportReviewPendingMetadataDto)?.BatchId,
+            "The row's own payload must reach the executor — it is the only thing naming the batch.");
+        Assert.AreSame(availability, executor.ReceivedAvailability,
+            "The availability this render read must reach the executor, not one it reads for itself.");
+
+        Assert.IsTrue(NotificationTable.ExecutorCanRun(executor, ReviewAlert(LiveBatch), availability),
+            "Positive control: the same alert naming a live batch can run. Without it, a seam that never "
+            + "offered any action would pass the assertion above.");
+    }
+
+    /// <summary>
+    /// #369: an alert whose action can no longer be carried out says so through its state (developer,
+    /// 2026-09-10). Withdrawing the Run control alone would leave an empty Action cell, indistinguishable
+    /// from a row that never had an action.
+    /// </summary>
+    [TestMethod]
+    public void GetDisplayStatus_ImportReviewWhoseBatchIsGone_IsActionUnavailable()
+    {
+        DateTime now = DateTime.UtcNow;
+        NotificationEntity alert = ReviewAlert(GoneBatch);
+
+        Assert.AreEqual(NotificationDisplayStatus.ActionUnavailable,
+            NotificationTable.GetDisplayStatus(alert, now, isExecuting: false, actionUnavailable: true));
+        Assert.AreEqual(NotificationDisplayStatus.Active,
+            NotificationTable.GetDisplayStatus(alert, now, isExecuting: false, actionUnavailable: false),
+            "Positive control: the same row whose action is still possible reads Active.");
+    }
+
+    /// <summary>
+    /// #369, a control on precedence: what has already happened to a row outranks whether its action
+    /// could still run. A dismissed, expired or running row reports that — the ordering #367 set for
+    /// Executing. It passes before this issue's change as well, which is what a control is for.
+    /// </summary>
+    [TestMethod]
+    public void GetDisplayStatus_ActionUnavailable_YieldsToDismissedExpiredAndExecuting()
+    {
+        DateTime now = DateTime.UtcNow;
+
+        Assert.AreEqual(NotificationDisplayStatus.Dismissed,
+            NotificationTable.GetDisplayStatus(Build(isDismissed: true, expiresAt: null), now, isExecuting: false, actionUnavailable: true));
+        Assert.AreEqual(NotificationDisplayStatus.Expired,
+            NotificationTable.GetDisplayStatus(Build(isDismissed: false, expiresAt: now.AddHours(-1)), now, isExecuting: false, actionUnavailable: true));
+        Assert.AreEqual(NotificationDisplayStatus.Executing,
+            NotificationTable.GetDisplayStatus(Build(isDismissed: false, expiresAt: null), now, isExecuting: true, actionUnavailable: true));
+    }
+
+    /// <summary>
+    /// #369: "no longer possible" is said only of an action that exists and cannot run. A row with no
+    /// action at all, or one whose action can still run, reads as it always did — otherwise every
+    /// informational notification would claim to have lost an action it never had.
+    /// </summary>
+    [TestMethod]
+    public void ActionIsUnavailable_OnlyForAWiredActionThatCannotRun()
+    {
+        NotificationActionAvailability availability = new([LiveBatch]);
+        AnsweringExecutor executor = new();
+
+        Assert.IsTrue(NotificationTable.ActionIsUnavailable(executor, ReviewAlert(GoneBatch), availability),
+            "An import-review alert whose batch is gone carries an action that can no longer run.");
+        Assert.IsFalse(NotificationTable.ActionIsUnavailable(executor, ReviewAlert(LiveBatch), availability),
+            "Its batch still exists, so its action is still possible.");
+        Assert.IsFalse(NotificationTable.ActionIsUnavailable(executor, Build(isDismissed: false, expiresAt: null), availability),
+            "A notification with no action at all has nothing to lose.");
+    }
+
+    /// <summary>
+    /// Answers the three-argument capability check the way the real executor does, and records what it
+    /// was handed — so a test can tell a seam that passes the row's payload from one that does not.
+    /// </summary>
+    private sealed class AnsweringExecutor : INotificationActionExecutor
+    {
+        public NotificationMetadataDto? ReceivedMetadata { get; private set; }
+        public NotificationActionAvailability? ReceivedAvailability { get; private set; }
+
+        public bool CanExecute(NotificationDismissTrigger trigger) => true;
+
+        public bool CanExecute(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability)
+        {
+            ReceivedMetadata     = metadata;
+            ReceivedAvailability = availability;
+            return metadata is ImportReviewPendingMetadataDto review && availability.ImportBatchExists(review.BatchId);
+        }
+
+        public Task<NotificationActionAvailability> GetAvailabilityAsync() =>
+            throw new NotSupportedException("The table is handed its availability; it never reads one.");
+
+        public Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null) =>
+            throw new NotSupportedException("The table never runs an action itself.");
+    }
+
+    #endregion
 
     #region #308 — title/body layout
 

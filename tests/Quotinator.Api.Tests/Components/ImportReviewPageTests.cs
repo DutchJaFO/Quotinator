@@ -1,8 +1,11 @@
 using Quotinator.Api.Components.Pages;
 using Quotinator.Api.Tests.Fakes;
 using Quotinator.Core.Models;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
+using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 
 namespace Quotinator.Api.Tests.Components;
 
@@ -139,32 +142,135 @@ public class ImportReviewPageTests
         Assert.IsTrue(rows.All(r => r.Decision == FieldResolutionChoice.Replace));
     }
 
+    // Hex letters in both, so a case-insensitive comparison is actually exercised rather than passing
+    // because an all-digit id has no casing to differ in.
+    private const string LiveBatch  = "7f00000a-0000-4000-8000-00000000000b";
+    private const string GoneBatch  = "7f00000c-0000-4000-8000-00000000000d";
+    private const string Unresolved = "Import batch no longer exists";
+
+    private static readonly Dictionary<string, string> NoLiveBatches   = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> NoRecordedNames = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>A pending-review alert as the notification history stores it, naming <paramref name="batchId"/>'s file.</summary>
+    private static NotificationEntity ReviewAlert(string batchId, string fileName, bool isDismissed) => new()
+    {
+        Body         = $"Your imported file {fileName} was reseeded, but 1 changes need your decision before they can be applied.",
+        IsDismissed  = isDismissed,
+        MetadataKind = new SafeValue<NotificationMetadataKind?>(nameof(NotificationMetadataKind.ImportReviewPending), NotificationMetadataKind.ImportReviewPending),
+        Metadata     = NotificationMetadataKinds.Serialize(new ImportReviewPendingMetadataDto
+        {
+            FileName     = fileName,
+            Origin       = FileResourceOrigin.User,
+            BatchId      = batchId,
+            ReleaseState = NotificationReleaseState.NotApplicable,
+        }),
+    };
+
     /// <summary>
     /// #303, from T1: the page names the file a conflict came from, not the batch id. A GUID is correct
     /// and useless — the operator needs to know which file to go and fix.
+    /// <para>
+    /// #369, and a control: the live batch's own name still wins over the copy its alert recorded. It
+    /// passed before #369 and must keep passing.
+    /// </para>
     /// </summary>
     [TestMethod]
     public void FileNameFor_KnownBatch_ReportsTheFileItWasImportedFrom()
     {
-        string batchId = Guid.NewGuid().ToString("D");
-        Dictionary<string, string> lookup = new(StringComparer.OrdinalIgnoreCase)
-        {
-            [batchId] = "conflicting.json",
-        };
+        Dictionary<string, string> live     = new(StringComparer.OrdinalIgnoreCase) { [LiveBatch] = "conflicting.json" };
+        Dictionary<string, string> recorded = new(StringComparer.OrdinalIgnoreCase) { [LiveBatch] = "renamed-since.json" };
 
-        Assert.AreEqual("conflicting.json", ImportReview.FileNameFor(lookup, batchId));
+        Assert.AreEqual("conflicting.json", ImportReview.FileNameFor(live, recorded, LiveBatch, Unresolved));
     }
 
     /// <summary>
-    /// A batch that no longer exists falls back to its id rather than a placeholder — that is an
-    /// anomaly worth showing something traceable for, and an em dash would hide it.
+    /// #369: a batch that no longer exists is named from the alert raised for it. A notification's
+    /// payload is written to outlive the records it names, and this is the case it was written for.
     /// </summary>
     [TestMethod]
-    public void FileNameFor_UnknownBatch_FallsBackToTheId()
+    public void FileNameFor_BatchGone_ResolvesTheNameFromNotificationMetadata()
     {
-        string batchId = Guid.NewGuid().ToString("D");
+        Dictionary<string, string> recorded = new(StringComparer.OrdinalIgnoreCase) { [GoneBatch] = "conflicting.json" };
 
-        Assert.AreEqual(batchId, ImportReview.FileNameFor(new Dictionary<string, string>(), batchId));
+        Assert.AreEqual("conflicting.json",
+            ImportReview.FileNameFor(NoLiveBatches, recorded, GoneBatch.ToUpperInvariant(), Unresolved),
+            "Matched case-insensitively — the action and the alert hold independently-cased copies of one id.");
+    }
+
+    /// <summary>
+    /// #369: with neither a live batch nor an alert to name it, the row says so — never the batch id.
+    /// Replaces #303's <c>FileNameFor_UnknownBatch_FallsBackToTheId</c>, which asserted the id as a
+    /// "traceable" fallback: an operator cannot act on a GUID, and a row that cannot be acted on at all
+    /// has to say why rather than show something that reads like data.
+    /// </summary>
+    [TestMethod]
+    public void FileNameFor_BatchGoneAndNoNotification_RendersUnresolved()
+        => Assert.AreEqual(Unresolved, ImportReview.FileNameFor(NoLiveBatches, NoRecordedNames, GoneBatch, Unresolved),
+            "Never the batch id: an operator cannot act on a GUID, and this row cannot be acted on at all.");
+
+    /// <summary>
+    /// #369: the lookup is built from every pending-review alert, the dismissed ones included. Pre-#372,
+    /// the batches that were orphaned are exactly those whose alert had been marked Obsolete, so a lookup
+    /// over active alerts only would miss every name it exists to recover.
+    /// </summary>
+    [TestMethod]
+    public void FileNamesFromNotifications_IncludesDismissedAlerts()
+    {
+        NotificationEntity active    = ReviewAlert(LiveBatch, "live.json", isDismissed: false);
+        NotificationEntity dismissed = ReviewAlert(GoneBatch, "orphaned.json", isDismissed: true);
+
+        IReadOnlyDictionary<string, string> names = ImportReview.FileNamesFromNotifications([active, dismissed]);
+
+        Assert.IsTrue(names.TryGetValue(GoneBatch.ToUpperInvariant(), out string? orphanedName),
+            "A dismissed alert carries the only surviving copy of its file's name, and is keyed case-insensitively.");
+        Assert.AreEqual("orphaned.json", orphanedName);
+        Assert.IsTrue(names.TryGetValue(LiveBatch, out string? liveName));
+        Assert.AreEqual("live.json", liveName);
+    }
+
+    /// <summary>
+    /// #369: the one predicate the page and its tests agree on. A batch is gone when no live row matches
+    /// its id — compared case-insensitively, since an action's stored batch id and the batch row's id are
+    /// two independently-cased copies of the same value (ADR 012).
+    /// </summary>
+    [TestMethod]
+    public void BatchIsGone_OnlyWhenNoLiveBatchMatches()
+    {
+        Dictionary<string, string> live = new(StringComparer.OrdinalIgnoreCase) { [LiveBatch] = "live.json" };
+
+        Assert.IsTrue(ImportReview.BatchIsGone(live, GoneBatch), "A batch id with no live row is gone.");
+        Assert.IsFalse(ImportReview.BatchIsGone(live, LiveBatch.ToUpperInvariant()),
+            "A live batch is not gone, whatever casing the action stored its id in.");
+    }
+
+    /// <summary>
+    /// #369: Keep existing and Take incoming are impossible once the batch is gone — the decision has
+    /// nothing to be applied against — so they are not offered, whatever the row's own conflicts say.
+    /// </summary>
+    [TestMethod]
+    public void CanDecide_BatchGone_IsFalseDespiteAmbiguousFields()
+    {
+        ImportActionSummaryResponse conflicted = Summary(ImportActionStatus.Pending, GoneBatch, "Quote", "quoteText");
+
+        Assert.IsFalse(ImportReview.CanDecide(conflicted, batchIsGone: true));
+        Assert.IsTrue(ImportReview.CanDecide(conflicted, batchIsGone: false),
+            "Positive control: the same row with its batch present is decidable. Without it, a CanDecide "
+            + "that never offered anything would pass the assertion above.");
+    }
+
+    /// <summary>
+    /// #369: dismissing is the one thing left to do with a row whose batch is gone, and it discards the
+    /// whole batch — every action in it is equally impossible, so they go together.
+    /// </summary>
+    [TestMethod]
+    public async Task DismissBatch_DiscardsTheWholeBatch()
+    {
+        FakeImportActionService service = new();
+
+        await ImportReview.DismissBatchAsync(service, Summary(ImportActionStatus.Pending, GoneBatch));
+
+        Assert.AreEqual(GoneBatch, service.LastDiscardedBatchId);
+        Assert.IsNull(service.LastAppliedBatchId, "Dismissing writes nothing — it is not a decision in disguise.");
     }
 
     /// <summary>

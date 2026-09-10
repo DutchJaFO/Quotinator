@@ -2,6 +2,7 @@ using Dapper;
 using Microsoft.Data.Sqlite;
 using Quotinator.Data.Connections;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Data.Queries;
 
@@ -24,10 +25,12 @@ namespace Quotinator.Data.Repositories;
 /// <param name="factory">Opens the connection for the total-row count, which is a bare <c>COUNT(*)</c> with no join and therefore outside ADR 017.</param>
 /// <param name="activeRepository">Executes the active-notifications join.</param>
 /// <param name="pageRepository">Executes the paged-history join.</param>
+/// <param name="byKindRepository">Executes the by-metadata-kind join (#369).</param>
 public sealed class NotificationReader(
     IDbConnectionFactory factory,
     JoinQueryRepository<NotificationEntity> activeRepository,
-    JoinQueryRepository<NotificationEntity> pageRepository) : INotificationReader
+    JoinQueryRepository<NotificationEntity> pageRepository,
+    JoinQueryRepository<NotificationEntity> byKindRepository) : INotificationReader
 {
     /// <inheritdoc/>
     public async Task<IReadOnlyList<NotificationEntity>> GetActiveNotificationsAsync(string? language = null)
@@ -65,6 +68,14 @@ public sealed class NotificationReader(
             return new PagedItems<NotificationEntity>([], page, pageSize, 0);
         }
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// No missing-table fallback, unlike the two reads above: those serve surfaces that stay reachable
+    /// while the database is degraded, and this one's only caller renders against a healthy database.
+    /// </remarks>
+    public Task<IReadOnlyList<NotificationEntity>> GetByMetadataKindAsync(NotificationMetadataKind kind, string? language = null) =>
+        byKindRepository.QueryAsync(new { kind = kind.ToString(), lang = language });
 
     // Not exception-based migration recovery (CLAUDE.md's "No exception-based migration recovery"
     // policy governs InitialiseAsync's own version-vs-schema mismatch handling, which stays a hard

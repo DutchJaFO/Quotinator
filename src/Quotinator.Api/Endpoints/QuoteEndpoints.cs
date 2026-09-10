@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Shared;
+using Quotinator.Api.Enums;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Enums;
@@ -29,7 +30,7 @@ internal static class QuoteEndpoints
 
     internal static void MapQuoteEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/v1/quotes")
+        RouteGroupBuilder group = app.MapGroup("/api/v1/quotes")
                        .WithTags(ApiTags.Quotes)
                        .RequireRateLimiting(RateLimitPolicies.Api);
 
@@ -120,19 +121,19 @@ internal static class QuoteEndpoints
     {
         if (types is not null)
         {
-            var unknown = types.FirstOrDefault(t => !InputValidation.ValidTypes.Contains(t.ToLowerInvariant()));
+            string? unknown = types.FirstOrDefault(t => !InputValidation.ValidTypes.Contains(t.ToLowerInvariant()));
             if (unknown is not null)
                 return FilterEnvelope(FilteredResultStatus.InvalidType, localizer[ApiMessages.TypeInvalid]);
         }
 
         if (genres is not null)
         {
-            var unknown = genres.FirstOrDefault(g => !InputValidation.ValidGenres.Contains(g.ToLowerInvariant()));
+            string? unknown = genres.FirstOrDefault(g => !InputValidation.ValidGenres.Contains(g.ToLowerInvariant()));
             if (unknown is not null)
                 return FilterEnvelope(FilteredResultStatus.InvalidGenre, localizer[ApiMessages.GenreInvalid]);
         }
 
-        foreach (var value in new[] { character, author, source }.Where(v => v is not null).Cast<string>())
+        foreach (string value in new[] { character, author, source }.Where(v => v is not null).Cast<string>())
         {
             if (value.Length > InputValidation.MaxFilterLength)
                 return FilterEnvelope(FilteredResultStatus.InputTooLong, localizer[ApiMessages.FilterInputTooLong]);
@@ -159,7 +160,7 @@ internal static class QuoteEndpoints
     private static bool TryParseYear(string? raw, out int? value)
     {
         if (raw is null) { value = null; return true; }
-        if (int.TryParse(raw, out var parsed)) { value = parsed; return true; }
+        if (int.TryParse(raw, out int parsed)) { value = parsed; return true; }
         value = null;
         return false;
     }
@@ -177,11 +178,11 @@ internal static class QuoteEndpoints
         string? seriesId, string? series, string? universeId, string? universe,
         ISeriesNameResolver seriesResolver, IUniverseNameResolver universeResolver, IApiLocalizer localizer)
     {
-        var seriesResult = await EntityFilterParsing.ResolveAsync(
+        EntityFilterResult seriesResult = await EntityFilterParsing.ResolveAsync(
             seriesId, series, new EntityFilterNames("Series", "seriesId", "series"),
             seriesResolver.ResolveIdByNameAsync, localizer);
 
-        var universeResult = await EntityFilterParsing.ResolveAsync(
+        EntityFilterResult universeResult = await EntityFilterParsing.ResolveAsync(
             universeId, universe, new EntityFilterNames("Universe", "universeId", "universe"),
             universeResolver.ResolveIdByNameAsync, localizer);
 
@@ -214,16 +215,16 @@ internal static class QuoteEndpoints
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
-        var count = QueryParamDefaults.RandomCount;
+        int count = QueryParamDefaults.RandomCount;
         if (n is not null && (!int.TryParse(n, out count) || count < 1 || count > 100))
             return Results.Problem(
                 detail: localizer[ApiMessages.RandomNOutOfRange],
                 statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, nameof(yearFrom));
-        if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, nameof(yearTo));
-        if (!TryParseYear(year,     out var yr)) return YearParseError(localizer, nameof(year));
-        if (!TryParseYear(decade,   out var dc)) return YearParseError(localizer, nameof(decade));
+        if (!TryParseYear(yearFrom, out int? yf)) return YearParseError(localizer, nameof(yearFrom));
+        if (!TryParseYear(yearTo,   out int? yt)) return YearParseError(localizer, nameof(yearTo));
+        if (!TryParseYear(year,     out int? yr)) return YearParseError(localizer, nameof(year));
+        if (!TryParseYear(decade,   out int? dc)) return YearParseError(localizer, nameof(decade));
 
         if (dc is not null)
         {
@@ -250,7 +251,7 @@ internal static class QuoteEndpoints
         if (ValidateFilterParams(localizer, type, genre, character, author, source) is { } invalid)
             return ToValidationResult(invalid);
 
-        var (seriesResult, universeResult) = await ResolveSeriesUniverseAsync(
+        (EntityFilterResult seriesResult, EntityFilterResult universeResult) = await ResolveSeriesUniverseAsync(
             seriesId, series, universeId, universe, seriesNameResolver, universeNameResolver, localizer);
         if (seriesResult.Outcome == EntityFilterOutcome.Error) return seriesResult.Error!;
         if (universeResult.Outcome == EntityFilterOutcome.Error) return universeResult.Error!;
@@ -266,7 +267,7 @@ internal static class QuoteEndpoints
                 ReturnedCount  = 0,
             });
 
-        var result = await service.GetRandom(count, type, genre, character, author, source, lang, yf, yt, seriesResult.Id, universeResult.Id);
+        FilteredQuoteResult<QuoteResponse> result = await service.GetRandom(count, type, genre, character, author, source, lang, yf, yt, seriesResult.Id, universeResult.Id);
 
         if (result.Status == FilteredResultStatus.NoResults)
             return Results.Ok(new FilteredQuoteResult<QuoteResponse>
@@ -293,7 +294,7 @@ internal static class QuoteEndpoints
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
-        var quote = await service.GetById(id, lang);
+        QuoteResponse? quote = await service.GetById(id, lang);
         return NotFoundResult.OkOrNotFound(quote, localizer, ApiMessages.QuoteNotFound);
     }
 
@@ -332,16 +333,16 @@ internal static class QuoteEndpoints
                 detail: localizer[ApiMessages.SearchQueryTooLong],
                 statusCode: StatusCodes.Status400BadRequest);
 
-        var limitValue = QueryParamDefaults.SearchLimit;
+        int limitValue = QueryParamDefaults.SearchLimit;
         if (limit is not null && (!int.TryParse(limit, out limitValue) || limitValue < 1 || limitValue > 100))
             return Results.Problem(
                 detail: localizer[ApiMessages.LimitOutOfRange],
                 statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, nameof(yearFrom));
-        if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, nameof(yearTo));
-        if (!TryParseYear(year,     out var yr)) return YearParseError(localizer, nameof(year));
-        if (!TryParseYear(decade,   out var dc)) return YearParseError(localizer, nameof(decade));
+        if (!TryParseYear(yearFrom, out int? yf)) return YearParseError(localizer, nameof(yearFrom));
+        if (!TryParseYear(yearTo,   out int? yt)) return YearParseError(localizer, nameof(yearTo));
+        if (!TryParseYear(year,     out int? yr)) return YearParseError(localizer, nameof(year));
+        if (!TryParseYear(decade,   out int? dc)) return YearParseError(localizer, nameof(decade));
 
         if (ValidateFilterParams(localizer, type, genre, null, null, null) is { } invalid)
             return ToValidationResult(invalid);
@@ -364,7 +365,7 @@ internal static class QuoteEndpoints
         if (yf is not null && yt is not null && yf > yt)
             return Results.Problem(detail: localizer[ApiMessages.YearRangeInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        var (seriesResult, universeResult) = await ResolveSeriesUniverseAsync(
+        (EntityFilterResult seriesResult, EntityFilterResult universeResult) = await ResolveSeriesUniverseAsync(
             seriesId, series, universeId, universe, seriesNameResolver, universeNameResolver, localizer);
         if (seriesResult.Outcome == EntityFilterOutcome.Error) return seriesResult.Error!;
         if (universeResult.Outcome == EntityFilterOutcome.Error) return universeResult.Error!;
@@ -378,7 +379,7 @@ internal static class QuoteEndpoints
                 Message       = seriesResult.Message ?? universeResult.Message,
             });
 
-        var result = await service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yf, yt, seriesResult.Id, universeResult.Id);
+        FilteredQuoteResult<QuoteResponse> result = await service.Search(q, limitValue, type, genre, lang, field?.ToLowerInvariant(), yf, yt, seriesResult.Id, universeResult.Id);
 
         if (result.Status == FilteredResultStatus.NoResults)
             return Results.Ok(new FilteredQuoteResult<QuoteResponse>
@@ -416,13 +417,13 @@ internal static class QuoteEndpoints
 
         if (ValidateCommon(localizer, ref lang) is { } err) return err;
 
-        if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
+        if (!PaginationParsing.TryParse(page, pageSize, localizer, out int pageValue, out int pageSizeValue, out IResult? pageError))
             return pageError!;
 
-        if (!TryParseYear(yearFrom, out var yf)) return YearParseError(localizer, nameof(yearFrom));
-        if (!TryParseYear(yearTo,   out var yt)) return YearParseError(localizer, nameof(yearTo));
-        if (!TryParseYear(year,     out var yr)) return YearParseError(localizer, nameof(year));
-        if (!TryParseYear(decade,   out var dc)) return YearParseError(localizer, nameof(decade));
+        if (!TryParseYear(yearFrom, out int? yf)) return YearParseError(localizer, nameof(yearFrom));
+        if (!TryParseYear(yearTo,   out int? yt)) return YearParseError(localizer, nameof(yearTo));
+        if (!TryParseYear(year,     out int? yr)) return YearParseError(localizer, nameof(year));
+        if (!TryParseYear(decade,   out int? dc)) return YearParseError(localizer, nameof(decade));
 
         if (ValidateFilterParams(localizer, type, genre, null, null, null) is { } invalid)
             return ToValidationResult(invalid);
@@ -445,7 +446,7 @@ internal static class QuoteEndpoints
         if (yf is not null && yt is not null && yf > yt)
             return Results.Problem(detail: localizer[ApiMessages.YearRangeInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        var (seriesResult, universeResult) = await ResolveSeriesUniverseAsync(
+        (EntityFilterResult seriesResult, EntityFilterResult universeResult) = await ResolveSeriesUniverseAsync(
             seriesId, series, universeId, universe, seriesNameResolver, universeNameResolver, localizer);
         if (seriesResult.Outcome == EntityFilterOutcome.Error) return seriesResult.Error!;
         if (universeResult.Outcome == EntityFilterOutcome.Error) return universeResult.Error!;
@@ -453,7 +454,7 @@ internal static class QuoteEndpoints
         if (seriesResult.Outcome == EntityFilterOutcome.NotFound || universeResult.Outcome == EntityFilterOutcome.NotFound)
             return Results.Ok(new PagedResult<QuoteResponse>([], pageValue, pageSizeValue, 0));
 
-        var result = await service.GetAll(pageValue, pageSizeValue, type, genre, lang, yf, yt, seriesResult.Id, universeResult.Id);
+        PagedResult<QuoteResponse> result = await service.GetAll(pageValue, pageSizeValue, type, genre, lang, yf, yt, seriesResult.Id, universeResult.Id);
         return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
             ?? Results.Ok(result);
     }

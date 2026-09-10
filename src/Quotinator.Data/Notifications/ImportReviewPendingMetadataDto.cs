@@ -15,9 +15,11 @@ namespace Quotinator.Data.Notifications;
 /// never reproduce an earlier batch id — so a reseed always raises new alerts rather than silently
 /// reusing one describing actions that no longer exist.
 /// <para>
-/// What stops those accumulating is not dedupe but removal: a reseed truncates <c>Import_Batch</c>, and
-/// every alert whose batch went with it is dismissed with the <c>Obsolete</c> reason. An alert
-/// therefore only ever survives while the batch it names is still there to be reviewed.
+/// A reseed no longer removes batches (#372), so an alert is retired by its own review: applying or
+/// discarding its batch dismisses it as resolved. A batch can still be gone while its alert is active —
+/// in a database that ran a build before #372, whose reseeds deleted <c>Import_Batch</c> — and
+/// <see cref="FileName"/> is recorded here for exactly that case. The payload names its file on its own
+/// because the row it came from may not survive it (#369).
 /// </para>
 /// </remarks>
 public sealed class ImportReviewPendingMetadataDto() : NotificationMetadataDto(NotificationMetadataKind.ImportReviewPending)

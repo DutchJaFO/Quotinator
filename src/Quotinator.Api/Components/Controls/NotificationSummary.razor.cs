@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
+using Quotinator.Api.Services;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Repositories;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
@@ -41,6 +42,10 @@ public partial class NotificationSummary
         // of the interface rather than staying English inside a translated page.
         Notifications = await NotificationReader.GetActiveNotificationsAsync(
             CultureInfo.CurrentUICulture.TwoLetterISOLanguageName);
+
+        // #369: the popup shows the Status column too, so an alert whose action can no longer run reads
+        // the same here as on the Notifications page — one read, behind the same health gate.
+        Availability = await ActionExecutor.GetAvailabilityAsync();
     }
 
     #endregion
@@ -49,10 +54,14 @@ public partial class NotificationSummary
 
     [Inject] private I18nTextService I18nText { get; set; } = default!;
     [Inject] private INotificationReader NotificationReader { get; set; } = default!;
+    [Inject] private INotificationActionExecutor ActionExecutor { get; set; } = default!;
     [Inject] private Quotinator.Api.Startup.DatabaseHealthState DatabaseHealth { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
     private IReadOnlyList<NotificationEntity> Notifications = [];
+
+    // Replaced once the gate passes. Until then there are no rows for it to judge.
+    private NotificationActionAvailability Availability = new([]);
 
     #endregion
 }

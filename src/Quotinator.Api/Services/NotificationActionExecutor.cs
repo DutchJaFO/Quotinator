@@ -2,7 +2,9 @@ using Microsoft.Extensions.Logging;
 using Quotinator.Api.Startup;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
+using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Helpers;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 
@@ -17,10 +19,11 @@ namespace Quotinator.Api.Services;
 /// <param name="versionService">Supplies the current version for <paramref name="appVersionTracker"/>.</param>
 /// <param name="logger">Logs a non-fatal warning if <paramref name="appVersionTracker"/>'s write fails.</param>
 /// <param name="importActions">Resolves a staged batch for <see cref="NotificationDismissTrigger.ImportReviewResolved"/> (#303).</param>
+/// <param name="importBatches">Supplies the batches that still exist, for <see cref="GetAvailabilityAsync"/> (#369).</param>
 internal sealed class NotificationActionExecutor(
     IDatabaseInitializer databaseInitializer, DatabaseHealthState databaseHealth, INotificationWriter notificationWriter,
     IAppVersionTracker appVersionTracker, IVersionService versionService, ILogger<NotificationActionExecutor> logger,
-    IImportActionService importActions) : INotificationActionExecutor
+    IImportActionService importActions, IImportBatchRepository importBatches) : INotificationActionExecutor
 {
     /// <inheritdoc/>
     public bool CanExecute(NotificationDismissTrigger trigger) => trigger switch
@@ -30,6 +33,26 @@ internal sealed class NotificationActionExecutor(
         NotificationDismissTrigger.ImportReviewResolved => true,
         _                                         => false,
     };
+
+    /// <inheritdoc/>
+    public bool CanExecute(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability) =>
+        CanExecute(trigger) && trigger switch
+        {
+            // #369: the batch is what this action decides and applies. Once it is gone there is nothing
+            // to apply against, and without the payload there is no batch to name at all — the same
+            // condition ExecuteAsync throws on below.
+            NotificationDismissTrigger.ImportReviewResolved =>
+                metadata is ImportReviewPendingMetadataDto review && availability.ImportBatchExists(review.BatchId),
+            // Reset and Reseed act on the whole database, which cannot be gone.
+            _ => true,
+        };
+
+    /// <inheritdoc/>
+    public async Task<NotificationActionAvailability> GetAvailabilityAsync()
+    {
+        IReadOnlyList<ImportBatchEntity> batches = await importBatches.GetAllAsync();
+        return new NotificationActionAvailability(batches.Select(batch => batch.Id.ToCanonicalId()));
+    }
 
     /// <inheritdoc/>
     public async Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null)

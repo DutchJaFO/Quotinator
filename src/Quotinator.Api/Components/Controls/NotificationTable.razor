@@ -1,3 +1,4 @@
+@using Quotinator.Api.Enums
 @using Quotinator.Data.Enums
 
 <table class="table table-sm">
@@ -93,8 +94,14 @@
                 </td>
                 <td>@Local(notification.ExpiresAt.Parsed)</td>
                 <td>
-                    @switch (GetDisplayStatus(notification, Now, Executing.IsExecuting(notification.Id)))
+                    @switch (GetDisplayStatus(notification, Now, Executing.IsExecuting(notification.Id), ActionIsUnavailable(notification)))
                     {
+                        case NotificationDisplayStatus.ActionUnavailable:
+                            @* #369: still active — nobody has decided anything — but what its action acts
+                               on is gone. Said through the state, which is what explains the empty
+                               Action cell beside it. *@
+                            <span class="badge bg-secondary">@Text.NotificationsActionUnavailableLabel</span>
+                            break;
                         case NotificationDisplayStatus.Executing:
                             @* aria-hidden: the badge's own text already says it is running, so the
                                spinner is decoration and must not be announced a second time. *@

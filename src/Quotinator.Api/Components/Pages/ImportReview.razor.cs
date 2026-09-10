@@ -6,6 +6,7 @@ using Quotinator.Data.Enums;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
@@ -101,6 +102,7 @@ public partial class ImportReview
     [Inject] private I18nTextService I18nText { get; set; } = default!;
     [Inject] private IImportActionService ActionService { get; set; } = default!;
     [Inject] private IImportBatchRepository ImportBatches { get; set; } = default!;
+    [Inject] private INotificationReader NotificationReader { get; set; } = default!;
     [Inject] private Quotinator.Api.Startup.DatabaseHealthState DatabaseHealth { get; set; } = default!;
 
     private Quotinator.Api.I18nText.UI Text = new();
@@ -111,23 +113,91 @@ public partial class ImportReview
     // tells them where the conflict came from and which file to go and fix.
     private Dictionary<string, string> BatchFileNames = [];
 
-    private string FileNameFor(string batchId) => FileNameFor(BatchFileNames, batchId);
+    // #369: the file name each pending-review alert recorded, by batch id. An alert's payload is written
+    // to outlive the batch it names, so this is where the name of a batch that is gone survives.
+    private IReadOnlyDictionary<string, string> RecordedFileNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    private string FileNameFor(string batchId) =>
+        FileNameFor(BatchFileNames, RecordedFileNames, batchId, Text.ImportReviewBatchGone);
+
+    private bool BatchIsGone(string batchId) => BatchIsGone(BatchFileNames, batchId);
 
     /// <summary>
-    /// The file a batch was imported from, falling back to the batch id when no batch matches.
+    /// The file a row's batch was imported from: the live batch's own name, else the name its
+    /// pending-review alert recorded, else <paramref name="unresolved"/> (#369).
     /// </summary>
     /// <remarks>
-    /// The fallback is deliberately the id rather than a placeholder: an action whose batch has gone is
-    /// an anomaly worth showing something traceable for, and an em dash would hide it. Static and
-    /// internal so the mapping can be tested without rendering the component — this project has no
-    /// bUnit.
+    /// The live batch wins where both exist — it is the record itself, and the alert only a copy taken
+    /// when it was raised. Never the batch id: an operator cannot act on a GUID, and a row whose batch is
+    /// gone with no alert to name it — one staged before #303 shipped — has nothing truthful to show but
+    /// that fact. Static and internal so the mapping can be tested without rendering the component —
+    /// this project has no bUnit.
     /// </remarks>
-    /// <param name="fileNamesByBatchId">The page's own batch-id to file-name lookup.</param>
+    /// <param name="liveBatchFileNames">Every batch that still exists, by id.</param>
+    /// <param name="recordedFileNames">The file name each pending-review alert recorded, by batch id.</param>
     /// <param name="batchId">The action's own batch id.</param>
-    internal static string FileNameFor(IReadOnlyDictionary<string, string> fileNamesByBatchId, string batchId) =>
-        fileNamesByBatchId.TryGetValue(batchId, out string? name) && !string.IsNullOrWhiteSpace(name)
-            ? name
-            : batchId;
+    /// <param name="unresolved">What to show when neither source names the file.</param>
+    internal static string FileNameFor(
+        IReadOnlyDictionary<string, string> liveBatchFileNames,
+        IReadOnlyDictionary<string, string> recordedFileNames,
+        string batchId,
+        string unresolved)
+    {
+        if (liveBatchFileNames.TryGetValue(batchId, out string? live) && !string.IsNullOrWhiteSpace(live))
+            return live;
+        if (recordedFileNames.TryGetValue(batchId, out string? recorded) && !string.IsNullOrWhiteSpace(recorded))
+            return recorded;
+        return unresolved;
+    }
+
+    /// <summary>
+    /// Every batch id a pending-review alert has named, mapped to the file name that alert recorded (#369).
+    /// </summary>
+    /// <remarks>
+    /// Keyed case-insensitively, since an action's stored batch id and the alert's copy of it are two
+    /// independently-cased values (ADR 012). A payload that cannot be read contributes nothing rather than
+    /// throwing — a row written by an older build must not take the page down.
+    /// </remarks>
+    /// <param name="notifications">Pending-review alerts, dismissed ones included.</param>
+    internal static IReadOnlyDictionary<string, string> FileNamesFromNotifications(IEnumerable<NotificationEntity> notifications)
+    {
+        Dictionary<string, string> names = new(StringComparer.OrdinalIgnoreCase);
+        foreach (NotificationEntity notification in notifications)
+        {
+            if (NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata)
+                    is ImportReviewPendingMetadataDto review
+                && !string.IsNullOrWhiteSpace(review.FileName))
+            {
+                names.TryAdd(review.BatchId, review.FileName);
+            }
+        }
+        return names;
+    }
+
+    /// <summary>Whether <paramref name="batchId"/> matches no batch that still exists (#369).</summary>
+    /// <remarks>
+    /// The one predicate the page and its tests agree on. Derived at render time from the page's own
+    /// batch lookup rather than stored: the absence of the row is already the fact, which is why no status
+    /// or schema change was needed — and ADR 014 rules out a stored flag for a dangling reference. As
+    /// case-insensitive as <paramref name="liveBatchFileNames"/>' own comparer, which the page builds that
+    /// way.
+    /// </remarks>
+    /// <param name="liveBatchFileNames">Every batch that still exists, by id.</param>
+    /// <param name="batchId">The action's own batch id.</param>
+    internal static bool BatchIsGone(IReadOnlyDictionary<string, string> liveBatchFileNames, string batchId) =>
+        !liveBatchFileNames.ContainsKey(batchId);
+
+    /// <summary>Whether a whole-action Keep/Take is offered for <paramref name="action"/> (#369).</summary>
+    /// <remarks>
+    /// Never once the batch is gone, whatever the row's own conflicts say: the decision would have
+    /// nothing to be applied against. Removed rather than disabled — impossible, not unavailable.
+    /// </remarks>
+    /// <param name="action">The row being rendered.</param>
+    /// <param name="batchIsGone">Whether the row's batch no longer exists.</param>
+    internal static bool CanDecide(ImportActionSummaryResponse action, bool batchIsGone) =>
+        !batchIsGone && action.AmbiguousFields.Count > 0;
+
+    private bool CanDecide(ImportActionSummaryResponse action) => CanDecide(action, BatchIsGone(action.BatchId));
 
     private async Task LoadAsync()
     {
@@ -148,6 +218,12 @@ public partial class ImportReview
         BatchFileNames = batches
             .GroupBy(batch => batch.Id.ToCanonicalId(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().Name, StringComparer.OrdinalIgnoreCase);
+
+        // #369: one read for the page as well, and over the alert history rather than the active set —
+        // a batch that is gone is exactly one whose alert may already have been dismissed.
+        IReadOnlyList<NotificationEntity> alerts =
+            await NotificationReader.GetByMetadataKindAsync(NotificationMetadataKind.ImportReviewPending);
+        RecordedFileNames = FileNamesFromNotifications(alerts);
     }
 
     /// <summary>
@@ -180,6 +256,27 @@ public partial class ImportReview
         // nothing while any action in the batch is still Pending/Blocked/Stale, so calling it after each
         // row is a no-op until the last one is settled and atomic when it is.
         await service.ApplyBatchAsync(action.BatchId);
+    }
+
+    /// <summary>
+    /// Discards <paramref name="action"/>'s whole batch — the one thing left to do with a row whose batch
+    /// is gone (#369).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IImportActionService.DiscardBatchAsync"/> reads and writes <c>Import_Action</c> only and
+    /// never the batch row, so it is already correct against a missing parent; it also retires the
+    /// batch's alert as resolved, since the operator dealt with it by keeping none of it. Internal and
+    /// static for the same reason as <see cref="DecideAndApplyAsync"/>.
+    /// </remarks>
+    /// <param name="service">The service the discard goes through.</param>
+    /// <param name="action">The row being dismissed.</param>
+    internal static Task DismissBatchAsync(IImportActionService service, ImportActionSummaryResponse action) =>
+        service.DiscardBatchAsync(action.BatchId);
+
+    private async Task DismissAsync(ImportActionSummaryResponse action)
+    {
+        await DismissBatchAsync(ActionService, action);
+        await LoadAsync();
     }
 
     private async Task DecideAsync(ImportActionSummaryResponse action, FieldResolutionChoice choice)

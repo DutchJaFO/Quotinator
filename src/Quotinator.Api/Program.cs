@@ -423,7 +423,9 @@ builder.Services.AddSingleton<INotificationReader>(sp => new NotificationReader(
     new JoinQueryRepository<NotificationEntity>(
         sp.GetRequiredService<IDbConnectionFactory>(), new NotificationJoinStrategies.Active()),
     new JoinQueryRepository<NotificationEntity>(
-        sp.GetRequiredService<IDbConnectionFactory>(), new NotificationJoinStrategies.Page())));
+        sp.GetRequiredService<IDbConnectionFactory>(), new NotificationJoinStrategies.Page()),
+    new JoinQueryRepository<NotificationEntity>(
+        sp.GetRequiredService<IDbConnectionFactory>(), new NotificationJoinStrategies.ByMetadataKind())));
 builder.Services.AddSingleton<INotificationWriter, NotificationWriter>();
 builder.Services.AddSingleton<INotificationActionExecutor, NotificationActionExecutor>();
 builder.Services.AddSingleton<IAppVersionTracker, AppVersionTracker>();

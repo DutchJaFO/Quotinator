@@ -30,7 +30,7 @@ public class NotificationReaderTests
         // which reads as honest but is a maintained copy that drifts — see CurrentSchema.
         await CurrentSchema.ApplyDataSchemaAsync(_dbPath);
 
-        SqliteConnectionFactory factory = new SqliteConnectionFactory(_dbPath);
+        SqliteConnectionFactory factory = new(_dbPath);
         _reader = TestNotificationReader.Create(factory);
         _writer = new NotificationWriter(factory);
     }
@@ -99,6 +99,41 @@ public class NotificationReaderTests
     }
 
     /// <summary>
+    /// #369: the review page recovers an orphaned batch's file name from the alert raised for it, and
+    /// that alert is usually dismissed — pre-#372, the orphaned batches were exactly those whose alert had
+    /// been marked Obsolete. So this read returns every notification of the kind whether dismissed or not,
+    /// and none of any other kind.
+    /// </summary>
+    [TestMethod]
+    public async Task GetByMetadataKindAsync_ReturnsDismissedAlertsToo()
+    {
+        NotificationEntity active = await _writer.WriteAsync(
+            NotificationType.ActionRequired, "live batch", appVersionId: null,
+            dismissTrigger: NotificationDismissTrigger.ImportReviewResolved,
+            metadata: """{"releaseState":"NotApplicable","fileName":"live.json","origin":"User","batchId":"7f00000a-0000-4000-8000-00000000000b","counts":[]}""",
+            metadataKind: NotificationMetadataKind.ImportReviewPending);
+        NotificationEntity dismissed = await _writer.WriteAsync(
+            NotificationType.ActionRequired, "orphaned batch", appVersionId: null,
+            dismissTrigger: NotificationDismissTrigger.ImportReviewResolved,
+            metadata: """{"releaseState":"NotApplicable","fileName":"orphaned.json","origin":"User","batchId":"7f00000c-0000-4000-8000-00000000000d","counts":[]}""",
+            metadataKind: NotificationMetadataKind.ImportReviewPending);
+        await _writer.DismissAsync(dismissed.Id);
+        NotificationEntity otherKind = await _writer.WriteAsync(
+            NotificationType.Information, "unrelated", appVersionId: null,
+            metadata: """{"releaseState":"NotApplicable"}""", metadataKind: NotificationMetadataKind.WhatsNew);
+
+        IReadOnlyList<NotificationEntity> result =
+            await _reader.GetByMetadataKindAsync(NotificationMetadataKind.ImportReviewPending);
+
+        List<string> ids = [.. result.Select(n => n.Id.ToString("D"))];
+        Assert.HasCount(2, ids, "Both pending-review alerts, and nothing else.");
+        Assert.Contains(active.Id.ToString("D"), ids);
+        Assert.Contains(dismissed.Id.ToString("D"), ids,
+            "A dismissed alert carries the only surviving copy of an orphaned batch's file name.");
+        Assert.DoesNotContain(otherKind.Id.ToString("D"), ids, "A notification of any other kind is not returned.");
+    }
+
+    /// <summary>
     /// Found live during a real HA v1.8.2 → v1.8.3-beta upgrade attempt that failed partway through
     /// the migration (unrelated cause): the restored pre-migration database genuinely has no
     /// System_Notification table yet, and both callers reachable during that degraded state (Home's
@@ -112,7 +147,7 @@ public class NotificationReaderTests
         try
         {
             string dbPath = Path.Combine(tempDir, "no-notification-table.db");
-            using (SqliteConnection conn = new SqliteConnection($"Data Source={dbPath}"))
+            using (SqliteConnection conn = new($"Data Source={dbPath}"))
             {
                 conn.Open();
                 conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");
@@ -139,7 +174,7 @@ public class NotificationReaderTests
         try
         {
             string dbPath = Path.Combine(tempDir, "no-notification-table.db");
-            using (SqliteConnection conn = new SqliteConnection($"Data Source={dbPath}"))
+            using (SqliteConnection conn = new($"Data Source={dbPath}"))
             {
                 conn.Open();
                 conn.Execute("CREATE TABLE Placeholder (Id TEXT PRIMARY KEY);");

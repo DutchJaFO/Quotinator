@@ -231,7 +231,7 @@ internal static class Sql
         // "GUID/enum/id/Name/Title comparisons are case-insensitive by default").
         private static string BuildWhere(bool filterType, bool filterStatus)
         {
-            List<string> parts = new List<string>(2);
+            List<string> parts = new(2);
             if (filterType)   parts.Add(TextClauses.Equals("Type", "type"));
             if (filterStatus) parts.Add(TextClauses.Equals("Status", "status"));
             return parts.Count > 0 ? " AND " + string.Join(" AND ", parts) : string.Empty;
@@ -275,7 +275,7 @@ internal static class Sql
         // TableName comparison is case-insensitive too (#216) — same reasoning as DeleteByTable above.
         private static string BuildWhere(bool filterTable, bool filterRecordId)
         {
-            List<string> parts = new List<string>(2);
+            List<string> parts = new(2);
             if (filterTable)    parts.Add(TextClauses.Equals("TableName", "table"));
             if (filterRecordId) parts.Add(IdClauses.Equals("RecordId", "recordId"));
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
@@ -299,7 +299,7 @@ internal static class Sql
 
         private static string BuildRangeWhere(bool filterStart, bool filterEnd)
         {
-            List<string> parts = new List<string>(2);
+            List<string> parts = new(2);
             if (filterStart) parts.Add("PerformedAt >= @startDate");
             if (filterEnd)   parts.Add("PerformedAt <= @endDate");
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
@@ -309,11 +309,13 @@ internal static class Sql
     /// <summary>Import_Action table. INSERT is handled by Dapper.Contrib via <see cref="Repositories.ImportActionWriter"/>.</summary>
     internal static class SystemImportActions
     {
-        /// <summary>Removes all import-action rows.</summary>
-        internal const string DeleteAll = "DELETE FROM Import_Action;";
+        // Column names come from ImportActionEntity via nameof — see AppVersion below for the convention,
+        // and for why the table name and every Dapper parameter name stay literal. `rowid` is SQLite's own
+        // pseudo-column rather than a property, so it stays literal too.
+        private const string Table = "Import_Action";
 
         // COUNT base — shared by CountPaged factory method below.
-        private const string CountPagedBase = "SELECT COUNT(*) FROM Import_Action";
+        private const string CountPagedBase = $"SELECT COUNT(*) FROM {Table}";
 
         // Column list shared by every SELECT below. Every id column (Id/BatchId/EntityId/
         // ExistingBatchId) is read through LOWER(...) — PK and FK alike, regardless of what C# type
@@ -321,13 +323,19 @@ internal static class Sql
         // convention still renders consistently, without needing a data migration to re-case
         // already-stored rows. Not a const because IdClauses.SelectColumn is a method call.
         private static readonly string SelectColumns =
-            $"{IdClauses.SelectColumn("Id")}, {IdClauses.SelectColumn("BatchId")}, ActionType, EntityType, {IdClauses.SelectColumn("EntityId")}, {IdClauses.SelectColumn("ExistingBatchId")}, ExistingValue, IncomingValue, AppliedPolicy, Status, MergedFields, OriginalDecision, MarkCompletenessAs, DetectedAt, AppliedAt, DiscardedAt";
+            $"{IdClauses.SelectColumn(nameof(ImportActionEntity.Id))}, {IdClauses.SelectColumn(nameof(ImportActionEntity.BatchId))}, " +
+            $"{nameof(ImportActionEntity.ActionType)}, {nameof(ImportActionEntity.EntityType)}, " +
+            $"{IdClauses.SelectColumn(nameof(ImportActionEntity.EntityId))}, {IdClauses.SelectColumn(nameof(ImportActionEntity.ExistingBatchId))}, " +
+            $"{nameof(ImportActionEntity.ExistingValue)}, {nameof(ImportActionEntity.IncomingValue)}, {nameof(ImportActionEntity.AppliedPolicy)}, " +
+            $"{nameof(ImportActionEntity.Status)}, {nameof(ImportActionEntity.MergedFields)}, {nameof(ImportActionEntity.OriginalDecision)}, " +
+            $"{nameof(ImportActionEntity.MarkCompletenessAs)}, {nameof(ImportActionEntity.DetectedAt)}, {nameof(ImportActionEntity.AppliedAt)}, " +
+            $"{nameof(ImportActionEntity.DiscardedAt)}";
 
         /// <summary>Paginated action listing, newest first, with optional filters.</summary>
         internal static string SelectPaged(bool filterBatchId, bool filterStatus, bool filterEntityType = false)
-            => $"SELECT {SelectColumns} FROM Import_Action" +
+            => $"SELECT {SelectColumns} FROM {Table}" +
                BuildWhere(filterBatchId, filterStatus, filterEntityType) +
-               " ORDER BY DetectedAt DESC LIMIT @pageSize OFFSET @offset;";
+               $" ORDER BY {nameof(ImportActionEntity.DetectedAt)} DESC LIMIT @pageSize OFFSET @offset;";
 
         /// <summary>Total matching count for the action list endpoint.</summary>
         internal static string CountPaged(bool filterBatchId, bool filterStatus, bool filterEntityType = false)
@@ -342,7 +350,8 @@ internal static class Sql
         /// guard tests' reflection was widened to scan properties too so this class of gap can't
         /// recur — see <c>EnumerateSqlConstants</c> in both <c>SqlQueryGuardTests</c> files.
         /// </summary>
-        internal static string SelectById => $"SELECT {SelectColumns} FROM Import_Action WHERE {IdClauses.Equals("Id", "id")};";
+        internal static string SelectById =>
+            $"SELECT {SelectColumns} FROM {Table} WHERE {IdClauses.Equals(nameof(ImportActionEntity.Id), "id")};";
 
         /// <summary>
         /// Every action sharing a BatchId, any status — #154's apply-batch readiness check needs the
@@ -358,7 +367,8 @@ internal static class Sql
         /// here is only safe because <c>WriteManyAsync</c> inserts sequentially, in the exact order a
         /// consumer's planner produced — never reordered, never bulk/set-based.
         /// </summary>
-        internal static string SelectAllForBatch => $"SELECT {SelectColumns} FROM Import_Action WHERE {IdClauses.Equals("BatchId", "batchId")} ORDER BY rowid ASC;";
+        internal static string SelectAllForBatch =>
+            $"SELECT {SelectColumns} FROM {Table} WHERE {IdClauses.Equals(nameof(ImportActionEntity.BatchId), "batchId")} ORDER BY rowid ASC;";
 
         /// <summary>
         /// Stages a per-field decision (#154) — Status→Decided, MergedFields holds the decision
@@ -372,19 +382,24 @@ internal static class Sql
         /// </summary>
         // Case-insensitive (#210) via IdClauses — see docs/architecture-decisions/012-canonicalize-entity-ids-at-capture.md.
         internal static readonly string MarkDecided =
-            $"UPDATE Import_Action SET Status = @status, MergedFields = @mergedFields, MarkCompletenessAs = @markCompletenessAs, OriginalDecision = @originalDecision, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+            $"UPDATE {Table} SET {nameof(ImportActionEntity.Status)} = @status, {nameof(ImportActionEntity.MergedFields)} = @mergedFields, " +
+            $"{nameof(ImportActionEntity.MarkCompletenessAs)} = @markCompletenessAs, {nameof(ImportActionEntity.OriginalDecision)} = @originalDecision, " +
+            $"{nameof(ImportActionEntity.DateModified)} = @dateModified WHERE {IdClauses.Equals(nameof(ImportActionEntity.Id), "id")};";
 
         /// <summary>Reverts a staged decision back to Pending (#154's undo-before-apply) — clears MergedFields. Case-insensitive — see <see cref="MarkDecided"/>.</summary>
         internal static readonly string ClearDecision =
-            $"UPDATE Import_Action SET Status = @status, MergedFields = NULL, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+            $"UPDATE {Table} SET {nameof(ImportActionEntity.Status)} = @status, {nameof(ImportActionEntity.MergedFields)} = NULL, " +
+            $"{nameof(ImportActionEntity.DateModified)} = @dateModified WHERE {IdClauses.Equals(nameof(ImportActionEntity.Id), "id")};";
 
         /// <summary>Marks an action applied once its batch has been applied (#154) — AppliedAt set. Case-insensitive — see <see cref="MarkDecided"/>.</summary>
         internal static readonly string MarkApplied =
-            $"UPDATE Import_Action SET Status = @status, AppliedAt = @appliedAt, DateModified = @dateModified WHERE {IdClauses.Equals("Id", "id")};";
+            $"UPDATE {Table} SET {nameof(ImportActionEntity.Status)} = @status, {nameof(ImportActionEntity.AppliedAt)} = @appliedAt, " +
+            $"{nameof(ImportActionEntity.DateModified)} = @dateModified WHERE {IdClauses.Equals(nameof(ImportActionEntity.Id), "id")};";
 
         /// <summary>Marks every action sharing a BatchId discarded in one statement (#154) — DiscardedAt set. Case-insensitive — see <see cref="SelectAllForBatch"/>.</summary>
         internal static readonly string MarkBatchDiscarded =
-            $"UPDATE Import_Action SET Status = @status, DiscardedAt = @discardedAt, DateModified = @dateModified WHERE {IdClauses.Equals("BatchId", "batchId")};";
+            $"UPDATE {Table} SET {nameof(ImportActionEntity.Status)} = @status, {nameof(ImportActionEntity.DiscardedAt)} = @discardedAt, " +
+            $"{nameof(ImportActionEntity.DateModified)} = @dateModified WHERE {IdClauses.Equals(nameof(ImportActionEntity.BatchId), "batchId")};";
 
         /// <summary>
         /// Hard-deletes every action sharing a BatchId (#249) — the conflict-resolution-data purge,
@@ -393,7 +408,7 @@ internal static class Sql
         /// soft-delete concept for <c>Import_Action</c>. Case-insensitive — see <see cref="SelectAllForBatch"/>.
         /// </summary>
         internal static readonly string DeleteByBatchId =
-            $"DELETE FROM Import_Action WHERE {IdClauses.Equals("BatchId", "batchId")};";
+            $"DELETE FROM {Table} WHERE {IdClauses.Equals(nameof(ImportActionEntity.BatchId), "batchId")};";
 
         /// <summary>
         /// Case-insensitive on every filter — see <see cref="SelectAllForBatch"/>'s remark for why
@@ -403,10 +418,10 @@ internal static class Sql
         /// </summary>
         private static string BuildWhere(bool filterBatchId, bool filterStatus, bool filterEntityType)
         {
-            List<string> parts = new List<string>(3);
-            if (filterBatchId)    parts.Add(IdClauses.Equals("BatchId", "batchId"));
-            if (filterStatus)     parts.Add(TextClauses.Equals("Status", "status"));
-            if (filterEntityType) parts.Add(TextClauses.Equals("EntityType", "entityType"));
+            List<string> parts = new(3);
+            if (filterBatchId)    parts.Add(IdClauses.Equals(nameof(ImportActionEntity.BatchId), "batchId"));
+            if (filterStatus)     parts.Add(TextClauses.Equals(nameof(ImportActionEntity.Status), "status"));
+            if (filterEntityType) parts.Add(TextClauses.Equals(nameof(ImportActionEntity.EntityType), "entityType"));
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
         }
     }
@@ -457,7 +472,7 @@ internal static class Sql
 
         private static string BuildRangeWhere(bool filterStart, bool filterEnd)
         {
-            List<string> parts = new List<string>(2);
+            List<string> parts = new(2);
             if (filterStart) parts.Add("OccurredAt >= @startDate");
             if (filterEnd)   parts.Add("OccurredAt <= @endDate");
             return parts.Count > 0 ? " WHERE " + string.Join(" AND ", parts) : string.Empty;
@@ -573,7 +588,7 @@ internal static class Sql
         // FileName/Origin comparisons are case-insensitive (project-wide convention).
         private static string BuildWhere(bool filterFileName, bool filterOrigin)
         {
-            List<string> parts = new List<string>(2);
+            List<string> parts = new(2);
             if (filterFileName) parts.Add(TextClauses.Equals("fr.FileName", "fileName"));
             if (filterOrigin)   parts.Add(TextClauses.Equals("fr.Origin", "origin"));
             return parts.Count > 0 ? " AND " + string.Join(" AND ", parts) : string.Empty;
@@ -583,6 +598,12 @@ internal static class Sql
     /// <summary>System_Notification table (#278). INSERT is handled by Dapper.Contrib via <see cref="Repositories.NotificationWriter"/>.</summary>
     internal static class Notifications
     {
+        // Column names come from the entities via nameof, the same convention as AppVersion below and for
+        // the same reason: the property name is the column name, so a rename propagates here. The table
+        // and alias prefixes, the JSON path, and every Dapper parameter name stay literal — see AppVersion
+        // for why none of those can come from a constant that ties both ends together.
+        private const string Table = "System_Notification";
+
         /// <summary>
         /// #319: Title/Body resolve to the requested language's translation when one exists, falling
         /// back per field to the notification's own original text. Mirrors <c>Sql.Quotes.SelectBase</c>
@@ -593,22 +614,27 @@ internal static class Sql
         /// </para>
         /// </summary>
         private static readonly string SelectColumns =
-            $"{IdClauses.SelectColumn("n.Id", "Id")}, n.Type, " +
-            "COALESCE(t.Title, n.Title) AS Title, " +
-            "COALESCE(t.Body,  n.Body)  AS Body, " +
-            "n.Metadata, n.MetadataKind, " +
-            $"{IdClauses.SelectColumn("n.AppVersionId", "AppVersionId")}, " +
-            "n.ExpiresAt, n.IsDismissed, n.DismissedAt, n.DismissTriggerKey, n.DismissReason, n.Resolution, " +
-            "n.DateCreated, n.DateModified, n.DateDeleted, n.IsDeleted, n.OriginalLanguage, " +
-            "CASE WHEN t.Body IS NOT NULL THEN LOWER(@lang) ELSE n.OriginalLanguage END AS EffectiveLanguage";
+            $"{IdClauses.SelectColumn("n." + nameof(NotificationEntity.Id), nameof(NotificationEntity.Id))}, n.{nameof(NotificationEntity.Type)}, " +
+            $"COALESCE(t.{nameof(NotificationTranslationEntity.Title)}, n.{nameof(NotificationEntity.Title)}) AS {nameof(NotificationEntity.Title)}, " +
+            $"COALESCE(t.{nameof(NotificationTranslationEntity.Body)},  n.{nameof(NotificationEntity.Body)})  AS {nameof(NotificationEntity.Body)}, " +
+            $"n.{nameof(NotificationEntity.Metadata)}, n.{nameof(NotificationEntity.MetadataKind)}, " +
+            $"{IdClauses.SelectColumn("n." + nameof(NotificationEntity.AppVersionId), nameof(NotificationEntity.AppVersionId))}, " +
+            $"n.{nameof(NotificationEntity.ExpiresAt)}, n.{nameof(NotificationEntity.IsDismissed)}, n.{nameof(NotificationEntity.DismissedAt)}, " +
+            $"n.{nameof(NotificationEntity.DismissTriggerKey)}, n.{nameof(NotificationEntity.DismissReason)}, n.{nameof(NotificationEntity.Resolution)}, " +
+            $"n.{nameof(NotificationEntity.DateCreated)}, n.{nameof(NotificationEntity.DateModified)}, n.{nameof(NotificationEntity.DateDeleted)}, " +
+            $"n.{nameof(NotificationEntity.IsDeleted)}, n.{nameof(NotificationEntity.OriginalLanguage)}, " +
+            $"CASE WHEN t.{nameof(NotificationTranslationEntity.Body)} IS NOT NULL THEN LOWER(@lang) " +
+            $"ELSE n.{nameof(NotificationEntity.OriginalLanguage)} END AS {nameof(NotificationEntity.EffectiveLanguage)}";
 
         // TextClauses.Equals on Language rather than a hand-written LOWER(...) = LOWER(...): a
         // translation's Language is never canonicalised at capture, so the SQL side needs its own wrap
         // even though InputValidation.TryNormalizeLang already lowercases the request's value.
         private static readonly string FromWithTranslation =
-            "FROM System_Notification n " +
+            $"FROM {Table} n " +
             "LEFT JOIN System_NotificationTranslation t " +
-            $"ON {IdClauses.Join("t.NotificationId", "n.Id")} AND {TextClauses.Equals("t.Language", "lang")} AND t.IsDeleted = 0";
+            $"ON {IdClauses.Join("t." + nameof(NotificationTranslationEntity.NotificationId), "n." + nameof(NotificationEntity.Id))} " +
+            $"AND {TextClauses.Equals("t." + nameof(NotificationTranslationEntity.Language), "lang")} " +
+            $"AND t.{nameof(NotificationTranslationEntity.IsDeleted)} = 0";
 
         /// <summary>
         /// Undismissed, unexpired, non-deleted notifications, newest first — the set surfaced in the
@@ -617,28 +643,41 @@ internal static class Sql
         /// </summary>
         internal static readonly string SelectActive =
             $"SELECT {SelectColumns} {FromWithTranslation} " +
-            "WHERE n.IsDismissed = 0 AND n.IsDeleted = 0 AND (n.ExpiresAt IS NULL OR n.ExpiresAt > @now) " +
-            "ORDER BY n.DateCreated DESC;";
+            $"WHERE n.{nameof(NotificationEntity.IsDismissed)} = 0 AND n.{nameof(NotificationEntity.IsDeleted)} = 0 " +
+            $"AND (n.{nameof(NotificationEntity.ExpiresAt)} IS NULL OR n.{nameof(NotificationEntity.ExpiresAt)} > @now) " +
+            $"ORDER BY n.{nameof(NotificationEntity.DateCreated)} DESC;";
 
         /// <summary>Full notification history (including dismissed/expired), paginated, newest first — backs the REST list endpoint and the Blazor Notifications page.</summary>
         internal static readonly string SelectPage =
-            $"SELECT {SelectColumns} {FromWithTranslation} WHERE n.IsDeleted = 0 " +
-            "ORDER BY n.DateCreated DESC LIMIT @pageSize OFFSET @offset;";
+            $"SELECT {SelectColumns} {FromWithTranslation} WHERE n.{nameof(NotificationEntity.IsDeleted)} = 0 " +
+            $"ORDER BY n.{nameof(NotificationEntity.DateCreated)} DESC LIMIT @pageSize OFFSET @offset;";
 
         /// <summary>Total non-deleted row count, for <see cref="SelectPage"/>'s pagination envelope.</summary>
-        internal const string CountAll = "SELECT COUNT(*) FROM System_Notification WHERE IsDeleted = 0;";
+        internal const string CountAll = $"SELECT COUNT(*) FROM {Table} WHERE {nameof(NotificationEntity.IsDeleted)} = 0;";
+
+        /// <summary>
+        /// Every non-deleted notification of one metadata kind, dismissed and expired included, newest
+        /// first (#369) — how a caller recovers what a notification recorded about something that has
+        /// since gone. Binds <c>@kind</c> and <c>@lang</c>.
+        /// </summary>
+        internal static readonly string SelectByMetadataKind =
+            $"SELECT {SelectColumns} {FromWithTranslation} " +
+            $"WHERE n.{nameof(NotificationEntity.IsDeleted)} = 0 " +
+            $"AND {TextClauses.Equals("n." + nameof(NotificationEntity.MetadataKind), "kind")} " +
+            $"ORDER BY n.{nameof(NotificationEntity.DateCreated)} DESC;";
 
         /// <summary>Single-notification lookup by Id — backs the dismiss endpoint's existence check.</summary>
         internal static readonly string SelectById =
-            $"SELECT {SelectColumns} {FromWithTranslation} WHERE {IdClauses.Equals("n.Id", "id")};";
+            $"SELECT {SelectColumns} {FromWithTranslation} WHERE {IdClauses.Equals("n." + nameof(NotificationEntity.Id), "id")};";
 
         /// <summary>
         /// Marks one notification dismissed by Id, recording why (#304). Idempotent — dismissing an
         /// already-dismissed row is a no-op in effect, not an error.
         /// </summary>
         internal static readonly string UpdateDismissById =
-            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, DateModified = @dateModified " +
-            $"WHERE {IdClauses.Equals("Id", "id")};";
+            $"UPDATE {Table} SET {nameof(NotificationEntity.IsDismissed)} = 1, {nameof(NotificationEntity.DismissedAt)} = @dismissedAt, " +
+            $"{nameof(NotificationEntity.DismissReason)} = @dismissReason, {nameof(NotificationEntity.DateModified)} = @dateModified " +
+            $"WHERE {IdClauses.Equals(nameof(NotificationEntity.Id), "id")};";
 
         /// <summary>
         /// Marks every active (undismissed, non-deleted) notification carrying a given
@@ -647,8 +686,11 @@ internal static class Sql
         /// project's project-wide enum-comparison convention.
         /// </summary>
         internal static readonly string UpdateDismissByTrigger =
-            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, Resolution = @resolution, DateModified = @dateModified " +
-            $"WHERE IsDismissed = 0 AND IsDeleted = 0 AND {TextClauses.Equals("DismissTriggerKey", "trigger")};";
+            $"UPDATE {Table} SET {nameof(NotificationEntity.IsDismissed)} = 1, {nameof(NotificationEntity.DismissedAt)} = @dismissedAt, " +
+            $"{nameof(NotificationEntity.DismissReason)} = @dismissReason, {nameof(NotificationEntity.Resolution)} = @resolution, " +
+            $"{nameof(NotificationEntity.DateModified)} = @dateModified " +
+            $"WHERE {nameof(NotificationEntity.IsDismissed)} = 0 AND {nameof(NotificationEntity.IsDeleted)} = 0 " +
+            $"AND {TextClauses.Equals(nameof(NotificationEntity.DismissTriggerKey), "trigger")};";
 
         /// <summary>
         /// Dismisses only those active notifications that carry <c>DismissTriggerKey</c> <b>and</b> name
@@ -667,9 +709,12 @@ internal static class Sql
         /// </para>
         /// </summary>
         internal static readonly string UpdateDismissByTriggerAndBatch =
-            $"UPDATE System_Notification SET IsDismissed = 1, DismissedAt = @dismissedAt, DismissReason = @dismissReason, Resolution = @resolution, DateModified = @dateModified " +
-            $"WHERE IsDismissed = 0 AND IsDeleted = 0 AND {TextClauses.Equals("DismissTriggerKey", "trigger")} " +
-            $"AND {IdClauses.Equals("json_extract(Metadata, '$.batchId')", "batchId")};";
+            $"UPDATE {Table} SET {nameof(NotificationEntity.IsDismissed)} = 1, {nameof(NotificationEntity.DismissedAt)} = @dismissedAt, " +
+            $"{nameof(NotificationEntity.DismissReason)} = @dismissReason, {nameof(NotificationEntity.Resolution)} = @resolution, " +
+            $"{nameof(NotificationEntity.DateModified)} = @dateModified " +
+            $"WHERE {nameof(NotificationEntity.IsDismissed)} = 0 AND {nameof(NotificationEntity.IsDeleted)} = 0 " +
+            $"AND {TextClauses.Equals(nameof(NotificationEntity.DismissTriggerKey), "trigger")} " +
+            $"AND {IdClauses.Equals("json_extract(" + nameof(NotificationEntity.Metadata) + ", '$.batchId')", "batchId")};";
     }
 
     /// <summary>

@@ -1062,5 +1062,40 @@ public partial class RepositoryStructureTests
             "produces a silent fallback instead of a startup failure:\n" + string.Join("\n", offenders));
     }
 
+    /// <summary>
+    /// #369: every enum in a source project lives in an <c>Enums/</c> folder (ADR 016), whatever file would
+    /// otherwise declare it — a Blazor code-behind nesting a display type, or a helper keeping its outcome
+    /// type beside it. Neither is a reason; a reason is stated at the declaration, and then this test is
+    /// where it gets recorded.
+    /// </summary>
+    /// <remarks>
+    /// Test projects are out of scope: a private enum nested in a test class as a fixture is not the shape
+    /// ADR 016 governs. <c>bin</c> and <c>obj</c> are skipped since nothing there is authored.
+    /// </remarks>
+    [TestMethod]
+    public void EveryEnumLivesInAnEnumsFolder()
+    {
+        // Positive control: the pattern must find the enums that do live where they belong, or "none
+        // outside Enums/" is exactly what a broken pattern would report too.
+        string dataEnums = Path.Combine(RepoRoot, "src", "Quotinator.Data", "Enums");
+        Assert.Contains(f => EnumDeclaration().IsMatch(File.ReadAllText(f)), Directory.GetFiles(dataEnums, "*.cs"),
+            "Positive control failed: no enum declaration found under Quotinator.Data/Enums, so the pattern is broken.");
+
+        List<string> offenders =
+            [.. Directory.GetFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(RepoRoot, f))
+                .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    .Any(segment => segment is "Enums" or "bin" or "obj"))
+                .Where(f => EnumDeclaration().IsMatch(File.ReadAllText(Path.Combine(RepoRoot, f))))];
+
+        Assert.IsEmpty(offenders,
+            "An enum is declared outside an Enums/ folder (ADR 016):\n  " + string.Join("\n  ", offenders));
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(
+        @"^\s*(?:(?:public|internal|private|protected)\s+)*enum\s+\w+",
+        System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex EnumDeclaration();
+
     public TestContext TestContext { get; set; }
 }

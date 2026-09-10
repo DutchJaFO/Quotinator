@@ -1,4 +1,5 @@
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
@@ -17,4 +18,8 @@ public sealed class NoOpNotificationReader : INotificationReader
     /// <inheritdoc/>
     public Task<PagedItems<NotificationEntity>> GetPagedAsync(int page, int pageSize, string? language = null)
         => Task.FromResult(new PagedItems<NotificationEntity>([], page, pageSize, 0));
+
+    /// <inheritdoc/>
+    public Task<IReadOnlyList<NotificationEntity>> GetByMetadataKindAsync(NotificationMetadataKind kind, string? language = null)
+        => Task.FromResult<IReadOnlyList<NotificationEntity>>([]);
 }

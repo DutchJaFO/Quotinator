@@ -55,7 +55,7 @@ public class NotificationActionExecutorTests
         FakeImportActionService importActions = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions);
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository());
 
         await executor.ExecuteAsync(
             NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(batchId), FieldResolutionChoice.Keep);
@@ -77,7 +77,7 @@ public class NotificationActionExecutorTests
         FakeImportActionService importActions = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions);
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository());
 
         await executor.ExecuteAsync(
             NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(batchId), FieldResolutionChoice.Replace);
@@ -96,7 +96,7 @@ public class NotificationActionExecutorTests
         FakeImportActionService importActions = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions);
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             executor.ExecuteAsync(NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(Guid.NewGuid().ToString("D"))));
@@ -114,7 +114,7 @@ public class NotificationActionExecutorTests
         FakeImportActionService importActions = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions);
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             executor.ExecuteAsync(NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(Guid.NewGuid().ToString("D"))));
@@ -129,7 +129,7 @@ public class NotificationActionExecutorTests
         FakeImportActionService importActions = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions);
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, importActions, new FakeImportBatchRepository());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             executor.ExecuteAsync(NotificationDismissTrigger.ImportReviewResolved, metadata: null, FieldResolutionChoice.Keep));
@@ -143,7 +143,7 @@ public class NotificationActionExecutorTests
     {
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository());
 
         Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.ImportReviewResolved));
     }
@@ -153,7 +153,7 @@ public class NotificationActionExecutorTests
     {
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository());
 
         Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.DatabaseReset));
     }
@@ -164,7 +164,7 @@ public class NotificationActionExecutorTests
     {
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository());
 
         Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.Reseed));
     }
@@ -177,7 +177,7 @@ public class NotificationActionExecutorTests
         FakeNotificationWriter notificationWriter = new();
         NotificationActionExecutor executor = new(
             dbInitializer, new DatabaseHealthState(), notificationWriter,
-            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
+            new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.Reseed);
 
@@ -208,7 +208,7 @@ public class NotificationActionExecutorTests
         SpyAppVersionTracker appVersionTracker = new();
         NotificationActionExecutor executor = new(
             new SpyDatabaseInitializer(), health, new FakeNotificationWriter(),
-            appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
+            appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.Reseed);
 
@@ -227,7 +227,7 @@ public class NotificationActionExecutorTests
         FakeNotificationWriter notificationWriter = new();
         SpyAppVersionTracker appVersionTracker = new();
         NotificationActionExecutor executor = new(
-            dbInitializer, health, notificationWriter, appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
+            dbInitializer, health, notificationWriter, appVersionTracker, new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
 
@@ -274,11 +274,81 @@ public class NotificationActionExecutorTests
         DatabaseHealthState health = new();
         NotificationActionExecutor executor = new(
             dbInitializer, health, new FakeNotificationWriter(), new SpyAppVersionTracker(),
-            new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService());
+            new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance, new FakeImportActionService(), new FakeImportBatchRepository());
 
         await executor.ExecuteAsync(NotificationDismissTrigger.DatabaseReset);
 
         Assert.IsTrue(dbInitializer.ResetCalled);
+    }
+
+    // ── #369: an action whose volatile subject is gone ─────────────────────────────────────────────
+
+    // Hex letters in both, so a case-insensitive match is actually exercised.
+    private const string LiveBatch = "7f00000a-0000-4000-8000-00000000000b";
+    private const string GoneBatch = "7f00000c-0000-4000-8000-00000000000d";
+
+    private static NotificationActionExecutor CreateExecutor(FakeImportBatchRepository? importBatches = null) => new(
+        new SpyDatabaseInitializer(), new DatabaseHealthState(), new FakeNotificationWriter(),
+        new SpyAppVersionTracker(), new FakeVersionService(), NullLogger<NotificationActionExecutor>.Instance,
+        new FakeImportActionService(), importBatches ?? new FakeImportBatchRepository());
+
+    /// <summary>
+    /// #369: an import-review alert outlives its batch, and once the batch is gone Keep and Take have
+    /// nothing to be applied against. Answered from the alert's own payload and the availability read
+    /// once per render — never by a query of the executor's own.
+    /// </summary>
+    [TestMethod]
+    public void CanExecute_ImportReviewWhoseBatchIsGone_IsFalse()
+        => Assert.IsFalse(CreateExecutor().CanExecute(
+            NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(GoneBatch), new NotificationActionAvailability([LiveBatch])));
+
+    /// <summary>
+    /// #369, the control: the same alert naming a batch that still exists stays executable — matched
+    /// case-insensitively, since the payload and the batch row hold independently-cased copies of one id.
+    /// </summary>
+    [TestMethod]
+    public void CanExecute_ImportReviewWithLiveBatch_IsTrue()
+        => Assert.IsTrue(CreateExecutor().CanExecute(
+            NotificationDismissTrigger.ImportReviewResolved, ReviewPayload(LiveBatch), new NotificationActionAvailability([LiveBatch.ToUpperInvariant()])));
+
+    /// <summary>
+    /// #369: without its payload an import-review action cannot run at all — <c>ExecuteAsync</c> throws
+    /// for exactly this case — so the capability check has to say so before the action is offered.
+    /// </summary>
+    [TestMethod]
+    public void CanExecute_ImportReviewWithoutItsPayload_IsFalse()
+        => Assert.IsFalse(CreateExecutor().CanExecute(
+            NotificationDismissTrigger.ImportReviewResolved, metadata: null, new NotificationActionAvailability([LiveBatch])));
+
+    /// <summary>
+    /// #369, the control for every other trigger: Reset and Reseed depend on nothing volatile, so an
+    /// availability in which nothing exists at all changes nothing for them.
+    /// </summary>
+    [TestMethod]
+    public void CanExecute_TriggerWithNoVolatileDependency_IgnoresAvailability()
+    {
+        NotificationActionExecutor executor = CreateExecutor();
+        NotificationActionAvailability nothingExists = new([]);
+
+        Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.DatabaseReset, metadata: null, nothingExists));
+        Assert.IsTrue(executor.CanExecute(NotificationDismissTrigger.Reseed, metadata: null, nothingExists));
+    }
+
+    /// <summary>
+    /// #369: the availability reports every batch that still exists — and only those, or a batch that is
+    /// gone would read as present and its impossible actions would stay on offer.
+    /// </summary>
+    [TestMethod]
+    public async Task GetAvailabilityAsync_ReportsEveryLiveBatchAndNoOther()
+    {
+        FakeImportBatchRepository importBatches = new();
+        importBatches.Seed(new Quotinator.Data.Entities.ImportBatchEntity { Id = Guid.Parse(LiveBatch), Name = "live.json" });
+
+        NotificationActionAvailability availability = await CreateExecutor(importBatches).GetAvailabilityAsync();
+
+        Assert.IsTrue(availability.ImportBatchExists(LiveBatch.ToUpperInvariant()),
+            "A batch that exists is reported, whatever casing it is asked about in.");
+        Assert.IsFalse(availability.ImportBatchExists(GoneBatch), "A batch that does not exist is not.");
     }
 
     /// <summary>Captures what <see cref="INotificationActionExecutor.ExecuteAsync"/> was handed, without performing real work.</summary>
@@ -287,6 +357,10 @@ public class NotificationActionExecutorTests
         public NotificationMetadataDto? ReceivedMetadata { get; private set; }
 
         public bool CanExecute(NotificationDismissTrigger trigger) => true;
+
+        public bool CanExecute(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability) => true;
+
+        public Task<NotificationActionAvailability> GetAvailabilityAsync() => Task.FromResult(new NotificationActionAvailability([]));
 
         /// <summary>The choice the caller passed, for a trigger that offers more than one outcome (#303).</summary>
         public FieldResolutionChoice? ReceivedChoice { get; private set; }

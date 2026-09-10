@@ -3,14 +3,14 @@ using Quotinator.Data.Entities;
 namespace Quotinator.Data.Queries;
 
 /// <summary>
-/// #319's three notification reads, each a two-table projection over
-/// <c>System_Notification</c> and <c>System_NotificationTranslation</c>.
+/// The notification reads, each a two-table projection over <c>System_Notification</c> and
+/// <c>System_NotificationTranslation</c> — #319's three, and #369's by-kind read.
 /// <para>
 /// These exist because ADR 017 requires a join-capable read to execute through
 /// <see cref="IJoinStrategy{TResult}"/>/<c>JoinQueryRepository</c> rather than a hand-rolled
 /// connection, whenever the result is a concrete POCO — which <see cref="NotificationEntity"/> is. The
-/// reads were single-table before this issue, which is why the reader was previously compliant while
-/// opening its own connection.
+/// reads were single-table before #319, which is why the reader was previously compliant while opening
+/// its own connection.
 /// </para>
 /// <para>
 /// Each strategy only returns its <c>Sql.Notifications</c> constant. The SQL itself stays in
@@ -43,5 +43,12 @@ public static class NotificationJoinStrategies
     {
         /// <inheritdoc/>
         public string BuildSql() => Sql.Notifications.SelectById;
+    }
+
+    /// <summary>Every non-deleted notification of one metadata kind, dismissed included, newest first (#369). Binds <c>@kind</c> and <c>@lang</c>.</summary>
+    public sealed class ByMetadataKind : IJoinStrategy<NotificationEntity>
+    {
+        /// <inheritdoc/>
+        public string BuildSql() => Sql.Notifications.SelectByMetadataKind;
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Quotinator.Api.Endpoints.Shared;
+using Quotinator.Api.Enums;
 using Quotinator.Constants.Api;
 using Quotinator.Core.Services;
 
@@ -36,10 +37,10 @@ public class EntityFilterParsingTests
     [TestMethod]
     public async Task ResolveAsync_BothSupplied_ReturnsError()
     {
-        var result = await EntityFilterParsing.ResolveAsync(KnownId.ToString(), "Airplane!", Names, ResolveKnownName, Localizer);
+        EntityFilterResult result = await EntityFilterParsing.ResolveAsync(KnownId.ToString(), "Airplane!", Names, ResolveKnownName, Localizer);
 
         Assert.AreEqual(EntityFilterOutcome.Error, result.Outcome);
-        var problem = Assert.IsInstanceOfType<ProblemHttpResult>(result.Error);
+        ProblemHttpResult problem = Assert.IsInstanceOfType<ProblemHttpResult>(result.Error);
         Assert.AreEqual(422, problem.StatusCode);
         Assert.AreEqual("Specify either sourceId or source, not both.", problem.ProblemDetails.Detail);
     }
@@ -47,7 +48,7 @@ public class EntityFilterParsingTests
     [TestMethod]
     public async Task ResolveAsync_IdOnlyWellFormed_ReturnsResolved()
     {
-        var result = await EntityFilterParsing.ResolveAsync(KnownId.ToString(), null, Names, ResolveKnownName, Localizer);
+        EntityFilterResult result = await EntityFilterParsing.ResolveAsync(KnownId.ToString(), null, Names, ResolveKnownName, Localizer);
 
         Assert.AreEqual(EntityFilterOutcome.Resolved, result.Outcome);
         Assert.AreEqual(KnownId, result.Id);
@@ -57,10 +58,10 @@ public class EntityFilterParsingTests
     [TestMethod]
     public async Task ResolveAsync_IdOnlyMalformed_ReturnsError()
     {
-        var result = await EntityFilterParsing.ResolveAsync("not-a-guid", null, Names, ResolveKnownName, Localizer);
+        EntityFilterResult result = await EntityFilterParsing.ResolveAsync("not-a-guid", null, Names, ResolveKnownName, Localizer);
 
         Assert.AreEqual(EntityFilterOutcome.Error, result.Outcome);
-        var problem = Assert.IsInstanceOfType<ProblemHttpResult>(result.Error);
+        ProblemHttpResult problem = Assert.IsInstanceOfType<ProblemHttpResult>(result.Error);
         Assert.AreEqual(422, problem.StatusCode);
         Assert.AreEqual("sourceId must be a valid identifier.", problem.ProblemDetails.Detail);
     }
@@ -68,7 +69,7 @@ public class EntityFilterParsingTests
     [TestMethod]
     public async Task ResolveAsync_NameResolves_ReturnsResolved()
     {
-        var result = await EntityFilterParsing.ResolveAsync(null, "Airplane!", Names, ResolveKnownName, Localizer);
+        EntityFilterResult result = await EntityFilterParsing.ResolveAsync(null, "Airplane!", Names, ResolveKnownName, Localizer);
 
         Assert.AreEqual(EntityFilterOutcome.Resolved, result.Outcome);
         Assert.AreEqual(KnownId, result.Id);
@@ -78,7 +79,7 @@ public class EntityFilterParsingTests
     [TestMethod]
     public async Task ResolveAsync_NameDoesNotResolve_ReturnsNotFoundWithMessage()
     {
-        var result = await EntityFilterParsing.ResolveAsync(null, "Nonexistent Source", Names, ResolveKnownName, Localizer);
+        EntityFilterResult result = await EntityFilterParsing.ResolveAsync(null, "Nonexistent Source", Names, ResolveKnownName, Localizer);
 
         Assert.AreEqual(EntityFilterOutcome.NotFound, result.Outcome);
         Assert.IsNull(result.Id);
@@ -89,7 +90,7 @@ public class EntityFilterParsingTests
     [TestMethod]
     public async Task ResolveAsync_NeitherSupplied_ReturnsNoFilter()
     {
-        var result = await EntityFilterParsing.ResolveAsync(null, null, Names, ResolveKnownName, Localizer);
+        EntityFilterResult result = await EntityFilterParsing.ResolveAsync(null, null, Names, ResolveKnownName, Localizer);
 
         Assert.AreEqual(EntityFilterOutcome.NoFilter, result.Outcome);
         Assert.IsNull(result.Id);

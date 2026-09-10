@@ -1,4 +1,5 @@
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 
@@ -39,5 +40,12 @@ internal sealed class FakeNotificationReader : INotificationReader
 
         int effectivePageSize = pageSize == 0 ? items.Count : pageSize;
         return Task.FromResult(new PagedItems<NotificationEntity>(items, page, effectivePageSize, total));
+    }
+
+    /// <summary>#369: every seeded notification of <paramref name="kind"/>, dismissed ones included — the same contract as the real reader.</summary>
+    public Task<IReadOnlyList<NotificationEntity>> GetByMetadataKindAsync(NotificationMetadataKind kind, string? language = null)
+    {
+        LastRequestedLanguage = language;
+        return Task.FromResult<IReadOnlyList<NotificationEntity>>([.. _notifications.Where(n => n.MetadataKind.Parsed == kind)]);
     }
 }
