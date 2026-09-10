@@ -1101,7 +1101,7 @@ different question in each.
 | 01 | [The staged review → decide → apply workflow](import-and-staged-actions/01-staged-action-review-workflow.md) | yes |
 | 02 | [A batch applied through the staged flow can be reversed](import-and-staged-actions/02-two-phase-decide-apply-reversal.md) | no |
 | 03 | [`POST /import?batchId=` applies an already-staged batch](import-and-staged-actions/03-batch-id-mode-alias.md) | no |
-| 04 | [Discarding a staged batch applies nothing](import-and-staged-actions/04-discard.md) | no |
+| 04 | [Discarding a staged batch discards what awaits a decision, keeps its no-ops, and applies nothing](import-and-staged-actions/04-discard.md) | no |
 | 05 | [Reversing an applied batch, and re-import resurrection](import-and-staged-actions/05-reverse-and-resurrection.md) | no |
 | 06 | [A bodyless import request is rejected with an actionable message](import-and-staged-actions/06-bodyless-request-validation.md) | no |
 | 07 | [StageDirection and SoundCue Modify, and Complete blocking](import-and-staged-actions/07-stagedirection-soundcue-modify.md) | no |
@@ -1124,6 +1124,7 @@ different question in each.
 | 24 | [A `Complete` row still blocks when a rule resolves to a different value](import-and-staged-actions/24-complete-row-still-blocks-a-real-write.md) | no |
 | 25 | [An already-reported conflict does not stage a duplicate on every reseed](import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md) | no |
 | 26 | [A conflict seen for the first time is still staged on a later reseed](import-and-staged-actions/26-a-new-conflict-is-still-staged.md) | no |
+| 27 | [A review row whose batch is gone offers only dismiss, and its alert says the action is no longer possible](import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md) | no |
 
 ---
 

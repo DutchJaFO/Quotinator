@@ -321,6 +321,7 @@
     <File Path="docs/milestones/notification-system/367-executing-notification-state-plan.md" />
     <File Path="docs/milestones/notification-system/368-unimported-files-are-discovered-but-never-imported-plan.md" />
     <File Path="docs/milestones/notification-system/369-orphaned-review-rows-plan.md" />
+    <File Path="docs/milestones/notification-system/389-discard-keeps-plan-time-no-ops-plan.md" />
     <File Path="docs/milestones/notification-system/370-conflict-signalled-by-throwing-plan.md" />
     <File Path="docs/milestones/notification-system/372-reseed-does-not-delete-plan.md" />
     <File Path="docs/milestones/notification-system/373-unchanged-is-not-modified-plan.md" />
@@ -411,6 +412,7 @@
     <File Path="docs/automated-testing/import-and-staged-actions/24-complete-row-still-blocks-a-real-write.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/26-a-new-conflict-is-still-staged.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />

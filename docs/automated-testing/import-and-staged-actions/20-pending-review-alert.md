@@ -78,7 +78,7 @@ function Get-PendingActionCount {
 
 while ((Invoke-RestMethod "http://localhost:19520/api/v1/quotes?page=1&pageSize=1").totalCount -lt 1) { Start-Sleep 2 }
 "pending actions = $(Get-PendingActionCount)"
-"active alerts   = $((Get-ActiveReviewAlerts).Count)"
+"active alerts   = $(@(Get-ActiveReviewAlerts).Count)"
 ```
 
 **Expected:** `pending actions = 1`, `active alerts = 1`, naming `conflicting.json` with `origin=User`
@@ -166,7 +166,7 @@ Invoke-RestMethod -Method Post -Headers $headers "http://localhost:19520/api/v1/
 @(Get-ReviewAlerts) | ForEach-Object {
   "$((($_.metadata | ConvertFrom-Json)).batchId.Substring(0,8))  isDismissed=$($_.isDismissed)  reason=$($_.dismissReason)"
 }
-"active alerts = $((Get-ActiveReviewAlerts).Count)"
+"active alerts = $(@(Get-ActiveReviewAlerts).Count)"
 ```
 
 **Expected:** three alerts and all three outcomes visible at once — one active, one `reason=obsolete`,

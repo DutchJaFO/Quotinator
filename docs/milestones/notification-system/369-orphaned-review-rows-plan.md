@@ -1,9 +1,9 @@
 # #369 — A review row whose batch is gone offers decisions that cannot be carried out
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #369
 **Tiers required:** T1, T2
-**Depends on:** #303, #372
+**Depends on:** #303, #372, #389
 
 ---
 
@@ -147,23 +147,55 @@ step's red.
 
 ### 1. Write every test first, and run them red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 14 unit tests red on their own assertions, 8 controls green; T2 document red against the pre-work canary
 
 Exit condition: every unit test in the verification table exists and **fails on its own assertion**,
 and the new T2 document has been run against a build from the commit before this work started and
 failed there.
 
-Rows 2, 5 and 11 are controls — they assert behaviour that must not change, so passing before and
-after is what correct looks like. A control that starts red is testing the wrong thing.
+**Production code at the end of this step is signatures only, each returning today's behaviour** — so
+every failure below is an assertion, never a build break: `NotificationActionAvailability`, the
+executor's three-argument `CanExecute` and `GetAvailabilityAsync`, `NotificationTable.ExecutorCanRun`,
+the `ActionUnavailable` member and `GetDisplayStatus`'s ignored flag, `INotificationReader.GetByMetadataKindAsync`
+returning nothing, and `ImportReview`'s `FileNameFor`/`FileNamesFromNotifications`/`BatchIsGone`/
+`CanDecide`/`DismissBatchAsync`. Build: 0 warnings, 0 errors.
 
-Producing the orphan is itself part of the T2 document's setup and has no API route post-#372: stage a
-batch, then delete its `Import_Batch` row with `scripts/testing/execute-sql.csx` against the
-container's database. That is the honest way to reach a state no endpoint creates, and it is why the
-document belongs in the suite rather than being folded into a unit test.
+**Red (14):** rows 1, 3, 4, 6, 7, 10, 12, 13, 15, 18, 20, 21, 22, 23.
+
+**Green, and correctly so (8 controls):** rows 2, 5, 8, 9, 11, 14, 24, and `TranslationCompletenessTests`
+in row 15. Each asserts behaviour that must not change, so passing before and after is what correct
+looks like; a control that starts red is testing the wrong thing.
+
+**Three corrections to this plan, found while writing the tests — recorded rather than absorbed:**
+
+- **Rows 8 and 9 could not go red, and the plan said they would.** It claimed `DiscardBatchAsync` "has
+  never been exercised with the parent missing". The coordinator's own
+  `DiscardBatchAsync_StagedBatch_MarksEveryActionDiscardedWithoutTouchingDomainTables` writes actions
+  against `"BATCH-1"` with no batch row at all, so it has been exercised that way all along — row 9 now
+  names that existing test rather than a duplicate of it. Row 8, at service level against real SQLite
+  whose fixture does write a batch row, deletes that row first and is kept as a control: it pins the
+  property the page's dismiss relies on.
+- **Row 14 is a control as well.** The stub ignores the new flag, so dismissed, expired and executing
+  win trivially before the change — which is exactly the precedence the row asserts must survive it.
+- **#303's `FileNameFor_UnknownBatch_FallsBackToTheId` was replaced here, not in step 6.** Its assertion
+  (the id is shown) and row 6's (the id is never shown) cannot both be green, so keeping it until step 6
+  would have turned an already-green test red during step 3 — which this plan's per-step rule forbids.
+
+**Five rows added** (20–24), each a behaviour the planned table left unasserted: the gone predicate
+itself, the page's dismiss, the capability check without a payload, the availability read, and a
+control showing the other triggers ignore availability.
+
+**The T2 document is written and red — on its second run.** Its first run against the canary was void:
+step 2's plain `DELETE` failed with `FOREIGN KEY constraint failed`, because a staged batch is referenced
+from `Import_FileResourceBatch`, so no orphan existed and steps 3–4 described a healthy batch. The fix
+does what the removed pre-#372 `TruncateDataAsync` actually did — `PRAGMA foreign_keys = OFF` before the
+delete — so the state under test is the one a legacy database really holds. On the second run the
+pre-work build failed every assertion that distinguishes the two builds; the document's own canary
+table records each one.
 
 ### 2. Read the file name from notification metadata, including dismissed alerts
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — rows 1, 3 and 4 green; every other test in the solution unchanged
 
 Neither existing `INotificationReader` read serves this (cross-check finding 9). Add one returning
 every `ImportReviewPending` metadata row regardless of dismissal, with its SQL in `Sql.Notifications`
@@ -179,9 +211,22 @@ The mapping from those rows to a batch-id → file-name dictionary is an `intern
 page, so it can be asserted without rendering the component — this project has no bUnit, the same
 reason `AwaitingReview` and `FileNameFor` are already shaped that way.
 
+**Result.** Rows 1, 3 and 4 were re-run red at the start of the step and pass at its end; row 5's guards
+pass with the new constant and strategy in their enumeration. Because the reader's constructor is shared
+by every test that builds one, the whole suite ran at the end rather than only this step's rows: every
+project green except the 11 rows later steps own, each still red for its own reason.
+
+- **The read is keyed on metadata kind, not on import review.** `GetByMetadataKindAsync(kind)` rather
+  than an import-review-specific method: the rule it serves — a notification's payload outlives what it
+  names — applies to every kind, and nothing about the query is specific to one. Row 4's test is named
+  for the method it actually tests.
+- **No missing-table fallback, unlike its two siblings.** Those serve surfaces that stay reachable while
+  the database is degraded; this read's only caller renders against a healthy one, so the fallback would
+  guard a state it cannot reach. The reason is stated at the method.
+
 ### 3. Make "batch no longer exists" a first-class predicate on the row
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — rows 6 and 20 green; translation guard green; later steps' 9 rows still red
 
 One `internal static` predicate — the batch id matches no live `Import_Batch` row — decided in one
 place rather than inferred at each call site, so the page and its tests agree on one definition.
@@ -192,18 +237,28 @@ name for it, and saying so is the honest state. This settles the question the is
 batch staged before #303 shipped — it is in scope, and it falls out of this predicate rather than
 needing a case of its own.
 
+**Result.** Rows 6 and 20 were red at the step's start — the run that closed step 2, with nothing changed
+between — and pass at its end; `TranslationCompletenessTests` stays green with the key in all three
+files, and the 9 rows later steps own are still red. The label reads *Import batch no longer exists* and
+sits as a second badge beside the action's stored status rather than replacing it: the action genuinely
+is still `Pending` in the database, and the badge says why it can go no further.
+
 ### 4. Offer only dismiss on such a row
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — rows 7 and 21 green; later steps' 7 rows still red
 
 Keep/Take removed, not disabled-and-still-shown — they are impossible, not unavailable. Dismiss calls
 `DiscardBatchAsync`, which reads and writes `Import_Action` only and never touches the batch row, so it
-is already correct against a missing parent. It has never been exercised that way, which is what rows 8
-and 9 prove.
+is already correct against a missing parent. Rows 8 and 9 pin that as controls — step 1 records why
+neither could be red.
+
+**Result.** Rows 7 and 21 were red at the step's start and pass at its end; `DecideAndApply`'s existing
+tests stay green, since a live batch's Keep/Take path is unchanged. `CanDecide` is the one gate for
+Keep/Take, so the markup asks it rather than repeating the gone check beside it.
 
 ### 5. Let a notification action decline when its own metadata names something gone
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — rows 10, 12, 13, 15, 22, 23 and 25 green; only step 7's row 18 still red
 
 `CanExecute` gains access to the notification's metadata so `ImportReviewResolved` can answer `false`
 when the batch it names is gone.
@@ -234,9 +289,27 @@ but not an open question.
 The capability check must not become a per-row database query at render time — the page does one read
 and passes it in, the same constraint step 2 works under.
 
+**Result.** Rows 10, 12, 13, 15, 22 and 23 were red at the step's start and pass at its end; every other
+test in `Api.Tests` stays green, and the only red test left in the solution is step 7's row 18.
+
+- **The availability is a required parameter of the table**, read by each host behind its existing
+  health gate — the Notifications page on every load, the startup popup once. `EditorRequired` makes a
+  host that forgets it a build warning, which the 0-warnings gate turns into a failure.
+- **Row 25 was added here, and run red against a stub first.** Whether a row reads `ActionUnavailable`
+  is a composition — an action is wired **and** cannot run — that no planned row asserted; without it a
+  purely informational notification could claim to have lost an action it never had.
+- **The analyzer caught a real defect mid-step.** The page's availability field was declared and never
+  assigned, and IDE0044 flagged it as a candidate for `readonly`. On the live page every import-review
+  alert would have been judged against an empty availability and read "no longer possible" with its
+  batch present. No unit test could see it, since the page cannot be rendered in tests here; T2 step 4
+  would have. Fixed before the step closed.
+- **The Active filter deliberately ignores the new state.** An alert whose action can no longer run is
+  undismissed and still waiting on the operator, so it belongs under Active, where its own badge says
+  why it cannot be acted on. The reason is stated at the filter.
+
 ### 6. Replace #303's id-fallback requirement, and correct #372's leftovers
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — no rows of its own; full suite green except step 7's row 18
 
 `ImportReviewPageTests.FileNameFor_UnknownBatch_FallsBackToTheId` asserts the behaviour this issue
 removes. It is replaced, not deleted quietly — the replacement asserts the name resolves from the
@@ -250,9 +323,16 @@ where one may reappear, and the answer is that it should not: dismissal is the o
 via step 4, not something the page decides on their behalf. Stated so the next reader does not treat
 the omission as an oversight.
 
+**Result.** No rows of its own — the test replacement was carried out in step 1, for the reason
+recorded there — so there was no start-of-step red to observe. The DTO's remarks now describe the
+post-#372 lifecycle and say why `FileName` is recorded; the unreferenced constant is gone. The full suite
+is unchanged: every project green except step 7's row 18. `Quotinator.Data.Tests` reports four fewer
+tests than at step 2, and that was checked rather than assumed: `AllNamedSqlConstants` feeds exactly
+four guard methods, so one constant fewer is four data rows fewer.
+
 ### 7. Boyscout pass over every file this issue touched
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — rows 16, 17 and 19 green; every verification row green
 
 The closing step for the issue, covering the files this work created or touched and no others.
 
@@ -286,28 +366,113 @@ only four in total, so most of this issue's files are new to it.
 
 **`docs/logging.md`'s `[Subsystem - Phase]` rule** applies to any touched file that emits a log line.
 
+**Result.** Row 18 was red at the step's start — as in every run since step 1 — and passes at its end.
+The full suite is green in every project, and a non-incremental build reports 0 warnings, 0 errors.
+
+- **Both enums live in `src/Quotinator.Api/Enums/`**, namespace `Quotinator.Api.Enums`, every member
+  documented. `NotificationDisplayStatus`'s summary had said "three" states for six; it now documents
+  all seven. The Razor caveat was checked by hand: only `NotificationTable.razor` and
+  `Notifications.razor` name either enum, and both import the namespace. Whether the switch still renders
+  live is row 19's T2 step, not something a build can show.
+- **The two adrift summaries are re-attached.** The enum's moved with it. `GetDisplayStatus`'s was
+  removed from above `ShowsRunControl` and rewritten above `GetDisplayStatus` itself, now naming the
+  whole precedence — `Executing` and `ActionUnavailable` included — with every parameter documented.
+- **Column names come from `nameof` in both touched `Sql.*` classes** — `Notifications` (a new query)
+  and `SystemImportActions` (a removed constant). Table names, alias prefixes, the JSON path, `rowid` and
+  Dapper parameter names stay literal, for the reasons `Sql.AppVersion` gives. Each class gained a
+  `Table` constant, which is why `Quotinator.Data.Tests` reports eight more tests than after step 6:
+  each constant feeds the same four guard methods that accounted for step 6's drop of four.
+- **`.editorconfig`**: four files new to the IDE0008 list, 28 to the IDE0090 list. One `dotnet format`
+  pass cleared all 96 IDE0090 warnings that exposed — in `Sql.cs`, `SqliteImportActionServiceTests.cs`
+  and `NotificationReaderTests.cs` — and a non-incremental rebuild found none left and no
+  `IDE0028`/`IDE0305` follow-ons. Every one of the 88 lines the formatter removed from the service tests
+  was a `new Type(...)` simplification.
+- **`.editorconfig` itself, and line endings — fixed at the close, having first been reported instead.**
+  The IDE0008 list named `tests/Quotinator.Data.Tests/Repositories/TestNotificationReader.cs`, a path
+  #312 moved into `Quotinator.Data.Testing`, and held 23 duplicate entries, mostly from the union-merge
+  with #320's list: 249 entries became 225, with none missing and none repeated. And
+  `SqliteImportActionServiceTests.cs` carried four CRLF lines against `.gitattributes`' `eol=lf`; the
+  working copy is LF again, with its diff unchanged. Both are files this issue touched, so both were in
+  scope all along — they were listed as surfaced, which is the treatment for an untouched file.
+- **Log prefixes**: every log line in a touched file already carries a `[Subsystem - Phase]` prefix.
+- **`EntityFilterOutcome` moved to `Enums/`, at the developer's direction, having first been surfaced.**
+  `EntityFilterParsing.cs` declared it beside the helper — the same ADR 016 deviation, in a file this
+  issue had not touched, and the only one left in `src/`. Row 18's guard had been scoped to code-behinds
+  for that reason alone, so it was widened first, to every source file outside an `Enums/` folder, and
+  renamed `EveryEnumLivesInAnEnumsFolder`: red on exactly
+  `src\Quotinator.Api\Endpoints\Shared\EntityFilterParsing.cs`, then green once the enum moved to
+  `src/Quotinator.Api/Enums/EntityFilterOutcome.cs`. Its three consumers gained the namespace and joined
+  both `.editorconfig` lists, which exposed 41 `var` declarations — 31 in `QuoteEndpoints.cs` — cleared
+  by `dotnet format` and read line by line. Full suite green afterwards, 4,090 of 4,090.
+
+**T2 green run, 2026-09-10 — steps 1–4 passed; steps 5–6 not yet run.** Against `quotinator:local` built
+from the finished tree, steps 1–4 produced every expected value: the orphan established (`1 row(s)
+affected`, `batch lookup -> 404`, `pending actions = 1`); the review page naming `conflicting.json`,
+never the batch id, stating the batch no longer exists, offering Dismiss and not Keep/Take; the
+notifications page reading *Action no longer possible* with no Decide control. Read from the rendered
+page as well, not only the HTML: the alert's badge is visible as `badge bg-secondary`, and the review
+row's cells read *Pending / Import batch no longer exists · Quote · Modify · conflicting.json · quoteText
+· Dismiss*.
+
+**Screenshots.** With the Browser pane reopened, real screenshots confirmed both pages before anything was
+dismissed: the review row with its grey *Import batch no longer exists* badge beside *Pending* and Dismiss
+as its only control, and the alert's grey *Action no longer possible* badge beside an empty Action cell.
+Row 17 is verified by that screenshot.
+
+**Step 5 failed, and found a defect older than this issue.** Clicking Dismiss raised
+`ImportBatchStateException: Batch '…' has already been applied and cannot be discarded`, and the row
+stayed. The orphaned batch holds two actions: the conflicting quote, `Pending`, and its Source,
+`Unchanged` — which the planner stages directly as `Applied` (#373, 2026-09-03; #377 and #376 do the same
+for their own no-op kinds). `DiscardBatchAsync`'s guard dates from #154 (2026-07-07), when `Applied` could
+only mean a real apply had happened, and it refuses any batch containing one. `ImportActionKind`'s own
+documentation says how *apply* treats a staged-`Applied` no-op and says nothing about *discard*. So a
+whole-batch discard fails for any staged review batch whose file restates something already stored —
+orphaned or not — and the REST discard endpoint goes through the same method.
+
+Row 8 missed it because its fixture never held a staged-`Applied` no-op, and the page's own test used a
+fake service; this is the gap the live tier exists for. By the developer's decision the fix went to its
+own issue, fixed before this one closes: #389, which this issue now depends on.
+
+**T2 re-run on the #389 build, 2026-09-10 — steps 1–6 passed.** A fresh container, since the earlier one
+held an image without the fix. Steps 1–4 gave the same values as before. Step 5: Dismiss left the page
+reading *Nothing is waiting for review.* (screenshot), `pending actions = 0`, the `Quote Modify`
+`Discarded`, the `Source Unchanged` no-op still `Applied` — #389's behaviour, which step 5's expectation
+now names — and the alert `isDismissed=True reason=resolved`. Step 6, under **All**: the 8 rows the API
+reports, every badge a word, the resolved alert **Done** and the others **Active** (screenshot, and the
+badge text read back from the page). Rows 16, 17 and 19 are verified.
+
+**What remains is T1**, which is the developer's: start the app in Visual Studio and confirm it starts
+without error (`docs/workflow/checklist.md`, *Waiting for release*). Until that is confirmed, none of
+the remaining Waiting-for-release items apply.
+
 ---
 
 ## Verification checklist
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | An orphaned row's file name resolves from notification metadata | Unit test | `ImportReviewPageTests.FileNameFor_BatchGone_ResolvesTheNameFromNotificationMetadata` |
-| 2 | ❌ | A live batch row still wins over the notification copy | Unit test | `ImportReviewPageTests.FileNameFor_KnownBatch_ReportsTheFileItWasImportedFrom` — existing control, stays green |
-| 3 | ❌ | The metadata lookup includes alerts already dismissed | Unit test | `ImportReviewPageTests.FileNamesFromNotifications_IncludesDismissedAlerts` |
-| 4 | ❌ | The new reader returns `ImportReviewPending` metadata regardless of dismissal | Unit test | `NotificationReaderTests.GetImportReviewMetadataAsync_ReturnsDismissedAlertsToo` |
-| 5 | ❌ | The new query and its join strategy pass the SQL guards | Unit test | `SqlQueryGuardTests` — existing enumeration; its `AllJoinStrategyBuildSqlCases` discovers the new `IJoinStrategy` by reflection, so no new row is needed. Control, stays green |
-| 6 | ❌ | An orphaned row with no notification renders the unresolved label, not the batch id | Unit test | `ImportReviewPageTests.FileNameFor_BatchGoneAndNoNotification_RendersUnresolved` — replaces `FileNameFor_UnknownBatch_FallsBackToTheId` |
-| 7 | ❌ | An orphaned row offers no Keep/Take even when it has ambiguous fields | Unit test | `ImportReviewPageTests.CanDecide_BatchGone_IsFalseDespiteAmbiguousFields` |
-| 8 | ❌ | Discard succeeds against a batch whose row is missing | Unit test | `SqliteImportActionServiceTests.DiscardBatchAsync_BatchRowMissing_MarksActionsDiscarded` — real SQLite |
-| 9 | ❌ | The coordinator discards an orphaned batch without touching a domain table | Unit test | `ImportActionResolutionCoordinatorTests.DiscardBatchAsync_BatchRowMissing_MarksEveryActionDiscarded` |
-| 10 | ❌ | A notification action declines when its metadata names a batch that is gone | Unit test | `NotificationActionExecutorTests.CanExecute_ImportReviewWhoseBatchIsGone_IsFalse` |
-| 11 | ❌ | A notification action still runs when its batch is live | Unit test | `NotificationActionExecutorTests.CanExecute_ImportReviewWithLiveBatch_IsTrue` — control |
-| 12 | ❌ | The panel asks the executor with the row's own metadata, not the trigger alone | Unit test | `NotificationTableTests.ExecutorCanRun_ImportReviewWhoseBatchIsGone_IsFalse` — needs an `internal static` seam; `ShowsRunControl`'s existing `executorCanRun: false` case already covers the propagation |
-| 13 | ❌ | Such a row reports `ActionUnavailable` rather than `Active` | Unit test | `NotificationTableTests.GetDisplayStatus_ImportReviewWhoseBatchIsGone_IsActionUnavailable` |
-| 14 | ❌ | Dismissed, expired and executing each still win over the new state | Unit test | `NotificationTableTests.GetDisplayStatus_ActionUnavailable_YieldsToDismissedExpiredAndExecuting` |
-| 15 | ❌ | Both new labels exist in every locale | Unit test | `TranslationCompletenessTests` — existing, covers the new key automatically |
-| 16 | ❌ | Live: an orphaned row shows its file name, offers only dismiss, and dismissing clears it | Live (T2) | `docs/automated-testing/import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md` |
-| 17 | ❌ | Live: the same row's notification shows the `ActionUnavailable` badge and names the file | Live (T2) | Same document, its own section |
-| 18 | ❌ | Both display enums live in `Enums/`, not in a `.razor.cs` | Unit test | `RepositoryStructureTests` — extended to assert no enum is declared in a `.razor.cs` file, so the rule holds for the next component too rather than for these two by hand |
-| 19 | ❌ | Live: the status column still renders every state after the enum move | Live (T2) | Same document — the Razor caveat means the build cannot prove this |
+| 1 | ✅ | An orphaned row's file name resolves from notification metadata | Unit test | `ImportReviewPageTests.FileNameFor_BatchGone_ResolvesTheNameFromNotificationMetadata` |
+| 2 | ✅ | A live batch row still wins over the notification copy | Unit test | `ImportReviewPageTests.FileNameFor_KnownBatch_ReportsTheFileItWasImportedFrom` — existing control, stayed green |
+| 3 | ✅ | The metadata lookup includes alerts already dismissed | Unit test | `ImportReviewPageTests.FileNamesFromNotifications_IncludesDismissedAlerts` |
+| 4 | ✅ | The new reader returns `ImportReviewPending` metadata regardless of dismissal | Unit test | `NotificationReaderTests.GetByMetadataKindAsync_ReturnsDismissedAlertsToo` — named for the kind-keyed method it tests (see step 2) |
+| 5 | ✅ | The new query and its join strategy pass the SQL guards | Unit test | `SqlQueryGuardTests` — existing enumeration; its `AllJoinStrategyBuildSqlCases` discovers the new `IJoinStrategy` by reflection, so no new row is needed. Control, stayed green |
+| 6 | ✅ | An orphaned row with no notification renders the unresolved label, not the batch id | Unit test | `ImportReviewPageTests.FileNameFor_BatchGoneAndNoNotification_RendersUnresolved` — replaces `FileNameFor_UnknownBatch_FallsBackToTheId` |
+| 7 | ✅ | An orphaned row offers no Keep/Take even when it has ambiguous fields | Unit test | `ImportReviewPageTests.CanDecide_BatchGone_IsFalseDespiteAmbiguousFields` |
+| 8 | ✅ | Discard succeeds against a batch whose row is missing | Unit test | `SqliteImportActionServiceTests.DiscardBatchAsync_BatchRowMissing_MarksActionsDiscarded` — real SQLite; control, green before and after (see step 1) |
+| 9 | ✅ | The coordinator discards an orphaned batch without touching a domain table | Unit test | `ImportActionResolutionCoordinatorTests.DiscardBatchAsync_StagedBatch_MarksEveryActionDiscardedWithoutTouchingDomainTables` — existing; its fixture has never had a batch row, so it already is this case (see step 1) |
+| 10 | ✅ | A notification action declines when its metadata names a batch that is gone | Unit test | `NotificationActionExecutorTests.CanExecute_ImportReviewWhoseBatchIsGone_IsFalse` |
+| 11 | ✅ | A notification action still runs when its batch is live | Unit test | `NotificationActionExecutorTests.CanExecute_ImportReviewWithLiveBatch_IsTrue` — control |
+| 12 | ✅ | The panel asks the executor with the row's own metadata, not the trigger alone | Unit test | `NotificationTableTests.ExecutorCanRun_ImportReviewWhoseBatchIsGone_IsFalse` — through the `internal static` seam; `ShowsRunControl`'s existing `executorCanRun: false` case covers the propagation |
+| 13 | ✅ | Such a row reports `ActionUnavailable` rather than `Active` | Unit test | `NotificationTableTests.GetDisplayStatus_ImportReviewWhoseBatchIsGone_IsActionUnavailable` |
+| 14 | ✅ | Dismissed, expired and executing each still win over the new state | Unit test | `NotificationTableTests.GetDisplayStatus_ActionUnavailable_YieldsToDismissedExpiredAndExecuting` — control (see step 1) |
+| 15 | ✅ | Every new label exists in every locale | Unit test | `NotificationTableTests.EveryDisplayStatus_HasATranslationKey` (red at step 1 for `ActionUnavailable`) and `TranslationCompletenessTests` (control, stayed green with all three new keys) |
+| 16 | ✅ | Live: an orphaned row shows its file name, offers only dismiss, and dismissing clears it | Live (T2) | `docs/automated-testing/import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md` |
+| 17 | ✅ | Live: the same row's notification shows the `ActionUnavailable` badge and names the file | Live (T2) | Same document, its own section |
+| 18 | ✅ | Every enum in a source project lives in `Enums/` — the two display enums included | Unit test | `RepositoryStructureTests.EveryEnumLivesInAnEnumsFolder` — asserts no enum outside an `Enums/` folder anywhere under `src/`, so the rule holds for the next file too rather than for these by hand; began scoped to `.razor.cs` files and was widened once the last other deviation moved (step 7) |
+| 19 | ✅ | Live: the Status column still renders its states as words after the enum move | Live (T2) | Same document, step 6 — the Razor caveat means the build cannot prove this |
+| 20 | ✅ | A batch is gone exactly when no live batch matches its id, compared case-insensitively | Unit test | `ImportReviewPageTests.BatchIsGone_OnlyWhenNoLiveBatchMatches` — added in step 1 |
+| 21 | ✅ | Dismissing a gone row discards its whole batch and applies nothing | Unit test | `ImportReviewPageTests.DismissBatch_DiscardsTheWholeBatch` — added in step 1 |
+| 22 | ✅ | An import-review action without its payload cannot run | Unit test | `NotificationActionExecutorTests.CanExecute_ImportReviewWithoutItsPayload_IsFalse` — added in step 1 |
+| 23 | ✅ | The availability reports every live batch and no other | Unit test | `NotificationActionExecutorTests.GetAvailabilityAsync_ReportsEveryLiveBatchAndNoOther` — added in step 1 |
+| 24 | ✅ | Reset and Reseed ignore availability | Unit test | `NotificationActionExecutorTests.CanExecute_TriggerWithNoVolatileDependency_IgnoresAvailability` — added in step 1; control |
+| 25 | ✅ | "Action no longer possible" is reported only for an action that exists and cannot run | Unit test | `NotificationTableTests.ActionIsUnavailable_OnlyForAWiredActionThatCannotRun` — added in step 5, red against its stub before implementing |
