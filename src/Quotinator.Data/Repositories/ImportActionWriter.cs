@@ -30,7 +30,7 @@ public sealed class ImportActionWriter(IDbConnectionFactory factory) : SqliteRep
     /// <inheritdoc/>
     public async Task WriteAsync(ImportActionEntity entry)
     {
-        using var conn = Factory.CreateConnection();
+        using IDbConnection conn = Factory.CreateConnection();
         conn.Open();
         await conn.InsertAsync(entry);
     }
@@ -69,7 +69,7 @@ public sealed class ImportActionWriter(IDbConnectionFactory factory) : SqliteRep
     /// <inheritdoc/>
     public async Task MarkAppliedAsync(Guid id, IDbConnection connection, IDbTransaction? transaction = null)
     {
-        var now = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+        string now = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
         await connection.ExecuteAsync(
             Sql.SystemImportActions.MarkApplied,
             new
@@ -85,13 +85,14 @@ public sealed class ImportActionWriter(IDbConnectionFactory factory) : SqliteRep
     /// <inheritdoc/>
     public async Task MarkBatchDiscardedAsync(string batchId, IDbConnection connection, IDbTransaction? transaction = null)
     {
-        var now = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
+        string now = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
         await connection.ExecuteAsync(
             Sql.SystemImportActions.MarkBatchDiscarded,
             new
             {
                 batchId,
                 status       = new SafeValue<ImportActionStatus?>(ImportActionStatus.Discarded.ToString(), ImportActionStatus.Discarded),
+                applied      = new SafeValue<ImportActionStatus?>(ImportActionStatus.Applied.ToString(), ImportActionStatus.Applied),
                 discardedAt  = now,
                 dateModified = now,
             },

@@ -7,10 +7,10 @@ namespace Quotinator.Core.Services;
 
 /// <summary>
 /// Unified staging workflow (#154) — decides, undoes, applies, and discards
-/// <c>System_ImportAction</c> batches. A thin, Quotinator-specific wrapper over
+/// <c>Import_Action</c> batches. A thin, Quotinator-specific wrapper over
 /// <see cref="Quotinator.Data.Import.IImportActionCoordinator"/>: this class supplies the one
-/// domain-specific piece the coordinator needs (how a resolved Quote/Source/Character/Person action
-/// actually gets written) — everything else (staging, undo, batch-readiness checking, the atomic
+/// domain-specific piece the coordinator needs (how a resolved action of each entity type actually gets
+/// written) — everything else (staging, undo, batch-readiness checking, the atomic
 /// apply transaction) is the coordinator's generic machinery.
 /// </summary>
 public interface IImportActionService
@@ -99,7 +99,10 @@ public interface IImportActionService
     /// <param name="cancellationToken">Cancellation token.</param>
     Task<ImportActionBatchStatusResponse?> ApplyBatchAsync(string batchId, InitiatorType initiatedByType = InitiatorType.WriteEndpoint, bool purgeOnSuccess = false, NotificationResolution? resolution = null, CancellationToken cancellationToken = default);
 
-    /// <summary>Discards every action sharing <paramref name="batchId"/>. Never touches any domain table.</summary>
+    /// <summary>
+    /// Discards every action sharing <paramref name="batchId"/> that still awaits a decision. A plan-time
+    /// no-op the planner staged as applied is left as recorded (#389). Never touches any domain table.
+    /// </summary>
     Task DiscardBatchAsync(string batchId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -108,7 +111,7 @@ public interface IImportActionService
     /// snapshot. Batches undo as a strict global LIFO stack — only the most recently applied batch
     /// still live may be reversed. On success, the batch's own <c>ImportBatch</c> row is itself
     /// soft-deleted, which is the sole signal that its effects are no longer live (its
-    /// <c>System_ImportActions</c> rows stay <c>Applied</c> permanently, an accurate historical
+    /// <c>Import_Action</c> rows stay <c>Applied</c> permanently, an accurate historical
     /// record).
     /// </summary>
     /// <param name="batchId">The batch to reverse.</param>

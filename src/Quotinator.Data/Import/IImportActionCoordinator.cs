@@ -76,11 +76,22 @@ public interface IImportActionCoordinator
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Marks every action sharing <paramref name="batchId"/> as <see cref="ImportActionStatus.Discarded"/>
-    /// in one statement. Never touches any domain table — a discarded batch's Add actions never
-    /// created anything to begin with (creation is deferred to apply time).
+    /// Marks every action sharing <paramref name="batchId"/> that still awaits a decision as
+    /// <see cref="ImportActionStatus.Discarded"/>, in one statement. Never touches any domain table — a
+    /// discarded batch's Add actions never created anything to begin with (creation is deferred to apply
+    /// time).
+    /// <para>
+    /// A plan-time no-op, staged <see cref="ImportActionStatus.Applied"/> by the planner
+    /// (<see cref="ImportActionKindExtensions.IsPlanTimeNoOp"/>), is left exactly as recorded (#389):
+    /// nothing was ever written for it, so a discard has nothing of it to undo, and it does not make the
+    /// batch count as applied.
+    /// </para>
     /// </summary>
-    /// <exception cref="ImportBatchStateException">The batch has no staged actions, or any action sharing it is already <see cref="ImportActionStatus.Applied"/> or <see cref="ImportActionStatus.Discarded"/>.</exception>
+    /// <exception cref="ImportBatchStateException">
+    /// The batch has no staged actions; holds an <see cref="ImportActionStatus.Applied"/> action that is not
+    /// a plan-time no-op; is already <see cref="ImportActionStatus.Discarded"/>; or has nothing left
+    /// awaiting a decision.
+    /// </exception>
     Task DiscardBatchAsync(string batchId, CancellationToken cancellationToken = default);
 
     /// <summary>

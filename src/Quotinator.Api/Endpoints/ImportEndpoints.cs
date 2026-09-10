@@ -7,11 +7,13 @@ using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Core.Database;
+using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Csv;
 using Quotinator.Data.Import;
 using Quotinator.Api.Logging;
+using Quotinator.Data.Models;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -24,12 +26,12 @@ internal static class ImportEndpoints
     internal static void MapImportEndpoints(this WebApplication app)
     {
         // Read-only listing — no API key required, matches GET /admin/audit's precedent.
-        var publicGroup = app.MapGroup("/api/v1/import")
+        RouteGroupBuilder publicGroup = app.MapGroup("/api/v1/import")
                              .WithTags(ApiTags.Import)
                              .RequireRateLimiting(RateLimitPolicies.Admin);
 
         // Every write here mutates staged or real data — requires X-Api-Key, matches reseed/reset/refresh's precedent.
-        var adminGroup = app.MapGroup("/api/v1/import")
+        RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/import")
                             .WithTags(ApiTags.Import)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
                             .AddEndpointFilter<AdminApiKeyFilter>()
@@ -129,10 +131,10 @@ internal static class ImportEndpoints
             [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
             [Description("Number of actions per page (0–500). 0 means every matching action as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null) =>
         {
-            if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
+            if (!PaginationParsing.TryParse(page, pageSize, localizer, out int pageValue, out int pageSizeValue, out IResult? pageError))
                 return pageError!;
 
-            var result = await service.GetPagedAsync(batchId, status, entityType, pageValue, pageSizeValue);
+            PagedItems<ImportActionSummaryResponse> result = await service.GetPagedAsync(batchId, status, entityType, pageValue, pageSizeValue);
 
             return PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer)
                 ?? Results.Ok(result);
@@ -143,8 +145,9 @@ internal static class ImportEndpoints
             "Returns a paginated list of staged import actions (#154), newest first — the review " +
             "surface for a staged batch, whether staged via `POST /import`, `POST /import/preview`, " +
             "or startup seeding. Filter by `status` (`Pending`, `Decided`, `Applied`, `Discarded`, " +
-            "`Blocked`, `Stale`), `batchId`, and/or `entityType` (`Quote`, `Source`, `Character`, " +
-            "`Person`). Each item includes `relatedActionIds` (the Source/Character/Person actions in " +
+            "`Blocked`, `Stale`), `batchId`, and/or `entityType` (" +
+            string.Join(", ", ImportActionEntityTypes.All.Select(type => $"`{type}`")) +
+            "). Each item includes `relatedActionIds` (the Source/Character/Person actions in " +
             "the same batch a Quote action depends on) and `ambiguousFields` (the fields genuinely " +
             "needing a decision, populated only while `status` is `Pending`). Maximum `pageSize` is 500.");
 
@@ -157,16 +160,15 @@ internal static class ImportEndpoints
             if (string.IsNullOrWhiteSpace(batchId))
                 return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-            var normalizedFormat = (format ?? "json").ToLowerInvariant();
+            string normalizedFormat = (format ?? "json").ToLowerInvariant();
             if (normalizedFormat is not ("json" or "csv"))
                 return Results.Problem(detail: localizer[ApiMessages.ImportActionExportUnknownFormat], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-            var rows = await service.ExportBatchAsync(batchId);
+            IReadOnlyList<ImportActionFieldRowResponse> rows = await service.ExportBatchAsync(batchId);
 
             if (normalizedFormat == "csv")
             {
-                var csvRows = new List<IEnumerable<string?>> { ImportActionFieldRowMapper.CsvHeader };
-                csvRows.AddRange(rows.Select(ImportActionFieldRowMapper.ToCsvRow));
+                List<IEnumerable<string?>> csvRows = [ImportActionFieldRowMapper.CsvHeader, .. rows.Select(ImportActionFieldRowMapper.ToCsvRow)];
                 return Results.Text(CsvLineWriter.Write(csvRows), "text/csv");
             }
 
@@ -210,20 +212,20 @@ internal static class ImportEndpoints
                 if (!request.HasFormContentType)
                     return Results.Problem(detail: localizer[ApiMessages.ImportFileMissing], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-                var form = await request.ReadFormAsync();
-                var file = form.Files["file"];
+                IFormCollection form = await request.ReadFormAsync();
+                IFormFile? file = form.Files["file"];
                 if (file is null || file.Length == 0)
                     return Results.Problem(detail: localizer[ApiMessages.ImportFileMissing], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-                var normalizedFormat = (format ?? "json").ToLowerInvariant();
+                string normalizedFormat = (format ?? "json").ToLowerInvariant();
                 if (normalizedFormat is not ("json" or "csv"))
                     return Results.Problem(detail: localizer[ApiMessages.ImportActionExportUnknownFormat], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-                using var reader = new StreamReader(file.OpenReadStream());
-                var content = await reader.ReadToEndAsync();
+                using StreamReader reader = new(file.OpenReadStream());
+                string content = await reader.ReadToEndAsync();
 
-                var (parsedRows, parseErrors) = normalizedFormat == "csv" ? ParseCsvRows(content) : ParseJsonRows(content);
-                var result = await service.BulkDecideAsync(batchId, parsedRows);
+                (List<ImportActionFieldRowDto>? parsedRows, List<BulkDecideRowError>? parseErrors) = normalizedFormat == "csv" ? ParseCsvRows(content) : ParseJsonRows(content);
+                BulkDecideResponse result = await service.BulkDecideAsync(batchId, parsedRows);
 
                 return Results.Ok(new BulkDecideResponse
                 {
@@ -258,7 +260,7 @@ internal static class ImportEndpoints
             IImportActionService service,
             IApiLocalizer localizer) =>
         {
-            if (!Guid.TryParse(id, out var actionId))
+            if (!Guid.TryParse(id, out Guid actionId))
                 return Results.Problem(detail: localizer[ApiMessages.ImportActionNotFound], statusCode: StatusCodes.Status404NotFound);
 
             try
@@ -306,7 +308,7 @@ internal static class ImportEndpoints
             IImportActionService service,
             IApiLocalizer localizer) =>
         {
-            if (!Guid.TryParse(id, out var actionId))
+            if (!Guid.TryParse(id, out Guid actionId))
                 return Results.Problem(detail: localizer[ApiMessages.ImportActionNotFound], statusCode: StatusCodes.Status404NotFound);
 
             try
@@ -344,7 +346,7 @@ internal static class ImportEndpoints
             if (string.IsNullOrWhiteSpace(batchId))
                 return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-            var stillPending = await service.ApplyBatchAsync(batchId, purgeOnSuccess: purgeOnSuccess ?? false);
+            ImportActionBatchStatusResponse? stillPending = await service.ApplyBatchAsync(batchId, purgeOnSuccess: purgeOnSuccess ?? false);
             return stillPending is null
                 ? Results.Ok()
                 : Results.Problem(
@@ -385,13 +387,16 @@ internal static class ImportEndpoints
             }
         })
         .WithName("DiscardImportActionBatch")
-        .WithSummary("Discard every staged action in a batch")
+        .WithSummary("Discard every action in a batch still awaiting a decision")
         .WithDescription(
-            "Marks every action sharing `batchId` as discarded in one statement — never touches any " +
-            "domain table, since a discarded batch's Add actions never created anything to begin " +
-            "with (creation is deferred to apply time). Returns `422` if `batchId` is missing, or if " +
-            "the batch has already been applied, already been discarded, or has no staged actions " +
-            "at all. " +
+            "Marks every action sharing `batchId` that still awaits a decision as discarded, in one " +
+            "statement — never touches any domain table, since a discarded batch's Add actions never " +
+            "created anything to begin with (creation is deferred to apply time). An action the " +
+            "importer recorded as already applied because it changes nothing — content already stored, " +
+            "a conflict that resolved to the stored values, or one already awaiting review from an " +
+            "earlier pass — is left as recorded: there is nothing of it to undo. Returns `422` if " +
+            "`batchId` is missing, or if the batch holds applied changes, has already been discarded, " +
+            "has nothing left awaiting a decision, or has no staged actions at all. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
 
         adminGroup.MapPost("/actions/reverse", async (
@@ -447,8 +452,8 @@ internal static class ImportEndpoints
     // aborts the rest" contract (#163 spec requirement 6) for the parse stage specifically.
     private static (List<ImportActionFieldRowDto> Rows, List<BulkDecideRowError> Errors) ParseJsonRows(string content)
     {
-        var rows   = new List<ImportActionFieldRowDto>();
-        var errors = new List<BulkDecideRowError>();
+        List<ImportActionFieldRowDto> rows   = [];
+        List<BulkDecideRowError> errors = [];
 
         JsonElement root;
         try
@@ -467,8 +472,8 @@ internal static class ImportEndpoints
             return (rows, errors);
         }
 
-        var index = 0;
-        foreach (var element in root.EnumerateArray())
+        int index = 0;
+        foreach (JsonElement element in root.EnumerateArray())
         {
             index++;
             try
@@ -488,11 +493,11 @@ internal static class ImportEndpoints
     // an aborted parse of the whole file.
     private static (List<ImportActionFieldRowDto> Rows, List<BulkDecideRowError> Errors) ParseCsvRows(string content)
     {
-        var rows   = new List<ImportActionFieldRowDto>();
-        var errors = new List<BulkDecideRowError>();
-        var lines  = CsvLineParser.Parse(content);
+        List<ImportActionFieldRowDto> rows   = [];
+        List<BulkDecideRowError> errors = [];
+        List<List<string>> lines  = CsvLineParser.Parse(content);
 
-        for (var i = 1; i < lines.Count; i++) // row 0 is the header
+        for (int i = 1; i < lines.Count; i++) // row 0 is the header
         {
             try
             {
@@ -516,7 +521,7 @@ internal static class ImportEndpoints
         if (file is null || file.Length == 0)
             return Results.Problem(detail: localizer[ApiMessages.ImportFileMissing], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        if (!ImportRequestSettingsParser.TryParse(settingsJson, out var settings))
+        if (!ImportRequestSettingsParser.TryParse(settingsJson, out ImportSettingsDto? settings))
             return Results.Problem(detail: localizer[ApiMessages.ImportSettingsInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
 
         if (settings?.Enrich == true)
@@ -524,8 +529,8 @@ internal static class ImportEndpoints
 
         try
         {
-            await using var stream = file.OpenReadStream();
-            var result = await importService.ImportAsync(stream, file.FileName, settings, preview, purgeOnSuccess, cancellationToken);
+            await using Stream stream = file.OpenReadStream();
+            ImportResultResponse result = await importService.ImportAsync(stream, file.FileName, settings, preview, purgeOnSuccess, cancellationToken);
             return ToStatusCodeResult(result);
         }
         catch (UnknownConverterException ex)
@@ -554,7 +559,7 @@ internal static class ImportEndpoints
         if (!request.HasFormContentType)
             return Results.Problem(detail: localizer[ApiMessages.ImportFileOrBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-        var form = await request.ReadFormAsync(cancellationToken);
+        IFormCollection form = await request.ReadFormAsync(cancellationToken);
         return await HandleImportAsync(
             form.Files["file"], form["settings"].FirstOrDefault(),
             importService, localizer, logger, preview: false, purgeOnSuccess, cancellationToken);
@@ -563,14 +568,14 @@ internal static class ImportEndpoints
     private static async Task<IResult> HandleApplyBatchAsync(
         string batchIdRaw, bool purgeOnSuccess, IQuoteImportService importService, IApiLocalizer localizer, ILogger<Log> logger, CancellationToken cancellationToken)
     {
-        if (!Guid.TryParse(batchIdRaw, out var batchId))
+        if (!Guid.TryParse(batchIdRaw, out Guid batchId))
             return Results.Problem(detail: localizer[ApiMessages.ImportBatchNotFound], statusCode: StatusCodes.Status404NotFound);
 
         logger.LogImportApplyingStagedBatch(batchId);
 
         try
         {
-            var result = await importService.ApplyStagedBatchAsync(batchId, purgeOnSuccess, cancellationToken);
+            ImportResultResponse result = await importService.ApplyStagedBatchAsync(batchId, purgeOnSuccess, cancellationToken);
             return ToStatusCodeResult(result);
         }
         catch (ImportBatchNotFoundException)

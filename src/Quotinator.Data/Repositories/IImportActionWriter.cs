@@ -50,8 +50,10 @@ public interface IImportActionWriter
     Task MarkAppliedAsync(Guid id, IDbConnection connection, IDbTransaction? transaction = null);
 
     /// <summary>
-    /// Marks every action sharing <paramref name="batchId"/> discarded in one statement — sets
-    /// <c>DiscardedAt</c>. The whole-batch discard operation has no per-row decision to make.
+    /// Marks discarded, in one statement, every action sharing <paramref name="batchId"/> that is neither
+    /// <c>Applied</c> nor already <c>Discarded</c> — sets <c>DiscardedAt</c>. The whole-batch discard
+    /// operation has no per-row decision to make; whether a batch holding applied rows may be discarded at
+    /// all is the coordinator's check, not this statement's (#389).
     /// </summary>
     Task MarkBatchDiscardedAsync(string batchId, IDbConnection connection, IDbTransaction? transaction = null);
 

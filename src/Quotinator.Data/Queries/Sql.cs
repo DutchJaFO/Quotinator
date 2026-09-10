@@ -396,10 +396,23 @@ internal static class Sql
             $"UPDATE {Table} SET {nameof(ImportActionEntity.Status)} = @status, {nameof(ImportActionEntity.AppliedAt)} = @appliedAt, " +
             $"{nameof(ImportActionEntity.DateModified)} = @dateModified WHERE {IdClauses.Equals(nameof(ImportActionEntity.Id), "id")};";
 
-        /// <summary>Marks every action sharing a BatchId discarded in one statement (#154) — DiscardedAt set. Case-insensitive — see <see cref="SelectAllForBatch"/>.</summary>
+        /// <summary>
+        /// Marks discarded, in one statement, every action sharing a BatchId that is not already terminal
+        /// (#154, #389) — DiscardedAt set.
+        /// <para>
+        /// <c>Applied</c> rows are left alone. <see cref="Import.ImportActionResolutionCoordinator.DiscardBatchAsync"/>
+        /// refuses any batch holding applied real work, so the only ones that reach this statement are
+        /// plan-time no-ops (<see cref="Enums.ImportActionKindExtensions.IsPlanTimeNoOp"/>), which nothing
+        /// was ever written for and a discard has nothing of to undo. A row already carrying the status being
+        /// set — <c>@status</c>, <c>Discarded</c> — keeps its original <c>DiscardedAt</c>.
+        /// </para>
+        /// Case-insensitive — see <see cref="SelectAllForBatch"/>.
+        /// </summary>
         internal static readonly string MarkBatchDiscarded =
             $"UPDATE {Table} SET {nameof(ImportActionEntity.Status)} = @status, {nameof(ImportActionEntity.DiscardedAt)} = @discardedAt, " +
-            $"{nameof(ImportActionEntity.DateModified)} = @dateModified WHERE {IdClauses.Equals(nameof(ImportActionEntity.BatchId), "batchId")};";
+            $"{nameof(ImportActionEntity.DateModified)} = @dateModified WHERE {IdClauses.Equals(nameof(ImportActionEntity.BatchId), "batchId")} " +
+            $"AND NOT ({TextClauses.Equals(nameof(ImportActionEntity.Status), "applied")}) " +
+            $"AND NOT ({TextClauses.Equals(nameof(ImportActionEntity.Status), "status")});";
 
         /// <summary>
         /// Hard-deletes every action sharing a BatchId (#249) — the conflict-resolution-data purge,

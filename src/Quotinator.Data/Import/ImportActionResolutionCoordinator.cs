@@ -136,11 +136,15 @@ public sealed class ImportActionResolutionCoordinator(IImportActionReader reader
         if (actions.Count == 0)
             throw new ImportBatchStateException(batchId, "has no staged actions to discard.");
 
-        if (actions.Any(a => a.Status.Parsed == ImportActionStatus.Applied))
+        // A kind that cannot be read counts as real work: refusing is the side a wrong guess recovers from.
+        if (actions.Any(a => a.Status.Parsed == ImportActionStatus.Applied && a.ActionType.Parsed?.IsPlanTimeNoOp() != true))
             throw new ImportBatchStateException(batchId, "has already been applied and cannot be discarded.");
 
         if (actions.All(a => a.Status.Parsed == ImportActionStatus.Discarded))
             throw new ImportBatchStateException(batchId, "has already been discarded.");
+
+        if (actions.All(a => a.Status.Parsed is ImportActionStatus.Applied or ImportActionStatus.Discarded))
+            throw new ImportBatchStateException(batchId, "has nothing awaiting a decision to discard.");
 
         using IDbConnection conn = _factory.CreateConnection();
         conn.Open();

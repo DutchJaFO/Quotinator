@@ -6,6 +6,7 @@ using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Database;
 
 namespace Quotinator.Data.Tests.Import;
 
@@ -25,40 +26,15 @@ public class ImportActionResolutionCoordinatorTests
     private ImportActionResolutionCoordinator _coordinator = null!;
 
     [TestInitialize]
-    public void TestInitialize()
+    public async Task TestInitialize()
     {
         _tempDir = Directory.CreateTempSubdirectory("quotinator_action_coordinator_test_").FullName;
         _dbPath  = Path.Combine(_tempDir, "test.db");
 
-        using SqliteConnection conn = new($"Data Source={_dbPath}");
-        conn.Open();
-        conn.Execute("""
-            CREATE TABLE Import_Action (
-                Id                 TEXT    NOT NULL PRIMARY KEY,
-                BatchId            TEXT    NOT NULL,
-                ActionType         TEXT    NOT NULL
-                                   CHECK (ActionType IN ('Add', 'Modify')),
-                EntityType         TEXT    NOT NULL,
-                EntityId           TEXT    NOT NULL,
-                ExistingBatchId    TEXT,
-                ExistingValue      TEXT,
-                IncomingValue      TEXT    NOT NULL,
-                AppliedPolicy      TEXT,
-                Status             TEXT    NOT NULL
-                                   CHECK (Status IN ('Pending', 'Decided', 'Applied', 'Discarded', 'Blocked')),
-                MergedFields       TEXT,
-                MarkCompletenessAs TEXT
-                                   CHECK (MarkCompletenessAs IS NULL OR MarkCompletenessAs IN ('Incomplete', 'NeedsReview', 'Complete')),
-                DetectedAt         TEXT    NOT NULL,
-                AppliedAt          TEXT,
-                DiscardedAt        TEXT,
-                DateCreated        TEXT    NOT NULL,
-                DateModified       TEXT,
-                DateDeleted        TEXT,
-                IsDeleted          INTEGER NOT NULL DEFAULT 0,
-                OriginalDecision   TEXT
-            );
-            """);
+        // #389: the schema the application actually creates, not a hand-written copy of Import_Action.
+        // The copy this replaced still allowed only Add/Modify and no Stale — it had drifted three
+        // migrations behind, so no test here could stage a no-op the planner now writes routinely.
+        await CurrentSchema.ApplyDataSchemaAsync(_dbPath);
 
         _factory     = new SqliteConnectionFactory(_dbPath);
         _writer      = new ImportActionWriter(_factory);
@@ -424,6 +400,71 @@ public class ImportActionResolutionCoordinatorTests
         ImportActionEntity entry = BuildDecidedAdd("BATCH-1");
         await _writer.WriteAsync(entry);
         await _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken);
+
+        await Assert.ThrowsExactlyAsync<ImportBatchStateException>(() => _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken));
+    }
+
+    /// <summary>
+    /// A no-op the planner stages straight to <c>Applied</c> (#373, #376, #377): nothing is ever written
+    /// for it, so it is not applied work, whatever its status says.
+    /// </summary>
+    private static ImportActionEntity BuildPlanTimeNoOp(string batchId) => new()
+    {
+        BatchId       = batchId,
+        ActionType    = new SafeValue<ImportActionKind?>(ImportActionKind.Unchanged.ToString(), ImportActionKind.Unchanged),
+        EntityType    = "Widget",
+        EntityId      = Guid.NewGuid().ToString(),
+        IncomingValue = "{}",
+        Status        = new SafeValue<ImportActionStatus?>(ImportActionStatus.Applied.ToString(), ImportActionStatus.Applied),
+        DetectedAt    = DateTime.UtcNow,
+    };
+
+    /// <summary>
+    /// #389, found by #369's T2 run: a review batch whose file restates something already stored holds a
+    /// plan-time no-op beside its pending conflict, and discarding it was refused as "already applied".
+    /// The pending action is discarded; the no-op is left exactly as recorded.
+    /// </summary>
+    [TestMethod]
+    public async Task DiscardBatchAsync_BatchWithPlanTimeNoOp_DiscardsTheRestAndKeepsTheNoOp()
+    {
+        ImportActionEntity noOp    = BuildPlanTimeNoOp("BATCH-1");
+        ImportActionEntity pending = BuildPendingModify("BATCH-1");
+        await _writer.WriteAsync(noOp);
+        await _writer.WriteAsync(pending);
+
+        await _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken);
+
+        Assert.AreEqual(ImportActionStatus.Discarded, (await _reader.GetByIdAsync(pending.Id))!.Status.Parsed);
+        Assert.AreEqual(ImportActionStatus.Applied, (await _reader.GetByIdAsync(noOp.Id))!.Status.Parsed,
+            "A plan-time no-op is left as recorded — a discard has nothing of it to undo.");
+    }
+
+    /// <summary>
+    /// #389, the control: an applied <c>Modify</c> is real applied work, which a discard cannot undo, so the
+    /// batch is still refused — and a refused discard changes nothing.
+    /// </summary>
+    [TestMethod]
+    public async Task DiscardBatchAsync_BatchWithAppliedModify_StillThrows()
+    {
+        ImportActionEntity applied = BuildPendingModify("BATCH-1");
+        ImportActionEntity pending = BuildPendingModify("BATCH-1");
+        await _writer.WriteAsync(applied);
+        await _writer.WriteAsync(pending);
+        await MarkAppliedAsync(applied.Id);
+
+        await Assert.ThrowsExactlyAsync<ImportBatchStateException>(() => _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken));
+        Assert.AreEqual(ImportActionStatus.Pending, (await _reader.GetByIdAsync(pending.Id))!.Status.Parsed,
+            "A refused discard must leave every action as it was.");
+    }
+
+    /// <summary>
+    /// #389, a control: a batch holding nothing but no-ops has nothing awaiting a decision, so there is
+    /// nothing to discard and the batch is refused.
+    /// </summary>
+    [TestMethod]
+    public async Task DiscardBatchAsync_BatchOfOnlyPlanTimeNoOps_Throws()
+    {
+        await _writer.WriteAsync(BuildPlanTimeNoOp("BATCH-1"));
 
         await Assert.ThrowsExactlyAsync<ImportBatchStateException>(() => _coordinator.DiscardBatchAsync("BATCH-1", TestContext.CancellationToken));
     }

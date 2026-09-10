@@ -7,6 +7,11 @@ namespace Quotinator.Data.Enums;
 /// and maintained entirely by this project's own coordinator logic, not by any consuming project's
 /// schema (a consumer decides, per row, which of these kinds applies — it does not invent new
 /// kinds of its own). Per ADR 008, backed by a matching SQL CHECK constraint.
+/// <para>
+/// Which kinds are plan-time no-ops — staged straight to <see cref="ImportActionStatus.Applied"/>, skipped
+/// by apply and left alone by discard — is declared once, in
+/// <see cref="ImportActionKindExtensions.IsPlanTimeNoOp"/> (#389). A new member must be classified there.
+/// </para>
 /// </summary>
 public enum ImportActionKind
 {
