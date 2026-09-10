@@ -83,6 +83,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#382](https://github.com/DutchJaFO/Quotinator/issues/382) | CompletenessGuard.ShouldBlock is evaluated against a pre-rule field set at four of five sites | Waiting for release | T1 ✅ T2 ✅ | [382-shouldblock-reads-a-pre-rule-field-set-plan.md](382-shouldblock-reads-a-pre-rule-field-set-plan.md) |
 | [#383](https://github.com/DutchJaFO/Quotinator/issues/383) | Notification detail table has no totals line | Waiting for release | T1 ✅ | [383-notification-detail-totals-line-plan.md](383-notification-detail-totals-line-plan.md) |
 | [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | Waiting for release | T1 ✅ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
+| [#390](https://github.com/DutchJaFO/Quotinator/issues/390) | A reseed imports the file list captured at startup, not the files currently in either folder | Planning | T1 ⬜ T2 ⬜ | — |
 
 ---
 
@@ -122,6 +123,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #370 ─── (none) — Planning
 #369 ─── depends on #303, #372, #389 — Waiting for release
 #389 ─── depends on #373, #376, #377 — Waiting for release
+#390 ─── (none); found in T1 while verifying #369; blocks #368 — Planning
 #372 ─── (none); blocks #302 — Waiting for release
 #373 ─── depends on #372; blocks #302 (via #372), #372's row 21 — Waiting for release
 #375 ─── (none); blocks #374; its import-report half landed with #373's step 10 — Waiting for release
@@ -134,7 +136,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #383 ─── depends on #377, whose invariant the totals line makes checkable — Waiting for release
 #367 ─── depends on #278, #312; blocks #308 — Waiting for release
 #371 ─── (none) — Planning
-#368 ─── depends on #303, #304 — Planning
+#368 ─── depends on #303, #304, #390 — Planning
 ```
 
 ---
@@ -188,7 +190,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 43 | **#352** | Planning — after #349 |
 | 44 | **#353** | Planning — after #352 |
 | 45 | **#360** | Planning — before end-of-milestone migration consolidation |
-| 46 | **#368** | Planning — depends on #303, #304 |
+| 46 | **#390** | Planning — before #368, which depends on it |
+| 47 | **#368** | Planning — depends on #303, #304, #390 |
 
 ---
 

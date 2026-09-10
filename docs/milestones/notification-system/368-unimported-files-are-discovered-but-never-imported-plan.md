@@ -4,7 +4,7 @@
 **GitHub issue:** #368
 **Tiers required:** T1, T2
 **Depends on:** #303 (its `/import-review` page is where a remedy would point), #304 (the reseed
-action this issue's remedy must not simply reuse)
+action), #390 (a reseed must see the current files before it can be a remedy at all)
 
 ---
 
@@ -38,8 +38,9 @@ if (count > 0) return;
 
 So the manifest is evidence the files were seen; nothing read them.
 
-The only route to importing them is `POST /admin/database/reseed`, which truncates every domain table
-first — so adding one file means accepting a full rebuild, or nothing.
+A reseed no longer truncates anything (#372), which would make it the natural route — but it plans from
+the file list built when the application started, so a file added after startup is invisible to it until
+a restart (#390). Until #390 lands, a reseed is not a route for these files at all.
 
 ---
 
@@ -49,11 +50,13 @@ first — so adding one file means accepting a full rebuild, or nothing.
 
 **Status:** ⬜ Not started — **blocks every step below**
 
-A reseed is destructive and disproportionate for one added file. `POST /api/v1/import` already imports
-a single uploaded file without truncating, so the mechanism exists; what is missing is a path from
-"file found on disk at startup" to that mechanism. The candidates are a notification with an action
-that imports just the new files, a notification that only reports and leaves the user to act, or
-importing them automatically and reporting what happened.
+Since #372 a reseed deletes nothing, and once #390 makes it plan from the current files it is itself a
+candidate: it imports every designated file, reporting the ones already stored as unchanged. `POST
+/api/v1/import` imports a single uploaded file the same way, so the mechanism exists either way; what is
+missing is a path from "file found on disk" to it. The candidates are a notification whose action
+reseeds, a notification whose action imports just the new files, a notification that only reports and
+leaves the user to act, or importing them automatically and reporting what happened. #390 also raises a
+notification when a directory's manifest is out of date; the two are designed together.
 
 Whether the notification is `Informational` or `Action-required` follows from this answer, and so does
 every test below.
