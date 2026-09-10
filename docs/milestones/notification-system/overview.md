@@ -119,7 +119,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #351 ─── (none) — Planning
 #313 ─── (none) — Waiting for release
 #370 ─── (none) — Planning
-#369 ─── depends on #303 — Planning
+#369 ─── depends on #303, #372 — Planning
 #372 ─── (none); blocks #302 — Waiting for release
 #373 ─── depends on #372; blocks #302 (via #372), #372's row 21 — Waiting for release
 #375 ─── (none); blocks #374; its import-report half landed with #373's step 10 — Waiting for release
@@ -167,7 +167,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 24 | **#382** ✅ | Waiting for release |
 | 25 | **#383** ✅ | Waiting for release |
 | 26 | **#376** ✅ | Waiting for release |
-| 27 | **#369** | Planning — depends on #303 |
+| 27 | **#369** | Planning — depends on #303, #372 |
 | 28 | **#370** | Planning — sequenced with #369, same page |
 | 29 | **#371** | Planning — before #351/#360, which each add migrations |
 | 30 | **#350** | Planning |
