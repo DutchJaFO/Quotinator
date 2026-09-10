@@ -1,6 +1,6 @@
 # #389 — A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #389
 **Tiers required:** T1, T2
 **Depends on:** #373, #376, #377
@@ -200,9 +200,9 @@ the fixes below.
   faults too and got both corrections. `ImportActionSummaryResponse.cs` joined both `.editorconfig`
   lists and exposed no warnings. The doc-20 count is recorded under step 5.
 
-**What remains is T1**, which is the developer's: start the app in Visual Studio and confirm it starts
-without error (`docs/workflow/checklist.md`, *Waiting for release*). Until that is confirmed, none of
-the remaining Waiting-for-release items apply.
+**T1, 2026-09-10 — passed.** The developer started the app in Visual Studio from the finished tree:
+`1.9.0-alpha`, both schemas up to date (data v22, app v9), 795 quotes, *Quotinator ready*, and no
+warning or error line anywhere in the startup log.
 
 ---
 

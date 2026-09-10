@@ -69,7 +69,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#360](https://github.com/DutchJaFO/Quotinator/issues/360) | Migration-generated identifiers are not valid UUIDs; route all id creation through one factory | Planning | T1 ⬜ T2 ⬜ | [360-guid-factory-plan.md](360-guid-factory-plan.md) |
 | [#367](https://github.com/DutchJaFO/Quotinator/issues/367) | Notification actions give no feedback while they run | Waiting for release | T1 ✅ T2 ✅ | [367-executing-notification-state-plan.md](367-executing-notification-state-plan.md) |
 | [#368](https://github.com/DutchJaFO/Quotinator/issues/368) | New import files are discovered but never imported, and nothing says so | Planning | T1 ⬜ T2 ⬜ | [368-unimported-files-are-discovered-but-never-imported-plan.md](368-unimported-files-are-discovered-but-never-imported-plan.md) |
-| [#369](https://github.com/DutchJaFO/Quotinator/issues/369) | A review row whose batch is gone offers decisions that cannot be carried out | In progress | T1 ⬜ T2 ✅ | [369-orphaned-review-rows-plan.md](369-orphaned-review-rows-plan.md) |
+| [#369](https://github.com/DutchJaFO/Quotinator/issues/369) | A review row whose batch is gone offers decisions that cannot be carried out | Waiting for release | T1 ✅ T2 ✅ | [369-orphaned-review-rows-plan.md](369-orphaned-review-rows-plan.md) |
 | [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | Planning | T1 ⬜ T2 ⬜ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Planning | T1 ⬜ T2 ⬜ | — |
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
@@ -82,7 +82,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#381](https://github.com/DutchJaFO/Quotinator/issues/381) | A cross-file duplicate quote's CharacterId/PersonId silently reverts to null on every reseed | Planning | T1 ⬜ T2 ⬜ | [381-character-personid-toggle-plan.md](381-character-personid-toggle-plan.md) |
 | [#382](https://github.com/DutchJaFO/Quotinator/issues/382) | CompletenessGuard.ShouldBlock is evaluated against a pre-rule field set at four of five sites | Waiting for release | T1 ✅ T2 ✅ | [382-shouldblock-reads-a-pre-rule-field-set-plan.md](382-shouldblock-reads-a-pre-rule-field-set-plan.md) |
 | [#383](https://github.com/DutchJaFO/Quotinator/issues/383) | Notification detail table has no totals line | Waiting for release | T1 ✅ | [383-notification-detail-totals-line-plan.md](383-notification-detail-totals-line-plan.md) |
-| [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | In progress | T1 ⬜ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
+| [#389](https://github.com/DutchJaFO/Quotinator/issues/389) | A staged review batch cannot be discarded once the planner has staged a no-op in it as Applied | Waiting for release | T1 ✅ T2 ✅ | [389-discard-keeps-plan-time-no-ops-plan.md](389-discard-keeps-plan-time-no-ops-plan.md) |
 
 ---
 
@@ -120,8 +120,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #351 ─── (none) — Planning
 #313 ─── (none) — Waiting for release
 #370 ─── (none) — Planning
-#369 ─── depends on #303, #372, #389 — In progress
-#389 ─── depends on #373, #376, #377 — In progress
+#369 ─── depends on #303, #372, #389 — Waiting for release
+#389 ─── depends on #373, #376, #377 — Waiting for release
 #372 ─── (none); blocks #302 — Waiting for release
 #373 ─── depends on #372; blocks #302 (via #372), #372's row 21 — Waiting for release
 #375 ─── (none); blocks #374; its import-report half landed with #373's step 10 — Waiting for release
@@ -169,8 +169,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 24 | **#382** ✅ | Waiting for release |
 | 25 | **#383** ✅ | Waiting for release |
 | 26 | **#376** ✅ | Waiting for release |
-| 27 | **#389** 🚧 | In progress — found by #369's T2; #369 waits on it |
-| 28 | **#369** 🚧 | In progress — depends on #303, #372, #389 |
+| 27 | **#389** ✅ | Waiting for release — found by #369's T2 |
+| 28 | **#369** ✅ | Waiting for release |
 | 29 | **#370** | Planning — sequenced with #369, same page |
 | 30 | **#371** | Planning — before #351/#360, which each add migrations |
 | 31 | **#350** | Planning |

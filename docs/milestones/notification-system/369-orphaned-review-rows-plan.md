@@ -1,6 +1,6 @@
 # #369 — A review row whose batch is gone offers decisions that cannot be carried out
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #369
 **Tiers required:** T1, T2
 **Depends on:** #303, #372, #389
@@ -441,9 +441,9 @@ now names — and the alert `isDismissed=True reason=resolved`. Step 6, under **
 reports, every badge a word, the resolved alert **Done** and the others **Active** (screenshot, and the
 badge text read back from the page). Rows 16, 17 and 19 are verified.
 
-**What remains is T1**, which is the developer's: start the app in Visual Studio and confirm it starts
-without error (`docs/workflow/checklist.md`, *Waiting for release*). Until that is confirmed, none of
-the remaining Waiting-for-release items apply.
+**T1, 2026-09-10 — passed.** The developer started the app in Visual Studio from the finished tree:
+`1.9.0-alpha`, both schemas up to date (data v22, app v9), 795 quotes, *Quotinator ready*, and no
+warning or error line anywhere in the startup log.
 
 ---
 
