@@ -10,7 +10,7 @@
        versions of one package and fails restore with NU1605.
        RepositoryStructureTests.PackageReferences_DoNotCarryInlineVersions enforces this. -->
   <ItemGroup>
-    <PackageVersion Include="Dapper" Version="2.1.79" />
+    <PackageVersion Include="Dapper" Version="2.1.86" />
     <PackageVersion Include="Dapper.Contrib" Version="2.0.78" />
     <PackageVersion Include="JsonSchema.Net" Version="9.4.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
