@@ -9,9 +9,9 @@
 
 ## Next action
 
-Execute this plan once #397 reaches `Waiting for release`. Every design decision is settled below; the
-dependency is the only thing holding it, because step 2's automated document can only go red against a
-build that already logs thrown exceptions.
+This is a draft, written before #370 started. Re-plan it against the current code and issues when #370
+starts, which cannot be before #397 reaches `Waiting for release`: step 2's automated document can only
+go red against a build that already logs thrown exceptions.
 
 ---
 

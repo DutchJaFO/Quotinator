@@ -11,7 +11,7 @@ Use this as a starting checklist when kicking off a milestone. The process detai
 - [ ] Map dependencies between issues
 - [ ] Decide on an order of operations
 - [ ] Create `docs/milestones/{slug}/overview.md` using the **Overview template** below
-- [ ] Create per-issue plan docs for all issues (defer only if the issue is far in the dependency chain)
+- [ ] Do **not** create per-issue plan docs — each is written when its issue starts; `overview.md` shows `—` until then
 - [ ] Commit the milestone folder to `main`
 - [ ] Create the feature branch: `git checkout -b feature/{slug}`
 - [ ] **Bump `Directory.Build.props`' `<Version>` to this milestone's target version with an `-alpha`
@@ -89,8 +89,7 @@ A short flat per-issue index list of plan-doc links at the end is optional but e
   ```
   Never create a new branch until you have confirmed no matching branch already exists on the remote.
 - [ ] Check for new issues: `gh issue list --milestone "<Name>" --state open --json number,title`
-- [ ] Update `overview.md` and create plan docs for any issues added since last session
-- [ ] For any new issue without a plan doc: confirm the no-plan-doc decision is logged in the GitHub issue and in `overview.md`
+- [ ] Add any issues filed since last session to `overview.md`, with `—` in the Plan doc column — no plan doc until the issue starts
 - [ ] Review plan docs for issues being worked on today
 
 ---
@@ -121,7 +120,7 @@ Covers the `Planning` phase — see `process.md` → "Working on an issue" → P
 behind each item.
 
 - [ ] Read the full issue spec: `gh issue view <N>`
-- [ ] Read the plan doc (or confirm one is being created now)
+- [ ] Create the plan doc now — or re-plan an existing draft against the current code and issues — add it to `Quotinator.slnx`, and link it from `overview.md`
 - [ ] **Cross-check the spec against current authoritative sources before writing any code** — in order: `docs/architecture-decisions/` (ADRs), JSON schemas (`schemas/`), generator/script behaviour, C# models, project documentation. Raise any mismatch to the user and get explicit confirmation on scope before proceeding — never silently assume a gap is in-scope or out-of-scope.
 - [ ] Check the dependency map in `overview.md` — verify all blocking issues are fully complete before starting
 - [ ] **Verification checklist created in the plan doc** — one entry per requirement in the spec, each naming either the exact unit test (class + method) to be written, or the exact live command and expected output. Status is its own column; `#` is plain sequential integers, never lettered.

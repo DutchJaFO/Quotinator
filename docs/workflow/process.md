@@ -8,7 +8,7 @@ This document defines how we plan, execute, and close milestones. All workflow t
 
 Two rules prevent the same fact from being written in two places, drifting out of sync the moment one of them is updated and not the other:
 
-- **`overview.md` carries status only, never detail.** For any given issue, `overview.md` states its current status and links to its plan doc. It never explains *what* was done, *why*, *when a tier was verified*, or *what a session found* — that is the plan doc's job.
+- **`overview.md` carries status only, never detail.** For any given issue, `overview.md` states its current status and, once the issue has started, links to its plan doc. It never explains *what* was done, *why*, *when a tier was verified*, or *what a session found* — that is the plan doc's job.
 - **A plan doc's numbered step sections and Verification table carry the detail, and their own status.** There is no separate "Step status" checklist — each step is its own subsection (`### N. Title`) with `**Status:**` as its first line, followed by the step's actual detail in that same place. Do not add prose sections (`Notes`, `Implementation notes`, session narratives) that restate what a step or verification row already documents — that is duplication, not a record of anything new. The one legitimate exception is a **Scope changes** section (see below): it records a *decision* — what moved, why, which issue now owns it — not a re-explanation of work already captured by a step or verification row.
 
 **`overview.md`'s header `**Status:**` line and every plan doc's own header `**Status:**` line are exactly one of these, nothing added:**
@@ -149,12 +149,10 @@ Examples:
    ```
 3. Map dependencies between issues.
 4. Decide on an order of operations.
-5. Create `docs/milestones/{slug}/overview.md` (see `checklist.md` for the template).
-6. Create a per-issue plan doc for every issue in the milestone. A parent (tracking) issue gets one
-   too, but shaped like a miniature `overview.md` — a sub-issue list, dependency map, and order of
-   operations, with no Steps or Verification checklist of its own. See `issues.md` → "Splitting an
-   issue into sub-issues".
-7. Commit the milestone folder to `main`.
+5. Create `docs/milestones/{slug}/overview.md` (see `checklist.md` for the template), with `—` in
+   every issue's Plan doc column. No plan doc is written here — see "A plan doc is written when its
+   issue starts" under "Working on an issue".
+6. Commit the milestone folder to `main`.
 
 ### Step 2 — Create the feature branch
 
@@ -237,7 +235,7 @@ At the start of every session working on a milestone:
    ```
    gh issue list --milestone "<Milestone Name>" --state open --json number,title
    ```
-3. Compare against `overview.md`. For any new issues: fetch the spec, create a plan doc, update the overview.
+3. Compare against `overview.md`. For any new issues: fetch the spec and add it to the overview, with `—` in its Plan doc column.
 4. Review the plan docs for issues being worked on today.
 
 ---
@@ -249,8 +247,16 @@ begins once the plan doc's verification checklist exists and the issue's status 
 
 ### Planning
 
+**A plan doc is written when its issue starts, never ahead of it** (developer decision, 2026-09-16). A
+plan is built against the code and the other issues as they stand when work begins; one prepared in
+advance is invalidated by whatever resolves in between, and bringing it up to date is the same work done
+twice. Until an issue starts, the GitHub issue is its only specification and `overview.md` shows `—` in
+its Plan doc column. A plan doc that already exists for an issue not yet started is a draft to re-plan
+from, never a plan to execute as written.
+
 1. Read the full issue spec: `gh issue view <N>`
-2. Read the plan doc.
+2. Create the plan doc (`{issue-number}-{safe-slug}-plan.md`), add it to `Quotinator.slnx`, and link it
+   from `overview.md` — or, where a draft already exists, re-plan it against the current code and issues.
 3. **Cross-check the spec against the current authoritative sources — do this before writing any code.**
 
    Issues are written at a point in time. Prior issues in the same milestone may have introduced schemas, models, or design decisions that change what this issue should cover. Before accepting the spec as written:
@@ -407,7 +413,7 @@ If during planning or implementation a requirement from the GitHub issue spec is
 
 1. Post a comment on the GitHub issue documenting what was deferred, why, and which issue it moves to.
 2. Update the plan doc with a **Scope changes** section listing the same information.
-3. Update the downstream issue's plan doc to reflect the deferred work — describe what the upstream issue delivered and what the downstream issue needs to decide or build on top of it.
+3. Tell the downstream issue about the deferred work — describe what the upstream issue delivered and what the downstream issue needs to decide or build on top of it. If the downstream issue has started, that goes in its plan doc; if not, it goes in a comment on the downstream issue, where its plan picks it up when it starts.
 4. The closing verification table covers only the requirements that remain in scope. Deferred items are listed separately with a pointer to the issue that owns them.
 
 An issue may only close when its GitHub issue page reflects the actual scope — either the spec was never changed, or a comment documents every deferral. Never close an issue whose spec contains requirements that were silently dropped.

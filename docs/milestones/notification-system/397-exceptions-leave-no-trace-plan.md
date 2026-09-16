@@ -9,8 +9,8 @@
 
 ## Next action
 
-Refine this plan: decide whether an exception that escapes a Blazor circuit is a fourth "nobody handled
-it" ending (see *Endings not yet covered* below). Every other design decision is settled.
+This is a draft, written before #397 started. Re-plan it against the current code and issues when #397
+starts.
 
 ---
 
@@ -42,10 +42,11 @@ three-frame probe (`Inner` ← `Middle` ← caller): first-chance reported `at I
 `catch` reported all three frames. So the thrown line identifies the throw site, and the handled and
 `Critical` lines — which pass the exception after unwinding — carry the full trace.
 
-### Endings not yet covered
+### Endings not covered here
 
 An exception escaping a Blazor Server circuit is handled inside the circuit, not by the exception-handler
-middleware, so none of the three endings above sees it. The issue does not list it.
+middleware, so none of the three endings above sees it. That ending is #399's, kept separate so this
+issue does not stall on circuit mechanics.
 
 ---
 

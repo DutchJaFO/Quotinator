@@ -234,7 +234,7 @@ When a gap, risk, or dependency is identified while working on a milestone issue
 1. **File the issue immediately** using the appropriate template above. Assign it to the current milestone.
 2. **Map its dependencies** — determine which open issues it blocks and which block it.
 3. **Update `overview.md`** — add the new issue to the issue list and dependency graph; insert it in the correct position in the order of operations table.
-4. **Create a plan doc** — use `{issue-number}-{safe-slug}-plan.md`. If the issue number is not yet known, file on GitHub first, then create the plan doc.
+4. **Do not create a plan doc yet** — it is written when the issue starts (`process.md` → "Working on an issue" → Planning). Its Plan doc column in `overview.md` reads `—` until then.
 5. **Do not start work on the new issue** in the same session unless it is a hard blocker for the current issue. Note it and continue with the current issue.
 
 If the new issue blocks the current issue:
@@ -333,11 +333,12 @@ Requires `gh` 2.94.0 or later.
 
 ### Plan docs
 
-**Each sub-issue gets an ordinary plan doc** — numbered Steps, a Verification checklist, the usual
-header — named as usual (`{issue-number}-{safe-slug}-plan.md`) and added to `Quotinator.slnx`. Nothing
-special applies to them.
+**Each sub-issue gets an ordinary plan doc when it starts** — numbered Steps, a Verification checklist,
+the usual header — named as usual (`{issue-number}-{safe-slug}-plan.md`) and added to `Quotinator.slnx`.
+Nothing special applies to them.
 
-**A parent gets a plan doc too, but shaped like a miniature `overview.md`, not like an issue plan.** A
+**A parent gets a plan doc when its first sub-issue starts, shaped like a miniature `overview.md`, not
+like an issue plan.** A
 parent has no Steps and no verification of its own — its content is the map. Mirror `overview.md`'s
 structure (`checklist.md` → "Overview template") scoped to this body of work, omitting the sections
 that only make sense at milestone level (tier definitions, PR merge plan):
