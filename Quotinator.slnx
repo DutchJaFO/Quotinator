@@ -333,6 +333,7 @@
     <File Path="docs/milestones/notification-system/381-character-personid-toggle-plan.md" />
     <File Path="docs/milestones/notification-system/382-shouldblock-reads-a-pre-rule-field-set-plan.md" />
     <File Path="docs/milestones/notification-system/383-notification-detail-totals-line-plan.md" />
+    <File Path="docs/milestones/notification-system/397-exceptions-leave-no-trace-plan.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/">
     <File Path="docs/automated-testing/README.md" />
