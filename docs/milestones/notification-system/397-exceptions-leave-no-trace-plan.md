@@ -156,7 +156,20 @@ stack trace, not assumed. One test covering both was the price of matching the i
 
 ### 5. Declare handled request exceptions and suppress only their duplicate line
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — every test but the documentation one is green
+
+`DeclaredExceptionHandlers` maps `BadHttpRequestException` to `BadRequestExceptionHandler`, and
+`Program.cs` configures `ExceptionHandlerOptions.SuppressDiagnosticsCallback` from it rather than
+passing options to `UseExceptionHandler`, so the pipeline line is untouched.
+
+The match is `IsInstanceOfType`, not an exact type comparison: the handler declines on
+`is not BadHttpRequestException`, which also accepts subclasses, and a suppression check that
+disagreed with its own handler would either hide a line or duplicate one.
+
+**A defect in this issue's own test, found by running it:** `Activator.CreateInstance(declared)` cannot
+build a `BadHttpRequestException`, which has no parameterless constructor — the test would have failed
+for a reason unrelated to the behaviour, the broken-instrument shape `docs/automated-testing/README.md`
+describes. It now builds through whichever constructor a declared type actually has.
 
 - `BadRequestExceptionHandler` calls `LogExceptionHandled` before writing its `422`.
 - `DeclaredExceptionHandlers` lists `BadHttpRequestException`. Both the handler registration and
