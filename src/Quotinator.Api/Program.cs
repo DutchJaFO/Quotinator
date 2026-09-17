@@ -338,6 +338,11 @@ builder.Services.AddExceptionHandler<BadRequestExceptionHandler>();
 // #397: last in the chain, so it sees only what every handler above it declined — which is what makes
 // its line an "escaped the request" report rather than a duplicate of a handled exception.
 builder.Services.AddExceptionHandler<UnhandledRequestExceptionHandler>();
+// #397: since .NET 10 the middleware logs nothing for an exception a handler reports as handled, which
+// silently took BadRequestExceptionHandler's 422s out of the log entirely. Suppress its line only where
+// one of our own handlers declared the exception and logged it itself; everything else keeps it.
+builder.Services.Configure<ExceptionHandlerOptions>(options =>
+    options.SuppressDiagnosticsCallback = DeclaredExceptionHandlers.ShouldSuppressDiagnostics);
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
 // #309: bundled changelog files read from the Docker image (AppContext.BaseDirectory/data/changelog/),

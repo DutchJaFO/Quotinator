@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Quotinator.Constants.Api;
 using Quotinator.Core.Services;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Middleware;
 
@@ -28,7 +29,7 @@ internal sealed class BadRequestExceptionHandler(IApiLocalizer localizer, ILogge
 
         // #397: this handler reporting the exception as handled stops the middleware logging it, so the
         // handler logs it itself — otherwise a binding failure turned into a 422 leaves no trace at all.
-        _ = logger;
+        logger.LogExceptionHandled(exception, "returned 422");
 
         context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         await Results.Problem(

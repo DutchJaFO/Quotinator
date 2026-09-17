@@ -16,10 +16,13 @@ internal static class DeclaredExceptionHandlers
     /// callback — two copies would drift, and a handler registered but not declared would silently log
     /// nothing at all.
     /// </summary>
-    internal static IReadOnlyDictionary<Type, Type> Handlers => throw new NotImplementedException();
+    internal static IReadOnlyDictionary<Type, Type> Handlers { get; } = new Dictionary<Type, Type>
+    {
+        [typeof(BadHttpRequestException)] = typeof(BadRequestExceptionHandler),
+    };
 
     /// <summary>The exception types one of our own handlers declares, handles and logs.</summary>
-    internal static IReadOnlySet<Type> ExceptionTypes => throw new NotImplementedException();
+    internal static IReadOnlySet<Type> ExceptionTypes { get; } = Handlers.Keys.ToHashSet();
 
     /// <summary>
     /// Decides whether the exception-handler middleware should stay quiet about this exception:
@@ -28,5 +31,8 @@ internal static class DeclaredExceptionHandlers
     /// <param name="context">The middleware's own context, carrying the exception and what handled it.</param>
     /// <returns><see langword="true"/> to suppress the middleware's diagnostics for this exception.</returns>
     internal static bool ShouldSuppressDiagnostics(ExceptionHandlerSuppressDiagnosticsContext context) =>
-        throw new NotImplementedException();
+        context.ExceptionHandledBy == ExceptionHandledType.ExceptionHandlerService
+        // IsInstanceOfType rather than an exact type match: a handler declining on `is not
+        // BadHttpRequestException` also handles its subclasses, so the two checks must agree.
+        && ExceptionTypes.Any(declared => declared.IsInstanceOfType(context.Exception));
 }

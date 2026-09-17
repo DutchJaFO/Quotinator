@@ -30,7 +30,7 @@ public class ExceptionHandlerDiagnosticsTests
         foreach (Type declared in DeclaredExceptionHandlers.ExceptionTypes)
         {
             bool suppressed = DeclaredExceptionHandlers.ShouldSuppressDiagnostics(
-                Context((Exception)Activator.CreateInstance(declared)!, ExceptionHandledType.ExceptionHandlerService));
+                Context(Instantiate(declared), ExceptionHandledType.ExceptionHandlerService));
 
             Assert.IsTrue(suppressed,
                 $"{declared.Name} is declared and logged by us, so the middleware's own line is a duplicate");
@@ -53,7 +53,7 @@ public class ExceptionHandlerDiagnosticsTests
         Type declared = DeclaredExceptionHandlers.ExceptionTypes.First();
         Assert.IsFalse(
             DeclaredExceptionHandlers.ShouldSuppressDiagnostics(
-                Context((Exception)Activator.CreateInstance(declared)!, ExceptionHandledType.Unhandled)),
+                Context(Instantiate(declared), ExceptionHandledType.Unhandled)),
             "a declared type that nothing handled is an escape, not the expected path");
 
         (ILogger<UnhandledRequestExceptionHandler> logger, CaptureSink sink) = BuildLastResortLogger();
@@ -97,6 +97,16 @@ public class ExceptionHandlerDiagnosticsTests
                 $"{handler} declares an exception type but is never registered, so its declaration silences a line nothing replaces");
         }
     }
+
+    /// <summary>
+    /// Builds an instance of a declared exception type. Not every one has a parameterless constructor —
+    /// <see cref="BadHttpRequestException"/> does not — so a bare <c>Activator.CreateInstance</c> would
+    /// fail for a reason that has nothing to do with the behaviour under test.
+    /// </summary>
+    private static Exception Instantiate(Type exceptionType) =>
+        (Exception)(exceptionType.GetConstructor(Type.EmptyTypes) is not null
+            ? Activator.CreateInstance(exceptionType)!
+            : Activator.CreateInstance(exceptionType, "declared, for this test")!);
 
     private static IEnumerable<string> RegisteredExceptionHandlers(string program) =>
         program
