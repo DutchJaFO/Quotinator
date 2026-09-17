@@ -335,6 +335,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull);
 
 builder.Services.AddExceptionHandler<BadRequestExceptionHandler>();
+// #397: last in the chain, so it sees only what every handler above it declined — which is what makes
+// its line an "escaped the request" report rather than a duplicate of a handled exception.
+builder.Services.AddExceptionHandler<UnhandledRequestExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
 // #309: bundled changelog files read from the Docker image (AppContext.BaseDirectory/data/changelog/),

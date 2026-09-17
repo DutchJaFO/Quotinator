@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics;
+using Quotinator.Logging;
 
 namespace Quotinator.Api.Middleware;
 
@@ -16,7 +17,11 @@ internal sealed class UnhandledRequestExceptionHandler(ILogger<UnhandledRequestE
         Exception exception,
         CancellationToken cancellationToken)
     {
-        _ = logger;
-        throw new NotImplementedException();
+        logger.LogExceptionNotHandled(exception, "request");
+
+        // Declining deliberately: every handler ahead of this one passed on the exception, so nothing
+        // handled it. Returning false leaves the middleware to produce the response and its own line,
+        // and keeps this handler's only job to reporting.
+        return ValueTask.FromResult(false);
     }
 }
