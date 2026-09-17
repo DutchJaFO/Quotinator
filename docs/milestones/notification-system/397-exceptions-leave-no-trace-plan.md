@@ -103,7 +103,16 @@ container, image and worktree are removed.
 
 ### 3. Log every thrown exception from the first line of `Program.cs`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 10 of the 15 Api tests green, both `ExceptionIds` tests green, build 0 warnings
+
+The five still red are steps 4 to 6's: the suppression list, `BadRequestExceptionHandler`'s own line,
+and the documentation.
+
+Two things the implementation added beyond the step's own description. `LogOutputTemplates` holds the
+two console templates, because the temporary logger and the configured one must render identically and
+a second copy would drift. And `LogExceptionNotHandled` guards its call site with
+`IsEnabled(LogLevel.Critical)`: CA1873 counts assigning an id and reading a type name as work not worth
+doing when the level is off, which `docs/logging.md` already prescribes this exact remedy for.
 
 - **The logger exists before the host, without Serilog's `CreateBootstrapLogger`.** That reloadable
   logger freezes when the first host is built and throws "The logger is already frozen" on the next
