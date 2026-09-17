@@ -196,7 +196,12 @@ sites move to `Error` under #398.
 
 ### 7. Build and run the full suite
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 4,107 tests passed across 10 projects, 0 warnings, 0 errors
+
+`dotnet build --configuration Release --no-incremental` and
+`dotnet test --configuration Release --verbosity normal -m:1`, 2026-09-17. Nothing regressed: the
+handlers are subscribed in the test process too, since `Quotinator.Api.Tests` runs `Program.cs` per
+test, and no test depends on an exception going unlogged.
 
 `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
 both 0 warnings, 0 errors.
