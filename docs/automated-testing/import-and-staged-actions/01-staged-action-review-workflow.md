@@ -6,26 +6,28 @@
 
 ## Preconditions
 
-Nothing beyond the Fresh profile. What matters about the profile's own first-boot seed here is that the
-curated file is re-imported against already-seeded data, which is what makes its quotes genuine
-duplicates.
+The Fresh profile, plus the shared conflict fixture this test writes itself:
+`scripts/testing/stage-import-conflict.csx` re-states a bundled quote's id with different text.
 
 `/api/v1/import/actions/*` (#154's unified staging engine) is the live mechanism: every import and seed
 run stages through it.
 
 ## Determinism
 
-- **`review` policy is forced explicitly.** The endpoint would otherwise auto-resolve via the default
-  policy and produce no pending action at all, leaving nothing to decide against.
+- **The batch comes from the conflict fixture, not from the curated file.** Since the planner began
+  recording already-stored content as an `Unchanged` no-op (#373), re-importing
+  `data/sources/quotinator-curated.json` against a seeded container stages nothing awaiting a decision
+  and answers `200` — measured 2026-09-17, `pending=0`, which leaves this document nothing to decide
+  against. [`04-discard.md`](04-discard.md) and [`20-pending-review-alert.md`](20-pending-review-alert.md)
+  use the same fixture for the same reason.
+- **`review` policy is forced explicitly.** The conflicting text would otherwise be resolved on the spot,
+  leaving nothing pending.
 - **`status=pending` is deliberately lowercase**, and the `batchId` on the apply call is deliberately
   lowercased too. Both prove the case-insensitive query-filter fix (#154) is still in effect — matching
   the stored casing would pass without testing anything.
-- **The curated re-import stages more than one action**, so a single `decide` is never enough to apply
-  — which is why step 8 loops over every pending id rather than naming a number. The count is a
-  property of the bundled file and moves when it changes: two when this was written, 13 when measured
-  during #339's full run.
-- `ambiguousFields` is populated only where fields genuinely differ — re-importing the same file
-  unmodified usually means they do not.
+- **Step 8 loops over every pending id rather than naming a number.** The fixture stages one pending
+  `Quote`, and the batch also carries the already-stored source as a no-op, so the final tally covers
+  more actions than were ever pending.
 - **`GET /import/actions`'s `items` may be empty or populated; that is not the assertion, the status
   code is.**
 - **The pending listing is scoped to this batch's own `batchId`.** Scoping matters, because an unscoped
@@ -67,21 +69,22 @@ dotnet script scripts/testing/http.csx -- --url "$base/import/conflicts" --expec
 **Expected:** `404`. It was removed entirely in #154 Phase B; anything else means the legacy
 manual-review machinery has regressed back in.
 
-### 4. Import the curated file under forced `review`
+### 4. Import the conflict fixture under forced `review`
 
 ```powershell
+$fixture = Join-Path $env:TEMP "qt-import-01-fixture"
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports $fixture
 $batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
-              --file data/sources/quotinator-curated.json --duplicate-resolution review --expect 202 `
+              --file (Join-Path $fixture "conflicting.json") --duplicate-resolution review --expect 202 `
             | ConvertFrom-Json).batchId
 $batchId
 ```
 
-**Expected:** `202`, **not** `200` — the re-imported quotes are genuine duplicates left `Pending` under
-`review` — and a non-empty `batchId`, which every step below is scoped to.
+**Expected:** `202`, **not** `200` — the fixture's quote conflicts with the stored one and is left
+`Pending` under `review` — and a non-empty `batchId`, which every step below is scoped to.
 
-**On failure:** a `200` here means the policy did not take effect and nothing was staged, so the rest of
-this document would be testing an empty batch. An empty `batchId` means the same thing one step earlier.
-Stop.
+**On failure:** a `200` here means nothing was staged, so the rest of this document would be testing an
+empty batch. An empty `batchId` means the same thing one step earlier. Stop.
 
 ### 5. List this batch's pending actions
 
@@ -164,12 +167,9 @@ a bug — step 8's count is what confirms it should not happen here.
 
 **Expected:** after a successful apply, one group — `Applied` — holding every action in the batch.
 
-## Observed effect
-
-Not yet established as a captured record beyond the status transitions asserted above.
-
 ## Cleanup
 
 ```powershell
+Remove-Item $fixture -Recurse -Force -ErrorAction SilentlyContinue
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-01
 ```

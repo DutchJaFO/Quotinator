@@ -183,6 +183,12 @@ List<string> settings =
     "-e Quotinator__DataDir=/data",
     "-e Quotinator__AdminApiKey=smoketest",
     "-e Quotinator__AutoPurgeBundledImportActions=true",
+    // A test downloads nothing. Left at its default (true) every container fetches the upstream sources
+    // at startup, which makes every run depend on GitHub being reachable — unpinned, so contrary to the
+    // suite's own Determinism rule — lets a refresh overwrite the bundled files the run is reading, and
+    // logs an exception whenever the connector cancels a stalled or losing connection attempt. A
+    // document whose subject *is* the refresh declares the opposite as its own delta.
+    "-e Quotinator__AutoUpdateSources=false",
 ];
 
 settings.AddRange(Values("--env").Select(e => $"-e {e}"));

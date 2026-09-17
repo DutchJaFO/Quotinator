@@ -217,7 +217,24 @@ Run 2026-09-17 against an image built from this branch.
 | `api-surface/01-baseline` | Pass |
 | `api-surface/02-pagination-contract` | Pass — 795 quotes, 1,507 actions, 35 audit rows; effective `pageSize` equalled `totalCount` on all three |
 | `api-surface/05-a-thrown-exception-is-logged` | Steps 3 to 5 pass; step 2 fails — see below |
-| `import-and-staged-actions/14-fresh-seed` | Steps 1 to 3 pass (`pending=0`, every entity count non-zero); the rest is withdrawn by the bundled-content rule |
+| `import-and-staged-actions/14-fresh-seed` | Steps 1 to 3 pass (`pending=0`, every entity count non-zero); the rest is withdrawn by the bundled-content rule, and now carries `Fully green after: #400` |
+| `import-and-staged-actions/19-per-file-import-report` | Pass — five per-file reports, `removed=0` against `replacements=15`, `missingTypes=[]`, and zero exception lines across a reseed, reset, import and preview |
+| `import-and-staged-actions/01-staged-action-review-workflow` | Failed on its own premise, now re-pointed and passing (below) |
+
+**`import-and-staged-actions/01` was stale, not broken.** Its step 4 expected `202` from re-importing
+the curated file and got `200` with `pending=0`: since #373 an already-stored quote stages as an
+`Unchanged` no-op, so the curated re-import leaves nothing to decide against. `04-discard.md` and
+`20-pending-review-alert.md` had already been re-pointed at `scripts/testing/stage-import-conflict.csx`
+for exactly this; this document had not. Re-pointed at the same fixture and measured green end to end:
+`202` with one pending `Quote`, decide `204`, `movedToDecided=1`, undo `204`, `backToPending=1`, nothing
+left pending, apply `200`, and a single `Applied` group of 2. Its `Observed effect` section is gone,
+per the rule that a document holds the test and nothing else.
+
+**That run logged eight exceptions, and both kinds are accounted for:** four
+`UnresolvedFieldConflictException` with distinct ids — [#370](https://github.com/DutchJaFO/Quotinator/issues/370)
+itself, visible in a container log for the first time, which is what both issues claimed would happen —
+and four `IOException` lines sharing one id, the client disconnect recorded as a Knowledgebase entry.
+Startup contributed none.
 
 **What the thrown lines showed, which is the point of the issue.** One malformed upload produced
 `JsonReaderException` then `QuoteImportValidationException`, both with ids. Four `IOException` lines
