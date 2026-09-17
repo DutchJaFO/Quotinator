@@ -180,7 +180,15 @@ describes. It now builds through whichever constructor a declared type actually 
 
 ### 6. Document the lines
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — every one of this issue's 17 unit tests is now green
+
+`docs/logging.md` registers the `[Runtime - Exception]` prefix and gains an *Exception lines* section:
+the three lines with their levels, the id that ties them together, how to read each combination, why
+first-chance gives only the throwing frame, that the lines obey `Quotinator:LogLevel`, and that only a
+line our own code already wrote suppresses the middleware's.
+
+`docs/vocabulary.md` gains *exception ending* and *first-chance exception*, per `CLAUDE.md`'s rule that
+a domain term used in a narrower sense is added in the same commit that introduces it.
 
 `docs/logging.md`: register the `[Runtime - Exception]` prefix, document the three lines, their levels
 and the id, and how to read their combinations, and state that the existing `LogWarning(ex, …)` catch

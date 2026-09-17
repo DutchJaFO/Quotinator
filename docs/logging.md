@@ -261,6 +261,7 @@ Format: `[Subsystem - Phase] message text`
 | `[Api - CreateBackup]` | POST /api/v1/admin/backups/create — Information on success, Warning on refusal |
 | `[Api - DeleteBackup]` | DELETE /api/v1/admin/backups/{name} — Information on success, Warning on refusal |
 | `[Audit]` | Audit trail write operations (AuditWriter) |
+| `[Runtime - Exception]` | Every exception the process throws, and every exception nothing handled — see *Exception lines* below |
 
 **Backup endpoints split by level deliberately (#349, developer decision 2026-08-29): a read is Debug,
 an action that creates or destroys a restore point is Information.** The status endpoint is designed to
@@ -269,6 +270,48 @@ an operator actually needs — "a backup was created" and "a backup was removed"
 This is the same reasoning the request log applies above, applied one layer up.
 
 New subsystems must register a prefix in this table before their log lines land in a PR.
+
+### Exception lines
+
+**Every exception the process throws is logged, whether or not anything catches it** (#397). Before
+this, an exception the code caught itself appeared only in Visual Studio's debugger output, so a
+container showed nothing at all — and since .NET 10, ASP.NET Core also stops logging an exception that
+an `IExceptionHandler` reports as handled.
+
+Nothing can say at throw time whether an exception is expected: `AppDomain.FirstChanceException` fires
+before the runtime looks for a handler. Where an exception *ends* is what distinguishes the two, so
+each ending gets its own line, and all lines about one exception carry the same 8-character id:
+
+| Line | Level | Written by |
+|---|---|---|
+| `{id} thrown: {type}` | `Error` | The first-chance handler, for every exception |
+| `{id} handled: {type} — {reason}` | `Error` | Whichever code turned it into a response |
+| `{id} not handled ({where}): {type}` | `Critical` | A request, thread or unobserved task ending with nobody handling it |
+
+**How to read them:**
+
+- **thrown, then handled** — expected behaviour. The library offered no non-throwing way to detect the
+  condition, and the application turned it into a response.
+- **thrown, then `Critical`** — dangerous. Nothing handled it; the `where` says which ending it reached.
+- **thrown, and neither** — it was caught somewhere that never declared itself a response point. That is
+  what [#398](https://github.com/DutchJaFO/Quotinator/issues/398) exists to remove, and these lines are
+  how such a catch is found.
+
+**An exception is never routine, so it is never logged below `Error`.** The thrown line carries the
+throwing frame only — a first-chance exception's stack trace holds nothing else yet, measured 2026-09-17
+— while the handled and `Critical` lines, written after the stack has unwound, carry the full trace.
+
+**These lines obey `Quotinator:LogLevel` like every other line.** A configured level is the operator's
+instruction, not a gap to work around: at `fatal`, only the `Critical` lines appear. Nothing lowers the
+global minimum on their behalf.
+
+**Only a line our own code already wrote suppresses the middleware's.**
+`ExceptionHandlerOptions.SuppressDiagnosticsCallback` reads `DeclaredExceptionHandlers`, the one list
+pairing an exception type with the handler that owns it, so the framework's duplicate line disappears
+exactly where a handler logged the exception as handled — and never anywhere else. Registering a handler
+without declaring its exception type there would take its exception out of the log entirely.
+
+The `LogWarning(ex, …)` catch sites that predate this move to `Error` under #398's audit, not here.
 
 ### Knowledgebase codes in a log line
 
