@@ -10,13 +10,13 @@ Nothing beyond the Fresh profile. The malformed file this test uploads is one it
 
 ## Determinism
 
-The exception provoked here is one `System.Text.Json` throws for invalid JSON, which no non-throwing
-API can detect — so it stays a legitimate throw whatever [#398](https://github.com/DutchJaFO/Quotinator/issues/398)
-converts, and this test does not depend on any check-then-throw surviving. Nothing else in the run
-provokes an exception, which is what makes the before-and-after counts around the health call readable.
-
-`Quotinator__LogLevel` is left at the profile's default, because these lines are written at `Error` and
-an operator's own level setting is respected: at `fatal` they would legitimately be absent.
+- The exception provoked is one `System.Text.Json` throws for invalid JSON; no non-throwing API detects
+  that, so the throw does not depend on any check-then-throw surviving
+  [#398](https://github.com/DutchJaFO/Quotinator/issues/398).
+- `Quotinator__LogLevel` stays at the profile default. These lines are written at `Error`, and at
+  `fatal` they are legitimately absent.
+- Nothing else in the run provokes an exception, which is what makes the counts around each step
+  readable.
 
 ## Steps
 
@@ -30,16 +30,17 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-api-05 --port 181
 
 **On failure:** stop. Every step below reads this container's log.
 
-### 2. Count the exception lines the healthy startup produced
+### 2. Count the exception lines a healthy startup produced
 
 ```powershell
 $before = ([regex]::Matches((docker logs qt-api-05 2>&1 | Out-String), '\[Runtime - Exception\]')).Count
 "before=$before"
 ```
 
-**Expected:** a number, printed. Zero is the healthy case and is not required — the framework throws
-and handles exceptions of its own during startup, and each is triaged rather than filtered. This value
-is the baseline the later steps compare against, not an assertion in itself.
+**Expected:** `before=0`. A healthy startup throws no exceptions.
+
+**On failure:** a non-zero count names each exception with its type and throw site in the log. Read
+them there; every one is a defect to resolve, not noise to tolerate.
 
 ### 3. Ask for something that cannot be parsed
 
@@ -49,8 +50,7 @@ dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:
   --file "$env:TEMP\qt-malformed.json" --duplicate-resolution review --expect 422
 ```
 
-**Expected:** `422`. The upload is rejected for content that is not valid JSON, which is the behaviour
-this step needs — the point is what the log now contains, not the status code.
+**Expected:** `422` — the upload is rejected as invalid JSON.
 
 ### 4. Read the thrown line
 
@@ -61,14 +61,14 @@ $after = ([regex]::Matches($log, '\[Runtime - Exception\]')).Count
 ($log -split "`n" | Select-String -SimpleMatch '[Runtime - Exception]' | Select-Object -Last 1).Line
 ```
 
-**Expected:** `after` is greater than `before`, and the last such line is an `ERR` line naming
-`JsonException` and carrying an 8-character hexadecimal id. This is the whole point of the test: an
-exception the application caught itself is visible in a container log, where before this issue it
-appeared only in a debugger.
+**Expected:** `after` is greater than `before`, and the upload's lines are `ERR` lines each carrying an
+8-character hexadecimal id: one naming `JsonReaderException`, `System.Text.Json`'s own subclass of
+`JsonException`, and one or more naming `QuoteImportValidationException`, the check-then-throw #398
+removes. Repeats of that second type share a single id — one exception object, notified once per throw
+and once per rethrow — so count distinct ids rather than lines.
 
-**On failure:** if `after` equals `before`, nothing logged the throw. Check that the thrown-exception
-handler is subscribed before the builder is created — a subscription that happens later misses nothing
-here, but a missing one misses everything.
+**On failure:** if `after` equals `before`, nothing logged the throw. Confirm the thrown-exception
+handler is subscribed before the host builder is created.
 
 ### 5. Confirm an ordinary request logs no exception
 
@@ -78,14 +78,7 @@ $quiet = ([regex]::Matches((docker logs qt-api-05 2>&1 | Out-String), '\[Runtime
 "after=$after quiet=$quiet"
 ```
 
-**Expected:** `healthy`, and `quiet` equal to `after` — a request that throws nothing adds no line. This
-is the control for step 4: without it, a handler that logged on every request would pass just as well.
-
-## Observed effect
-
-Not yet established. This document records what a pass requires; what the container emits around these
-requests has not been captured beyond the lines asserted here. See
-[the index](../README.md#test-outcomes-feed-the-knowledgebase) for why that matters.
+**Expected:** `healthy`, and `quiet` equal to `after` — a request that throws nothing adds no line.
 
 ## Cleanup
 

@@ -208,7 +208,41 @@ both 0 warnings, 0 errors.
 
 ### 8. T2 pass
 
-**Status:** ⬜ Not started
+**Status:** 🚧 In progress — 3 documents pass; 1 blocked on the startup exceptions below
+
+Run 2026-09-17 against an image built from this branch.
+
+| Document | Result |
+|---|---|
+| `api-surface/01-baseline` | Pass |
+| `api-surface/02-pagination-contract` | Pass — 795 quotes, 1,507 actions, 35 audit rows; effective `pageSize` equalled `totalCount` on all three |
+| `api-surface/05-a-thrown-exception-is-logged` | Steps 3 to 5 pass; step 2 fails — see below |
+| `import-and-staged-actions/14-fresh-seed` | Steps 1 to 3 pass (`pending=0`, every entity count non-zero); the rest is withdrawn by the bundled-content rule |
+
+**What the thrown lines showed, which is the point of the issue.** One malformed upload produced
+`JsonReaderException` then `QuoteImportValidationException`, both with ids. Four `IOException` lines
+(*"Unable to read data from the transport connection: Operation canceled"*) shared a single id, which is
+the id scheme working: one exception object, notified once per throw.
+
+**A healthy startup threw six exceptions, and they are now fixed.** Each was *"A suitable constructor
+for type `AdminApiKeyFilter` could not be located"* from inside `ActivatorUtilities`, one per
+`AddEndpointFilter<AdminApiKeyFilter>` registration: the framework probes for a constructor taking
+`EndpointFilterFactoryContext`, catches the failure and falls back to the parameterless one
+(dotnet/runtime#67309 — confirmed against `EndpointFilterExtensions.cs`, which cannot be influenced by
+container registration). The filter is now registered once and passed to each group as an instance,
+with its configuration injected instead of service-located. Re-measured on a rebuilt image: `before=0`.
+
+Under the developer rule that no exceptions should be seen at all (2026-09-17), `api-surface/05` step 2
+now asserts that zero and passes.
+
+**The upload's own lines, re-measured:** one `JsonReaderException` and four
+`QuoteImportValidationException` lines sharing one id — a single exception object notified once per
+throw and once per rethrow. The document now says to count distinct ids rather than lines.
+
+**`import-and-staged-actions/14`'s step 5 was never runnable.** It calls
+`dotnet run --project src/Quotinator.Api -- --convert`, and no `--convert` CLI exists anywhere in the
+codebase — the step was authored in `7d1e9ff6` and never executed. Its other steps assert properties of
+bundled content, which the same developer rule withdraws.
 
 The designated smoke set plus `api-surface/05-a-thrown-exception-is-logged.md`, against a fresh build of
 the branch. Every thrown line the smoke set produces is triaged in this step's record under `CLAUDE.md`'s
