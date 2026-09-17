@@ -54,7 +54,7 @@ issue does not stall on circuit mechanics.
 
 ### 1. Add the signatures only
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `dotnet build --configuration Release`: 0 warnings, 0 errors
 
 Per `docs/testing-policy.md`'s *Red first means signatures first* — types and members, bodies throwing
 `NotImplementedException`:
@@ -78,7 +78,18 @@ framework because Microsoft's pages name none: `HttpContext`, `Exception`, and `
 
 ### 2. Write every test and confirm each is red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 16 tests written, 15 red; the automated document red too
+
+Run 2026-09-17 against the branch with only step 1's signatures in place: `ExceptionIdsTests` 2 of 2
+failed, and the Api tests 12 of 13. The one pass is `AnotherException_IsDeclinedAndNotLogged`, a
+control — declining an exception the handler does not own needs no logging, so it is correct that it
+already holds.
+
+The document needed no separate canary worktree: nothing is implemented yet, so this build *is* the
+before-state. `POST /import` with malformed JSON returned `422` while the exception-line count stayed
+at `0` across the upload — the document's own step 4 requires it to rise, and it did not. That is both
+the document's red run and a live confirmation of the issue's premise: the `JsonException` was thrown,
+caught, and left no trace in the container log.
 
 Every row of the Verification checklist below. No test subscribes to an `AppDomain` or `TaskScheduler`
 event: `docs/testing-policy.md` allows global state to be written only once, in `[AssemblyInitialize]`,

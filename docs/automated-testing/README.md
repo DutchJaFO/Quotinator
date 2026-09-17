@@ -1029,6 +1029,7 @@ The five this suite runs on:
 | 02 | [The pagination contract holds live on every paginated endpoint](api-surface/02-pagination-contract.md) | yes |
 | 03 | [The Unicode-aware search flag reaches the running app](api-surface/03-unicode-aware-search-toggle.md) | no |
 | 04 | [Endpoint names and summaries follow the standard](api-surface/04-endpoint-naming-and-operation-ids.md) | no |
+| 05 | [A thrown exception is logged where the app actually runs](api-surface/05-a-thrown-exception-is-logged.md) | no |
 
 ### `identity-and-casing/`
 

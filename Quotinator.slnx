@@ -343,6 +343,7 @@
     <File Path="docs/automated-testing/api-surface/02-pagination-contract.md" />
     <File Path="docs/automated-testing/api-surface/03-unicode-aware-search-toggle.md" />
     <File Path="docs/automated-testing/api-surface/04-endpoint-naming-and-operation-ids.md" />
+    <File Path="docs/automated-testing/api-surface/05-a-thrown-exception-is-logged.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/identity-and-casing/">
     <File Path="docs/automated-testing/identity-and-casing/01-canonicalize-explicit-ids-at-capture.md" />
