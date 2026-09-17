@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi;
 using Quotinator.Api.Components;
 using Quotinator.Api.Endpoints;
+using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
@@ -333,6 +334,11 @@ if (isContainer)
 // choice for one endpoint).
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull);
+
+// #397: registered so every admin group can be handed one resolved instance. Activating the filter by
+// type instead makes AddEndpointFilter probe for a constructor it does not have, and the framework
+// throws and swallows an InvalidOperationException once per registration (dotnet/runtime#67309).
+builder.Services.AddSingleton<AdminApiKeyFilter>();
 
 builder.Services.AddExceptionHandler<BadRequestExceptionHandler>();
 // #397: last in the chain, so it sees only what every handler above it declined — which is what makes

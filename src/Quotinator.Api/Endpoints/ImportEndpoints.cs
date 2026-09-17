@@ -34,7 +34,7 @@ internal static class ImportEndpoints
         RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/import")
                             .WithTags(ApiTags.Import)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
-                            .AddEndpointFilter<AdminApiKeyFilter>()
+                            .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())
                             .WithMetadata(AdminApiKeyRequiredMarker.Instance);
 
         const string ImportDescription =

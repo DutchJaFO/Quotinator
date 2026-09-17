@@ -14,6 +14,7 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Paths;
 using Quotinator.Data.Repositories;
 using Quotinator.Api.Logging;
+using Quotinator.Data.Models;
 
 namespace Quotinator.Api.Endpoints;
 
@@ -30,14 +31,14 @@ internal static class ImportRuleEndpoints
 
     internal static void MapImportRuleEndpoints(this WebApplication app)
     {
-        var publicGroup = app.MapGroup("/api/v1/import/rules")
+        RouteGroupBuilder publicGroup = app.MapGroup("/api/v1/import/rules")
                              .WithTags(ApiTags.Import)
                              .RequireRateLimiting(RateLimitPolicies.Admin);
 
-        var adminGroup = app.MapGroup("/api/v1/import/rules")
+        RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/import/rules")
                             .WithTags(ApiTags.Import)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
-                            .AddEndpointFilter<AdminApiKeyFilter>()
+                            .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())
                             .WithMetadata(AdminApiKeyRequiredMarker.Instance);
 
         publicGroup.MapGet("/conflict", async (
@@ -48,16 +49,16 @@ internal static class ImportRuleEndpoints
                 IApiLocalizer localizer,
                 ILogger<Log> logger) =>
             {
-                if (!TryValidate(fileName, origin, localizer, out var parsedOrigin, out var validationError))
+                if (!TryValidate(fileName, origin, localizer, out SeedBatchOrigin parsedOrigin, out IResult? validationError))
                     return validationError!;
 
-                var content = await EffectiveRuleFileResolver.ReadEffectiveContentAsync(
+                string? content = await EffectiveRuleFileResolver.ReadEffectiveContentAsync(
                     fileName!, parsedOrigin, pathResolver, registry, logger, logPrefix: "[Api - Import]");
                 if (content is null)
                     return Results.Problem(detail: localizer[ApiMessages.RuleFileNotFound], statusCode: StatusCodes.Status404NotFound);
 
-                var isOverrideActive = await registry.FindAsync(fileName!, parsedOrigin) is not null;
-                var ruleFile = ParseConflictRuleFile(content);
+                bool isOverrideActive = await registry.FindAsync(fileName!, parsedOrigin) is not null;
+                ConflictResolutionRuleFileDto ruleFile = ParseConflictRuleFile(content);
 
                 return Results.Ok(new ConflictRuleFileResponse
                 {
@@ -87,24 +88,24 @@ internal static class ImportRuleEndpoints
                 IApiLocalizer localizer,
                 ILogger<Log> logger) =>
             {
-                if (!TryValidate(fileName, origin, localizer, out var parsedOrigin, out var validationError))
+                if (!TryValidate(fileName, origin, localizer, out SeedBatchOrigin parsedOrigin, out IResult? validationError))
                     return validationError!;
 
                 if (string.IsNullOrWhiteSpace(batchId))
                     return Results.Problem(detail: localizer[ApiMessages.ImportActionBatchIdRequired], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-                var rows      = await actionService.ExportBatchAsync(batchId);
-                var generated = ConflictRuleGenerator.Generate(rows);
+                IReadOnlyList<ImportActionFieldRowResponse> rows      = await actionService.ExportBatchAsync(batchId);
+                IReadOnlyList<ConflictResolutionRule> generated = ConflictRuleGenerator.Generate(rows);
 
-                var existingContent = await EffectiveRuleFileResolver.ReadEffectiveContentAsync(
+                string? existingContent = await EffectiveRuleFileResolver.ReadEffectiveContentAsync(
                     fileName!, parsedOrigin, pathResolver, registry, logger, logPrefix: "[Api - Import]");
-                var existingFile = existingContent is null ? null : ParseConflictRuleFile(existingContent);
+                ConflictResolutionRuleFileDto? existingFile = existingContent is null ? null : ParseConflictRuleFile(existingContent);
 
-                var merged     = ConflictRuleGenerator.Merge(existingFile, generated);
-                var rulesAdded = merged.Rules.Count - (existingFile?.Rules.Count ?? 0);
+                ConflictResolutionRuleFileDto merged     = ConflictRuleGenerator.Merge(existingFile, generated);
+                int rulesAdded = merged.Rules.Count - (existingFile?.Rules.Count ?? 0);
 
-                var json         = System.Text.Json.JsonSerializer.Serialize(merged, RuleFileWriteOptions);
-                var overridePath = pathResolver.Resolve(fileName!, parsedOrigin);
+                string json         = System.Text.Json.JsonSerializer.Serialize(merged, RuleFileWriteOptions);
+                string overridePath = pathResolver.Resolve(fileName!, parsedOrigin);
                 Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
                 await File.WriteAllTextAsync(overridePath, json);
 
@@ -143,10 +144,10 @@ internal static class ImportRuleEndpoints
                 ISourceFileOverrideRegistry registry,
                 IApiLocalizer localizer) =>
             {
-                if (!TryValidate(fileName, origin, localizer, out var parsedOrigin, out var validationError))
+                if (!TryValidate(fileName, origin, localizer, out SeedBatchOrigin parsedOrigin, out IResult? validationError))
                     return validationError!;
 
-                var removed = await registry.RemoveAsync(fileName!, parsedOrigin);
+                bool removed = await registry.RemoveAsync(fileName!, parsedOrigin);
                 return removed
                     ? Results.NoContent()
                     : Results.Problem(detail: localizer[ApiMessages.RuleFileOverrideNotFound], statusCode: StatusCodes.Status404NotFound);
@@ -173,19 +174,19 @@ internal static class ImportRuleEndpoints
                 IApiLocalizer localizer,
                 ILogger<Log> logger) =>
             {
-                if (!TryValidate(fileName, origin, localizer, out var parsedOrigin, out var validationError))
+                if (!TryValidate(fileName, origin, localizer, out SeedBatchOrigin parsedOrigin, out IResult? validationError))
                     return validationError!;
 
-                var content = await EffectiveRuleFileResolver.ReadEffectiveContentAsync(
+                string? content = await EffectiveRuleFileResolver.ReadEffectiveContentAsync(
                     fileName!, parsedOrigin, pathResolver, registry, logger, logPrefix: "[Api - Import]");
-                var existingAliases = content is null
+                SourceAliasLookup existingAliases = content is null
                     ? SourceAliasLookup.Empty
                     : new SourceAliasLookup(ParseSourceAliasFile(content).Aliases);
 
-                var allSources = await sourceRepository.GetPageAsync(page: 1, pageSize: 0);
-                var tuples = allSources.Items.Select(s => (s.Id.ToCanonicalId(), s.Title, s.Type.Raw));
+                PagedItems<SourceEntity> allSources = await sourceRepository.GetPageAsync(page: 1, pageSize: 0);
+                IEnumerable<(string, string Title, string Raw)> tuples = allSources.Items.Select(s => (s.Id.ToCanonicalId(), s.Title, s.Type.Raw));
 
-                var candidates = SourceAliasCandidateGenerator.Generate(tuples, existingAliases);
+                IReadOnlyList<SourceAliasCandidate> candidates = SourceAliasCandidateGenerator.Generate(tuples, existingAliases);
 
                 return Results.Ok(new SourceAliasCandidateResponse
                 {

@@ -34,7 +34,7 @@ internal static class NotificationEndpoints
         RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/notifications")
                             .WithTags(ApiTags.Notifications)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
-                            .AddEndpointFilter<AdminApiKeyFilter>()
+                            .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())
                             .WithMetadata(AdminApiKeyRequiredMarker.Instance);
 
         publicGroup.MapGet("/", async (
@@ -55,7 +55,7 @@ internal static class NotificationEndpoints
             IResult? beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
             if (beyondLastError is not null) return beyondLastError;
 
-            PagedItems<NotificationResponse> mapped = new PagedItems<NotificationResponse>(
+            PagedItems<NotificationResponse> mapped = new(
                 [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
             return Results.Ok(mapped);
         })

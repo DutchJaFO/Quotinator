@@ -26,15 +26,15 @@ internal static class ImportFileResourceEndpoints
     internal static void MapImportFileResourceEndpoints(this WebApplication app)
     {
         // Non-destructive endpoints — read-only; no API key required.
-        var publicGroup = app.MapGroup("/api/v1/import/file-resources")
+        RouteGroupBuilder publicGroup = app.MapGroup("/api/v1/import/file-resources")
                              .WithTags(ApiTags.Import)
                              .RequireRateLimiting(RateLimitPolicies.Admin);
 
         // Destructive endpoints — require X-Api-Key header.
-        var adminGroup = app.MapGroup("/api/v1/import/file-resources")
+        RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/import/file-resources")
                             .WithTags(ApiTags.Import)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
-                            .AddEndpointFilter<AdminApiKeyFilter>()
+                            .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())
                             .WithMetadata(AdminApiKeyRequiredMarker.Instance);
 
         publicGroup.MapGet("/", async (
@@ -45,23 +45,23 @@ internal static class ImportFileResourceEndpoints
             [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
             [Description("Number of entries per page (0-500). 0 means every matching file resource as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null) =>
         {
-            if (!PaginationParsing.TryParse(page, pageSize, localizer, out var pageValue, out var pageSizeValue, out var pageError))
+            if (!PaginationParsing.TryParse(page, pageSize, localizer, out int pageValue, out int pageSizeValue, out IResult? pageError))
                 return pageError!;
 
             FileResourceOrigin? parsedOrigin = null;
             if (origin is not null)
             {
-                if (!Enum.TryParse<FileResourceOrigin>(origin, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+                if (!Enum.TryParse<FileResourceOrigin>(origin, ignoreCase: true, out FileResourceOrigin parsed) || !Enum.IsDefined(parsed))
                     return Results.Problem(detail: localizer[ApiMessages.FileResourceOriginInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
                 parsedOrigin = parsed;
             }
 
-            var result = await fileResources.GetPageAsync(fileName, parsedOrigin, pageValue, pageSizeValue);
+            PagedItems<FileResourceListItem> result = await fileResources.GetPageAsync(fileName, parsedOrigin, pageValue, pageSizeValue);
 
-            var beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
+            IResult? beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
             if (beyondLastError is not null) return beyondLastError;
 
-            var mapped = new PagedItems<FileResourceResponse>(
+            PagedItems<FileResourceResponse> mapped = new(
                 [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
             return Results.Ok(mapped);
         })
@@ -82,14 +82,14 @@ internal static class ImportFileResourceEndpoints
             IFileResourceRepository fileResources,
             IApiLocalizer localizer) =>
         {
-            if (!Guid.TryParse(id, out var fileResourceId))
+            if (!Guid.TryParse(id, out Guid fileResourceId))
                 return Results.Problem(detail: localizer[ApiMessages.FileResourceNotFound], statusCode: StatusCodes.Status404NotFound);
 
-            var fileResource = await fileResources.FindAsync(fileResourceId);
+            FileResourceEntity? fileResource = await fileResources.FindAsync(fileResourceId);
             if (fileResource is null)
                 return Results.Problem(detail: localizer[ApiMessages.FileResourceNotFound], statusCode: StatusCodes.Status404NotFound);
 
-            var batchIds = await fileResources.GetBatchIdsAsync(fileResourceId);
+            IReadOnlyList<Guid> batchIds = await fileResources.GetBatchIdsAsync(fileResourceId);
             return Results.Ok(ToResponse(fileResource, [.. batchIds.Select(b => b.ToCanonicalId())]));
         })
         .WithName("GetFileResourceById")
@@ -107,23 +107,23 @@ internal static class ImportFileResourceEndpoints
             IFileResourceRepository fileResources,
             IApiLocalizer localizer) =>
         {
-            if (!Guid.TryParse(id, out var fileResourceId))
+            if (!Guid.TryParse(id, out Guid fileResourceId))
                 return Results.Problem(detail: localizer[ApiMessages.FileResourceNotFound], statusCode: StatusCodes.Status404NotFound);
 
-            var fileResource = await fileResources.FindAsync(fileResourceId);
+            FileResourceEntity? fileResource = await fileResources.FindAsync(fileResourceId);
             if (fileResource is null)
                 return Results.Problem(detail: localizer[ApiMessages.FileResourceNotFound], statusCode: StatusCodes.Status404NotFound);
 
-            var effectiveLineEnding = fileResource.LineEnding.Parsed!.Value;
+            LineEndingStyle effectiveLineEnding = fileResource.LineEnding.Parsed!.Value;
             if (lineEnding is not null)
             {
-                if (!Enum.TryParse<LineEndingStyle>(lineEnding, ignoreCase: true, out var overrideLineEnding) || !Enum.IsDefined(overrideLineEnding))
+                if (!Enum.TryParse<LineEndingStyle>(lineEnding, ignoreCase: true, out LineEndingStyle overrideLineEnding) || !Enum.IsDefined(overrideLineEnding))
                     return Results.Problem(detail: localizer[ApiMessages.LineEndingInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
                 effectiveLineEnding = overrideLineEnding;
             }
 
-            var lines = await fileResources.GetLinesAsync(fileResourceId);
-            var content = FileContentSplitter.Join(
+            IReadOnlyList<FileResourceLineEntity> lines = await fileResources.GetLinesAsync(fileResourceId);
+            string content = FileContentSplitter.Join(
                 [.. lines.Select(l => l.Text)], effectiveLineEnding, fileResource.EndsWithTrailingNewline);
 
             return Results.Text(content, "text/plain");
@@ -146,11 +146,11 @@ internal static class ImportFileResourceEndpoints
             IApiLocalizer localizer,
             [Description("Number of most-recently-seen rows to keep per distinct FileName (>= 0)."), DefaultValue(QueryParamDefaults.KeepPerFile)] string? keepPerFile = null) =>
         {
-            var keepPerFileValue = QueryParamDefaults.KeepPerFile;
+            int keepPerFileValue = QueryParamDefaults.KeepPerFile;
             if (keepPerFile is not null && (!int.TryParse(keepPerFile, out keepPerFileValue) || keepPerFileValue < 0))
                 return Results.Problem(detail: localizer[ApiMessages.KeepPerFileInvalid], statusCode: StatusCodes.Status422UnprocessableEntity);
 
-            var prunedCount = await fileResources.PruneAsync(keepPerFileValue);
+            int prunedCount = await fileResources.PruneAsync(keepPerFileValue);
             return Results.Ok(new FileResourcePruneResponse { PrunedCount = prunedCount });
         })
         .WithName("PruneFileResources")

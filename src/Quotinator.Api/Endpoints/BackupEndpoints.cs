@@ -48,7 +48,7 @@ internal static class BackupEndpoints
         RouteGroupBuilder backups = app.MapGroup("/api/v1/admin/backups")
                                        .WithTags(ApiTags.Backup)
                                        .RequireRateLimiting(RateLimitPolicies.Admin)
-                                       .AddEndpointFilter<AdminApiKeyFilter>()
+                                       .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())
                                        .WithMetadata(AdminApiKeyRequiredMarker.Instance);
 
         backups.MapGet("/", (

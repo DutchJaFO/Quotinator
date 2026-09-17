@@ -34,7 +34,7 @@ internal static class AdminEndpoints
         RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/admin")
                             .WithTags(ApiTags.Admin)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
-                            .AddEndpointFilter<AdminApiKeyFilter>()
+                            .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())
                             .WithMetadata(AdminApiKeyRequiredMarker.Instance);
 
         // ── Public ────────────────────────────────────────────────────────────
