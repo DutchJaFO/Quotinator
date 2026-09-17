@@ -34,4 +34,35 @@ public static partial class LogMessages
     /// <param name="id">The requested id.</param>
     [LoggerMessage(Level = LogLevel.Information, Message = "{Tag:l} id={Id}")]
     public static partial void LogIdQuery(this ILogger logger, string tag, string id);
+
+    /// <summary>
+    /// Logs an exception at the moment it is thrown, before anything has had a chance to catch it, so
+    /// no throw is invisible outside a debugger (#397). At this point the exception's stack trace holds
+    /// only the frame that threw it — measured, not assumed — so this line identifies the throw site
+    /// while the handled and not-handled lines carry the full trace.
+    /// </summary>
+    /// <param name="logger">The logger to write to.</param>
+    /// <param name="exception">The exception that was thrown.</param>
+    public static void LogExceptionThrown(this ILogger logger, Exception exception) =>
+        throw new NotImplementedException();
+
+    /// <summary>
+    /// Logs that an exception was handled at a point where a response could be formed — the line that
+    /// marks it as expected behaviour rather than a fault. Carries the same id as its thrown line.
+    /// </summary>
+    /// <param name="logger">The logger to write to.</param>
+    /// <param name="exception">The exception that was handled.</param>
+    /// <param name="reason">What the caller did with it, in a few words.</param>
+    public static void LogExceptionHandled(this ILogger logger, Exception exception, string reason) =>
+        throw new NotImplementedException();
+
+    /// <summary>
+    /// Logs an exception no code handled — it escaped a request, a thread, or a task nobody observed.
+    /// Carries the same id as its thrown line.
+    /// </summary>
+    /// <param name="logger">The logger to write to.</param>
+    /// <param name="exception">The exception nobody handled.</param>
+    /// <param name="where">Where it escaped from, in a few words.</param>
+    public static void LogExceptionNotHandled(this ILogger logger, Exception exception, string where) =>
+        throw new NotImplementedException();
 }
