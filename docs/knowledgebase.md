@@ -156,6 +156,27 @@ Rendering is a separate concern from the type. An enum member renders to its wir
 
 ---
 
+## Where entries live, and what they look like
+
+**Entries are written as they are learned, not when the in-app Knowledgebase is built.** Waiting for
+[#333](https://github.com/DutchJaFO/Quotinator/issues/333) would mean discarding everything observed in
+the meantime and inventing the content again at implementation time.
+
+- **One markdown file per entry, in `docs/knowledgebase/`**, from
+  [`entry-template.md`](knowledgebase/entry-template.md). Markdown because these have to be readable by
+  a person now; #333 is what turns them into the JSON-sourced, coded form it needs.
+- **`docs/knowledgebase/README.md` indexes them**, and each is listed in `Quotinator.slnx`.
+- **The template is fine-tuned as new situations arrive.** It is a starting shape, not a frozen contract
+  — a field that turns out to be missing gets added to the template, and existing entries gain it when
+  they are next touched.
+
+**A test outcome is entry material.** A T2 run that observes an exception, a warning or a degraded state
+records it here, never in the test document — the document states what a pass requires, and the outcome
+belongs where an operator will look for it. See [`automated-testing/README.md`](automated-testing/README.md)'s
+*Test outcomes feed the Knowledgebase*.
+
+---
+
 ## What an entry carries
 
 | Field | Notes |

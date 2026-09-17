@@ -338,6 +338,13 @@
   <Folder Name="/docs/automated-testing/">
     <File Path="docs/automated-testing/README.md" />
   </Folder>
+  <Folder Name="/docs/knowledgebase/">
+    <File Path="docs/knowledgebase/README.md" />
+    <File Path="docs/knowledgebase/entry-template.md" />
+    <File Path="docs/knowledgebase/repeated-suitable-constructor-exceptions-at-startup.md" />
+    <File Path="docs/knowledgebase/transport-connection-cancelled-during-a-request.md" />
+    <File Path="docs/knowledgebase/uploaded-file-is-rejected-as-invalid-json.md" />
+  </Folder>
   <Folder Name="/docs/automated-testing/api-surface/">
     <File Path="docs/automated-testing/api-surface/01-baseline.md" />
     <File Path="docs/automated-testing/api-surface/02-pagination-contract.md" />
