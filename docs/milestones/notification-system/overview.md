@@ -71,6 +71,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#368](https://github.com/DutchJaFO/Quotinator/issues/368) | New import files are discovered but never imported, and nothing says so | Planning | T1 ⬜ T2 ⬜ | [368-unimported-files-are-discovered-but-never-imported-plan.md](368-unimported-files-are-discovered-but-never-imported-plan.md) |
 | [#369](https://github.com/DutchJaFO/Quotinator/issues/369) | A review row whose batch is gone offers decisions that cannot be carried out | Waiting for release | T1 ✅ T2 ✅ | [369-orphaned-review-rows-plan.md](369-orphaned-review-rows-plan.md) |
 | [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | Planning | T1 ⬜ T2 ⬜ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
+| [#400](https://github.com/DutchJaFO/Quotinator/issues/400) | Prove the import behaviours with tests that own their input, not against bundled content | Planning | T1 ⬜ T2 ⬜ | — |
+| [#401](https://github.com/DutchJaFO/Quotinator/issues/401) | Automated test documents contain the test, and outcomes go to the Knowledgebase | Planning | T1 ⬜ T2 ⬜ | — |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | In progress | T1 ⬜ T2 ⬜ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Planning | T1 ⬜ T2 ⬜ | — |
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
@@ -123,6 +125,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #313 ─── (none) — Waiting for release
 #370 ─── depends on #397 — Planning
 #397 ─── (none); blocks #370 — In progress
+#400 ─── (none); blocks import-and-staged-actions/14 going fully green — Planning
+#401 ─── depends on #397, which created docs/knowledgebase/ for relocated outcomes — Planning
 #369 ─── depends on #303, #372, #389 — Waiting for release
 #389 ─── depends on #373, #376, #377 — Waiting for release
 #390 ─── (none); found in T1 while verifying #369; blocks #368 — Planning
@@ -195,6 +199,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 46 | **#360** | Planning — before end-of-milestone migration consolidation |
 | 47 | **#390** | Planning — before #368, which depends on it |
 | 48 | **#368** | Planning — depends on #303, #304, #390 |
+| 49 | **#400** | Planning — found by #397's T2 pass; #14 is not fully green until it lands |
+| 50 | **#401** | Planning — suite-wide cleanup, after #397 established where outcomes go |
 
 ---
 

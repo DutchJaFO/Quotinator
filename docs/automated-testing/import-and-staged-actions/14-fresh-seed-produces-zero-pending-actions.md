@@ -3,6 +3,7 @@
 **Smoke:** yes
 **Environment:** Fresh
 **Traces to:** #181
+**Fully green after:** [#400](https://github.com/DutchJaFO/Quotinator/issues/400)
 
 ## Preconditions
 

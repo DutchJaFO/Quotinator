@@ -235,6 +235,15 @@ with its configuration injected instead of service-located. Re-measured on a reb
 Under the developer rule that no exceptions should be seen at all (2026-09-17), `api-surface/05` step 2
 now asserts that zero and passes.
 
+**Boyscout, found by review of this issue's own diff:** the six endpoint files converted here passed
+their route group prefix to `MapGroup` as a literal, one of them duplicating a string
+`ApiRoutes.Import` already held — a breach of `CLAUDE.md`'s string-centralisation policy in files this
+issue touched, left in place by a `var` conversion that changed the declaration beside it. The five
+missing prefixes are now `ApiRoutes` constants, all six files use them, and
+`RouteConstantUsageTests` guards the converted files with a positive control asserting each constant
+names a path the API actually serves. The remaining endpoint files still hold literals and are
+surfaced rather than swept.
+
 **The upload's own lines, re-measured:** one `JsonReaderException` and four
 `QuoteImportValidationException` lines sharing one id — a single exception object notified once per
 throw and once per rethrow. The document now says to count distinct ids rather than lines.
