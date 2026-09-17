@@ -10,6 +10,14 @@ namespace Quotinator.Api.Middleware;
 /// </summary>
 internal static class DeclaredExceptionHandlers
 {
+    /// <summary>
+    /// Each exception type one of our own handlers declares, handled and logged by the handler type it
+    /// maps to. One list, read both by the registration in <c>Program.cs</c> and by the suppression
+    /// callback — two copies would drift, and a handler registered but not declared would silently log
+    /// nothing at all.
+    /// </summary>
+    internal static IReadOnlyDictionary<Type, Type> Handlers => throw new NotImplementedException();
+
     /// <summary>The exception types one of our own handlers declares, handles and logs.</summary>
     internal static IReadOnlySet<Type> ExceptionTypes => throw new NotImplementedException();
 

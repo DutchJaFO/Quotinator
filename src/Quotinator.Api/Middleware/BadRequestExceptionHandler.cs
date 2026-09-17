@@ -15,7 +15,7 @@ namespace Quotinator.Api.Middleware;
 /// fix it at the point of origin the same way rather than relying on this generic fallback.
 /// Registered before AddProblemDetails() so it runs first in the IExceptionHandler chain.
 /// </remarks>
-internal sealed class BadRequestExceptionHandler(IApiLocalizer localizer) : IExceptionHandler
+internal sealed class BadRequestExceptionHandler(IApiLocalizer localizer, ILogger<BadRequestExceptionHandler> logger) : IExceptionHandler
 {
     /// <inheritdoc/>
     public async ValueTask<bool> TryHandleAsync(
@@ -25,6 +25,10 @@ internal sealed class BadRequestExceptionHandler(IApiLocalizer localizer) : IExc
     {
         if (exception is not BadHttpRequestException)
             return false;
+
+        // #397: this handler reporting the exception as handled stops the middleware logging it, so the
+        // handler logs it itself — otherwise a binding failure turned into a 422 leaves no trace at all.
+        _ = logger;
 
         context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
         await Results.Problem(
