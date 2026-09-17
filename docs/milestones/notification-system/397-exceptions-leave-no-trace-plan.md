@@ -1,6 +1,6 @@
 # #397 — Exceptions the application catches leave no trace outside Visual Studio
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #397
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,8 +9,8 @@
 
 ## Next action
 
-This is a draft, written before #397 started. Re-plan it against the current code and issues when #397
-starts.
+Execute this plan, step by step. Re-planned against the current code on 2026-09-17, with every design
+decision settled below.
 
 ---
 
@@ -70,15 +70,23 @@ Per `docs/testing-policy.md`'s *Red first means signatures first* — types and 
   `IExceptionHandler`s handle, and the `SuppressDiagnosticsCallback` built from it.
 - **`Quotinator.Api/Middleware/UnhandledRequestExceptionHandler`** — the last-resort `IExceptionHandler`.
 
-Before writing the callback, confirm `ExceptionHandlerSuppressDiagnosticsContext`'s members against the
-assembly itself. Microsoft's pages say it carries the exception, the request, and whether the exception
-was handled, but name no properties.
+`ExceptionHandlerSuppressDiagnosticsContext`'s members, read by reflection from the 10.0.12 shared
+framework because Microsoft's pages name none: `HttpContext`, `Exception`, and `ExceptionHandledBy`, an
+`ExceptionHandledType` of `Unhandled`, `ExceptionHandlerService`, `ProblemDetailsService`,
+`ExceptionHandlerDelegate` or `ExceptionHandlingPath`. "Handled by one of our `IExceptionHandler`s" is
+`ExceptionHandlerService`.
 
 ### 2. Write every test and confirm each is red
 
 **Status:** ⬜ Not started
 
-Every row of the Verification checklist below. The automated document runs against a canary built from
+Every row of the Verification checklist below. No test subscribes to an `AppDomain` or `TaskScheduler`
+event: `docs/testing-policy.md` allows global state to be written only once, in `[AssemblyInitialize]`,
+so each test calls the handler method directly with constructed event arguments
+(`FirstChanceExceptionEventArgs`, `UnhandledExceptionEventArgs`, `UnobservedTaskExceptionEventArgs` all
+have public constructors).
+
+The automated document runs against a canary built from
 the commit before this issue's first code commit, which must log no thrown line at all; then the
 container, image and worktree are removed.
 
@@ -86,14 +94,21 @@ container, image and worktree are removed.
 
 **Status:** ⬜ Not started
 
-- **The logger exists before the host.** `Program.cs` opens with Serilog's two-stage initialisation: a
-  bootstrap logger assigned to `Log.Logger` using the same output template as the configured one — the
-  template moves to one constant so the two cannot drift — then `UseSerilog` replaces its configuration
-  once the host is built.
-- **The handlers log through `Log.Logger`**, wrapped once in a `SerilogLoggerFactory` so they can call
-  the `[LoggerMessage]` methods. That wrapper is created outside DI because it has to exist before the
-  container does; the call site says so, per `CLAUDE.md`'s DI policy.
-- **Subscription is the first statement** after the bootstrap logger is assigned.
+- **The logger exists before the host, without Serilog's `CreateBootstrapLogger`.** That reloadable
+  logger freezes when the first host is built and throws "The logger is already frozen" on the next
+  (serilog/serilog-aspnetcore#312) — and `Quotinator.Api.Tests` builds a host per test in one process.
+  Instead `Program.cs` assigns a plain logger to `Log.Logger` if none has been assigned yet, using the
+  same output template as the configured one — the template moves to one constant so the two cannot
+  drift — and `UseSerilog` replaces `Log.Logger` once the host is built.
+- **The handlers read `Log.Logger` at the moment they log**, so they move to the host's logger the
+  moment it exists, and wrap it in a `SerilogLoggerFactory` so they can call the `[LoggerMessage]`
+  methods. That wrapper is created outside DI because it has to exist before the container does; the
+  call site says so, per `CLAUDE.md`'s DI policy.
+- **Subscription is the first statement of `Program.cs`**, ahead of `QuotinatorDapperConfiguration`,
+  and happens once per process however many hosts are built.
+- **The lines obey `Quotinator:LogLevel` like every other line** (developer decision, 2026-09-17): a
+  configured level is the operator's instruction, not a gap to work around, so at `fatal` only the
+  `Critical` lines appear. Nothing lowers the global minimum for these events.
 - **The id** is 8 hex characters, held in a `ConditionalWeakTable<Exception, string>` so it lives exactly
   as long as the exception and the exception object itself is never modified.
 - **Recursion:** a `[ThreadStatic]` flag makes the first-chance handler a no-op while it is already
@@ -117,8 +132,10 @@ container, image and worktree are removed.
 
 - `BadRequestExceptionHandler` calls `LogExceptionHandled` before writing its `422`.
 - `DeclaredExceptionHandlers` lists `BadHttpRequestException`. Both the handler registration and
-  `SuppressDiagnosticsCallback` read that list, so the middleware's own line is suppressed exactly for an
-  exception one of our handlers declared and logged, and never for anything else.
+  `SuppressDiagnosticsCallback` read that list. The callback suppresses only when `ExceptionHandledBy` is
+  `ExceptionHandlerService` **and** the exception's type is on the list, so the middleware's own line
+  disappears exactly for an exception one of our handlers declared and logged, and never for anything
+  else.
 
 ### 6. Document the lines
 
