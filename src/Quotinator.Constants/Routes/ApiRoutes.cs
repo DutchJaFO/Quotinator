@@ -11,7 +11,12 @@ public static class ApiRoutes
     public const string AuditLog            = "/api/v1/admin/audit";
     public const string AuditExport         = "/api/v1/admin/audit/export";
     public const string AuditDateRange      = "/api/v1/admin/audit/date-range";
+    public const string Admin               = "/api/v1/admin";
+    public const string AdminBackups        = "/api/v1/admin/backups";
     public const string Import              = "/api/v1/import";
+    public const string ImportFileResources = "/api/v1/import/file-resources";
+    public const string ImportRules         = "/api/v1/import/rules";
+    public const string Notifications       = "/api/v1/notifications";
     public const string ImportPreview       = "/api/v1/import/preview";
     public const string ImportActions         = "/api/v1/import/actions";
     public const string ImportActionsDecide   = "/api/v1/import/actions/{id}/decide";

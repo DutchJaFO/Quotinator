@@ -5,6 +5,7 @@ using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Constants.Routes;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
@@ -27,11 +28,11 @@ internal static class NotificationEndpoints
 {
     internal static void MapNotificationEndpoints(this WebApplication app)
     {
-        RouteGroupBuilder publicGroup = app.MapGroup("/api/v1/notifications")
+        RouteGroupBuilder publicGroup = app.MapGroup(ApiRoutes.Notifications)
                              .WithTags(ApiTags.Notifications)
                              .RequireRateLimiting(RateLimitPolicies.Admin);
 
-        RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/notifications")
+        RouteGroupBuilder adminGroup = app.MapGroup(ApiRoutes.Notifications)
                             .WithTags(ApiTags.Notifications)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
                             .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())

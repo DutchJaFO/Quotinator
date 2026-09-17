@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Constants.Routes;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
 using Quotinator.Core.Models;
@@ -31,11 +32,11 @@ internal static class ImportRuleEndpoints
 
     internal static void MapImportRuleEndpoints(this WebApplication app)
     {
-        RouteGroupBuilder publicGroup = app.MapGroup("/api/v1/import/rules")
+        RouteGroupBuilder publicGroup = app.MapGroup(ApiRoutes.ImportRules)
                              .WithTags(ApiTags.Import)
                              .RequireRateLimiting(RateLimitPolicies.Admin);
 
-        RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/import/rules")
+        RouteGroupBuilder adminGroup = app.MapGroup(ApiRoutes.ImportRules)
                             .WithTags(ApiTags.Import)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
                             .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())

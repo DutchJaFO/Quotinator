@@ -4,6 +4,7 @@ using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Constants.Routes;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
@@ -26,12 +27,12 @@ internal static class ImportFileResourceEndpoints
     internal static void MapImportFileResourceEndpoints(this WebApplication app)
     {
         // Non-destructive endpoints — read-only; no API key required.
-        RouteGroupBuilder publicGroup = app.MapGroup("/api/v1/import/file-resources")
+        RouteGroupBuilder publicGroup = app.MapGroup(ApiRoutes.ImportFileResources)
                              .WithTags(ApiTags.Import)
                              .RequireRateLimiting(RateLimitPolicies.Admin);
 
         // Destructive endpoints — require X-Api-Key header.
-        RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/import/file-resources")
+        RouteGroupBuilder adminGroup = app.MapGroup(ApiRoutes.ImportFileResources)
                             .WithTags(ApiTags.Import)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
                             .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())

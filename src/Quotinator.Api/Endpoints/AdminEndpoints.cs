@@ -8,6 +8,7 @@ using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Constants.Routes;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
@@ -26,12 +27,12 @@ internal static class AdminEndpoints
     internal static void MapAdminEndpoints(this WebApplication app)
     {
         // Non-destructive endpoints — read-only; no API key required.
-        RouteGroupBuilder publicGroup = app.MapGroup("/api/v1/admin")
+        RouteGroupBuilder publicGroup = app.MapGroup(ApiRoutes.Admin)
                              .WithTags(ApiTags.Admin)
                              .RequireRateLimiting(RateLimitPolicies.Admin);
 
         // Destructive or sensitive endpoints — require X-Api-Key header.
-        RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/admin")
+        RouteGroupBuilder adminGroup = app.MapGroup(ApiRoutes.Admin)
                             .WithTags(ApiTags.Admin)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
                             .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())

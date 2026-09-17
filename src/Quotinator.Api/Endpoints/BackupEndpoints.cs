@@ -7,6 +7,7 @@ using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Api.Startup;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Constants.Routes;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
@@ -45,7 +46,7 @@ internal static class BackupEndpoints
 
     internal static void MapBackupEndpoints(this WebApplication app)
     {
-        RouteGroupBuilder backups = app.MapGroup("/api/v1/admin/backups")
+        RouteGroupBuilder backups = app.MapGroup(ApiRoutes.AdminBackups)
                                        .WithTags(ApiTags.Backup)
                                        .RequireRateLimiting(RateLimitPolicies.Admin)
                                        .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())

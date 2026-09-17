@@ -6,6 +6,7 @@ using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
+using Quotinator.Constants.Routes;
 using Quotinator.Core.Database;
 using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
@@ -26,12 +27,12 @@ internal static class ImportEndpoints
     internal static void MapImportEndpoints(this WebApplication app)
     {
         // Read-only listing — no API key required, matches GET /admin/audit's precedent.
-        RouteGroupBuilder publicGroup = app.MapGroup("/api/v1/import")
+        RouteGroupBuilder publicGroup = app.MapGroup(ApiRoutes.Import)
                              .WithTags(ApiTags.Import)
                              .RequireRateLimiting(RateLimitPolicies.Admin);
 
         // Every write here mutates staged or real data — requires X-Api-Key, matches reseed/reset/refresh's precedent.
-        RouteGroupBuilder adminGroup = app.MapGroup("/api/v1/import")
+        RouteGroupBuilder adminGroup = app.MapGroup(ApiRoutes.Import)
                             .WithTags(ApiTags.Import)
                             .RequireRateLimiting(RateLimitPolicies.Admin)
                             .AddEndpointFilter(app.Services.GetRequiredService<AdminApiKeyFilter>())
