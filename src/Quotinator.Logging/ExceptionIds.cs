@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Quotinator.Logging;
 
 /// <summary>
@@ -13,5 +15,11 @@ public static class ExceptionIds
     /// </summary>
     /// <param name="exception">The exception to identify.</param>
     /// <returns>An 8-character hexadecimal id.</returns>
-    public static string For(Exception exception) => throw new NotImplementedException();
+    public static string For(Exception exception) =>
+        Ids.GetValue(exception, static _ => Guid.NewGuid().ToString("N")[..8]);
+
+    // Keyed on the exception instance and holding no strong reference to it, so an id cannot keep a
+    // dead exception alive and nothing has to be cleaned up. Writing the id onto the exception itself
+    // (Data, or a wrapper) would modify an object the application is still handling.
+    private static readonly ConditionalWeakTable<Exception, string> Ids = [];
 }

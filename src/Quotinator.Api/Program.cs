@@ -45,6 +45,10 @@ using System.Text.Json;
 using Quotinator.Api.Startup;
 using Quotinator.Changelog.Models;
 
+// First statement in the process: an exception thrown while startup is being configured is logged too,
+// and nothing that throws before this line would be logged anywhere (#397).
+ExceptionLogging.Subscribe();
+
 new QuotinatorDapperConfiguration().Configure();
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -695,8 +699,8 @@ builder.Host.UseSerilog((ctx, _, config) =>
 {
     bool isDev = ctx.HostingEnvironment.IsDevelopment();
     string template = isDev
-        ? "{Timestamp:HH:mm:ss} {Level:u3}: {SourceContext}[{EventId:0}] {Message}{NewLine}{Exception}"
-        : "{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}: {SourceContext}[{EventId:0}] {Message}{NewLine}{Exception}";
+        ? LogOutputTemplates.Development
+        : LogOutputTemplates.Production;
 
     config
         .MinimumLevel.Is(serilogLevel)

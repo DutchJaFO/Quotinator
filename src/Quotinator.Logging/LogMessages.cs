@@ -44,7 +44,10 @@ public static partial class LogMessages
     /// <param name="logger">The logger to write to.</param>
     /// <param name="exception">The exception that was thrown.</param>
     public static void LogExceptionThrown(this ILogger logger, Exception exception) =>
-        throw new NotImplementedException();
+        logger.LogExceptionThrownCore(exception, ExceptionIds.For(exception), exception.GetType().Name);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Runtime - Exception] {ExceptionId:l} thrown: {ExceptionType:l}")]
+    private static partial void LogExceptionThrownCore(this ILogger logger, Exception exception, string exceptionId, string exceptionType);
 
     /// <summary>
     /// Logs that an exception was handled at a point where a response could be formed — the line that
@@ -54,7 +57,10 @@ public static partial class LogMessages
     /// <param name="exception">The exception that was handled.</param>
     /// <param name="reason">What the caller did with it, in a few words.</param>
     public static void LogExceptionHandled(this ILogger logger, Exception exception, string reason) =>
-        throw new NotImplementedException();
+        logger.LogExceptionHandledCore(exception, ExceptionIds.For(exception), exception.GetType().Name, reason);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Runtime - Exception] {ExceptionId:l} handled: {ExceptionType:l} — {Reason:l}")]
+    private static partial void LogExceptionHandledCore(this ILogger logger, Exception exception, string exceptionId, string exceptionType, string reason);
 
     /// <summary>
     /// Logs an exception no code handled — it escaped a request, a thread, or a task nobody observed.
@@ -63,6 +69,16 @@ public static partial class LogMessages
     /// <param name="logger">The logger to write to.</param>
     /// <param name="exception">The exception nobody handled.</param>
     /// <param name="where">Where it escaped from, in a few words.</param>
-    public static void LogExceptionNotHandled(this ILogger logger, Exception exception, string where) =>
-        throw new NotImplementedException();
+    public static void LogExceptionNotHandled(this ILogger logger, Exception exception, string where)
+    {
+        // Guarded at the call site because CA1873 counts assigning an id and reading a type name as
+        // work not worth doing when the level is off — see docs/logging.md's "a [LoggerMessage]
+        // conversion does not, by itself, defer an expensive argument".
+        if (!logger.IsEnabled(LogLevel.Critical)) return;
+
+        logger.LogExceptionNotHandledCore(exception, ExceptionIds.For(exception), exception.GetType().Name, where);
+    }
+
+    [LoggerMessage(Level = LogLevel.Critical, Message = "[Runtime - Exception] {ExceptionId:l} not handled ({Where:l}): {ExceptionType:l}")]
+    private static partial void LogExceptionNotHandledCore(this ILogger logger, Exception exception, string exceptionId, string exceptionType, string where);
 }
