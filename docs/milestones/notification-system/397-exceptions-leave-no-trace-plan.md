@@ -137,7 +137,15 @@ doing when the level is off, which `docs/logging.md` already prescribes this exa
 
 ### 4. Log the endings nobody handled at `Critical`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — code complete; its verification row goes green with step 5
+
+The thread and unobserved-task endings landed with step 3's handlers and are already green.
+`UnhandledRequestExceptionHandler` now logs and declines, and is registered directly after
+`BadRequestExceptionHandler` so it sees only what every handler above it passed on.
+
+Its assertion sits inside `UndeclaredException_KeepsTheMiddlewareLineAndLogsCritical`, which reaches the
+suppression callback first and therefore still fails on step 5's unimplemented method — confirmed by the
+stack trace, not assumed. One test covering both was the price of matching the issue's own table.
 
 - `UnhandledException` logs `Critical` and then calls `Log.CloseAndFlush()`, because the runtime
   terminates the process once the handler returns. Today's sinks (Console, Debug) are synchronous, so
