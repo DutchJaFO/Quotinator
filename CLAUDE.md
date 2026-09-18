@@ -1124,6 +1124,14 @@ See [`docs/logging.md`](docs/logging.md).
 
 Boyscout rule: when you edit any file that emits log lines without the `[Subsystem - Phase]` prefix, add the prefix in the same commit. Do not defer it to a cleanup PR.
 
+### Exceptions: thrown only when nothing else can detect the condition, and always logged
+
+A condition the code has already checked — a lookup returned nothing, a status is wrong — is returned as
+an outcome, never thrown; a legitimate exception is caught at the first point a response can be formed;
+a guard against a programming error still throws. Every exception is logged with an id at `Error` when
+thrown and again where it is handled, and at `Critical` where nothing handled it. See
+[ADR 022](docs/architecture-decisions/022-exceptions-only-for-undetectable-conditions.md).
+
 ### Triaging a warning: ask what it costs before chasing it
 
 **A warning produced by a degraded or deliberately restricted environment is not automatically a defect, and must not be treated as one by default.** The first question about any warning in a log is always the same:

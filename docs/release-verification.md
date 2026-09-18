@@ -69,7 +69,7 @@ as verification with no canary run, exactly as #304 had already done before it.
 
 | Scope | What runs |
 |---|---|
-| End of an issue | The designated smoke set, plus whatever tests are relevant to that issue |
+| End of an issue | The designated smoke set, plus whatever tests are relevant to that issue, plus every document the issue changed or whose environment it changed |
 | End of a milestone | Every test. No exceptions |
 | Release | Every test — a release follows a milestone close |
 

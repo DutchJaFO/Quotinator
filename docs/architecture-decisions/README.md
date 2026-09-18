@@ -45,3 +45,4 @@ Each file follows the naming convention `NNN-short-title.md` and contains:
 | 019 | [019-central-package-version-management.md](019-central-package-version-management.md) | Every NuGet package version is declared once, centrally |
 | 020 | [020-openapi-tags-are-declared-with-descriptions.md](020-openapi-tags-are-declared-with-descriptions.md) | Every OpenAPI tag an endpoint uses is declared with a description |
 | 021 | [021-file-inputs-are-schema-validated.md](021-file-inputs-are-schema-validated.md) | Every file used as input is validated against the schema that defines it |
+| 022 | [022-exceptions-only-for-undetectable-conditions.md](022-exceptions-only-for-undetectable-conditions.md) | An exception is thrown only when nothing else can detect the condition, and every exception is logged |

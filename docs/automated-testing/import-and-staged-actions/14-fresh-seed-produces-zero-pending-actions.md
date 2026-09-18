@@ -3,7 +3,8 @@
 **Smoke:** yes
 **Environment:** Fresh
 **Traces to:** #181
-**Fully green after:** [#400](https://github.com/DutchJaFO/Quotinator/issues/400)
+**Fully green after:** [#400](https://github.com/DutchJaFO/Quotinator/issues/400) — step 5 cannot run
+until then: it calls a `--convert` entry point that does not exist
 
 ## Preconditions
 
@@ -264,29 +265,34 @@ Get-ChildItem data/sources/*conflict-rules.json | ForEach-Object {
   (Get-Content $_.FullName -Raw | ConvertFrom-Json).rules | ForEach-Object { $declaredRuleIds[$_.entityId.ToLower()] = $true }
 }
 
-$unexplained = @($noOps | Where-Object {
-  if ($declaredRuleIds[$_.entityId.ToLower()]) { return $false }        # shape 1
-  $existing = $_.existingValue | ConvertFrom-Json
-  $incoming = $_.incomingValue | ConvertFrom-Json
-  $differing = @($existing.fields.PSObject.Properties | Where-Object {
-    "$($incoming.fields.($_.Name))" -ne "$($_.Value)" })
+$isUnexplained = {
+  param($action)
+  if ($declaredRuleIds[$action.entityId.ToLower()]) { return $false }   # shape 1
+  $differing = @($action.existingFields.PSObject.Properties | Where-Object {
+    "$($action.incomingFields.($_.Name))" -ne "$($_.Value)" })
   # shape 2: every difference is a field the incoming side left empty
-  @($differing | Where-Object { "$($incoming.fields.($_.Name))" -ne "" }).Count -gt 0
-})
+  @($differing | Where-Object { "$($action.incomingFields.($_.Name))" -ne "" }).Count -gt 0
+}
 
+$unexplained = @($noOps | Where-Object { & $isUnexplained $_ })
 "unexplained no-ops = $($unexplained.Count)"
 $unexplained | Select-Object -First 10 | ForEach-Object { "  $($_.entityType) $($_.entityId)" }
+
+# Control: a row whose incoming side genuinely disagrees, with no rule declared for it.
+$control = [pscustomobject]@{ entityId = 'control'
+  existingFields = [pscustomobject]@{ date = '1972' }; incomingFields = [pscustomobject]@{ date = '1980' } }
+"control flagged = $(& $isUnexplained $control)"
 
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-14-noop
 ```
 
-**Expected:** `resolvedToExisting` is **non-zero** and names real entity types, and
-`unexplained no-ops = 0`.
+**Expected:** `resolvedToExisting` is **non-zero** and names real entity types,
+`unexplained no-ops = 0`, and `control flagged = True`.
 
-**Measured 2026-09-09 against a freshly built image:** 24 no-ops on the first reseed — the same figure
-#377's own planning measurement predicted from a fixture, which is what makes this a regression guard
-rather than a fresh discovery each time. Pre-fix the same run reported them as `modified`, with two
-confirmations naming `modified: 21` and `modified: 56`.
+**The control is what makes the `= 0` mean anything.** The endpoint returns `existingFields` and
+`incomingFields` as objects. A predicate that reads a property the response does not carry finds no
+differences on any row and reports `0` whatever the data holds — which is how this step was first
+written. Only a row the same predicate *does* flag separates a real pass from that.
 
 **Both halves matter and neither substitutes for the other.** The `= 0` assertion alone is satisfied by
 a build that produces no actions at all — including one where the classification broke the import
@@ -302,10 +308,6 @@ own history records nine wrong dates sitting in the database while a listing pas
 our rules do not yet cover — read the row's `existingValue`/`incomingValue` and decide whether it wants
 a `ConflictResolutionRule`, a `SourceAliasRule`, or nothing at all. Deciding "nothing at all" is a
 legitimate outcome; leaving it undecided is not.
-
-**Canary, 2026-09-08, against a pre-fix image built from `18418c29`:** red, and for the right reason —
-`resolvedToExisting = 0`, because the classification did not exist yet and every one of these rows was
-reported as `modified`. The assertion cannot pass on a build without the fix.
 
 ## Observed effect
 

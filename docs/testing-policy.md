@@ -150,6 +150,23 @@ The live tier covers what genuinely cannot be reached in-process — and when a 
 be unobservable there *too*, that is a finding about the design rather than about the test. A value
 visible only in rendered HTML usually needs to reach an API response before any live test can assert it.
 
+## A changed test is executed, and every test goes red before it goes green
+
+**Any test changed for whatever reason is executed after the change** (developer rule, 2026-09-18) —
+an edited expectation, a re-pointed fixture, a corrected command, a changed environment profile. An
+edit to a test is a claim about what the test now does, and it is untrue until a run shows it. This
+covers the tooling a test runs on as well as the test itself: a change to `scripts/testing/test-env.csx`
+changes the environment of every document that uses it, so those documents are executed again.
+
+**Every test an issue adds or changes is red first and green once the issue is complete.** Red first
+means against the state before the issue's own change — for a new test, the build before the work; for
+a test that was wrong, the version that failed. A test that has only ever been seen green has proven
+nothing about whether it can fail.
+
+Found live in #397: four automated documents were edited during its T2 pass — two to match behaviour
+other issues had changed, one re-pointed at a fixture — and a profile change altered the environment of
+every document, while several of those documents had last been run before the edits.
+
 ## A distinction the code makes is a distinction that can be proven
 
 If the application distinguishes two states, the means to reach both exists — so a member, branch or

@@ -220,7 +220,7 @@ Run 2026-09-17 against an image built from this branch.
 | `api-surface/01-baseline` | Pass |
 | `api-surface/02-pagination-contract` | Pass — 795 quotes, 1,507 actions, 35 audit rows; effective `pageSize` equalled `totalCount` on all three |
 | `api-surface/05-a-thrown-exception-is-logged` | Steps 3 to 5 pass; step 2 fails — see below |
-| `import-and-staged-actions/14-fresh-seed` | Steps 1 to 3 pass (`pending=0`, every entity count non-zero); the rest is withdrawn by the bundled-content rule, and now carries `Fully green after: #400` |
+| `import-and-staged-actions/14-fresh-seed` | Steps 1 to 4 and 6 pass on the re-run below; step 5 cannot run until #400, and the document says so |
 | `import-and-staged-actions/19-per-file-import-report` | Pass — five per-file reports, `removed=0` against `replacements=15`, `missingTypes=[]`, and zero exception lines across a reseed, reset, import and preview |
 | `import-and-staged-actions/01-staged-action-review-workflow` | Failed on its own premise, now re-pointed and passing (below) |
 | `database-lifecycle/03-reset-is-a-full-wipe` | Pass — 795 quotes and 40 audit rows before, `0` and the single self-trace row after, `NoResults` on the empty database, both schema counters unchanged at `1` |
@@ -296,8 +296,35 @@ throw and once per rethrow. The document now says to count distinct ids rather t
 
 **`import-and-staged-actions/14`'s step 5 was never runnable.** It calls
 `dotnet run --project src/Quotinator.Api -- --convert`, and no `--convert` CLI exists anywhere in the
-codebase — the step was authored in `7d1e9ff6` and never executed. Its other steps assert properties of
-bundled content, which the same developer rule withdraws.
+codebase — the step was authored in `7d1e9ff6` and never executed. The rest of the document stands: it
+is the zero-pending test the bundled-content rule permits, and its other steps stay in its use case.
+
+**Re-run 2026-09-18, after each document's last change**, on the current profile (no downloads),
+every command as written:
+
+| Document | Result |
+|---|---|
+| `api-surface/01` | Pass, 0 exceptions |
+| `api-surface/02` | Pass — 795 / 1,507 / 35 rows, 0 exceptions |
+| `api-surface/05` | Pass — `before=0`; the upload's lines share one id |
+| `import-and-staged-actions/19` | Pass — every step, 0 exceptions |
+| `import-and-staged-actions/01` | Pass — `202`, one pending action, decide / undo / apply, one `Applied` group of 2; 3 `UnresolvedFieldConflictException` (#370) |
+| `import-and-staged-actions/14` | Steps 1 to 4 pass — nothing pending, no duplicate, casing or undeclared date rows; 2 `SocketException` from the step's own `docker stop`. Step 6 passes as corrected below, 0 exceptions |
+| `notifications-and-changelog/01` | Pass, every step, driven in a browser |
+
+**`import-and-staged-actions/14` step 6 could never fail.** It read `existingValue`/`incomingValue`,
+which `GET /import/actions` has never returned — the response has carried `existingFields`/
+`incomingFields` since #154. Every row errored inside the predicate, found no differences, and counted
+as explained. Corrected, with a control row the predicate must flag: on the same data the old predicate
+flags `0` and the new one `1`. The re-run gives 25 no-ops (24 `Quote`, 1 `Source`): one `Source` covered
+by a declared rule, and 24 `Quote` rows whose incoming side leaves a stored field empty.
+
+**`notifications-and-changelog/01` logged one exception pair nothing had recorded:**
+`CryptographicException` with `AntiforgeryValidationException`, *"The antiforgery token could not be
+decrypted"*, on the first page load. The browser still held a cookie from the previous container on the
+same port, whose key ring went with its volume. The page rendered and every click worked afterwards, so
+it is recorded as a new Knowledgebase entry. The other 7 lines are the WebSocket and socket forms
+already recorded.
 
 The designated smoke set plus `api-surface/05-a-thrown-exception-is-logged.md`, against a fresh build of
 the branch. Every thrown line the smoke set produces is triaged in this step's record under `CLAUDE.md`'s
@@ -320,13 +347,14 @@ kept in scope because the issue could not otherwise verify what it claims.
    boyscout breach of the string-centralisation policy, found in review of this issue's own diff. Tests:
    `RouteConstantUsageTests`.
 3. **`docs/knowledgebase/` exists**, with an entry template, a procedure section in `knowledgebase.md`,
-   and three entries from this issue's T2 run — developer direction to record what is learned before
+   and four entries from this issue's T2 runs — developer direction to record what is learned before
    #333 builds the in-app form.
 4. **The test profile downloads nothing** — `Quotinator__AutoUpdateSources=false` in
    `scripts/testing/test-env.csx`.
 5. **Three documents corrected** while running the smoke set: `import-and-staged-actions/01` re-pointed
    at the conflict fixture, `notifications-and-changelog/01`'s stale expectations fixed, and
-   `import-and-staged-actions/14` marked `**Fully green after:** #400`.
+   `import-and-staged-actions/14` marked `**Fully green after:** #400`, with its step 6 predicate
+   reading the fields the response actually carries.
 6. **One extra test beyond the issue's table:** `BadRequestExceptionHandlerTests.AnotherException_IsDeclinedAndNotLogged`,
    the negative control beside the handler's own test.
 

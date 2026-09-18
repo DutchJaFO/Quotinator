@@ -135,6 +135,7 @@
     <File Path="docs/architecture-decisions/019-central-package-version-management.md" />
     <File Path="docs/architecture-decisions/020-openapi-tags-are-declared-with-descriptions.md" />
     <File Path="docs/architecture-decisions/021-file-inputs-are-schema-validated.md" />
+    <File Path="docs/architecture-decisions/022-exceptions-only-for-undetectable-conditions.md" />
   </Folder>
   <Folder Name="/docs/milestones/">
     <File Path="docs/milestones/README.md" />
@@ -340,6 +341,7 @@
   </Folder>
   <Folder Name="/docs/knowledgebase/">
     <File Path="docs/knowledgebase/README.md" />
+    <File Path="docs/knowledgebase/antiforgery-token-could-not-be-decrypted.md" />
     <File Path="docs/knowledgebase/entry-template.md" />
     <File Path="docs/knowledgebase/repeated-suitable-constructor-exceptions-at-startup.md" />
     <File Path="docs/knowledgebase/transport-connection-cancelled-during-a-request.md" />

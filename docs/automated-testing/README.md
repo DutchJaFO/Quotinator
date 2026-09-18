@@ -16,7 +16,7 @@ Three scopes, and they are not interchangeable.
 
 | Scope | What runs |
 |---|---|
-| **End of an issue (T2)** | The designated smoke set below, plus whatever tests are relevant to that issue. Not everything |
+| **End of an issue (T2)** | The designated smoke set below, plus whatever tests are relevant to that issue, plus every document the issue changed and every document whose environment it changed — each executed after its last change. Not everything |
 | **End of a milestone** | Every test here. No exceptions |
 | **Release** | Every test here — a release follows a milestone close |
 
@@ -820,6 +820,12 @@ its own result apart from the purge.
 the profile. A profile's job is to be what a user actually runs; a test needing something else says so
 where a reader can see it. `database-lifecycle/02` already works this way, running one container on the
 default and a second on `false` precisely to compare them.
+
+**Every profile pins `Quotinator__AutoUpdateSources=false` — a test downloads nothing.** Left at its
+default, every container fetches the upstream sources at startup: each run then depends on GitHub being
+reachable, a refresh can overwrite the bundled files the run is reading, and a cancelled or stalled
+download logs an exception the test never caused. A document whose subject *is* source refresh declares
+`true` as its own delta.
 
 **`--name` is mandatory**, on this and on every `docker run` in the suite. Without it, every later
 `docker cp` and `docker logs` is written against a `<container>` placeholder no reader can resolve.
