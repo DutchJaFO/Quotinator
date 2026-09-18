@@ -1,6 +1,6 @@
 # #397 — Exceptions the application catches leave no trace outside Visual Studio
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #397
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -9,8 +9,9 @@
 
 ## Next action
 
-Execute this plan, step by step. Re-planned against the current code on 2026-09-17, with every design
-decision settled below.
+Complete the *Waiting for release* checklist: the developer's T1 run, the scope additions recorded on
+the issue, the Definition of done ticked, and the changelog entry. Every step and verification row is
+green.
 
 ---
 
@@ -196,7 +197,7 @@ sites move to `Error` under #398.
 
 ### 7. Build and run the full suite
 
-**Status:** ✅ Done — 4,107 tests passed across 10 projects, 0 warnings, 0 errors
+**Status:** ✅ Done — re-run 2026-09-18 after step 8's fixes: 4,113 tests passed across 10 projects, 0 warnings, 0 errors
 
 `dotnet build --configuration Release --no-incremental` and
 `dotnet test --configuration Release --verbosity normal -m:1`, 2026-09-17. Nothing regressed: the
@@ -208,7 +209,7 @@ both 0 warnings, 0 errors.
 
 ### 8. T2 pass
 
-**Status:** 🚧 In progress — 3 documents pass; 1 blocked on the startup exceptions below
+**Status:** ✅ Done — the full designated smoke set plus this issue's own document
 
 Run 2026-09-17 against an image built from this branch.
 
@@ -220,6 +221,32 @@ Run 2026-09-17 against an image built from this branch.
 | `import-and-staged-actions/14-fresh-seed` | Steps 1 to 3 pass (`pending=0`, every entity count non-zero); the rest is withdrawn by the bundled-content rule, and now carries `Fully green after: #400` |
 | `import-and-staged-actions/19-per-file-import-report` | Pass — five per-file reports, `removed=0` against `replacements=15`, `missingTypes=[]`, and zero exception lines across a reseed, reset, import and preview |
 | `import-and-staged-actions/01-staged-action-review-workflow` | Failed on its own premise, now re-pointed and passing (below) |
+| `database-lifecycle/03-reset-is-a-full-wipe` | Pass — 795 quotes and 40 audit rows before, `0` and the single self-trace row after, `NoResults` on the empty database, both schema counters unchanged at `1` |
+| `startup-and-degradation/03-startup-wait-page` | Pass — `503`/`starting` during initialisation, a self-contained auto-refreshing page, then `healthy`/`ready`, Kestrel bound before the banner |
+| `notifications-and-changelog/07-changelog-served-from-its-own-database` | Pass — both database files on disk, 126 entries imported and served from the database, no fallback, file intact after a restart |
+| `notifications-and-changelog/01-notification-system` | Pass, driven in a browser; three expectations were stale and are corrected (below) |
+
+**`notifications-and-changelog/01` had three stale expectations**, all cause 2: the action button is
+labelled **Reset the database**, not **Run**; **All** lists ten rows, not "all five"; the spec declares
+eight tags, not "seven". The assertions that matter all held — the expired row reads `Expired`, Cancel
+leaves quotes at 795, Confirm takes them to `0` and empties the notification table.
+
+**Every run's exceptions are accounted for, and none originates in Quotinator's code:**
+
+| Run | Exceptions | What they are |
+|---|---|---|
+| `database-lifecycle/03` | 4 `SocketException` | Inbound reads cancelled by `docker stop` for the database copies |
+| `notifications-and-changelog/07` | 2 `SocketException` | The same, from its `docker restart` |
+| `notifications-and-changelog/01` | 5 `OperationCanceledException`, 2 `SocketException` | The web UI's WebSocket closing on each page change, and the `docker stop` in step 7 |
+| `import-and-staged-actions/01` | 4 `UnresolvedFieldConflictException` | #370's defect, visible for the first time |
+| every other run | 0 | — |
+
+All three socket forms are one Knowledgebase entry with several causes, which is what an entry is for.
+
+**These results stand on the Fresh profile as it seeds today — the full bundled corpus.** Every
+document here inherits 795 quotes it did not ask for, where a fixture of its own would do; the developer
+flagged that pattern (2026-09-18), and `Quotinator__IncludeDefaultSources=false` already exists to turn
+it off. Moving the profile is #400's scope, not this issue's.
 
 **`import-and-staged-actions/01` was stale, not broken.** Its step 4 expected `202` from re-importing
 the curated file and got `200` with `pending=0`: since #373 an already-stored quote stages as an
@@ -280,13 +307,13 @@ triage rule — never filtered out of the log.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Every thrown exception is logged at `Error` with an id and the exception | Unit test | `FirstChanceExceptionLoggingTests.ThrownException_IsLoggedAtErrorWithIdAndException`, `FirstChanceExceptionLoggingTests.NoExceptionThrown_LogsNothing` |
-| 2 | ❌ | The same exception keeps the same id on every line | Unit test | `ExceptionIdsTests.SameException_GetsTheSameId`, `ExceptionIdsTests.DifferentExceptions_GetDifferentIds`, `FirstChanceExceptionLoggingTests.LogExceptionHandled_CarriesTheSameIdAsTheThrownLine` |
-| 3 | ❌ | Logging starts before the host is built | Unit test | `FirstChanceExceptionLoggingTests.ProgramCs_RegistersExceptionLoggingBeforeTheBuilderIsCreated` |
-| 4 | ❌ | The handler never throws and never recurses | Unit test | `FirstChanceExceptionLoggingTests.LoggingItselfThrows_DoesNotRecurseOrPropagate` |
-| 5 | ❌ | An exception nobody handled is logged at `Critical` with its id, and the log is flushed before the process ends | Unit test | `UnhandledExceptionLoggingTests.UnhandledException_IsLoggedAtCriticalWithItsId`, `UnhandledExceptionLoggingTests.UnhandledException_FlushesTheLogBeforeReturning`, `UnhandledExceptionLoggingTests.UnobservedTaskException_IsLoggedAtCriticalWithItsId`, `UnhandledExceptionLoggingTests.ProgramCs_SubscribesToUnhandledAndUnobservedTaskExceptions` |
-| 6 | ❌ | A request exception our handler declared gets one handled line and no middleware line; any other keeps the middleware line and gets `Critical` | Unit test | `ExceptionHandlerDiagnosticsTests.DeclaredHandledException_LogsOneHandledLineAndNoMiddlewareLine`, `ExceptionHandlerDiagnosticsTests.UndeclaredException_KeepsTheMiddlewareLineAndLogsCritical`, `ExceptionHandlerDiagnosticsTests.SuppressionCallback_ReadsTheSameListTheHandlersAreRegisteredFrom` |
-| 7 | ❌ | `BadRequestExceptionHandler` declares what it handles | Unit test | `BadRequestExceptionHandlerTests.BindingFailure_Returns422AndLogsHandledLineWithTheThrownId` |
-| 8 | ❌ | A thrown exception is logged in a running container | Live (T2) | `automated-testing/api-surface/05-a-thrown-exception-is-logged.md` passes on this branch's build, and fails on the canary from step 2 |
-| 9 | ❌ | `docs/logging.md` registers the prefix and documents every line and its level | Unit test | `LoggingDocumentationTests.RuntimeExceptionLines_AreRegisteredAndDocumentedWithTheirLevels` — an assertion over the document's own text, as #307 established |
-| 10 | ❌ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
+| 1 | ✅ | Every thrown exception is logged at `Error` with an id and the exception | Unit test | `FirstChanceExceptionLoggingTests.ThrownException_IsLoggedAtErrorWithIdAndException`, `FirstChanceExceptionLoggingTests.NoExceptionThrown_LogsNothing` |
+| 2 | ✅ | The same exception keeps the same id on every line | Unit test | `ExceptionIdsTests.SameException_GetsTheSameId`, `ExceptionIdsTests.DifferentExceptions_GetDifferentIds`, `FirstChanceExceptionLoggingTests.LogExceptionHandled_CarriesTheSameIdAsTheThrownLine` |
+| 3 | ✅ | Logging starts before the host is built | Unit test | `FirstChanceExceptionLoggingTests.ProgramCs_RegistersExceptionLoggingBeforeTheBuilderIsCreated` |
+| 4 | ✅ | The handler never throws and never recurses | Unit test | `FirstChanceExceptionLoggingTests.LoggingItselfThrows_DoesNotRecurseOrPropagate` |
+| 5 | ✅ | An exception nobody handled is logged at `Critical` with its id, and the log is flushed before the process ends | Unit test | `UnhandledExceptionLoggingTests.UnhandledException_IsLoggedAtCriticalWithItsId`, `UnhandledExceptionLoggingTests.UnhandledException_FlushesTheLogBeforeReturning`, `UnhandledExceptionLoggingTests.UnobservedTaskException_IsLoggedAtCriticalWithItsId`, `UnhandledExceptionLoggingTests.ProgramCs_SubscribesToUnhandledAndUnobservedTaskExceptions` |
+| 6 | ✅ | A request exception our handler declared gets one handled line and no middleware line; any other keeps the middleware line and gets `Critical` | Unit test | `ExceptionHandlerDiagnosticsTests.DeclaredHandledException_LogsOneHandledLineAndNoMiddlewareLine`, `ExceptionHandlerDiagnosticsTests.UndeclaredException_KeepsTheMiddlewareLineAndLogsCritical`, `ExceptionHandlerDiagnosticsTests.SuppressionCallback_ReadsTheSameListTheHandlersAreRegisteredFrom` |
+| 7 | ✅ | `BadRequestExceptionHandler` declares what it handles | Unit test | `BadRequestExceptionHandlerTests.BindingFailure_Returns422AndLogsHandledLineWithTheThrownId` |
+| 8 | ✅ | A thrown exception is logged in a running container | Live (T2) | `automated-testing/api-surface/05-a-thrown-exception-is-logged.md` passes on this branch's build, and fails on the canary from step 2 |
+| 9 | ✅ | `docs/logging.md` registers the prefix and documents every line and its level | Unit test | `LoggingDocumentationTests.RuntimeExceptionLines_AreRegisteredAndDocumentedWithTheirLevels` — an assertion over the document's own text, as #307 established |
+| 10 | ✅ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |

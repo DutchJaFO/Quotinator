@@ -94,7 +94,7 @@ $operations = foreach ($path in $spec.paths.PSObject.Properties) {
 operations' own `tags` arrays rather than matched as text, so the assertion cannot be satisfied by the
 word appearing somewhere unrelated in the document.
 
-**`declaredTags` names all seven, `Notifications` among them.** It was missing until 2026-08-27 — the
+**`declaredTags` includes `Notifications`.** It was missing until 2026-08-27 — the
 constant existed and the operations carried it, but the spec's top-level `tags` array declared only the
 other six, so the group rendered with no description and no ordering. Found by reading the live spec
 during #339's PowerShell conversion, and fixed in the same issue.
@@ -209,20 +209,21 @@ assertion is a DOM read or a click, and each is stated so a driver can perform i
 and status cell —
 
 - The page loads with the **Active** filter selected: exactly the `ActionRequired` row is listed, and
-  its Action cell holds a **Run** button.
-- Click **All**: all five rows are listed, and their statuses read `Dismissed`, `Dismissed`, `Active`,
-  `Expired`, `Dismissed`. **The undismissed row past its `ExpiresAt` reads `Expired`, never `Active`**
-  — that is the computed-status assertion.
+  its Action cell holds that action's own button, **Reset the database**.
+- Click **All**: every row is listed, the three constructed ones among them, and those three read
+  `Active` (the action row), `Expired` and `Dismissed`. **The undismissed row past its `ExpiresAt` reads
+  `Expired`, never `Active`** — that is the computed-status assertion.
 - Click **Expired only**: exactly one row, the expired one.
 
-**Action button, Cancel path.** Back on **Active**, click **Run** in the ActionRequired row.
+**Action button, Cancel path.** Back on **Active**, click **Reset the database** in the ActionRequired
+row.
 
 - The row's buttons become **Confirm** and **Cancel**.
-- Click **Cancel**: the buttons revert to a single **Run**.
+- Click **Cancel**: the buttons revert to the single **Reset the database** button.
 - `(Invoke-RestMethod "http://localhost:18501/api/v1/version").database.quotes` is **unchanged** —
   Cancel called nothing.
 
-**Action button, Confirm path.** Click **Run**, then **Confirm**.
+**Action button, Confirm path.** Click **Reset the database**, then **Confirm**.
 
 - `(Invoke-RestMethod "http://localhost:18501/api/v1/version").database.quotes` drops to `0`, matching
   [`database-lifecycle/03-reset-is-a-full-wipe.md`](../database-lifecycle/03-reset-is-a-full-wipe.md).

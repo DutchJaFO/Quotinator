@@ -10,6 +10,6 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 
 | Entry | Prevents functioning? | Affected versions |
 |---|---|---|
-| [A cancelled transport connection during a source download](transport-connection-cancelled-during-a-request.md) | No | 1.9.0-alpha onwards |
+| [A cancelled socket or transport connection](transport-connection-cancelled-during-a-request.md) | No | 1.9.0-alpha onwards |
 | [An uploaded file is rejected as invalid JSON](uploaded-file-is-rejected-as-invalid-json.md) | No | up to 1.9.0-alpha |
 | [Repeated "a suitable constructor could not be located" at startup](repeated-suitable-constructor-exceptions-at-startup.md) | No | 1.9.0-alpha only |
