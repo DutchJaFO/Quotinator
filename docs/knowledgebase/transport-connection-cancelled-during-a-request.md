@@ -37,7 +37,13 @@ was stopped while requests were open (`docker stop` cancels every in-flight read
 web server's own socket layer, not Quotinator's code. Observed 2026-09-17: four such lines, each with its
 own id, at the moment a container was stopped for a database copy.
 
-The same cause has a third form when the connection was a browser page's live connection: an
+On Windows, and over HTTPS, the same cause reads differently: `IOException: Unable to read data from
+the transport connection: The I/O operation has been aborted because of either a thread exit or an
+application request` over `SocketException (995)`, with `SslStream` frames. Error 995 is Windows'
+equivalent of Linux's 125, and the `SslStream` frames only mean the connection was TLS. Observed
+2026-09-18 in a Visual Studio run, the same id repeated as it was rethrown.
+
+The same cause has a further form when the connection was a browser page's live connection: an
 `OperationCanceledException` whose frames run through `Http1UpgradeMessageBody` and
 `System.IO.Pipelines`. That is the web UI's WebSocket closing because the page was navigated away from
 or closed — every page change produces one. Observed 2026-09-18 while driving the notifications page.

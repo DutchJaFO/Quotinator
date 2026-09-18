@@ -303,6 +303,36 @@ triage rule — never filtered out of the log.
 
 ---
 
+## Scope changes
+
+Recorded on the issue in a comment of its own. Each addition was found while executing this plan and
+kept in scope because the issue could not otherwise verify what it claims.
+
+**Added:**
+
+1. **`AdminApiKeyFilter` is registered once and passed as an instance.** Activating it by type made the
+   framework throw and swallow six exceptions on every startup. Under the developer rule that no
+   exceptions should be seen at all (2026-09-17), `api-surface/05` asserts a zero baseline, which could
+   not pass without it. Tests: `AdminApiKeyFilterRegistrationTests`.
+2. **Route group prefixes come from `ApiRoutes`** in the six endpoint files this issue touched — a
+   boyscout breach of the string-centralisation policy, found in review of this issue's own diff. Tests:
+   `RouteConstantUsageTests`.
+3. **`docs/knowledgebase/` exists**, with an entry template, a procedure section in `knowledgebase.md`,
+   and three entries from this issue's T2 run — developer direction to record what is learned before
+   #333 builds the in-app form.
+4. **The test profile downloads nothing** — `Quotinator__AutoUpdateSources=false` in
+   `scripts/testing/test-env.csx`.
+5. **Three documents corrected** while running the smoke set: `import-and-staged-actions/01` re-pointed
+   at the conflict fixture, `notifications-and-changelog/01`'s stale expectations fixed, and
+   `import-and-staged-actions/14` marked `**Fully green after:** #400`.
+6. **One extra test beyond the issue's table:** `BadRequestExceptionHandlerTests.AnotherException_IsDeclinedAndNotLogged`,
+   the negative control beside the handler's own test.
+
+**Moved out:** an exception ending a Blazor circuit (#399); tests owning their input instead of the
+bundled corpus (#400); observations and unrelated prose across the suite (#401).
+
+---
+
 ## Verification checklist
 
 | # | Status | Requirement | Method | Verification |

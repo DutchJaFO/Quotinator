@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397],
     "highlights": [
       "A TV series can now be divided into seasons, and a quote can be attached to the episode it comes from where that is known — instead of every quote from a long-running show sharing one entry for the whole series.",
       "Reloading your quotes no longer wipes what is stored first. It adds what is missing, holds anything that disagrees for your decision, and leaves what already matches alone — so your own additions and corrections survive a reload. To start completely fresh, reset the database and then reload.",
@@ -18,7 +18,8 @@
       "Quotinator now tells you when reloading your quotes would be worthwhile — after a reset leaves the database empty, or when updated content has been downloaded that your stored quotes do not yet reflect. The notification carries a button that does it for you, so this no longer needs a command-line call. Quotinator never reloads on its own: it asks, because replacing the stored content is your decision.",
       "Reloading your quotes now confirms what it did, one message per file, listing how many entries of each kind were added or updated — so a reload that went perfectly says so, instead of finishing in silence.",
       "Quote files you add yourself no longer overwrite stored quotes silently. Previously a file that disagreed with something already stored simply replaced it, with nothing said; now the change is held for your decision instead. If you relied on the old behaviour, set `Quotinator__DefaultConflictPolicy` to `newest-wins`.",
-      "When a quote file brings changes that need your decision, Quotinator now tells you instead of leaving them to be discovered. A new Import review page lists every such change, and both the notification and the page let you keep what is stored or take what the file brought. Most conflicts are still best fixed by correcting the file and reloading; a fuller side-by-side review is planned."
+      "When a quote file brings changes that need your decision, Quotinator now tells you instead of leaving them to be discovered. A new Import review page lists every such change, and both the notification and the page let you keep what is stored or take what the file brought. Most conflicts are still best fixed by correcting the file and reloading; a fuller side-by-side review is planned.",
+      "Quotinator now writes every error it runs into to its log, including the ones it deals with itself, so a problem can be traced wherever Quotinator runs — each error carries a short reference that ties together every line written about it."
     ],
     "audienceHighlights": {
       "notification": [
@@ -27,7 +28,8 @@
       ]
     },
     "added": [
-      "Backups can now be managed from the API: list what exists with sizes and dates, take one on demand, download one so it survives the container, and remove one to free space. Each answers even when the database itself is in a limited state (issue #349)",
+      "Every exception the application throws is now logged, whether or not anything catches it: at `Error` when thrown, again at `Error` where it is handled as a response, and at `Critical` where nothing handled it — escaping a request, a thread, or an unobserved task — with one 8-character id tying the lines together. Logging starts before the host is built. Previously an exception the application caught itself was visible only in a debugger (issue #397)",
+      "Backups can now be managed from the API: list what exists withsizes and dates, take one on demand, download one so it survives the container, and remove one to free space. Each answers even when the database itself is in a limited state (issue #349)",
       "A what's-new startup notification after an update, covering every release missed since the last version this instance actually ran — one notification per release, plus the in-development section when it has anything flagged; a fresh install sees only the current version (issue #81)",
       "Quotinator now keeps a record of which application versions have used the database, and links each notification to the version that added it — the groundwork for showing when a notification first appeared (issue #312)",
       "A notification recommending that quotes be reloaded, with a button that carries it out. It appears after a reset has left the database without quotes, and when updated source content has been downloaded that the stored quotes do not reflect. It clears itself once quotes are reloaded or imported by any route, and reappears if the situation arises again (issue #304)",
@@ -57,6 +59,8 @@
       "`github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)"
     ],
     "fixed": [
+      "A parameter-binding failure turned into a `422` was logged nowhere: since .NET 10 the exception-handler middleware stops logging an exception a handler reports as handled. The handler now logs it itself, and the middleware's own line is suppressed only for exceptions an application handler has already logged (issue #397)",
+      "Six exceptions were thrown and swallowed on every startup while the framework probed for a constructor the admin API key filter did not have. The filter is now registered once and shared by every admin endpoint group, with its configuration injected (issue #397)",
       "A change waiting for your decision was reported again every time your quotes were reloaded, so the same unresolved item piled up copies of itself without limit. Each is now reported once and recognised on every later reload, and the reload's own record says how many it recognised that way — so a long-standing decision no longer buries the ones that are genuinely new (issue #376)",
       "The Import review page could offer to keep or take a change whose import had since been removed — a decision that could no longer be carried out — and showed the import's internal id where its file name belonged. Such a change now names the file it came from, says its import no longer exists and offers only to dismiss it, and its notification says the action is no longer possible instead of offering one that would fail. A database reloaded by an earlier version can hold changes like this (issue #369)",
       "Discarding changes held for review was refused as already applied whenever the same file also restated something already stored — which a reloaded file nearly always does — so such a batch could be neither dismissed from the Import review page nor discarded through the API. Entries that change nothing are now left as recorded, and everything still awaiting a decision is discarded; released versions were never affected (issue #389)",
