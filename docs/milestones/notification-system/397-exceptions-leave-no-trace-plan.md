@@ -9,9 +9,11 @@
 
 ## Next action
 
-Complete the *Waiting for release* checklist: the developer's T1 run, the scope additions recorded on
-the issue, the Definition of done ticked, and the changelog entry. Every step and verification row is
-green.
+Complete the *Waiting for release* checklist: the Definition of done ticked and the process-gap check.
+Every step and verification row is green, T1 passed on 2026-09-18 (the developer's Visual Studio run: a
+clean start through a Data v3 → v22 upgrade, zero exceptions before ready, every debugger `Exception
+thrown:` line matched by a `[Runtime - Exception]` line), and the scope additions and changelog entry are
+recorded.
 
 ---
 
