@@ -9,8 +9,9 @@
 
 ## Next action
 
-Complete the *Waiting for release* checklist: the Definition of done ticked and the process-gap check.
-Every step and verification row is green, T1 passed on 2026-09-18 (the developer's Visual Studio run: a
+Wait for the release. The *Waiting for release* checklist is complete: the Definition of done is ticked
+apart from the closing comment, and the process-gap check is recorded below. Every step and
+verification row is green, T1 passed on 2026-09-18 (the developer's Visual Studio run: a
 clean start through a Data v3 → v22 upgrade, zero exceptions before ready, every debugger `Exception
 thrown:` line matched by a `[Runtime - Exception]` line), and the scope additions and changelog entry are
 recorded.
@@ -372,6 +373,33 @@ kept in scope because the issue could not otherwise verify what it claims.
 
 **Moved out:** an exception ending a Blazor circuit (#399); tests owning their input instead of the
 bundled corpus (#400); observations and unrelated prose across the suite (#401).
+
+---
+
+## Process gap check
+
+**Rules that existed and were not followed** — behavioural, no document change:
+
+- `sed`, `awk`, `grep` and `head` run in a shell during the session — ADR 010.
+- Route group prefixes left as literals in the endpoint files this issue touched — `CLAUDE.md`'s
+  string-centralisation policy.
+- `import-and-staged-actions/14` step 6 counted nothing, written in #377 — the suite index's *A count is
+  evidence only if the instrument counts the right thing* already required a positive control.
+- The signatures step slid into implementation — `docs/testing-policy.md`'s *Red first means signatures
+  first*.
+- Labels and a milestone for a new issue read off a sibling issue instead of `docs/workflow/issues.md`.
+
+**Genuine gaps, resolved in documents during this issue:**
+
+- A plan is written when its issue starts — `process.md`, `checklist.md`, `issues.md`.
+- Knowledgebase entries are recorded now, from a template — `docs/knowledgebase.md`, `docs/knowledgebase/`.
+- A changed test is executed, red before green — `docs/testing-policy.md`.
+
+**Genuine gaps, each owned by an issue:**
+
+- The suite index still says a test against the bundled sources tests the real thing — #400.
+- Test documents carry `Observed effect` sections and history prose — #401.
+- Test documents stop their container when that is not what they verify — #402.
 
 ---
 
