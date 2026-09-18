@@ -1,6 +1,6 @@
 # #370 — An expected import conflict is signalled by throwing, once per conflicted row per render
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 8)
 **GitHub issue:** #370
 **Tiers required:** T1, T2
 **Depends on:** #397
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Execute the steps in order; step 4 is next.
+Execute the steps in order; step 8, the T2 pass, is next.
 
 ---
 
@@ -150,7 +150,9 @@ conflicted row per read. Container, image and worktree are removed afterwards.
 
 ### 4. Report unresolved fields instead of throwing
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — landed with steps 5 and 6 in one change: once the resolver stops throwing, the
+decide path would otherwise read incomplete merged fields, and deleting the exception type forces every
+use of it to change at once.
 
 `ResolveWithDecisions` returns the unresolved names in `UnresolvedFields`, and
 `UnresolvedFieldConflictException` is deleted. The six planner fall-through sites test
@@ -163,7 +165,16 @@ own.
 
 ### 5. Return an outcome from the decide path
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — the unresolved check still runs before the coordinator's state check, so a request
+that is both incomplete and against an applied action answers as it did. `DecideAsync_AlreadyAppliedAction_…`
+at service level had been built on an Add action, which has no existing value to decide against; it now
+decides and applies a Modify first, and was re-run red against step 3's code (`ImportActionStateException`)
+before passing. The interface's decidable-types summary, which still read "Quote, and Source Modify", now
+names all nine.
+
+**Found, not fixed here:** deciding a Quote *Add* action dereferences a missing existing value and throws
+`ArgumentNullException` — pre-existing, and reachable because #378 can hold an Add for review. A bug of
+its own; see the issue it was filed as.
 
 The coordinator returns `NotFound`/`AlreadyResolved` where it threw. `SqliteImportActionService.DecideAsync`
 returns the coordinator's non-`Decided` result unchanged, `NotDecidable` where it threw, and
@@ -177,7 +188,7 @@ until #404.
 
 ### 6. Keep the planner's one invariant throw
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `ResolveEarlyRule` supplies both sides of every undecided field itself, so no field can be left
 unresolved there. An unresolved field would be a bug in that construction, which no caller can respond
@@ -185,7 +196,9 @@ to — ADR 022 rule 3 — so it throws `InvalidOperationException`, the one thro
 
 ### 7. Build and run the full suite
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 4,134 tests passed across 11 projects, 0 warnings, 0 errors. The first run failed
+one guard: `28`'s header named its setting instead of a profile, corrected to `Fresh` (the setting is in
+its Preconditions, as other documents do).
 
 `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
 both 0 warnings, 0 errors.
@@ -206,16 +219,16 @@ actions — `import-and-staged-actions/01`, `/20`, `/25`, `/26` and `/27`. Each 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
 | 1 | ✅ | A test can see an exception the code threw and caught itself | Unit test | `ThrownExceptionRecorderTests.Scope_ExceptionThrownAndCaughtInside_IsRecorded`, `…Scope_NothingThrown_RecordsNothing`, `…Scope_ExceptionThrownOutside_IsNotRecorded`, `…Scope_ExceptionThrownAfterAnAwait_IsRecorded`, `…Scopes_OnConcurrentFlows_RecordOnlyTheirOwn` |
-| 2 | ❌ | The resolver reports unresolved fields instead of throwing | Unit test | `FieldMergeResolverTests.ResolveWithDecisions_AmbiguousFieldNoDecision_ReportsFieldName`, `…_AmbiguousFieldsNoDecision_ReportsEveryAmbiguousFieldName`, `…_FieldInCaseSensitiveSet_DiffersOnlyByCase_ReportsFieldName`, `…_NothingAmbiguous_ReportsNoUnresolvedFields`, `…_AmbiguousFieldNoDecision_ThrowsNothing` |
-| 3 | ❌ | `UnresolvedFieldConflictException` and `ImportActionNotDecidableException` no longer exist | Live | `git grep -n -e UnresolvedFieldConflictException -e ImportActionNotDecidableException -- src tests` prints nothing and exits 1 |
-| 4 | ❌ | The planner's fall-through sites stage Pending and throw nothing | Unit test | `ImportActionPlannerTests.PlanAsync_ReviewPolicy_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSourcesAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSourcesAsync_ByNaturalKey_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSeriesAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSeasonsAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing` |
-| 5 | ❌ | Listing and exporting report ambiguous fields and throw nothing | Unit test | `SqliteImportActionServiceTests.GetPagedAsync_PendingModifyConflicts_ReportsAmbiguousFieldsWithoutThrowing`, `…ExportBatchAsync_PendingModifyConflicts_ReportsAmbiguousFieldsWithoutThrowing` |
-| 6 | ❌ | The coordinator's decide returns not-found and already-resolved, throwing nothing | Unit test | `ImportActionResolutionCoordinatorTests.DecideAsync_UnknownId_ReturnsNotFoundWithoutThrowing`, `…DecideAsync_AlreadyAppliedAction_ReturnsAlreadyResolvedWithoutThrowing` |
-| 7 | ❌ | The service's decide returns every outcome, throwing nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_UnknownId_ReturnsNotFoundWithoutThrowing`, `…DecideAsync_AlreadyAppliedAction_ReturnsAlreadyResolvedWithoutThrowing`, `…DecideAsync_NonQuoteAction_ReturnsNotDecidableWithoutThrowing`, `…DecideAsync_AmbiguousFieldLeftUndecided_ReturnsUnresolvedFieldNamesWithoutThrowing`, `…DecideAsync_AllFieldsDecided_ReturnsDecided` |
-| 8 | ❌ | The endpoint's responses and the bulk-decide row errors are unchanged | Unit test | `ImportActionEndpointsTests.DecideAction_UnknownId_Returns404`, `…DecideAction_AmbiguousFieldUnresolved_Returns422WithFieldNames`, `…DecideAction_AlreadyResolved_Returns422`, `…DecideAction_NotDecidable_Returns422`, `SqliteImportActionServiceTests.BulkDecideAsync_AmbiguousFieldLeftUndecided_ReportedAsRowErrorWithoutThrowing`, `ImportActionDecideResultTests.Describe_NotDecidable_DoesNotNameASpecificEntityType` |
-| 9 | ❌ | The planner's early-rule invariant throws when violated, and only then | Unit test | `ImportActionPlannerTests.ResolveEarlyRule_FieldLeftUnresolved_ThrowsInvalidOperationException`, `…ResolveEarlyRule_EveryFieldResolved_ReturnsMergedFields` |
+| 2 | ✅ | The resolver reports unresolved fields instead of throwing | Unit test | `FieldMergeResolverTests.ResolveWithDecisions_AmbiguousFieldNoDecision_ReportsFieldName`, `…_AmbiguousFieldsNoDecision_ReportsEveryAmbiguousFieldName`, `…_FieldInCaseSensitiveSet_DiffersOnlyByCase_ReportsFieldName`, `…_NothingAmbiguous_ReportsNoUnresolvedFields`, `…_AmbiguousFieldNoDecision_ThrowsNothing` |
+| 3 | ✅ | `UnresolvedFieldConflictException` and `ImportActionNotDecidableException` no longer exist | Live | `git grep -n -e UnresolvedFieldConflictException -e ImportActionNotDecidableException -- src tests` prints nothing and exits 1 |
+| 4 | ✅ | The planner's fall-through sites stage Pending and throw nothing | Unit test | `ImportActionPlannerTests.PlanAsync_ReviewPolicy_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSourcesAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSourcesAsync_ByNaturalKey_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSeriesAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSeasonsAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing` |
+| 5 | ✅ | Listing and exporting report ambiguous fields and throw nothing | Unit test | `SqliteImportActionServiceTests.GetPagedAsync_PendingModifyConflicts_ReportsAmbiguousFieldsWithoutThrowing`, `…ExportBatchAsync_PendingModifyConflicts_ReportsAmbiguousFieldsWithoutThrowing` |
+| 6 | ✅ | The coordinator's decide returns not-found and already-resolved, throwing nothing | Unit test | `ImportActionResolutionCoordinatorTests.DecideAsync_UnknownId_ReturnsNotFoundWithoutThrowing`, `…DecideAsync_AlreadyAppliedAction_ReturnsAlreadyResolvedWithoutThrowing` |
+| 7 | ✅ | The service's decide returns every outcome, throwing nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_UnknownId_ReturnsNotFoundWithoutThrowing`, `…DecideAsync_AlreadyAppliedAction_ReturnsAlreadyResolvedWithoutThrowing`, `…DecideAsync_NonQuoteAction_ReturnsNotDecidableWithoutThrowing`, `…DecideAsync_AmbiguousFieldLeftUndecided_ReturnsUnresolvedFieldNamesWithoutThrowing`, `…DecideAsync_AllFieldsDecided_ReturnsDecided` |
+| 8 | ✅ | The endpoint's responses and the bulk-decide row errors are unchanged | Unit test | `ImportActionEndpointsTests.DecideAction_UnknownId_Returns404`, `…DecideAction_AmbiguousFieldUnresolved_Returns422WithFieldNames`, `…DecideAction_AlreadyResolved_Returns422`, `…DecideAction_NotDecidable_Returns422`, `SqliteImportActionServiceTests.BulkDecideAsync_AmbiguousFieldLeftUndecided_ReportedAsRowErrorWithoutThrowing`, `ImportActionDecideResultTests.Describe_NotDecidable_DoesNotNameASpecificEntityType` |
+| 9 | ✅ | The planner's early-rule invariant throws when violated, and only then | Unit test | `ImportActionPlannerTests.ResolveEarlyRule_FieldLeftUnresolved_ThrowsInvalidOperationException`, `…ResolveEarlyRule_EveryFieldResolved_ReturnsMergedFields` |
 | 10 | ❌ | Listing, exporting, rendering the review page and an undecided decide throw nothing in a running container, while every conflicted row still reports its ambiguous fields | Live (T2) | `automated-testing/import-and-staged-actions/28-review-throws-nothing.md` passes on this branch's build, and fails on the canary from step 3 with one thrown line per conflicted row per read |
-| 11 | ❌ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
+| 11 | ✅ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
 
 ### The automated document
 

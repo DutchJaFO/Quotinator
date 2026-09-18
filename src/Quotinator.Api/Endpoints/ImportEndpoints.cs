@@ -12,6 +12,7 @@ using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Csv;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Api.Logging;
 using Quotinator.Data.Models;
@@ -264,31 +265,20 @@ internal static class ImportEndpoints
             if (!Guid.TryParse(id, out Guid actionId))
                 return Results.Problem(detail: localizer[ApiMessages.ImportActionNotFound], statusCode: StatusCodes.Status404NotFound);
 
-            try
+            ImportActionDecideResult result = await service.DecideAsync(actionId, request);
+
+            return result.Outcome switch
             {
-                await service.DecideAsync(actionId, request);
-                return Results.NoContent();
-            }
-            catch (ImportActionNotFoundException)
-            {
-                return Results.Problem(detail: localizer[ApiMessages.ImportActionNotFound], statusCode: StatusCodes.Status404NotFound);
-            }
-            catch (ImportActionStateException)
-            {
-                return Results.Problem(detail: localizer[ApiMessages.ImportActionAlreadyResolved], statusCode: StatusCodes.Status422UnprocessableEntity);
-            }
-            catch (ImportActionNotDecidableException ex)
-            {
-                return Results.Problem(
-                    detail: localizer.Format(ApiMessages.ImportActionNotDecidable, ex.EntityType),
-                    statusCode: StatusCodes.Status422UnprocessableEntity);
-            }
-            catch (UnresolvedFieldConflictException ex)
-            {
-                return Results.Problem(
-                    detail: localizer.Format(ApiMessages.ImportActionAmbiguousFieldsUnresolved, string.Join(", ", ex.FieldNames)),
-                    statusCode: StatusCodes.Status422UnprocessableEntity);
-            }
+                ImportActionDecideOutcome.Decided         => Results.NoContent(),
+                ImportActionDecideOutcome.NotFound        => Results.Problem(detail: localizer[ApiMessages.ImportActionNotFound], statusCode: StatusCodes.Status404NotFound),
+                ImportActionDecideOutcome.AlreadyResolved => Results.Problem(detail: localizer[ApiMessages.ImportActionAlreadyResolved], statusCode: StatusCodes.Status422UnprocessableEntity),
+                ImportActionDecideOutcome.NotDecidable    => Results.Problem(
+                    detail: localizer.Format(ApiMessages.ImportActionNotDecidable, result.EntityType ?? string.Empty),
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+                _                                          => Results.Problem(
+                    detail: localizer.Format(ApiMessages.ImportActionAmbiguousFieldsUnresolved, string.Join(", ", result.UnresolvedFields)),
+                    statusCode: StatusCodes.Status422UnprocessableEntity),
+            };
         })
         .WithName("DecideImportAction")
         .WithSummary("Stage a per-field decision for one staged action")

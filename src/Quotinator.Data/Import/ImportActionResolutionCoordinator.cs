@@ -37,9 +37,11 @@ public sealed class ImportActionResolutionCoordinator(IImportActionReader reader
     /// <inheritdoc/>
     public async Task<ImportActionDecideResult> DecideAsync(Guid actionId, string decisionsJson, CompletenessStatus? markCompletenessAs = null, string? originalDecisionJson = null, IDbConnection? connection = null, IDbTransaction? transaction = null)
     {
-        ImportActionEntity action = await _reader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
+        ImportActionEntity? action = await _reader.GetByIdAsync(actionId);
+        if (action is null)
+            return ImportActionDecideResult.NotFound(actionId);
         if (action.Status.Parsed == ImportActionStatus.Applied || action.Status.Parsed == ImportActionStatus.Discarded)
-            throw new ImportActionStateException(actionId, action.Status.Raw);
+            return ImportActionDecideResult.AlreadyResolved(actionId, action.Status.Raw);
 
         if (connection is not null)
         {

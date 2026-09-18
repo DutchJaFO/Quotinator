@@ -513,14 +513,10 @@ internal static class ImportActionPlanner
                 // which values the guard reads on the way to a hold it takes either way.
                 if (!hasStaleRule)
                 {
-                    try
-                    {
-                        ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions, QuoteFieldMerge.CaseSensitiveContentFields);
-                    }
-                    catch (UnresolvedFieldConflictException)
-                    {
-                        // Not every ambiguous field has a matching rule — fall through to normal Pending staging.
-                    }
+                    // Not every ambiguous field has a matching rule when anything is left — fall through to normal Pending staging.
+                    FieldMergeResult candidate = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions, QuoteFieldMerge.CaseSensitiveContentFields);
+                    if (candidate.UnresolvedFields.Count == 0)
+                        ruleResolved = candidate;
                 }
             }
 
@@ -673,11 +669,18 @@ internal static class ImportActionPlanner
     /// <param name="rawFields">The incoming side.</param>
     /// <param name="earlyDecisions">The rule's decision for each field it covers.</param>
     /// <returns>The resolved fields.</returns>
+    /// <exception cref="InvalidOperationException">A field was left unresolved — <paramref name="blendedExisting"/> was built wrongly.</exception>
     internal static FieldMergeResult ResolveEarlyRule(
         IReadOnlyDictionary<string, object?> blendedExisting,
         IReadOnlyDictionary<string, object?> rawFields,
-        IReadOnlyDictionary<string, FieldMergeDecision> earlyDecisions) =>
-        FieldMergeResolver.ResolveWithDecisions(blendedExisting, rawFields, earlyDecisions, QuoteFieldMerge.CaseSensitiveContentFields);
+        IReadOnlyDictionary<string, FieldMergeDecision> earlyDecisions)
+    {
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(blendedExisting, rawFields, earlyDecisions, QuoteFieldMerge.CaseSensitiveContentFields);
+        if (result.UnresolvedFields.Count > 0)
+            throw new InvalidOperationException(
+                $"The early conflict-rule resolution left {string.Join(", ", result.UnresolvedFields)} unresolved; every undecided field must hold the incoming value on both sides.");
+        return result;
+    }
 
     /// <summary>
     /// #373: one action recording that an entity arrived and already matched what is stored.
@@ -1266,8 +1269,10 @@ internal static class ImportActionPlanner
                 FieldMergeResult? ruleResolved = null;
                 if (ruleDecisions.Count > 0 && !hasStaleRule)
                 {
-                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
-                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                    // Not every ambiguous field has a matching rule when anything is left — fall through to normal Pending staging.
+                    FieldMergeResult candidate = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions);
+                    if (candidate.UnresolvedFields.Count == 0)
+                        ruleResolved = candidate;
                 }
                 if (ruleResolved is not null)
                     resolved = new SourceActionPayloadDto((string)ruleResolved.MergedFields["title"]!, (string)ruleResolved.MergedFields["type"]!, (string?)ruleResolved.MergedFields["date"], (string?)ruleResolved.MergedFields["seriesId"], (string?)ruleResolved.MergedFields["seasonId"]);
@@ -1447,8 +1452,10 @@ internal static class ImportActionPlanner
                 FieldMergeResult? keyRuleResolved = null;
                 if (keyRuleDecisions.Count > 0 && !keyHasStaleRule)
                 {
-                    try { keyRuleResolved = FieldMergeResolver.ResolveWithDecisions(keyExistingFields, keyIncomingFields, keyRuleDecisions); }
-                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                    // Not every ambiguous field has a matching rule when anything is left — fall through to normal Pending staging.
+                    FieldMergeResult candidate = FieldMergeResolver.ResolveWithDecisions(keyExistingFields, keyIncomingFields, keyRuleDecisions);
+                    if (candidate.UnresolvedFields.Count == 0)
+                        keyRuleResolved = candidate;
                 }
                 if (keyRuleResolved is not null)
                     resolved = new SourceActionPayloadDto((string)keyRuleResolved.MergedFields["title"]!, (string)keyRuleResolved.MergedFields["type"]!, (string?)keyRuleResolved.MergedFields["date"], (string?)keyRuleResolved.MergedFields["seriesId"], (string?)keyRuleResolved.MergedFields["seasonId"]);
@@ -2021,8 +2028,10 @@ internal static class ImportActionPlanner
                 FieldMergeResult? ruleResolved = null;
                 if (ruleDecisions.Count > 0 && !hasStaleRule)
                 {
-                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
-                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                    // Not every ambiguous field has a matching rule when anything is left — fall through to normal Pending staging.
+                    FieldMergeResult candidate = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions);
+                    if (candidate.UnresolvedFields.Count == 0)
+                        ruleResolved = candidate;
                 }
                 if (ruleResolved is not null)
                     resolved = new UniverseActionPayloadDto((string)ruleResolved.MergedFields["name"]!);
@@ -2225,8 +2234,10 @@ internal static class ImportActionPlanner
                 FieldMergeResult? ruleResolved = null;
                 if (ruleDecisions.Count > 0 && !hasStaleRule)
                 {
-                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
-                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                    // Not every ambiguous field has a matching rule when anything is left — fall through to normal Pending staging.
+                    FieldMergeResult candidate = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions);
+                    if (candidate.UnresolvedFields.Count == 0)
+                        ruleResolved = candidate;
                 }
                 if (ruleResolved is not null)
                 {
@@ -2435,8 +2446,10 @@ internal static class ImportActionPlanner
                 FieldMergeResult? ruleResolved = null;
                 if (ruleDecisions.Count > 0)
                 {
-                    try { ruleResolved = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions); }
-                    catch (UnresolvedFieldConflictException) { /* Not every ambiguous field has a matching rule — fall through to normal Pending staging. */ }
+                    // Not every ambiguous field has a matching rule when anything is left — fall through to normal Pending staging.
+                    FieldMergeResult candidate = FieldMergeResolver.ResolveWithDecisions(existingFields, incomingFields, ruleDecisions);
+                    if (candidate.UnresolvedFields.Count == 0)
+                        ruleResolved = candidate;
                 }
                 if (ruleResolved is not null)
                 {

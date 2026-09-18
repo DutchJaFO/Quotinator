@@ -46,9 +46,12 @@ public interface IImportActionCoordinator
     /// <paramref name="decisionsJson"/>'s resolved value, so a later export can show exactly what was
     /// decided rather than inferring it. Always overwrites any previously-set value, including with
     /// <c>null</c>, on a repeated decide call for the same action.
-    /// <exception cref="ImportActionNotFoundException"><paramref name="actionId"/> does not exist.</exception>
-    /// <exception cref="ImportActionStateException">The action is already <see cref="ImportActionStatus.Applied"/> or <see cref="ImportActionStatus.Discarded"/>.</exception>
-    /// <returns>What staging the decision produced.</returns>
+    /// <returns>
+    /// What staging the decision produced: <see cref="ImportActionDecideOutcome.NotFound"/> when
+    /// <paramref name="actionId"/> does not exist, <see cref="ImportActionDecideOutcome.AlreadyResolved"/>
+    /// when the action is already <see cref="ImportActionStatus.Applied"/> or <see cref="ImportActionStatus.Discarded"/>,
+    /// otherwise <see cref="ImportActionDecideOutcome.Decided"/>.
+    /// </returns>
     Task<ImportActionDecideResult> DecideAsync(Guid actionId, string decisionsJson, CompletenessStatus? markCompletenessAs = null, string? originalDecisionJson = null, IDbConnection? connection = null, IDbTransaction? transaction = null);
 
     /// <summary>

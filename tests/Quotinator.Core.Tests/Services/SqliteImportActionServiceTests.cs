@@ -196,12 +196,15 @@ public class SqliteImportActionServiceTests
     public async Task DecideAsync_AlreadyAppliedAction_ReturnsAlreadyResolvedWithoutThrowing()
     {
         string id = "22111111-1111-4111-8111-111111111111";
-        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+        await SeedExistingQuoteAsync(id, "Original text");
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
         ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        ConflictDecisionRequest everyFieldDecided = new() { QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace } };
+        await _service.DecideAsync(quoteAction.Id, everyFieldDecided, TestContext.CancellationToken);
         await _service.ApplyBatchAsync(quoteAction.BatchId, cancellationToken: TestContext.CancellationToken);
 
         using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
-        ImportActionDecideResult result = await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+        ImportActionDecideResult result = await _service.DecideAsync(quoteAction.Id, everyFieldDecided, TestContext.CancellationToken);
 
         Assert.AreEqual(ImportActionDecideOutcome.AlreadyResolved, result.Outcome);
         Assert.AreEqual(nameof(ImportActionStatus.Applied), result.CurrentStatus);

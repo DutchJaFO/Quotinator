@@ -64,14 +64,16 @@ public interface IImportActionService
     Task<int> DecideBatchAsync(string batchId, FieldResolutionChoice choice, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Stages a decision for one action of a currently-decidable entity type and <c>ActionType</c>
-    /// (today: Quote, and Source Modify — see <see cref="ImportActionNotDecidableException"/>'s own
-    /// doc comment for which combination is current, since it changes as more entities gain
-    /// decidability). Validates immediately — a genuinely ambiguous field left undecided throws
-    /// before anything is stored. Throws <see cref="ImportActionNotDecidableException"/> for any
-    /// action whose entity type/<c>ActionType</c> combination isn't currently decidable.
+    /// Stages a decision for one action of a decidable entity type and <c>ActionType</c> — a Quote, or a
+    /// Modify of a Source, StageDirection, SoundCue, Conversation, Person, Character, Series or Universe.
+    /// Validates immediately: a genuinely ambiguous field left undecided stores nothing. Every condition
+    /// here is already checked, so each is reported in the result rather than thrown (ADR 022).
     /// </summary>
-    /// <returns>What staging the decision produced.</returns>
+    /// <returns>
+    /// What staging the decision produced — <see cref="ImportActionDecideOutcome.Decided"/>, or
+    /// <see cref="ImportActionDecideOutcome.NotFound"/>, <see cref="ImportActionDecideOutcome.AlreadyResolved"/>,
+    /// <see cref="ImportActionDecideOutcome.NotDecidable"/> or <see cref="ImportActionDecideOutcome.UnresolvedFields"/>.
+    /// </returns>
     Task<ImportActionDecideResult> DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>Reverts a staged decision back to pending.</summary>

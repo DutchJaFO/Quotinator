@@ -174,12 +174,14 @@ public sealed class SqliteImportActionService(
                     throw new InvalidOperationException($"Row EntityType '{mismatched.EntityType}' does not match action '{actionId}''s actual entity type '{action.EntityType}'.");
 
                 ConflictDecisionRequest request = ImportActionFieldRowMapper.BuildRequest(action.EntityType, groupRows);
-                await DecideAsync(actionId, request, cancellationToken);
-                decided++;
+                ImportActionDecideResult result = await DecideAsync(actionId, request, cancellationToken);
+                if (result.Outcome == ImportActionDecideOutcome.Decided)
+                    decided++;
+                else
+                    errors.Add(new BulkDecideRowError { ActionId = actionId, Message = result.Describe() });
             }
             catch (Exception ex) when (ex is ImportActionUnknownEntityTypeException or ImportActionUnknownFieldException
-                or InvalidOperationException or ImportActionNotFoundException or ImportActionStateException
-                or ImportActionNotDecidableException or UnresolvedFieldConflictException)
+                or InvalidOperationException)
             {
                 errors.Add(new BulkDecideRowError { ActionId = actionId, Message = ex.Message });
             }
@@ -208,7 +210,9 @@ public sealed class SqliteImportActionService(
     /// <inheritdoc/>
     public async Task<ImportActionDecideResult> DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
     {
-        ImportActionEntity action = await _actionReader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
+        ImportActionEntity? action = await _actionReader.GetByIdAsync(actionId);
+        if (action is null)
+            return ImportActionDecideResult.NotFound(actionId);
 
         if (action.EntityType == ImportActionEntityTypes.Source && action.ActionType.Parsed == ImportActionKind.Modify)
         {
@@ -220,6 +224,8 @@ public sealed class SqliteImportActionService(
             Dictionary<string, FieldMergeDecision> sourceDecisions      = ToSourceDecisionMap(request);
 
             FieldMergeResult sourceResult = FieldMergeResolver.ResolveWithDecisions(existingSourceFields, incomingSourceFields, sourceDecisions);
+            if (sourceResult.UnresolvedFields.Count > 0)
+                return ImportActionDecideResult.Unresolved(actionId, sourceResult.UnresolvedFields);
 
             SourceActionPayloadDto resolvedSourcePayload = new(
                 (string)sourceResult.MergedFields["title"]!,
@@ -240,6 +246,8 @@ public sealed class SqliteImportActionService(
             Dictionary<string, FieldMergeDecision> stageDirectionDecisions      = ToStageDirectionDecisionMap(request);
 
             FieldMergeResult stageDirectionResult = FieldMergeResolver.ResolveWithDecisions(existingStageDirectionFields, incomingStageDirectionFields, stageDirectionDecisions);
+            if (stageDirectionResult.UnresolvedFields.Count > 0)
+                return ImportActionDecideResult.Unresolved(actionId, stageDirectionResult.UnresolvedFields);
 
             StageDirectionActionPayloadDto resolvedStageDirectionPayload = new(
                 (string)stageDirectionResult.MergedFields["text"]!,
@@ -259,6 +267,8 @@ public sealed class SqliteImportActionService(
             Dictionary<string, FieldMergeDecision> soundCueDecisions      = ToSoundCueDecisionMap(request);
 
             FieldMergeResult soundCueResult = FieldMergeResolver.ResolveWithDecisions(existingSoundCueFields, incomingSoundCueFields, soundCueDecisions);
+            if (soundCueResult.UnresolvedFields.Count > 0)
+                return ImportActionDecideResult.Unresolved(actionId, soundCueResult.UnresolvedFields);
 
             SoundCueActionPayloadDto resolvedSoundCuePayload = new(
                 (string)soundCueResult.MergedFields["text"]!,
@@ -281,6 +291,8 @@ public sealed class SqliteImportActionService(
                 conversationDecisions["description"] = new FieldMergeDecision(cd.Choice, cd.Value);
 
             FieldMergeResult conversationResult = FieldMergeResolver.ResolveWithDecisions(existingConversationFields, incomingConversationFields, conversationDecisions);
+            if (conversationResult.UnresolvedFields.Count > 0)
+                return ImportActionDecideResult.Unresolved(actionId, conversationResult.UnresolvedFields);
 
             ConversationActionPayloadDto resolvedConversationPayload = new((string?)conversationResult.MergedFields["description"], []);
 
@@ -297,6 +309,8 @@ public sealed class SqliteImportActionService(
             Dictionary<string, FieldMergeDecision> personDecisions      = ToPersonDecisionMap(request);
 
             FieldMergeResult personResult = FieldMergeResolver.ResolveWithDecisions(existingPersonFields, incomingPersonFields, personDecisions);
+            if (personResult.UnresolvedFields.Count > 0)
+                return ImportActionDecideResult.Unresolved(actionId, personResult.UnresolvedFields);
 
             PersonActionPayloadDto resolvedPersonPayload = new(
                 (string)personResult.MergedFields["name"]!,
@@ -316,6 +330,8 @@ public sealed class SqliteImportActionService(
             Dictionary<string, FieldMergeDecision> characterDecisions      = ToCharacterDecisionMap(request);
 
             FieldMergeResult characterResult = FieldMergeResolver.ResolveWithDecisions(existingCharacterFields, incomingCharacterFields, characterDecisions);
+            if (characterResult.UnresolvedFields.Count > 0)
+                return ImportActionDecideResult.Unresolved(actionId, characterResult.UnresolvedFields);
 
             // #175: SourceId/SourceTitle/SourceType are never Modify-able (ADR 013 Decision 9) — the
             // resolved payload carries the existing row's own values through unchanged, only Name
@@ -339,6 +355,8 @@ public sealed class SqliteImportActionService(
             Dictionary<string, FieldMergeDecision> seriesDecisions      = ToSeriesDecisionMap(request);
 
             FieldMergeResult seriesResult = FieldMergeResolver.ResolveWithDecisions(existingSeriesFields, incomingSeriesFields, seriesDecisions);
+            if (seriesResult.UnresolvedFields.Count > 0)
+                return ImportActionDecideResult.Unresolved(actionId, seriesResult.UnresolvedFields);
 
             // UniverseName only carries through when the resolved universeId is the incoming one — see
             // the matching comment in ImportActionPlanner.PlanSeriesAsync's merge branch.
@@ -361,6 +379,8 @@ public sealed class SqliteImportActionService(
             Dictionary<string, FieldMergeDecision> universeDecisions      = ToUniverseDecisionMap(request);
 
             FieldMergeResult universeResult = FieldMergeResolver.ResolveWithDecisions(existingUniverseFields, incomingUniverseFields, universeDecisions);
+            if (universeResult.UnresolvedFields.Count > 0)
+                return ImportActionDecideResult.Unresolved(actionId, universeResult.UnresolvedFields);
 
             UniverseActionPayloadDto resolvedUniversePayload = new((string)universeResult.MergedFields["name"]!);
 
@@ -368,7 +388,7 @@ public sealed class SqliteImportActionService(
         }
 
         if (action.EntityType != ImportActionEntityTypes.Quote)
-            throw new ImportActionNotDecidableException(actionId, action.EntityType);
+            return ImportActionDecideResult.NotDecidable(actionId, action.EntityType);
 
         QuoteActionPayloadDto existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
         QuoteActionPayloadDto incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
@@ -380,6 +400,8 @@ public sealed class SqliteImportActionService(
         // Validate immediately — an ambiguous field with no decision must fail here, not silently
         // defer the problem to apply time.
         FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
+        if (result.UnresolvedFields.Count > 0)
+            return ImportActionDecideResult.Unresolved(actionId, result.UnresolvedFields);
 
         // Store the fully resolved payload (not the raw decision request) — apply never needs to
         // re-run FieldMergeResolver or know about policies/decisions at all.
@@ -1680,15 +1702,7 @@ public sealed class SqliteImportActionService(
                 return [];
         }
 
-        try
-        {
-            FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
-            return [];
-        }
-        catch (UnresolvedFieldConflictException ex)
-        {
-            return ex.FieldNames;
-        }
+        return FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>()).UnresolvedFields;
     }
 
     private async Task<IReadOnlyList<Guid>> ComputeRelatedActionIdsAsync(ImportActionEntity action, Dictionary<string, IReadOnlyList<ImportActionEntity>> batchCache)

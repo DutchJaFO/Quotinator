@@ -52,6 +52,10 @@ public sealed record ImportActionDecideResult(
     /// <returns>The description.</returns>
     public string Describe() => Outcome switch
     {
-        _ => string.Empty,
+        ImportActionDecideOutcome.NotFound         => $"Import action '{ActionId}' does not exist.",
+        ImportActionDecideOutcome.AlreadyResolved  => $"Import action '{ActionId}' is not in a valid state for this operation (current status: '{CurrentStatus}').",
+        ImportActionDecideOutcome.NotDecidable     => $"Import action '{ActionId}' is a '{EntityType}' action and cannot be manually decided — this action's entity type does not currently support a Modify decision.",
+        ImportActionDecideOutcome.UnresolvedFields => $"The following fields are ambiguous and need an explicit decision: {string.Join(", ", UnresolvedFields)}",
+        _                                          => string.Empty,
     };
 }

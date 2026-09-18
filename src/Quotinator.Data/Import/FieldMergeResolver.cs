@@ -86,9 +86,12 @@ public static class FieldMergeResolver
     /// git-merge-style: a supplied decision always wins for that field, regardless of whether it was
     /// actually ambiguous. Any field with no decision auto-resolves the same way <see cref="Resolve"/>
     /// already does (empty-side wins, equal values keep existing). A field that is genuinely ambiguous
-    /// (both sides non-empty and differ) with no decision supplied is collected and reported via
-    /// <see cref="UnresolvedFieldConflictException"/> once every field has been examined — mirroring a
-    /// git merge refusing to complete while unresolved conflicts remain.
+    /// (both sides non-empty and differ) with no decision supplied is collected into
+    /// <see cref="FieldMergeResult.UnresolvedFields"/> once every field has been examined — mirroring a
+    /// git merge refusing to complete while unresolved conflicts remain. Whether a field is ambiguous is
+    /// already known here, so it is reported as part of the result rather than thrown (ADR 022); a caller
+    /// must not write <see cref="FieldMergeResult.MergedFields"/> while any field is unresolved, since it
+    /// holds no value for those.
     /// </summary>
     /// <param name="existing">The stored side's field-name → value map.</param>
     /// <param name="incoming">The imported side's field-name → value map.</param>
@@ -100,10 +103,7 @@ public static class FieldMergeResolver
     /// An explicit <paramref name="decisions"/> entry for the field always wins regardless — this only
     /// affects a field with no supplied decision.
     /// </param>
-    /// <exception cref="UnresolvedFieldConflictException">
-    /// One or more fields are ambiguous and have no decision. <see cref="UnresolvedFieldConflictException.FieldNames"/>
-    /// lists every such field, not just the first one found.
-    /// </exception>
+    /// <returns>The resolved fields, and every ambiguous field left without a decision — all of them, not just the first found.</returns>
     public static FieldMergeResult ResolveWithDecisions(
         IReadOnlyDictionary<string, object?> existing,
         IReadOnlyDictionary<string, object?> incoming,
@@ -163,10 +163,7 @@ public static class FieldMergeResolver
             }
         }
 
-        if (unresolved.Count > 0)
-            throw new UnresolvedFieldConflictException(unresolved);
-
-        return new FieldMergeResult(merged, fromIncoming);
+        return new FieldMergeResult(merged, fromIncoming) { UnresolvedFields = unresolved };
     }
 
     private static bool IsEmpty(object? value) => value switch

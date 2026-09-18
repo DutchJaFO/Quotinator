@@ -1,7 +1,7 @@
 # Reviewing conflicted import actions throws nothing
 
 **Smoke:** no
-**Environment:** Fresh, bundled sources off
+**Environment:** Fresh
 **Traces to:** #370
 
 ## Preconditions
