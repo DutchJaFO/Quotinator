@@ -41,7 +41,7 @@ itself.
 
 | | Rule |
 |---|---|
-| ✅ Do | Give every class exactly one of four suffixes, chosen by which boundary it crosses: `Entity` (persistence, maps a table), `Request`/`Response` (HTTP endpoint body — top-level only), `Dto` (any other wire format, e.g. a JSON file shape). |
+| ✅ Do | Give every class exactly one of five suffixes: `Entity` (persistence, maps a table), `Request`/`Response` (HTTP endpoint body — top-level only), `Dto` (any other wire format, e.g. a JSON file shape), or `Result` (the in-process outcome an operation returns to its caller, never an endpoint body). |
 | ✅ Do | Suffix only the *top-level* type bound directly to an endpoint's request/response. A member of that type (a property, a list element) is never suffixed, no matter how substantial. |
 | ✅ Do | If a member type also needs its own independent endpoint later, create a new wrapper type for that (`OrderRecordResponse : BaseResponse<OrderRecord>`) rather than suffixing the shared member type itself. |
 | ✅ Do | Prefer a generic base (`BaseResponse<T>`/`BaseRequest<T>`) for the concrete wrapper when several `Response`/`Request` types share the same standard shape (paging, a data payload) — DRY over re-implementing it per type. |

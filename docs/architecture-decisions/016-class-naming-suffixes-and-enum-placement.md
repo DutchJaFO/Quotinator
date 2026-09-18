@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-08-01
-**GitHub issues:** #227, #264
+**GitHub issues:** #227, #264, #370
 
 ---
 
@@ -52,8 +52,8 @@ each class named individually, by whichever session added it, with no written ru
 
 ## Decision
 
-**Four class-naming suffixes, one per boundary a class crosses. A class carries exactly one, chosen by
-which boundary it exists for — never zero, and never more than one.**
+**Five class-naming suffixes: four for the boundary a class crosses, one for the in-process outcome of an
+operation. A class carries exactly one — never zero, and never more than one.**
 
 | Suffix | Applies to | Namespace |
 |---|---|---|
@@ -61,6 +61,15 @@ which boundary it exists for — never zero, and never more than one.**
 | `Request` | The *top-level* body type of an HTTP endpoint's incoming request — never a member of that type | `*.Models` |
 | `Response` | The *top-level* body type of an HTTP endpoint's outgoing response — never a member of that type | `*.Models` |
 | `Dto` | A wire-format object for a boundary that is **not** HTTP and **not** a direct entity-column mapping: an on-disk JSON file shape, **or** a JSON blob serialized into and read back out of a database column — both via `JsonSerializer.Deserialize<T>` | `*.Import` or the owning feature's own namespace |
+| `Result` | The in-process return value of an operation, carrying its outcome — what happened and the data that goes with it — back to its caller. Crosses no boundary of its own | The owning feature's own namespace |
+
+**`Result`** — the type an operation returns in place of throwing for a condition it has already checked
+(ADR 022): `FieldMergeResult`, `DatabaseBackupResult`, `DatabaseOperationResult`, `SourceRefreshResult`,
+`SeedPreviewResult`. It is never an endpoint's body. An endpoint maps a `Result` onto its own `Response`
+or status code, so a type that is both returned by a service and serialised as a response body is two
+types. `PagedResult<T>` and `FilteredQuoteResult<T>` are endpoint response bodies despite their names, and
+remain the `Response` corrections this ADR already records. The outcome itself, when it is a fixed set of
+cases, is an enum in `Enums/` like every other enum (`BackupOutcome`, `SourceRefreshOutcome`).
 
 **`Entity`** — every class in `Quotinator.Data.Entities`/`Quotinator.Core.Entities` (or a future
 consumer's equivalent namespace), unconditionally — the suffix is a property of *being a persistence
@@ -142,11 +151,11 @@ it's a straightforward single-name fix, not left to the plan.
 
 **Out of scope, unchanged:** exceptions keep .NET's own `Exception` suffix convention; static
 utility/service classes (`FieldMergeResolver`, `ManifestSeedPlanner`, ...) aren't data-carrying types
-and don't take any of these four suffixes; genuine domain value objects used throughout business logic
+and don't take any of these suffixes; genuine domain value objects used throughout business logic
 rather than only at a boundary (`ManifestPolicy`, `SeedBatch`, `SeedFile`, `ConflictResolutionRule`,
 `SourceAliasRule`, `SafeValue<T>`, `MasterDataReference`) are not forced into this scheme either — the
-four suffixes above answer "which boundary does this type exist to carry data across," not "is this
-type Y a plain record."
+suffixes above answer "which boundary does this type exist to carry data across, or which operation's
+outcome does it report," not "is this type a plain record."
 
 ### Enums live in their own folder, never mixed with classes
 
