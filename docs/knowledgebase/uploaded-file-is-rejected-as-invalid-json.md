@@ -4,7 +4,7 @@
 **Entry code:** —
 **Status code:** —
 **Affected versions:** up to and including 1.9.0-alpha
-**GitHub issue:** [#384](https://github.com/DutchJaFO/Quotinator/issues/384)
+**GitHub issue:** [#384](https://github.com/DutchJaFO/Quotinator/issues/384); [#406](https://github.com/DutchJaFO/Quotinator/issues/406) — the refusal stops being thrown
 
 ## Symptom
 
