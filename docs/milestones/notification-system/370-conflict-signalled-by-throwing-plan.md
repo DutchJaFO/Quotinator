@@ -1,6 +1,6 @@
 # #370 — An expected import conflict is signalled by throwing, once per conflicted row per render
 
-**Status:** In progress (step 8)
+**Status:** In progress (T1)
 **GitHub issue:** #370
 **Tiers required:** T1, T2
 **Depends on:** #397
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Execute the steps in order; step 8, the T2 pass, is next.
+T1: the developer runs the application in Visual Studio and confirms it starts cleanly and that reviewing a conflict — `/import-review`, deciding, applying — shows no `UnresolvedFieldConflictException` in the debugger output. Then the *Waiting for release* checklist.
 
 ---
 
@@ -174,7 +174,7 @@ names all nine.
 
 **Found, not fixed here:** deciding a Quote *Add* action dereferences a missing existing value and throws
 `ArgumentNullException` — pre-existing, and reachable because #378 can hold an Add for review. A bug of
-its own; see the issue it was filed as.
+its own, filed as [#410](https://github.com/DutchJaFO/Quotinator/issues/410).
 
 The coordinator returns `NotFound`/`AlreadyResolved` where it threw. `SqliteImportActionService.DecideAsync`
 returns the coordinator's non-`Decided` result unchanged, `NotDecidable` where it threw, and
@@ -205,7 +205,44 @@ both 0 warnings, 0 errors.
 
 ### 8. T2 pass
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-09-18, against an image built from `b3fa0fce`.
+
+| Document | Result |
+|---|---|
+| `import-and-staged-actions/28-review-throws-nothing` | Pass — `before=0`, `after=0`; three rows reporting `quoteText`, three export rows, review page `200`, empty decide refused `422` naming `quoteText` |
+| `import-and-staged-actions/01` | Pass — `202`, decide/undo/apply, one `Applied` group of 2; **0 exceptions**, where the #397 run logged three `UnresolvedFieldConflictException` |
+| `import-and-staged-actions/20` | Steps 1–5, 7 and 9 pass; 6 and half of 8 cannot be reached — see below |
+| `import-and-staged-actions/25` | Behaviour passes (`AlreadyReported=2`, `Modify=1`); its step 4–5 counts print empty — see below |
+| `import-and-staged-actions/26` | Pass — `1 → 2` |
+| `import-and-staged-actions/27` | Pass, every step, driven in a browser |
+| `api-surface/01`, `/02` | Pass, 0 exceptions |
+| `import-and-staged-actions/19`, `/14` (1–4, 6) | Pass, 0 exceptions before `/14`'s own stop |
+| `database-lifecycle/03` | Pass |
+| `notifications-and-changelog/01`, `/07` | Pass; `/01` driven in a browser |
+| `startup-and-degradation/03` | Pass, 0 exceptions |
+
+**Step 9 of `/20` is this issue's own path through the UI**: the review page's **Take incoming** goes
+through `BulkDecideAsync`. The batch reached `Applied`, the stored text became the incoming text, the
+alert read `resolved`, and nothing was thrown.
+
+**Every exception line is accounted for, and none is `UnresolvedFieldConflictException`:** two
+`SocketException` per stop or restart (the listening ports); the WebSocket `OperationCanceledException`
+and a stale-cookie `CryptographicException`/`AntiforgeryValidationException` in the browser-driven
+documents; and in `/20` step 7 the read-only mount's `IOException`, `SqliteException` and
+`CryptographicException` — the known `/data/keys` defect that step documents as pre-existing.
+
+**Found in documents this issue does not own:**
+
+- `/20` step 6 expects three alerts with one `obsolete`. Since #372 a reseed no longer truncates a
+  batch and since #376 an already-reported conflict is not re-staged, so no alert can become obsolete;
+  step 8's "No longer applicable" half is unreachable for the same reason. Step 7 also destroys
+  `qt-review-20` before steps 8 and 9 drive it; run here as 1–6, 8, 9, then 7.
+- `/25` steps 4 and 5 print empty counts: `.Count` on a single unrolled object in PowerShell 5.1, the
+  pitfall `/20` itself warns about. Both documents are filed as
+  [#411](https://github.com/DutchJaFO/Quotinator/issues/411).
+- Deciding a Quote **Add** action answers `500` with `ArgumentNullException`, reproduced twice on this
+  image; a Modify on the same container answers `422`. Pre-existing — filed as
+  [#410](https://github.com/DutchJaFO/Quotinator/issues/410).
 
 Against a fresh build of the branch: the designated smoke set, this issue's
 `import-and-staged-actions/28-review-throws-nothing.md`, and the documents that list or decide staged
@@ -227,7 +264,7 @@ actions — `import-and-staged-actions/01`, `/20`, `/25`, `/26` and `/27`. Each 
 | 7 | ✅ | The service's decide returns every outcome, throwing nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_UnknownId_ReturnsNotFoundWithoutThrowing`, `…DecideAsync_AlreadyAppliedAction_ReturnsAlreadyResolvedWithoutThrowing`, `…DecideAsync_NonQuoteAction_ReturnsNotDecidableWithoutThrowing`, `…DecideAsync_AmbiguousFieldLeftUndecided_ReturnsUnresolvedFieldNamesWithoutThrowing`, `…DecideAsync_AllFieldsDecided_ReturnsDecided` |
 | 8 | ✅ | The endpoint's responses and the bulk-decide row errors are unchanged | Unit test | `ImportActionEndpointsTests.DecideAction_UnknownId_Returns404`, `…DecideAction_AmbiguousFieldUnresolved_Returns422WithFieldNames`, `…DecideAction_AlreadyResolved_Returns422`, `…DecideAction_NotDecidable_Returns422`, `SqliteImportActionServiceTests.BulkDecideAsync_AmbiguousFieldLeftUndecided_ReportedAsRowErrorWithoutThrowing`, `ImportActionDecideResultTests.Describe_NotDecidable_DoesNotNameASpecificEntityType` |
 | 9 | ✅ | The planner's early-rule invariant throws when violated, and only then | Unit test | `ImportActionPlannerTests.ResolveEarlyRule_FieldLeftUnresolved_ThrowsInvalidOperationException`, `…ResolveEarlyRule_EveryFieldResolved_ReturnsMergedFields` |
-| 10 | ❌ | Listing, exporting, rendering the review page and an undecided decide throw nothing in a running container, while every conflicted row still reports its ambiguous fields | Live (T2) | `automated-testing/import-and-staged-actions/28-review-throws-nothing.md` passes on this branch's build, and fails on the canary from step 3 with one thrown line per conflicted row per read |
+| 10 | ✅ | Listing, exporting, rendering the review page and an undecided decide throw nothing in a running container, while every conflicted row still reports its ambiguous fields | Live (T2) | `automated-testing/import-and-staged-actions/28-review-throws-nothing.md` passes on this branch's build, and fails on the canary from step 3 with one thrown line per conflicted row per read |
 | 11 | ✅ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
 
 ### The automated document

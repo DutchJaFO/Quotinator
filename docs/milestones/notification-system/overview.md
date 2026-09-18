@@ -72,6 +72,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#369](https://github.com/DutchJaFO/Quotinator/issues/369) | A review row whose batch is gone offers decisions that cannot be carried out | Waiting for release | T1 ✅ T2 ✅ | [369-orphaned-review-rows-plan.md](369-orphaned-review-rows-plan.md) |
 | [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | In progress | T1 ⬜ T2 ⬜ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
 | [#409](https://github.com/DutchJaFO/Quotinator/issues/409) | A quote held for review over a case-only text change shows nothing to decide, and is decided without asking | Planning | T1 ⬜ T2 ⬜ | — |
+| [#410](https://github.com/DutchJaFO/Quotinator/issues/410) | Deciding a Quote Add action answers 500 instead of an outcome | Planning | T1 ⬜ T2 ⬜ | — |
+| [#411](https://github.com/DutchJaFO/Quotinator/issues/411) | Two automated-test documents assert results the application no longer produces | Planning | T1 ⬜ T2 ⬜ | — |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Planning | T1 ⬜ T2 ⬜ | — |
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
@@ -124,6 +126,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #313 ─── (none) — Waiting for release
 #370 ─── depends on #397 — In progress
 #409 ─── (none); touches the same two calls as #370 — Planning
+#410 ─── depends on #370, whose decide outcomes it extends — Planning
+#411 ─── (none) — Planning
 #397 ─── (none); blocks #370 — Waiting for release
 #369 ─── depends on #303, #372, #389 — Waiting for release
 #389 ─── depends on #373, #376, #377 — Waiting for release
@@ -180,24 +184,26 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 29 | **#397** ✅ | Waiting for release; unblocks #370 |
 | 30 | **#370** 🚧 | In progress — #397 is at Waiting for release; sequenced with #369, same page |
 | 31 | **#409** | Planning — found while planning #370; same two calls, so after it |
-| 32 | **#371** | Planning — before #351/#360, which each add migrations |
-| 33 | **#350** | Planning |
-| 34 | **#327** 🚧 | In progress — depends on #326 (done), #348 |
-| 35 | **#328** | Planning |
-| 36 | **#339** 🚧 | In progress — blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
-| 37 | **#329** | Planning — before #324, which consumes its statistics |
-| 38 | **#330** | Planning — #331 depends on it |
-| 39 | **#331** | Planning — depends on #330 |
-| 40 | **#324** | Planning — after #329/#330/#331 |
-| 41 | **#305** | Planning — independent |
-| 42 | **#306** | Planning — independent |
-| 43 | **#351** | Planning — independent, placed late |
-| 44 | **#381** | Planning — independent, deliberately deferred (found live while verifying #374/#378) |
-| 45 | **#352** | Planning — after #349 |
-| 46 | **#353** | Planning — after #352 |
-| 47 | **#360** | Planning — before end-of-milestone migration consolidation |
-| 48 | **#390** | Planning — before #368, which depends on it |
-| 49 | **#368** | Planning — depends on #303, #304, #390 |
+| 32 | **#410** | Planning — found in #370's T2; extends #370's decide outcomes |
+| 33 | **#411** | Planning — found in #370's T2; two stale automated-test documents |
+| 34 | **#371** | Planning — before #351/#360, which each add migrations |
+| 35 | **#350** | Planning |
+| 36 | **#327** 🚧 | In progress — depends on #326 (done), #348 |
+| 37 | **#328** | Planning |
+| 38 | **#339** 🚧 | In progress — blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
+| 39 | **#329** | Planning — before #324, which consumes its statistics |
+| 40 | **#330** | Planning — #331 depends on it |
+| 41 | **#331** | Planning — depends on #330 |
+| 42 | **#324** | Planning — after #329/#330/#331 |
+| 43 | **#305** | Planning — independent |
+| 44 | **#306** | Planning — independent |
+| 45 | **#351** | Planning — independent, placed late |
+| 46 | **#381** | Planning — independent, deliberately deferred (found live while verifying #374/#378) |
+| 47 | **#352** | Planning — after #349 |
+| 48 | **#353** | Planning — after #352 |
+| 49 | **#360** | Planning — before end-of-milestone migration consolidation |
+| 50 | **#390** | Planning — before #368, which depends on it |
+| 51 | **#368** | Planning — depends on #303, #304, #390 |
 
 ---
 
