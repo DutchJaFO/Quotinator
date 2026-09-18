@@ -237,9 +237,9 @@ leaves quotes at 795, Confirm takes them to `0` and empties the notification tab
 
 | Run | Exceptions | What they are |
 |---|---|---|
-| `database-lifecycle/03` | 4 `SocketException` | Inbound reads cancelled by `docker stop` for the database copies |
+| `database-lifecycle/03` | 4 `SocketException` | The web server closing its two listening ports, on each of the document's two stops |
 | `notifications-and-changelog/07` | 2 `SocketException` | The same, from its `docker restart` |
-| `notifications-and-changelog/01` | 5 `OperationCanceledException`, 2 `SocketException` | The web UI's WebSocket closing on each page change, and the `docker stop` in step 7 |
+| `notifications-and-changelog/01` | 5 `OperationCanceledException`, 2 `SocketException` | The web UI's WebSocket closing on each page change, and the two listening ports closing on the stop in step 7 |
 | `import-and-staged-actions/01` | 4 `UnresolvedFieldConflictException` | #370's defect, visible for the first time |
 | every other run | 0 | — |
 
@@ -309,7 +309,7 @@ every command as written:
 | `api-surface/05` | Pass — `before=0`; the upload's lines share one id |
 | `import-and-staged-actions/19` | Pass — every step, 0 exceptions |
 | `import-and-staged-actions/01` | Pass — `202`, one pending action, decide / undo / apply, one `Applied` group of 2; 3 `UnresolvedFieldConflictException` (#370) |
-| `import-and-staged-actions/14` | Steps 1 to 4 pass — nothing pending, no duplicate, casing or undeclared date rows; 2 `SocketException` from the step's own `docker stop`. Step 6 passes as corrected below, 0 exceptions |
+| `import-and-staged-actions/14` | Steps 1 to 4 pass — nothing pending, no duplicate, casing or undeclared date rows; 2 `SocketException` from the two listening ports closing on step 4's stop. Step 6 passes as corrected below, 0 exceptions |
 | `notifications-and-changelog/01` | Pass, every step, driven in a browser |
 
 **`import-and-staged-actions/14` step 6 could never fail.** It read `existingValue`/`incomingValue`,
@@ -325,6 +325,18 @@ decrypted"*, on the first page load. The browser still held a cookie from the pr
 same port, whose key ring went with its volume. The page rendered and every click worked afterwards, so
 it is recorded as a new Knowledgebase entry. The other 7 lines are the WebSocket and socket forms
 already recorded.
+
+**Every bare `SocketException` in these runs comes from the web server's own shutdown, not a cut
+connection — an unresolved finding, not an expected line.**
+Measured 2026-09-18: a container that served only requests from processes that had already exited
+logged exactly two on `docker stop` — one per listening port, 8080 and 8099. Kestrel ends its wait for
+the next connection by disposing the listening socket and catching the `OperationAborted` that follows
+(`SocketConnectionListener.AcceptAsync`, release/10.0). Every count above is two per stop or restart.
+The application follows the documented shutdown sequence (Generic Host, .NET 10); neither that
+documentation nor Kestrel's mentions this exception or a way to stop listening without it. The
+Knowledgebase entry previously blamed in-flight reads and is corrected. The documents that stop their
+container only to reach something else move off it in
+[#402](https://github.com/DutchJaFO/Quotinator/issues/402).
 
 The designated smoke set plus `api-surface/05-a-thrown-exception-is-logged.md`, against a fresh build of
 the branch. Every thrown line the smoke set produces is triaged in this step's record under `CLAUDE.md`'s
