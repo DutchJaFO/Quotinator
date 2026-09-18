@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Quotinator.Core.Helpers;
+using Quotinator.Data.Testing.Diagnostics;
 
 [assembly: DoNotParallelize]
 
@@ -9,7 +10,11 @@ namespace Quotinator.Core.Tests;
 [TestClass]
 public static class AssemblySetup
 {
-    /// <summary>Registers Dapper type handlers once for the entire test run.</summary>
+    /// <summary>Registers Dapper type handlers and subscribes the thrown-exception recorder, once for the entire test run.</summary>
     [AssemblyInitialize]
-    public static void Initialize(TestContext _) => new QuotinatorDapperConfiguration().Configure();
+    public static void Initialize(TestContext _)
+    {
+        new QuotinatorDapperConfiguration().Configure();
+        ThrownExceptionRecorder.Install();
+    }
 }

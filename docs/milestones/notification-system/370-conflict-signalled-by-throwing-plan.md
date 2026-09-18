@@ -1,6 +1,6 @@
 # #370 — An expected import conflict is signalled by throwing, once per conflicted row per render
 
-**Status:** Planning
+**Status:** In progress (step 2)
 **GitHub issue:** #370
 **Tiers required:** T1, T2
 **Depends on:** #397
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Review this plan. Once it is approved, execute step 1.
+Execute the steps in order; step 2 is next.
 
 ---
 
@@ -62,7 +62,11 @@ and a violated invariant the code built itself still throws (rule 3).
 
 ### 1. A way for a test to see an exception the code caught itself
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — red against the no-op signatures (the three recording tests failed on their
+assertions), green after; `Install()` wired into `Quotinator.Data.Tests` and `Quotinator.Core.Tests`;
+build 0 warnings, 0 errors. `Scope_NothingThrown_RecordsNothing` and `Scope_ExceptionThrownOutside_IsNotRecorded`
+are controls — they pass against a recorder that records nothing, which is what makes the other three's
+red meaningful — so they start green rather than red.
 
 Every "throws nothing" test below asserts on an exception that production code throws and catches
 internally, so no assertion on the call can see it — the test would be green before the fix. A
@@ -174,7 +178,7 @@ actions — `import-and-staged-actions/01`, `/20`, `/25`, `/26` and `/27`. Each 
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | A test can see an exception the code threw and caught itself | Unit test | `ThrownExceptionRecorderTests.Scope_ExceptionThrownAndCaughtInside_IsRecorded`, `…Scope_NothingThrown_RecordsNothing`, `…Scope_ExceptionThrownOutside_IsNotRecorded`, `…Scope_ExceptionThrownAfterAnAwait_IsRecorded`, `…Scopes_OnConcurrentFlows_RecordOnlyTheirOwn` |
+| 1 | ✅ | A test can see an exception the code threw and caught itself | Unit test | `ThrownExceptionRecorderTests.Scope_ExceptionThrownAndCaughtInside_IsRecorded`, `…Scope_NothingThrown_RecordsNothing`, `…Scope_ExceptionThrownOutside_IsNotRecorded`, `…Scope_ExceptionThrownAfterAnAwait_IsRecorded`, `…Scopes_OnConcurrentFlows_RecordOnlyTheirOwn` |
 | 2 | ❌ | The resolver reports unresolved fields instead of throwing | Unit test | `FieldMergeResolverTests.ResolveWithDecisions_AmbiguousFieldNoDecision_ReportsFieldName`, `…_AmbiguousFieldsNoDecision_ReportsEveryAmbiguousFieldName`, `…_FieldInCaseSensitiveSet_DiffersOnlyByCase_ReportsFieldName`, `…_NothingAmbiguous_ReportsNoUnresolvedFields`, `…_AmbiguousFieldNoDecision_ThrowsNothing` |
 | 3 | ❌ | `UnresolvedFieldConflictException` and `ImportActionNotDecidableException` no longer exist | Live | `git grep -n -e UnresolvedFieldConflictException -e ImportActionNotDecidableException -- src tests` prints nothing and exits 1 |
 | 4 | ❌ | The planner's fall-through sites stage Pending and throw nothing | Unit test | `ImportActionPlannerTests.PlanAsync_ReviewPolicy_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSourcesAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSourcesAsync_ByNaturalKey_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSeriesAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing`, `…PlanSeasonsAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing` |
