@@ -1132,6 +1132,7 @@ different question in each.
 | 25 | [An already-reported conflict does not stage a duplicate on every reseed](import-and-staged-actions/25-an-already-reported-conflict-does-not-accumulate.md) | no |
 | 26 | [A conflict seen for the first time is still staged on a later reseed](import-and-staged-actions/26-a-new-conflict-is-still-staged.md) | no |
 | 27 | [A review row whose batch is gone offers only dismiss, and its alert says the action is no longer possible](import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md) | no |
+| 28 | [Reviewing conflicted import actions throws nothing](import-and-staged-actions/28-review-throws-nothing.md) | no |
 
 ---
 

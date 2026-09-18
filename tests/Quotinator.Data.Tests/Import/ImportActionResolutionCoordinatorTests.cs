@@ -7,6 +7,7 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.Database;
+using Quotinator.Data.Testing.Diagnostics;
 
 namespace Quotinator.Data.Tests.Import;
 
@@ -132,9 +133,17 @@ public class ImportActionResolutionCoordinatorTests
     // ── DecideAsync / UndoDecisionAsync ──────────────────────────────────────
 
     [TestMethod]
-    public async Task DecideAsync_UnknownId_ThrowsImportActionNotFoundException()
-        => await Assert.ThrowsExactlyAsync<ImportActionNotFoundException>(
-            () => _coordinator.DecideAsync(Guid.NewGuid(), "\"decision\""));
+    public async Task DecideAsync_UnknownId_ReturnsNotFoundWithoutThrowing()
+    {
+        Guid unknown = Guid.NewGuid();
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _coordinator.DecideAsync(unknown, "\"decision\"");
+
+        Assert.AreEqual(ImportActionDecideOutcome.NotFound, result.Outcome);
+        Assert.AreEqual(unknown, result.ActionId);
+        Assert.IsEmpty(scope.Thrown);
+    }
 
     [TestMethod]
     public async Task DecideAsync_PendingAction_StagesDecisionAndNeverInvokesApplyCallback()
@@ -152,7 +161,7 @@ public class ImportActionResolutionCoordinatorTests
     }
 
     [TestMethod]
-    public async Task DecideAsync_AlreadyAppliedAction_ThrowsImportActionStateException()
+    public async Task DecideAsync_AlreadyAppliedAction_ReturnsAlreadyResolvedWithoutThrowing()
     {
         ImportActionEntity entry = BuildDecidedAdd("BATCH-1");
         await _writer.WriteAsync(entry);
@@ -162,7 +171,12 @@ public class ImportActionResolutionCoordinatorTests
             await _writer.MarkAppliedAsync(entry.Id, conn);
         }
 
-        await Assert.ThrowsExactlyAsync<ImportActionStateException>(() => _coordinator.DecideAsync(entry.Id, "\"x\""));
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _coordinator.DecideAsync(entry.Id, "\"x\"");
+
+        Assert.AreEqual(ImportActionDecideOutcome.AlreadyResolved, result.Outcome);
+        Assert.AreEqual(nameof(ImportActionStatus.Applied), result.CurrentStatus);
+        Assert.IsEmpty(scope.Thrown);
     }
 
     [TestMethod]

@@ -1,6 +1,6 @@
 # #370 — An expected import conflict is signalled by throwing, once per conflicted row per render
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 **GitHub issue:** #370
 **Tiers required:** T1, T2
 **Depends on:** #397
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Execute the steps in order; step 3 is next.
+Execute the steps in order; step 4 is next.
 
 ---
 
@@ -19,9 +19,9 @@ Execute the steps in order; step 3 is next.
 decided — by throwing `UnresolvedFieldConflictException`. Seven call sites catch it as normal flow: six
 in `ImportActionPlanner` where a conflict rule covers only some ambiguous fields, and
 `SqliteImportActionService.ComputeAmbiguousFields`, which calls the resolver only to read
-`ex.FieldNames`. `ComputeAmbiguousFields` runs for every pending row in `GET /import/actions` and in a
-batch export, so `/import-review` — which reads that listing and renders twice — throws twice per
-conflicted row.
+`ex.FieldNames`. `ComputeAmbiguousFields` runs for every pending row in `GET /import/actions`, so
+`/import-review` — which reads that listing and renders twice — throws twice per conflicted row. A
+batch export does not call it (step 3).
 
 The decide path throws the same exception for incomplete decisions, alongside three more for conditions
 already checked: `ImportActionNotFoundException`, `ImportActionStateException` and
@@ -107,7 +107,29 @@ Per `docs/testing-policy.md`'s *Red first means signatures first* — shapes onl
 
 ### 3. Write every test and confirm each is red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 25 unit tests red against step 2's signatures, each for its own reason: the
+recorder saw `UnresolvedFieldConflictException` thrown, the outcome was wrong, or the endpoint answered
+`204`. Five start green as controls: `ResolveWithDecisions_NothingAmbiguous_ReportsNoUnresolvedFields`,
+`ResolveEarlyRule_EveryFieldResolved_ReturnsMergedFields`, `DecideAsync_AllFieldsDecided_ReturnsDecided`
+(step 2 already returns `Decided`), `ImportActionDecideResultTests.Describe_Decided_IsEmpty`, and
+`ExportBatchAsync_PendingModifyConflicts_ReportsAmbiguousFieldsWithoutThrowing`.
+
+**The export never threw.** `ExportBatchAsync` builds its rows from the stored fields and never calls the
+resolver, so the issue's claim that a batch export throws is wrong — its test is a control, and the
+canary below confirms it (the export added no line).
+
+**The natural-key Source site needed a different second field.** That branch only ever matches a row
+whose date is equal or empty, so a date can never be ambiguous there; the test makes `seriesId` and
+`seasonId` differ instead, with the rule covering only `seriesId`.
+
+**One test beyond the issue's table:** `ImportActionDecideResultTests.Describe_EachOutcome_MatchesTheMessageItReplaces`,
+the check that every row-error text is the one the exception carried (requirement 4).
+
+**Canary:** `import-and-staged-actions/28` against an image built from `ef561186` — `before=0`,
+`after=8`: three `UnresolvedFieldConflictException` from the listing, three from the review page's
+render, and the refused decide's twice under one id. Every other expectation held. The run also found
+the document reading the export's JSON array as one element in PowerShell 5.1; corrected and re-run.
+Container, image and worktree removed.
 
 Every row of the verification checklist, written against step 2's signatures and run red. The tests
 that assert today's throws are rewritten, not kept alongside — they encode the behaviour this issue

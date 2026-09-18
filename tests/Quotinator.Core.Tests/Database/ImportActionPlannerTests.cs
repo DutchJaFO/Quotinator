@@ -9,6 +9,7 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Diagnostics;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
@@ -37,12 +38,12 @@ public class ImportActionPlannerTests
         _dbPath  = Path.Combine(_tempDir, "test.db");
         _factory = new SqliteConnectionFactory(_dbPath);
 
-        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
-        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        ImportActionReader actionReader  = new ImportActionReader(_factory);
-        ImportActionWriter actionWriter  = new ImportActionWriter(_factory);
-        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        DatabaseOptions options       = new() { DbPath = _dbPath, BackupsPath = Path.Combine(_tempDir, "backups") };
+        SqliteImportBatchRepository importBatches = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        ImportActionReader actionReader  = new(_factory);
+        ImportActionWriter actionWriter  = new(_factory);
+        ImportActionResolutionCoordinator coordinator   = new(actionReader, actionWriter, _factory);
+        SqliteImportActionService actionService = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -51,7 +52,7 @@ public class ImportActionPlannerTests
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory, NoOpNotificationWriter.Instance);
-        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(_factory, options, QuotinatorMigrations.All, [], importBatches,
+        QuotinatorDatabaseInitializer db = new(_factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, actionWriter, NoOpAuditEntryWriter.Instance,
             NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance, NoOpSourceCacheUpdater.Instance,
             autoUpdateSources: false,
@@ -85,7 +86,7 @@ public class ImportActionPlannerTests
 
     private async Task<SqliteConnection> OpenConnectionAsync()
     {
-        SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync();
         return conn;
     }
@@ -104,7 +105,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         SourceQuoteDto excluded = BuildQuote("f6111111-1111-4111-8111-111111111111", source: "The Godfather", quoteText: "I'm gonna make him an offer he can't refuse.");
         SourceQuoteDto kept     = BuildQuote("f6211111-1111-4111-8111-111111111111", source: "The Godfather", quoteText: "Keep your friends close, but your enemies closer.");
-        QuoteExclusionLookup exclusions = new QuoteExclusionLookup([
+        QuoteExclusionLookup exclusions = new([
             new QuoteExclusionRule { Id = "f6111111-1111-4111-8111-111111111111", Reason = "Test exclusion" },
         ]);
 
@@ -420,7 +421,7 @@ public class ImportActionPlannerTests
         await SeedExistingQuoteAsync(conn, id);
 
         SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
-        ConflictRuleLookup rules = new ConflictRuleLookup([BuildQuoteTextKeepRule(id)]);
+        ConflictRuleLookup rules = new([BuildQuoteTextKeepRule(id)]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -439,7 +440,7 @@ public class ImportActionPlannerTests
         await SeedExistingQuoteWithCharacterAsync(conn, id, quoteText: "Original text", characterName: "Rick Blaine");
 
         SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.", character: "Ilsa Lund");
-        ConflictRuleLookup rules = new ConflictRuleLookup([BuildQuoteTextKeepRule(id)]);
+        ConflictRuleLookup rules = new([BuildQuoteTextKeepRule(id)]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -447,6 +448,176 @@ public class ImportActionPlannerTests
         Assert.AreEqual(ImportActionStatus.Pending, quoteAction.Status.Parsed, "The character field is also ambiguous and has no matching rule — a partial rule match must not auto-resolve the whole action");
         Assert.IsNull(quoteAction.MergedFields, "Pending actions have no resolved values yet");
     }
+
+    // ── #370: a rule covering only some ambiguous fields stages Pending without throwing ───────────
+    //
+    // One per site that consults a rule. Universe is absent on purpose: it has a single field, so a rule
+    // deciding anything there decides everything, and its site cannot reach the unresolved case.
+
+    [TestMethod]
+    public async Task PlanAsync_ReviewPolicy_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string id = "c2211111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteWithCharacterAsync(conn, id, quoteText: "Original text", characterName: "Rick Blaine");
+        SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.", character: "Ilsa Lund");
+        ConflictRuleLookup rules = new([BuildQuoteTextKeepRule(id)]);
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+
+        Assert.AreEqual(ImportActionStatus.Pending, actions.Single(a => a.EntityType == "Quote").Status.Parsed);
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string storedSeriesId = await SeedExistingSeriesAsync(conn, "Stored Series");
+        await SeedExistingSeriesAsync(conn, "Incoming Series");
+        string id = "77e11111-1111-4111-8111-111111111111";
+        await SeedExplicitSourceAsync(conn, id, title: "Casablanca", type: "Movie", date: "1942", seriesId: storedSeriesId);
+        ConflictRuleLookup rules = new([
+            new ConflictResolutionRule
+            {
+                EntityId       = id,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1942"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"date":"1943"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "date", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [BuildSourceEntry(id, date: "1943", seriesName: "Incoming Series")], conflictRules: rules);
+
+        Assert.AreEqual(ImportActionStatus.Pending, actions.Single(a => a.EntityType == "Source").Status.Parsed,
+            "The rule decides the date; the Series link also differs and has no rule");
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+    }
+
+    [TestMethod]
+    public async Task PlanSourcesAsync_ByNaturalKey_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string storedSeriesId   = await SeedExistingSeriesAsync(conn, "Stored Series");
+        string incomingSeriesId = await SeedExistingSeriesAsync(conn, "Incoming Series");
+        string storedSeasonId   = await SeedExistingSeasonAsync(conn, storedSeriesId, number: 1);
+        await SeedExistingSeasonAsync(conn, incomingSeriesId, number: 1);
+        string sourceId = "77e22222-2222-4222-8222-222222222222";
+        await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Tv", date: "1942", seriesId: storedSeriesId);
+        await conn.ExecuteAsync("UPDATE Quotinator_Source SET SeasonId = @storedSeasonId WHERE Id = @sourceId", new { storedSeasonId, sourceId });
+        ConflictRuleLookup rules = new([
+            new ConflictResolutionRule
+            {
+                EntityId       = sourceId,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{storedSeriesId}}"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>($$"""{"seriesId":"{{incomingSeriesId}}"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "seriesId", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        // No id, so the natural-key branch. The date is never ambiguous here — the branch only matches an
+        // equal or date-less row — so the second differing field is the Season the new Series brings.
+        SourceEntryDto entry = new() { Title = "Casablanca", Type = Core.Enums.QuoteType.Tv, SeriesName = "Incoming Series", SeasonNumber = 1 };
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            sources: [entry], conflictRules: rules);
+
+        Assert.AreEqual(ImportActionStatus.Pending, actions.Single(a => a.EntityType == "Source").Status.Parsed,
+            "The rule decides the Series link; the Season link also differs and has no rule");
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+    }
+
+    [TestMethod]
+    public async Task PlanSeriesAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string storedUniverseId = await SeedExistingUniverseAsync(conn, "Stored Universe");
+        await SeedExistingUniverseAsync(conn, "Incoming Universe");
+        string id = await SeedExistingSeriesAsync(conn, "The Lord of the Rings", universeId: storedUniverseId);
+        ConflictRuleLookup rules = new([
+            new ConflictResolutionRule
+            {
+                EntityId       = id,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"The Lord of the Rings"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"name":"Lord of the Rings"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "name", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            series: [new SeriesEntryDto { Id = id, Name = "Lord of the Rings", UniverseName = "Incoming Universe" }], conflictRules: rules);
+
+        Assert.AreEqual(ImportActionStatus.Pending, actions.Single(a => a.EntityType == "Series").Status.Parsed,
+            "The rule decides the name; the Universe link also differs and has no rule");
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+    }
+
+    [TestMethod]
+    public async Task PlanSeasonsAsync_RuleCoversOnlySomeChangedFields_StagesPendingWithoutThrowing()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
+        string seasonId = await SeedExistingSeasonAsync(conn, seriesId, number: 1, title: "Book One", subtitle: "Water");
+        ConflictRuleLookup rules = new([
+            new ConflictResolutionRule
+            {
+                EntityId       = seasonId,
+                ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book One"}"""),
+                IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"title":"Book 1"}"""),
+                Fields         = [new ConflictResolutionFieldRule { Field = "title", Resolution = FieldResolutionChoice.Keep }],
+            },
+        ]);
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
+            conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.Review,
+            seasons: [BuildSeasonEntry(number: 1, seriesName: "Avatar: The Last Airbender", title: "Book 1", subtitle: "Fire", id: seasonId)],
+            conflictRules: rules);
+
+        Assert.AreEqual(ImportActionStatus.Pending, actions.Single(a => a.EntityType == "Season").Status.Parsed,
+            "The rule decides the title; the subtitle also differs and has no rule");
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+    }
+
+    // ── #370: the early-rule invariant ───────────────────────────────────────────────────────────
+
+    [TestMethod]
+    public void ResolveEarlyRule_EveryFieldResolved_ReturnsMergedFields()
+    {
+        Dictionary<string, object?> blended  = new() { ["quoteText"] = "Stored", ["character"] = "Rick" };
+        Dictionary<string, object?> incoming = new() { ["quoteText"] = "Incoming", ["character"] = "Rick" };
+        Dictionary<string, FieldMergeDecision> decisions = new() { ["quoteText"] = new(FieldResolutionChoice.Keep, null) };
+
+        FieldMergeResult result = ImportActionPlanner.ResolveEarlyRule(blended, incoming, decisions);
+
+        Assert.AreEqual("Stored", result.MergedFields["quoteText"]);
+        Assert.AreEqual("Rick", result.MergedFields["character"]);
+    }
+
+    [TestMethod]
+    public void ResolveEarlyRule_FieldLeftUnresolved_ThrowsInvalidOperationException()
+    {
+        // A blended map the caller is never supposed to build: an undecided field that disagrees.
+        Dictionary<string, object?> blended  = new() { ["quoteText"] = "Stored", ["character"] = "Rick" };
+        Dictionary<string, object?> incoming = new() { ["quoteText"] = "Incoming", ["character"] = "Ilsa" };
+        Dictionary<string, FieldMergeDecision> decisions = new() { ["quoteText"] = new(FieldResolutionChoice.Keep, null) };
+
+        InvalidOperationException ex = Assert.ThrowsExactly<InvalidOperationException>(
+            () => ImportActionPlanner.ResolveEarlyRule(blended, incoming, decisions));
+
+        Assert.Contains("character", ex.Message, "The invariant's message names the field the construction failed to settle");
+    }
+
+    private static string ThrownTypes(ThrownExceptionRecorder.Scope scope) =>
+        $"Thrown: {string.Join(", ", scope.Thrown.Select(e => e.GetType().Name))}";
 
     [TestMethod]
     public async Task PlanAsync_ReviewPolicy_NonMatchingRuleLookup_StagesPendingAsToday()
@@ -456,7 +627,7 @@ public class ImportActionPlannerTests
         await SeedExistingQuoteAsync(conn, id);
 
         SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
-        ConflictRuleLookup rules = new ConflictRuleLookup([BuildQuoteTextKeepRule("00000000-0000-4000-8000-000000000000")]);
+        ConflictRuleLookup rules = new([BuildQuoteTextKeepRule("00000000-0000-4000-8000-000000000000")]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -632,7 +803,7 @@ public class ImportActionPlannerTests
         string id = "77b11111-1111-4111-8111-111111111111";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", type: "Movie", date: "1942");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -665,7 +836,7 @@ public class ImportActionPlannerTests
         string id = "77b22222-2222-4222-8222-222222222222";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", type: "Movie", date: "1942");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -694,7 +865,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -721,7 +892,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -792,7 +963,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingSeriesAsync(conn, "The Lord of the Rings");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -819,7 +990,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingSeriesAsync(conn, "The Lord of the Rings");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -850,7 +1021,7 @@ public class ImportActionPlannerTests
         string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
         string seasonId = await SeedExistingSeasonAsync(conn, seriesId, number: 1, title: "Book One", subtitle: "Water");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = seasonId,
@@ -879,7 +1050,7 @@ public class ImportActionPlannerTests
         string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
         string seasonId = await SeedExistingSeasonAsync(conn, seriesId, number: 1, title: "Book One", subtitle: "Water");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = seasonId,
@@ -915,7 +1086,7 @@ public class ImportActionPlannerTests
         string sourceId = "77d11111-1111-4111-8111-111111111111";
         await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: "1942", seriesId: storedSeriesId);
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = sourceId,
@@ -945,7 +1116,7 @@ public class ImportActionPlannerTests
         string sourceId = "77d22222-2222-4222-8222-222222222222";
         await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: "1942", seriesId: storedSeriesId);
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = sourceId,
@@ -1020,7 +1191,7 @@ public class ImportActionPlannerTests
 
         // An empty lookup would not do: with `conflictRules` null the Review branch never calls
         // ResolveWithDecisions at all and the action falls through to Pending.
-        ConflictRuleLookup rules = new ConflictRuleLookup([BuildQuoteTextKeepRule(id)]);
+        ConflictRuleLookup rules = new([BuildQuoteTextKeepRule(id)]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
             conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
@@ -1048,7 +1219,7 @@ public class ImportActionPlannerTests
         // resolution is the only thing that differs between the two tests, and `quoteText` genuinely
         // would be overwritten on a row a human marked Complete.
         SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.", character: null, date: null);
-        ConflictRuleLookup rules = new ConflictRuleLookup([BuildQuoteTextReplaceRule(id)]);
+        ConflictRuleLookup rules = new([BuildQuoteTextReplaceRule(id)]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(
             conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
@@ -1066,7 +1237,7 @@ public class ImportActionPlannerTests
         string id = "82b11111-1111-4111-8111-111111111111";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", type: "Movie", date: "1942", completenessStatus: "Complete");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -1094,7 +1265,7 @@ public class ImportActionPlannerTests
         string id = "82b22222-2222-4222-8222-222222222222";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", type: "Movie", date: "1942", completenessStatus: "Complete");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -1126,7 +1297,7 @@ public class ImportActionPlannerTests
         string sourceId = "82c11111-1111-4111-8111-111111111111";
         await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: "1942", completenessStatus: "Complete", seriesId: storedSeriesId);
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = sourceId,
@@ -1156,7 +1327,7 @@ public class ImportActionPlannerTests
         string sourceId = "82c22222-2222-4222-8222-222222222222";
         await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", type: "Movie", date: "1942", completenessStatus: "Complete", seriesId: storedSeriesId);
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = sourceId,
@@ -1181,7 +1352,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingUniverseAsync(conn, "Middle Earth", completenessStatus: "Complete");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -1208,7 +1379,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingUniverseAsync(conn, "Middle Earth", completenessStatus: "Complete");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -1233,7 +1404,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingSeriesAsync(conn, "The Lord of the Rings", completenessStatus: "Complete");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -1260,7 +1431,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingSeriesAsync(conn, "The Lord of the Rings", completenessStatus: "Complete");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = id,
@@ -1291,7 +1462,7 @@ public class ImportActionPlannerTests
         string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
         string seasonId = await SeedExistingSeasonAsync(conn, seriesId, number: 1, title: "Book One", subtitle: "Water", completenessStatus: "Complete");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = seasonId,
@@ -1320,7 +1491,7 @@ public class ImportActionPlannerTests
         string seriesId = await SeedExistingSeriesAsync(conn, "Avatar: The Last Airbender");
         string seasonId = await SeedExistingSeasonAsync(conn, seriesId, number: 1, title: "Book One", subtitle: "Water", completenessStatus: "Complete");
 
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId       = seasonId,
@@ -1355,7 +1526,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = "d1111111-1111-4111-8111-111111111111";
         SourceQuoteDto quote = BuildQuote(id, source: "Airplane!", character: null);
-        ConflictRuleLookup rules = new ConflictRuleLookup([BuildCharacterCustomRule(id, "Steve McCroskey")]);
+        ConflictRuleLookup rules = new([BuildCharacterCustomRule(id, "Steve McCroskey")]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -1371,7 +1542,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = "d2111111-1111-4111-8111-111111111111";
         SourceQuoteDto quote = BuildQuote(id, source: "Airplane!", character: null);
-        ConflictRuleLookup rules = new ConflictRuleLookup([BuildCharacterCustomRule(id, "Steve McCroskey")]);
+        ConflictRuleLookup rules = new([BuildCharacterCustomRule(id, "Steve McCroskey")]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -1392,7 +1563,7 @@ public class ImportActionPlannerTests
         // The rule was authored assuming "character" comes in as null — this quote's raw incoming
         // character is no longer null (the upstream data changed since the rule was written), so the
         // rule's own recorded snapshot for this exact field no longer matches and it must not apply.
-        ConflictResolutionRule staleRule = new ConflictResolutionRule
+        ConflictResolutionRule staleRule = new()
         {
             EntityId = id,
             ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":null}"""),
@@ -1400,7 +1571,7 @@ public class ImportActionPlannerTests
             Fields = [new ConflictResolutionFieldRule { Field = "character", Resolution = FieldResolutionChoice.Custom, CustomValue = "Steve McCroskey" }],
         };
         SourceQuoteDto quote = BuildQuote(id, source: "Airplane!", character: "Some Newly-Added Value");
-        ConflictRuleLookup rules = new ConflictRuleLookup([staleRule]);
+        ConflictRuleLookup rules = new([staleRule]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -1416,7 +1587,7 @@ public class ImportActionPlannerTests
         string id = "d4111111-1111-4111-8111-111111111111";
         SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "Here's looking at you, kid.");
         // A Keep/Replace rule has no second side to choose between on a brand-new Add — must be a no-op.
-        ConflictRuleLookup rules = new ConflictRuleLookup([BuildQuoteTextKeepRule(id)]);
+        ConflictRuleLookup rules = new([BuildQuoteTextKeepRule(id)]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -1439,14 +1610,14 @@ public class ImportActionPlannerTests
         await SeedExistingQuoteAsync(conn, id); // stores QuoteText = "Original text"
 
         SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A changed line.");
-        ConflictResolutionRule rule = new ConflictResolutionRule
+        ConflictResolutionRule rule = new()
         {
             EntityId       = id,
             ExistingRecord = EmptyConflictRuleRecord,
             IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"A changed line."}"""),
             Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Custom, CustomValue = "Original text" }],
         };
-        ConflictRuleLookup rules = new ConflictRuleLookup([rule]);
+        ConflictRuleLookup rules = new([rule]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -1467,7 +1638,7 @@ public class ImportActionPlannerTests
         await SeedExistingQuoteAsync(conn, id); // stores QuoteText = "Original text"
 
         SourceQuoteDto quote = BuildQuote(id, source: "Casablanca", quoteText: "A different changed line.");
-        ConflictResolutionRule rule = new ConflictResolutionRule
+        ConflictResolutionRule rule = new()
         {
             EntityId       = id,
             ExistingRecord = EmptyConflictRuleRecord,
@@ -1476,7 +1647,7 @@ public class ImportActionPlannerTests
             IncomingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"quoteText":"A changed line."}"""),
             Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Custom, CustomValue = "Original text" }],
         };
-        ConflictRuleLookup rules = new ConflictRuleLookup([rule]);
+        ConflictRuleLookup rules = new([rule]);
 
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [quote], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
 
@@ -1521,7 +1692,7 @@ public class ImportActionPlannerTests
         await SeedExplicitSourceAsync(conn, canonicalSourceId, title: "The Avengers", type: "Movie", date: null);
 
         SourceQuoteDto quote   = BuildQuote("d1111111-1111-4111-8111-111111111111", source: "Marvel's The Avengers", character: null);
-        SourceAliasLookup aliases = new SourceAliasLookup([
+        SourceAliasLookup aliases = new([
             new SourceAliasRule { Title = "Marvel's The Avengers", Type = "movie", CanonicalTitle = "The Avengers", CanonicalType = "movie" },
         ]);
 
@@ -1552,7 +1723,7 @@ public class ImportActionPlannerTests
         await SeedExistingQuoteWithSourceAsync(conn, quoteId, sourceId, "Zootopia", "Movie", "Original text.");
 
         SourceQuoteDto quote   = BuildQuote(quoteId, source: "Zootopia", quoteText: "Original text.", type: Core.Enums.QuoteType.Anime);
-        SourceAliasLookup aliases = new SourceAliasLookup([
+        SourceAliasLookup aliases = new([
             new SourceAliasRule { Title = "Zootopia", Type = "anime", CanonicalTitle = "Zootopia", CanonicalType = "movie" },
         ]);
 
@@ -1656,7 +1827,7 @@ public class ImportActionPlannerTests
 
         SourceQuoteDto quote = BuildQuote(quoteId, source: "Casablanca", character: "rhett butler",
             quoteText: "Frankly, my dear, I don't give a damn.");
-        ConflictRuleLookup rules = new ConflictRuleLookup([new ConflictResolutionRule
+        ConflictRuleLookup rules = new([new ConflictResolutionRule
         {
             EntityId = quoteId,
             ExistingRecord = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>("""{"character":"Rhett Butler"}"""),
@@ -1694,7 +1865,7 @@ public class ImportActionPlannerTests
         await SeedExplicitSourceAsync(conn, renamedSourceId, title: "The Avengers (Renamed)", type: "Movie", date: null);
 
         SourceQuoteDto quote   = BuildQuote("f1111111-1111-4111-8111-111111111111", source: "Marvel's The Avengers", character: null);
-        SourceAliasLookup aliases = new SourceAliasLookup([
+        SourceAliasLookup aliases = new([
             new SourceAliasRule { Title = "Marvel's The Avengers", Type = "movie", CanonicalTitle = "The Avengers", CanonicalType = "movie" },
         ]);
 
@@ -1716,7 +1887,7 @@ public class ImportActionPlannerTests
         await SeedExplicitSourceAsync(conn, renamedCanonicalId, title: "Zootopia (Canonical, Renamed)", type: "Movie", date: null);
 
         SourceQuoteDto quote   = BuildQuote(quoteId, source: "Zootopia", quoteText: "A changed line.", type: Core.Enums.QuoteType.Anime);
-        SourceAliasLookup aliases = new SourceAliasLookup([
+        SourceAliasLookup aliases = new([
             new SourceAliasRule { Title = "Zootopia", Type = "anime", CanonicalTitle = "Zootopia (Canonical)", CanonicalType = "movie" },
         ]);
 
@@ -1738,7 +1909,7 @@ public class ImportActionPlannerTests
     {
         using SqliteConnection conn = await OpenConnectionAsync();
         SourceQuoteDto quote   = BuildQuote("f4111111-1111-4111-8111-111111111111", source: "Marvel's The Avengers", character: null);
-        SourceAliasLookup aliases = new SourceAliasLookup([
+        SourceAliasLookup aliases = new([
             new SourceAliasRule { Title = "Marvel's The Avengers", Type = "movie", CanonicalTitle = "The Avengers", CanonicalType = "movie" },
         ]);
 
@@ -1759,7 +1930,7 @@ public class ImportActionPlannerTests
         await SeedExplicitSourceAsync(conn, canonicalSourceId, title: "The Avengers", type: "Movie", date: null);
 
         SourceQuoteDto quote   = BuildQuote("f3111111-1111-4111-8111-111111111111", source: "Marvel's The Avengers", character: null);
-        SourceAliasLookup aliases = new SourceAliasLookup([
+        SourceAliasLookup aliases = new([
             new SourceAliasRule { Title = "Marvel's The Avengers", Type = "movie", CanonicalTitle = "The Avengers", CanonicalType = "movie" },
         ]);
 
@@ -1782,7 +1953,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         SourceQuoteDto correctQuote = BuildQuote("f4111111-1111-4111-8111-111111111111", source: "Back to the Future", date: "1985");
         SourceQuoteDto typoQuote    = BuildQuote("f4211111-1111-4111-8111-111111111111", source: "Back to the future", date: "1958", quoteText: "Great Scott!");
-        SourceAliasLookup aliases = new SourceAliasLookup([
+        SourceAliasLookup aliases = new([
             new SourceAliasRule { Title = "Back to the future", Type = "movie", Date = "1958", CanonicalTitle = "Back to the Future", CanonicalType = "movie", CanonicalDate = "1985" },
         ]);
 
@@ -2864,7 +3035,7 @@ public class ImportActionPlannerTests
     {
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId = id,
@@ -2901,7 +3072,7 @@ public class ImportActionPlannerTests
     {
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId = id,
@@ -2934,7 +3105,7 @@ public class ImportActionPlannerTests
     {
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId = id,
@@ -2965,7 +3136,7 @@ public class ImportActionPlannerTests
     {
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingUniverseAsync(conn, "Middle Earth");
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId = id,
@@ -3052,7 +3223,7 @@ public class ImportActionPlannerTests
     {
         using SqliteConnection conn = await OpenConnectionAsync();
         string id = await SeedExistingSeriesAsync(conn, "The Hobbit");
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId = id,
@@ -3178,7 +3349,7 @@ public class ImportActionPlannerTests
         string hobbitSeriesId = await SeedExistingSeriesAsync(conn, "The Hobbit");
         string sourceId = "cf111111-1111-4111-8111-111111111111";
         await SeedExplicitSourceAsync(conn, sourceId, title: "Casablanca", date: "1942", seriesId: null);
-        ConflictRuleLookup rules = new ConflictRuleLookup([
+        ConflictRuleLookup rules = new([
             new ConflictResolutionRule
             {
                 EntityId = sourceId,
@@ -3917,7 +4088,7 @@ public class ImportActionPlannerTests
         string id = "db111111-1111-4111-8111-111111111176";
         await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.");
 
-        SourceConversationDto entry = new SourceConversationDto
+        SourceConversationDto entry = new()
         {
             Id          = id,
             Description = "A tense standoff in the saloon.",
@@ -4090,7 +4261,7 @@ public class ImportActionPlannerTests
         using SqliteConnection conn = await OpenConnectionAsync();
         string uppercaseQuoteId = "DF222222-2222-4222-8222-222222222280";
         SourceQuoteDto quote = BuildQuote(uppercaseQuoteId, source: "A Film With A Referenced Line (Canonical Id Test)");
-        SourceConversationDto conversationEntry = new SourceConversationDto
+        SourceConversationDto conversationEntry = new()
         {
             Id          = "df333333-3333-4333-8333-333333333380",
             Description = "A conversation referencing an uppercase-authored quote id.",
@@ -4115,7 +4286,7 @@ public class ImportActionPlannerTests
         string id = "e0111111-1111-4111-8111-111111111181";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942");
 
-        SourceEntryDto entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie };
+        SourceEntryDto entry = new() { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -4129,7 +4300,7 @@ public class ImportActionPlannerTests
         string id = "e0111111-1111-4111-8111-111111111182";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942");
 
-        SourceEntryDto entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = Optional<string>.Of(null) };
+        SourceEntryDto entry = new() { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = Optional<string>.Of(null) };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -4147,7 +4318,7 @@ public class ImportActionPlannerTests
         string id = "e0111111-1111-4111-8111-111111111183";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942", seriesId: seriesId);
 
-        SourceEntryDto entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1942" };
+        SourceEntryDto entry = new() { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1942" };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -4162,7 +4333,7 @@ public class ImportActionPlannerTests
         string id = "e0111111-1111-4111-8111-111111111184";
         await SeedExplicitSourceAsync(conn, id, title: "Casablanca", date: "1942", seriesId: seriesId);
 
-        SourceEntryDto entry = new SourceEntryDto { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1942", SeriesName = Optional<string>.Of(null) };
+        SourceEntryDto entry = new() { Id = id, Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1942", SeriesName = Optional<string>.Of(null) };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -4180,7 +4351,7 @@ public class ImportActionPlannerTests
         await SeedExplicitSourceAsync(conn, "e0111111-1111-4111-8111-111111111185", title: "Casablanca", date: null);
 
         // #180's enrichment shape: no explicit id.
-        SourceEntryDto entry = new SourceEntryDto { Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1975" };
+        SourceEntryDto entry = new() { Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, Date = "1975" };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             sources: [entry]);
 
@@ -4200,7 +4371,7 @@ public class ImportActionPlannerTests
         // Not referenced by the entry below — a row found only by natural key (Title+Type).
         await SeedExplicitSourceAsync(conn, "e0111111-1111-4111-8111-111111111186", title: "Casablanca", seriesId: originalSeriesId);
 
-        SourceEntryDto entry = new SourceEntryDto { Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, SeriesName = "New Series" };
+        SourceEntryDto entry = new() { Title = "Casablanca", Type = Core.Enums.QuoteType.Movie, SeriesName = "New Series" };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.MergeOurs,
             sources: [entry]);
 
@@ -4217,7 +4388,7 @@ public class ImportActionPlannerTests
         string id = "e0111111-1111-4111-8111-111111111187";
         await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27");
 
-        PersonEntryDto entry = new PersonEntryDto { Id = id, Name = "Ada Lovelace", DateOfDeath = "1852-11-27" };
+        PersonEntryDto entry = new() { Id = id, Name = "Ada Lovelace", DateOfDeath = "1852-11-27" };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [entry]);
 
@@ -4231,7 +4402,7 @@ public class ImportActionPlannerTests
         string id = "e0111111-1111-4111-8111-111111111188";
         await SeedExplicitPersonAsync(conn, id, name: "Ada Lovelace", dateOfBirth: "1815-12-10", dateOfDeath: "1852-11-27");
 
-        PersonEntryDto entry = new PersonEntryDto { Id = id, Name = "Ada Lovelace", DateOfBirth = "1815-12-10", DateOfDeath = Optional<string>.Of(null) };
+        PersonEntryDto entry = new() { Id = id, Name = "Ada Lovelace", DateOfBirth = "1815-12-10", DateOfDeath = Optional<string>.Of(null) };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             people: [entry]);
 
@@ -4248,7 +4419,7 @@ public class ImportActionPlannerTests
         string id = "e0111111-1111-4111-8111-111111111189";
         await SeedExplicitStageDirectionAsync(conn, id, text: "A shot rings out.", imageUrl: "http://example.com/still.jpg");
 
-        SourceStageDirectionDto entry = new SourceStageDirectionDto { Id = id, Text = "A shot rings out." };
+        SourceStageDirectionDto entry = new() { Id = id, Text = "A shot rings out." };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             stageDirections: [entry]);
 
@@ -4262,7 +4433,7 @@ public class ImportActionPlannerTests
         string id = "e0111111-1111-4111-8111-111111111191";
         await SeedExplicitSoundCueAsync(conn, id, text: "Distant thunder.", soundFileUrl: "http://example.com/thunder.mp3", imageUrl: "http://example.com/img.jpg");
 
-        SourceSoundCueDto entry = new SourceSoundCueDto { Id = id, Text = "Distant thunder.", ImageUrl = "http://example.com/img.jpg" };
+        SourceSoundCueDto entry = new() { Id = id, Text = "Distant thunder.", ImageUrl = "http://example.com/img.jpg" };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             soundCues: [entry]);
 
@@ -4276,7 +4447,7 @@ public class ImportActionPlannerTests
         string id = "e0111111-1111-4111-8111-111111111192";
         await SeedExplicitConversationAsync(conn, id, description: "A tense standoff.");
 
-        SourceConversationDto entry = new SourceConversationDto { Id = id, Lines = [] };
+        SourceConversationDto entry = new() { Id = id, Lines = [] };
         IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins,
             conversations: [entry]);
 

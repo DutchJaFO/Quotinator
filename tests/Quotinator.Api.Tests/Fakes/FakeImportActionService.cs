@@ -11,7 +11,8 @@ internal sealed class FakeImportActionService : IImportActionService
 {
     public PagedItems<ImportActionSummaryResponse>? ReturnPage { get; set; }
     public IReadOnlyList<ImportActionFieldRowResponse>? ReturnExportRows { get; set; }
-    public Exception? ThrowOnDecide { get; set; }
+    /// <summary>What <see cref="DecideAsync"/> returns for the action id it is given — <c>Decided</c> unless a test sets otherwise.</summary>
+    public Func<Guid, ImportActionDecideResult> DecideResult { get; set; } = ImportActionDecideResult.Decided;
     public Exception? ThrowOnUndo { get; set; }
     public Exception? ThrowOnDiscard { get; set; }
     public Exception? ThrowOnReverse { get; set; }
@@ -64,8 +65,7 @@ internal sealed class FakeImportActionService : IImportActionService
     {
         LastDecidedActionId = actionId;
         LastDecisionRequest = request;
-        if (ThrowOnDecide is not null) throw ThrowOnDecide;
-        return Task.FromResult(ImportActionDecideResult.Decided(actionId));
+        return Task.FromResult(DecideResult(actionId));
     }
 
     public Task UndoDecisionAsync(Guid actionId, CancellationToken cancellationToken = default)

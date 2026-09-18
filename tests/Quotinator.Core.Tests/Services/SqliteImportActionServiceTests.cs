@@ -15,6 +15,7 @@ using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
+using Quotinator.Data.Testing.Diagnostics;
 using Quotinator.Data.Testing.NoOps;
 using Quotinator.Core.Database;
 using Quotinator.Core.Entities;
@@ -167,23 +168,48 @@ public class SqliteImportActionServiceTests
     }
 
     [TestMethod]
-    public async Task DecideAsync_NonQuoteAction_ThrowsImportActionNotDecidableException()
+    public async Task DecideAsync_NonQuoteAction_ReturnsNotDecidableWithoutThrowing()
     {
         Guid batchId = Guid.NewGuid();
         IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote("11111111-1111-4111-8111-111111111111")], batchId, DuplicateResolutionPolicy.NewestWins);
         ImportActionEntity sourceAction = actions.Single(a => a.EntityType == "Source");
 
-        await Assert.ThrowsExactlyAsync<ImportActionNotDecidableException>(
-            () => _service.DecideAsync(sourceAction.Id, new ConflictDecisionRequest(), TestContext.CancellationToken));
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(sourceAction.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        Assert.AreEqual(ImportActionDecideOutcome.NotDecidable, result.Outcome);
+        Assert.AreEqual("Source", result.EntityType);
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
     }
 
     [TestMethod]
-    public async Task DecideAsync_UnknownId_ThrowsImportActionNotFoundException()
-        => await Assert.ThrowsExactlyAsync<ImportActionNotFoundException>(
-            () => _service.DecideAsync(Guid.NewGuid(), new ConflictDecisionRequest(), TestContext.CancellationToken));
+    public async Task DecideAsync_UnknownId_ReturnsNotFoundWithoutThrowing()
+    {
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(Guid.NewGuid(), new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        Assert.AreEqual(ImportActionDecideOutcome.NotFound, result.Outcome);
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+    }
 
     [TestMethod]
-    public async Task DecideAsync_AmbiguousFieldLeftUndecided_ThrowsUnresolvedFieldConflictException()
+    public async Task DecideAsync_AlreadyAppliedAction_ReturnsAlreadyResolvedWithoutThrowing()
+    {
+        string id = "22111111-1111-4111-8111-111111111111";
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        await _service.ApplyBatchAsync(quoteAction.BatchId, cancellationToken: TestContext.CancellationToken);
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        Assert.AreEqual(ImportActionDecideOutcome.AlreadyResolved, result.Outcome);
+        Assert.AreEqual(nameof(ImportActionStatus.Applied), result.CurrentStatus);
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_AmbiguousFieldLeftUndecided_ReturnsUnresolvedFieldNamesWithoutThrowing()
     {
         string id = "21111111-1111-4111-8111-111111111111";
         await SeedExistingQuoteAsync(id, "Original text");
@@ -191,9 +217,89 @@ public class SqliteImportActionServiceTests
         IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
         ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
 
-        await Assert.ThrowsExactlyAsync<UnresolvedFieldConflictException>(
-            () => _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest(), TestContext.CancellationToken));
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        Assert.AreEqual(ImportActionDecideOutcome.UnresolvedFields, result.Outcome);
+        Assert.Contains("quoteText", result.UnresolvedFields);
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+
+        ImportActionEntity? found = await _actionReader.GetByIdAsync(quoteAction.Id);
+        Assert.AreEqual(ImportActionStatus.Pending, found!.Status.Parsed, "Nothing is stored for an incomplete decision");
     }
+
+    [TestMethod]
+    public async Task DecideAsync_AllFieldsDecided_ReturnsDecided()
+    {
+        string id = "32111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+
+        ImportActionDecideResult result = await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
+        {
+            QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        }, TestContext.CancellationToken);
+
+        Assert.AreEqual(ImportActionDecideOutcome.Decided, result.Outcome);
+        Assert.AreEqual(quoteAction.Id, result.ActionId);
+    }
+
+    [TestMethod]
+    public async Task BulkDecideAsync_AmbiguousFieldLeftUndecided_ReportedAsRowErrorWithoutThrowing()
+    {
+        string id = "23111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote(id, character: "Someone else")], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        ImportActionFieldRowDto onlyCharacter = Field(quoteAction.Id, quoteAction.EntityId, ImportActionEntityTypes.Quote, "character", FieldResolutionChoice.Keep);
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        BulkDecideResponse response = await _service.BulkDecideAsync(quoteAction.BatchId, [onlyCharacter], TestContext.CancellationToken);
+
+        Assert.AreEqual(0, response.ActionsDecided);
+        BulkDecideRowError error = response.Errors.Single();
+        Assert.AreEqual(quoteAction.Id, error.ActionId);
+        Assert.AreEqual("The following fields are ambiguous and need an explicit decision: quoteText", error.Message);
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_PendingModifyConflicts_ReportsAmbiguousFieldsWithoutThrowing()
+    {
+        string id = "24111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+        string batchId = actions[0].BatchId;
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        PagedItems<ImportActionSummaryResponse> page = await _service.GetPagedAsync(batchId, "Pending", null, 1, 0, TestContext.CancellationToken);
+
+        ImportActionSummaryResponse quote = page.Items.Single(a => a.EntityType == "Quote");
+        Assert.Contains("quoteText", quote.AmbiguousFields, "Control: the listing still reports what needs deciding");
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+    }
+
+    [TestMethod]
+    public async Task ExportBatchAsync_PendingModifyConflicts_ReportsAmbiguousFieldsWithoutThrowing()
+    {
+        string id = "25111111-1111-4111-8111-111111111111";
+        await SeedExistingQuoteAsync(id, "Original text");
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote(id)], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+        string batchId = actions[0].BatchId;
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        IReadOnlyList<ImportActionFieldRowResponse> rows = await _service.ExportBatchAsync(batchId, TestContext.CancellationToken);
+
+        Assert.Contains(r => r.EntityType == "Quote" && r.Field == "quoteText", rows,
+            "Control: the export still carries the ambiguous field as a row to decide");
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+    }
+
+    private static string ThrownTypes(ThrownExceptionRecorder.Scope scope) =>
+        $"Thrown: {string.Join(", ", scope.Thrown.Select(e => e.GetType().Name))}";
 
     [TestMethod]
     public async Task DecideAsync_AllFieldsDecided_TransitionsToDecidedWithResolvedMergedFields()

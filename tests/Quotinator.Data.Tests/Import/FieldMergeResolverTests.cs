@@ -1,5 +1,6 @@
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
+using Quotinator.Data.Testing.Diagnostics;
 
 namespace Quotinator.Data.Tests.Import;
 
@@ -222,16 +223,15 @@ public class FieldMergeResolverTests
     }
 
     [TestMethod]
-    public void ResolveWithDecisions_FieldInCaseSensitiveSet_DiffersOnlyByCase_ThrowsWithFieldName()
+    public void ResolveWithDecisions_FieldInCaseSensitiveSet_DiffersOnlyByCase_ReportsFieldName()
     {
         Dictionary<string, object?> existing = new() { ["source"] = "Gone With the Wind" };
         Dictionary<string, object?> incoming = new() { ["source"] = "Gone with the Wind" };
 
-        UnresolvedFieldConflictException ex = Assert.ThrowsExactly<UnresolvedFieldConflictException>(() =>
-            FieldMergeResolver.ResolveWithDecisions(
-                existing, incoming, new Dictionary<string, FieldMergeDecision>(), new HashSet<string> { "source" }));
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(
+            existing, incoming, new Dictionary<string, FieldMergeDecision>(), new HashSet<string> { "source" });
 
-        Assert.AreSequenceEqual(["source"], [.. ex.FieldNames]);
+        Assert.AreSequenceEqual(["source"], result.UnresolvedFields);
     }
 
     [TestMethod]
@@ -287,27 +287,58 @@ public class FieldMergeResolverTests
     }
 
     [TestMethod]
-    public void ResolveWithDecisions_AmbiguousFieldNoDecision_ThrowsWithFieldName()
+    public void ResolveWithDecisions_AmbiguousFieldNoDecision_ReportsFieldName()
     {
         Dictionary<string, object?> existing = new() { ["date"] = "1994", ["source"] = "A" };
         Dictionary<string, object?> incoming = new() { ["date"] = "1995", ["source"] = "A" };
 
-        UnresolvedFieldConflictException ex = Assert.ThrowsExactly<UnresolvedFieldConflictException>(
-            () => FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>()));
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
 
-        Assert.AreSequenceEqual(["date"], [.. ex.FieldNames]);
+        Assert.AreSequenceEqual(["date"], result.UnresolvedFields);
     }
 
     [TestMethod]
-    public void ResolveWithDecisions_AmbiguousFieldsNoDecision_ThrowsWithEveryAmbiguousFieldName()
+    public void ResolveWithDecisions_AmbiguousFieldsNoDecision_ReportsEveryAmbiguousFieldName()
     {
         Dictionary<string, object?> existing = new() { ["date"] = "1994", ["character"] = "Bob" };
         Dictionary<string, object?> incoming = new() { ["date"] = "1995", ["character"] = "Alice" };
 
-        UnresolvedFieldConflictException ex = Assert.ThrowsExactly<UnresolvedFieldConflictException>(
-            () => FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>()));
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
 
-        Assert.AreSequenceEqual(["date", "character"], [.. ex.FieldNames], Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+        Assert.AreSequenceEqual(["date", "character"], result.UnresolvedFields, Microsoft.VisualStudio.TestTools.UnitTesting.SequenceOrder.InAnyOrder);
+    }
+
+    [TestMethod]
+    public void ResolveWithDecisions_NothingAmbiguous_ReportsNoUnresolvedFields()
+    {
+        Dictionary<string, object?> existing = new() { ["date"] = "1994", ["character"] = "Bob" };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1995", ["character"] = "Bob" };
+        Dictionary<string, FieldMergeDecision> decisions = new() { ["date"] = new(FieldResolutionChoice.Replace, null) };
+
+        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
+
+        Assert.IsEmpty(result.UnresolvedFields);
+        Assert.AreEqual("1995", result.MergedFields["date"],
+            "Control: the resolution itself still happened — an empty list must not come from resolving nothing");
+    }
+
+    [TestMethod]
+    public void ResolveWithDecisions_AmbiguousFieldNoDecision_ThrowsNothing()
+    {
+        Dictionary<string, object?> existing = new() { ["date"] = "1994" };
+        Dictionary<string, object?> incoming = new() { ["date"] = "1995" };
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        try
+        {
+            FieldMergeResolver.ResolveWithDecisions(existing, incoming, new Dictionary<string, FieldMergeDecision>());
+        }
+        catch (Exception)
+        {
+            // Swallowed here only so the assertion below reports the throw, rather than the test stopping on it.
+        }
+
+        Assert.IsEmpty(scope.Thrown, $"Thrown: {string.Join(", ", scope.Thrown.Select(e => e.GetType().Name))}");
     }
 
     [TestMethod]

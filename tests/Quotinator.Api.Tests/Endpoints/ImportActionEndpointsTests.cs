@@ -27,7 +27,7 @@ public class ImportActionEndpointsTests
         FakeImportActionService? service = null,
         string? adminApiKey = TestKey)
     {
-        var fakeService = service ?? new FakeImportActionService();
+        FakeImportActionService fakeService = service ?? new FakeImportActionService();
 
         return new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
@@ -50,7 +50,7 @@ public class ImportActionEndpointsTests
 
     private static HttpClient CreateAuthorizedClient(WebApplicationFactory<Program> factory)
     {
-        var client = factory.CreateClient();
+        HttpClient client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
         return client;
     }
@@ -60,10 +60,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task GetActions_NoApiKey_Returns200()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
@@ -71,7 +71,7 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task GetActions_ReturnsPageShape()
     {
-        var fake = new FakeImportActionService
+        FakeImportActionService fake = new()
         {
             ReturnPage = new PagedItems<ImportActionSummaryResponse>(
                 [
@@ -90,11 +90,11 @@ public class ImportActionEndpointsTests
                 ],
                 Page: 1, PageSize: 50, TotalCount: 1)
         };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions", TestContext.CancellationToken);
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions", TestContext.CancellationToken);
+        JsonDocument doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("totalCount").GetInt32());
         Assert.AreEqual(1, doc.RootElement.GetProperty("items").GetArrayLength());
@@ -106,10 +106,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ImportActions_PageSizeAbove500_Returns422NotSilentClamp()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?pageSize=999", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions?pageSize=999", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "pageSize above 500 must be rejected, not silently clamped");
     }
@@ -117,11 +117,11 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ImportActions_PageSizeOmitted_DefaultsTo20NotFifty()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions", TestContext.CancellationToken);
-        var doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions", TestContext.CancellationToken);
+        JsonDocument doc      = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.CancellationToken));
 
         Assert.AreEqual(20, doc.RootElement.GetProperty("pageSize").GetInt32(), "the standard shared default is 20, not import/actions' old default of 50");
     }
@@ -129,10 +129,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ImportActions_PageZero_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?page=0", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions?page=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -140,10 +140,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ImportActions_PageMalformed_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?page=abc", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions?page=abc", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -151,10 +151,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ImportActions_PageSizeMalformed_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?pageSize=abc", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions?pageSize=abc", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -162,10 +162,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ImportActions_PageSizeNegative_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?pageSize=-1", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions?pageSize=-1", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -173,10 +173,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ImportActions_PageSizeZero_Succeeds()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?pageSize=0", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions?pageSize=0", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "pageSize=0 means every row as one page — must succeed, not 422");
     }
@@ -184,7 +184,7 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ImportActions_PageBeyondLast_Returns422()
     {
-        var fake = new FakeImportActionService
+        FakeImportActionService fake = new()
         {
             ReturnPage = new PagedItems<ImportActionSummaryResponse>(
                 [
@@ -203,10 +203,10 @@ public class ImportActionEndpointsTests
                 ],
                 Page: 1, PageSize: 1, TotalCount: 1)
         };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions?page=5", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions?page=5", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode, "page beyond the last page must be rejected");
     }
@@ -216,10 +216,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ExportActions_NoApiKey_Returns200()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
@@ -227,10 +227,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ExportActions_BatchIdMissing_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions/export", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions/export", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -238,10 +238,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ExportActions_UnknownFormat_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1&format=xml", TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1&format=xml", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -249,8 +249,8 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ExportActions_DefaultFormat_ReturnsJsonRows()
     {
-        var actionId = Guid.NewGuid();
-        var fake = new FakeImportActionService
+        Guid actionId = Guid.NewGuid();
+        FakeImportActionService fake = new()
         {
             ReturnExportRows =
             [
@@ -265,11 +265,11 @@ public class ImportActionEndpointsTests
                 },
             ],
         };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1", TestContext.CancellationToken);
-        var rows = await response.Content.ReadFromJsonAsync<List<ImportActionFieldRowResponse>>(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1", TestContext.CancellationToken);
+        List<ImportActionFieldRowResponse>? rows = await response.Content.ReadFromJsonAsync<List<ImportActionFieldRowResponse>>(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsNotNull(rows);
@@ -281,7 +281,7 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ExportActions_CsvFormat_ReturnsCsvWithHeaderAndDataRow()
     {
-        var fake = new FakeImportActionService
+        FakeImportActionService fake = new()
         {
             ReturnExportRows =
             [
@@ -296,15 +296,15 @@ public class ImportActionEndpointsTests
                 },
             ],
         };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1&format=csv", TestContext.CancellationToken);
-        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/api/v1/import/actions/export?batchId=BATCH-1&format=csv", TestContext.CancellationToken);
+        string body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("text/csv", response.Content.Headers.ContentType?.MediaType);
-        var lines = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+        string[] lines = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         Assert.AreEqual("ActionId,EntityId,EntityType,Field,ExistingValue,IncomingValue,Decision,CustomValue,MarkCompletenessAs", lines[0]);
         Assert.IsTrue(lines[1].Contains("Old Name") && lines[1].Contains("New Name"));
     }
@@ -313,10 +313,10 @@ public class ImportActionEndpointsTests
 
     private static MultipartFormDataContent BuildBulkDecideForm(string fileContent, bool includeFile = true)
     {
-        var form = new MultipartFormDataContent();
+        MultipartFormDataContent form = [];
         if (includeFile)
         {
-            var part = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(fileContent));
+            ByteArrayContent part = new(System.Text.Encoding.UTF8.GetBytes(fileContent));
             part.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
             form.Add(part, "file", "bulk-decide.json");
         }
@@ -334,10 +334,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task BulkDecide_NoApiKey_Returns401()
     {
-        using var factory = CreateFactory(adminApiKey: TestKey);
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory(adminApiKey: TestKey);
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm("[]"), TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm("[]"), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -345,10 +345,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task BulkDecide_BatchIdMissing_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide", BuildBulkDecideForm("[]"), TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/bulk-decide", BuildBulkDecideForm("[]"), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -356,10 +356,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task BulkDecide_FileMissing_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm("", includeFile: false), TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm("", includeFile: false), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -374,11 +374,11 @@ public class ImportActionEndpointsTests
         // endpoint's own batchId/file validation entirely. Found live via T2 Docker testing, where
         // a bare `curl -X POST .../bulk-decide` (no -F flags at all) returned 400 instead of the
         // expected 422.
-        using var factory = CreateFactory();
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide", content: null, TestContext.CancellationToken);
-        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/bulk-decide", content: null, TestContext.CancellationToken);
+        string body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Contains("batchId", body,
@@ -388,11 +388,11 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task BulkDecide_NoBodyButBatchIdPresent_Returns422ForMissingFile()
     {
-        using var factory = CreateFactory();
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", content: null, TestContext.CancellationToken);
-        var body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", content: null, TestContext.CancellationToken);
+        string body = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Contains("file", body,
@@ -402,10 +402,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task BulkDecide_UnknownFormat_Returns422()
     {
-        using var factory = CreateFactory();
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1&format=xml", BuildBulkDecideForm("[]"), TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1&format=xml", BuildBulkDecideForm("[]"), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -413,21 +413,21 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task BulkDecide_ValidJsonRows_CallsServiceAndReturnsResponse()
     {
-        var actionId = Guid.NewGuid();
-        var fake = new FakeImportActionService
+        Guid actionId = Guid.NewGuid();
+        FakeImportActionService fake = new()
         {
             ReturnBulkDecideResponse = new BulkDecideResponse { RowsProcessed = 1, ActionsDecided = 1 },
         };
-        using var factory = CreateFactory(fake);
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var json = JsonSerializer.Serialize(new[]
+        string json = JsonSerializer.Serialize(new[]
         {
             new { ActionId = actionId, EntityId = "e0000001-0000-4000-8000-000000000001", EntityType = "Person", Field = "name", Decision = "Replace" },
         });
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json), TestContext.CancellationToken);
-        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json), TestContext.CancellationToken);
+        BulkDecideResponse? body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual(1, body!.ActionsDecided);
@@ -450,20 +450,20 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task BulkDecide_CamelCaseJsonPropertyNames_MatchingExportsOwnOutput_ParsesSuccessfully()
     {
-        var actionId = Guid.NewGuid();
-        var fake = new FakeImportActionService
+        Guid actionId = Guid.NewGuid();
+        FakeImportActionService fake = new()
         {
             ReturnBulkDecideResponse = new BulkDecideResponse { RowsProcessed = 1, ActionsDecided = 1 },
         };
-        using var factory = CreateFactory(fake);
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var json = $$"""
+        string json = $$"""
             [{"actionId":"{{actionId}}","entityId":"e0000001-0000-4000-8000-000000000001","entityType":"Person","field":"name","existingValue":"Old","incomingValue":"New","decision":"Replace"}]
             """;
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json), TestContext.CancellationToken);
-        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json), TestContext.CancellationToken);
+        BulkDecideResponse? body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsEmpty(body!.Errors, "camelCase property names (export's own output shape) must parse without error");
@@ -476,24 +476,24 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task BulkDecide_MalformedJsonRow_ReportedAsErrorWithoutAbortingValidRows()
     {
-        var validActionId = Guid.NewGuid();
-        var fake = new FakeImportActionService
+        Guid validActionId = Guid.NewGuid();
+        FakeImportActionService fake = new()
         {
             ReturnBulkDecideResponse = new BulkDecideResponse { RowsProcessed = 1, ActionsDecided = 1 },
         };
-        using var factory = CreateFactory(fake);
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
         // First element has an unrecognised Decision value; second is well-formed.
-        var json = $$"""
+        string json = $$"""
             [
               {"ActionId":"{{Guid.NewGuid()}}","EntityId":"e0000001-0000-4000-8000-000000000001","EntityType":"Person","Field":"name","Decision":"NotARealChoice"},
               {"ActionId":"{{validActionId}}","EntityId":"e0000001-0000-4000-8000-000000000001","EntityType":"Person","Field":"name","Decision":"Replace"}
             ]
             """;
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json), TestContext.CancellationToken);
-        var body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1", BuildBulkDecideForm(json), TestContext.CancellationToken);
+        BulkDecideResponse? body = await response.Content.ReadFromJsonAsync<BulkDecideResponse>(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.HasCount(1, body!.Errors, "The malformed row must be reported as an error");
@@ -505,18 +505,18 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task BulkDecide_CsvFormat_ParsesRowsAndCallsService()
     {
-        var actionId = Guid.NewGuid();
-        var fake = new FakeImportActionService
+        Guid actionId = Guid.NewGuid();
+        FakeImportActionService fake = new()
         {
             ReturnBulkDecideResponse = new BulkDecideResponse { RowsProcessed = 1, ActionsDecided = 1 },
         };
-        using var factory = CreateFactory(fake);
-        using var client  = CreateAuthorizedClient(factory);
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = CreateAuthorizedClient(factory);
 
-        var csv = "ActionId,EntityId,EntityType,Field,ExistingValue,IncomingValue,Decision,CustomValue,MarkCompletenessAs\r\n" +
+        string csv = "ActionId,EntityId,EntityType,Field,ExistingValue,IncomingValue,Decision,CustomValue,MarkCompletenessAs\r\n" +
                   $"{actionId},e0000001-0000-4000-8000-000000000001,Person,name,Old Name,New Name,Replace,,\r\n";
 
-        var response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1&format=csv", BuildBulkDecideForm(csv), TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/bulk-decide?batchId=BATCH-1&format=csv", BuildBulkDecideForm(csv), TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsNotNull(fake.LastBulkDecideRows);
@@ -530,10 +530,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DecideAction_NoKey_Returns401()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -541,15 +541,15 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DecideAction_CorrectKey_Returns204AndForwardsRequest()
     {
-        var fake = new FakeImportActionService();
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var actionId = Guid.NewGuid();
-        var request = new ConflictDecisionRequest { QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace } };
+        Guid actionId = Guid.NewGuid();
+        ConflictDecisionRequest request = new() { QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace } };
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{actionId}/decide", request, cancellationToken: TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/import/actions/{actionId}/decide", request, cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
         Assert.AreEqual(actionId, fake.LastDecidedActionId);
@@ -566,19 +566,19 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DecideAction_WithMarkCompletenessAs_DeserializesAndForwards()
     {
-        var fake = new FakeImportActionService();
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var actionId = Guid.NewGuid();
-        var request = new ConflictDecisionRequest
+        Guid actionId = Guid.NewGuid();
+        ConflictDecisionRequest request = new()
         {
             SourceTitle = new FieldDecision { Choice = FieldResolutionChoice.Replace },
             MarkCompletenessAs = CompletenessStatus.Complete,
         };
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{actionId}/decide", request, cancellationToken: TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/import/actions/{actionId}/decide", request, cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
         Assert.AreEqual(CompletenessStatus.Complete, fake.LastDecisionRequest!.MarkCompletenessAs);
@@ -587,12 +587,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DecideAction_UnknownId_Returns404()
     {
-        var fake = new FakeImportActionService { ThrowOnDecide = new ImportActionNotFoundException(Guid.NewGuid()) };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { DecideResult = ImportActionDecideResult.NotFound };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -600,13 +600,13 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DecideAction_AmbiguousFieldUnresolved_Returns422WithFieldNames()
     {
-        var fake = new FakeImportActionService { ThrowOnDecide = new UnresolvedFieldConflictException(["genres", "source"]) };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { DecideResult = id => ImportActionDecideResult.Unresolved(id, ["genres", "source"]) };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
-        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
+        string body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Contains("genres", body);
@@ -616,12 +616,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DecideAction_AlreadyResolved_Returns422()
     {
-        var fake = new FakeImportActionService { ThrowOnDecide = new ImportActionStateException(Guid.NewGuid(), "Applied") };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { DecideResult = id => ImportActionDecideResult.AlreadyResolved(id, "Applied") };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -629,13 +629,13 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DecideAction_NotDecidable_Returns422()
     {
-        var fake = new FakeImportActionService { ThrowOnDecide = new ImportActionNotDecidableException(Guid.NewGuid(), "Source") };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { DecideResult = id => ImportActionDecideResult.NotDecidable(id, "Source") };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
-        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
+        string body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Contains("Source", body);
@@ -646,10 +646,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task UndoAction_NoKey_Returns401()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.PostAsync($"/api/v1/import/actions/{Guid.NewGuid()}/undo", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync($"/api/v1/import/actions/{Guid.NewGuid()}/undo", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -657,13 +657,13 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task UndoAction_CorrectKey_Returns204()
     {
-        var fake = new FakeImportActionService();
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var actionId = Guid.NewGuid();
-        var response = await client.PostAsync($"/api/v1/import/actions/{actionId}/undo", null, TestContext.CancellationToken);
+        Guid actionId = Guid.NewGuid();
+        HttpResponseMessage response = await client.PostAsync($"/api/v1/import/actions/{actionId}/undo", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
         Assert.AreEqual(actionId, fake.LastUndoneActionId);
@@ -672,12 +672,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task UndoAction_NotDecided_Returns422()
     {
-        var fake = new FakeImportActionService { ThrowOnUndo = new ImportActionStateException(Guid.NewGuid(), "Pending") };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { ThrowOnUndo = new ImportActionStateException(Guid.NewGuid(), "Pending") };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync($"/api/v1/import/actions/{Guid.NewGuid()}/undo", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync($"/api/v1/import/actions/{Guid.NewGuid()}/undo", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -687,10 +687,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ApplyBatch_NoKey_Returns401()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -698,12 +698,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ApplyBatch_MissingBatchId_Returns422NotGenericNumericFallback()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply", null, TestContext.CancellationToken);
-        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/apply", null, TestContext.CancellationToken);
+        string body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.DoesNotContain("Numeric parameters", body, "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
@@ -712,12 +712,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ApplyBatch_EveryActionDecided_Returns200()
     {
-        var fake = new FakeImportActionService { ReturnApplyResult = null };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { ReturnApplyResult = null };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("BATCH-1", fake.LastAppliedBatchId);
@@ -728,12 +728,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ApplyBatch_PurgeOnSuccessTrue_ForwardsTrueToService()
     {
-        var fake = new FakeImportActionService { ReturnApplyResult = null };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { ReturnApplyResult = null };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1&purgeOnSuccess=true", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1&purgeOnSuccess=true", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsTrue(fake.LastApplyPurgeOnSuccess);
@@ -742,12 +742,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ApplyBatch_PurgeOnSuccessOmitted_ForwardsFalseToService()
     {
-        var fake = new FakeImportActionService { ReturnApplyResult = null };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { ReturnApplyResult = null };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsFalse(fake.LastApplyPurgeOnSuccess, "must default to false, not purge unless the caller explicitly opts in");
@@ -756,17 +756,17 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ApplyBatch_PurgeOnSuccessTrue_BatchStillPending_DoesNotAffect422Outcome()
     {
-        var pendingId = Guid.NewGuid();
-        var fake = new FakeImportActionService
+        Guid pendingId = Guid.NewGuid();
+        FakeImportActionService fake = new()
         {
             ReturnApplyResult = new ImportActionBatchStatusResponse { BatchId = "BATCH-1", PendingActionIds = [pendingId] }
         };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1&purgeOnSuccess=true", null, TestContext.CancellationToken);
-        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1&purgeOnSuccess=true", null, TestContext.CancellationToken);
+        string body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Contains(pendingId.ToString(), body);
@@ -775,17 +775,17 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ApplyBatch_SomeActionsStillPending_Returns422WithPendingIds()
     {
-        var pendingId = Guid.NewGuid();
-        var fake = new FakeImportActionService
+        Guid pendingId = Guid.NewGuid();
+        FakeImportActionService fake = new()
         {
             ReturnApplyResult = new ImportActionBatchStatusResponse { BatchId = "BATCH-1", PendingActionIds = [pendingId] }
         };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
-        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/apply?batchId=BATCH-1", null, TestContext.CancellationToken);
+        string body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Contains(pendingId.ToString(), body);
@@ -796,10 +796,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DiscardBatch_NoKey_Returns401()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -807,12 +807,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DiscardBatch_MissingBatchId_Returns422NotGenericNumericFallback()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/discard", null, TestContext.CancellationToken);
-        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/discard", null, TestContext.CancellationToken);
+        string body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.DoesNotContain("Numeric parameters", body, "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
@@ -821,12 +821,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DiscardBatch_CorrectKey_Returns204()
     {
-        var fake = new FakeImportActionService();
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
         Assert.AreEqual("BATCH-1", fake.LastDiscardedBatchId);
@@ -835,12 +835,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DiscardBatch_InvalidState_Returns422()
     {
-        var fake = new FakeImportActionService { ThrowOnDiscard = new ImportBatchStateException("BATCH-1", "has already been applied and cannot be discarded.") };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { ThrowOnDiscard = new ImportBatchStateException("BATCH-1", "has already been applied and cannot be discarded.") };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/discard?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
@@ -850,10 +850,10 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ReverseActions_NoApiKey_Returns401()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -861,12 +861,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ReverseActions_MissingBatchId_Returns422NotGenericNumericFallback()
     {
-        using var factory = CreateFactory();
-        using var client  = factory.CreateClient();
+        using WebApplicationFactory<Program> factory = CreateFactory();
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse", null, TestContext.CancellationToken);
-        var body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/reverse", null, TestContext.CancellationToken);
+        string body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.DoesNotContain("Numeric parameters", body, "must not fall through to the generic BadHttpRequestException safety-net message — batchId is not numeric");
@@ -875,12 +875,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ReverseActions_CorrectKey_Returns200()
     {
-        var fake = new FakeImportActionService();
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("BATCH-1", fake.LastReversedBatchId);
@@ -893,12 +893,12 @@ public class ImportActionEndpointsTests
         // The endpoint passes batchId straight through as a string — case-insensitive matching is
         // the service/coordinator's own responsibility (already covered at that layer). This proves
         // the endpoint itself does not mangle or reject a lowercase batchId before it gets there.
-        var fake = new FakeImportActionService();
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=batch-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=batch-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.AreEqual("batch-1", fake.LastReversedBatchId);
@@ -907,12 +907,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ReverseActions_Preview_PassesPreviewTrueAndReturns200()
     {
-        var fake = new FakeImportActionService();
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new();
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1&preview=true", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1&preview=true", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         Assert.IsTrue(fake.LastReversePreview);
@@ -921,12 +921,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ReverseActions_UnknownOrAlreadyReversedBatchId_Returns404()
     {
-        var fake = new FakeImportActionService { ThrowOnReverse = new ImportBatchNotFoundException(Guid.NewGuid()) };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { ThrowOnReverse = new ImportBatchNotFoundException(Guid.NewGuid()) };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -934,12 +934,12 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task ReverseActions_EmptyOrNotApplied_Returns422()
     {
-        var fake = new FakeImportActionService { ThrowOnReverse = new ImportBatchStateException("BATCH-1", "has no actions and cannot be reversed.") };
-        using var factory = CreateFactory(fake);
-        using var client  = factory.CreateClient();
+        FakeImportActionService fake = new() { ThrowOnReverse = new ImportBatchStateException("BATCH-1", "has no actions and cannot be reversed.") };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
 
-        var response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
+        HttpResponseMessage response = await client.PostAsync("/api/v1/import/actions/reverse?batchId=BATCH-1", null, TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
