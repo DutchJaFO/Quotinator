@@ -74,7 +74,7 @@ public sealed class SqliteImportActionService(
         PagedItems<ImportActionEntity> result     = await _actionReader.GetPagedAsync(batchId, status, entityType, page, pageSize);
         Dictionary<string, IReadOnlyList<ImportActionEntity>> batchCache = [];
 
-        List<ImportActionSummaryResponse> items = new List<ImportActionSummaryResponse>(result.Items.Count);
+        List<ImportActionSummaryResponse> items = new(result.Items.Count);
         foreach (ImportActionEntity action in result.Items)
             items.Add(await ToSummaryAsync(action, batchCache));
 
@@ -206,7 +206,7 @@ public sealed class SqliteImportActionService(
     }
 
     /// <inheritdoc/>
-    public async Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
+    public async Task<ImportActionDecideResult> DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
     {
         ImportActionEntity action = await _actionReader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
 
@@ -221,14 +221,13 @@ public sealed class SqliteImportActionService(
 
             FieldMergeResult sourceResult = FieldMergeResolver.ResolveWithDecisions(existingSourceFields, incomingSourceFields, sourceDecisions);
 
-            SourceActionPayloadDto resolvedSourcePayload = new SourceActionPayloadDto(
+            SourceActionPayloadDto resolvedSourcePayload = new(
                 (string)sourceResult.MergedFields["title"]!,
                 (string)sourceResult.MergedFields["type"]!,
                 (string?)sourceResult.MergedFields["date"],
                 (string?)sourceResult.MergedFields["seriesId"]);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSourcePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(sourceDecisions));
-            return;
+            return await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSourcePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(sourceDecisions));
         }
 
         if (action.EntityType == ImportActionEntityTypes.StageDirection && action.ActionType.Parsed == ImportActionKind.Modify)
@@ -242,13 +241,12 @@ public sealed class SqliteImportActionService(
 
             FieldMergeResult stageDirectionResult = FieldMergeResolver.ResolveWithDecisions(existingStageDirectionFields, incomingStageDirectionFields, stageDirectionDecisions);
 
-            StageDirectionActionPayloadDto resolvedStageDirectionPayload = new StageDirectionActionPayloadDto(
+            StageDirectionActionPayloadDto resolvedStageDirectionPayload = new(
                 (string)stageDirectionResult.MergedFields["text"]!,
                 (string?)stageDirectionResult.MergedFields["imageUrl"],
                 existingStageDirectionPayload.Translations);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedStageDirectionPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(stageDirectionDecisions));
-            return;
+            return await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedStageDirectionPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(stageDirectionDecisions));
         }
 
         if (action.EntityType == ImportActionEntityTypes.SoundCue && action.ActionType.Parsed == ImportActionKind.Modify)
@@ -262,14 +260,13 @@ public sealed class SqliteImportActionService(
 
             FieldMergeResult soundCueResult = FieldMergeResolver.ResolveWithDecisions(existingSoundCueFields, incomingSoundCueFields, soundCueDecisions);
 
-            SoundCueActionPayloadDto resolvedSoundCuePayload = new SoundCueActionPayloadDto(
+            SoundCueActionPayloadDto resolvedSoundCuePayload = new(
                 (string)soundCueResult.MergedFields["text"]!,
                 (string?)soundCueResult.MergedFields["soundFileUrl"],
                 (string?)soundCueResult.MergedFields["imageUrl"],
                 existingSoundCuePayload.Translations);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSoundCuePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(soundCueDecisions));
-            return;
+            return await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSoundCuePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(soundCueDecisions));
         }
 
         if (action.EntityType == ImportActionEntityTypes.Conversation && action.ActionType.Parsed == ImportActionKind.Modify)
@@ -277,18 +274,17 @@ public sealed class SqliteImportActionService(
             ConversationActionPayloadDto existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
             ConversationActionPayloadDto incomingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
 
-            Dictionary<string, object?> existingConversationFields = new Dictionary<string, object?> { ["description"] = existingConversationPayload.Description };
-            Dictionary<string, object?> incomingConversationFields = new Dictionary<string, object?> { ["description"] = incomingConversationPayload.Description };
+            Dictionary<string, object?> existingConversationFields = new() { ["description"] = existingConversationPayload.Description };
+            Dictionary<string, object?> incomingConversationFields = new() { ["description"] = incomingConversationPayload.Description };
             Dictionary<string, FieldMergeDecision> conversationDecisions      = [];
             if (request.ConversationDescription is { } cd)
                 conversationDecisions["description"] = new FieldMergeDecision(cd.Choice, cd.Value);
 
             FieldMergeResult conversationResult = FieldMergeResolver.ResolveWithDecisions(existingConversationFields, incomingConversationFields, conversationDecisions);
 
-            ConversationActionPayloadDto resolvedConversationPayload = new ConversationActionPayloadDto((string?)conversationResult.MergedFields["description"], []);
+            ConversationActionPayloadDto resolvedConversationPayload = new((string?)conversationResult.MergedFields["description"], []);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedConversationPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(conversationDecisions));
-            return;
+            return await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedConversationPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(conversationDecisions));
         }
 
         if (action.EntityType == ImportActionEntityTypes.Person && action.ActionType.Parsed == ImportActionKind.Modify)
@@ -302,13 +298,12 @@ public sealed class SqliteImportActionService(
 
             FieldMergeResult personResult = FieldMergeResolver.ResolveWithDecisions(existingPersonFields, incomingPersonFields, personDecisions);
 
-            PersonActionPayloadDto resolvedPersonPayload = new PersonActionPayloadDto(
+            PersonActionPayloadDto resolvedPersonPayload = new(
                 (string)personResult.MergedFields["name"]!,
                 (string?)personResult.MergedFields["dateOfBirth"],
                 (string?)personResult.MergedFields["dateOfDeath"]);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPersonPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(personDecisions));
-            return;
+            return await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPersonPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(personDecisions));
         }
 
         if (action.EntityType == ImportActionEntityTypes.Character && action.ActionType.Parsed == ImportActionKind.Modify)
@@ -325,14 +320,13 @@ public sealed class SqliteImportActionService(
             // #175: SourceId/SourceTitle/SourceType are never Modify-able (ADR 013 Decision 9) — the
             // resolved payload carries the existing row's own values through unchanged, only Name
             // comes from FieldMergeResolver's result.
-            CharacterActionPayloadDto resolvedCharacterPayload = new CharacterActionPayloadDto(
+            CharacterActionPayloadDto resolvedCharacterPayload = new(
                 existingCharacterPayload.SourceId,
                 (string)characterResult.MergedFields["name"]!,
                 existingCharacterPayload.SourceTitle,
                 existingCharacterPayload.SourceType);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedCharacterPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(characterDecisions));
-            return;
+            return await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedCharacterPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(characterDecisions));
         }
 
         if (action.EntityType == ImportActionEntityTypes.Series && action.ActionType.Parsed == ImportActionKind.Modify)
@@ -349,13 +343,12 @@ public sealed class SqliteImportActionService(
             // UniverseName only carries through when the resolved universeId is the incoming one — see
             // the matching comment in ImportActionPlanner.PlanSeriesAsync's merge branch.
             string? resolvedSeriesUniverseId = (string?)seriesResult.MergedFields["universeId"];
-            SeriesActionPayloadDto resolvedSeriesPayload = new SeriesActionPayloadDto(
+            SeriesActionPayloadDto resolvedSeriesPayload = new(
                 (string)seriesResult.MergedFields["name"]!,
                 resolvedSeriesUniverseId,
                 resolvedSeriesUniverseId == incomingSeriesPayload.UniverseId ? incomingSeriesPayload.UniverseName : null);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSeriesPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(seriesDecisions));
-            return;
+            return await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedSeriesPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(seriesDecisions));
         }
 
         if (action.EntityType == ImportActionEntityTypes.Universe && action.ActionType.Parsed == ImportActionKind.Modify)
@@ -369,10 +362,9 @@ public sealed class SqliteImportActionService(
 
             FieldMergeResult universeResult = FieldMergeResolver.ResolveWithDecisions(existingUniverseFields, incomingUniverseFields, universeDecisions);
 
-            UniverseActionPayloadDto resolvedUniversePayload = new UniverseActionPayloadDto((string)universeResult.MergedFields["name"]!);
+            UniverseActionPayloadDto resolvedUniversePayload = new((string)universeResult.MergedFields["name"]!);
 
-            await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedUniversePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(universeDecisions));
-            return;
+            return await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedUniversePayload), request.MarkCompletenessAs, JsonSerializer.Serialize(universeDecisions));
         }
 
         if (action.EntityType != ImportActionEntityTypes.Quote)
@@ -391,7 +383,7 @@ public sealed class SqliteImportActionService(
 
         // Store the fully resolved payload (not the raw decision request) — apply never needs to
         // re-run FieldMergeResolver or know about policies/decisions at all.
-        QuoteActionPayloadDto resolvedPayload = new QuoteActionPayloadDto
+        QuoteActionPayloadDto resolvedPayload = new()
         {
             Fields      = QuoteFieldMerge.ToDto(result.MergedFields),
             SourceId    = incomingPayload.SourceId,
@@ -399,7 +391,7 @@ public sealed class SqliteImportActionService(
             PersonId    = incomingPayload.PersonId,
         };
 
-        await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(decisions));
+        return await _coordinator.DecideAsync(actionId, JsonSerializer.Serialize(resolvedPayload), request.MarkCompletenessAs, JsonSerializer.Serialize(decisions));
     }
 
     /// <inheritdoc/>
@@ -653,12 +645,12 @@ public sealed class SqliteImportActionService(
     {
         SqliteConnection sqliteConnection  = (SqliteConnection)connection;
         SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction;
-        SqliteUnitOfWork uow       = new SqliteUnitOfWork(connection, transaction);
+        SqliteUnitOfWork uow       = new(connection, transaction);
         string now       = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
         Guid batchGuid = Guid.Parse(actions[0].BatchId);
-        QuoteSeedWriter.ChangeLogContext changeLog = new QuoteSeedWriter.ChangeLogContext(_changeLogWriter, initiatedByType, actions[0].BatchId);
+        QuoteSeedWriter.ChangeLogContext changeLog = new(_changeLogWriter, initiatedByType, actions[0].BatchId);
 
-        Dictionary<string, int> order = new Dictionary<string, int>
+        Dictionary<string, int> order = new()
         {
             [ImportActionEntityTypes.Quote]        = 0,
             [ImportActionEntityTypes.Conversation] = 0,
@@ -976,7 +968,7 @@ public sealed class SqliteImportActionService(
         SqliteTransaction sqliteTransaction = (SqliteTransaction)transaction;
         string now       = DateTime.UtcNow.ToString(SafeDateValue.TimestampFormat);
         Guid batchId   = Guid.Parse(action.BatchId);
-        QuoteSeedWriter.ChangeLogContext changeLog = new QuoteSeedWriter.ChangeLogContext(_changeLogWriter, initiatedByType, action.BatchId);
+        QuoteSeedWriter.ChangeLogContext changeLog = new(_changeLogWriter, initiatedByType, action.BatchId);
 
         switch (action.EntityType)
         {
@@ -1185,8 +1177,8 @@ public sealed class SqliteImportActionService(
                     string? json  = isAdd ? action.IncomingValue : action.MergedFields;
                     QuoteActionPayloadDto payload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(json!)
                               ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload.");
-                    SourceQuoteDto resolved = new SourceQuoteDto
-                {
+                    SourceQuoteDto resolved = new()
+                    {
                     Id               = action.EntityId,
                     QuoteText        = payload.Fields.QuoteText!,
                     OriginalLanguage = payload.Fields.OriginalLanguage!,
@@ -1576,30 +1568,38 @@ public sealed class SqliteImportActionService(
     }
 
     private static Dictionary<string, object?> ToFieldMap(SourceActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId };
+        new()
+        { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId };
 
     private static Dictionary<string, object?> ToFieldMap(CharacterActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["name"] = payload.Name, ["sourceId"] = payload.SourceId };
+        new()
+        { ["name"] = payload.Name, ["sourceId"] = payload.SourceId };
 
     private static Dictionary<string, object?> ToFieldMap(PersonActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["name"] = payload.Name, ["dateOfBirth"] = payload.DateOfBirth, ["dateOfDeath"] = payload.DateOfDeath };
+        new()
+        { ["name"] = payload.Name, ["dateOfBirth"] = payload.DateOfBirth, ["dateOfDeath"] = payload.DateOfDeath };
 
     private static Dictionary<string, object?> ToFieldMap(StageDirectionActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["text"] = payload.Text, ["imageUrl"] = payload.ImageUrl };
+        new()
+        { ["text"] = payload.Text, ["imageUrl"] = payload.ImageUrl };
 
     private static Dictionary<string, object?> ToFieldMap(SoundCueActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["text"] = payload.Text, ["soundFileUrl"] = payload.SoundFileUrl, ["imageUrl"] = payload.ImageUrl };
+        new()
+        { ["text"] = payload.Text, ["soundFileUrl"] = payload.SoundFileUrl, ["imageUrl"] = payload.ImageUrl };
 
     private static Dictionary<string, object?> ToFieldMap(ConversationActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["description"] = payload.Description, ["lineCount"] = payload.Lines.Count };
+        new()
+        { ["description"] = payload.Description, ["lineCount"] = payload.Lines.Count };
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload — must stay in sync (#163).</summary>
     private static Dictionary<string, object?> ToFieldMap(SeriesActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["name"] = payload.Name, ["universeId"] = payload.UniverseId };
+        new()
+        { ["name"] = payload.Name, ["universeId"] = payload.UniverseId };
 
     /// <summary>Same key name as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload — must stay in sync (#163).</summary>
     private static Dictionary<string, object?> ToFieldMap(UniverseActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["name"] = payload.Name };
+        new()
+        { ["name"] = payload.Name };
 
     private static IReadOnlyList<string> ComputeAmbiguousFields(ImportActionEntity action)
     {

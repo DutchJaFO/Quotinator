@@ -1,5 +1,6 @@
 using Quotinator.Core.Models;
 using Quotinator.Data.Enums;
+using Quotinator.Data.Import;
 using Quotinator.Data.Models;
 using Quotinator.Core.Services;
 
@@ -59,12 +60,12 @@ internal sealed class FakeImportActionService : IImportActionService
         return Task.FromResult(ReturnBulkDecideResponse ?? new BulkDecideResponse { RowsProcessed = rows.Count, ActionsDecided = 0 });
     }
 
-    public Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
+    public Task<ImportActionDecideResult> DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default)
     {
         LastDecidedActionId = actionId;
         LastDecisionRequest = request;
         if (ThrowOnDecide is not null) throw ThrowOnDecide;
-        return Task.CompletedTask;
+        return Task.FromResult(ImportActionDecideResult.Decided(actionId));
     }
 
     public Task UndoDecisionAsync(Guid actionId, CancellationToken cancellationToken = default)

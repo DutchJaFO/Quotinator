@@ -255,4 +255,11 @@ public static class FieldMergeResolver
 /// </param>
 public sealed record FieldMergeResult(
     IReadOnlyDictionary<string, object?> MergedFields,
-    IReadOnlyList<string> FieldsFromIncoming);
+    IReadOnlyList<string> FieldsFromIncoming)
+{
+    /// <summary>
+    /// Names of the fields that are genuinely ambiguous and had no decision — empty when every field
+    /// resolved. Non-empty means <see cref="MergedFields"/> is incomplete and must not be written.
+    /// </summary>
+    public IReadOnlyList<string> UnresolvedFields { get; init; } = [];
+}

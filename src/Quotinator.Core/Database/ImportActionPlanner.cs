@@ -55,7 +55,7 @@ internal static class ImportActionPlanner
         QuoteExclusionLookup? quoteExclusions = null)
     {
         List<ImportActionEntity> actions = [];
-        Dictionary<string, string> sourceIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> sourceIndex = new(StringComparer.OrdinalIgnoreCase);
         // #374: date joins a Source's natural key, so more than one row can now share (Title, Type).
         // sourceIndex above still maps a key to a single id, for every consumer that has never needed
         // more than one Source per title (PlanSourcesAsync's own sources[] declarations included) —
@@ -63,20 +63,20 @@ internal static class ImportActionPlanner
         // in this run so a second quote's differing date is never silently matched against the first
         // quote's not-yet-persisted row, and which variant ids have already had an action staged for
         // them this run so a repeat quote for an already-settled variant stages nothing further.
-        Dictionary<string, List<SourceVariant>> sourceVariantsByKey = new Dictionary<string, List<SourceVariant>>(StringComparer.OrdinalIgnoreCase);
-        HashSet<string> stagedSourceVariantIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, List<SourceVariant>> sourceVariantsByKey = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> stagedSourceVariantIds = new(StringComparer.OrdinalIgnoreCase);
         // #374: a quote is unique per Source. Two brand-new quote ids within this same batch can
         // collide on (QuoteText, SourceId) before either has reached the database — tracked here so the
         // second one is still caught, the same way stagedSourceVariantIds catches a same-batch Source
         // collision the database itself cannot yet see.
-        HashSet<string> stagedQuoteTextsBySource = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, string> characterIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, string> personIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, string> seriesIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, string> universeIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, string> seasonIndex = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        Dictionary<string, SourceQuoteDto> seenQuotes = new Dictionary<string, SourceQuoteDto>(StringComparer.Ordinal);
-        Dictionary<string, CompletenessStatus> seenQuoteStatus = new Dictionary<string, CompletenessStatus>(StringComparer.Ordinal);
+        HashSet<string> stagedQuoteTextsBySource = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> characterIndex = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> personIndex = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> seriesIndex = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> universeIndex = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> seasonIndex = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, SourceQuoteDto> seenQuotes = new(StringComparer.Ordinal);
+        Dictionary<string, CompletenessStatus> seenQuoteStatus = new(StringComparer.Ordinal);
         // #378: a Pending Add is never registered into seenQuotes (its resolution is provisional, not a
         // confirmed same-batch reference — see the comment at its own check below), so two in-file
         // occurrences of the same id that both need review (dateNeedsReview or a Keep/Replace rule
@@ -85,7 +85,7 @@ internal static class ImportActionPlanner
         // byte-identical raw occurrences both triggered review. Tracked here, separately from seenQuotes,
         // specifically so the second occurrence recognises the first's Pending Add within this same batch,
         // before either has reached a database `SelectHasUnresolvedActionById` could see.
-        HashSet<string> stagedPendingReviewAddIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> stagedPendingReviewAddIds = new(StringComparer.OrdinalIgnoreCase);
 
         string batchIdStr = batchId.ToCanonicalId();
         DateTime now = DateTime.UtcNow;
@@ -301,8 +301,7 @@ internal static class ImportActionPlanner
                             ? existingFieldsForEarlyRule?.GetValueOrDefault(field)
                             : rawFields[field];
 
-                    FieldMergeResult corrected = FieldMergeResolver.ResolveWithDecisions(
-                        blendedExisting, rawFields, earlyDecisions, QuoteFieldMerge.CaseSensitiveContentFields);
+                    FieldMergeResult corrected = ResolveEarlyRule(blendedExisting, rawFields, earlyDecisions);
                     q = QuoteFieldMerge.ApplyMergedFields(corrected.MergedFields, q);
                 }
             }
@@ -313,7 +312,7 @@ internal static class ImportActionPlanner
 
             if (existing is null)
             {
-                QuoteActionPayloadDto payload = new QuoteActionPayloadDto
+                QuoteActionPayloadDto payload = new()
                 {
                     Fields = QuoteFieldMerge.ToDto(q),
                     SourceId = sourceId,
@@ -664,6 +663,23 @@ internal static class ImportActionPlanner
     }
 
     /// <summary>
+    /// Resolves an early conflict rule against a quote's incoming fields. The caller builds
+    /// <paramref name="blendedExisting"/> so that every field without a decision holds the incoming value
+    /// on both sides, which leaves nothing for the resolver to report as unresolved — so an unresolved
+    /// field here means that construction is wrong, a programming error no caller can respond to
+    /// (ADR 022 rule 3).
+    /// </summary>
+    /// <param name="blendedExisting">The existing side: the stored value for each decided field, the incoming value for every other.</param>
+    /// <param name="rawFields">The incoming side.</param>
+    /// <param name="earlyDecisions">The rule's decision for each field it covers.</param>
+    /// <returns>The resolved fields.</returns>
+    internal static FieldMergeResult ResolveEarlyRule(
+        IReadOnlyDictionary<string, object?> blendedExisting,
+        IReadOnlyDictionary<string, object?> rawFields,
+        IReadOnlyDictionary<string, FieldMergeDecision> earlyDecisions) =>
+        FieldMergeResolver.ResolveWithDecisions(blendedExisting, rawFields, earlyDecisions, QuoteFieldMerge.CaseSensitiveContentFields);
+
+    /// <summary>
     /// #373: one action recording that an entity arrived and already matched what is stored.
     /// <para>
     /// Terminal by construction — <c>Applied</c>, with no <c>ExistingValue</c>, because there is
@@ -895,8 +911,8 @@ internal static class ImportActionPlanner
             {
                 if (row.Date is null && q.Date is not null)
                 {
-                    SourceActionPayloadDto existingPayload = new SourceActionPayloadDto(q.Source, typeStr, row.Date, row.SeriesId, row.SeasonId);
-                    SourceActionPayloadDto incomingPayload = new SourceActionPayloadDto(q.Source, typeStr, q.Date, row.SeriesId, row.SeasonId);
+                    SourceActionPayloadDto existingPayload = new(q.Source, typeStr, row.Date, row.SeriesId, row.SeasonId);
+                    SourceActionPayloadDto incomingPayload = new(q.Source, typeStr, q.Date, row.SeriesId, row.SeasonId);
                     HashSet<string> changedFields = ["date"];
                     CompletenessStatus currentStatus = row.CompletenessStatus.Parsed ?? CompletenessStatus.Incomplete;
                     bool wouldBlock = CompletenessGuard.ShouldBlock(currentStatus, changedFields);
@@ -1093,15 +1109,18 @@ internal static class ImportActionPlanner
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync, both feed the same decide-time <c>FieldMergeResolver</c> field-name vocabulary. <c>seriesId</c> added by #180.</summary>
     private static Dictionary<string, object?> ToFieldMap(SourceActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId, ["seasonId"] = payload.SeasonId };
+        new()
+        { ["title"] = payload.Title, ["type"] = payload.Type, ["date"] = payload.Date, ["seriesId"] = payload.SeriesId, ["seasonId"] = payload.SeasonId };
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#171).</summary>
     private static Dictionary<string, object?> ToFieldMap(StageDirectionActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["text"] = payload.Text, ["imageUrl"] = payload.ImageUrl };
+        new()
+        { ["text"] = payload.Text, ["imageUrl"] = payload.ImageUrl };
 
     /// <summary>Same key names as <see cref="Quotinator.Core.Services.SqliteImportActionService"/>'s own private overload — must stay in sync (#172).</summary>
     private static Dictionary<string, object?> ToFieldMap(SoundCueActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["text"] = payload.Text, ["soundFileUrl"] = payload.SoundFileUrl, ["imageUrl"] = payload.ImageUrl };
+        new()
+        { ["text"] = payload.Text, ["soundFileUrl"] = payload.SoundFileUrl, ["imageUrl"] = payload.ImageUrl };
 
     // ── #162: explicit Source planning ───────────────────────────────────────
     // Unlike ResolveSourceAsync (natural-key match only, never compares Date/Title/Type once
@@ -1189,8 +1208,8 @@ internal static class ImportActionPlanner
                 // change, under any policy. See OptionalExtensions.ResolveAgainst.
                 string? incomingDate = s.Date.ResolveAgainst(row.Date);
                 string? incomingSeriesId = resolvedSeriesId.ResolveAgainst(row.SeriesId);
-                SourceActionPayloadDto existingPayload = new SourceActionPayloadDto(row.Title, row.Type, row.Date, row.SeriesId, row.SeasonId);
-                SourceActionPayloadDto incomingPayload = new SourceActionPayloadDto(s.Title, typeStr, incomingDate, incomingSeriesId, resolvedSeasonId.ResolveAgainst(row.SeasonId));
+                SourceActionPayloadDto existingPayload = new(row.Title, row.Type, row.Date, row.SeriesId, row.SeasonId);
+                SourceActionPayloadDto incomingPayload = new(s.Title, typeStr, incomingDate, incomingSeriesId, resolvedSeasonId.ResolveAgainst(row.SeasonId));
                 Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
                 Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
@@ -1375,8 +1394,8 @@ internal static class ImportActionPlanner
                 // silently ignored regardless of what the file said.
                 string? keyIncomingDate = s.Date.ResolveAgainst(keyRow.Date);
                 string? keyIncomingSeriesId = resolvedSeriesId.ResolveAgainst(keyRow.SeriesId);
-                SourceActionPayloadDto keyExistingPayload = new SourceActionPayloadDto(s.Title, typeStr, keyRow.Date, keyRow.SeriesId, keyRow.SeasonId);
-                SourceActionPayloadDto keyIncomingPayload = new SourceActionPayloadDto(s.Title, typeStr, keyIncomingDate, keyIncomingSeriesId, resolvedSeasonId.ResolveAgainst(keyRow.SeasonId));
+                SourceActionPayloadDto keyExistingPayload = new(s.Title, typeStr, keyRow.Date, keyRow.SeriesId, keyRow.SeasonId);
+                SourceActionPayloadDto keyIncomingPayload = new(s.Title, typeStr, keyIncomingDate, keyIncomingSeriesId, resolvedSeasonId.ResolveAgainst(keyRow.SeasonId));
                 Dictionary<string, object?> keyExistingFields = ToFieldMap(keyExistingPayload);
                 Dictionary<string, object?> keyIncomingFields = ToFieldMap(keyIncomingPayload);
 
@@ -1608,8 +1627,8 @@ internal static class ImportActionPlanner
                 // never a change, under any policy.
                 string? incomingDob = p.DateOfBirth.ResolveAgainst(row.DateOfBirth);
                 string? incomingDod = p.DateOfDeath.ResolveAgainst(row.DateOfDeath);
-                PersonActionPayloadDto existingPayload = new PersonActionPayloadDto(row.Name, row.DateOfBirth, row.DateOfDeath);
-                PersonActionPayloadDto incomingPayload = new PersonActionPayloadDto(p.Name, incomingDob, incomingDod);
+                PersonActionPayloadDto existingPayload = new(row.Name, row.DateOfBirth, row.DateOfDeath);
+                PersonActionPayloadDto incomingPayload = new(p.Name, incomingDob, incomingDod);
                 Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
                 Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
@@ -1819,8 +1838,8 @@ internal static class ImportActionPlanner
             }
 
             (string Name, SafeValue<CompletenessStatus?> CompletenessStatus) row2 = existing!.Value;
-            CharacterActionPayloadDto existingPayload = new CharacterActionPayloadDto(resolvedSourceId, row2.Name, c.SourceTitle, sourceTypeStr);
-            CharacterActionPayloadDto incomingPayload = new CharacterActionPayloadDto(resolvedSourceId, c.Name, c.SourceTitle, sourceTypeStr);
+            CharacterActionPayloadDto existingPayload = new(resolvedSourceId, row2.Name, c.SourceTitle, sourceTypeStr);
+            CharacterActionPayloadDto incomingPayload = new(resolvedSourceId, c.Name, c.SourceTitle, sourceTypeStr);
             Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
             Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
@@ -1950,8 +1969,8 @@ internal static class ImportActionPlanner
             if (existing is { } row)
             {
                 string matchedId = resolvedId!;
-                UniverseActionPayloadDto existingPayload = new UniverseActionPayloadDto(row.Name);
-                UniverseActionPayloadDto incomingPayload = new UniverseActionPayloadDto(u.Name);
+                UniverseActionPayloadDto existingPayload = new(row.Name);
+                UniverseActionPayloadDto incomingPayload = new(u.Name);
                 Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
                 Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
@@ -2151,8 +2170,8 @@ internal static class ImportActionPlanner
                 // the same batch) only genuinely fires when the resolved UniverseId is the incoming one
                 // — the existing side's Universe row is already known to exist, so the insert there is
                 // always a safe no-op regardless of what name is passed.
-                SeriesActionPayloadDto existingPayload = new SeriesActionPayloadDto(row.Name, row.UniverseId);
-                SeriesActionPayloadDto incomingPayload = new SeriesActionPayloadDto(s.Name, incomingUniverseId, s.UniverseName);
+                SeriesActionPayloadDto existingPayload = new(row.Name, row.UniverseId);
+                SeriesActionPayloadDto incomingPayload = new(s.Name, incomingUniverseId, s.UniverseName);
                 Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
                 Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
@@ -2538,8 +2557,8 @@ internal static class ImportActionPlanner
                 Dictionary<string, SourceStageDirectionTranslation> emptyTranslations = [];
                 // #190: an absent ImageUrl resolves to the existing row's own value — never a change.
                 string? incomingImageUrl = sd.ImageUrl.ResolveAgainst(row.ImageUrl);
-                StageDirectionActionPayloadDto existingPayload = new StageDirectionActionPayloadDto(row.Text, row.ImageUrl, emptyTranslations);
-                StageDirectionActionPayloadDto incomingPayload = new StageDirectionActionPayloadDto(sd.Text, incomingImageUrl, emptyTranslations);
+                StageDirectionActionPayloadDto existingPayload = new(row.Text, row.ImageUrl, emptyTranslations);
+                StageDirectionActionPayloadDto incomingPayload = new(sd.Text, incomingImageUrl, emptyTranslations);
                 Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
                 Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
@@ -2651,8 +2670,8 @@ internal static class ImportActionPlanner
                 // #190: an absent SoundFileUrl/ImageUrl resolves to the existing row's own value — never a change.
                 string? incomingSoundFileUrl = sc.SoundFileUrl.ResolveAgainst(row.SoundFileUrl);
                 string? incomingImageUrl = sc.ImageUrl.ResolveAgainst(row.ImageUrl);
-                SoundCueActionPayloadDto existingPayload = new SoundCueActionPayloadDto(row.Text, row.SoundFileUrl, row.ImageUrl, emptyTranslations);
-                SoundCueActionPayloadDto incomingPayload = new SoundCueActionPayloadDto(sc.Text, incomingSoundFileUrl, incomingImageUrl, emptyTranslations);
+                SoundCueActionPayloadDto existingPayload = new(row.Text, row.SoundFileUrl, row.ImageUrl, emptyTranslations);
+                SoundCueActionPayloadDto incomingPayload = new(sc.Text, incomingSoundFileUrl, incomingImageUrl, emptyTranslations);
                 Dictionary<string, object?> existingFields = ToFieldMap(existingPayload);
                 Dictionary<string, object?> incomingFields = ToFieldMap(incomingPayload);
 
@@ -2753,7 +2772,8 @@ internal static class ImportActionPlanner
     /// remark — will therefore apply first too.
     /// </summary>
     private static Dictionary<string, object?> ToConversationFieldMap(ConversationActionPayloadDto payload) =>
-        new Dictionary<string, object?> { ["description"] = payload.Description };
+        new()
+        { ["description"] = payload.Description };
 
     private static async Task PlanConversationsAsync(
         SqliteConnection connection, IReadOnlyList<SourceConversationDto> conversations, string batchId,
@@ -2774,8 +2794,8 @@ internal static class ImportActionPlanner
             {
                 // #190: an absent Description resolves to the existing row's own value — never a change.
                 string? incomingDescription = c.Description.ResolveAgainst(row.Description);
-                ConversationActionPayloadDto existingPayload = new ConversationActionPayloadDto(row.Description, []);
-                ConversationActionPayloadDto incomingPayload = new ConversationActionPayloadDto(incomingDescription, []);
+                ConversationActionPayloadDto existingPayload = new(row.Description, []);
+                ConversationActionPayloadDto incomingPayload = new(incomingDescription, []);
                 Dictionary<string, object?> existingFields = ToConversationFieldMap(existingPayload);
                 Dictionary<string, object?> incomingFields = ToConversationFieldMap(incomingPayload);
 

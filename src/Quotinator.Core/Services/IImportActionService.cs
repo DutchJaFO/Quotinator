@@ -71,7 +71,8 @@ public interface IImportActionService
     /// before anything is stored. Throws <see cref="ImportActionNotDecidableException"/> for any
     /// action whose entity type/<c>ActionType</c> combination isn't currently decidable.
     /// </summary>
-    Task DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default);
+    /// <returns>What staging the decision produced.</returns>
+    Task<ImportActionDecideResult> DecideAsync(Guid actionId, ConflictDecisionRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>Reverts a staged decision back to pending.</summary>
     Task UndoDecisionAsync(Guid actionId, CancellationToken cancellationToken = default);

@@ -48,7 +48,8 @@ public interface IImportActionCoordinator
     /// <c>null</c>, on a repeated decide call for the same action.
     /// <exception cref="ImportActionNotFoundException"><paramref name="actionId"/> does not exist.</exception>
     /// <exception cref="ImportActionStateException">The action is already <see cref="ImportActionStatus.Applied"/> or <see cref="ImportActionStatus.Discarded"/>.</exception>
-    Task DecideAsync(Guid actionId, string decisionsJson, CompletenessStatus? markCompletenessAs = null, string? originalDecisionJson = null, IDbConnection? connection = null, IDbTransaction? transaction = null);
+    /// <returns>What staging the decision produced.</returns>
+    Task<ImportActionDecideResult> DecideAsync(Guid actionId, string decisionsJson, CompletenessStatus? markCompletenessAs = null, string? originalDecisionJson = null, IDbConnection? connection = null, IDbTransaction? transaction = null);
 
     /// <summary>
     /// Reverts a staged decision back to <see cref="ImportActionStatus.Pending"/> and clears the

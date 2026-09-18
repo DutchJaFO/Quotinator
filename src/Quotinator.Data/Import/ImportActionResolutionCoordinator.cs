@@ -35,7 +35,7 @@ public sealed class ImportActionResolutionCoordinator(IImportActionReader reader
     }
 
     /// <inheritdoc/>
-    public async Task DecideAsync(Guid actionId, string decisionsJson, CompletenessStatus? markCompletenessAs = null, string? originalDecisionJson = null, IDbConnection? connection = null, IDbTransaction? transaction = null)
+    public async Task<ImportActionDecideResult> DecideAsync(Guid actionId, string decisionsJson, CompletenessStatus? markCompletenessAs = null, string? originalDecisionJson = null, IDbConnection? connection = null, IDbTransaction? transaction = null)
     {
         ImportActionEntity action = await _reader.GetByIdAsync(actionId) ?? throw new ImportActionNotFoundException(actionId);
         if (action.Status.Parsed == ImportActionStatus.Applied || action.Status.Parsed == ImportActionStatus.Discarded)
@@ -44,12 +44,13 @@ public sealed class ImportActionResolutionCoordinator(IImportActionReader reader
         if (connection is not null)
         {
             await _writer.MarkDecidedAsync(actionId, decisionsJson, markCompletenessAs, originalDecisionJson, connection, transaction);
-            return;
+            return ImportActionDecideResult.Decided(actionId);
         }
 
         using IDbConnection conn = _factory.CreateConnection();
         conn.Open();
         await _writer.MarkDecidedAsync(actionId, decisionsJson, markCompletenessAs, originalDecisionJson, conn);
+        return ImportActionDecideResult.Decided(actionId);
     }
 
     /// <inheritdoc/>

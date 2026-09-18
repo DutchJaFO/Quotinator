@@ -1,6 +1,6 @@
 # #370 — An expected import conflict is signalled by throwing, once per conflicted row per render
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 3)
 **GitHub issue:** #370
 **Tiers required:** T1, T2
 **Depends on:** #397
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Execute the steps in order; step 2 is next.
+Execute the steps in order; step 3 is next.
 
 ---
 
@@ -84,7 +84,12 @@ implementation.
 
 ### 2. Add the signatures only
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — every shape below in place, behaviour unchanged: build 0 warnings, 0 errors, and
+`Quotinator.Data.Tests` (1,375), `Quotinator.Core.Tests` (1,685) and `Quotinator.Api.Tests` (950) all
+pass. `ResolveEarlyRule` takes the blended existing map already built, so a test can hand it an
+inconsistent one — the construction itself stays in `PlanAsync`. Adding `ImportActionPlanner.cs` and
+`SqliteImportActionService.cs` to the IDE0090 list surfaced their target-typed `new` warnings, cleared by
+`dotnet format` in one pass.
 
 Per `docs/testing-policy.md`'s *Red first means signatures first* — shapes only, no behaviour:
 
@@ -95,7 +100,7 @@ Per `docs/testing-policy.md`'s *Red first means signatures first* — shapes onl
 - `ImportActionDecideResult` in `Quotinator.Data.Import` (ADR 016's `Result`): the outcome, the
   unresolved field names, the action's entity type and its current status, and `Describe()` — the text
   a bulk-decide row error carries for a non-`Decided` outcome.
-- `IImportActionResolutionCoordinator.DecideAsync` and `IImportActionService.DecideAsync` return
+- `IImportActionCoordinator.DecideAsync` and `IImportActionService.DecideAsync` return
   `Task<ImportActionDecideResult>`; their bodies are unchanged apart from returning `Decided`.
 - `ImportActionPlanner.ResolveEarlyRule` — the early-rule resolution moved into an `internal static`
   method taking its inputs, body unchanged, so step 6's invariant can be proven directly.
