@@ -318,6 +318,9 @@ the drift listing — which are the observations this test exists for.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-14
-Remove-Item .claude/temp/inspect-181.db, .claude/temp/inspect-181.db-wal, `
-            .claude/temp/inspect-181.db-shm -ErrorAction SilentlyContinue
+Get-ChildItem .claude/temp -Filter 'inspect-181.db*' | Remove-Item
+Get-ChildItem .claude/temp -Filter 'inspect-181.db*'
 ```
+
+**Expected:** the second listing is empty. The copy gains `-wal`/`-shm` sidecars when DbInspector opens
+it in step 4, whether or not the `docker cp` of those files found any.
