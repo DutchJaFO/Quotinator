@@ -1,6 +1,6 @@
 # #409 — A quote held for review over a case-only text change shows nothing to decide, and is decided without asking
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 7)
 **GitHub issue:** #409
 **Tiers required:** T1, T2
 **Depends on:** #370
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 6: the T2 pass.
+Step 7: the developer starts the application in Visual Studio.
 
 ---
 
@@ -79,8 +79,9 @@ incoming already stored the incoming casing. It stays as the positive half of ro
 | 8 | `QuoteFieldMerge.ResolveWithDecisions` reports nothing unresolved |
 | 9 | `CLAUDE.md` does not contain the text |
 
-Document 29 against a canary image of `871061d8`: step 3 printed `caseOnly= control=quoteText`, and
-step 4's empty decide answered `204`. Container and image removed.
+*A case-only change is shown for review, and needs a decision*, against a canary image of `871061d8`:
+step 3 printed `caseOnly= control=quoteText`, and step 4's empty decide answered `204`. Container and
+image removed.
 
 ### 3. Pass the set, and route every quote comparison through `QuoteFieldMerge`
 
@@ -110,11 +111,48 @@ both 0 warnings, 0 errors.
 
 ### 6. T2 pass
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-09-19, against an image built from `72e5d5e8`.
+
+| Document | Result |
+|---|---|
+| *A case-only change is shown for review, and needs a decision* | Pass — `caseOnly=quoteText control=quoteText`, empty decide `422` naming `quoteText`, taking incoming `status=Decided quoteText=SURELY YOU CANNOT BE SERIOUS.`; 0 exceptions |
+| *Baseline — health, version, random and search* | Pass, 0 exceptions |
+| *The pagination contract holds live on every paginated endpoint* | Pass, 0 exceptions |
+| *Reset wipes the entire database and does not reseed* | Pass |
+| *Kestrel serves a wait page during initialisation* | Pass, 0 exceptions |
+| *Notifications list, dismiss, render, and drive their action* | Pass, every step, driven in a browser |
+| *The changelog is served from its own on-disk database* | Pass — step 5 read after the import line appears; see below |
+| *The staged review → decide → apply workflow* | Pass, 0 exceptions |
+| *Every seed and import surface reports per-file counts* | Pass, 0 exceptions |
+| *Reviewing conflicted import actions throws nothing* | Pass, 0 exceptions |
+| *A fresh seed resolves every bundled file with nothing left pending* | Steps 1–4 and 6 pass; step 5 cannot run until #400, as the document states |
+| *A file left awaiting review raises an alert, and resolving it retires the alert* | Steps 1–5, 7, 9 and 8's *Done* half pass; step 9 settled through the notification's *Take incoming* — `DecideBatchAsync` — reaching `Applied` |
+| *Bulk-deciding a staged batch via file export and re-import* | Not run past step 2 — see below |
+
+**Every exception line is accounted for:** two `SocketException` per stop or restart (the listening
+ports); the browser's WebSocket `OperationCanceledException` when *Notifications list, dismiss, render,
+and drive their action* stopped its container with the page open; a stale-cookie
+`CryptographicException` and `AntiforgeryValidationException` in the pending-review alert document's
+browser steps; and that document's step 7 read-only-mount `IOException`, `SqliteException` and
+`CryptographicException`, which the step documents as pre-existing.
+
+**Found in documents this issue does not own:**
+
+- *Bulk-deciding a staged batch via file export and re-import*, step 2, imports the curated file under
+  `review` and expects `202`; it answers `200`, because since #373 an already-stored file stages
+  nothing — the reason *The staged review → decide → apply workflow* moved to the conflict fixture. The
+  document never reaches its own subject.
+- *The changelog is served from its own on-disk database*, step 5, reads the log as soon as health
+  answers, but after a restart the changelog import runs after that: its `refreshed` line appeared
+  716 ms later.
+- *Reset wipes the entire database and does not reseed* leaves the `-wal`/`-shm` files DbInspector
+  creates beside `smoke156-before.db`.
 
 Against a fresh build of the branch: the smoke set, the new document, and the documents that list or
-decide staged actions — `import-and-staged-actions/01`, `/13`, `/20`, `/28`. Each container's log is
-read for `[Runtime - Exception]` lines before it is removed.
+decide staged actions — *The staged review → decide → apply workflow*, *Bulk-deciding a staged batch via
+file export and re-import*, *A file left awaiting review raises an alert, and resolving it retires the
+alert*, and *Reviewing conflicted import actions throws nothing*. Each container's log is read for
+`[Runtime - Exception]` lines before it is removed.
 
 ### 7. T1 pass
 
@@ -138,5 +176,5 @@ The developer starts the application in Visual Studio.
 | 8 | ✅ | A case-only `quoteText` difference is unresolved without a decision | Unit test | `QuoteFieldMergeTests.ResolveWithDecisions_QuoteTextDiffersOnlyByCase_IsUnresolved` |
 | 9 | ✅ | `CLAUDE.md` names the case-sensitive quote fields and the single entry point | Unit test | `QuoteFieldMergeTests.CaseSensitiveContentFields_AreDocumentedInClaudeMd` |
 | 10 | ✅ | A genuine text change is listed exactly as before — control | Unit test | `SqliteImportActionServiceTests.GetPagedAsync_PendingModifyConflicts_ReportsAmbiguousFieldsWithoutThrowing` (existing) |
-| 11 | ❌ | In a running container, a case-only change is listed with `quoteText`, an empty decide is refused, and taking incoming decides the incoming casing | Live (T2) | `automated-testing/import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md` passes on this branch's build and fails on the canary at its listing step |
+| 11 | ✅ | In a running container, a case-only change is listed with `quoteText`, an empty decide is refused, and taking incoming decides the incoming casing | Live (T2) | [*A case-only change is shown for review, and needs a decision*](../../automated-testing/import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md) passes on this branch's build and fails on the canary at its listing step |
 | 12 | ✅ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |

@@ -73,7 +73,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | Waiting for release | T1 ✅ T2 ✅ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
 | [#409](https://github.com/DutchJaFO/Quotinator/issues/409) | A quote held for review over a case-only text change shows nothing to decide, and is decided without asking | In progress | T1 ⬜ T2 ⬜ | [409-case-only-change-shows-nothing-to-decide-plan.md](409-case-only-change-shows-nothing-to-decide-plan.md) |
 | [#410](https://github.com/DutchJaFO/Quotinator/issues/410) | Deciding a Quote Add action answers 500 instead of an outcome | Planning | T1 ⬜ T2 ⬜ | — |
-| [#411](https://github.com/DutchJaFO/Quotinator/issues/411) | Two automated-test documents assert results the application no longer produces | Planning | T1 ⬜ T2 ⬜ | — |
+| [#411](https://github.com/DutchJaFO/Quotinator/issues/411) | Automated-test documents no longer run as written | Planning | T1 ⬜ T2 ⬜ | — |
 | [#413](https://github.com/DutchJaFO/Quotinator/issues/413) | The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph | Planning | T1 ⬜ T2 ⬜ | — |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Planning | T1 ⬜ T2 ⬜ | — |
@@ -187,7 +187,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 30 | **#370** ✅ | Waiting for release |
 | 31 | **#409** 🚧 | In progress |
 | 32 | **#410** | Planning — found in #370's T2; extends #370's decide outcomes |
-| 33 | **#411** | Planning — found in #370's T2; two stale automated-test documents |
+| 33 | **#411** | Planning — found in #370's and #409's T2; stale automated-test documents |
 | 34 | **#413** | Planning — found in #370's T1; the #279 announcement, after #312 and #319 |
 | 35 | **#371** | Planning — before #351/#360, which each add migrations |
 | 36 | **#350** | Planning |
