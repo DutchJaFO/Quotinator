@@ -1,6 +1,6 @@
 # #410 — Deciding a Quote Add action answers 500 instead of an outcome
 
-**Status:** Planning
+**Status:** In progress (step 2)
 **GitHub issue:** #410
 **Tiers required:** T1, T2
 **Depends on:** #370
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Approve this plan. Then step 1: add the signatures.
+Step 2: write every test and the automated document, and run each red.
 
 ---
 
@@ -62,7 +62,8 @@ Agreed 2026-09-19, recorded on the issue:
 
 ### 1. Add the signatures
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `c98522c8`. The build is clean; `ApiMessages.cs` joined the scoped IDE0090 list
+with nothing to convert.
 
 `ImportActionDecideOutcome.HeldForReview`; `ImportActionDecideResult.HeldForReview(actionId, status)`;
 `ImportActionDecideResult.NotDecidable` gains an `actionType` parameter, its one caller passing
