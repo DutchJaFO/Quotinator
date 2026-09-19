@@ -224,6 +224,22 @@ all — the state has to be constructed. And a test whose precondition comes fro
 break, where a fixture is what keeps the test runnable while that path is being fixed (see *Depending
 on content is not the same as depending on another test* above).
 
+### Read the log before the application stops
+
+**A container's log is read for `[Runtime - Exception]` lines before anything stops or restarts it —
+`docker stop`, `docker restart`, or `test-env.csx destroy`** (developer direction, 2026-09-19). Stopping
+the application logs exceptions of its own: a `SocketException (125)` for each port it listens on, on
+every stop, and an `OperationCanceledException` for each page still connected. Read afterwards, they are
+counted with whatever the test itself produced, and the result no longer says what the test did.
+
+A document that stops or restarts its container partway reads the log before each stop, and counts only
+what was logged since its previous read. Measured 2026-09-19: an idle container with no client, stopped
+with a 60-second grace period, exited cleanly with code `0` in under a second and still logged two — the
+stop causes them, not stopping too soon.
+
+**The one exception is a test about shutdown itself**, which reads the log after the stop because the
+shutdown is what it observes. It says so in its `Determinism` section.
+
 ### A test that needs a defective input must own that input
 
 **Never let a test's ability to fail depend on shipped data happening to be wrong.** Shipped data gets
