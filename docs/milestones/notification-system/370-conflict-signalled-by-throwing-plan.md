@@ -1,6 +1,6 @@
 # #370 — An expected import conflict is signalled by throwing, once per conflicted row per render
 
-**Status:** In progress (T1)
+**Status:** In progress
 **GitHub issue:** #370
 **Tiers required:** T1, T2
 **Depends on:** #397
@@ -9,7 +9,7 @@
 
 ## Next action
 
-T1: the developer runs the application in Visual Studio and confirms it starts cleanly and that reviewing a conflict — `/import-review`, deciding, applying — shows no `UnresolvedFieldConflictException` in the debugger output. Then the *Waiting for release* checklist.
+Run the *Waiting for release* checklist.
 
 ---
 
@@ -248,6 +248,25 @@ Against a fresh build of the branch: the designated smoke set, this issue's
 `import-and-staged-actions/28-review-throws-nothing.md`, and the documents that list or decide staged
 actions — `import-and-staged-actions/01`, `/20`, `/25`, `/26` and `/27`. Each container's log is read for
 `[Runtime - Exception]` lines before it is removed, and every line is triaged.
+
+### 9. T1 pass
+
+**Status:** ✅ Done — 2026-09-19, the developer's Visual Studio run: the application started and reached
+ready, upgrading a Data v3 / App v5 database to Data v22 / App v9.
+
+**Found during the T1 runs, filed elsewhere:**
+
+- A reseed on that upgraded database held 15 Quote actions for review that the rule files already
+  decide; a reset database holds none. Identical on images built before and after this issue's code, so
+  not introduced here — filed as [#412](https://github.com/DutchJaFO/Quotinator/issues/412).
+- The first start's NikhilNamal17 download ran out its 60 s connect timeout; the second start fetched it
+  in 437 ms. Recorded in the Knowledgebase entry for cancelled transport connections; cause not yet
+  established.
+- The #279 announcement shows as Expired after the upgrade — a 1.8.3 row keeps the 30-day expiry that
+  version applied — and its body is one unbroken paragraph. Filed as
+  [#413](https://github.com/DutchJaFO/Quotinator/issues/413).
+- One `ObjectDisposedException` on a `NetworkStream`, at a moment the application's only outgoing client
+  made no request. Not identified; the logged first-chance stack holds only the throwing frame.
 
 ---
 
