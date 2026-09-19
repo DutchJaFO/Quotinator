@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 3: add the obsolete check to the notification document.
+Step 4: fix the already-reported conflict document.
 
 ---
 
@@ -84,7 +84,8 @@ removes the bind folder. The Preconditions and Determinism sections no longer pr
 
 ### 3. Add the obsolete check to the notification document
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — the insert names `DismissReason`, `NULL` for the three existing rows; the
+Preconditions and the CHECK-constraint note name the fourth row and its column.
 
 Step 7 inserts a fourth row — `IsDismissed = 1`, `DismissReason = 'Obsolete'` — and its count becomes
 `4`. Step 8, under **All**, asserts that row's status reads *No longer applicable*.
