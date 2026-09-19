@@ -72,7 +72,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#369](https://github.com/DutchJaFO/Quotinator/issues/369) | A review row whose batch is gone offers decisions that cannot be carried out | Waiting for release | T1 ✅ T2 ✅ | [369-orphaned-review-rows-plan.md](369-orphaned-review-rows-plan.md) |
 | [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | Waiting for release | T1 ✅ T2 ✅ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
 | [#409](https://github.com/DutchJaFO/Quotinator/issues/409) | A quote held for review over a case-only text change shows nothing to decide, and is decided without asking | Waiting for release | T1 ✅ T2 ✅ | [409-case-only-change-shows-nothing-to-decide-plan.md](409-case-only-change-shows-nothing-to-decide-plan.md) |
-| [#410](https://github.com/DutchJaFO/Quotinator/issues/410) | Deciding a Quote Add action answers 500 instead of an outcome | In progress | T1 ⬜ T2 ⬜ | [410-deciding-an-add-answers-500-plan.md](410-deciding-an-add-answers-500-plan.md) |
+| [#410](https://github.com/DutchJaFO/Quotinator/issues/410) | Deciding a Quote Add action answers 500 instead of an outcome | Waiting for release | T1 ✅ T2 ✅ | [410-deciding-an-add-answers-500-plan.md](410-deciding-an-add-answers-500-plan.md) |
 | [#411](https://github.com/DutchJaFO/Quotinator/issues/411) | Automated-test documents no longer run as written | Planning | T1 ⬜ T2 ⬜ | — |
 | [#413](https://github.com/DutchJaFO/Quotinator/issues/413) | The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph | Planning | T1 ⬜ T2 ⬜ | — |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
@@ -127,7 +127,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #313 ─── (none) — Waiting for release
 #370 ─── depends on #397 — Waiting for release
 #409 ─── (none); touches the same two calls as #370 — Waiting for release
-#410 ─── depends on #370, whose decide outcomes it extends — In progress
+#410 ─── depends on #370, whose decide outcomes it extends — Waiting for release
 #411 ─── (none) — Planning
 #413 ─── depends on #312, #319 — Planning
 #397 ─── (none); blocks #370 — Waiting for release
@@ -186,7 +186,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 29 | **#397** ✅ | Waiting for release; unblocks #370 |
 | 30 | **#370** ✅ | Waiting for release |
 | 31 | **#409** ✅ | Waiting for release |
-| 32 | **#410** 🚧 | In progress |
+| 32 | **#410** ✅ | Waiting for release |
 | 33 | **#411** | Planning — found in #370's and #409's T2; stale automated-test documents |
 | 34 | **#413** | Planning — found in #370's T1; the #279 announcement, after #312 and #319 |
 | 35 | **#371** | Planning — before #351/#360, which each add migrations |

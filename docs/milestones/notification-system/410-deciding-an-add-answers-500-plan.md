@@ -1,6 +1,6 @@
 # #410 — Deciding a Quote Add action answers 500 instead of an outcome
 
-**Status:** In progress (step 6)
+**Status:** Waiting for release
 **GitHub issue:** #410
 **Tiers required:** T1, T2
 **Depends on:** #370
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 6: the developer starts the application in Visual Studio.
+Wait for the release; then the *Released* checklist and the closing comment.
 
 ---
 
@@ -166,9 +166,28 @@ case-only change is shown for review, and needs a decision*. Each container's lo
 
 ### 6. T1 pass
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-09-19, the developer's Visual Studio run: the application started and reached
+ready, upgrading a Data v3 / App v5 database to Data v22 / App v9. The reseeds and the reset that
+followed logged no exception.
 
-The developer starts the application in Visual Studio.
+---
+
+## Process gap check
+
+**Rules that existed and were not followed** — behavioural, no document change:
+
+- The first plan was presented before the existing coverage was checked; the developer asked for every
+  held variant to have unit and automated tests, which the Steps and Verification table now carry —
+  `process.md`, *Every row must name a step someone can actually execute*, and `docs/testing-policy.md`'s
+  fix-the-class rule.
+- DbInspector was run with `--no-build` where its documents run it without, and the step had to be
+  repeated.
+
+**Genuine gaps, each owned by an issue:**
+
+- A problem in incoming content is resolved by correcting the content or by a rule, and a resolution
+  chosen in the interface creates that rule (developer decision, 2026-09-19). Nothing documents it yet;
+  its ADR is #416's first requirement.
 
 ---
 

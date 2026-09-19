@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410],
     "highlights": [
       "A TV series can now be divided into seasons, and a quote can be attached to the episode it comes from where that is known — instead of every quote from a long-running show sharing one entry for the whole series.",
       "Reloading your quotes no longer wipes what is stored first. It adds what is missing, holds anything that disagrees for your decision, and leaves what already matches alone — so your own additions and corrections survive a reload. To start completely fresh, reset the database and then reload.",
@@ -59,6 +59,7 @@
       "`github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)"
     ],
     "fixed": [
+      "Deciding a new entry held back because of its file — a duplicate, a second date, a rule with nothing to apply to — no longer fails with a server error; it says the file or a rule needs correcting (issue #410)",
       "A quote held for your decision because only its capitalisation changed now shows what needs deciding, and can no longer be settled without anyone choosing (issue #409)",
       "Changes waiting for your decision no longer fill the log with errors each time they are viewed — nothing was actually wrong (issue #370)",
       "A parameter-binding failure turned into a `422` was logged nowhere: since .NET 10 the exception-handler middleware stops logging an exception a handler reports as handled. The handler now logs it itself, and the middleware's own line is suppressed only for exceptions an application handler has already logged (issue #397)",
