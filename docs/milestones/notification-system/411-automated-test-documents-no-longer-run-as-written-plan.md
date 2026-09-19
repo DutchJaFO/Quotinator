@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 9)
+**Status:** In progress (step 10)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 9: run the six smoke documents step 8 skipped.
+Step 10: share one key ring across test containers.
 
 ---
 
@@ -220,7 +220,25 @@ Each changed document, in full, against a build of the branch; each container's 
 
 ### 9. Run the smoke documents step 8 skipped
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — against the step 8 image. All six pass, each log read before its container
+stopped, and each reporting no `[Runtime - Exception]` line:
+
+| Document | Result |
+|---|---|
+| Baseline | `healthy`; version matches `Directory.Build.props` (`1.9.0-alpha`); random `Ok`; search `Ok` 20 matching; source-scoped 9 with 0 off-target rows; Churchill; two `NoResults` |
+| Pagination contract | 795 quotes, 1507 actions, 35 audit rows; `pageSize=0` returns every row with `pageSize` equal to `totalCount`; `501` → 422 on all three; default 20; page-beyond-last → 422 on all three |
+| Staged review workflow | Staged `202`, 1 pending, decide/undo/decide, apply `200`, `Applied=2` |
+| Fresh seed | No zero counts, `pending=0`, duplicate checks A/B empty, `undeclared date variants = 0`, `resolvedToExisting = 25` with `unexplained no-ops = 0` and the control flagged |
+| Per-file report | 5 reports with `fileName`/`entityTypes`; reset reports nothing; import's `report` singular; `removed=0` against `replacements=15`; `missingTypes=[]` |
+| Startup wait page | `503 starting`, `hasDatabase=False`, self-contained refreshing page, then `healthy`/`ready` with 795 quotes; `kestrelFirst=True` |
+
+**Step 5 of the fresh-seed document did not run**, as its own header states: it calls a `--convert`
+entry point that does not exist until #400.
+
+**One defect, fixed here:** that document's cleanup used the multi-path `Remove-Item` this environment's
+shell guard refuses — the same form the reset document carried. It now removes what
+`Get-ChildItem .claude/temp -Filter 'inspect-181.db*'` lists and lists again; the run left all three
+files, sidecars included.
 
 The six the end-of-issue scope requires and step 8 did not run, against the same build, each log read
 before its container stops:
@@ -339,4 +357,4 @@ The developer starts the application in Visual Studio.
 | 11 | ❌ | The browser-driven documents log no exception they did not cause | Live (T2) | *Notifications list, dismiss, render, and drive their action* before its step 7 stop, and *A file left awaiting review raises an alert, and resolving it retires the alert* before step 3 and step 9: no `[Runtime - Exception]` line |
 | 12 | ❌ | Every document whose environment changed still passes | Live (T2) | Steps 14 and 15: every document in the suite passes as written |
 | 13 | ❌ | A container's log is read before the application stops | Review | The index's *Read the log before the application stops*, and every document run in steps 14 and 15 read that way |
-| 14 | ❌ | The smoke documents step 8 skipped pass | Live (T2) | Step 9: each of the six passes as written |
+| 14 | ✅ | The smoke documents step 8 skipped pass | Live (T2) | Step 9: each of the six passes as written |
