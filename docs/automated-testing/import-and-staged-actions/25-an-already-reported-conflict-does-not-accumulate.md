@@ -109,9 +109,13 @@ docker cp "$temp\376-imports\376-b-sources.json" qt-import-25:/data/imports/
 docker exec qt-import-25 sh -c "ls /data/imports"
 
 docker restart qt-import-25 | Out-Null
+dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --status
 ```
 
-**Expected:** all three files listed, and the container restarts.
+**Expected:** all three files listed, and the container restarts and answers health with `200`.
+
+**Wait for health before step 3.** `docker restart` returns when the process starts, not when it
+answers; a reseed sent straight after it fails with the connection closed.
 
 **The manifest lists the quotes file first.** Reversing the order makes the `sources[]` entry create
 the Source with its date, leaving nothing to disagree about — the fixture then asserts nothing.

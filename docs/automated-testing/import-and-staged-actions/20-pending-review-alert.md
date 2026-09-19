@@ -64,6 +64,8 @@ awaiting a decision.
 ```powershell
 $bind    = Join-Path $env:TEMP "qt-review-20-bind"
 $imports = Join-Path $bind "imports"
+# A folder left by an earlier run still holds its database, and the container would start against it.
+if (Test-Path $bind) { Remove-Item -LiteralPath $bind -Recurse -Force }
 
 # Writes two user-imports files, each re-stating a different bundled quote's id with different text,
 # under a `review` policy. Shared with T1, which needs the same fixture for the same reason.
@@ -93,6 +95,10 @@ while ((Invoke-RestMethod "http://localhost:19520/api/v1/quotes?page=1&pageSize=
 **On failure:** if `pending actions` is `0`, the id in the import did not match a bundled quote, so it
 was an Add and nothing was staged. Stop — every later step would pass against an empty set and prove
 nothing.
+
+**The bind folder is removed first because the container keeps its database there.** Found by running
+this document: a folder an earlier run had not cleaned up still held that run's database, so step 1
+passed against it and step 6 counted the earlier run's alerts too.
 
 ### 2. Confirm the alert names its batch, file and workload
 
