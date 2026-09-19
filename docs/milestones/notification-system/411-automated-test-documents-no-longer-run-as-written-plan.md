@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 6)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 5: rewrite the bulk-decide document.
+Step 6: fix the changelog document's step 5.
 
 ---
 
@@ -98,7 +98,20 @@ Step 7 inserts a fourth row — `IsDismissed = 1`, `DismissReason = 'Obsolete'` 
 
 ### 5. Rewrite the bulk-decide document
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — run as written against the step 1 image; every step passes. Two corrections to
+the design below, both measured:
+
+- **Each batch conflicts with different quotes** — a base file of six, and three conflicting files of
+  two. With the same two quotes in every batch, the second and third staged nothing: a conflict already
+  awaiting review is recognised as already reported.
+- **The malformed-row step reports two errors, not one**, both for the corrupted action: the rejected
+  value, and `quoteText` left ambiguous because its only decision was the rejected one.
+
+The container's log holds one `[Runtime - Exception]` line: a `FormatException` thrown by
+`ImportActionFieldRowMapper.FromCsvRow` for the rejected value, which bulk-decide catches and reports as
+that row's error. Under [ADR 022](../../architecture-decisions/022-exceptions-only-for-undetectable-conditions.md)
+a value the code has checked is returned as an outcome, not thrown. That is code, not a document, so it
+is outside this issue — raised with the developer.
 
 A container with `Quotinator__IncludeDefaultSources=false`; a base file and a conflicting file of two
 quotes each, the second imported under `review` for each of the three batches. The JSON and CSV round
