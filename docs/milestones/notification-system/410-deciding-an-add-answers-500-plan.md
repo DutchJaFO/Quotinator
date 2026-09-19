@@ -1,6 +1,6 @@
 # #410 — Deciding a Quote Add action answers 500 instead of an outcome
 
-**Status:** In progress (step 5)
+**Status:** In progress (step 6)
 **GitHub issue:** #410
 **Tiers required:** T1, T2
 **Depends on:** #370
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 5: the T2 pass.
+Step 6: the developer starts the application in Visual Studio.
 
 ---
 
@@ -134,7 +134,29 @@ both 0 warnings, 0 errors.
 
 ### 5. T2 pass
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-09-19, against an image built from `dec09367`.
+
+| Document | Result |
+|---|---|
+| *Deciding an import Add answers an outcome, never a server error* | Pass — `applied`, `secondDate`, `ruleOnNothing`, `storedDuplicate`, `fileDuplicate` staged as intended; each decide `422`, the applied one "already resolved" and the rest "held for review"; `before=0 after=0` |
+| *Baseline — health, version, random and search* | Pass, 0 exceptions |
+| *The pagination contract holds live on every paginated endpoint* | Pass, 0 exceptions |
+| *Kestrel serves a wait page during initialisation* | Pass, 0 exceptions |
+| *Reset wipes the entire database and does not reseed* | Pass |
+| *The changelog is served from its own on-disk database* | Pass — step 5 read after the import line appears (#411) |
+| *The staged review → decide → apply workflow* | Pass, 0 exceptions |
+| *A fresh seed resolves every bundled file with nothing left pending* | Steps 1–4 and 6 pass; step 5 waits on #400, as the document states |
+| *Every seed and import surface reports per-file counts* | Pass, 0 exceptions |
+| *Reviewing conflicted import actions throws nothing* | Pass, `before=0 after=0` |
+| *A case-only change is shown for review, and needs a decision* | Pass, 0 exceptions |
+| *Notifications list, dismiss, render, and drive their action* | Pass, every step, driven in a browser |
+| *A file left awaiting review raises an alert, and resolving it retires the alert* | Steps 1–5, 7, 9 and 8's *Done* half pass; 6 and 8's other half as #411 records |
+
+**Every exception line is accounted for:** two `SocketException` per stop or restart (the listening
+ports); the WebSocket `OperationCanceledException` of a page open during a stop; a stale-cookie
+`CryptographicException` and `AntiforgeryValidationException` in the browser-driven documents; and the
+read-only-mount `IOException`, `SqliteException` and `CryptographicException` the pending-review alert
+document's step 7 records as pre-existing.
 
 Against a fresh build of the branch: the smoke set, the new document, and the documents that decide
 staged actions — *The staged review → decide → apply workflow*, *A file left awaiting review raises an
@@ -170,5 +192,5 @@ The developer starts the application in Visual Studio.
 | 14 | ✅ | The not-decidable text names the action kind and makes no claim about Modify support | Unit test | `ImportActionDecideResultTests.Describe_NotDecidable_NamesTheActionKind`; `Describe_EachOutcome_MatchesTheMessageItReplaces` loses its `NotDecidable` line |
 | 15 | ✅ | The decide endpoint answers a held Add with `422` and its message | Unit test | `ImportActionEndpointsTests.DecideAction_HeldForReview_Returns422WithItsMessage` — the issue's `DecideAction_QuoteAdd_Returns422` |
 | 16 | ✅ | The decide endpoint's not-decidable `422` names the action kind | Unit test | `ImportActionEndpointsTests.DecideAction_NotDecidable_Returns422` (existing, updated) |
-| 17 | ❌ | In a running container, deciding an applied Add and a Quote Add held in each live-reachable way — a second date, a rule matching nothing stored, a duplicate of a stored quote, a duplicate within its file — answers `422` each, with nothing thrown | Live (T2) | *Deciding an import Add answers an outcome, never a server error* (`automated-testing/import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md`) passes on this branch's build and fails on the canary at its first decide |
+| 17 | ✅ | In a running container, deciding an applied Add and a Quote Add held in each live-reachable way — a second date, a rule matching nothing stored, a duplicate of a stored quote, a duplicate within its file — answers `422` each, with nothing thrown | Live (T2) | *Deciding an import Add answers an outcome, never a server error* (`automated-testing/import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md`) passes on this branch's build and fails on the canary at its first decide |
 | 18 | ✅ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
