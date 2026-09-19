@@ -60,8 +60,16 @@ HTTP handler, bounded by `Quotinator:SourceRefreshConnectTimeoutSeconds` (60 s) 
 timeout (90 s). A connect that is dropped, stalls past its budget, or is cut short by shutdown surfaces
 as this `IOException`. Intermittent by nature: the same host answers in ~300 ms on another run.
 
-A refresh failing this way costs nothing — `SourceCacheUpdater` falls back to the local copy and the
-refresh runs again next cycle.
+A connect that never completes reads differently: an `OperationCanceledException` whose frames run
+through `SslStream` and `HttpConnectionPool.ConnectAsync`, followed by a `TaskCanceledException` whose
+inner exception is `System.TimeoutException: A connection could not be established within the configured
+ConnectTimeout.` — each repeated once per frame it is rethrown through, so a single timeout produces
+about twenty lines under two ids. The `[Database - SourceRefresh] could not reach … — using local …`
+warning follows, and the startup banner waits for it: 95 seconds end to end. Observed 2026-09-19 in a
+Visual Studio run, with the next file's download from the same host succeeding 276 ms later.
+
+A refresh failing this way costs nothing but that wait — `SourceCacheUpdater` falls back to the local
+copy and the refresh runs again next cycle.
 
 **Several lines with one id are one exception, not several faults.** An id is assigned per exception
 object, and a rethrow is notified again, so a single cancellation can produce four identical lines.
