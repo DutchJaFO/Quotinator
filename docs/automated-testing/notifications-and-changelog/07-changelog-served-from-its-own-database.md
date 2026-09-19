@@ -112,12 +112,23 @@ every startup, so this confirms the rebuild is idempotent rather than duplicatin
 docker restart qt-notif-07
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18507/api/v1/health" --wait-for 200 --status
 
+function ImportLines { @(docker logs qt-notif-07 2>&1 | Select-String -SimpleMatch '[Changelog - Import] refreshed') }
+$deadline = (Get-Date).AddSeconds(60)
+while ((ImportLines).Count -lt 2 -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
+
 Get-ChildItem $dataDir -Filter quotinatorchangelog.db | Select-Object Name, Length
-docker logs qt-notif-07 2>&1 | Select-String -Pattern 'Changelog - (Init|Import)' | Select-Object -Last 4
+ImportLines | ForEach-Object { $_.Line }
 ```
 
-**Expected:** after restart, the file is still present and the import reports the same entry count as
-step 3 did — no duplication.
+**Expected:** after restart, the file is still present, and two `refreshed N entries` lines are listed —
+the first start's and the restart's — reporting the same entry count, as step 3 did. No duplication.
+
+**The log is polled for the second line, for at most 60 s.** Health answers before the post-restart
+import has logged, so reading the log straight after it lists only the first start's line. Polling waits
+for the line itself rather than for a guessed delay; the bound only stops a run that will never see it.
+
+**On failure:** one line after 60 s means the restart's import never ran or never logged. A second count
+larger than the first is the duplication this step exists for.
 
 ## Observed effect
 
