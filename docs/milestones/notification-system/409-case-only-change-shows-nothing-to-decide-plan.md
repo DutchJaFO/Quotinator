@@ -1,6 +1,6 @@
 # #409 — A quote held for review over a case-only text change shows nothing to decide, and is decided without asking
 
-**Status:** Planning
+**Status:** In progress (step 2)
 **GitHub issue:** #409
 **Tiers required:** T1, T2
 **Depends on:** #370
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Approve this plan. Then step 1: add the `QuoteFieldMerge` signatures.
+Step 2: write every test and the automated document, and run each red.
 
 ---
 
@@ -54,7 +54,9 @@ Agreed 2026-09-19 while cross-checking the issue against the code:
 
 ### 1. Add the `QuoteFieldMerge` signatures
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `1e4a27be`. The build is clean. Adding `SqliteQuoteImportService.cs` and
+`QuoteImportServiceTests.cs` to the scoped IDE0090 list surfaced their existing `new Type(...)`
+declarations, converted in the same commit.
 
 `QuoteFieldMerge.Resolve`, `QuoteFieldMerge.ResolveWithDecisions` and `QuoteFieldMerge.ValuesEqual`,
 each calling `FieldMergeResolver` **without** the set — today's behaviour, so the tests in step 2
