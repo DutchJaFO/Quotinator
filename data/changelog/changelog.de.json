@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409],
     "highlights": [
       "Eine Fernsehserie lässt sich jetzt in Staffeln unterteilen, und ein Zitat kann der Folge zugeordnet werden, aus der es stammt, sofern diese bekannt ist — statt dass sich jedes Zitat einer langlaufenden Serie einen einzigen Eintrag für die ganze Serie teilt.",
       "Das Neuladen Ihrer Zitate löscht nicht mehr zuerst, was gespeichert ist. Es ergänzt, was fehlt, hält alles, was abweicht, für Ihre Entscheidung zurück und lässt unverändert, was bereits stimmt — so überstehen Ihre eigenen Ergänzungen und Korrekturen ein Neuladen. Wer ganz von vorn beginnen möchte, setzt zuerst die Datenbank zurück und lädt dann neu.",
@@ -66,6 +66,7 @@
       "`github/codeql-action` von 4.37.7 auf 4.37.9 aktualisiert (nur CI)"
     ],
     "fixed": [
+      "Ein Zitat, das auf Ihre Entscheidung wartet, weil sich nur die Groß- und Kleinschreibung geändert hat, zeigt jetzt, was zu entscheiden ist, und kann nicht mehr ohne Ihre Wahl erledigt werden (issue #409)",
       "Änderungen, die auf Ihre Entscheidung warten, füllen das Protokoll nicht mehr bei jedem Ansehen mit Fehlern — es war nichts falsch (issue #370)",
       "Ein Fehler bei der Parameterbindung, der in ein `422` umgewandelt wurde, wurde nirgends protokolliert: Seit .NET 10 protokolliert die Middleware zur Ausnahmebehandlung keine Ausnahme mehr, die ein Handler als behandelt meldet. Der Handler protokolliert sie jetzt selbst, und die eigene Zeile der Middleware wird nur für Ausnahmen unterdrückt, die ein Anwendungshandler bereits protokolliert hat (issue #397)",
       "Bei jedem Start wurden sechs Ausnahmen ausgelöst und verschluckt, während das Framework nach einem Konstruktor suchte, den der Filter für den Admin-API-Schlüssel nicht hatte. Der Filter wird jetzt einmal registriert und von jeder Admin-Endpunktgruppe gemeinsam genutzt, mit injizierter Konfiguration (issue #397)",

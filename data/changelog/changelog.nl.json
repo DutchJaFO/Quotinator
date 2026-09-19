@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409],
     "highlights": [
       "Een televisieserie kan nu worden opgedeeld in seizoenen, en een citaat kan worden gekoppeld aan de aflevering waaruit het komt als die bekend is — in plaats van dat elk citaat uit een langlopende serie één item voor de hele serie deelt.",
       "Het opnieuw laden van uw citaten wist niet langer eerst wat is opgeslagen. Het voegt toe wat ontbreekt, houdt alles wat afwijkt aan voor uw beslissing en laat ongemoeid wat al klopt — zodat uw eigen toevoegingen en correcties een herlading overleven. Wilt u volledig opnieuw beginnen, reset dan eerst de database en laad daarna opnieuw.",
@@ -66,6 +66,7 @@
       "`github/codeql-action` bijgewerkt van 4.37.7 naar 4.37.9 (alleen CI)"
     ],
     "fixed": [
+      "Een citaat dat op je beslissing wacht omdat alleen de hoofdletters veranderden, toont nu wat er te beslissen valt en kan niet meer worden afgehandeld zonder dat iemand kiest (issue #409)",
       "Wijzigingen die op je beslissing wachten, vullen het log niet langer met fouten telkens wanneer ze worden bekeken — er was niets mis (issue #370)",
       "Een fout bij het binden van parameters die tot een `422` werd omgezet, werd nergens gelogd: sinds .NET 10 stopt de middleware voor exceptieafhandeling met het loggen van een exceptie die een handler als afgehandeld meldt. De handler logt haar nu zelf, en de eigen regel van de middleware wordt alleen onderdrukt voor excepties die een applicatiehandler al heeft gelogd (issue #397)",
       "Bij elke start werden zes excepties gegooid en ingeslikt terwijl het framework zocht naar een constructor die het filter voor de beheer-API-sleutel niet had. Het filter wordt nu één keer geregistreerd en gedeeld door elke groep beheer-endpoints, met zijn configuratie geïnjecteerd (issue #397)",

@@ -1,6 +1,6 @@
 # #409 — A quote held for review over a case-only text change shows nothing to decide, and is decided without asking
 
-**Status:** In progress (step 7)
+**Status:** Waiting for release
 **GitHub issue:** #409
 **Tiers required:** T1, T2
 **Depends on:** #370
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 7: the developer starts the application in Visual Studio.
+Wait for the release; then the *Released* checklist and the closing comment.
 
 ---
 
@@ -156,9 +156,31 @@ alert*, and *Reviewing conflicted import actions throws nothing*. Each container
 
 ### 7. T1 pass
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-09-19, the developer's Visual Studio run: the application started and reached
+ready, upgrading a Data v3 / App v5 database to Data v22 / App v9.
 
-The developer starts the application in Visual Studio.
+The same run logged one `ObjectDisposedException` on a `NetworkStream`, 75 s after startup, with no
+outgoing request made — the second occurrence, recorded under #370's T1 as unidentified. Not this
+issue's; still unidentified.
+
+---
+
+## Process gap check
+
+**Rules that existed and were not followed** — behavioural, no document change:
+
+- `sed`, `grep`, `head` and `tail` in a shell, and a PowerShell regex rewrite of this plan — ADR 010.
+- The first plan was not checked against the code before it was presented: a control that could not
+  be set up, tests written before their signatures, and a missing fixture — `process.md`, *Every row must
+  name a step someone can actually execute*, and `docs/testing-policy.md`, *Red first means signatures
+  first*.
+- Automated-test documents referred to by number — now a standing rule in memory.
+
+**Genuine gaps, resolved in documents during this issue:**
+
+- `process.md` listed the commit types `feat`, `fix`, `docs`, `chore` and `refactor`; the test commits
+  of #370 and #409 used `test`, which it did not list. `test` is now defined there (developer
+  decision, 2026-09-19).
 
 ---
 
