@@ -63,7 +63,7 @@ internal static class QuoteFieldMerge
         IReadOnlyDictionary<string, object?> existing,
         IReadOnlyDictionary<string, object?> incoming,
         DuplicateResolutionPolicy policy) =>
-        FieldMergeResolver.Resolve(existing, incoming, policy);
+        FieldMergeResolver.Resolve(existing, incoming, policy, CaseSensitiveContentFields);
 
     /// <summary>
     /// <see cref="FieldMergeResolver.ResolveWithDecisions"/> for a quote's fields, with
@@ -76,7 +76,7 @@ internal static class QuoteFieldMerge
         IReadOnlyDictionary<string, object?> existing,
         IReadOnlyDictionary<string, object?> incoming,
         IReadOnlyDictionary<string, FieldMergeDecision> decisions) =>
-        FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
+        FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions, CaseSensitiveContentFields);
 
     /// <summary>
     /// <see cref="FieldMergeResolver.ValuesEqual(string, object?, object?, IReadOnlySet{string}?)"/> for one
@@ -86,7 +86,7 @@ internal static class QuoteFieldMerge
     /// <param name="a">One side's value.</param>
     /// <param name="b">The other side's value.</param>
     public static bool ValuesEqual(string field, object? a, object? b) =>
-        FieldMergeResolver.ValuesEqual(field, a, b, null);
+        FieldMergeResolver.ValuesEqual(field, a, b, CaseSensitiveContentFields);
 
     /// <summary>
     /// Maps the mergeable fields of a <see cref="SourceQuoteDto"/> to a field-name → value dictionary.

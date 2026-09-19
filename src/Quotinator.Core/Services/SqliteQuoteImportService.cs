@@ -234,7 +234,7 @@ public sealed class SqliteQuoteImportService(
             bool isPending       = action.Status.Parsed == ImportActionStatus.Pending;
 
             bool isMerge = policy is DuplicateResolutionPolicy.MergeOurs or DuplicateResolutionPolicy.MergeTheirs;
-            FieldMergeResult? mergeResult = isMerge ? FieldMergeResolver.Resolve(existingFields, incomingFields, policy) : null;
+            FieldMergeResult? mergeResult = isMerge ? QuoteFieldMerge.Resolve(existingFields, incomingFields, policy) : null;
 
             entries.Add(new ImportConflictEntry
             {

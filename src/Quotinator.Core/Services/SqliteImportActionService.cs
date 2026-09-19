@@ -399,7 +399,7 @@ public sealed class SqliteImportActionService(
 
         // Validate immediately — an ambiguous field with no decision must fail here, not silently
         // defer the problem to apply time.
-        FieldMergeResult result = FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
+        FieldMergeResult result = QuoteFieldMerge.ResolveWithDecisions(existing, incoming, decisions);
         if (result.UnresolvedFields.Count > 0)
             return ImportActionDecideResult.Unresolved(actionId, result.UnresolvedFields);
 
@@ -1642,11 +1642,12 @@ public sealed class SqliteImportActionService(
         {
             case ImportActionEntityTypes.Quote:
             {
-                    QuoteActionPayloadDto existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
-                    QuoteActionPayloadDto incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
-                existing = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
-                incoming = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
-                break;
+                QuoteActionPayloadDto existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
+                QuoteActionPayloadDto incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
+                return QuoteFieldMerge.ResolveWithDecisions(
+                    QuoteFieldMerge.ToFieldMap(existingPayload.Fields),
+                    QuoteFieldMerge.ToFieldMap(incomingPayload.Fields),
+                    new Dictionary<string, FieldMergeDecision>()).UnresolvedFields;
             }
             case ImportActionEntityTypes.Source:
             {
