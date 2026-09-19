@@ -17,4 +17,10 @@ public enum ImportActionDecideOutcome
 
     /// <summary>One or more genuinely ambiguous fields were left without a decision; nothing was stored.</summary>
     UnresolvedFields,
+
+    /// <summary>
+    /// The action is held for review because of its incoming content (#410): it is resolved by correcting
+    /// the imported file or adding a rule, not by a decision on the action.
+    /// </summary>
+    HeldForReview,
 }

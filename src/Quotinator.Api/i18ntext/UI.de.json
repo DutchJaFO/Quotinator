@@ -191,6 +191,7 @@
   "ErrorImportActionAlreadyResolved": "Diese Import-Aktion wurde bereits angewendet oder verworfen und kann nicht mehr entschieden werden.",
   "ErrorImportActionNotDecided": "Für diese Import-Aktion gibt es keine gespeicherte Entscheidung, die rückgängig gemacht werden kann.",
   "ErrorImportActionNotDecidable": "Diese Import-Aktion ist eine '{0}'-Aktion und kann nicht manuell entschieden werden — dieser Aktionstyp unterstützt derzeit keine Modify-Entscheidung.",
+  "ErrorImportActionHeldForReview": "Diese Import-Aktion wartet auf Prüfung und kann hier nicht entschieden werden: Korrigieren Sie die importierte Datei oder fügen Sie eine Regel hinzu, die sie auflöst.",
   "ErrorImportActionAmbiguousFieldsUnresolved": "Die folgenden Felder sind mehrdeutig und benötigen eine ausdrückliche Entscheidung: {0}.",
   "ErrorImportActionBatchNotFullyDecided": "Noch nicht jede Aktion in diesem Batch hat eine Entscheidung. Entscheiden Sie die verbleibenden Aktionen, bevor Sie anwenden.",
   "ErrorImportActionBatchInvalidState": "Dieser Batch kann nicht verworfen werden — er wurde bereits angewendet, bereits verworfen, oder enthält keine gespeicherten Aktionen.",

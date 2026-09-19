@@ -16,7 +16,7 @@ public class ImportActionDecideResultTests
     {
         Guid actionId = Guid.NewGuid();
 
-        string description = ImportActionDecideResult.NotDecidable(actionId, entityType).Describe();
+        string description = ImportActionDecideResult.NotDecidable(actionId, entityType, "Add").Describe();
 
         Assert.IsFalse(description.Contains("Quote", StringComparison.OrdinalIgnoreCase),
             "The text must describe the rule generically, not name a specific entity type as the one exception");
@@ -35,7 +35,7 @@ public class ImportActionDecideResultTests
         Assert.AreEqual($"Import action '{id}' is not in a valid state for this operation (current status: 'Applied').",
             ImportActionDecideResult.AlreadyResolved(id, "Applied").Describe());
         Assert.AreEqual($"Import action '{id}' is a 'Source' action and cannot be manually decided — this action's entity type does not currently support a Modify decision.",
-            ImportActionDecideResult.NotDecidable(id, "Source").Describe());
+            ImportActionDecideResult.NotDecidable(id, "Source", "Add").Describe());
         Assert.AreEqual("The following fields are ambiguous and need an explicit decision: quoteText, character",
             ImportActionDecideResult.Unresolved(id, ["quoteText", "character"]).Describe());
     }

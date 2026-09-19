@@ -11,13 +11,15 @@ namespace Quotinator.Data.Import;
 /// <param name="Outcome">What happened.</param>
 /// <param name="UnresolvedFields">The ambiguous fields left without a decision; empty unless <see cref="Outcome"/> is <see cref="ImportActionDecideOutcome.UnresolvedFields"/>.</param>
 /// <param name="EntityType">The action's entity type, when <see cref="Outcome"/> is <see cref="ImportActionDecideOutcome.NotDecidable"/>.</param>
-/// <param name="CurrentStatus">The action's status, when <see cref="Outcome"/> is <see cref="ImportActionDecideOutcome.AlreadyResolved"/>.</param>
+/// <param name="CurrentStatus">The action's status, when <see cref="Outcome"/> is <see cref="ImportActionDecideOutcome.AlreadyResolved"/> or <see cref="ImportActionDecideOutcome.HeldForReview"/>.</param>
+/// <param name="ActionType">The action's kind, when <see cref="Outcome"/> is <see cref="ImportActionDecideOutcome.NotDecidable"/>.</param>
 public sealed record ImportActionDecideResult(
     Guid ActionId,
     ImportActionDecideOutcome Outcome,
     IReadOnlyList<string> UnresolvedFields,
     string? EntityType = null,
-    string? CurrentStatus = null)
+    string? CurrentStatus = null,
+    string? ActionType = null)
 {
     /// <summary>The decision was stored.</summary>
     /// <param name="actionId">The action decided.</param>
@@ -36,8 +38,15 @@ public sealed record ImportActionDecideResult(
     /// <summary>The action's kind does not accept a manual decision.</summary>
     /// <param name="actionId">The action.</param>
     /// <param name="entityType">Its entity type.</param>
-    public static ImportActionDecideResult NotDecidable(Guid actionId, string entityType) =>
-        new(actionId, ImportActionDecideOutcome.NotDecidable, [], EntityType: entityType);
+    /// <param name="actionType">Its kind — <c>Add</c>, <c>Modify</c> and so on.</param>
+    public static ImportActionDecideResult NotDecidable(Guid actionId, string entityType, string actionType) =>
+        new(actionId, ImportActionDecideOutcome.NotDecidable, [], EntityType: entityType, ActionType: actionType);
+
+    /// <summary>The action is held because of its incoming content, and is resolved by correcting the file or adding a rule.</summary>
+    /// <param name="actionId">The action.</param>
+    /// <param name="currentStatus">Its status — <c>Pending</c>, <c>Stale</c> or <c>Blocked</c>.</param>
+    public static ImportActionDecideResult HeldForReview(Guid actionId, string currentStatus) =>
+        new(actionId, ImportActionDecideOutcome.HeldForReview, [], CurrentStatus: currentStatus);
 
     /// <summary>Ambiguous fields were left without a decision.</summary>
     /// <param name="actionId">The action.</param>

@@ -629,7 +629,7 @@ public class ImportActionEndpointsTests
     [TestMethod]
     public async Task DecideAction_NotDecidable_Returns422()
     {
-        FakeImportActionService fake = new() { DecideResult = id => ImportActionDecideResult.NotDecidable(id, "Source") };
+        FakeImportActionService fake = new() { DecideResult = id => ImportActionDecideResult.NotDecidable(id, "Source", "Add") };
         using WebApplicationFactory<Program> factory = CreateFactory(fake);
         using HttpClient client  = factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);

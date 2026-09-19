@@ -34,6 +34,7 @@ public static class ApiMessages
     public const string ImportActionAlreadyResolved      = "ErrorImportActionAlreadyResolved";
     public const string ImportActionNotDecided           = "ErrorImportActionNotDecided";
     public const string ImportActionNotDecidable         = "ErrorImportActionNotDecidable";
+    public const string ImportActionHeldForReview        = "ErrorImportActionHeldForReview";
     public const string ImportActionAmbiguousFieldsUnresolved = "ErrorImportActionAmbiguousFieldsUnresolved";
     public const string ImportActionBatchNotFullyDecided = "ErrorImportActionBatchNotFullyDecided";
     public const string ImportActionBatchInvalidState    = "ErrorImportActionBatchInvalidState";

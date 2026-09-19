@@ -388,7 +388,7 @@ public sealed class SqliteImportActionService(
         }
 
         if (action.EntityType != ImportActionEntityTypes.Quote)
-            return ImportActionDecideResult.NotDecidable(actionId, action.EntityType);
+            return ImportActionDecideResult.NotDecidable(actionId, action.EntityType, action.ActionType.Raw);
 
         QuoteActionPayloadDto existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
         QuoteActionPayloadDto incomingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
