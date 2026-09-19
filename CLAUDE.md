@@ -707,15 +707,17 @@ Found and fixed piecemeal across `status`/`entityType`/`batchId` (#154), a conve
 `FieldMergeResolver.ValuesEqual` (`src/Quotinator.Data/Import/FieldMergeResolver.cs`) — the shared
 comparison every entity's conflict/merge detection goes through (Quote, Source, Person, Character,
 Series, Universe, StageDirection, SoundCue, Conversation) — compares string values (scalar or within a
-list) case-insensitively, applied uniformly to every field including free-text content, not just
-identity-like ones. Found while implementing #181: a plain `Equals(a, b)` meant an import file's own
-casing variance (e.g. `"star wars"` vs `"Star Wars"`) was treated as a genuine field conflict, even
-though `QuoteIdentity.StableId` already normalises casing away when generating the same quote's id —
-an inconsistency between two adjacent mechanisms governing the same imported value. Deliberately applies
-uniformly rather than only to source/character/author-style fields: a future import correcting only a
-quote's own casing (e.g. an all-caps entry) is expected to be rare enough that requiring an accompanying
-non-casing change (or an explicit `markCompletenessAs`) to register the correction is an acceptable
-trade-off against the alternative of a growing per-field exemption list.
+list) case-insensitively by default. Found while implementing #181: a plain `Equals(a, b)` meant an
+import file's own casing variance (e.g. `"star wars"` vs `"Star Wars"`) was treated as a genuine field
+conflict, even though `QuoteIdentity.StableId` already normalises casing away when generating the same
+quote's id.
+
+**One exception: a quote's `quoteText` and `character` are compared case-sensitively** (#374,
+`QuoteFieldMerge.CaseSensitiveContentFields`). A case-only change to a quote's own words can be a
+correction or a downgrade, and only a person can tell which, so it is held for review. Every comparison
+of a quote's fields — staging, listing, deciding, the import response — goes through `QuoteFieldMerge`,
+which applies the set; never call `FieldMergeResolver` directly on quote fields. #409 found four callers
+that did, each treating as equal what staging had held for review.
 
 ### Entity-scoped filter-parameter convention
 
