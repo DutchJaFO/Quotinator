@@ -176,6 +176,12 @@ nothing observable changes in a running container for that part.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-03
-Remove-Item .claude/temp/smoke156.db, .claude/temp/smoke156.db-wal, .claude/temp/smoke156.db-shm, `
-            .claude/temp/smoke156-before.db -ErrorAction SilentlyContinue
+Get-ChildItem .claude/temp -Filter 'smoke156*' | Remove-Item
+Get-ChildItem .claude/temp -Filter 'smoke156*'
 ```
+
+**Expected:** the second listing is empty.
+
+**Both copies have sidecars.** DbInspector opens `smoke156-before.db` as well as `smoke156.db`, and
+opening a database in WAL mode creates its `-wal`/`-shm` files beside it — so the copy step 7 never
+copied sidecars for still gains them.
