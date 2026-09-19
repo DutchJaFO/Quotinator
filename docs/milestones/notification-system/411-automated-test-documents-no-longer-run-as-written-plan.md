@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 3)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 2: fix the pending-review alert document.
+Step 3: add the obsolete check to the notification document.
 
 ---
 
@@ -68,11 +68,19 @@ must fail where the Description says; a document that passes as written is not i
 
 ### 2. Fix the pending-review alert document
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done.
 
-Step 6 asserts what two reseeds now produce: two alerts, one active and one `resolved`, and
-`active alerts = 1`. Step 8 asserts the resolved alerts read *Done*. The read-only-container step moves to
-the end, after the browser steps that use the container it destroys; the steps are renumbered.
+The fixture stages **two** conflicts (`--count 2`): the document's decision step settles one from the
+notification and one from the review page, and with a single conflict only one surface could be driven —
+exactly what #370's and #409's passes had to settle for. Measured before writing the expectations, against
+the same image as step 1: after the discard and two reseeds, three alerts — the discarded file's original
+`resolved` and a new active one for it, and the other file's original still active — with
+`active alerts = 2` and `pending actions = 2`; the second reseed added nothing.
+
+Step 6 asserts that. The resolved alert reads *Done* (new step 7). The decision step (new step 8) captures
+both pending quotes and expects both batches `Applied` and `active alerts = 0`, and names the button
+**Decide**, not the old **Run**. The read-only-container step moves last (new step 9), and the cleanup
+removes the bind folder. The Preconditions and Determinism sections no longer promise an obsolete alert.
 
 ### 3. Add the obsolete check to the notification document
 
