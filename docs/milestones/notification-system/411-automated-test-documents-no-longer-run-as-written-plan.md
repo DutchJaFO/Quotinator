@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 5)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 4: fix the already-reported conflict document.
+Step 5: rewrite the bulk-decide document.
 
 ---
 
@@ -92,7 +92,7 @@ Step 7 inserts a fourth row — `IsDismissed = 1`, `DismissReason = 'Obsolete'` 
 
 ### 4. Fix the already-reported conflict document
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done.
 
 `Unresolved` wraps its filtered result in `@(...)` before `.Count`.
 
