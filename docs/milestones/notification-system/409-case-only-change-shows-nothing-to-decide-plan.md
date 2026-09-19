@@ -1,6 +1,6 @@
 # #409 — A quote held for review over a case-only text change shows nothing to decide, and is decided without asking
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 6)
 **GitHub issue:** #409
 **Tiers required:** T1, T2
 **Depends on:** #370
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 3: pass the set, and route every quote comparison through `QuoteFieldMerge`.
+Step 6: the T2 pass.
 
 ---
 
@@ -84,7 +84,8 @@ step 4's empty decide answered `204`. Container and image removed.
 
 ### 3. Pass the set, and route every quote comparison through `QuoteFieldMerge`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `19ea138b`. Every #409 test green except row 9, which waits on step 4. Every
+direct `FieldMergeResolver` call left in `Quotinator.Core` is for another entity type.
 
 The three methods pass `CaseSensitiveContentFields`. Replace the direct `FieldMergeResolver` calls on
 quote fields: `ImportActionPlanner` (`Resolve`, two `ResolveWithDecisions`, four `ValuesEqual`),
@@ -94,7 +95,7 @@ quote fields: `ImportActionPlanner` (`Resolve`, two `ResolveWithDecisions`, four
 
 ### 4. Correct `CLAUDE.md`
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `0f184b63`. Row 9 green.
 
 Rewrite the paragraph on `FieldMergeResolver.ValuesEqual` in *GUID/enum/id/Name/Title comparisons are
 case-insensitive by default*: case-insensitive by default, except a quote's `quoteText` and `character`
@@ -102,7 +103,7 @@ case-insensitive by default*: case-insensitive by default, except a quote's `quo
 
 ### 5. Build and run the full suite
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 4,143 tests passed across 11 projects, 0 warnings, 0 errors.
 
 `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
 both 0 warnings, 0 errors.
@@ -127,15 +128,15 @@ The developer starts the application in Visual Studio.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | The listing reports `quoteText` for a case-only text change | Unit test | `SqliteImportActionServiceTests.GetPagedAsync_QuoteTextDiffersOnlyByCase_ReportsQuoteTextAsAmbiguous` |
-| 2 | ❌ | The listing reports `character` for a case-only character change | Unit test | `SqliteImportActionServiceTests.GetPagedAsync_CharacterDiffersOnlyByCase_ReportsCharacterAsAmbiguous` |
-| 3 | ❌ | An empty decide on a case-only change is refused, naming the field | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteTextDiffersOnlyByCase_NoDecision_IsRefused` |
+| 1 | ✅ | The listing reports `quoteText` for a case-only text change | Unit test | `SqliteImportActionServiceTests.GetPagedAsync_QuoteTextDiffersOnlyByCase_ReportsQuoteTextAsAmbiguous` |
+| 2 | ✅ | The listing reports `character` for a case-only character change | Unit test | `SqliteImportActionServiceTests.GetPagedAsync_CharacterDiffersOnlyByCase_ReportsCharacterAsAmbiguous` |
+| 3 | ✅ | An empty decide on a case-only change is refused, naming the field | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteTextDiffersOnlyByCase_NoDecision_IsRefused` |
 | 4 | ✅ | Taking incoming on a case-only change stores the incoming casing — positive half of row 3 | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteTextDiffersOnlyByCase_Replace_TakesIncomingText` |
-| 5 | ❌ | The notification's batch decide settles a case-only change | Unit test | `SqliteImportActionServiceTests.DecideBatchAsync_QuoteTextDiffersOnlyByCase_DecidesIt` |
-| 6 | ❌ | Under `merge-theirs`, the `POST /import` response reports a case-only `quoteText` as taken from the incoming side | Unit test | `QuoteImportServiceTests.ImportAsync_MergeTheirs_QuoteTextDiffersOnlyByCase_ReportsQuoteTextFromIncoming` |
+| 5 | ✅ | The notification's batch decide settles a case-only change | Unit test | `SqliteImportActionServiceTests.DecideBatchAsync_QuoteTextDiffersOnlyByCase_DecidesIt` |
+| 6 | ✅ | Under `merge-theirs`, the `POST /import` response reports a case-only `quoteText` as taken from the incoming side | Unit test | `QuoteImportServiceTests.ImportAsync_MergeTheirs_QuoteTextDiffersOnlyByCase_ReportsQuoteTextFromIncoming` |
 | 7 | ✅ | A quote field outside the set still resolves a case-only difference on its own — control | Unit test | `QuoteFieldMergeTests.ResolveWithDecisions_SourceDiffersOnlyByCase_NeedsNoDecision` (new class) |
-| 8 | ❌ | A case-only `quoteText` difference is unresolved without a decision | Unit test | `QuoteFieldMergeTests.ResolveWithDecisions_QuoteTextDiffersOnlyByCase_IsUnresolved` |
-| 9 | ❌ | `CLAUDE.md` names the case-sensitive quote fields and the single entry point | Unit test | `QuoteFieldMergeTests.CaseSensitiveContentFields_AreDocumentedInClaudeMd` |
+| 8 | ✅ | A case-only `quoteText` difference is unresolved without a decision | Unit test | `QuoteFieldMergeTests.ResolveWithDecisions_QuoteTextDiffersOnlyByCase_IsUnresolved` |
+| 9 | ✅ | `CLAUDE.md` names the case-sensitive quote fields and the single entry point | Unit test | `QuoteFieldMergeTests.CaseSensitiveContentFields_AreDocumentedInClaudeMd` |
 | 10 | ✅ | A genuine text change is listed exactly as before — control | Unit test | `SqliteImportActionServiceTests.GetPagedAsync_PendingModifyConflicts_ReportsAmbiguousFieldsWithoutThrowing` (existing) |
 | 11 | ❌ | In a running container, a case-only change is listed with `quoteText`, an empty decide is refused, and taking incoming decides the incoming casing | Live (T2) | `automated-testing/import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md` passes on this branch's build and fails on the canary at its listing step |
-| 12 | ❌ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
+| 12 | ✅ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
