@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 6)
+**Status:** In progress (step 7)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 6: fix the changelog document's step 5.
+Step 7: fix the reset document's cleanup.
 
 ---
 
@@ -122,7 +122,13 @@ edits use `corrupt-csv-cell.csx --row`, the row found by its `Field` value.
 
 ### 6. Fix the changelog document's step 5
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — run as written against the step 1 image; every step passes. At health the log held
+one `refreshed 126 entries` line; the second appeared after about a second of polling, also 126.
+
+The container's log holds two `[Runtime - Exception]` lines, both `SocketException (125): Operation
+canceled`, logged the moment the restart stops the server — none before it, measured by counting after
+start, after the page request and after the restart. They do not affect the app's function; they are
+outside this issue and raised with the developer.
 
 After the restart, poll the log until a second `[Changelog - Import]` line appears, for at most 60 s,
 then assert it reports the same entry count as the first.
