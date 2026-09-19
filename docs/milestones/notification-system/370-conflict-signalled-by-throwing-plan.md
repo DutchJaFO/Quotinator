@@ -1,6 +1,6 @@
 # #370 — An expected import conflict is signalled by throwing, once per conflicted row per render
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #370
 **Tiers required:** T1, T2
 **Depends on:** #397
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Run the *Waiting for release* checklist.
+Wait for the release; then the *Released* checklist and the closing comment.
 
 ---
 
@@ -267,6 +267,20 @@ ready, upgrading a Data v3 / App v5 database to Data v22 / App v9.
   [#413](https://github.com/DutchJaFO/Quotinator/issues/413).
 - One `ObjectDisposedException` on a `NetworkStream`, at a moment the application's only outgoing client
   made no request. Not identified; the logged first-chance stack holds only the throwing frame.
+
+---
+
+## Process gap check
+
+**Rules that existed and were not followed** — behavioural, no document change:
+
+- `sed`, `grep`, `head` and `tail` run in a shell while following up T1 — ADR 010.
+- T1 was given a review check on top of the startup it exists for — `docs/release-verification.md`,
+  "T1 confirms the thing still starts".
+- The source-download timeout was probed per address family, a line #325's revert had already closed:
+  the application never resolves addresses itself.
+
+**Genuine gaps:** none found.
 
 ---
 

@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-09-18 05:30 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-09-19 10:33 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -59,6 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)
 
 ### Fixed
+- Changes waiting for your decision no longer fill the log with errors each time they are viewed — nothing was actually wrong (issue #370)
 - A parameter-binding failure turned into a `422` was logged nowhere: since .NET 10 the exception-handler middleware stops logging an exception a handler reports as handled. The handler now logs it itself, and the middleware's own line is suppressed only for exceptions an application handler has already logged (issue #397)
 - Six exceptions were thrown and swallowed on every startup while the framework probed for a constructor the admin API key filter did not have. The filter is now registered once and shared by every admin endpoint group, with its configuration injected (issue #397)
 - A change waiting for your decision was reported again every time your quotes were reloaded, so the same unresolved item piled up copies of itself without limit. Each is now reported once and recognised on every later reload, and the reload's own record says how many it recognised that way — so a long-standing decision no longer buries the ones that are genuinely new (issue #376)

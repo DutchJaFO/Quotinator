@@ -70,7 +70,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#367](https://github.com/DutchJaFO/Quotinator/issues/367) | Notification actions give no feedback while they run | Waiting for release | T1 ✅ T2 ✅ | [367-executing-notification-state-plan.md](367-executing-notification-state-plan.md) |
 | [#368](https://github.com/DutchJaFO/Quotinator/issues/368) | New import files are discovered but never imported, and nothing says so | Planning | T1 ⬜ T2 ⬜ | [368-unimported-files-are-discovered-but-never-imported-plan.md](368-unimported-files-are-discovered-but-never-imported-plan.md) |
 | [#369](https://github.com/DutchJaFO/Quotinator/issues/369) | A review row whose batch is gone offers decisions that cannot be carried out | Waiting for release | T1 ✅ T2 ✅ | [369-orphaned-review-rows-plan.md](369-orphaned-review-rows-plan.md) |
-| [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | In progress | T1 ✅ T2 ✅ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
+| [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | Waiting for release | T1 ✅ T2 ✅ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
 | [#409](https://github.com/DutchJaFO/Quotinator/issues/409) | A quote held for review over a case-only text change shows nothing to decide, and is decided without asking | Planning | T1 ⬜ T2 ⬜ | — |
 | [#410](https://github.com/DutchJaFO/Quotinator/issues/410) | Deciding a Quote Add action answers 500 instead of an outcome | Planning | T1 ⬜ T2 ⬜ | — |
 | [#411](https://github.com/DutchJaFO/Quotinator/issues/411) | Two automated-test documents assert results the application no longer produces | Planning | T1 ⬜ T2 ⬜ | — |
@@ -125,7 +125,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #353 ─── (none) — Planning
 #351 ─── (none) — Planning
 #313 ─── (none) — Waiting for release
-#370 ─── depends on #397 — In progress
+#370 ─── depends on #397 — Waiting for release
 #409 ─── (none); touches the same two calls as #370 — Planning
 #410 ─── depends on #370, whose decide outcomes it extends — Planning
 #411 ─── (none) — Planning
@@ -184,7 +184,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 27 | **#389** ✅ | Waiting for release — found by #369's T2 |
 | 28 | **#369** ✅ | Waiting for release |
 | 29 | **#397** ✅ | Waiting for release; unblocks #370 |
-| 30 | **#370** 🚧 | In progress — #397 is at Waiting for release; sequenced with #369, same page |
+| 30 | **#370** ✅ | Waiting for release |
 | 31 | **#409** | Planning — found while planning #370; same two calls, so after it |
 | 32 | **#410** | Planning — found in #370's T2; extends #370's decide outcomes |
 | 33 | **#411** | Planning — found in #370's T2; two stale automated-test documents |
