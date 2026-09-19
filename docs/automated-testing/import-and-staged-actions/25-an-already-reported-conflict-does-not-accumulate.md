@@ -138,7 +138,8 @@ against bundled content. Stop.
 
 ```powershell
 function Unresolved($sourceId) {
-  ((Invoke-RestMethod "$base/import/actions?pageSize=0").items |
+  # @(...): a single match is unrolled to one object, whose .Count is empty in PowerShell 5.1.
+  @((Invoke-RestMethod "$base/import/actions?pageSize=0").items |
     Where-Object { $_.entityType -eq 'Source' -and $_.entityId -eq $sourceId -and
                    $_.status -in @('Pending','Blocked','Stale') }).Count
 }
