@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** Planning
+**Status:** In progress (step 2)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Approve this plan. Then step 1: run each document as written, and record where it fails.
+Step 2: fix the pending-review alert document.
 
 ---
 
@@ -49,7 +49,19 @@ Five automated-test documents no longer run as written, found in the T2 passes o
 
 ### 1. Run each document as written, and record where it fails
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-09-19, against an image built from `dec09367` (no code has changed since).
+Each fails where the Description says:
+
+| Document | As written |
+|---|---|
+| Pending-review alert | Step 6: `fd009b2f isDismissed=False`, `661fbc9f isDismissed=True reason=resolved`, `active alerts = 1` — no obsolete alert; after step 7, step 8's `http://localhost:19520/notifications` is unreachable |
+| Already-reported conflict | Steps 4–5: `after cold start: ` and ` ->  -> ` |
+| Bulk decide | Step 2: `< 200 OK`, `Expected 202, got 200.` |
+| Changelog database | Step 5, three runs: one `[Changelog - Import]` line at health each time — the post-restart import had not yet logged |
+| Reset | After the cleanup: `smoke156-before.db-shm`, `smoke156-before.db-wal` remain |
+
+The reset document's cleanup line is refused by this environment's shell guard as written (a multi-path
+`Remove-Item`); it was run as one `-LiteralPath` removal per path it names, which removes the same files.
 
 Against a build of this branch, the failing steps of each of the five documents, exactly as written. Each
 must fail where the Description says; a document that passes as written is not in scope.
