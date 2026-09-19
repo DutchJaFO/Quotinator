@@ -11,9 +11,11 @@ because the Action-button check runs a Reset that wipes the database it is start
 Seeding must be allowed to finish before anything is asserted — the notification a fresh container
 produces is written during startup, so an early read cannot tell "not produced" from "not yet".
 
-The Status-filter and Action-button checks additionally need three rows that no producer creates on its
-own — one `ActionRequired` row with `DismissTriggerKey = 'DatabaseReset'`, one already-expired row, and
-one already-dismissed row. Step 7 constructs them directly in `System_Notification`; this is the index's
+The Status-filter and Action-button checks additionally need four rows that no producer creates on its
+own — one `ActionRequired` row with `DismissTriggerKey = 'DatabaseReset'`, one already-expired row, one
+already-dismissed row, and one dismissed with reason `Obsolete`. Nothing has produced an obsolete
+notification since #372 stopped reseeds truncating batches, but databases that already hold one still
+have to read it correctly. Step 7 constructs them directly in `System_Notification`; this is the index's
 first case for a constructed fixture, a state the application cannot be driven into through its own
 surfaces.
 
@@ -155,11 +157,11 @@ stats block still renders.
 a fresh container now produces more than one — two when measured. Dismissing just the announcement, as
 this step said until #339's full run, leaves the what's-new row behind and the empty state untested.
 
-### 7. Insert the three rows no producer creates
+### 7. Insert the four rows no producer creates
 
 The Status-column, filter and Action-button checks need one `ActionRequired` row carrying a dismiss
-trigger, one already-expired row and one already-dismissed row. Nothing in the application produces
-these, so the test constructs them — against a **stopped** container, since writing to a SQLite file
+trigger, one already-expired row, one already-dismissed row and one dismissed as obsolete. Nothing in
+the application produces these, so the test constructs them — against a **stopped** container, since writing to a SQLite file
 underneath a running process is a different scenario:
 
 ```powershell
@@ -167,10 +169,11 @@ docker stop -t 15 qt-notif-01
 docker cp qt-notif-01:/data/quotinatordata.db .claude/temp/notif-01.db
 
 dotnet script scripts/testing/execute-sql.csx -- --db .claude/temp/notif-01.db --sql @'
-INSERT INTO System_Notification (Id, Type, Title, Body, ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DateCreated, IsDeleted) VALUES
-  ('a0000278-0000-4000-8000-000000000001','ActionRequired','Smoke test action required','A #278 smoke test row needing an action.',NULL,0,NULL,'DatabaseReset','2026-01-01 00:00:00',0),
-  ('a0000278-0000-4000-8000-000000000002','Information','Smoke test expired','A #278 smoke test row that has already expired.','2020-01-01 00:00:00',0,NULL,NULL,'2026-01-01 00:00:00',0),
-  ('a0000278-0000-4000-8000-000000000003','Information','Smoke test dismissed','A #278 smoke test row already dismissed.',NULL,1,'2026-01-02 00:00:00',NULL,'2026-01-01 00:00:00',0);
+INSERT INTO System_Notification (Id, Type, Title, Body, ExpiresAt, IsDismissed, DismissedAt, DismissTriggerKey, DismissReason, DateCreated, IsDeleted) VALUES
+  ('a0000278-0000-4000-8000-000000000001','ActionRequired','Smoke test action required','A #278 smoke test row needing an action.',NULL,0,NULL,'DatabaseReset',NULL,'2026-01-01 00:00:00',0),
+  ('a0000278-0000-4000-8000-000000000002','Information','Smoke test expired','A #278 smoke test row that has already expired.','2020-01-01 00:00:00',0,NULL,NULL,NULL,'2026-01-01 00:00:00',0),
+  ('a0000278-0000-4000-8000-000000000003','Information','Smoke test dismissed','A #278 smoke test row already dismissed.',NULL,1,'2026-01-02 00:00:00',NULL,NULL,'2026-01-01 00:00:00',0),
+  ('a0000278-0000-4000-8000-000000000004','Information','Smoke test obsolete','A #278 smoke test row whose subject no longer exists.',NULL,1,'2026-01-02 00:00:00',NULL,'Obsolete','2026-01-01 00:00:00',0);
 '@
 
 docker cp .claude/temp/notif-01.db qt-notif-01:/data/quotinatordata.db
@@ -181,7 +184,7 @@ $rows = (Invoke-RestMethod "http://localhost:18501/api/v1/notifications?pageSize
 @($rows | Where-Object { $_.title -like 'Smoke test*' }).Count
 ```
 
-**Expected:** `execute-sql.csx` reports `3 row(s) affected`, and the count reads `3` — all three rows
+**Expected:** `execute-sql.csx` reports `4 row(s) affected`, and the count reads `4` — all four rows
 are present and readable through the API.
 
 **Counted as objects, not as text matches.** The response is single-line JSON, so a line-counting match
@@ -196,13 +199,13 @@ and it removes a network dependency from the middle of a test.
 **On failure:** a SQL error means the rows were never created, and every assertion in step 8 then
 reads an unchanged page. That is a setup failure, not a result — stop.
 
-A CHECK-constraint rejection here is worth reading rather than working around: `Type` and
-`DismissTriggerKey` are constrained to their enum's current members, so a failure means the enum moved
-and this fixture needs updating with it.
+A CHECK-constraint rejection here is worth reading rather than working around: `Type`,
+`DismissTriggerKey` and `DismissReason` are constrained to their enum's current members, so a failure
+means the enum moved and this fixture needs updating with it.
 
 ### 8. Check the status column, the status filter, and the Action button
 
-With the three rows from step 7 in place, on `/notifications`. **Driver step**, like step 5 — every
+With the four rows from step 7 in place, on `/notifications`. **Driver step**, like step 5 — every
 assertion is a DOM read or a click, and each is stated so a driver can perform it without judgement.
 
 **Expected — status column and default filter:** reading `tbody tr`, taking each row's message cell
@@ -210,9 +213,11 @@ and status cell —
 
 - The page loads with the **Active** filter selected: exactly the `ActionRequired` row is listed, and
   its Action cell holds that action's own button, **Reset the database**.
-- Click **All**: every row is listed, the three constructed ones among them, and those three read
-  `Active` (the action row), `Expired` and `Dismissed`. **The undismissed row past its `ExpiresAt` reads
-  `Expired`, never `Active`** — that is the computed-status assertion.
+- Click **All**: every row is listed, the four constructed ones among them, and those four read
+  `Active` (the action row), `Expired`, `Dismissed` and `No longer applicable`. **The undismissed row past
+  its `ExpiresAt` reads `Expired`, never `Active`** — that is the computed-status assertion. **The row
+  dismissed as obsolete reads `No longer applicable`, never `Dismissed`** — a notification whose subject
+  no longer exists was neither dealt with nor set aside.
 - Click **Expired only**: exactly one row, the expired one.
 
 **Action button, Cancel path.** Back on **Active**, click **Reset the database** in the ActionRequired
