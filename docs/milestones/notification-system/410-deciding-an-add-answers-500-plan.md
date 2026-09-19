@@ -1,6 +1,6 @@
 # #410 — Deciding a Quote Add action answers 500 instead of an outcome
 
-**Status:** In progress (step 2)
+**Status:** In progress (step 3)
 **GitHub issue:** #410
 **Tiers required:** T1, T2
 **Depends on:** #370
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 2: write every test and the automated document, and run each red.
+Step 3: answer every Add with an outcome.
 
 ---
 
@@ -73,7 +73,22 @@ German, and its `ApiMessages` constant, so `TranslationCompletenessTests` stays 
 
 ### 2. Write every test and the automated document, and run each red
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — every planned red test fails, each after its precondition assert passed; rows 9,
+10 and 11 green.
+
+| Row | Red on |
+|---|---|
+| 1, 2, 3, 5, 6, 7, 12 | `DecideAsync` throws `ArgumentNullException` deserializing the Add's absent `ExistingValue` |
+| 4 | `DecideAsync` throws `JsonException` deserializing the blocked Add's `{ conflictingQuoteId }` marker as a quote |
+| 8 | `NotDecidable` instead of `AlreadyResolved`, for both `Source` and `Character` |
+| 13, 14 | `Describe` returns empty for `HeldForReview`, and the old `NotDecidable` text |
+| 15 | The endpoint's unmatched arm answers with the ambiguous-fields message |
+| 16 | The `422` names no action kind |
+
+*Deciding an import Add answers an outcome, never a server error*, against a canary image of `af7f9498`:
+all five cases staged as intended — `applied=Add/Applied`, `secondDate` and `ruleOnNothing` `Pending`,
+`storedDuplicate` and `fileDuplicate` `Blocked` — and every decide answered `500`, with 71 exception
+lines logged. Container, bind folder and image removed.
 
 The tests in the Verification checklist. Rows 9, 10 and 11 are controls or coverage of existing
 behaviour and start green. Fixtures, each following the staging test already named in *Decisions*:
