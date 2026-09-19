@@ -79,8 +79,10 @@ just because they happened in the same session.
 **Commit message format and content.** Title is `type [#N]: short summary` — `type` is one of `feat`
 (new capability), `fix` (bug fix), `docs` (documentation-only change, no source files), `chore`
 (tooling/dependency/config, no behaviour change), `refactor` (code-organisation change with no
-behaviour change, e.g. moving a type between projects); `[#N]` is the GitHub issue number, or
-multiple bracketed numbers (`[#69][#157]`) when a commit's work genuinely spans more than one issue.
+behaviour change, e.g. moving a type between projects), `test` (tests and automated-test documents
+only, no production code — the red-first commit an issue makes before its fix); `[#N]` is the GitHub
+issue number, or multiple bracketed numbers (`[#69][#157]`) when a commit's work genuinely spans
+more than one issue.
 **The message is the subject line, and nothing else, whenever the committed content already carries
 the information** (developer direction, 2026-09-09). That is the normal case for every commit type,
 `docs` included — so subject-only is the default, not an option:
