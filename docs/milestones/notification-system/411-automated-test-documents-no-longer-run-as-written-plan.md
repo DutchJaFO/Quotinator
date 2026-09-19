@@ -125,11 +125,8 @@ edits use `corrupt-csv-cell.csx --row`, the row found by its `Field` value.
 **Status:** ✅ Done — run as written against the step 1 image; every step passes. At health the log held
 one `refreshed 126 entries` line; the second appeared after about a second of polling, also 126.
 
-The container's log holds two `[Runtime - Exception]` lines, both `SocketException (125): Operation
-canceled`, logged the moment the restart stops the server — none before it, measured by counting after
-start, after the page request and after the restart. They do not affect the app's function, and are
-the known shutdown cause in the Knowledgebase entry *The log reports a cancelled socket or transport
-connection* (#402).
+Read before the restart — after start and after the page request — the log holds no
+`[Runtime - Exception]` line.
 
 After the restart, poll the log until a second `[Changelog - Import]` line appears, for at most 60 s,
 then assert it reports the same entry count as the first.
@@ -143,8 +140,7 @@ The cleanup removes what `Get-ChildItem .claude/temp -Filter 'smoke156*'` lists,
 loop over composed paths was tried first and refused by this environment's shell guard, as the original
 multi-path line was in step 1.
 
-The log holds four `[Runtime - Exception]` lines: the same `SocketException (125): Operation canceled`
-pair step 6 recorded, once at each of the document's two stops.
+Read before each of its three stops, the log holds no `[Runtime - Exception]` line.
 
 The cleanup removes the `-wal`/`-shm` files beside both database copies.
 
@@ -169,18 +165,24 @@ written:
 - The already-reported conflict document's step 3 reseeded straight after `docker restart`, which
   failed with the connection closed. Step 2 now waits for health.
 
-`[Runtime - Exception]` lines, none of which affect the app's function, and each already recorded:
+**Each container's log is read before every stop and restart**, per the index's *Read the log before
+the application stops*. The pending-review alert, notification, already-reported conflict and reset
+documents were first run with the log read only at the end, which counted the stops' own exceptions
+with the tests'; all four were run again reading before each stop, with the results above unchanged.
+What the tests themselves produced, none of which affects the app's function and each already recorded:
 
-- the `SocketException (125)` pair at every stop or restart, and five `OperationCanceledException` at
-  the notification document's stop with the browser connected — causes 1 and 2 of the Knowledgebase
-  entry *The log reports a cancelled socket or transport connection*;
-- a *key not found in the key ring* / antiforgery pair in both browser-driven documents — the browser
-  pane still held a cookie from an earlier container on the same port, the Knowledgebase entry *The log
-  reports that an antiforgery token could not be decrypted*;
-- the bulk-decide document's `FormatException` — #405.
+| Document | `[Runtime - Exception]` lines before its stops |
+|---|---|
+| Bulk decide | 1 — `FormatException` for the rejected value, #405 |
+| Pending-review alert, notification | 2 each — a *key not found in the key ring* / antiforgery pair on the browser's first page: it still held a cookie from an earlier container on the same port (Knowledgebase: *The log reports that an antiforgery token could not be decrypted*) |
+| Pending-review alert, read-only container (step 9) | 48 — `IOException`, `SqliteException`, `CryptographicException` from the read-only data directory the step creates; the known defect its step 9 describes |
+| Already-reported conflict, changelog, reset | 0 |
+
+For comparison, the notification document's one stop logged 7 of its own: two `SocketException (125)`
+and five `OperationCanceledException` with the browser connected.
 
 Each changed document, in full, against a build of the branch; each container's log read for
-`[Runtime - Exception]` lines before it is removed.
+`[Runtime - Exception]` lines before every stop, restart and removal.
 
 ### 9. T1 pass
 
