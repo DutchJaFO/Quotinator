@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 9)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 8: the T2 pass.
+Step 9: the developer's T1 pass — the application starts in Visual Studio.
 
 ---
 
@@ -149,7 +149,32 @@ The cleanup removes the `-wal`/`-shm` files beside both database copies.
 
 ### 8. T2 pass
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — against an image built from `7d3f164a`. Every step of every document passes as
+written:
+
+| Document | Result |
+|---|---|
+| Pending-review alert | 2 pending, 2 active; after the discard and two reseeds three alerts, 2 active, 2 pending; the resolved one reads *Done*; both surfaces left their batch `Applied` with `active alerts = 0`; read-only: `/notifications` and `/import-review` both `500`, `/about` and `/stats` `200` |
+| Notification | Constructed rows read `Active`, `Expired`, `Dismissed`, `No longer applicable`; Cancel left 795 quotes, Confirm left 0 quotes and 0 notifications |
+| Already-reported conflict | `1 -> 1 -> 1`; `AlreadyReported=2 Unchanged=2 Modify=1 Add=1` |
+| Changelog | Second import line after about a second of polling, both 126 entries |
+| Bulk decide, reset | As steps 5 and 7 recorded — run against the step 1 image, which differs from this one only in the bundled changelog JSON neither reads |
+
+**Two further defects, found by this pass and fixed in the documents:**
+
+- The pending-review alert document's step 1 wrote into a bind folder without clearing it; one left by
+  an earlier run still held that run's database, so step 6 counted four alerts. Step 1 now removes the
+  folder first.
+- The already-reported conflict document's step 3 reseeded straight after `docker restart`, which
+  failed with the connection closed. Step 2 now waits for health.
+
+`[Runtime - Exception]` lines, none of which affect the app's function:
+
+- the `SocketException (125)` pair at every stop or restart (step 6);
+- five `OperationCanceledException` at the notification document's stop, with the browser connected;
+- a *key not found in the key ring* / antiforgery pair in both browser-driven documents — the browser
+  pane still held a cookie from an earlier container on the same port;
+- the bulk-decide document's `FormatException` (step 5).
 
 Each changed document, in full, against a build of the branch; each container's log read for
 `[Runtime - Exception]` lines before it is removed.
@@ -166,9 +191,9 @@ The developer starts the application in Visual Studio.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | The pending-review alert document asserts what a reseed now produces and runs in its written order | Live (T2) | *A file left awaiting review raises an alert, and resolving it retires the alert* passes every step, in order |
-| 2 | ❌ | An obsolete alert reads *No longer applicable* | Live (T2) | *Notifications list, dismiss, render, and drive their action*, steps 7 and 8, with the fourth row |
-| 3 | ❌ | The already-reported conflict document prints its counts | Live (T2) | *An already-reported conflict does not stage a duplicate on every reseed*, steps 4 and 5 print `1 -> 1 -> 1` |
-| 4 | ❌ | The bulk-decide document stages batches of its own and runs its round trips | Live (T2) | *Bulk-deciding a staged batch via file export and re-import, in both wire formats* passes every step |
-| 5 | ❌ | The changelog document reads the import line once it is written | Live (T2) | *The changelog is served from its own on-disk database, not the JSON fallback*, step 5 |
-| 6 | ❌ | The reset document leaves nothing in `.claude/temp` | Live (T2) | *Reset wipes the entire database and does not reseed*, then `Get-ChildItem .claude/temp -Filter 'smoke156*'` lists nothing |
+| 1 | ✅ | The pending-review alert document asserts what a reseed now produces and runs in its written order | Live (T2) | *A file left awaiting review raises an alert, and resolving it retires the alert* passes every step, in order |
+| 2 | ✅ | An obsolete alert reads *No longer applicable* | Live (T2) | *Notifications list, dismiss, render, and drive their action*, steps 7 and 8, with the fourth row |
+| 3 | ✅ | The already-reported conflict document prints its counts | Live (T2) | *An already-reported conflict does not stage a duplicate on every reseed*, steps 4 and 5 print `1 -> 1 -> 1` |
+| 4 | ✅ | The bulk-decide document stages batches of its own and runs its round trips | Live (T2) | *Bulk-deciding a staged batch via file export and re-import, in both wire formats* passes every step |
+| 5 | ✅ | The changelog document reads the import line once it is written | Live (T2) | *The changelog is served from its own on-disk database, not the JSON fallback*, step 5 |
+| 6 | ✅ | The reset document leaves nothing in `.claude/temp` | Live (T2) | *Reset wipes the entire database and does not reseed*, then `Get-ChildItem .claude/temp -Filter 'smoke156*'` lists nothing |
