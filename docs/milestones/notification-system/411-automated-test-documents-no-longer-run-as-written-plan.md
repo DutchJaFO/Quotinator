@@ -110,8 +110,8 @@ the design below, both measured:
 The container's log holds one `[Runtime - Exception]` line: a `FormatException` thrown by
 `ImportActionFieldRowMapper.FromCsvRow` for the rejected value, which bulk-decide catches and reports as
 that row's error. Under [ADR 022](../../architecture-decisions/022-exceptions-only-for-undetectable-conditions.md)
-a value the code has checked is returned as an outcome, not thrown. That is code, not a document, so it
-is outside this issue — raised with the developer.
+a value the code has checked is returned as an outcome, not thrown. That is code, not a document, and is
+already tracked as #405, *Bulk decide reports a bad row instead of throwing for it*.
 
 A container with `Quotinator__IncludeDefaultSources=false`; a base file and a conflicting file of two
 quotes each, the second imported under `review` for each of the three batches. The JSON and CSV round
@@ -127,8 +127,9 @@ one `refreshed 126 entries` line; the second appeared after about a second of po
 
 The container's log holds two `[Runtime - Exception]` lines, both `SocketException (125): Operation
 canceled`, logged the moment the restart stops the server — none before it, measured by counting after
-start, after the page request and after the restart. They do not affect the app's function; they are
-outside this issue and raised with the developer.
+start, after the page request and after the restart. They do not affect the app's function, and are
+the known shutdown cause in the Knowledgebase entry *The log reports a cancelled socket or transport
+connection* (#402).
 
 After the restart, poll the log until a second `[Changelog - Import]` line appears, for at most 60 s,
 then assert it reports the same entry count as the first.
@@ -168,13 +169,15 @@ written:
 - The already-reported conflict document's step 3 reseeded straight after `docker restart`, which
   failed with the connection closed. Step 2 now waits for health.
 
-`[Runtime - Exception]` lines, none of which affect the app's function:
+`[Runtime - Exception]` lines, none of which affect the app's function, and each already recorded:
 
-- the `SocketException (125)` pair at every stop or restart (step 6);
-- five `OperationCanceledException` at the notification document's stop, with the browser connected;
+- the `SocketException (125)` pair at every stop or restart, and five `OperationCanceledException` at
+  the notification document's stop with the browser connected — causes 1 and 2 of the Knowledgebase
+  entry *The log reports a cancelled socket or transport connection*;
 - a *key not found in the key ring* / antiforgery pair in both browser-driven documents — the browser
-  pane still held a cookie from an earlier container on the same port;
-- the bulk-decide document's `FormatException` (step 5).
+  pane still held a cookie from an earlier container on the same port, the Knowledgebase entry *The log
+  reports that an antiforgery token could not be decrypted*;
+- the bulk-decide document's `FormatException` — #405.
 
 Each changed document, in full, against a build of the branch; each container's log read for
 `[Runtime - Exception]` lines before it is removed.
