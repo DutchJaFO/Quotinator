@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 9: share one key ring across test containers.
+Step 9: run the six smoke documents step 8 skipped.
 
 ---
 
@@ -213,13 +213,29 @@ For comparison, the notification document's one stop logged 7 of its own: two `S
 and five `OperationCanceledException` with the browser connected.
 
 **This pass ran only the changed documents, not the index's full end-of-issue scope**: six of the nine
-smoke tests were not run. Steps 13 and 14 cover them, together with everything the shared key ring
-changes.
+smoke tests were not run. Step 9 runs them, before any further change.
 
 Each changed document, in full, against a build of the branch; each container's log read for
 `[Runtime - Exception]` lines before every stop, restart and removal.
 
-### 9. Share one key ring across test containers
+### 9. Run the smoke documents step 8 skipped
+
+**Status:** ⬜ Not started
+
+The six the end-of-issue scope requires and step 8 did not run, against the same build, each log read
+before its container stops:
+
+- *Baseline — health, version, random and search respond correctly*
+- *The pagination contract holds live on every paginated endpoint*
+- *The staged review → decide → apply workflow, end to end*
+- *A fresh seed resolves every bundled file with nothing left pending*
+- *Every seed and import surface reports per-file, per-entity-type counts*
+- *Kestrel serves a wait page during initialisation instead of appearing dead*
+
+They run before the key-ring change, so a failure here belongs to the build rather than to it. A
+document that fails as written is fixed in this issue, like the five the Description names.
+
+### 10. Share one key ring across test containers
 
 **Status:** ⬜ Not started
 
@@ -235,7 +251,7 @@ Probe before relying on it, each read from the container's own log before it is 
 - the shared ring inside a `--read-only` root filesystem container — the mount is writable and the
   container healthy.
 
-### 10. Write the antiforgery document
+### 11. Write the antiforgery document
 
 **Status:** ⬜ Not started
 
@@ -246,16 +262,16 @@ containers; each log is read before its container is stopped.
 1. Container A on the shared ring; visit `/notifications` twice. The first visit is not asserted — it
    depends on what the browser held — the second logs nothing.
 2. Container B, a new volume on the shared ring; visit once — logs nothing. This is the core claim, and
-   the red case: before step 9 there is no shared ring, and B logs the pair.
+   the red case: before step 10 there is no shared ring, and B logs the pair.
 3. Container C with `--own-keys`; visit twice — the first logs the `CryptographicException` /
    `AntiforgeryValidationException` pair, measured in this step for the exact set; the second logs
    nothing.
 4. Container D on the shared ring; visit twice — the first logs the pair once, the second nothing. This
    restores the browser for every later test, and is the Knowledgebase entry's remedy, exercised.
 
-**Red first:** run against the script as it was before step 9 — step 2 logs the pair.
+**Red first:** run against the script as it was before step 10 — step 2 logs the pair.
 
-### 11. Assert a clean log in the browser-driven documents
+### 12. Assert a clean log in the browser-driven documents
 
 **Status:** ⬜ Not started
 
@@ -264,9 +280,9 @@ expects no `[Runtime - Exception]` line; *A file left awaiting review raises an 
 retires the alert* does the same before its step 3 restart and again before step 9. Both close the
 browser tab before any stop, so no page reconnects.
 
-**Red:** both were measured before step 9 in step 8's rerun — 2 lines each, the antiforgery pair.
+**Red:** both were measured before step 10 in step 8's rerun — 2 lines each, the antiforgery pair.
 
-### 12. Update the automated-testing index
+### 13. Update the automated-testing index
 
 **Status:** ⬜ Not started
 
@@ -275,7 +291,7 @@ browser tab before any stop, so no page reconnects.
   antiforgery pair uses `--own-keys` and ends by restoring the browser; `qt-keys` is never deleted.
 - `api-surface/` lists the new document.
 
-### 13. T2, targeted pass — prove the shared ring
+### 14. T2, targeted pass — prove the shared ring
 
 **Status:** ⬜ Not started
 
@@ -289,16 +305,16 @@ Against a build of the branch, each document in full, each log read before every
 | `reenter`, `--read-only` root | *Migration replay survives an environment where only the data directory is writable* |
 | `--read-only-data`, `--bind`, `reenter` | *A reset refuses when the backup folder cannot be written, and stops re-offering the override* |
 | `--tmpfs-data` | *A reset refuses when the disk fills during the backup, instead of wiping behind a 200* |
-| Smoke set, not yet run | The other six smoke documents |
+| Smoke set | The six of step 9, re-run because the key ring changed their environment too |
 
-### 14. T2, second pass — everything else the change touched
+### 15. T2, second pass — everything else the change touched
 
 **Status:** ⬜ Not started
 
 Every other document in `docs/automated-testing/`: every container gains the mount, so every document's
 environment changed. A document found broken is fixed in this issue and run again.
 
-### 15. T1 pass
+### 16. T1 pass
 
 **Status:** ⬜ Not started
 
@@ -318,8 +334,9 @@ The developer starts the application in Visual Studio.
 | 6 | ✅ | The reset document leaves nothing in `.claude/temp` | Live (T2) | *Reset wipes the entire database and does not reseed*, then `Get-ChildItem .claude/temp -Filter 'smoke156*'` lists nothing |
 | 7 | ✅ | The pending-review alert document runs against a fresh database whatever an earlier run left | Live (T2) | Step 1 run over a leftover bind folder: step 6 lists three alerts |
 | 8 | ✅ | The already-reported conflict document reseeds only once the application answers | Live (T2) | Step 3 as written: the reseed succeeds |
-| 9 | ❌ | A new test container on the shared ring reads the browser's cookie | Live (T2) | *A cookie from another key ring is replaced on the first page, and logged only then*, step 2: no `[Runtime - Exception]` line; red before step 9 |
+| 9 | ❌ | A new test container on the shared ring reads the browser's cookie | Live (T2) | *A cookie from another key ring is replaced on the first page, and logged only then*, step 2: no `[Runtime - Exception]` line; red before step 10 |
 | 10 | ❌ | Provoking the pair is possible on demand, and the remedy restores the browser | Live (T2) | Same document, steps 3 and 4: the pair once, then nothing |
 | 11 | ❌ | The browser-driven documents log no exception they did not cause | Live (T2) | *Notifications list, dismiss, render, and drive their action* before its step 7 stop, and *A file left awaiting review raises an alert, and resolving it retires the alert* before step 3 and step 9: no `[Runtime - Exception]` line |
-| 12 | ❌ | Every document whose environment changed still passes | Live (T2) | Steps 13 and 14: every document in the suite passes as written |
-| 13 | ❌ | A container's log is read before the application stops | Review | The index's *Read the log before the application stops*, and every document run in steps 13 and 14 read that way |
+| 12 | ❌ | Every document whose environment changed still passes | Live (T2) | Steps 14 and 15: every document in the suite passes as written |
+| 13 | ❌ | A container's log is read before the application stops | Review | The index's *Read the log before the application stops*, and every document run in steps 14 and 15 read that way |
+| 14 | ❌ | The smoke documents step 8 skipped pass | Live (T2) | Step 9: each of the six passes as written |
