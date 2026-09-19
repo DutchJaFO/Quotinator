@@ -62,7 +62,7 @@ public sealed class SqliteQuoteImportService(
 
         (List<SourceQuoteDto>? valid, List<ImportRowError>? errors) = ValidateRows(quotes);
 
-        ImportBatchEntity batch = new ImportBatchEntity
+        ImportBatchEntity batch = new()
         {
             Name           = fileName,
             Type           = new SafeValue<ImportBatchType?>(ImportBatchType.Import.ToString(), ImportBatchType.Import),

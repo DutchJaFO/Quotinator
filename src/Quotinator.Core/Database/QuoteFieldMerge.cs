@@ -1,5 +1,6 @@
 using Quotinator.Core.Import;
 using Quotinator.Core.Models;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
 
 namespace Quotinator.Core.Database;
@@ -50,6 +51,42 @@ internal static class QuoteFieldMerge
     /// </summary>
     public static readonly IReadOnlySet<string> CaseSensitiveContentFields =
         new HashSet<string> { QuoteTextField, CharacterField };
+
+    /// <summary>
+    /// <see cref="FieldMergeResolver.Resolve"/> for a quote's fields, with <see cref="CaseSensitiveContentFields"/>
+    /// applied (#409). Every quote merge goes through here, so no caller can compare a quote without the set.
+    /// </summary>
+    /// <param name="existing">The stored quote's field-name → value map.</param>
+    /// <param name="incoming">The imported quote's field-name → value map.</param>
+    /// <param name="policy">The merge direction — <see cref="DuplicateResolutionPolicy.MergeOurs"/> or <see cref="DuplicateResolutionPolicy.MergeTheirs"/>.</param>
+    public static FieldMergeResult Resolve(
+        IReadOnlyDictionary<string, object?> existing,
+        IReadOnlyDictionary<string, object?> incoming,
+        DuplicateResolutionPolicy policy) =>
+        FieldMergeResolver.Resolve(existing, incoming, policy);
+
+    /// <summary>
+    /// <see cref="FieldMergeResolver.ResolveWithDecisions"/> for a quote's fields, with
+    /// <see cref="CaseSensitiveContentFields"/> applied (#409).
+    /// </summary>
+    /// <param name="existing">The stored quote's field-name → value map.</param>
+    /// <param name="incoming">The imported quote's field-name → value map.</param>
+    /// <param name="decisions">A resolution per ambiguous field, keyed by field name. A field absent here auto-resolves.</param>
+    public static FieldMergeResult ResolveWithDecisions(
+        IReadOnlyDictionary<string, object?> existing,
+        IReadOnlyDictionary<string, object?> incoming,
+        IReadOnlyDictionary<string, FieldMergeDecision> decisions) =>
+        FieldMergeResolver.ResolveWithDecisions(existing, incoming, decisions);
+
+    /// <summary>
+    /// <see cref="FieldMergeResolver.ValuesEqual(string, object?, object?, IReadOnlySet{string}?)"/> for one
+    /// of a quote's fields, with <see cref="CaseSensitiveContentFields"/> applied (#409).
+    /// </summary>
+    /// <param name="field">The quote field being compared.</param>
+    /// <param name="a">One side's value.</param>
+    /// <param name="b">The other side's value.</param>
+    public static bool ValuesEqual(string field, object? a, object? b) =>
+        FieldMergeResolver.ValuesEqual(field, a, b, null);
 
     /// <summary>
     /// Maps the mergeable fields of a <see cref="SourceQuoteDto"/> to a field-name → value dictionary.

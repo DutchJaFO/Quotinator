@@ -47,12 +47,12 @@ public class QuoteImportServiceTests
         _changeReader = new ChangeReader(_factory);
         _testActionReader = new ImportActionReader(_factory);
 
-        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups };
-        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        ImportActionReader actionReader  = new ImportActionReader(_factory);
-        ImportActionWriter actionWriter  = new ImportActionWriter(_factory);
-        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        DatabaseOptions options       = new() { DbPath = _dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        ImportActionReader actionReader  = new(_factory);
+        ImportActionWriter actionWriter  = new(_factory);
+        ImportActionResolutionCoordinator coordinator   = new(actionReader, actionWriter, _factory);
+        SqliteImportActionService actionService = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -61,7 +61,7 @@ public class QuoteImportServiceTests
             new SqliteRestorableRepository<StageDirectionEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, _factory, NoOpNotificationWriter.Instance);
-        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(
+        QuotinatorDatabaseInitializer db = new(
             _factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, actionWriter,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
@@ -88,11 +88,11 @@ public class QuoteImportServiceTests
         IReadOnlyDictionary<string, IQuoteSourceConverter>? converters = null,
         ManifestPolicy? configPolicy = null)
     {
-        SqliteImportBatchRepository importBatches  = new SqliteImportBatchRepository(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        ImportActionReader actionReader   = new ImportActionReader(_factory);
-        ImportActionWriter actionWriter   = new ImportActionWriter(_factory);
-        ImportActionResolutionCoordinator coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, _factory);
-        SqliteImportActionService actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, changeLogWriter ?? NoOpChangeWriter.Instance,
+        SqliteImportBatchRepository importBatches  = new(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        ImportActionReader actionReader   = new(_factory);
+        ImportActionWriter actionWriter   = new(_factory);
+        ImportActionResolutionCoordinator coordinator    = new(actionReader, actionWriter, _factory);
+        SqliteImportActionService actionService  = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, changeLogWriter ?? NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(_factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -118,14 +118,14 @@ public class QuoteImportServiceTests
 
     private async Task<int> CountAsync(string table)
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         return await conn.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM {table}");
     }
 
     private async Task<string> ReadQuoteTextAsync()
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         return (await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId }))!;
     }
@@ -189,7 +189,7 @@ public class QuoteImportServiceTests
         SqliteQuoteImportService service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Skip } };
+        ImportSettingsDto settings = new() { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Skip } };
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(0, result.Summary.Imported);
@@ -204,7 +204,7 @@ public class QuoteImportServiceTests
         SqliteQuoteImportService service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.NewestWins } };
+        ImportSettingsDto settings = new() { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.NewestWins } };
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(1, result.Summary.Updated);
@@ -218,7 +218,7 @@ public class QuoteImportServiceTests
         SqliteQuoteImportService service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
+        ImportSettingsDto settings = new() { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
         // #377: MergeOurs keeps the existing side on a true conflict, so nothing is written — and this
@@ -238,7 +238,7 @@ public class QuoteImportServiceTests
         SqliteQuoteImportService service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeTheirs } };
+        ImportSettingsDto settings = new() { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeTheirs } };
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
         // #377's negative half for ImportAsync_MergeOurs_TrueConflictKeepsExisting: the same fixture
@@ -257,7 +257,7 @@ public class QuoteImportServiceTests
         SqliteQuoteImportService service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         conn.Open();
         (string? completenessStatus, string? noValueKnown) = await conn.QuerySingleAsync<(string CompletenessStatus, string NoValueKnown)>(
             "SELECT CompletenessStatus, NoValueKnown FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
@@ -287,7 +287,7 @@ public class QuoteImportServiceTests
         SqliteQuoteImportService service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             conn.Open();
             await conn.ExecuteAsync(
@@ -295,13 +295,13 @@ public class QuoteImportServiceTests
                 new { id = SharedId });
         }
 
-        ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = policy } };
+        ImportSettingsDto settings = new() { DuplicateResolution = new ManifestPolicyDto { Default = policy } };
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(0, result.Summary.Updated, "A Complete row's field change must be held, not silently applied, regardless of policy");
         Assert.HasCount(1, result.PendingActionIds, "The held action must be surfaced as pending/blocked");
 
-        using SqliteConnection conn2 = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn2 = new($"Data Source={_dbPath}");
         conn2.Open();
         (string? quoteText, string? completenessStatus, string? noValueKnown) = await conn2.QuerySingleAsync<(string QuoteText, string CompletenessStatus, string NoValueKnown)>(
             "SELECT QuoteText, CompletenessStatus, NoValueKnown FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
@@ -324,18 +324,18 @@ public class QuoteImportServiceTests
         SqliteQuoteImportService service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             conn.Open();
             await conn.ExecuteAsync("UPDATE Quotinator_Quote SET CompletenessStatus = 'Complete' WHERE Id = @id", new { id = SharedId });
         }
 
-        ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
+        ImportSettingsDto settings = new() { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeOurs } };
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
         Assert.IsEmpty(result.PendingActionIds, "MergeOurs keeps the existing value on every conflicting field, so there is nothing to hold");
 
-        using SqliteConnection conn2 = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn2 = new($"Data Source={_dbPath}");
         conn2.Open();
         string? quoteText = await conn2.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id", new { id = SharedId });
         Assert.AreEqual("Original.", quoteText, "MergeOurs must keep the existing (Complete) value, not the incoming one");
@@ -365,7 +365,7 @@ public class QuoteImportServiceTests
             .Replace("__SHARED_ID__", SharedId).Replace("__SOURCE_ID__", sourceId);
         await service.ImportAsync(JsonStream(firstFile), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             conn.Open();
             // #209: the row is stored under its canonicalized (uppercase) id, not the lowercase id
@@ -388,7 +388,7 @@ public class QuoteImportServiceTests
 
         Assert.IsNotEmpty(result.PendingActionIds, "A Blocked Source action must be reflected in PendingActionIds");
 
-        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection verifyConn = new($"Data Source={_dbPath}");
         verifyConn.Open();
         int unrelatedQuoteCount = await verifyConn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Quotinator_Quote WHERE Id = @id", new { id = unrelatedQuoteId });
@@ -402,7 +402,7 @@ public class QuoteImportServiceTests
         SqliteQuoteImportService service = CreateService();
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Review } };
+        ImportSettingsDto settings = new() { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Review } };
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
         Assert.AreEqual(1, result.Summary.Skipped);
@@ -415,7 +415,7 @@ public class QuoteImportServiceTests
     [TestMethod]
     public async Task ImportAsync_FreshDatabase_WritesCreatedChangeLogRowWithImportInitiator()
     {
-        ChangeWriter changeLogWriter = new ChangeWriter(_factory);
+        ChangeWriter changeLogWriter = new(_factory);
         SqliteQuoteImportService service = CreateService(changeLogWriter: changeLogWriter);
 
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
@@ -430,11 +430,11 @@ public class QuoteImportServiceTests
     [TestMethod]
     public async Task ImportAsync_NewestWins_WritesModifiedChangeLogRowWithSameImportBatchId()
     {
-        ChangeWriter changeLogWriter = new ChangeWriter(_factory);
+        ChangeWriter changeLogWriter = new(_factory);
         SqliteQuoteImportService service = CreateService(changeLogWriter: changeLogWriter);
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.NewestWins } };
+        ImportSettingsDto settings = new() { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.NewestWins } };
         ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
         List<ChangeEntity> rows = [.. (await _changeReader.GetHistoryAsync("quote", SharedId)).OrderBy(r => r.OccurredAt)];
@@ -449,11 +449,11 @@ public class QuoteImportServiceTests
     [TestMethod]
     public async Task ImportAsync_Skip_WritesNoModifiedChangeLogRow()
     {
-        ChangeWriter changeLogWriter = new ChangeWriter(_factory);
+        ChangeWriter changeLogWriter = new(_factory);
         SqliteQuoteImportService service = CreateService(changeLogWriter: changeLogWriter);
         await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
 
-        ImportSettingsDto settings = new ImportSettingsDto { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Skip } };
+        ImportSettingsDto settings = new() { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.Skip } };
         await service.ImportAsync(JsonStream(OneQuoteJson("Updated.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
 
         List<ChangeAction?> actions = [.. (await _changeReader.GetHistoryAsync("quote", SharedId)).Select(r => r.Action.Parsed)];
@@ -464,7 +464,7 @@ public class QuoteImportServiceTests
     [TestMethod]
     public async Task ImportAsync_PreviewWithNewRow_NoChangeLogRowPersisted()
     {
-        ChangeWriter changeLogWriter = new ChangeWriter(_factory);
+        ChangeWriter changeLogWriter = new(_factory);
         SqliteQuoteImportService service = CreateService(changeLogWriter: changeLogWriter);
 
         await service.ImportAsync(JsonStream(OneQuoteJson("A quote.", "A Source")), "test.json", null, preview: true, cancellationToken: TestContext.CancellationToken);
@@ -596,7 +596,7 @@ public class QuoteImportServiceTests
     public async Task ImportAsync_UnknownConverterName_ThrowsUnknownConverterException()
     {
         SqliteQuoteImportService service = CreateService();
-        ImportSettingsDto settings = new ImportSettingsDto { Converter = "does-not-exist" };
+        ImportSettingsDto settings = new() { Converter = "does-not-exist" };
 
         UnknownConverterException ex = await Assert.ThrowsExactlyAsync<UnknownConverterException>(
             () => service.ImportAsync(JsonStream("irrelevant"), "test.json", settings, preview: false, cancellationToken: TestContext.CancellationToken));
@@ -666,12 +666,12 @@ public class QuoteImportServiceTests
     [TestMethod]
     public async Task ImportAsync_RegisteredConverter_ConvertsBeforeImporting()
     {
-        Dictionary<string, IQuoteSourceConverter> converters = new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase)
+        Dictionary<string, IQuoteSourceConverter> converters = new(StringComparer.OrdinalIgnoreCase)
         {
             ["passthrough"] = new PassthroughTestConverter()
         };
         SqliteQuoteImportService service = CreateService(converters: converters);
-        ImportSettingsDto settings = new ImportSettingsDto { Converter = "passthrough" };
+        ImportSettingsDto settings = new() { Converter = "passthrough" };
 
         ImportResultResponse result = await service.ImportAsync(
             JsonStream(OneQuoteJson("Converted quote.", "A Source")), "raw.txt", settings, preview: false, cancellationToken: TestContext.CancellationToken);
@@ -683,14 +683,14 @@ public class QuoteImportServiceTests
     [TestMethod]
     public async Task ImportAsync_ConverterWithOptions_PassesOptionsToConvertAsync()
     {
-        PassthroughTestConverter passthrough = new PassthroughTestConverter();
-        Dictionary<string, IQuoteSourceConverter> converters = new Dictionary<string, IQuoteSourceConverter>(StringComparer.OrdinalIgnoreCase)
+        PassthroughTestConverter passthrough = new();
+        Dictionary<string, IQuoteSourceConverter> converters = new(StringComparer.OrdinalIgnoreCase)
         {
             ["passthrough"] = passthrough
         };
         SqliteQuoteImportService service = CreateService(converters: converters);
         JsonElement converterOptions = JsonSerializer.Deserialize<JsonElement>("""{"propertyMapping": {"source": "movie"}}""");
-        ImportSettingsDto settings = new ImportSettingsDto { Converter = "passthrough", ConverterOptions = converterOptions };
+        ImportSettingsDto settings = new() { Converter = "passthrough", ConverterOptions = converterOptions };
 
         await service.ImportAsync(
             JsonStream(OneQuoteJson("Converted quote.", "A Source")), "raw.txt", settings, preview: false, cancellationToken: TestContext.CancellationToken);
