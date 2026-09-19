@@ -144,7 +144,9 @@ public class SqliteImportActionServiceTests
         IReadOnlyList<PersonEntryDto>? people = null,
         IReadOnlyList<SeriesEntryDto>? series = null,
         IReadOnlyList<UniverseEntryDto>? universe = null,
-        IReadOnlyList<CharacterEntryDto>? characters = null)
+        IReadOnlyList<CharacterEntryDto>? characters = null,
+        ConflictRuleLookup? conflictRules = null,
+        SourceAliasLookup? sourceAliases = null)
     {
         using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
@@ -162,7 +164,7 @@ public class SqliteImportActionServiceTests
             "INSERT INTO Import_Batch (Id, Name, Type, Status, ImportedAt, DateCreated) VALUES (@Id, 'test', 'Import', 'Staged', @now, @now)",
             new { Id = batchId, now });
 
-        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations, people: people, series: series, universe: universe, characters: characters);
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, quotes, batchId, policy, sources: sources, stageDirections: stageDirections, soundCues: soundCues, conversations: conversations, people: people, series: series, universe: universe, characters: characters, conflictRules: conflictRules, sourceAliases: sourceAliases);
         await _coordinator.StageAsync(actions);
         return actions;
     }
@@ -247,6 +249,171 @@ public class SqliteImportActionServiceTests
 
         Assert.AreEqual(ImportActionDecideOutcome.Decided, result.Outcome);
         Assert.AreEqual(quoteAction.Id, result.ActionId);
+    }
+
+    // ── #410 — every Add answers an outcome; a held Quote Add is waiting on its file or a rule ──
+
+    /// <summary>Two new TV quotes from one title under two dates: the second is held for review.</summary>
+    private async Task<ImportActionEntity> StageQuoteAddHeldOverASecondDateAsync()
+    {
+        SourceQuoteDto first  = new() { Id = "41011111-1111-4111-8111-11111111111a", QuoteText = "The first line.", OriginalLanguage = "en", Source = "Fixture Series 410", Date = "2015", Type = QuoteType.Tv };
+        SourceQuoteDto second = new() { Id = "41011111-1111-4111-8111-11111111111b", QuoteText = "The second line.", OriginalLanguage = "en", Source = "Fixture Series 410", Date = "2017", Type = QuoteType.Tv };
+
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([first, second], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+        ImportActionEntity held = actions.Single(a => a.EntityType == "Quote" && a.Status.Parsed == ImportActionStatus.Pending);
+        Assert.AreEqual(ImportActionKind.Add, held.ActionType.Parsed, "Precondition: the held quote is an Add");
+        return held;
+    }
+
+    private static void AssertHeldForReview(ImportActionDecideResult result, ThrownExceptionRecorder.Scope scope, string status)
+    {
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+        Assert.AreEqual(ImportActionDecideOutcome.HeldForReview, result.Outcome);
+        Assert.AreEqual(status, result.CurrentStatus);
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_QuoteAddHeldOverASecondDate_ReturnsHeldForReviewWithoutThrowing()
+    {
+        ImportActionEntity held = await StageQuoteAddHeldOverASecondDateAsync();
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(held.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        AssertHeldForReview(result, scope, "Pending");
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_QuoteAddHeldByARuleMatchingNothing_ReturnsHeldForReviewWithoutThrowing()
+    {
+        string id = "41011111-1111-4111-8111-11111111111c";
+        const string text = "A line a keep rule was written for before it was ever stored.";
+        ConflictRuleLookup rules = new([new ConflictResolutionRule
+        {
+            EntityId       = id,
+            ExistingRecord = JsonSerializer.Deserialize<JsonElement>($$"""{"quoteText":"{{text}}"}"""),
+            IncomingRecord = JsonSerializer.Deserialize<JsonElement>($$"""{"quoteText":"{{text}}"}"""),
+            Fields         = [new ConflictResolutionFieldRule { Field = "quoteText", Resolution = FieldResolutionChoice.Keep }],
+        }]);
+
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote(id, quoteText: text)], Guid.NewGuid(), DuplicateResolutionPolicy.Review, conflictRules: rules);
+        ImportActionEntity held = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Pending, held.Status.Parsed, "Precondition: a keep rule matching nothing stored holds the Add");
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(held.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        AssertHeldForReview(result, scope, "Pending");
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_StaleQuoteAdd_ReturnsHeldForReviewWithoutThrowing()
+    {
+        // The source the alias's canonical pair hashes to, stored under a title renamed away from it.
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
+        {
+            await conn.OpenAsync(TestContext.CancellationToken);
+            await conn.ExecuteAsync("INSERT INTO Quotinator_Source (Id, Title, Type, DateCreated) VALUES (@Id, 'Fixture Canon 410 (Renamed)', 'Movie', @now)",
+                new { Id = EntityIdentity.SourceId("Fixture Canon 410", "movie"), now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss") });
+        }
+        SourceAliasLookup aliases = new([new SourceAliasRule { Title = "Fixture Alias 410", Type = "movie", CanonicalTitle = "Fixture Canon 410", CanonicalType = "movie" }]);
+
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync(
+            [BuildQuote("41011111-1111-4111-8111-11111111111d", source: "Fixture Alias 410", character: null)],
+            Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins, sourceAliases: aliases);
+        ImportActionEntity held = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Stale, held.Status.Parsed, "Precondition: a renamed canonical source makes the alias stale");
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(held.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        AssertHeldForReview(result, scope, "Stale");
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_QuoteAddBlockedAsADuplicateOfAStoredQuote_ReturnsHeldForReviewWithoutThrowing()
+    {
+        await StageAndApplyAsync(BuildQuote("41011111-1111-4111-8111-11111111111e"), DuplicateResolutionPolicy.NewestWins);
+
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote("41011111-1111-4111-8111-11111111111f")], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+        ImportActionEntity held = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Blocked, held.Status.Parsed, "Precondition: the same text and source as a stored quote blocks the Add");
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(held.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        AssertHeldForReview(result, scope, "Blocked");
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_QuoteAddBlockedAsADuplicateWithinItsFile_ReturnsHeldForReviewWithoutThrowing()
+    {
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync(
+            [BuildQuote("41021111-1111-4111-8111-11111111111a"), BuildQuote("41021111-1111-4111-8111-11111111111b")],
+            Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+        ImportActionEntity held = actions.Single(a => a.EntityType == "Quote" && a.Status.Parsed == ImportActionStatus.Blocked);
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(held.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        AssertHeldForReview(result, scope, "Blocked");
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_AppliedQuoteAdd_ReturnsAlreadyResolvedWithoutThrowing()
+    {
+        Guid batchId = await StageAndApplyAsync(BuildQuote("41031111-1111-4111-8111-11111111111a"), DuplicateResolutionPolicy.NewestWins);
+        ImportActionEntity applied = (await _actionReader.GetAllForBatchAsync(batchId.ToCanonicalId())).Single(a => a.EntityType == "Quote");
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(applied.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+        Assert.AreEqual(ImportActionDecideOutcome.AlreadyResolved, result.Outcome);
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_DecidedQuoteAdd_ReturnsNotDecidableWithoutThrowing()
+    {
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([BuildQuote("41031111-1111-4111-8111-11111111111b")], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+        ImportActionEntity decided = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Decided, decided.Status.Parsed, "Precondition: a new quote with nothing in its way is staged Decided");
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        ImportActionDecideResult result = await _service.DecideAsync(decided.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+        Assert.AreEqual(ImportActionDecideOutcome.NotDecidable, result.Outcome);
+        Assert.AreEqual("Add", result.ActionType);
+    }
+
+    [TestMethod]
+    [DataRow("Source")]
+    [DataRow("Character")]
+    public async Task DecideAsync_AppliedNonQuoteAdd_ReturnsAlreadyResolved(string entityType)
+    {
+        Guid batchId = await StageAndApplyAsync(BuildQuote("41031111-1111-4111-8111-11111111111c"), DuplicateResolutionPolicy.NewestWins);
+        ImportActionEntity applied = (await _actionReader.GetAllForBatchAsync(batchId.ToCanonicalId())).Single(a => a.EntityType == entityType);
+
+        ImportActionDecideResult result = await _service.DecideAsync(applied.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        Assert.AreEqual(ImportActionDecideOutcome.AlreadyResolved, result.Outcome);
+    }
+
+    [TestMethod]
+    public async Task BulkDecideAsync_HeldQuoteAdd_ReportedAsRowErrorWithoutThrowing()
+    {
+        ImportActionEntity held = await StageQuoteAddHeldOverASecondDateAsync();
+        ImportActionFieldRowDto row = Field(held.Id, held.EntityId, ImportActionEntityTypes.Quote, "quoteText", FieldResolutionChoice.Replace);
+
+        using ThrownExceptionRecorder.Scope scope = ThrownExceptionRecorder.Begin();
+        BulkDecideResponse response = await _service.BulkDecideAsync(held.BatchId, [row], TestContext.CancellationToken);
+
+        Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
+        Assert.AreEqual(0, response.ActionsDecided);
+        BulkDecideRowError error = response.Errors.Single();
+        Assert.AreEqual(held.Id, error.ActionId);
+        Assert.Contains("held for review", error.Message);
     }
 
     [TestMethod]

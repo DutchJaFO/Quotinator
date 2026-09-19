@@ -1580,6 +1580,26 @@ public class ImportActionPlannerTests
         Assert.AreEqual("Some Newly-Added Value", payload.Fields.Character, "A stale rule (recorded snapshot no longer matches this field's real value) must never silently apply, on Add or Modify");
     }
 
+    /// <summary>
+    /// #410: two ids carrying the same text and source in one file — the second duplicates the first, so
+    /// it is held Blocked. Existing behaviour, previously covered only against a quote already stored.
+    /// </summary>
+    [TestMethod]
+    public async Task PlanAsync_TwoQuotesWithTheSameTextAndSourceInOneFile_StagesTheSecondBlocked()
+    {
+        using SqliteConnection conn = await OpenConnectionAsync();
+        SourceQuoteDto first  = BuildQuote("41041111-1111-4111-8111-11111111111a", source: "Casablanca", quoteText: "Here's looking at you, kid.");
+        SourceQuoteDto second = BuildQuote("41041111-1111-4111-8111-11111111111b", source: "Casablanca", quoteText: "Here's looking at you, kid.");
+
+        IReadOnlyList<ImportActionEntity> actions = await ImportActionPlanner.PlanAsync(conn, [first, second], Guid.NewGuid(), DuplicateResolutionPolicy.NewestWins);
+
+        ImportActionEntity firstAction  = actions.Single(a => a.EntityType == "Quote" && a.EntityId == first.Id);
+        ImportActionEntity secondAction = actions.Single(a => a.EntityType == "Quote" && a.EntityId == second.Id);
+        Assert.AreEqual(ImportActionStatus.Decided, firstAction.Status.Parsed, "The first occurrence is an ordinary Add");
+        Assert.AreEqual(ImportActionStatus.Blocked, secondAction.Status.Parsed);
+        Assert.AreEqual(ImportActionKind.Add, secondAction.ActionType.Parsed);
+    }
+
     [TestMethod]
     public async Task PlanAsync_BrandNewQuote_KeepOrReplaceRuleField_IsNoOpOnAdd()
     {

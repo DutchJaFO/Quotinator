@@ -639,6 +639,27 @@ public class ImportActionEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
         Assert.Contains("Source", body);
+        Assert.Contains("Add", body, "#410: the message names the action kind as well as the entity type");
+        Assert.DoesNotContain("Modify decision", body, "#410: a Quote Add's entity type does support a Modify decision, so the message must not say it does not");
+    }
+
+    /// <summary>#410: a held Add is waiting on the imported file or a rule, and the response says so.</summary>
+    [TestMethod]
+    public async Task DecideAction_HeldForReview_Returns422WithItsMessage()
+    {
+        FakeImportActionService fake = new() { DecideResult = id => ImportActionDecideResult.HeldForReview(id, "Pending") };
+        using WebApplicationFactory<Program> factory = CreateFactory(fake);
+        using HttpClient client  = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", TestKey);
+
+        HttpResponseMessage response = await client.PostAsJsonAsync($"/api/v1/import/actions/{Guid.NewGuid()}/decide", new ConflictDecisionRequest(), cancellationToken: TestContext.CancellationToken);
+        string body     = await response.Content.ReadAsStringAsync(TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Contains("held for review", body);
+        Assert.Contains("correct the imported file", body);
+        Assert.Contains("add a rule", body);
+        Assert.DoesNotContain("ambiguous", body, "Not the ambiguous-fields message the unmatched arm would give");
     }
 
     // ── POST /actions/{id}/undo — requires X-Api-Key ─────────────────────────

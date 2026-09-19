@@ -1134,6 +1134,7 @@ different question in each.
 | 27 | [A review row whose batch is gone offers only dismiss, and its alert says the action is no longer possible](import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md) | no |
 | 28 | [Reviewing conflicted import actions throws nothing](import-and-staged-actions/28-review-throws-nothing.md) | no |
 | 29 | [A case-only change is shown for review, and needs a decision](import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md) | no |
+| 30 | [Deciding an import Add answers an outcome, never a server error](import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md) | no |
 
 ---
 
