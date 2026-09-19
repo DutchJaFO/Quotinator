@@ -285,6 +285,99 @@ public class SqliteImportActionServiceTests
         Assert.IsEmpty(scope.Thrown, ThrownTypes(scope));
     }
 
+    // ── #409 — a case-only change is held for review, so every later step must see it too ──
+
+    private const string CaseOnlyQuoteText = "HERE'S LOOKING AT YOU, KID.";
+
+    /// <summary>
+    /// Stores <see cref="BuildQuote"/>'s quote by importing and applying it, then stages
+    /// <paramref name="incoming"/> under review. Imported rather than inserted, because
+    /// <see cref="SeedExistingQuoteAsync"/> stores no character.
+    /// </summary>
+    private async Task<ImportActionEntity> StageCaseOnlyChangeAsync(string id, SourceQuoteDto incoming)
+    {
+        await StageAndApplyAsync(BuildQuote(id), DuplicateResolutionPolicy.NewestWins);
+
+        IReadOnlyList<ImportActionEntity> actions = await PlanAndStageAsync([incoming], Guid.NewGuid(), DuplicateResolutionPolicy.Review);
+        ImportActionEntity quoteAction = actions.Single(a => a.EntityType == "Quote");
+        Assert.AreEqual(ImportActionStatus.Pending, quoteAction.Status.Parsed, "Precondition: the case-only change is held for review");
+        return quoteAction;
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_QuoteTextDiffersOnlyByCase_ReportsQuoteTextAsAmbiguous()
+    {
+        string id = "40911111-1111-4111-8111-11111111111a";
+        ImportActionEntity quoteAction = await StageCaseOnlyChangeAsync(id, BuildQuote(id, quoteText: CaseOnlyQuoteText));
+
+        PagedItems<ImportActionSummaryResponse> page = await _service.GetPagedAsync(quoteAction.BatchId, "Pending", null, 1, 0, TestContext.CancellationToken);
+
+        Assert.AreSequenceEqual(["quoteText"], page.Items.Single(a => a.EntityType == "Quote").AmbiguousFields);
+    }
+
+    [TestMethod]
+    public async Task GetPagedAsync_CharacterDiffersOnlyByCase_ReportsCharacterAsAmbiguous()
+    {
+        string id = "40911111-1111-4111-8111-11111111111b";
+        ImportActionEntity quoteAction = await StageCaseOnlyChangeAsync(id, BuildQuote(id, character: "RICK BLAINE"));
+
+        PagedItems<ImportActionSummaryResponse> page = await _service.GetPagedAsync(quoteAction.BatchId, "Pending", null, 1, 0, TestContext.CancellationToken);
+
+        Assert.AreSequenceEqual(["character"], page.Items.Single(a => a.EntityType == "Quote").AmbiguousFields);
+    }
+
+    [TestMethod]
+    public async Task DecideAsync_QuoteTextDiffersOnlyByCase_NoDecision_IsRefused()
+    {
+        string id = "40911111-1111-4111-8111-11111111111c";
+        ImportActionEntity quoteAction = await StageCaseOnlyChangeAsync(id, BuildQuote(id, quoteText: CaseOnlyQuoteText));
+
+        ImportActionDecideResult result = await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest(), TestContext.CancellationToken);
+
+        Assert.AreEqual(ImportActionDecideOutcome.UnresolvedFields, result.Outcome);
+        Assert.AreSequenceEqual(["quoteText"], result.UnresolvedFields);
+        ImportActionEntity? found = await _actionReader.GetByIdAsync(quoteAction.Id);
+        Assert.AreEqual(ImportActionStatus.Pending, found!.Status.Parsed, "Nobody chose a side, so nothing is decided");
+    }
+
+    /// <summary>The positive half of <see cref="DecideAsync_QuoteTextDiffersOnlyByCase_NoDecision_IsRefused"/>: an explicit choice settles it, and applying stores the chosen casing.</summary>
+    [TestMethod]
+    public async Task DecideAsync_QuoteTextDiffersOnlyByCase_Replace_TakesIncomingText()
+    {
+        string id = "40911111-1111-4111-8111-11111111111d";
+        ImportActionEntity quoteAction = await StageCaseOnlyChangeAsync(id, BuildQuote(id, quoteText: CaseOnlyQuoteText));
+
+        ImportActionDecideResult result = await _service.DecideAsync(quoteAction.Id, new ConflictDecisionRequest
+        {
+            QuoteText = new FieldDecision { Choice = FieldResolutionChoice.Replace },
+        }, TestContext.CancellationToken);
+        await _service.ApplyBatchAsync(quoteAction.BatchId, cancellationToken: TestContext.CancellationToken);
+
+        Assert.AreEqual(ImportActionDecideOutcome.Decided, result.Outcome);
+        Assert.AreEqual(CaseOnlyQuoteText, await ReadStoredQuoteTextAsync(id));
+    }
+
+    /// <summary>The pending-review notification's "Take incoming" goes through <see cref="SqliteImportActionService.DecideBatchAsync"/>.</summary>
+    [TestMethod]
+    public async Task DecideBatchAsync_QuoteTextDiffersOnlyByCase_DecidesIt()
+    {
+        string id = "40911111-1111-4111-8111-11111111111e";
+        ImportActionEntity quoteAction = await StageCaseOnlyChangeAsync(id, BuildQuote(id, quoteText: CaseOnlyQuoteText));
+
+        int decided = await _service.DecideBatchAsync(quoteAction.BatchId, FieldResolutionChoice.Replace, TestContext.CancellationToken);
+
+        Assert.AreEqual(1, decided);
+        ImportActionEntity? found = await _actionReader.GetByIdAsync(quoteAction.Id);
+        Assert.AreEqual(ImportActionStatus.Decided, found!.Status.Parsed);
+    }
+
+    private async Task<string> ReadStoredQuoteTextAsync(string id)
+    {
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        return await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE LOWER(Id) = LOWER(@id)", new { id }) ?? string.Empty;
+    }
+
     [TestMethod]
     public async Task ExportBatchAsync_PendingModifyConflicts_ReportsAmbiguousFieldsWithoutThrowing()
     {

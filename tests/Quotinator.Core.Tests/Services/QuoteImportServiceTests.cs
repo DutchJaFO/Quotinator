@@ -249,6 +249,23 @@ public class QuoteImportServiceTests
         Assert.AreEqual("merge-theirs", result.Conflicts.Single().AppliedPolicy, "Response-facing wire value must be kebab-case, matching every other DuplicateResolutionPolicy JSON value in this API");
     }
 
+    /// <summary>
+    /// #409: the planner compares <c>quoteText</c> case-sensitively, so a case-only change under
+    /// merge-theirs takes the incoming text. The response must say so rather than report the field kept.
+    /// </summary>
+    [TestMethod]
+    public async Task ImportAsync_MergeTheirs_QuoteTextDiffersOnlyByCase_ReportsQuoteTextFromIncoming()
+    {
+        SqliteQuoteImportService service = CreateService();
+        await service.ImportAsync(JsonStream(OneQuoteJson("Original.", "A Source")), "first.json", null, preview: false, cancellationToken: TestContext.CancellationToken);
+
+        ImportSettingsDto settings = new() { DuplicateResolution = new ManifestPolicyDto { Default = DuplicateResolutionPolicy.MergeTheirs } };
+        ImportResultResponse result = await service.ImportAsync(JsonStream(OneQuoteJson("ORIGINAL.", "A Source")), "second.json", settings, preview: false, cancellationToken: TestContext.CancellationToken);
+
+        Assert.AreEqual("ORIGINAL.", await ReadQuoteTextAsync(), "Precondition: the planner took the incoming casing");
+        Assert.AreEqual("theirs", result.Conflicts.Single().MergedFields!["quoteText"]);
+    }
+
     // ── #55/#165: CompletenessStatus / NoValueKnown ──────────────────────────
 
     [TestMethod]

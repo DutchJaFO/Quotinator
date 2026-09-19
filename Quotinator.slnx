@@ -426,6 +426,7 @@
     <File Path="docs/automated-testing/import-and-staged-actions/26-a-new-conflict-is-still-staged.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/27-orphaned-review-row-offers-only-dismiss.md" />
     <File Path="docs/automated-testing/import-and-staged-actions/28-review-throws-nothing.md" />
+    <File Path="docs/automated-testing/import-and-staged-actions/29-a-case-only-change-is-shown-for-review.md" />
   </Folder>
   <Folder Name="/docs/security/">
     <File Path="docs/security/README.md" />
