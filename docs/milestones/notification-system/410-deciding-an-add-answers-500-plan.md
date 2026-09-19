@@ -1,6 +1,6 @@
 # #410 — Deciding a Quote Add action answers 500 instead of an outcome
 
-**Status:** In progress (step 4)
+**Status:** In progress (step 5)
 **GitHub issue:** #410
 **Tiers required:** T1, T2
 **Depends on:** #370
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 4: build and run the full suite.
+Step 5: the T2 pass.
 
 ---
 
@@ -127,7 +127,7 @@ endpoint's `WithDescription` and `docs/api-endpoints.md` name the new `422`.
 
 ### 4. Build and run the full suite
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 4,157 tests passed across 11 projects, 0 warnings, 0 errors.
 
 `dotnet build --configuration Release` and `dotnet test --configuration Release --verbosity normal -m:1`,
 both 0 warnings, 0 errors.
@@ -171,4 +171,4 @@ The developer starts the application in Visual Studio.
 | 15 | ✅ | The decide endpoint answers a held Add with `422` and its message | Unit test | `ImportActionEndpointsTests.DecideAction_HeldForReview_Returns422WithItsMessage` — the issue's `DecideAction_QuoteAdd_Returns422` |
 | 16 | ✅ | The decide endpoint's not-decidable `422` names the action kind | Unit test | `ImportActionEndpointsTests.DecideAction_NotDecidable_Returns422` (existing, updated) |
 | 17 | ❌ | In a running container, deciding an applied Add and a Quote Add held in each live-reachable way — a second date, a rule matching nothing stored, a duplicate of a stored quote, a duplicate within its file — answers `422` each, with nothing thrown | Live (T2) | *Deciding an import Add answers an outcome, never a server error* (`automated-testing/import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md`) passes on this branch's build and fails on the canary at its first decide |
-| 18 | ❌ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
+| 18 | ✅ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
