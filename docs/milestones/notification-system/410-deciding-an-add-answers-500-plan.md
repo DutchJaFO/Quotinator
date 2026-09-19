@@ -1,6 +1,6 @@
 # #410 — Deciding a Quote Add action answers 500 instead of an outcome
 
-**Status:** In progress (step 3)
+**Status:** In progress (step 4)
 **GitHub issue:** #410
 **Tiers required:** T1, T2
 **Depends on:** #370
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 3: answer every Add with an outcome.
+Step 4: build and run the full suite.
 
 ---
 
@@ -112,10 +112,14 @@ image of this branch after step 1, the canary, and fails at its first decide.
 
 ### 3. Answer every Add with an outcome
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `b5bcb93b`. Every #410 test green, and the build clean.
 
-`DecideAsync`: after the not-found check, `Applied`/`Discarded` returns `AlreadyResolved`; a Quote Add
-in `Pending`, `Stale` or `Blocked` returns `HeldForReview`; any other Add returns `NotDecidable`.
+`HeldForReview` is returned for a held Add of **any** entity type, not only a Quote: only Quote Adds
+are held today, and the developer's rule — resolved by correcting the file or adding a rule — applies
+to every importable type, so a type that starts holding Adds needs no second change here.
+
+`DecideAsync`: after the not-found check, `Applied`/`Discarded` returns `AlreadyResolved`; an Add in
+`Pending`, `Stale` or `Blocked` returns `HeldForReview`; any other Add returns `NotDecidable`.
 `Describe` gains the `HeldForReview` text and the new `NotDecidable` text. The decide endpoint maps
 `HeldForReview` to `422` with its message, and passes the action kind to `NotDecidable`'s. The
 `NotDecidable` message changes in all three languages. `IImportActionService`'s outcome list, the
@@ -150,21 +154,21 @@ The developer starts the application in Visual Studio.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Deciding a Quote Add held over a second date answers held-for-review and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteAddHeldOverASecondDate_ReturnsHeldForReviewWithoutThrowing` |
-| 2 | ❌ | Deciding a Quote Add held by a rule matching nothing stored answers held-for-review and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteAddHeldByARuleMatchingNothing_ReturnsHeldForReviewWithoutThrowing` |
-| 3 | ❌ | Deciding a stale Quote Add answers held-for-review and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_StaleQuoteAdd_ReturnsHeldForReviewWithoutThrowing` |
-| 4 | ❌ | Deciding a Quote Add blocked as a duplicate of a stored quote answers held-for-review and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteAddBlockedAsADuplicateOfAStoredQuote_ReturnsHeldForReviewWithoutThrowing` |
-| 5 | ❌ | Deciding a Quote Add blocked as a duplicate within the same file answers held-for-review and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteAddBlockedAsADuplicateWithinItsFile_ReturnsHeldForReviewWithoutThrowing` |
-| 6 | ❌ | Deciding an applied Quote Add answers already-resolved and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_AppliedQuoteAdd_ReturnsAlreadyResolvedWithoutThrowing` — the issue's `DecideAsync_QuoteAddAction_ReturnsAnOutcomeWithoutThrowing`, named for its case |
-| 7 | ❌ | Deciding a decided, unapplied Quote Add answers not-decidable and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_DecidedQuoteAdd_ReturnsNotDecidableWithoutThrowing` |
-| 8 | ❌ | Deciding an applied Add of another type answers already-resolved | Unit test | `SqliteImportActionServiceTests.DecideAsync_AppliedNonQuoteAdd_ReturnsAlreadyResolved` (`Source`, `Character`) |
+| 1 | ✅ | Deciding a Quote Add held over a second date answers held-for-review and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteAddHeldOverASecondDate_ReturnsHeldForReviewWithoutThrowing` |
+| 2 | ✅ | Deciding a Quote Add held by a rule matching nothing stored answers held-for-review and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteAddHeldByARuleMatchingNothing_ReturnsHeldForReviewWithoutThrowing` |
+| 3 | ✅ | Deciding a stale Quote Add answers held-for-review and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_StaleQuoteAdd_ReturnsHeldForReviewWithoutThrowing` |
+| 4 | ✅ | Deciding a Quote Add blocked as a duplicate of a stored quote answers held-for-review and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteAddBlockedAsADuplicateOfAStoredQuote_ReturnsHeldForReviewWithoutThrowing` |
+| 5 | ✅ | Deciding a Quote Add blocked as a duplicate within the same file answers held-for-review and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_QuoteAddBlockedAsADuplicateWithinItsFile_ReturnsHeldForReviewWithoutThrowing` |
+| 6 | ✅ | Deciding an applied Quote Add answers already-resolved and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_AppliedQuoteAdd_ReturnsAlreadyResolvedWithoutThrowing` — the issue's `DecideAsync_QuoteAddAction_ReturnsAnOutcomeWithoutThrowing`, named for its case |
+| 7 | ✅ | Deciding a decided, unapplied Quote Add answers not-decidable and throws nothing | Unit test | `SqliteImportActionServiceTests.DecideAsync_DecidedQuoteAdd_ReturnsNotDecidableWithoutThrowing` |
+| 8 | ✅ | Deciding an applied Add of another type answers already-resolved | Unit test | `SqliteImportActionServiceTests.DecideAsync_AppliedNonQuoteAdd_ReturnsAlreadyResolved` (`Source`, `Character`) |
 | 9 | ✅ | Deciding a decided Add of another type still answers not-decidable — control | Unit test | `SqliteImportActionServiceTests.DecideAsync_NonQuoteAction_ReturnsNotDecidableWithoutThrowing` (existing) |
 | 10 | ✅ | A Quote Modify still decides — control | Unit test | `SqliteImportActionServiceTests.DecideAsync_AllFieldsDecided_ReturnsDecided` (existing) |
 | 11 | ✅ | Two quotes with the same text and source in one file stage the second as Blocked — coverage of existing behaviour | Unit test | `ImportActionPlannerTests.PlanAsync_TwoQuotesWithTheSameTextAndSourceInOneFile_StagesTheSecondBlocked` |
-| 12 | ❌ | A held Add is reported as a bulk-decide row error, not thrown | Unit test | `SqliteImportActionServiceTests.BulkDecideAsync_HeldQuoteAdd_ReportedAsRowErrorWithoutThrowing` |
-| 13 | ❌ | The held-for-review text says the item is resolved by correcting the file or adding a rule | Unit test | `ImportActionDecideResultTests.Describe_HeldForReview_NamesBothWaysToResolveIt` |
-| 14 | ❌ | The not-decidable text names the action kind and makes no claim about Modify support | Unit test | `ImportActionDecideResultTests.Describe_NotDecidable_NamesTheActionKind`; `Describe_EachOutcome_MatchesTheMessageItReplaces` loses its `NotDecidable` line |
-| 15 | ❌ | The decide endpoint answers a held Add with `422` and its message | Unit test | `ImportActionEndpointsTests.DecideAction_HeldForReview_Returns422WithItsMessage` — the issue's `DecideAction_QuoteAdd_Returns422` |
-| 16 | ❌ | The decide endpoint's not-decidable `422` names the action kind | Unit test | `ImportActionEndpointsTests.DecideAction_NotDecidable_Returns422` (existing, updated) |
+| 12 | ✅ | A held Add is reported as a bulk-decide row error, not thrown | Unit test | `SqliteImportActionServiceTests.BulkDecideAsync_HeldQuoteAdd_ReportedAsRowErrorWithoutThrowing` |
+| 13 | ✅ | The held-for-review text says the item is resolved by correcting the file or adding a rule | Unit test | `ImportActionDecideResultTests.Describe_HeldForReview_NamesBothWaysToResolveIt` |
+| 14 | ✅ | The not-decidable text names the action kind and makes no claim about Modify support | Unit test | `ImportActionDecideResultTests.Describe_NotDecidable_NamesTheActionKind`; `Describe_EachOutcome_MatchesTheMessageItReplaces` loses its `NotDecidable` line |
+| 15 | ✅ | The decide endpoint answers a held Add with `422` and its message | Unit test | `ImportActionEndpointsTests.DecideAction_HeldForReview_Returns422WithItsMessage` — the issue's `DecideAction_QuoteAdd_Returns422` |
+| 16 | ✅ | The decide endpoint's not-decidable `422` names the action kind | Unit test | `ImportActionEndpointsTests.DecideAction_NotDecidable_Returns422` (existing, updated) |
 | 17 | ❌ | In a running container, deciding an applied Add and a Quote Add held in each live-reachable way — a second date, a rule matching nothing stored, a duplicate of a stored quote, a duplicate within its file — answers `422` each, with nothing thrown | Live (T2) | *Deciding an import Add answers an outcome, never a server error* (`automated-testing/import-and-staged-actions/30-deciding-an-add-answers-an-outcome.md`) passes on this branch's build and fails on the canary at its first decide |
 | 18 | ❌ | No regression | Live | `dotnet test --configuration Release --verbosity normal -m:1` — all pass, 0 warnings, 0 errors |
