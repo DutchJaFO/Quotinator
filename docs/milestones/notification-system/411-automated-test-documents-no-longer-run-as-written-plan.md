@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 8)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 7: fix the reset document's cleanup.
+Step 8: the T2 pass.
 
 ---
 
@@ -135,7 +135,15 @@ then assert it reports the same entry count as the first.
 
 ### 7. Fix the reset document's cleanup
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — run as written against the step 1 image; every step passes. Before the cleanup,
+both copies and both pairs of sidecars were listed; after it, nothing.
+
+The cleanup removes what `Get-ChildItem .claude/temp -Filter 'smoke156*'` lists, then lists again. A
+loop over composed paths was tried first and refused by this environment's shell guard, as the original
+multi-path line was in step 1.
+
+The log holds four `[Runtime - Exception]` lines: the same `SocketException (125): Operation canceled`
+pair step 6 recorded, once at each of the document's two stops.
 
 The cleanup removes the `-wal`/`-shm` files beside both database copies.
 
