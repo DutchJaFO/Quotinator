@@ -5,7 +5,8 @@ namespace Quotinator.Data.Import;
 /// <summary>
 /// What staging a decision on one import action produced. Returned in place of throwing for the
 /// conditions the decide path has already checked (ADR 022): a missing action, one already resolved, one
-/// whose kind cannot be decided, and ambiguous fields left without a decision.
+/// whose kind cannot be decided, one held for review until its file or a rule changes, and ambiguous
+/// fields left without a decision.
 /// </summary>
 /// <param name="ActionId">The action the decision was staged on.</param>
 /// <param name="Outcome">What happened.</param>
@@ -63,8 +64,9 @@ public sealed record ImportActionDecideResult(
     {
         ImportActionDecideOutcome.NotFound         => $"Import action '{ActionId}' does not exist.",
         ImportActionDecideOutcome.AlreadyResolved  => $"Import action '{ActionId}' is not in a valid state for this operation (current status: '{CurrentStatus}').",
-        ImportActionDecideOutcome.NotDecidable     => $"Import action '{ActionId}' is a '{EntityType}' action and cannot be manually decided — this action's entity type does not currently support a Modify decision.",
+        ImportActionDecideOutcome.NotDecidable     => $"Import action '{ActionId}' is a '{EntityType}' {ActionType} action and cannot be manually decided.",
         ImportActionDecideOutcome.UnresolvedFields => $"The following fields are ambiguous and need an explicit decision: {string.Join(", ", UnresolvedFields)}",
+        ImportActionDecideOutcome.HeldForReview    => $"Import action '{ActionId}' is held for review (current status: '{CurrentStatus}') and cannot be decided: correct the imported file, or add a rule that resolves it.",
         _                                          => string.Empty,
     };
 }

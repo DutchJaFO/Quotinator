@@ -214,6 +214,18 @@ public sealed class SqliteImportActionService(
         if (action is null)
             return ImportActionDecideResult.NotFound(actionId);
 
+        // #410: before any branch reads the payloads — an Add has no existing row to read, and a
+        // resolved action of any kind has nothing left to decide.
+        if (action.Status.Parsed is ImportActionStatus.Applied or ImportActionStatus.Discarded)
+            return ImportActionDecideResult.AlreadyResolved(actionId, action.Status.Raw);
+
+        // An Add held for review is waiting on its incoming content, resolved by correcting the file or
+        // adding a rule; one that is not held has nothing to decide.
+        if (action.ActionType.Parsed == ImportActionKind.Add)
+            return action.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Stale or ImportActionStatus.Blocked
+                ? ImportActionDecideResult.HeldForReview(actionId, action.Status.Raw)
+                : ImportActionDecideResult.NotDecidable(actionId, action.EntityType, action.ActionType.Raw);
+
         if (action.EntityType == ImportActionEntityTypes.Source && action.ActionType.Parsed == ImportActionKind.Modify)
         {
             SourceActionPayloadDto existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.ExistingValue!)!;

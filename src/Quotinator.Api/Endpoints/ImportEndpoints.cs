@@ -273,8 +273,9 @@ internal static class ImportEndpoints
                 ImportActionDecideOutcome.NotFound        => Results.Problem(detail: localizer[ApiMessages.ImportActionNotFound], statusCode: StatusCodes.Status404NotFound),
                 ImportActionDecideOutcome.AlreadyResolved => Results.Problem(detail: localizer[ApiMessages.ImportActionAlreadyResolved], statusCode: StatusCodes.Status422UnprocessableEntity),
                 ImportActionDecideOutcome.NotDecidable    => Results.Problem(
-                    detail: localizer.Format(ApiMessages.ImportActionNotDecidable, result.EntityType ?? string.Empty),
+                    detail: localizer.Format(ApiMessages.ImportActionNotDecidable, result.EntityType ?? string.Empty, result.ActionType ?? string.Empty),
                     statusCode: StatusCodes.Status422UnprocessableEntity),
+                ImportActionDecideOutcome.HeldForReview   => Results.Problem(detail: localizer[ApiMessages.ImportActionHeldForReview], statusCode: StatusCodes.Status422UnprocessableEntity),
                 _                                          => Results.Problem(
                     detail: localizer.Format(ApiMessages.ImportActionAmbiguousFieldsUnresolved, string.Join(", ", result.UnresolvedFields)),
                     statusCode: StatusCodes.Status422UnprocessableEntity),
@@ -289,7 +290,9 @@ internal static class ImportEndpoints
             "wins, equal values keep existing); a field that is genuinely ambiguous (both sides " +
             "non-empty and differ) with no decision returns `422`. An entity type/action combination " +
             "that isn't currently decidable (e.g. an Add action — never ambiguous — or an entity type " +
-            "not yet supporting Modify decisions) returns `422` if targeted. Nothing is written to " +
+            "not yet supporting Modify decisions) returns `422` if targeted. An Add held for review " +
+            "(Pending, Stale or Blocked) returns `422` too: it is resolved by correcting the imported " +
+            "file or adding a rule. An action already applied or discarded returns `422`. Nothing is written to " +
             "any domain table yet — call `POST /import/actions/apply` once every action in the batch " +
             "has been decided. Calling this again for the same action overwrites the prior decision. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
