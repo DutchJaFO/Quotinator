@@ -11,8 +11,8 @@ current build, created with `--env Quotinator__AdminApiKey=t2-303`.
 
 A staged batch already tracked conflicts precisely, but only `/import/actions` and the container log
 said so. This proves the alert appears, names the batch it reports, survives to the startup modal, is
-retired when the review is resolved or its batch removed, and that `/import-review` stays reachable
-while the database is degraded.
+retired as `resolved` when the review is settled from either surface, does not accumulate across
+reseeds, and that `/import-review` stays reachable while the database is degraded.
 
 **`Environment: Fresh` is load-bearing here, not a default.** Against a database that already holds
 quotes, this test's fixture does nothing at all: the files are discovered and a manifest is written for
@@ -47,9 +47,15 @@ recorded on [`../notifications-and-changelog/10-reseed-recommendation-and-action
 which found them the hard way — single-line JSON makes a line match report `1` however many exist, and
 PowerShell 5.1 unrolls a single-element array so a bare `.Count` prints empty.
 
-**`Obsolete` and `Resolved` are different outcomes and must be asserted apart.** An alert whose batch
-was truncated was not reviewed; one whose actions were decided was. A test that only checked
-`isDismissed` would pass for both and prove neither.
+**Two conflicts, not one.** Step 8 settles one from the notification and another from the review page,
+so the fixture stages two files, each against a different quote — one batch and one alert each.
+
+**`Obsolete` is not reached here.** Since #372 a reseed no longer truncates a batch, so nothing marks an
+alert obsolete; the status survives only for databases that already hold such rows. Its rendering is
+checked against a constructed row in
+[`../notifications-and-changelog/01-notification-system.md`](../notifications-and-changelog/01-notification-system.md).
+What this document asserts is `resolved`, and that the alerts a reseed leaves are exactly the ones still
+awaiting a decision.
 
 ## Steps
 
@@ -59,9 +65,9 @@ was truncated was not reviewed; one whose actions were decided was. A test that 
 $bind    = Join-Path $env:TEMP "qt-review-20-bind"
 $imports = Join-Path $bind "imports"
 
-# Writes a user-imports file re-stating a real bundled quote's id with different text, under a `review`
-# policy. Shared with T1, which needs the same fixture for the same reason.
-dotnet script scripts/testing/stage-import-conflict.csx -- --imports $imports
+# Writes two user-imports files, each re-stating a different bundled quote's id with different text,
+# under a `review` policy. Shared with T1, which needs the same fixture for the same reason.
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports $imports --count 2
 
 dotnet script scripts/testing/test-env.csx -- create --name qt-review-20 --port 19520 `
   --image quotinator:local --env Quotinator__AdminApiKey=t2-303 --bind $bind
@@ -81,8 +87,8 @@ while ((Invoke-RestMethod "http://localhost:19520/api/v1/quotes?page=1&pageSize=
 "active alerts   = $(@(Get-ActiveReviewAlerts).Count)"
 ```
 
-**Expected:** `pending actions = 1`, `active alerts = 1`, naming `conflicting.json` with `origin=User`
-and a `Pending: 1` count.
+**Expected:** `pending actions = 2`, `active alerts = 2` — one per file, `conflicting-1.json` and
+`conflicting-2.json`, each with `origin=User` and a `Pending: 1` count.
 
 **On failure:** if `pending actions` is `0`, the id in the import did not match a bundled quote, so it
 was an Add and nothing was staged. Stop — every later step would pass against an empty set and prove
@@ -150,41 +156,85 @@ Invoke-RestMethod -Method Post -Headers $headers `
 **Expected:** `isDismissed=True dismissReason=resolved`.
 
 Discarding is a decision — the operator dealt with the batch by keeping none of it. `resolved` is what
-separates that from a notification the user merely set aside, and from step 6's very different outcome.
+separates that from a notification the user merely set aside.
 
-### 6. Reseed twice, and confirm a removed batch's alert reads `Obsolete`
-
-**Two reseeds, not one, and the order matters.** The first raises a fresh alert for its new batch while
-the step-5 alert is already `resolved`; only the *second* truncates a batch whose alert is still
-active, which is the sole path to `obsolete`. Running one reseed and expecting `obsolete` was this
-document's own first-run error — the alert it checked had been resolved a step earlier.
+### 6. Reseed twice, and confirm the alerts are exactly the ones awaiting a decision
 
 ```powershell
 Invoke-RestMethod -Method Post -Headers $headers "http://localhost:19520/api/v1/admin/database/reseed" | Out-Null
 Invoke-RestMethod -Method Post -Headers $headers "http://localhost:19520/api/v1/admin/database/reseed" | Out-Null
 
 @(Get-ReviewAlerts) | ForEach-Object {
-  "$((($_.metadata | ConvertFrom-Json)).batchId.Substring(0,8))  isDismissed=$($_.isDismissed)  reason=$($_.dismissReason)"
+  $p = $_.metadata | ConvertFrom-Json
+  "$($p.fileName) $($p.batchId.Substring(0,8)) isDismissed=$($_.isDismissed) reason=$($_.dismissReason)"
+}
+"active alerts = $(@(Get-ActiveReviewAlerts).Count) pending actions = $(Get-PendingActionCount)"
+```
+
+**Expected:** three alerts, `active alerts = 2` and `pending actions = 2`:
+
+- the file discarded in step 5 has its original alert, `isDismissed=True reason=resolved`, and a new
+  active one — the first reseed read the file again and staged its conflict afresh;
+- the other file's original alert is still active — its conflict was never decided.
+
+The second reseed adds nothing: a conflict already awaiting a decision is recognised rather than staged
+again (#376). A fourth alert, or a third active one, is the accumulation this step guards against.
+
+### 7. Confirm a resolved alert reads as done, not as dismissed
+
+**Browser, not `Invoke-WebRequest`.** The status cell is rendered by an interactive circuit and the
+question is what a person reads.
+
+Open `http://localhost:19520/notifications` and switch the filter to **All**.
+
+**Expected:** the resolved import-review alert reads **Done**, not **Dismissed**. A notification whose
+changes were dealt with must not read as one the operator set aside.
+
+### 8. Confirm a decision reaches the data from both surfaces
+
+Two controls can settle a review, and both must carry the decision all the way through. Capture the
+stored value of both pending quotes first, so the change is proven rather than assumed:
+
+```powershell
+$pendingQuotes = @((Invoke-RestMethod "http://localhost:19520/api/v1/import/actions?status=Pending&pageSize=0").items |
+  Where-Object { $_.entityType -eq 'Quote' })
+$pendingQuotes | ForEach-Object {
+  "$($_.entityId) stored=$((Invoke-RestMethod "http://localhost:19520/api/v1/quotes/$($_.entityId)").quote) incoming=$($_.incomingFields.quoteText)"
+}
+```
+
+Then, in the browser: on `/notifications` use one alert's **Decide → Take incoming**, and on
+`/import-review` use the other row's **Take incoming**.
+
+```powershell
+(Invoke-RestMethod "http://localhost:19520/api/v1/import/actions?pageSize=0").items |
+  Where-Object { $_.entityType -eq 'Quote' -and $_.actionType -eq 'Modify' } |
+  Select-Object @{n='Batch';e={$_.batchId.Substring(0,8)}}, status
+$pendingQuotes | ForEach-Object {
+  "$($_.entityId) storedNow=$((Invoke-RestMethod "http://localhost:19520/api/v1/quotes/$($_.entityId)").quote)"
 }
 "active alerts = $(@(Get-ActiveReviewAlerts).Count)"
 ```
 
-**Expected:** three alerts and all three outcomes visible at once — one active, one `reason=obsolete`,
-one `reason=resolved` — with `active alerts = 1`.
+**Expected:** both touched batches read `Applied` — **not `Decided`** — each stored text now equals what
+was incoming, and `active alerts = 0`: each alert is dismissed with reason `resolved`.
 
-That single line is the requirement itself: an inactive notification explains what happened to it
-without anyone reading the audit trail. `obsolete` and `resolved` are different events — a batch
-truncated out from under its alert was never reviewed — and a history that collapsed them would tell
-the reader something untrue.
+**On failure:** a batch left at `Decided` with its alert still `Active` is the defect this step was
+written for (found 2026-09-01). Both controls decided without applying, so the operator's choice never
+reached the data and the alert kept asking for a decision they had already made. Dismissal is wired to
+`ApplyBatchAsync`/`DiscardBatchAsync`, never to deciding, so the stale alert is the visible symptom of
+the unapplied batch — check the status before concluding the notification is at fault.
 
-`active alerts = 1` across three seeding runs is what keeps the design bounded: a batch id is part of
-an alert's identity and is a fresh GUID per batch, so every reseed necessarily raises a new alert.
-Retiring the removed ones is the only thing stopping them accumulating.
+**Give the page a moment before clicking.** These controls need the Blazor circuit; a click issued
+immediately after navigating is silently swallowed and the row simply stays `Pending`. Re-read the page
+and click again rather than concluding the control is broken — measured here on the first attempt.
 
-### 7. Confirm the page still answers while the database is degraded
+### 9. Confirm the pages still answer while the database is degraded
+
+**Last, because it replaces the container** every earlier step drives.
 
 ```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-review-20
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-review-20 --bind $bind
 dotnet script scripts/testing/test-env.csx -- create --name qt-review-20d --port 19521 `
   --image quotinator:local --env Quotinator__AdminApiKey=t2-303 --read-only-data --wait-listening
 
@@ -214,53 +264,6 @@ when the database is degraded — and when the underlying defect is fixed, both 
 together. A row asserting `200` here would have to be marked failing for a fault #303 did not cause and
 does not own.
 
-### 8. Confirm both dismiss reasons render as words, not as "Dismissed"
-
-**Browser, not `Invoke-WebRequest`.** The status cell is rendered by an interactive circuit and the
-question is what a person reads, so this step is driven and screenshotted rather than string-matched.
-
-Against a container that has one resolved and one obsoleted alert (step 5 resolves one; a reseed while
-the other is still active obsoletes it), open `http://localhost:19520/notifications` and switch the
-filter to **All**.
-
-**Expected:** the two inactive rows read **Done** and **No longer applicable** — different words for
-different outcomes. Both reading "Dismissed" is the failure this step exists to catch: an alert whose
-batch was truncated was never reviewed, and one whose actions were decided was, and an operator must be
-able to tell those apart without opening the audit trail.
-
-### 9. Confirm a decision reaches the data from both surfaces
-
-Two controls can settle a review, and both must carry the decision all the way through. Capture the
-stored value first so the change is proven rather than assumed:
-
-```powershell
-$a = (Invoke-RestMethod "http://localhost:19520/api/v1/import/actions?status=Pending&pageSize=0").items[0]
-"stored   = $((Invoke-RestMethod "http://localhost:19520/api/v1/quotes/$($a.entityId)").quote)"
-"incoming = $($a.incomingFields.quoteText)"
-```
-
-Then, in the browser: on `/notifications` use one alert's **Run → Take incoming**, and on
-`/import-review` use another row's **Take incoming**.
-
-```powershell
-(Invoke-RestMethod "http://localhost:19520/api/v1/import/actions?pageSize=0").items |
-  Select-Object @{n='Batch';e={$_.batchId.Substring(0,8)}}, status
-"stored now = $((Invoke-RestMethod "http://localhost:19520/api/v1/quotes/$($a.entityId)").quote)"
-```
-
-**Expected:** every touched batch reads `Applied` — **not `Decided`** — the stored text now equals what
-was incoming, and each alert is dismissed with reason `resolved`.
-
-**On failure:** a batch left at `Decided` with its alert still `Active` is the defect this step was
-written for (found 2026-09-01). Both controls decided without applying, so the operator's choice never
-reached the data and the alert kept asking for a decision they had already made. Dismissal is wired to
-`ApplyBatchAsync`/`DiscardBatchAsync`, never to deciding, so the stale alert is the visible symptom of
-the unapplied batch — check the status before concluding the notification is at fault.
-
-**Give the page a moment before clicking.** These controls need the Blazor circuit; a click issued
-immediately after navigating is silently swallowed and the row simply stays `Pending`. Re-read the page
-and click again rather than concluding the control is broken — measured here on the first attempt.
-
 ## Canary — run red against the build before #303
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Run against
@@ -282,6 +285,7 @@ Container, image, bind mount and worktree removed afterwards.
 ## Cleanup
 
 ```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-review-20
+dotnet script scripts/testing/test-env.csx -- destroy --name qt-review-20 --bind $bind
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-review-20d
+Remove-Item -LiteralPath $bind -Recurse -Force
 ```
