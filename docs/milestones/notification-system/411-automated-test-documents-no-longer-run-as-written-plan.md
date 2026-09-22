@@ -458,6 +458,7 @@ Against a build of the branch, each document in full, each log read before every
 | *Reviewing conflicted import actions throws nothing* | Pass — three pending with `quoteText`, the refusal names it, `before=0 after=0` |
 | *A case-only change is shown for review* | Pass — both hold `quoteText`; refusal; `Decided` with the incoming casing |
 | *Deciding an Add answers an outcome* | Pass after the bind-folder fix — the five cases held as expected, each decide `422` with the right reason, no exception |
+| *Notification metadata, provenance, and the released-database migration path* | Pass after two fixes — its data folder was never cleared (now it is), and step 6's `DELETE` failed on the announcement's #319 translation rows (`FOREIGN KEY constraint failed`), rolling the edit back so `announcementBack=1` was read off the untouched original; translations are now deleted first (`4 row(s) affected`, 0 announcements while stopped, then back beside the legacy row). Step 5 expected one `applying … pending` line where startup logs one per phase (2); it now compares against step 2's own count |
 
 Exceptions before each stop, beyond what a document provokes: #407's `DatabaseBackupUnavailableException`
 refusals in the two unreadable-database documents, alongside the corrupt file's own `SqliteException`s;

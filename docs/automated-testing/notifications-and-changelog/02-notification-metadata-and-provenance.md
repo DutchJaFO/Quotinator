@@ -78,6 +78,8 @@ notification.**
 
 ```powershell
 $dataDir = "$PWD\.claude\temp\qt-notif-02-data"
+# A folder left by an earlier run still holds its database, and the container would start against it.
+if (Test-Path $dataDir) { Remove-Item -LiteralPath $dataDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
 docker pull ghcr.io/dutchjafo/quotinator:1.8.3
@@ -102,6 +104,7 @@ dotnet script scripts/testing/test-env.csx -- reenter --name qt-notif-02-current
   --image quotinator:local --bind $dataDir
 
 docker logs qt-notif-02-current 2>&1 | Select-String -SimpleMatch 'pending', 'schema updated', 'Quotinator ready'
+$applyingAtStep2 = ([regex]::Matches((docker logs qt-notif-02-current 2>&1 | Out-String), 'applying .* pending')).Count
 ```
 
 **Expected:** the current build reports `applying … pending "Data" migration(s)` followed by
@@ -173,12 +176,15 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18502/api/v1/h
 $after = (Invoke-RestMethod "http://localhost:18502/api/v1/notifications?pageSize=0").totalCount
 "before=$before after=$after unchanged=$($before -eq $after)"
 
-([regex]::Matches((docker logs qt-notif-02-current 2>&1 | Out-String), 'applying .* pending')).Count
+"applying at step 2=$applyingAtStep2 now=$(([regex]::Matches((docker logs qt-notif-02-current 2>&1 | Out-String), 'applying .* pending')).Count)"
 ```
 
 **Expected:** `unchanged=True`. A producer runs on every startup; the history is what stops it writing
-twice. **And no repeat migration on a second start** — the `applying … pending` count stays at the one
-occurrence step 2 produced, rather than growing with each restart.
+twice. **And no repeat migration on a second start** — `now` equals `applying at step 2`, rather than
+growing with each restart.
+
+Compared against step 2's own count, not a literal: step 2 logs one line per migration phase that has
+work, which was two (`Data` and `App`) when measured on 2026-09-22 and moves with the schema.
 
 ### 6. Confirm the old text-matching path is genuinely dead
 
@@ -193,12 +199,19 @@ suppresses a second copy whether or not text matching is also alive. The two out
 the assertion says nothing. Removing the structural row first leaves the legacy text as the only thing
 a suppressor could match on, which is the whole question.
 
+**Its translations go first.** Since #319 an announcement carries `System_NotificationTranslation`
+rows that reference it, so deleting the notification alone fails with `FOREIGN KEY constraint failed`
+and rolls the whole edit back — the announcement then never leaves, and `announcementBack=1` is read
+off the untouched original. Found 2026-09-22.
+
 Written against a **stopped** container:
 
 ```powershell
 docker stop -t 15 qt-notif-02-current
 
 dotnet script scripts/testing/execute-sql.csx -- --db "$dataDir\quotinatordata.db" --sql @'
+DELETE FROM System_NotificationTranslation WHERE NotificationId IN
+  (SELECT Id FROM System_Notification WHERE MetadataKind = 'Announcement');
 DELETE FROM System_Notification WHERE MetadataKind = 'Announcement';
 INSERT INTO System_Notification (Id, Type, Title, Body, Metadata, MetadataKind, ExpiresAt, IsDismissed, DateCreated, IsDeleted) VALUES
   ('a0000312-0000-4000-8000-000000000001','Information','Legacy text-matched row','Two API operation IDs were renamed, including GetAllImportBatches.',NULL,NULL,NULL,0,'2026-01-01 00:00:00',0);
