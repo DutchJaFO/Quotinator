@@ -43,17 +43,34 @@ $base = "http://localhost:18605/api/v1"
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
 
-### 2. Apply a batch cleanly under `newest-wins`
+### 2. Apply a batch of new quotes cleanly under `newest-wins`
 
 ```powershell
+$temp = "$PWD\.claude\temp"
+$fixture = "$temp\qt-import-05.json"
+$json = @'
+{ "quotes": [
+  {"id":"a4110005-0000-4000-8000-00000000000a","quote":"Quotinator 411 resurrection line one.","originalLanguage":"en","source":"Quotinator 411 Resurrection Film","date":"2001","character":null,"author":null,"type":"movie","genres":[],"translations":{}},
+  {"id":"a4110005-0000-4000-8000-00000000000b","quote":"Quotinator 411 resurrection line two.","originalLanguage":"en","source":"Quotinator 411 Resurrection Film","date":"2001","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
+] }
+'@
+[IO.File]::WriteAllText($fixture, $json, [Text.UTF8Encoding]::new($false))
+function Fixture-Quotes { (Invoke-RestMethod "$base/quotes/search?q=Quotinator%20411%20Resurrection&field=source&pageSize=0").totalMatching }
+
 $batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
-              --file data/sources/quotinator-curated.json --duplicate-resolution newest-wins --expect 200 `
+              --file $fixture --duplicate-resolution newest-wins --expect 200 `
             | ConvertFrom-Json).batchId
-$batchId
+"batchId=$batchId fixtureQuotes=$(Fixture-Quotes)"
 ```
 
-**Expected:** `200` with nothing left pending — a genuinely `Applied` batch — and a non-empty
-`batchId`, which every step below is scoped to.
+**Expected:** `200` with nothing left pending — a genuinely `Applied` batch — a non-empty `batchId`,
+which every step below is scoped to, and `fixtureQuotes=2`.
+
+**The batch must create something.** Until #411 this step imported the curated file, which since #373
+stages only `Unchanged` no-ops against a database seeded from it: 37 of them, measured 2026-09-22. The
+reversal then removed nothing — the curated quotes were still there before step 7 re-imported them — so
+the resurrection step could not fail. Two quotes of its own are new, so the reversal really removes
+them.
 
 ### 3. Preview the reversal
 
@@ -69,9 +86,13 @@ dotnet script scripts/testing/http.csx -- --method POST `
 ```powershell
 dotnet script scripts/testing/http.csx -- --method POST `
   --url "$base/import/actions/reverse?batchId=$batchId" --expect 200 --status
+"fixtureQuotes=$(Fixture-Quotes)"
 ```
 
-**Expected:** `200`.
+**Expected:** `200`, and `fixtureQuotes=0` — the reversal soft-deleted what the batch added.
+
+**On failure:** a non-zero count means the reversal removed nothing, and step 7 would read the same
+quotes back whether or not resurrection works. Stop.
 
 ### 5. List the reversed batch's actions
 
@@ -96,13 +117,13 @@ dotnet script scripts/testing/http.csx -- --method POST `
 
 ```powershell
 dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
-  --file data/sources/quotinator-curated.json --duplicate-resolution newest-wins --expect 200 | Out-Null
+  --file $fixture --duplicate-resolution newest-wins --expect 200 | Out-Null
 
-(Invoke-RestMethod "$base/quotes/search?q=Airplane&field=source&pageSize=0").totalMatching
+Fixture-Quotes
 ```
 
-**Expected:** the re-import succeeds (**never a silent no-op**) and `totalMatching` is **non-zero** —
-the curated quotes are reachable again. This is the resurrection fix proven live, rather than only by
+**Expected:** the re-import succeeds (**never a silent no-op**) and the count is `2` — the fixture's
+quotes are reachable again, against `0` after step 4. This is the resurrection fix proven live, rather than only by
 `ApplyResolvedActionAsync_ReAddAfterSoftDelete_ResurrectsSoftDeletedRow`.
 
 **The field is `totalMatching`, not `totalCount`.** `/quotes/search` returns its own shape, and this
@@ -182,6 +203,6 @@ observation, since no action status changes to signal the reversal.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-05
-Remove-Item .claude/temp/smoke-reverse.db, .claude/temp/smoke-reverse.db-wal, `
-            .claude/temp/smoke-reverse.db-shm -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $fixture
+Get-ChildItem .claude/temp -Filter 'smoke-reverse.db*' | Remove-Item
 ```
