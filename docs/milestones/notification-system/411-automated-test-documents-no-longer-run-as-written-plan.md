@@ -442,6 +442,14 @@ Against a build of the branch, each document in full, each log read before every
 | *Person Modify and lowercase-id reversal* | Pass — `Blocked` third import; `404` after the reversal, `Add` and `200` after the re-import. Same stale loop reason, corrected |
 | *Character/Source many-to-many identity* | Pass — links 15 → 16; a second Source makes a second Character |
 | *Source date from the resolving quote* | Pass — 434 of 473 sources dated; Airplane! 1980, Jurassic Park 1993, Frozen 2013 |
+| *`batchId` validation and request-log status* | Pass — three `422`s logged as `422`; its happy path now applies the conflict fixture's decided action rather than a batch of no-ops |
+| *Character Modify and explicit id on Add* | Pass — rename `Complete`, third name `Blocked`, explicit id canonical, `AIRPLANE!` matches the stored Source. Same stale loop reason, corrected |
+| *Bulk-deciding a staged batch via file export and re-import, in both wire formats* | Pass — rerun, as step 5 recorded |
+| *Rule-file live-read proof* | Pass — the conflict returns without the rule; `Replace` records `2005`; the rule file restored and the image rebuilt |
+| *Conflict rule staleness*, *Source alias staleness* | Pass except the evaluation line, which #347 adds; both now declare `Fully green after: #347` |
+| *Rule-file override endpoints* | **Fails at step 4 — an application defect.** Step 3 staged from the curated file (`Expected 202, got 200`) and now uses the conflict fixture; step 4's `generate` then answers an unhandled `500`: `nikhilnamal17-conflict-rules.json` holds two rules for `e69951f1-…`, and `ConflictRuleGenerator.Merge` keys a dictionary on the entity id (`An item with the same key has already been added`). Raised with the developer |
+| *A reseed imports the designated files and deletes nothing* | Pass after a fix — step 5 called `DELETE /quotes/{id}`, which does not exist (`405`); the removal is now a constructed soft delete (795 → 794 → 795, that quote back). Its `Fully green after: #373` header no longer applied on this branch and is removed |
+| *A season-attached quote is served through the API* | Pass — three seasons, the episode's season in both read paths, the quote, and the database link |
 
 Exceptions before each stop, beyond what a document provokes: #407's `DatabaseBackupUnavailableException`
 refusals in the two unreadable-database documents, alongside the corrupt file's own `SqliteException`s;
