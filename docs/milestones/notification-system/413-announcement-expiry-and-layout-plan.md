@@ -45,6 +45,9 @@ pre-line` for every kind — measured live during #411's T2 pass (`breaksHonoure
 against `2`). The issue names `BodyIsMultiLine: false` as part of the cause; it is not. The cause is
 that the text has no line breaks in it.
 
+So this issue needs no rendering change whatsoever: give the body line breaks and the existing markup
+renders them. The flag, and the unread map around it, go back to #308 — see its own reopening.
+
 ---
 
 ## Decisions
@@ -60,12 +63,11 @@ that the text has no line breaks in it.
   2026-09-22). It is not a pattern a later producer may reach for: every other notification keeps the
   rule migration 11 states — edited wording is new content, and new content re-announces. A migration
   that rewrites a stored notification's text again needs its own decision, made on its own merits.
-- **`BodyIsMultiLine` is removed rather than flipped** (developer decision, 2026-09-22): a flag no
-  renderer reads cannot be made true by setting it. `PayloadParts` stays — the tests that read it stay
-  with it.
-- **The wider finding is filed separately, not fixed here**: `PayloadParts` is equally unread by any
-  renderer, so `LayoutFor` as a whole is exercised only by its own tests. Deciding what that map is
-  for is not this bug's job.
+- **`BodyIsMultiLine` belongs to #308, not here** (developer direction, 2026-09-22). It is one of the
+  features #308 defines, and #308 is still open: it returns to `In progress` and finishes by proving
+  every feature it defines is useful and testable across both surfaces and every variant. The flag, and
+  the `LayoutFor` map it sits in, are resolved there — see that plan's steps 14–16. This issue changes
+  no rendering code at all.
 - **The announcement's text moves to one named place.** It is currently a `const` inside a block in
   `Program.cs`, which no test can name, and it now has to agree with a frozen hash in a migration.
   A small `OperationIdAnnouncement` class in `Quotinator.Api.Startup` — the shape #81's
@@ -112,17 +114,9 @@ producer writes the new text directly. Idempotent by construction — every stat
 value to a row selected by a fixed predicate, so replaying it changes nothing.
 
 The hash is a frozen literal, as migration 11's is, because SQLite cannot compute one and migration
-text must not follow a later edit. Step 5's guard test is what keeps the literal honest.
+text must not follow a later edit. Step 4's guard test is what keeps the literal honest.
 
-### 4. Remove `BodyIsMultiLine`
-
-**Status:** ⬜ Not started
-
-Delete the flag from the `NotificationLayout` record and from all seven `LayoutFor` arms, leaving
-`PayloadParts`. `NotificationTableTests`'s existing arms read `PayloadParts` only, so they keep
-working; step 5 adds the assertion that keeps the record honest.
-
-### 5. Write the tests, red first
+### 4. Write the tests, red first
 
 **Status:** ⬜ Not started
 
@@ -131,7 +125,7 @@ reason it exists. The migration tests build their fixture the way
 `NotificationLegacyBackfillMigrationTests` already does: a row in the 1.8.3 shape, with an expiry, the
 single-line body, the old hash, and `nl`/`de` translation rows.
 
-### 6. Extend the live document
+### 5. Extend the live document
 
 **Status:** ⬜ Not started
 
@@ -145,7 +139,7 @@ Run it red against a build from the commit before this issue's first change — 
 `docker build -t quotinator:canary413` — per `docs/testing-policy.md`'s red-first rule for automated
 documents, then remove the container, image and worktree.
 
-### 7. Close out
+### 6. Close out
 
 **Status:** ⬜ Not started
 
@@ -165,13 +159,12 @@ checklist.
 | 4 | ❌ | The upgrade writes no second copy | Unit test | `NotificationSeedingTests.SeedOnce_AgainstAMigratedAnnouncementRow_WritesNothing` — history holding the migrated row, producer payload from `OperationIdAnnouncement`, result `null` |
 | 5 | ❌ | The migration's frozen hash matches the text the producer ships | Unit test | `OperationIdAnnouncementTests.TheMigrationHash_MatchesTheShippedBody` — `NotificationContentHash.Of(OperationIdAnnouncement.Body)` equals the literal in migration 23 |
 | 6 | ❌ | Every language's announcement body is multi-line | Unit test | `TranslationCompletenessTests.OperationIdRenameBody_CarriesLineBreaksInEveryLanguage` — each of `UI.en-GB`, `UI.nl`, `UI.de` holds `\n` in that key |
-| 7 | ❌ | The layout map declares nothing no renderer reads | Unit test | `NotificationTableTests.NotificationLayout_DeclaresOnlyWhatTheUiReads` — the record's public properties are exactly `PayloadParts` |
-| 8 | ❌ | A real 1.8.3 upgrade shows one active, multi-line announcement | Live (T2) | *Upgrading a v1.8.3 database enriches its notification rather than duplicating it*, step 2: count `1`, `expiresAt` empty, body contains a line break, `metadataKind=announcement` |
-| 9 | ❌ | That document would have caught the defect | Live (T2) | The same document against `quotinator:canary413`, built from the commit before this issue's first change: step 2 fails on `expiresAt` and on the line break |
-| 10 | ❌ | The application starts | Live (T1) | The developer starts it in Visual Studio and it reaches `Quotinator ready` |
+| 7 | ❌ | A real 1.8.3 upgrade shows one active, multi-line announcement | Live (T2) | *Upgrading a v1.8.3 database enriches its notification rather than duplicating it*, step 2: count `1`, `expiresAt` empty, body contains a line break, `metadataKind=announcement` |
+| 8 | ❌ | That document would have caught the defect | Live (T2) | The same document against `quotinator:canary413`, built from the commit before this issue's first change: step 2 fails on `expiresAt` and on the line break |
+| 9 | ❌ | The application starts | Live (T1) | The developer starts it in Visual Studio and it reaches `Quotinator ready` |
 
 ---
 
 ## Observed effect
 
-Not yet established — this section records what the fix produces once step 6 has run.
+Not yet established — this section records what the fix produces once step 5 has run.
