@@ -3,7 +3,7 @@
   "sourceLanguage": "en",
   "machineTranslated": false,
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411],
     "highlights": [
       "A TV series can now be divided into seasons, and a quote can be attached to the episode it comes from where that is known — instead of every quote from a long-running show sharing one entry for the whole series.",
       "Reloading your quotes no longer wipes what is stored first. It adds what is missing, holds anything that disagrees for your decision, and leaves what already matches alone — so your own additions and corrections survive a reload. To start completely fresh, reset the database and then reload.",
@@ -39,6 +39,7 @@
       "Changelog highlights can be marked as worth a startup notification through a reserved `notification` audience, read at runtime rather than rendered into a generated file — the mechanism the what's-new notification uses to choose which highlights to show, never falling back to the full list (issue #307)"
     ],
     "changed": [
+      "Quotinator's own automated test documents were repaired so that each runs exactly as written, and so that a run reports only what the test itself caused rather than noise from the way it was run — test maintenance with no effect on the application (issue #411)",
       "The details table on a reload confirmation now ends with a totals line, so the figures for every kind of entry add up in front of you instead of having to be added by eye (issue #383)",
       "Reloading quotes no longer deletes the stored content before importing. It is now an ordinary import of the designated files against what is already stored: missing entries are added, entries that differ raise a conflict to resolve, and entries that already match produce no change. Starting from scratch is a reset followed by a reload — two explicit actions. The deletion this replaces had also skipped three kinds of stored data, leaving links between characters and sources that no longer existed (issue #372)",
       "A backup that cannot be taken is now reported by its specific cause — the storage quota reached, too little free disk space, a backups folder that cannot be created, a backup file that cannot be written, the disk filling during the copy, or a database that cannot be read — each with its own remedy, where previously some were skipped silently and the rest failed alike. Normal operation keeps a reserve below the storage ceiling, so a backup can still be taken just before a reset (issue #348)",

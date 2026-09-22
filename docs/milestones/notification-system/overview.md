@@ -73,7 +73,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#370](https://github.com/DutchJaFO/Quotinator/issues/370) | An expected import conflict is signalled by throwing, once per conflicted row per render | Waiting for release | T1 ✅ T2 ✅ | [370-conflict-signalled-by-throwing-plan.md](370-conflict-signalled-by-throwing-plan.md) |
 | [#409](https://github.com/DutchJaFO/Quotinator/issues/409) | A quote held for review over a case-only text change shows nothing to decide, and is decided without asking | Waiting for release | T1 ✅ T2 ✅ | [409-case-only-change-shows-nothing-to-decide-plan.md](409-case-only-change-shows-nothing-to-decide-plan.md) |
 | [#410](https://github.com/DutchJaFO/Quotinator/issues/410) | Deciding a Quote Add action answers 500 instead of an outcome | Waiting for release | T1 ✅ T2 ✅ | [410-deciding-an-add-answers-500-plan.md](410-deciding-an-add-answers-500-plan.md) |
-| [#411](https://github.com/DutchJaFO/Quotinator/issues/411) | Automated-test documents no longer run as written | In progress | T1 ⬜ T2 ⬜ | [411-automated-test-documents-no-longer-run-as-written-plan.md](411-automated-test-documents-no-longer-run-as-written-plan.md) |
+| [#411](https://github.com/DutchJaFO/Quotinator/issues/411) | Automated-test documents no longer run as written | Waiting for release | T1 ✅ T2 ✅ | [411-automated-test-documents-no-longer-run-as-written-plan.md](411-automated-test-documents-no-longer-run-as-written-plan.md) |
 | [#413](https://github.com/DutchJaFO/Quotinator/issues/413) | The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph | Planning | T1 ⬜ T2 ⬜ | — |
 | [#419](https://github.com/DutchJaFO/Quotinator/issues/419) | A reset in the first moments after startup races the what's-new notification's write | Planning | T1 ⬜ T2 ⬜ | — |
 | [#420](https://github.com/DutchJaFO/Quotinator/issues/420) | Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity | Planning | T1 ⬜ T2 ⬜ | — |
@@ -132,7 +132,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #370 ─── depends on #397 — Waiting for release
 #409 ─── (none); touches the same two calls as #370 — Waiting for release
 #410 ─── depends on #370, whose decide outcomes it extends — Waiting for release
-#411 ─── (none) — In progress
+#411 ─── (none) — Waiting for release
 #413 ─── depends on #312, #319 — Planning
 #419 ─── (none); found in #411's T2, in #81's producer — Planning
 #420 ─── (none); found in #411's T2; blocks one #411 document — Planning
@@ -195,7 +195,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 30 | **#370** ✅ | Waiting for release |
 | 31 | **#409** ✅ | Waiting for release |
 | 32 | **#410** ✅ | Waiting for release |
-| 33 | **#411** 🚧 | In progress |
+| 33 | **#411** ✅ | Waiting for release |
 | 34 | **#413** | Planning — found in #370's T1; the #279 announcement, after #312 and #319 |
 | 35 | **#419** | Planning — found in #411's T2; a defect in #81's finished producer |
 | 36 | **#420** | Planning — found in #411's T2; one #411 document waits on it |

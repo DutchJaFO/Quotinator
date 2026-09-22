@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411],
     "highlights": [
       "Een televisieserie kan nu worden opgedeeld in seizoenen, en een citaat kan worden gekoppeld aan de aflevering waaruit het komt als die bekend is — in plaats van dat elk citaat uit een langlopende serie één item voor de hele serie deelt.",
       "Het opnieuw laden van uw citaten wist niet langer eerst wat is opgeslagen. Het voegt toe wat ontbreekt, houdt alles wat afwijkt aan voor uw beslissing en laat ongemoeid wat al klopt — zodat uw eigen toevoegingen en correcties een herlading overleven. Wilt u volledig opnieuw beginnen, reset dan eerst de database en laad daarna opnieuw.",
@@ -46,6 +46,7 @@
       "Hoogtepunten in de changelog kunnen via een gereserveerde doelgroep `notification` worden gemarkeerd als waardig voor een opstartmelding; die wordt tijdens het draaien gelezen in plaats van in een gegenereerd bestand weergegeven — het mechanisme waarmee de wat-is-er-nieuw-melding kiest welke hoogtepunten ze toont, zonder ooit terug te vallen op de volledige lijst (issue #307)"
     ],
     "changed": [
+      "De eigen geautomatiseerde testdocumenten van Quotinator zijn hersteld, zodat elk document precies zo werkt als het beschreven staat en een testronde alleen meldt wat de test zelf veroorzaakt heeft, in plaats van ruis door de manier waarop hij werd uitgevoerd — testonderhoud zonder gevolgen voor de applicatie (issue #411)",
       "De detailtabel bij een bevestiging van opnieuw laden sluit nu af met een totaalregel, zodat de aantallen voor elk soort item voor je worden opgeteld in plaats van dat je ze zelf bij elkaar moet optellen (issue #383)",
       "Het opnieuw laden van citaten verwijdert niet langer eerst de opgeslagen inhoud. Het is nu een gewone import van de aangewezen bestanden tegen wat al is opgeslagen: ontbrekende items worden toegevoegd, afwijkende items leveren een conflict op dat moet worden opgelost, en items die al kloppen veranderen niet. Opnieuw beginnen is een reset gevolgd door opnieuw laden — twee expliciete handelingen. De verwijdering die hiermee verdwijnt sloeg bovendien drie soorten opgeslagen gegevens over, waardoor koppelingen bleven bestaan tussen personages en bronnen die niet meer bestonden (issue #372)",
       "Een back-up die niet kan worden gemaakt, wordt nu gemeld met de specifieke oorzaak — het opslagquotum bereikt, te weinig vrije schijfruimte, een back-upmap die niet kan worden aangemaakt, een back-upbestand dat niet kan worden geschreven, een schijf die tijdens het kopiëren volloopt, of een database die niet kan worden gelezen — elk met een eigen oplossing, waar voorheen sommige stilzwijgend werden overgeslagen en de rest op dezelfde manier mislukte. Bij normaal gebruik blijft er een reserve onder het opslagplafond, zodat vlak voor een reset nog een back-up kan worden gemaakt (issue #348)",

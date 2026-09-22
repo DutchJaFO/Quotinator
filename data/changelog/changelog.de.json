@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411],
     "highlights": [
       "Eine Fernsehserie lässt sich jetzt in Staffeln unterteilen, und ein Zitat kann der Folge zugeordnet werden, aus der es stammt, sofern diese bekannt ist — statt dass sich jedes Zitat einer langlaufenden Serie einen einzigen Eintrag für die ganze Serie teilt.",
       "Das Neuladen Ihrer Zitate löscht nicht mehr zuerst, was gespeichert ist. Es ergänzt, was fehlt, hält alles, was abweicht, für Ihre Entscheidung zurück und lässt unverändert, was bereits stimmt — so überstehen Ihre eigenen Ergänzungen und Korrekturen ein Neuladen. Wer ganz von vorn beginnen möchte, setzt zuerst die Datenbank zurück und lädt dann neu.",
@@ -46,6 +46,7 @@
       "Changelog-Highlights lassen sich über eine reservierte Zielgruppe `notification` als würdig für eine Startbenachrichtigung markieren; sie wird zur Laufzeit gelesen, statt in eine generierte Datei geschrieben zu werden — der Mechanismus, mit dem die Was-ist-neu-Benachrichtigung auswählt, welche Highlights sie zeigt, ohne je auf die vollständige Liste zurückzufallen (issue #307)"
     ],
     "changed": [
+      "Quotinators eigene automatisierte Testdokumente wurden instand gesetzt, sodass jedes genau so läuft, wie es beschrieben ist, und ein Testlauf nur noch meldet, was der Test selbst verursacht hat, statt Rauschen aus der Art seiner Ausführung — Testpflege ohne Auswirkung auf die Anwendung (Issue #411)",
       "Die Detailtabelle einer Bestätigung des erneuten Ladens schließt jetzt mit einer Summenzeile ab, sodass die Zahlen für jede Art von Eintrag für Sie zusammengezählt werden, statt dass Sie sie selbst addieren müssen (Issue #383)",
       "Das Neuladen von Zitaten löscht den gespeicherten Inhalt nicht mehr vor dem Import. Es ist jetzt ein gewöhnlicher Import der vorgesehenen Dateien gegen den gespeicherten Bestand: Fehlende Einträge werden ergänzt, abweichende Einträge lösen einen zu klärenden Konflikt aus, und bereits übereinstimmende Einträge bleiben unverändert. Ein Neuanfang ist ein Zurücksetzen gefolgt von einem Neuladen — zwei ausdrückliche Schritte. Die dadurch ersetzte Löschung hatte zudem drei Arten gespeicherter Daten ausgelassen, sodass Verknüpfungen zwischen Figuren und Quellen bestehen blieben, die es nicht mehr gab (issue #372)",
       "Eine Sicherung, die sich nicht erstellen lässt, wird jetzt mit ihrer konkreten Ursache gemeldet — Speicherkontingent erreicht, zu wenig freier Speicherplatz, ein Sicherungsordner, der sich nicht anlegen lässt, eine Sicherungsdatei, die sich nicht schreiben lässt, ein Datenträger, der während des Kopierens vollläuft, oder eine Datenbank, die sich nicht lesen lässt — jeweils mit eigener Abhilfe, wo zuvor manche stillschweigend übersprungen wurden und der Rest gleichartig scheiterte. Im Normalbetrieb bleibt eine Reserve unterhalb der Speicherobergrenze, sodass kurz vor einem Zurücksetzen noch eine Sicherung möglich ist (issue #348)",

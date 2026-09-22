@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 16)
+**Status:** Waiting for release
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,8 @@
 
 ## Next action
 
-Step 16: the developer's T1 pass — start the application in Visual Studio and confirm it reaches ready.
+The Waiting-for-release checklist: changelog entries in all three languages, then the closing comment
+when the release ships.
 
 ---
 
@@ -495,7 +496,19 @@ environment changed. A document found broken is fixed in this issue and run agai
 
 ### 16. T1 pass
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — 2026-09-22. The application reaches `Quotinator ready` on the developer's own
+database: backup taken, `applying 19 pending Data` and `4 pending App` migration(s) (`data v3 → v22`,
+`app v5 → v9`), both sources refreshed, 795 quotes, both listeners bound. No exception during startup.
+
+Four `IOException` lines appeared later, one exception id through its rethrow chain, when a browser
+connection closed — the cancelled-transport condition, which has its own Knowledgebase entry and
+prevents nothing.
+
+**The pass also surfaced #421's real cost, which the issue had understated.** The first reseed reported
+`quotinator-curated.json … Quote[incoming=13 unchanged=12 blocked=1]`; after a Reset the same file read
+`new=13`, and every reseed after that `unchanged=13`. Reproduced on a 1.8.2 upgrade: the blocked row is
+a `Quote Add` for `da53310a`, the curated id Migration009 removes. So on an upgraded database that quote
+is blocked on every reseed, not merely unreachable by its id. Recorded on the Knowledgebase entry.
 
 The developer starts the application in Visual Studio.
 
