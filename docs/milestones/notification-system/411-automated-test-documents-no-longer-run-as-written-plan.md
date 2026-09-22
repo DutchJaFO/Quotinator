@@ -73,6 +73,14 @@ issue body was widened on 2026-09-19 to include them):
 - **Between containers, the browser tab is closed rather than left on the old page.** A page left open
   reconnects to whatever answers on its port next. The pane cannot open `about:blank`, so the tab is
   closed and a new one opened.
+- **A filed defect always gets a Knowledgebase entry, and only a released entry is kept forever**
+  (developer direction, 2026-09-22) — the process gap this issue exposed. `knowledgebase.md` decided
+  entry-worthiness by impact alone, so the four defects this issue filed were triaged to "no entry" for
+  a condition an operator can see in their own log. Both rules are now written down: the allocation
+  table gains a *filed as a defect* row, and a retention section says an entry that reached a release is
+  retired while one written and resolved inside a development cycle is deleted, its commits being its
+  history. The four entries here are pre-release, so they are deleted when their issues close, and each
+  issue says so.
 - **T2 runs in two passes** (developer direction, 2026-09-19): a targeted pass proving the shared ring,
   then every other document whose environment it changed — which, since every container gains the
   mount, is every other document in the suite. Nothing touched goes untested.
