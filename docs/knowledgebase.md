@@ -68,6 +68,13 @@ prevent the application or the API from functioning?* — and the answer is reco
 | **Prevents the app or API functioning** | An entry code. The operator needs the remedy. |
 | **Does not prevent it** | An entry code *if* an operator is likely to see it and worry. The entry's job is to say "this costs you nothing" — for expected noise in a degraded mode, that *is* the answer they need. |
 | **Impact unknown** | An entry code, a status code, **and** a GitHub issue. Unknown impact is an unanswered question, not "harmless by default"; this is the case status codes exist for. |
+| **Filed as a defect** | An entry and a status code, for as long as the issue is open — whatever the impact answer is. An operator meeting a known defect should find it already written down. |
+
+**A filed defect always gets an entry** (developer direction, 2026-09-22), which the impact answer alone
+does not decide: a condition can cost an operator nothing and still be worth finding written down,
+because what they need to know is that it is known. Found live in #411: four defects were filed and
+only the impact question was asked of them, which produced "no entry" for a condition an operator can
+see in their own log.
 
 Routine Debug output — request logs, asset logs — never gets a code. **A code is a promise that looking
 it up produces an answer**, so allocating one for a line nobody would ever look up devalues every other
@@ -191,7 +198,27 @@ belongs where an operator will look for it. See [`automated-testing/README.md`](
 | GitHub issue | When one exists — see the workflow rule below |
 | Affected versions | When the entry is version-specific |
 | CVE | When the entry concerns a security advisory — see below |
-| Retired | Marks an entry as no longer applicable. **Entries are retired, never deleted**, so a code can never be reused |
+| Retired | Marks an entry as no longer applicable. **An entry that reached a release is retired, never deleted**, so a code can never be reused — see the rule below for one that never did |
+
+---
+
+## Retention: only a released entry is kept forever
+
+**Retiring rather than deleting protects an entry someone may have read.** That is true of an entry
+published in a release, and it is what stops a code being reused for a different condition later.
+
+**An entry for a condition that never reached a release is deleted when its issue closes** (developer
+direction, 2026-09-22). Nobody outside development ever met that condition, no code of it was ever
+published, and the git history of `docs/knowledgebase/` is the record of what it said. Keeping it
+retired would leave an operator reading about something their version cannot produce.
+
+The test is *did this entry ship*, not *is the condition fixed*:
+
+| The entry | On its issue closing |
+|---|---|
+| Was published in a release | **Retired.** Marked, kept, its code never reused |
+| Written and resolved inside one development cycle | **Deleted.** The commits are its history |
+| Still describes something a released version does | Neither — it stays, and is rewritten to match |
 
 ---
 

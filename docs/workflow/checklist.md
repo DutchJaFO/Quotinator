@@ -106,11 +106,16 @@ A short flat per-issue index list of plan-doc links at the end is optional but e
 - [ ] The `gh issue create` command itself includes `--label` and `--milestone` — approving the draft
       approves all three (title/body, label, milestone) in one pass, not label/milestone as a
       follow-up round after the issue already exists
-- [ ] **If the issue concerns a condition that has a Knowledgebase entry, add the issue number to that
-      entry** — and if the condition has no entry yet but warrants one (run the triage question in
-      `docs/knowledgebase.md`), create it. This is what keeps a `QTN-INV` status honest: the guard test
-      that no investigating entry points at a closed issue only works if the link was made when the
-      issue was filed. Doing it later means doing it never.
+- [ ] **A filed defect gets a Knowledgebase entry, for as long as the issue is open** — add the issue
+      number to an existing entry, or write one from `docs/knowledgebase/entry-template.md` carrying
+      that number and a status code. Do not run the impact question to decide *whether* to write it:
+      that question decides what the entry says, not whether it exists, and answering it first is how
+      #411's four filed defects nearly went unwritten. When the issue closes, the entry is retired,
+      deleted or rewritten by `docs/knowledgebase.md`'s retention rule — an entry for a condition no
+      release ever carried is deleted, and its commits are its history. Writing the entry now is also
+      what keeps a `QTN-INV` status honest: the guard test that no investigating entry points at a
+      closed issue only works if the link was made when the issue was filed. Doing it later means
+      doing it never.
 
 ---
 
