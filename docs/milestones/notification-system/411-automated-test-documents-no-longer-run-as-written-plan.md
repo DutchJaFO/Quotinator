@@ -450,6 +450,14 @@ Against a build of the branch, each document in full, each log read before every
 | *Rule-file override endpoints* | **Fails at step 4 — an application defect.** Step 3 staged from the curated file (`Expected 202, got 200`) and now uses the conflict fixture; step 4's `generate` then answers an unhandled `500`: `nikhilnamal17-conflict-rules.json` holds two rules for `e69951f1-…`, and `ConflictRuleGenerator.Merge` keys a dictionary on the entity id (`An item with the same key has already been added`). Raised with the developer |
 | *A reseed imports the designated files and deletes nothing* | Pass after a fix — step 5 called `DELETE /quotes/{id}`, which does not exist (`405`); the removal is now a constructed soft delete (795 → 794 → 795, that quote back). Its `Fully green after: #373` header no longer applied on this branch and is removed |
 | *A season-attached quote is served through the API* | Pass — three seasons, the episode's season in both read paths, the quote, and the database link |
+| *A `Complete` row is not blocked when the resolution writes nothing* | Pass after a fix — its step 3 reseeded straight after `docker restart` and failed with the connection closed; step 2 now waits for health. `blocked=0`, a `ResolvedToExisting` action |
+| *A `Complete` row still blocks a real write* | Pass after the same fix — `blocked=1`, the third text never written |
+| *An already-reported conflict does not stage a duplicate on every reseed* | Pass — rerun: `1 -> 1 -> 1`, `AlreadyReported=2` |
+| *A new conflict is still staged* | Pass after the same restart fix — `1` then `2` distinct unresolved |
+| *A review row whose batch is gone offers only dismiss…* | Pass after a fix — step 1 wrote into its bind folder without clearing it (the pending-review alert document's defect); now cleared. Every page assertion, then Dismiss: `Discarded`/`Applied`, alert `resolved`, eight worded badges |
+| *Reviewing conflicted import actions throws nothing* | Pass — three pending with `quoteText`, the refusal names it, `before=0 after=0` |
+| *A case-only change is shown for review* | Pass — both hold `quoteText`; refusal; `Decided` with the incoming casing |
+| *Deciding an Add answers an outcome* | Pass after the bind-folder fix — the five cases held as expected, each decide `422` with the right reason, no exception |
 
 Exceptions before each stop, beyond what a document provokes: #407's `DatabaseBackupUnavailableException`
 refusals in the two unreadable-database documents, alongside the corrupt file's own `SqliteException`s;
