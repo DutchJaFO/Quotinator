@@ -43,14 +43,19 @@ publishes no port and is waited on by its own log, then `qt-notif-09-current` pu
 
 ```powershell
 $dataDir = "$env:TEMP\qt-notif-09-data"
+# A folder left by an earlier run still holds its database, and the released image would start against it.
+if (Test-Path $dataDir) { Remove-Item -LiteralPath $dataDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+function Count-Thrown($name) { @(docker logs $name 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count }
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-09-183 `
   --image ghcr.io/dutchjafo/quotinator:1.8.3 --bind $dataDir
 while (-not (docker logs qt-notif-09-183 2>&1 | Select-String -SimpleMatch 'Quotinator ready')) { Start-Sleep 1 }
+"before the stop: thrown=$(Count-Thrown qt-notif-09-183)"
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-09-183 --bind $dataDir
 ```
 
-**Expected:** the released image reaches `Quotinator ready` and the container is removed, leaving its
+**Expected:** the released image reaches `Quotinator ready`, `thrown=0` — read before the stop, per the
+index's *Read the log before the application stops* — and the container is removed, leaving its
 database in `$dataDir`.
 
 ### 2. Confirm the released database has the announcement and no translations
@@ -120,15 +125,18 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotin
 ### 6. A second boot does not re-announce
 
 ```powershell
+"before the restart: thrown=$(Count-Thrown qt-notif-09-current)"
 docker restart qt-notif-09-current | Out-Null
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18509/api/v1/health" --wait-for 200 --status
+$afterRestart = Count-Thrown qt-notif-09-current
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
   --sql "SELECT COUNT(*) AS Announcements FROM System_Notification WHERE Body LIKE '%GetAllImportBatches%'"
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$dataDir\quotinatordata.db" `
   --sql "SELECT t.Language, COUNT(*) AS Cnt FROM System_NotificationTranslation t JOIN System_Notification n ON LOWER(n.Id)=LOWER(t.NotificationId) WHERE n.MetadataKind = 'Announcement' GROUP BY t.Language"
 ```
 
-**Expected:** `200`, `Announcements` still `1`, and one row per translated language each with `Cnt` = `1`.
+**Expected:** `thrown=0` before the restart, then `200`, `Announcements` still `1`, and one row per
+translated language each with `Cnt` = `1`.
 
 **The count is scoped to the announcement by joining its notification.** Other producers write
 translations of their own — the what's-new notification has a row per language too — so an unscoped
@@ -149,6 +157,11 @@ upgrade. A database that never ran v1.8.3 gains nothing, because the backfill ma
 ## Cleanup
 
 ```powershell
+"before the stop: new=$((Count-Thrown qt-notif-09-current) - $afterRestart)"
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-09-current --bind $dataDir
 Remove-Item -Recurse -Force $dataDir
 ```
+
+**Expected:** `new=0`. Counted from `$afterRestart`, not from zero: the restart in step 6 is a stop, and
+its own shutdown lines stay in the log — two, one per listening port, measured 2026-09-22 — so a
+cumulative count would report them as if this run had thrown.

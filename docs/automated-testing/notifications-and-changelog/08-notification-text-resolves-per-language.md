@@ -139,6 +139,9 @@ in Dutch sees Dutch notification text with English as the visible fallback.
 
 ## Cleanup
 
+Read the log before the stop, per the index's *Read the log before the application stops* — expect nothing:
+
 ```powershell
+docker logs qt-notif-08 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-08
 ```
