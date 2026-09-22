@@ -428,6 +428,11 @@ Against a build of the branch, each document in full, each log read before every
 | *Captured source files are recorded with provenance and reconstruct byte-for-byte* | Pass — six captured rows, `manifest.json` linked to all 5 batches; list/detail/batches agree; byte-for-byte download; CRLF 277 against 0; `prunedCount=0` |
 | *Audit export, date-range discovery, and conflict-data auto-purge* | Pass after a fix — step 12 re-imported the curated file for change rows, which since #373 writes none (`ChangesBefore 0`, its own stop condition); it now applies the conflict fixture (`1` before, `1` after). Its cleanup missed two copies' sidecars; it now removes what a listing finds |
 | *Reset wipes the entire database and does not reseed* | Pass — 795 → 0, audit 1, `NoResults`; both counters 1 before and after |
+| *A file-authored explicit id is canonicalized at capture* | Pass — no `SQLite Error 19`; the Source resolves by its lowercase id and the quote's join holds |
+| *A quote resolves by id in either casing* | Pass — both casings `200`, id lowercase, same quote |
+| *A conversation line in the wrong casing does not violate the foreign key* | Pass — `200`, `0 -> 0` |
+| *String-typed id fields render canonically over HTTP* | Pass after a fix — it staged its batch from the curated file, which since #373 answers `200` (`Expected 202, got 200`); it now stages the conflict fixture. Every id checked is lowercase |
+| *Generic-repository endpoints return correct data and lowercase ids* | Pass — all eight endpoints populated and lowercase; a Source resolves in both casings |
 
 Exceptions before each stop, beyond what a document provokes: #407's `DatabaseBackupUnavailableException`
 refusals in the two unreadable-database documents, alongside the corrupt file's own `SqliteException`s;
