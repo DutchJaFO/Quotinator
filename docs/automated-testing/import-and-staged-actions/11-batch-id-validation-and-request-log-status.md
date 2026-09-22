@@ -22,9 +22,10 @@ level. That means its own container, since a configuration value is fixed at sta
   `→` lines at all, so "no `→ 200` present" is satisfied by logging never having run. The first step
   therefore makes a request whose logged outcome is known and asserts that its line *appears*. Only
   then does the absence of a wrong line mean anything.
-- **The batch for the happy path is staged by this document**, via a preview of the bundled curated
-  file — the same way `03-batch-id-mode-alias.md` obtains one. Borrowing a batch from another test
-  would make this unrunnable alone.
+- **The batch for the happy path is staged by this document**, via a preview of the suite's conflict
+  fixture — the same way [`03-batch-id-mode-alias.md`](03-batch-id-mode-alias.md) obtains one, so the
+  apply has a decided action to write. Borrowing a batch from another test would make this unrunnable
+  alone. Until #411 it previewed the curated file, which since #373 stages only already-applied no-ops.
 - **The log lines are counted with `[regex]::Matches`, not by matching lines.** Several `import/actions`
   entries can share a line, and a line-counting form would report `1` for any number of them.
 
@@ -85,8 +86,10 @@ Counting them is the assertion: a single missing line would otherwise be invisib
 ### 5. Stage a batch for the happy path, this document's own
 
 ```powershell
+$fixture = Join-Path $env:TEMP "qt-import-11-fixture"
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports $fixture | Out-Null
 $batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/preview" `
-              --file data/sources/quotinator-curated.json --duplicate-resolution skip `
+              --file (Join-Path $fixture "conflicting.json") --duplicate-resolution skip `
             | ConvertFrom-Json).batchId
 $batchId
 ```
@@ -127,4 +130,5 @@ by it.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-11
+Remove-Item -LiteralPath $fixture -Recurse -Force
 ```
