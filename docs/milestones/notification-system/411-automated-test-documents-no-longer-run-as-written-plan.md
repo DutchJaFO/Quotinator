@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 12)
+**Status:** In progress (step 13)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 12: assert a clean log in the browser-driven documents.
+Step 13: update the automated-testing index.
 
 ---
 
@@ -321,7 +321,10 @@ containers; each log is read before its container is stopped.
 
 ### 12. Assert a clean log in the browser-driven documents
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — both documents carry a `Read-Thrown` function that prints only the lines added
+since its previous read, called before every stop with the browser tab closed first; each expects
+`thrown=0`. The pending-review alert document also says why step 9's read-only container is not counted:
+its 48 lines are the read-only data directory's own defect. Run green in step 14.
 
 *Notifications list, dismiss, render, and drive their action* reads the log before its step 7 stop and
 expects no `[Runtime - Exception]` line; *A file left awaiting review raises an alert, and resolving it
