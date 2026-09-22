@@ -93,9 +93,14 @@ docker cp "$temp\376b-imports\manifest.json"       qt-import-26:/data/imports/
 docker cp "$temp\376b-imports\376b-a-quotes.json"  qt-import-26:/data/imports/
 docker cp "$temp\376b-imports\376b-b-sources.json" qt-import-26:/data/imports/
 docker restart qt-import-26 | Out-Null
+dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --status
 ```
 
-**Expected:** the container restarts.
+**Expected:** the container restarts and answers health with `200`.
+
+**Wait for health before step 3.** `docker restart` returns when the process starts, not when it
+answers; a reseed sent straight after it fails with the connection closed — measured 2026-09-22, as in
+its pair *An already-reported conflict does not stage a duplicate on every reseed*.
 
 ### 3. Reseed, then confirm the fixture was picked up and capture both Source ids
 
