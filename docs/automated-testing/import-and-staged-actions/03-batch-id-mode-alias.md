@@ -23,9 +23,13 @@ Nothing beyond the Fresh profile — the batch is staged by the preview call in 
 - **That transition is the assertion, not the status code.** `batchId` mode is a genuine alias for
   `POST /import/actions/apply` only if the actions it names actually moved; a route that returned `200`
   and did nothing leaves them exactly as the first reading found them.
-- **`pageSize=0` is required on both readings.** The default page is 20 and the curated file stages more
-  than that, so a default-paged listing would compare two truncated samples and could agree while the
-  batch was only partly applied.
+- **`pageSize=0` is required on both readings**, so the comparison covers the whole batch however many
+  actions it holds; a default-paged listing would compare two truncated samples of a larger one.
+- **The batch must hold an action that is not yet applied.** Content already stored stages as an
+  `Unchanged` no-op that reads `Applied` from the start (#373), so a batch made only of those — the
+  curated file re-imported, which this document used until #411 — reads `Applied` before the alias
+  runs, and the comparison can no longer fail. The suite's conflict fixture stages its quote as a
+  `Modify` the `skip` policy decides but does not apply.
 
 ## Steps
 
@@ -41,11 +45,13 @@ $base = "http://localhost:18603/api/v1"
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
 
-### 2. Stage a batch by previewing the curated file under `skip`
+### 2. Stage a batch by previewing the conflict fixture under `skip`
 
 ```powershell
+$fixture = Join-Path $env:TEMP "qt-import-03-fixture"
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports $fixture | Out-Null
 $batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/preview" `
-              --file data/sources/quotinator-curated.json --duplicate-resolution skip `
+              --file (Join-Path $fixture "conflicting.json") --duplicate-resolution skip `
             | ConvertFrom-Json).batchId
 $batchId
 ```
@@ -56,11 +62,15 @@ $batchId
 
 ```powershell
 $before = (Invoke-RestMethod "$base/import/actions?batchId=$batchId&pageSize=0").items
-$before | Group-Object status | Select-Object Count, Name
-"total=$(@($before).Count) applied=$(@($before | Where-Object { $_.status -eq 'Applied' }).Count)"
+$before | ForEach-Object { "$($_.entityType) $($_.actionType) $($_.status)" }
+"total=$(@($before).Count) notApplied=$(@($before | Where-Object { $_.status -ne 'Applied' }).Count)"
 ```
 
-**Expected:** the batch's actions are staged and `applied=0`.
+**Expected:** `Quote Modify Decided` and `Source Unchanged Applied`, so `notApplied=1` — the quote's
+decision is staged and not yet written.
+
+**On failure:** `notApplied=0` means nothing is left for the alias to apply, and step 5 would pass
+whether or not it works. Stop.
 
 ### 4. Apply by `batchId`
 
@@ -91,4 +101,5 @@ Not yet established as a captured record.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-03
+Remove-Item -LiteralPath $fixture -Recurse -Force
 ```
