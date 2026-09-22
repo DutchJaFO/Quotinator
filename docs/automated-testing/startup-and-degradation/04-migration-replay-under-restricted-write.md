@@ -59,9 +59,8 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-startup-04 --port
 
 $seeded = (Invoke-RestMethod "http://localhost:18404/api/v1/version").database
 $seededQuotes = @((Invoke-RestMethod "http://localhost:18404/api/v1/quotes?pageSize=0").items)
-$duplicateRows = ($seededQuotes | Group-Object { "$($_.quote)|$($_.source)" } |
-                   Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Count - 1 } |
-                   Measure-Object -Sum).Sum
+$duplicateGroups = $seededQuotes | Group-Object { "$($_.quote)|$($_.source)" } | Where-Object Count -gt 1
+$duplicateRows   = ($duplicateGroups | ForEach-Object { $_.Count - 1 } | Measure-Object -Sum).Sum
 "quotes=$($seeded.quotes) sources=$($seeded.sources) duplicateRows=$duplicateRows"
 ```
 

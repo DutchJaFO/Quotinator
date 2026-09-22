@@ -419,7 +419,15 @@ Against a build of the branch, each document in full, each log read before every
 read before every stop; with steps 8, 9 and 14 that is all 68. Every one passes except *Rule-file
 override endpoints*, which fails at step 4 on an application defect and declares `Fully green after:
 #420`. The other application findings are filed too: the reset/what's-new race as #419, Migration009's
-install-dependent quote id as #421, the inert `95vh` modal cap as #422.
+install-dependent quote id as #421, the inert `95vh` modal cap as #422. **Each of the four also has a
+Knowledgebase entry** (developer direction, 2026-09-22), so an operator meeting one finds an answer
+while it is open; each carries `QTN-KNOWN` and its issue number, and is retired when the issue closes.
+
+**`RepositoryStructureTests` caught two of this issue's own edits**: the reseed-alert helper in *A
+running notification action…* and the duplicate count in *Migration replay survives…* each put
+`Where-Object` and `.Count` on one line without `@(…)`, which reports blank for exactly one match. Both
+were rewritten and the rewrites checked against the originals on fabricated data (`3`/`3`, and `1`/`1`/`0`
+for one, mixed and no rows); 27 pass.
 
 | Document | Result |
 |---|---|

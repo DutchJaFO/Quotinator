@@ -344,11 +344,15 @@
   </Folder>
   <Folder Name="/docs/knowledgebase/">
     <File Path="docs/knowledgebase/README.md" />
+    <File Path="docs/knowledgebase/a-dialog-fills-almost-the-whole-window.md" />
+    <File Path="docs/knowledgebase/a-quote-id-stops-working-after-an-upgrade.md" />
     <File Path="docs/knowledgebase/antiforgery-token-could-not-be-decrypted.md" />
+    <File Path="docs/knowledgebase/generating-conflict-rules-answers-500.md" />
     <File Path="docs/knowledgebase/entry-template.md" />
     <File Path="docs/knowledgebase/repeated-suitable-constructor-exceptions-at-startup.md" />
     <File Path="docs/knowledgebase/transport-connection-cancelled-during-a-request.md" />
     <File Path="docs/knowledgebase/uploaded-file-is-rejected-as-invalid-json.md" />
+    <File Path="docs/knowledgebase/whats-new-notification-fails-to-seed-after-a-reset.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/api-surface/">
     <File Path="docs/automated-testing/api-surface/01-baseline.md" />

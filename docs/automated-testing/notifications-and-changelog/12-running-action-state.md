@@ -48,8 +48,8 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-367 --port 19367 
 
 $h = @{ "X-Api-Key" = "t2-367" }
 function Get-OpenReseedAlerts {
-  @((Invoke-RestMethod "http://localhost:19367/api/v1/notifications?pageSize=0").items |
-    Where-Object { $_.dismissTriggerKey -eq 'reseed' -and -not $_.isDismissed }).Count
+  $items = (Invoke-RestMethod "http://localhost:19367/api/v1/notifications?pageSize=0").items
+  @($items | Where-Object { $_.dismissTriggerKey -eq 'reseed' -and -not $_.isDismissed }).Count
 }
 Invoke-RestMethod -Method Post -Headers $h "http://localhost:19367/api/v1/admin/database/reset" | Out-Null
 $deadline = (Get-Date).AddSeconds(30)
