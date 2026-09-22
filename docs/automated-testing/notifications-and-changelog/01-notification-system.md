@@ -39,6 +39,10 @@ about. A count asserts something nobody intended and gets "fixed" by editing a d
 - **Step 7 edits the database from the host, against a stopped container.** A clean `docker stop -t 15`
   checkpoints and removes the `-wal`/`-shm` sidecars (measured), so copying the `.db` file out, editing
   it and copying it back cannot leave a stale sidecar behind for SQLite to recover from.
+- **The log is read before each stop, with the browser tab closed first.** Stopping logs exceptions of
+  its own — measured 2026-09-19, this document's one stop logged seven with a page still open — and a
+  page left open reconnects to the restarted container. Read afterwards, they would be counted as this
+  test's.
 
 ## Steps
 
@@ -164,8 +168,31 @@ trigger, one already-expired row, one already-dismissed row and one dismissed as
 the application produces these, so the test constructs them — against a **stopped** container, since writing to a SQLite file
 underneath a running process is a different scenario:
 
+First close the browser tab, so no page reconnects to the restarted container, and read the log — the
+stop below logs exceptions of its own (the index's *Read the log before the application stops*):
+
+```powershell
+function Read-Thrown {
+  $lines = @(docker logs qt-notif-01 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]')
+  $new = @($lines | Select-Object -Skip $script:thrownSeen)
+  $script:thrownSeen = $lines.Count
+  "thrown=$($new.Count)"
+  $new | ForEach-Object { '  ' + ($_.Line -split 'thrown: ')[1] }
+}
+$thrownSeen = 0
+Read-Thrown
+```
+
+**Expected:** `thrown=0` — nothing in steps 1 to 6 threw.
+
+**On failure:** a `CryptographicException` / `AntiforgeryValidationException` pair means the browser
+held a cookie from a container outside the suite's shared key ring — see
+[*A cookie from another key ring is replaced on the first page, and logged only
+then*](../api-surface/06-a-cookie-from-another-key-ring-is-replaced.md), whose step 4 restores it.
+
 ```powershell
 docker stop -t 15 qt-notif-01
+$thrownSeen = @(docker logs qt-notif-01 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count
 docker cp qt-notif-01:/data/quotinatordata.db .claude/temp/notif-01.db
 
 dotnet script scripts/testing/execute-sql.csx -- --db .claude/temp/notif-01.db --sql @'
@@ -240,6 +267,14 @@ similar; only the domain read separates "reverted without calling anything" from
 
 **Verified this way during #339's full run**, driving a real browser: the filters behaved exactly as
 above, Cancel left `quotes` at `799`, and Confirm dropped it to `0` with `0` notification rows left.
+
+**Then close the browser tab and read the log once more**, before the cleanup stops the container:
+
+```powershell
+Read-Thrown
+```
+
+**Expected:** `thrown=0` — nothing since the restart threw, the reset included.
 
 ## Observed effect
 

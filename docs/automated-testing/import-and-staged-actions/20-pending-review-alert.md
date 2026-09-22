@@ -38,6 +38,10 @@ meets content that is already stored — which is the only shape that stages a d
 inline. T1 hits the same wall for the same reason and needs the same file, and a fixture defined in two
 places drifts — the copy that is not being run stops matching what the code does.
 
+**The log is read before each stop, with the browser tab closed first** — before step 3's restart and
+before step 9 replaces the container. Stopping logs exceptions of its own, and a page left open
+reconnects to whatever answers next; read afterwards, both would be counted as this test's.
+
 **Count this alert, never the total number of notifications.** Every count filters on `metadataKind` of
 `importReviewPending`. PowerShell's `-eq` is case-insensitive, which is why this matches the API's
 lower-cased `importreviewpending`.
@@ -119,6 +123,23 @@ carry one can never be retired by resolving its review.
 
 ### 3. Confirm it reaches the startup modal after a restart
 
+The restart logs exceptions of its own, so the log is read first (the index's *Read the log before the
+application stops*):
+
+```powershell
+function Read-Thrown {
+  $lines = @(docker logs qt-review-20 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]')
+  $new = @($lines | Select-Object -Skip $script:thrownSeen)
+  $script:thrownSeen = $lines.Count
+  "thrown=$($new.Count)"
+  $new | ForEach-Object { '  ' + ($_.Line -split 'thrown: ')[1] }
+}
+$thrownSeen = 0
+Read-Thrown
+```
+
+**Expected:** `thrown=0` — nothing in steps 1 and 2 threw.
+
 ```powershell
 docker restart qt-review-20 | Out-Null
 foreach ($i in 1..30) {
@@ -127,7 +148,10 @@ foreach ($i in 1..30) {
 }
 $html = (Invoke-WebRequest "http://localhost:19520/" -UseBasicParsing).Content
 "alert text in modal: $($html.Contains('need your decision'))"
+$thrownSeen = @(docker logs qt-review-20 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count
 ```
+
+The last line sets aside what the restart itself logged, so step 9's read counts only what came after.
 
 **Expected:** `True`. The modal is shown once per process run, so this needs the restart — the same
 sequencing [`../notifications-and-changelog/11-clean-reseed-confirmation.md`](../notifications-and-changelog/11-clean-reseed-confirmation.md)
@@ -237,7 +261,19 @@ and click again rather than concluding the control is broken — measured here o
 
 ### 9. Confirm the pages still answer while the database is degraded
 
-**Last, because it replaces the container** every earlier step drives.
+**Last, because it replaces the container** every earlier step drives. Close the browser tab first,
+and read the log before the container goes:
+
+```powershell
+Read-Thrown
+```
+
+**Expected:** `thrown=0` — nothing since the restart threw, both decisions included.
+
+**On failure:** a `CryptographicException` / `AntiforgeryValidationException` pair means the browser
+held a cookie from a container outside the suite's shared key ring — see [*A cookie from another key
+ring is replaced on the first page, and logged only
+then*](../api-surface/06-a-cookie-from-another-key-ring-is-replaced.md), whose step 4 restores it.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-review-20 --bind $bind
@@ -269,6 +305,12 @@ This test asserts parity rather than `200` on purpose. `/import-review` is exemp
 when the database is degraded — and when the underlying defect is fixed, both pages become reachable
 together. A row asserting `200` here would have to be marked failing for a fault #303 did not cause and
 does not own.
+
+**This container's exceptions are not counted.** Its log carries the read-only data directory's own —
+`IOException`, `SqliteException` and `CryptographicException`, 48 lines measured 2026-09-19, 16 of them
+at startup before any request — which are the defect above rather than anything this document
+provokes. It also keeps its own key ring rather than the suite's shared one, which `test-env.csx`
+never mounts over a read-only `/data`.
 
 ## Canary — run red against the build before #303
 
