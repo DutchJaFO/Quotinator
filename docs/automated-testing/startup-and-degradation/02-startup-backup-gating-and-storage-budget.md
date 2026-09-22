@@ -38,6 +38,7 @@ and nothing to seed puts nothing at risk. That is #277's gating, and it is why t
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-02 --port 18402
+function Count-Thrown { @(docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count }
 docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'Database - Backup'
 ```
 
@@ -50,14 +51,16 @@ different sequence. Stop and remove the volume before re-running.
 ### 2. Restart while healthy
 
 ```powershell
+"before the restart: thrown=$(Count-Thrown)"
 docker restart qt-startup-02
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18402/api/v1/health" --wait-for 200 --status
+$afterRestart = Count-Thrown
 
 docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'Database - Backup', 'schema is up to date'
 "backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
 ```
 
-**Expected:** `schema is up to date`, **no** `[Database - Backup]` line, and `backups=0` — the
+**Expected:** `thrown=0` before the restart, `schema is up to date`, **no** `[Database - Backup]` line, and `backups=0` — the
 `/data/backups` directory does not even exist yet, which is why the listing is allowed to fail.
 
 ### 3. Reset the database
@@ -72,30 +75,44 @@ dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:
 ### 4. Restart immediately after the Reset
 
 ```powershell
+"before the restart: new=$((Count-Thrown) - $afterRestart)"
 docker restart qt-startup-02
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18402/api/v1/health" --wait-for 200 --status
+$afterRestart = Count-Thrown
 
 docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'Database - Backup'
 "backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
 ```
 
-**Expected:** a `[Database - Backup]` line, and `backups=2`. Content-seed has real work to do again
+**Expected:** `new=0` before the restart — counted from step 2's restart, whose own shutdown lines stay
+in the log — then a `[Database - Backup]` line, and `backups=2`. Content-seed has real work to do again
 (Quotes are empty) even though the schema itself needed no migration. **This is the exact case a
 `MigrationApplied`-based gate was found to miss**, and the reason the gate is not based on it.
 
 ### 5. Reset again with the backup budget already exceeded
 
 ```powershell
+"before the stop: new=$((Count-Thrown) - $afterRestart)"
 dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-02 --port 18402 `
   --env Quotinator__MaxBackupStorageGb=0
 
-dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18402/api/v1/admin/database/reset" --expect 200 | Out-Null
-docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'LogBackupSkippedBudgetExceeded', 'budget'
+dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18402/api/v1/admin/database/reset" --expect 409
+docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch 'reset refused'
 "backups=$(@(docker exec qt-startup-02 ls /data/backups 2>$null).Count)"
+"quotes still present = $((Invoke-RestMethod 'http://localhost:18402/api/v1/quotes?page=1&pageSize=1').totalCount)"
 ```
 
-**Expected:** Reset still succeeds (`200`, database rebuilt). The backup is skipped with a warning log,
-not an exception, and `backups=2` — unchanged from step 4, because the new one was never written.
+**Expected:** `new=0`, then `409` with `backupObstacle` `BudgetExceeded` and remedies naming the backup
+endpoints and the quota setting; a `reset refused — no backup could be taken` warning, not an
+exception; `backups=2` — unchanged from step 4; and a non-zero quote count, because the refused reset
+changed nothing.
+
+**Reset refuses rather than proceeding without a backup.** This step expected `200` with the backup
+skipped until the full-quota work changed Reset to refuse whenever no backup can be taken, unless the
+caller passes `allowNoBackup=true` — measured 2026-09-22: `409`, `backups=2`, `795` quotes still
+present. [`../backup/05-a-full-quota-is-resolvable-from-inside-the-application.md`](../backup/05-a-full-quota-is-resolvable-from-inside-the-application.md)
+asserts the remedies end to end; what this step keeps is that the budget is applied to a volume that
+already holds backups.
 
 **On failure:** `backups=3` means the budget was not applied. Check that `reenter` (not `create`) was
 used — `create` would have wiped the volume and taken the count back to zero, which reads as a budget
@@ -109,5 +126,9 @@ are observed state and are asserted above.
 ## Cleanup
 
 ```powershell
+docker logs qt-startup-02 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-02
 ```
+
+**Expected:** the read finds nothing — `reenter` replaced the container in step 5, so its log starts
+there, and the refusal is a warning.
