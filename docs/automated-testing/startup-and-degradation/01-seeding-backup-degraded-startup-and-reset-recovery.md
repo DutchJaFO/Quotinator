@@ -55,8 +55,11 @@ before that. Its own justification named the missing gate that #277 supplied.
 
 ```powershell
 $dataDir = "$PWD\.claude\temp\qt-startup-01-data"
+# A folder left by an earlier run holds a database, and this step's baseline and backup checks need none.
+if (Test-Path $dataDir) { Remove-Item -LiteralPath $dataDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-01 --port 18401 --bind $dataDir
+function Count-Thrown { @(docker logs qt-startup-01 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count }
 
 docker logs qt-startup-01 2>&1 | Select-String -SimpleMatch '[Database - Init]'
 "backups=$(@(Get-ChildItem "$dataDir\backups\*.db" -ErrorAction SilentlyContinue).Count)"
@@ -73,14 +76,16 @@ wrong one they report nonsense.
 ### 2. Restart unchanged — nothing is at risk, so nothing is backed up
 
 ```powershell
+"before the restart: thrown=$(Count-Thrown)"
 docker restart qt-startup-01
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/health" --wait-for 200 --status
+$afterRestart = Count-Thrown
 
 docker logs qt-startup-01 2>&1 | Select-String -SimpleMatch '[Database - Init]' | Select-Object -Last 3
 "backups=$(@(Get-ChildItem "$dataDir\backups\*.db" -ErrorAction SilentlyContinue).Count)"
 ```
 
-**Expected:** `schema is up to date`, and `backups=0` still. No migration is pending and the content
+**Expected:** `thrown=0` before the restart, `schema is up to date`, and `backups=0` still. No migration is pending and the content
 already exists, so neither risky action runs and there is nothing to protect against.
 
 ### 3. Break the schema on the host side, then restart
@@ -89,14 +94,30 @@ The container stays the one step 1 created — it is already bound to this direc
 re-running. It is stopped only so the host can write to the database file safely:
 
 ```powershell
+"before the stop: new=$((Count-Thrown) - $afterRestart)"
 docker stop qt-startup-01
 dotnet script scripts/testing/execute-sql.csx -- `
   --db "$dataDir\quotinatordata.db" `
   --sql "PRAGMA foreign_keys=OFF; DROP TABLE Quotinator_Quote;"
 docker start qt-startup-01
-dotnet script scripts/testing/http.csx -- --url "http://localhost:18401/api/v1/health" --wait-for 503 --status
+# A 503's body is read from the response stream: PowerShell 5.1 leaves ErrorDetails.Message empty here.
+function Health-Status {
+  try   { (Invoke-RestMethod "http://localhost:18401/api/v1/health").status }
+  catch {
+    $response = $_.Exception.Response
+    if ($null -eq $response) { return 'down' }
+    $body = (New-Object IO.StreamReader($response.GetResponseStream())).ReadToEnd()
+    try { ($body | ConvertFrom-Json -ErrorAction Stop).status } catch { 'unreadable' }
+  }
+}
+$deadline = (Get-Date).AddSeconds(120)
+while (($status = Health-Status) -ne 'unhealthy' -and (Get-Date) -lt $deadline) { Start-Sleep 1 }
+"health status=$status"
+$afterDegraded = Count-Thrown
 
-docker logs qt-startup-01 2>&1 | Select-Object -Last 20
+docker logs qt-startup-01 2>&1 |
+  Select-String -Pattern 'backup complete|seeding failed|pre-seed backup restored|Database initialisation failed|no such table: Quotinator_Quote|Unhandled exception' |
+  ForEach-Object { $_.Line }
 "backups=$(@(Get-ChildItem "$dataDir\backups\*.db" -ErrorAction SilentlyContinue).Count)"
 docker ps -a --filter name=qt-startup-01 --format "{{.Status}}"
 ```
@@ -115,10 +136,19 @@ its `-shm`/`-wal` sidecars are not separate backups.
 
 `docker ps -a` shows the container as `Up …`, **not** `Exited` — the app degrades, it does not crash.
 
+`new=0` before the stop. The degraded start then logs its own `SqliteException` — thrown, then handled
+by the restore — which is this step's subject, not noise.
+
+**Wait for `unhealthy`, not for a `503`.** A starting app answers `503` too — the startup wait page
+(#280) reports `status=starting` until initialisation finishes — so a wait on the status code returns at
+once and everything after it reads a half-started app. Measured 2026-09-22 with the old
+`--wait-for 503`: health read `starting` with no reason, `/quotes/random` answered the wait page's
+`200`, and the container had been up one second.
+
 **On failure:** an `Exited` container means the app crashed instead of degrading, which is the defect
 this test exists to catch — and there is then no server left to answer the degraded-surface and Reset
-steps below. Stop and record the exit rather than running them against nothing. The `--wait-for 503`
-above fails within its own timeout in that case, rather than hanging.
+steps below. Stop and record the exit rather than running them against nothing. `health status=down`
+or `starting` means the wait gave up after 120 seconds rather than hanging.
 
 ### 4. Confirm the degraded surface
 
@@ -194,10 +224,17 @@ what the assertions are made against.
 
 ## Cleanup
 
+Read the log before the stop, per the index's *Read the log before the application stops*. Every line
+belongs to step 3's degraded start, counted once it reported `unhealthy`; none may come from the Reset
+or the recovery after it:
+
 ```powershell
+"before the stop: new=$((Count-Thrown) - $afterDegraded)"
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-01 --bind $dataDir
 Remove-Item $dataDir -Recurse -Force -ErrorAction SilentlyContinue
 ```
+
+**Expected:** `new=0`.
 
 This test's data directory is a bind mount rather than a named volume, so removing the directory is
 what removes its data.
