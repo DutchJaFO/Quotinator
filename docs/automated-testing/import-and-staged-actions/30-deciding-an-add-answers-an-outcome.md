@@ -36,6 +36,8 @@ The test never stops its container.
 ```powershell
 $bind    = Join-Path $env:TEMP "qt-import-30-bind"
 $imports = Join-Path $bind "imports"
+# A folder left by an earlier run still holds its database, and the container would start against it.
+if (Test-Path $bind) { Remove-Item -LiteralPath $bind -Recurse -Force }
 New-Item -ItemType Directory -Force $imports | Out-Null
 function Write-Json($name, $value) {
   [IO.File]::WriteAllText((Join-Path $imports $name), ($value | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
