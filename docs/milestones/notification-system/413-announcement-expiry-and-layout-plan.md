@@ -55,6 +55,11 @@ that the text has no line breaks in it.
   the row it expects and writes nothing. This is a deliberate exception to migration 11's reasoning
   above, and the exception is narrow: the announcement is being *restated*, not replaced by new
   content, so re-announcing it would tell the operator nothing they have not already read.
+
+  **The in-place edit is strictly this migration's, for this one notification** (developer direction,
+  2026-09-22). It is not a pattern a later producer may reach for: every other notification keeps the
+  rule migration 11 states — edited wording is new content, and new content re-announces. A migration
+  that rewrites a stored notification's text again needs its own decision, made on its own merits.
 - **`BodyIsMultiLine` is removed rather than flipped** (developer decision, 2026-09-22): a flag no
   renderer reads cannot be made true by setting it. `PayloadParts` stays — the tests that read it stay
   with it.
