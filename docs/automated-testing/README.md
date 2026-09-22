@@ -608,9 +608,16 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:PORT/api/v1/import/actions
 mismatch, which is what stops a run at the step that failed rather than three steps later:
 
 ```powershell
+$fixture = Join-Path $env:TEMP "qt-example-fixture"
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports $fixture | Out-Null
 dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:PORT/api/v1/import" `
-  --file data/sources/quotinator-curated.json --duplicate-resolution review --expect 202
+  --file (Join-Path $fixture "conflicting.json") --duplicate-resolution review --expect 202
 ```
+
+**Stage from the conflict fixture, never from a bundled file.** A bundled file restates content the seed
+already stored, and since #373 that is an `Unchanged` no-op applied at once — `200`, nothing held for
+review. Every document that uploaded `quotinator-curated.json` expecting `202` stopped running as written
+for that reason (#411).
 
 ```powershell
 dotnet script scripts/testing/http.csx -- --url "http://localhost:PORT/api/v1/quotes?page=0" --expect 422
@@ -647,7 +654,7 @@ it — and note that none of this needs a text-extraction step, because the resp
 ```powershell
 $batchId = (dotnet script scripts/testing/http.csx -- --method POST `
               --url "http://localhost:PORT/api/v1/import" `
-              --file data/sources/quotinator-curated.json --duplicate-resolution review `
+              --file (Join-Path $fixture "conflicting.json") --duplicate-resolution review `
             | ConvertFrom-Json).batchId
 $batchId
 ```
