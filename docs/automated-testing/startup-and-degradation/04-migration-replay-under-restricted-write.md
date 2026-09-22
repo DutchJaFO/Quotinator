@@ -58,11 +58,15 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-startup-04 --port
   --image ghcr.io/dutchjafo/quotinator:1.8.2
 
 $seeded = (Invoke-RestMethod "http://localhost:18404/api/v1/version").database
-"quotes=$($seeded.quotes) sources=$($seeded.sources)"
+$seededQuotes = @((Invoke-RestMethod "http://localhost:18404/api/v1/quotes?pageSize=0").items)
+$duplicateRows = ($seededQuotes | Group-Object { "$($_.quote)|$($_.source)" } |
+                   Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Count - 1 } |
+                   Measure-Object -Sum).Sum
+"quotes=$($seeded.quotes) sources=$($seeded.sources) duplicateRows=$duplicateRows"
 ```
 
 **Expected:** a non-zero `quotes` count, and a seed reporting zero failures — nothing `Pending`,
-`Blocked` or `Stale`. `$seeded` is kept for step 2 to compare against.
+`Blocked` or `Stale`. `$seeded` and `$duplicateRows` are kept for step 2 to compare against.
 
 **On failure:** a zero or partial count means the volume is only partially seeded, and the upgrade
 below has nothing meaningful to replay against — a pass would then say nothing about the restricted
@@ -76,16 +80,22 @@ dotnet script scripts/testing/test-env.csx -- reenter --name qt-startup-04 --por
 
 (dotnet script scripts/testing/http.csx -- --url "http://localhost:18404/api/v1/health" --expect 200 | ConvertFrom-Json).status
 $upgraded = (Invoke-RestMethod "http://localhost:18404/api/v1/version").database
-"quotes=$($upgraded.quotes) same=$($upgraded.quotes -eq $seeded.quotes)"
+"quotes=$($upgraded.quotes) accountedFor=$($upgraded.quotes -eq $seeded.quotes - $duplicateRows)"
 
 $log = docker logs qt-startup-04 2>&1 | Out-String
 "migrationApplied=$(([regex]::Matches($log, 'migration applied')).Count)"
 "sqliteErrors=$(([regex]::Matches($log, 'SqliteException|SQLite Error')).Count)"
 ```
 
-**Expected:** `/health` returns `200` and `healthy`. `same=True` — the quote count is identical to what
-the seeding run recorded, because migration replay must not lose content; that is a relationship
-between the two runs rather than a number either of them should predict. `migrationApplied` is non-zero
+**Expected:** `/health` returns `200` and `healthy`. `accountedFor=True` — the upgraded count is the
+seeded count less exactly the duplicate rows step 1 counted, because migration replay must not lose
+content; that is a relationship between the two runs rather than a number either of them should
+predict.
+
+**Duplicates are the one deliberate loss.** Migration009 (#374) makes a quote unique per Source by
+deleting every row that repeats another's text under the same Source, keeping the earliest. Measured
+2026-09-22: the 1.8.2 seed holds four such pairs, 799 quotes become 795, and nothing else goes. Until
+#411 this step asserted the two counts were equal, which has been false since #374. `migrationApplied` is non-zero
 and `sqliteErrors` is `0` — the fix means the migration's temp files never touch disk at all, so
 restricting every other writable path does not matter.
 
