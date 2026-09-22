@@ -415,7 +415,19 @@ Against a build of the branch, each document in full, each log read before every
 
 ### 15. T2, second pass — everything else the change touched
 
-**Status:** ⬜ Not started
+**Status:** In progress — 53 documents, each run as written with the log read before every stop.
+
+| Document | Result |
+|---|---|
+| *The Unicode-aware search flag reaches the running app* | Pass — flag off `NoResults`, on `Ok` with the fixture; 0 exceptions |
+| *Endpoint names and summaries follow the standard* | Pass — 59 operations; renames 1/1/0/0; summaries 1/1/1/0/0/0; `GetQuoteById` 1, `GetById` 0; `by ID` 12, `by id` 0 |
+| *A thrown exception is logged where the app actually runs* | Pass — 0 before; 5 after, `JsonReaderException` plus one `QuoteImportValidationException` id rethrown; quiet request adds none |
+| *A reset refuses when the database cannot be read…* | Pass — 34 bytes, `503`, `SourceUnreadable`, 2 remedies, no override; `409` with it; remedy then `200` |
+| *A reset refuses when the database is truncated…* | Pass — `503`, `SourceUnreadable`, no override; remedy then `200`. Its Determinism claimed `destroy` stops cleanly; it is `docker rm -f`, now said so |
+| *A full backup quota is resolvable from inside the application* | Pass — create; `BudgetExceeded` with remedies naming the endpoints; reset `409`; delete `204`; reset `200`; download matches; read-only delete `409` with its remedy |
+
+Exceptions before each stop, beyond what a document provokes: #407's `DatabaseBackupUnavailableException`
+refusals in the two unreadable-database documents, alongside the corrupt file's own `SqliteException`s.
 
 Every other document in `docs/automated-testing/`: every container gains the mount, so every document's
 environment changed. A document found broken is fixed in this issue and run again.
