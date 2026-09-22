@@ -55,6 +55,8 @@ is evidence only if the instrument counts the right thing*.
 ```powershell
 $bind    = Join-Path $env:TEMP "qt-orphan-27-bind"
 $imports = Join-Path $bind "imports"
+# A folder left by an earlier run still holds its database, and the container would start against it.
+if (Test-Path $bind) { Remove-Item -LiteralPath $bind -Recurse -Force }
 dotnet script scripts/testing/stage-import-conflict.csx -- --imports $imports
 
 dotnet script scripts/testing/test-env.csx -- create --name qt-orphan-27 --port 18627 --bind $bind
