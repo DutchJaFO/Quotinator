@@ -150,9 +150,10 @@ Invoke-RestMethod "$base/masterdata/characters/$characterId" | Select-Object id,
 **Expected:** the apply returns `200`, and the Character reads back `Renamed Via Smoke Test` with
 `completenessStatus` of `Complete`.
 
-**The loop decides the fixture's own quote action**, which `apply` requires and which naming only the
-Character action would leave pending — see [`07`](07-stagedirection-soundcue-modify.md) step 4 for the
-same trap.
+**The loop decides anything else the batch stages**, which `apply` requires and which naming only the
+Character action would leave pending. Since #373 the fixture's new quote is an ordinary `Add` rather
+than an action awaiting a decision, so today it decides nothing (measured 2026-09-22: only the Character
+was pending); see [*StageDirection and SoundCue Modify*](07-stagedirection-soundcue-modify.md) step 4.
 
 ### 6. Attempt a *different* Modify against the now-`Complete` Character
 
