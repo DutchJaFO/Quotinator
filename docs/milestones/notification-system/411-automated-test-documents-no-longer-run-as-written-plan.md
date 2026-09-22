@@ -425,9 +425,13 @@ Against a build of the branch, each document in full, each log read before every
 | *A reset refuses when the database cannot be read…* | Pass — 34 bytes, `503`, `SourceUnreadable`, 2 remedies, no override; `409` with it; remedy then `200` |
 | *A reset refuses when the database is truncated…* | Pass — `503`, `SourceUnreadable`, no override; remedy then `200`. Its Determinism claimed `destroy` stops cleanly; it is `docker rm -f`, now said so |
 | *A full backup quota is resolvable from inside the application* | Pass — create; `BudgetExceeded` with remedies naming the endpoints; reset `409`; delete `204`; reset `200`; download matches; read-only delete `409` with its remedy |
+| *Captured source files are recorded with provenance and reconstruct byte-for-byte* | Pass — six captured rows, `manifest.json` linked to all 5 batches; list/detail/batches agree; byte-for-byte download; CRLF 277 against 0; `prunedCount=0` |
+| *Audit export, date-range discovery, and conflict-data auto-purge* | Pass after a fix — step 12 re-imported the curated file for change rows, which since #373 writes none (`ChangesBefore 0`, its own stop condition); it now applies the conflict fixture (`1` before, `1` after). Its cleanup missed two copies' sidecars; it now removes what a listing finds |
+| *Reset wipes the entire database and does not reseed* | Pass — 795 → 0, audit 1, `NoResults`; both counters 1 before and after |
 
 Exceptions before each stop, beyond what a document provokes: #407's `DatabaseBackupUnavailableException`
-refusals in the two unreadable-database documents, alongside the corrupt file's own `SqliteException`s.
+refusals in the two unreadable-database documents, alongside the corrupt file's own `SqliteException`s;
+#404's `ImportBatchStateException` for the audit document's refused reversal.
 
 Every other document in `docs/automated-testing/`: every container gains the mount, so every document's
 environment changed. A document found broken is fixed in this issue and run again.
