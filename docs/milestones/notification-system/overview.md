@@ -74,7 +74,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#409](https://github.com/DutchJaFO/Quotinator/issues/409) | A quote held for review over a case-only text change shows nothing to decide, and is decided without asking | Waiting for release | T1 ✅ T2 ✅ | [409-case-only-change-shows-nothing-to-decide-plan.md](409-case-only-change-shows-nothing-to-decide-plan.md) |
 | [#410](https://github.com/DutchJaFO/Quotinator/issues/410) | Deciding a Quote Add action answers 500 instead of an outcome | Waiting for release | T1 ✅ T2 ✅ | [410-deciding-an-add-answers-500-plan.md](410-deciding-an-add-answers-500-plan.md) |
 | [#411](https://github.com/DutchJaFO/Quotinator/issues/411) | Automated-test documents no longer run as written | Waiting for release | T1 ✅ T2 ✅ | [411-automated-test-documents-no-longer-run-as-written-plan.md](411-automated-test-documents-no-longer-run-as-written-plan.md) |
-| [#413](https://github.com/DutchJaFO/Quotinator/issues/413) | The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph | Planning | T1 ⬜ T2 ⬜ | — |
+| [#413](https://github.com/DutchJaFO/Quotinator/issues/413) | The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph | Planning | T1 ⬜ T2 ⬜ | [413-announcement-expiry-and-layout-plan.md](413-announcement-expiry-and-layout-plan.md) |
+| [#416](https://github.com/DutchJaFO/Quotinator/issues/416) | Resolving a held import item always creates a rule, and every held item says why it was held | Planning | T1 ⬜ T2 ⬜ | — |
 | [#419](https://github.com/DutchJaFO/Quotinator/issues/419) | A reset in the first moments after startup races the what's-new notification's write | Planning | T1 ⬜ T2 ⬜ | — |
 | [#420](https://github.com/DutchJaFO/Quotinator/issues/420) | Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity | Planning | T1 ⬜ T2 ⬜ | — |
 | [#421](https://github.com/DutchJaFO/Quotinator/issues/421) | A quote's id depends on whether the install was upgraded or fresh, after Migration009's dedupe | Planning | T1 ⬜ T2 ⬜ | — |
@@ -134,6 +135,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #410 ─── depends on #370, whose decide outcomes it extends — Waiting for release
 #411 ─── (none) — Waiting for release
 #413 ─── depends on #312, #319 — Planning
+#416 ─── (none); filed 2026-09-19, unsequenced — Planning
 #419 ─── (none); found in #411's T2, in #81's producer — Planning
 #420 ─── (none); found in #411's T2; blocks one #411 document — Planning
 #421 ─── (none); found in #411's T2, in #374's migration — Planning
@@ -219,6 +221,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 54 | **#360** | Planning — before end-of-milestone migration consolidation |
 | 55 | **#390** | Planning — before #368, which depends on it |
 | 56 | **#368** | Planning — depends on #303, #304, #390 |
+| 57 | **#416** | Planning — filed 2026-09-19 during #411 and not yet sequenced; placed last until it is |
 
 ---
 
