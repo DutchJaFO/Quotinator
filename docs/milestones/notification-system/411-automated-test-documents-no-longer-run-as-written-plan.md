@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 13)
+**Status:** In progress (step 14)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 13: update the automated-testing index.
+Step 14: the targeted T2 pass.
 
 ---
 
@@ -335,7 +335,10 @@ browser tab before any stop, so no page reconnects.
 
 ### 13. Update the automated-testing index
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — *Fresh* documents the shared key ring and its options table gains `--own-keys`,
+plus `--read-only-data` and `--tmpfs-data`, which were missing from it and now imply `--own-keys`. *Read
+the log before the application stops* gains the closed-tab rule and the rule for a test that provokes
+the pair. `api-surface/` lists the new document. `RepositoryStructureTests`: 27 passed.
 
 - The `test-env.csx` options table gains `--own-keys`.
 - *Read the log before the application stops* gains the browser rule: a test that provokes the
