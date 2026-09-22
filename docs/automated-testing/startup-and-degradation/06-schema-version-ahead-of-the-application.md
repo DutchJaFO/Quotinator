@@ -54,6 +54,8 @@ or get "fixed" by breaking correct behaviour.
 
 ```powershell
 $dataDir = "$PWD\.claude\temp\qt-startup-06-data"
+# A folder left by an earlier run holds a database, and step 5's single log match assumes none.
+if (Test-Path $dataDir) { Remove-Item -LiteralPath $dataDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
 dotnet script scripts/testing/test-env.csx -- create --name qt-startup-06 --port 18406 `
@@ -69,13 +71,14 @@ overshoot — stop and fix that first.
 
 ```powershell
 $dataDir = "$PWD\.claude\temp\qt-startup-06-data"
+docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-06 --bind $dataDir
 
 dotnet script scripts/testing/execute-sql.csx -- --db "$dataDir\quotinatordata.db" `
   --sql "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) SELECT MAX(Version) + 1, '2026-08-27 00:00:00' FROM System_ConsumerSchemaVersion;"
 ```
 
-**Expected:** `OK — 1 row(s) affected.`
+**Expected:** the log read before the stop finds nothing, then `OK — 1 row(s) affected.`
 
 **On failure:** a SQL error means the overshoot state was never built, and every step below would be
 asserting against an ordinary healthy database — which proves nothing. Stop.
@@ -103,10 +106,15 @@ $n = dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api
 $overshoot = $n.items | Where-Object { $_.metadataKind -eq 'schemaversionovershoot' }
 "found=$($null -ne $overshoot)"
 "type=$($overshoot.type)"
-"bodyNamesTheRemedy=$($overshoot.body -match 'database Reset')"
+"bodyNamesTheRemedy=$($overshoot.body -match 'Reset the database')"
 ```
 
 **Expected:** `found=True`, `type=actionrequired`, and `bodyNamesTheRemedy=True`.
+
+**The phrase follows the body's wording, which has changed once.** This matched `database Reset` until
+the body was reworded to *Reset the database from the admin endpoints…*; measured 2026-09-22, the old
+pattern read `False` against a body that still names the remedy. If it reads `False` again, read the
+body before concluding the remedy is gone.
 
 **On failure:** health at `200` with no notification is the worse half of this defect — the application
 noticed the overshoot and told nobody, leaving an operator with stale bookkeeping they cannot discover.
@@ -144,6 +152,11 @@ ahead of this build*:
 > normally; running a database Reset (POST /api/v1/admin/database/reset) will true up the version
 > bookkeeping.
 
+**Re-measured 2026-09-22**: the same log line with `recorded app v10 (known: v9)`, and the body now
+reading *This database's recorded schema version (data v22, app v10) is ahead of what this build knows
+how to apply. Reset the database from the admin endpoints to rebuild it at this build's own schema
+version.*
+
 **The version numbers above are observed output, not assertions.** They are recorded because an operator
 reading a real log will see numbers there and should recognise the shape; no step compares against them,
 and they move whenever a migration is added.
@@ -158,6 +171,7 @@ clears itself once it does, via its `DatabaseReset` dismiss trigger.
 
 ```powershell
 $dataDir = "$PWD\.claude\temp\qt-startup-06-data"
+docker logs qt-startup-06 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-startup-06 --bind $dataDir
 Remove-Item -Recurse -Force $dataDir -ErrorAction SilentlyContinue
 ```
