@@ -115,9 +115,15 @@ docker cp "$temp\382-neg-imports\382-rules.json"  qt-import-24:/data/imports/
 docker exec qt-import-24 sh -c "ls /data/imports"
 
 docker restart qt-import-24 | Out-Null
+dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --status
 ```
 
-**Expected:** all three files listed, and the container restarts.
+**Expected:** all three files listed, and the container restarts and answers health with `200`.
+
+**Wait for health before step 3.** `docker restart` returns when the process starts, not when it
+answers; a reseed sent straight after it fails with the connection closed — measured 2026-09-22 in
+[*A `Complete` row is not blocked when the resolution writes nothing*](23-complete-row-blocks-only-on-a-real-write.md),
+which shares this step.
 
 **The quote states its own `date` here**, unlike [`23`](23-complete-row-blocks-only-on-a-real-write.md).
 That is deliberate: this document's block must be earned by the rule's resolution alone, so no other

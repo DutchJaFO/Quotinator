@@ -114,9 +114,14 @@ docker cp "$temp\382-imports\382-rules.json"  qt-import-23:/data/imports/
 docker exec qt-import-23 sh -c "ls /data/imports"
 
 docker restart qt-import-23 | Out-Null
+dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --status
 ```
 
-**Expected:** all three files listed, and the container restarts.
+**Expected:** all three files listed, and the container restarts and answers health with `200`.
+
+**Wait for health before step 3.** `docker restart` returns when the process starts, not when it
+answers; a reseed sent straight after it fails with the connection closed — measured 2026-09-22, the
+same failure *An already-reported conflict does not stage a duplicate on every reseed* had.
 
 **The quote deliberately omits its own `date`** while its Source declares one. Adding a `date` to the
 quote removes the field the resolver settles and the test asserts nothing.
