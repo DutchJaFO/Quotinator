@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 11)
+**Status:** In progress (step 12)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 11: write the antiforgery document.
+Step 12: assert a clean log in the browser-driven documents.
 
 ---
 
@@ -291,7 +291,17 @@ Probe before relying on it, each read from the container's own log before it is 
 
 ### 11. Write the antiforgery document
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — written, added to `Quotinator.slnx`, and run both ways against the step 8 image:
+
+| Step | Red — script before step 10 | Green — as written |
+|---|---|---|
+| 1. Pin the browser (first, second visit) | 2, 0 | 2, 0 |
+| 2. New container on the shared ring | **2** — `CryptographicException`, `AntiforgeryValidationException` | **0** |
+| 3. `--own-keys` container (first, second visit) | not run | 2, 0 — the pair; the page renders |
+| 4. Restore (first, second visit) | not run | 2, 0 |
+
+The red run stopped at step 2, which is where it fails; its container had no `/data/keys` mount. The
+old script was recovered from `1e97f777` into `.claude/temp` and removed afterwards.
 
 `api-surface/06-a-cookie-from-another-key-ring-is-replaced.md`, titled *A cookie from another key ring
 is replaced on the first page, and logged only then*. The browser tab is closed and reopened between
@@ -372,8 +382,8 @@ The developer starts the application in Visual Studio.
 | 6 | ✅ | The reset document leaves nothing in `.claude/temp` | Live (T2) | *Reset wipes the entire database and does not reseed*, then `Get-ChildItem .claude/temp -Filter 'smoke156*'` lists nothing |
 | 7 | ✅ | The pending-review alert document runs against a fresh database whatever an earlier run left | Live (T2) | Step 1 run over a leftover bind folder: step 6 lists three alerts |
 | 8 | ✅ | The already-reported conflict document reseeds only once the application answers | Live (T2) | Step 3 as written: the reseed succeeds |
-| 9 | ❌ | A new test container on the shared ring reads the browser's cookie | Live (T2) | *A cookie from another key ring is replaced on the first page, and logged only then*, step 2: no `[Runtime - Exception]` line; red before step 10 |
-| 10 | ❌ | Provoking the pair is possible on demand, and the remedy restores the browser | Live (T2) | Same document, steps 3 and 4: the pair once, then nothing |
+| 9 | ✅ | A new test container on the shared ring reads the browser's cookie | Live (T2) | *A cookie from another key ring is replaced on the first page, and logged only then*, step 2: no `[Runtime - Exception]` line; red before step 10 |
+| 10 | ✅ | Provoking the pair is possible on demand, and the remedy restores the browser | Live (T2) | Same document, steps 3 and 4: the pair once, then nothing |
 | 11 | ❌ | The browser-driven documents log no exception they did not cause | Live (T2) | *Notifications list, dismiss, render, and drive their action* before its step 7 stop, and *A file left awaiting review raises an alert, and resolving it retires the alert* before step 3 and step 9: no `[Runtime - Exception]` line |
 | 12 | ❌ | Every document whose environment changed still passes | Live (T2) | Steps 14 and 15: every document in the suite passes as written |
 | 13 | ❌ | A container's log is read before the application stops | Review | The index's *Read the log before the application stops*, and every document run in steps 14 and 15 read that way |
