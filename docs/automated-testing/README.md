@@ -240,6 +240,19 @@ stop causes them, not stopping too soon.
 **The one exception is a test about shutdown itself**, which reads the log after the stop because the
 shutdown is what it observes. It says so in its `Determinism` section.
 
+**A browser-driven test closes its tab before the stop, too.** A page left open reconnects to whatever
+answers on its port next, and the reconnect logs lines of its own — measured 2026-09-19, the same
+condition read 5 lines with the old page open and exactly 2 with it closed.
+
+**A `CryptographicException` / `AntiforgeryValidationException` pair appears only in a test that sets
+out to provoke it** (developer direction, 2026-09-19). Every container shares one key ring (see
+*Fresh*), so a browser's cookie from any earlier test still decrypts. A test that wants the pair starts
+its container with `--own-keys`, and must end by visiting a container on the shared ring: that visit
+logs the pair once and replaces the cookie, and the next logs nothing. Skipping it leaves the browser
+holding a cookie the shared ring cannot read, and the next browser-driven test reports it as its own.
+[*A cookie from another key ring is replaced on the first page, and logged only
+then*](api-surface/06-a-cookie-from-another-key-ring-is-replaced.md) is that test.
+
 ### A test that needs a defective input must own that input
 
 **Never let a test's ability to fail depend on shipped data happening to be wrong.** Shipped data gets
@@ -729,6 +742,17 @@ Options exist for the cases that genuinely differ, and a document passes only wh
 | `--wait-listening` | A degraded scenario where `503` is the expected outcome, so waiting for healthy would hang |
 | `--no-wait` | A container that should not be waited on before the next step |
 | `--read-only` | A read-only root filesystem, for a test whose subject is what happens when the application cannot write |
+| `--read-only-data` | `/data` itself mounted read-only — the case that degrades. Implies `--own-keys` |
+| `--tmpfs-data <size>` | `/data` as a tmpfs with a hard ceiling, for provoking a full disk mid-write. Implies `--own-keys` |
+| `--own-keys` | The container's own DataProtection key ring instead of the suite's shared one — only for a test whose subject is a cookie the running key ring cannot read |
+
+**Every container shares one DataProtection key ring by default**, a host folder at
+`.claude/temp/qt-keys` mounted at `/data/keys`. The browser pane keeps its cookies from one test to the
+next, and does not separate them by port or host name; with a key ring per container, the first page a
+browser-driven test opened carried a cookie the new container could not read, and logged a
+`CryptographicException` / `AntiforgeryValidationException` pair the test did not cause. See *Read the
+log before the application stops* for what a test that wants that pair must do, and never delete the
+folder: the next browser-driven test would log the pair once.
 
 **`--port` itself is optional.** A container nothing connects to over HTTP — one waited on by its own
 log line — publishes none, and omitting the flag is how a document says so. Requiring one would force
@@ -1052,6 +1076,7 @@ The five this suite runs on:
 | 03 | [The Unicode-aware search flag reaches the running app](api-surface/03-unicode-aware-search-toggle.md) | no |
 | 04 | [Endpoint names and summaries follow the standard](api-surface/04-endpoint-naming-and-operation-ids.md) | no |
 | 05 | [A thrown exception is logged where the app actually runs](api-surface/05-a-thrown-exception-is-logged.md) | no |
+| 06 | [A cookie from another key ring is replaced on the first page, and logged only then](api-surface/06-a-cookie-from-another-key-ring-is-replaced.md) | no |
 
 ### `identity-and-casing/`
 
