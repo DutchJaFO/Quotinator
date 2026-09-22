@@ -3,8 +3,6 @@
 **Smoke:** no
 **Environment:** Fresh
 **Traces to:** #372
-**Fully green after:** #373 — steps 3, 4 and 6 pass once #372 lands; step 4's "changes nothing" reads
-as a rewrite of every quote until #373 stops reporting identical content as modified
 
 ## Preconditions
 
@@ -168,27 +166,37 @@ sees seven entity types become one, and goes looking for a bug in entity handlin
 
 ### 5. Remove a bundled quote and confirm the reseed repairs only that
 
+**There is no endpoint that deletes a quote** — `DELETE /quotes/{id}` answers `405`, which this step
+called until #411. The removal is constructed instead: a soft delete written into a copy of the database
+while the container is stopped, the way *Notifications list, dismiss, render, and drive their action*
+constructs rows no producer makes. Read the log first; the stop logs exceptions of its own:
+
 ```powershell
-$victim = (Invoke-RestMethod "http://localhost:19522/api/v1/quotes?page=1&pageSize=50" -Headers $headers).items |
+$victim = (Invoke-RestMethod "http://localhost:19522/api/v1/quotes?page=1&pageSize=50").items |
           Where-Object { $_.id -ne $localId } | Select-Object -First 1
-Invoke-RestMethod -Method Delete -Headers $headers "http://localhost:19522/api/v1/quotes/$($victim.id)" | Out-Null
+"thrown=$(@(docker logs qt-reseed-21 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count)"
+
+docker stop -t 15 qt-reseed-21
+docker cp qt-reseed-21:/data/quotinatordata.db .claude/temp/reseed-21.db
+dotnet script scripts/testing/execute-sql.csx -- --db .claude/temp/reseed-21.db `
+  --sql "UPDATE Quotinator_Quote SET IsDeleted = 1 WHERE Id = '$($victim.id)'"
+docker cp .claude/temp/reseed-21.db qt-reseed-21:/data/quotinatordata.db
+docker start qt-reseed-21
+dotnet script scripts/testing/http.csx -- --url "http://localhost:19522/api/v1/health" --wait-for 200 --status
 "quotes after delete = $(Get-QuoteCount)"
 
 Invoke-RestMethod -Method Post -Headers $headers `
   "http://localhost:19522/api/v1/admin/database/reseed" | Out-Null
 "quotes after repair reseed = $(Get-QuoteCount)"
+"victim back: $((Invoke-RestMethod "http://localhost:19522/api/v1/quotes/$($victim.id)").id -eq $victim.id)"
 "local quote still present: $(Test-LocalQuote)"
 ```
 
-**Expected:** the count drops by one after the delete, returns to its previous value after the reseed,
-and `local quote still present: True`.
+**Expected:** `thrown=0`; `1 row(s) affected`; the count drops by one after the delete and returns to its
+previous value after the reseed; `victim back: True`; and `local quote still present: True`.
 
 **Both halves are required.** A reseed that wiped everything and reimported would also land on the
 right total — the local quote is what says the repair was surgical rather than wholesale.
-
-**If the delete endpoint soft-deletes rather than removing the row**, the count may not drop. Record
-what it actually does and treat a soft delete as this step's subject instead; do not force the
-assertion.
 
 ### 6. Confirm import batches survive
 
@@ -247,4 +255,6 @@ document before the code rather than after.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-reseed-21
+Remove-Item -LiteralPath $fixture
+Get-ChildItem .claude/temp -Filter 'reseed-21.db*' | Remove-Item
 ```
