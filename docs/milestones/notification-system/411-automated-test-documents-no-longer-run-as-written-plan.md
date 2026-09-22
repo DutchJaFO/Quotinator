@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 14)
+**Status:** In progress (step 15)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 14: the targeted T2 pass.
+Step 15: T2 on every other document in the suite.
 
 ---
 
@@ -57,10 +57,12 @@ issue body was widened on 2026-09-19 to include them):
   `destroy`: a cookie the browser pane got from any earlier test container then still decrypts. Measured
   2026-09-19 with probe containers: a new volume on the shared ring logged 0 lines on its first visit,
   where one with its own ring logged 2 to 7.
-- **`--own-keys` opts out, and two options imply it.** `--read-only-data` keeps its keys where the
-  read-only mount puts them — a writable shared ring would change what those documents test.
-  `--tmpfs-data` keeps them on its tmpfs, because *A reset refuses when the disk fills during the backup,
-  instead of wiping behind a 200* sizes that tmpfs to run out of space, and moving the keys off it changes the arithmetic.
+- **`--own-keys` opts out; `--tmpfs-data` implies it, and `--read-only-data` depends on the command.**
+  `--tmpfs-data` keeps its keys on its tmpfs, because *A reset refuses when the disk fills during the
+  backup, instead of wiping behind a 200* sizes that tmpfs to run out of space, and moving the keys off
+  it changes the arithmetic. `create --read-only-data` is a new volume that never had keys, so it gets
+  none; `reenter --read-only-data` keeps the shared ring its volume was created with, mounted read-only
+  (corrected in step 14).
 - **A document that provokes the condition restores the browser before it ends.** Measured: a container
   with its own ring leaves the browser holding a cookie the shared ring cannot read, and the next
   shared-ring container logged 5 lines. Visiting a shared-ring container once replaces the cookie; that
@@ -347,7 +349,57 @@ the pair. `api-surface/` lists the new document. `RepositoryStructureTests`: 27 
 
 ### 14. T2, targeted pass — prove the shared ring
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — against the step 8 image (no code change since), each log read before every stop.
+Every document passes as written, after the corrections below:
+
+| Document | Result |
+|---|---|
+| *A cookie from another key ring…* | Step 11's run — red at step 2 before the change, green throughout after |
+| *Notifications list, dismiss, render, and drive their action* | Every step; `thrown=0` before the stop and before the cleanup (red was 2); with the tab closed the stop logged 2 lines, not 7 |
+| *A file left awaiting review…* | Every step; `thrown=0` before the restart and before step 9 (red was 2); read-only parity `500`/`500`/`200`/`200` |
+| *A running notification action says so, and cannot be started twice* | Every step, after the fixes below |
+| *Degraded-state pages survive a genuine migration failure* | Every step, after the script fix below; console six `503`s; no stale-cookie line |
+| *The changelog is served from its own on-disk database…* | Every step; `--bind` with the ring nested inside it |
+| *Migration replay survives an environment where only the data directory is writable* | Every step, after the fix below; `--read-only` root with the ring mounted |
+| *A reset refuses when the backup folder cannot be written…* | Every step; `reenter --read-only-data` over a bind, the ring mounted read-only |
+| *A reset refuses when the disk fills during the backup…* | Every step; the tmpfs keeps its own keys |
+| The six smoke documents of step 9 | All pass again, 0 exceptions each |
+
+**The shared ring broke one document, and the script was corrected.** *Degraded-state pages survive a
+genuine migration failure* answered `500` on `/` and `/notifications`: its 1.8.2 seed wrote its keys to
+the shared folder, and the read-only re-entry, given no ring at all, had no keys to read. `reenter
+--read-only-data` now mounts the shared ring read-only — the keys that install was created with, made
+unwritable like the rest of `/data` — while `create --read-only-data` still mounts none. Rerun green,
+and the index's options table says so.
+
+**Stale documents, fixed here:**
+
+- *A running notification action…* named a **Run** button that is now *Reseed the database*, and waited
+  with two fixed sleeps (3 s and 20 s). Both now poll a condition. The run found the alert records
+  `resolved` one second after the reseed starts while the page reads **Running…** for another 18, so
+  step 3 waits for `reseed complete` rather than for the alert.
+- *Migration replay survives…* asserted the quote count is unchanged by the upgrade — false since #374's
+  Migration009 deletes duplicate quotes per Source. Its 1.8.2 seed holds four such pairs (799 → 795); it
+  now counts them and asserts `upgraded = seeded − duplicates`. The pre-change script gave the same
+  799 → 795, so the key ring was not the cause.
+- *A reset refuses when the disk fills…* expected 1–2 MB free on its tmpfs; measured 260 KB. The outcome
+  is unchanged; the figure is updated.
+
+**Two application findings, outside this issue:**
+
+- **A reset in the first moments after startup races the what's-new notification.** The startup writes
+  it on a detached task with the pre-reset application-version id; a reset that lands first wipes that
+  row, and the write fails `FOREIGN KEY constraint failed` — one exception rethrown ten times, then
+  `[Server] Failed to seed the #81 what's-new notification`. Reproduced 5 of 5 by firing the reset the
+  instant health answers, against 0 of 5 with the script's one-second poll. Found in *A running
+  notification action…*'s first run.
+- **Migration009 keeps the earliest row of a duplicate pair, which can drop the curated one.** On the
+  1.8.2 upgrade the "Inigo Montoya" line survives as `f3557c41`, not as the curated `da53310a` a
+  conversation in `quotinator-curated.json` references.
+
+Exceptions logged before each stop, beyond the ones the documents provoke on purpose: #407's
+`DatabaseBackupUnavailableException` refusals in both backup documents, and the read-only
+directories' own `SqliteException`/`IOException`s.
 
 Against a build of the branch, each document in full, each log read before every stop:
 
