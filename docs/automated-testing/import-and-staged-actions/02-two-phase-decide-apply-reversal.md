@@ -45,13 +45,19 @@ never became healthy.
 ### 2. Stage a batch under `review`
 
 ```powershell
+$fixture = Join-Path $env:TEMP "qt-import-02-fixture"
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports $fixture | Out-Null
 $batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
-              --file data/sources/quotinator-curated.json --duplicate-resolution review --expect 202 `
+              --file (Join-Path $fixture "conflicting.json") --duplicate-resolution review --expect 202 `
             | ConvertFrom-Json).batchId
 $batchId
 ```
 
-**Expected:** a non-empty `batchId` — every step below is scoped to it.
+**Expected:** `202` and a non-empty `batchId` — every step below is scoped to it.
+
+**Until #411 this step staged the curated file**, which since #373 stages nothing against a database
+seeded from it and answers `200`. The suite's conflict fixture re-states a bundled quote with different
+text, so it always leaves an action pending.
 
 **On failure:** an empty value means nothing staged, and each step below would then act on no batch at
 all while still returning plausible-looking codes. Stop.
@@ -122,4 +128,5 @@ added elsewhere.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-02
+Remove-Item -LiteralPath $fixture -Recurse -Force
 ```
