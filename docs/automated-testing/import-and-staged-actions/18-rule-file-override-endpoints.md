@@ -3,6 +3,9 @@
 **Smoke:** no
 **Environment:** Fresh
 **Traces to:** #153
+**Fully green after:** [#420](https://github.com/DutchJaFO/Quotinator/issues/420) — step 4's `generate`
+answers an unhandled `500`, because `nikhilnamal17-conflict-rules.json` holds two rules for one entity;
+every step before it passes
 
 ## Preconditions
 
