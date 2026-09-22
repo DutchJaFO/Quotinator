@@ -22,8 +22,9 @@ would let one pass on the other's behalf.
   literal length would silently stop truncating anything once it grew past it.
 - **The WAL sidecars are deleted.** A surviving `-wal` can carry enough recent pages for SQLite to open
   the database anyway, which would make the outcome depend on how recently the seed checkpointed.
-- **The container is stopped before the file is touched**, and stopped *cleanly* by `destroy`, so the
-  sidecars are checkpointed away rather than killed mid-write.
+- **The container is removed before the file is touched.** `destroy` is `docker rm -f`, a kill rather
+  than a clean stop, so the sidecars can survive it — which is why the bullet above deletes them rather
+  than relying on a checkpoint.
 - **The second start waits for *listening*, not healthy** — degrading is the expected outcome.
 
 ## Steps
