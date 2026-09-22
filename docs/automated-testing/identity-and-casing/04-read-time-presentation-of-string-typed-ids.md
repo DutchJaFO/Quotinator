@@ -49,7 +49,7 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-id-04 --port 1820
 **On failure:** every step below reads this container. Stop rather than running them against an app
 that never became healthy.
 
-### 2. Import the curated file under the `review` policy
+### 2. Stage a conflict under the `review` policy
 
 ```powershell
 function Test-Canonical($values) {
@@ -58,9 +58,11 @@ function Test-Canonical($values) {
   "checked=$($checked.Count) notLowercase=$($wrong.Count) $($wrong -join ' ')"
 }
 
+$fixture = Join-Path $env:TEMP "qt-id-04-fixture"
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports $fixture | Out-Null
 $import = dotnet script scripts/testing/http.csx -- --method POST `
   --url "http://localhost:18204/api/v1/import" `
-  --file data/sources/quotinator-curated.json --duplicate-resolution review --expect 202 `
+  --file (Join-Path $fixture "conflicting.json") --duplicate-resolution review --expect 202 `
   | ConvertFrom-Json
 
 Test-Canonical @($import.batchId)
@@ -72,6 +74,10 @@ import's own `batchId`, and every id under `pendingActionIds`, are canonical.
 
 **On failure:** `checked=0` on the second line means the `review` policy staged nothing, so the reads
 below would page an empty list and report canonical ids they never saw. Stop.
+
+**Until #411 this step imported the curated file**, which since #373 stages nothing against a database
+seeded from it and answers `200`, not `202`. The suite's conflict fixture re-states a bundled quote with
+different text, so it always leaves one action pending.
 
 ### 3. Read a pending staged action
 
@@ -102,4 +108,5 @@ distinction matters more than the raw result.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-id-04
+Remove-Item -LiteralPath $fixture -Recurse -Force
 ```
