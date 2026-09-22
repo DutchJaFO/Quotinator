@@ -3,6 +3,8 @@
 **Smoke:** no
 **Environment:** Fresh
 **Traces to:** #153
+**Fully green after:** [#347](https://github.com/DutchJaFO/Quotinator/issues/347) — step 3's
+evaluation line does not exist until then, so that reading is inconclusive; every other reading passes
 
 ## Preconditions
 
