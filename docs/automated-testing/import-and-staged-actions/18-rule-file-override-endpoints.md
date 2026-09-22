@@ -71,15 +71,20 @@ notice.
 ### 3. Stage a batch to generate from
 
 ```powershell
+$fixture = Join-Path $env:TEMP "qt-import-18-fixture"
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports $fixture | Out-Null
 $batchId = (dotnet script scripts/testing/http.csx -- --method POST --url "$base/import" `
-              --file data/sources/quotinator-curated.json --duplicate-resolution review --expect 202 `
+              --file (Join-Path $fixture "conflicting.json") --duplicate-resolution review --expect 202 `
             | ConvertFrom-Json).batchId
 $actionId = (Invoke-RestMethod "$base/import/actions?status=pending&batchId=$batchId&pageSize=0").items[0].id
 "batchId=$batchId actionId=$actionId"
 ```
 
-**Expected:** both values non-empty — at least one pending action was staged, and the next step needs
+**Expected:** `202` and both values non-empty — a pending action was staged, and the next step needs
 both.
+
+**Until #411 this step staged the curated file**, which since #373 stages nothing against a database
+seeded from it and answers `200`. The suite's conflict fixture always leaves an action pending.
 
 ### 4. Decide one action, and generate the rule-file override from it
 
@@ -167,6 +172,7 @@ part of a test run.**
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-18
+Remove-Item -LiteralPath $fixture -Recurse -Force
 ```
 
 The `DELETE` above removes the override. Confirm the first of the two returned `204` before moving on.
