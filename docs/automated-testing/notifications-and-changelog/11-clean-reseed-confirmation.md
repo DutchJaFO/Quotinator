@@ -3,8 +3,6 @@
 **Smoke:** no
 **Environment:** Fresh
 **Traces to:** #302
-**Fully green after:** #372 and #373 — step 2 measures a reseed against a populated database, which
-deletes first until #372 and reports identical content as modified until #373
 
 ## Preconditions
 
@@ -149,11 +147,18 @@ that produced no actions at all.
 ```powershell
 $payload = $confirmations[0].metadata | ConvertFrom-Json
 "file=$($payload.fileName)"
-$payload.counts | ForEach-Object { "$($_.entityType): added=$($_.added) modified=$($_.modified)" }
+$payload.counts | ForEach-Object { "$($_.entityType): incoming=$($_.incoming) added=$($_.added) modified=$($_.modified) unchanged=$($_.unchanged)" }
 ```
 
-**Expected:** a non-empty `file`, and at least one non-quote `entityType` line. No line may read
-`added=0 modified=0` — an untouched type is omitted rather than stored as a pair of zeros.
+**Expected:** a non-empty `file`, at least one non-quote `entityType` line, and no line reading
+`incoming=0` — a type the file did not touch is omitted rather than stored as a row of zeros.
+
+**`added=0 modified=0` is expected here, not a failure.** This step once required that no line read
+that way, which held only while a reseed deleted before importing. Since #372 and #373 a reseed of
+unchanged content imports into what is already stored, so every row lands in `unchanged` or
+`resolvedToExisting` and a touched type legitimately reports zero adds and zero modifications —
+measured 2026-09-22: `Quote: incoming=97 … unchanged=76`. Whether a type was touched is `incoming`,
+which is what this step now reads.
 
 **Do not require `Quote` on every file.** Measured on this document's first run: of the four bundled
 files, `quotinator-series-universe.json` reports `Source: added=69` and carries no `Quote` line at all.
@@ -228,7 +233,7 @@ and notifications already in it. That is the opposite of what this step is for.
 ```powershell
 function New-BindRoot($name) {
   $root = Join-Path $env:TEMP "qt-notif-11-bind-$name"
-  Remove-Item -Recurse -Force $root -ErrorAction SilentlyContinue
+  if (Test-Path $root) { Remove-Item -LiteralPath $root -Recurse -Force }
   $imports = Join-Path $root "imports"
   New-Item -ItemType Directory -Force $imports | Out-Null
   Copy-Item data/sources/quotinator-curated.json $imports -Force
@@ -241,16 +246,23 @@ function Confirmations($port) {
   @($items | Where-Object { $_.metadataKind -eq 'reseedFileApplied' -and -not $_.isDismissed })
 }
 function ReseedAndCount($name, $port, $extra) {
+  $key = @{ "X-Api-Key" = "t2-302" }
   dotnet script scripts/testing/test-env.csx -- create --name $name --port $port `
     --image quotinator:local --env Quotinator__AdminApiKey=t2-302 @extra
-  Invoke-RestMethod -Method Post -Headers @{ "X-Api-Key" = "t2-302" } `
-    "http://localhost:$port/api/v1/admin/database/reseed" | Out-Null
+  # Seeding finishes before the ready banner, and every start logs it — including one with no files.
+  while (-not (docker logs $name 2>&1 | Select-String -SimpleMatch 'Quotinator ready')) { Start-Sleep 1 }
+  # Dismiss what the cold start wrote, so what is counted next is attributable to the reseed alone.
+  @(Confirmations $port) | ForEach-Object {
+    Invoke-RestMethod -Method Post -Headers $key "http://localhost:$port/api/v1/notifications/$($_.id)/dismiss" | Out-Null
+  }
+  Invoke-RestMethod -Method Post -Headers $key "http://localhost:$port/api/v1/admin/database/reseed" | Out-Null
   $c = @(Confirmations $port)
   "$name -> $($c.Count) confirmation(s)"
   $c | ForEach-Object {
     $p = $_.metadata | ConvertFrom-Json
     "    $($p.fileName)  origin=$($p.origin)  counts=$(@($p.counts).Count)"
   }
+  "    before the stop: thrown=$(@(docker logs $name 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count)"
   dotnet script scripts/testing/test-env.csx -- destroy --name $name | Out-Null
 }
 
@@ -269,11 +281,18 @@ ReseedAndCount "qt-notif-11d" 19515 @("--bind",(New-BindRoot "d"))
 | User imports only | `11c` | one, `origin=User`, naming the file placed in `imports/` |
 | Bundled + user imports | `11d` | the step 2 count plus one |
 
+Every variant also reads `before the stop: thrown=0`.
+
+**Each variant dismisses its cold start's confirmations before it reseeds**, for the reason step 2 does.
+Without it the counts double: since #372 and #373 a cold start reports a file's rows as added and a
+reseed reports the same rows as unchanged, so the two results differ and each is its own confirmation.
+Measured 2026-09-22 before the dismissal was added: `11b` 10 and `11c` 2, against 5 and 1 with it.
+
 **`11d` must show the same file name twice, once per origin.** Copying a bundled file into `imports/`
 is the ordinary way a user customises one, so both directories hold `quotinator-curated.json`; the two
-confirmations are told apart by `origin`, not by name. The user copy reports `counts=0` because the
-bundled copy applied that content first — that empty breakdown is kept deliberately, since it still
-shows which sections were used.
+confirmations are told apart by `origin`, not by name. Both carry the same seven-type breakdown: the
+bundled copy applied that content first, so the user copy's rows are all unchanged — reported, not
+omitted, since the file did touch those types.
 
 **Read `origin` from the payload, not the count alone.** Before `origin` existed, these two rows were
 distinguishable only by their breakdowns happening to differ — two same-named files that both applied
@@ -308,21 +327,29 @@ the run that performed the reseed, and this step needs a restart.
 The modal is server-rendered, so its content is in the HTML of `/` and needs no browser automation.
 
 ```powershell
+function Count-Thrown { @(docker logs qt-notif-11 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count }
+"before the restart: thrown=$(Count-Thrown)"
 docker restart qt-notif-11 | Out-Null
 foreach ($i in 1..30) {
   try { if ((Invoke-RestMethod "http://localhost:19511/api/v1/health").status -eq 'healthy') { break } }
   catch { Start-Sleep 2 }
 }
+$afterRestart = Count-Thrown
 
 $html = (Invoke-WebRequest "http://localhost:19511/" -UseBasicParsing).Content
 "confirmation text in modal: $($html.Contains('reseeded with nothing left to review'))"
-foreach ($f in 'quotinator-curated.json','vilaboim_movie-quotes.json',
-               'NikhilNamal17_popular-movie-quotes.json','quotinator-series-universe.json') {
+foreach ($f in 'quotinator-curated.json','vilaboim_movie-quotes.json','NikhilNamal17_popular-movie-quotes.json',
+               'quotinator-series-universe.json','quotinator-seasons.json') {
   "  $f -> $($html.Contains($f))"
 }
 ```
 
-**Expected:** `confirmation text in modal: True`, and every bundled file name present.
+**Expected:** `before the restart: thrown=0`, `confirmation text in modal: True`, and every bundled file
+name present.
+
+**Read the log before each restart, and count from after it.** A restart is a stop, and the stop writes
+shutdown lines of its own; a count taken across it reports them as thrown. See the index's *Read the
+log before the application stops*.
 
 **Negative control — dismiss every confirmation, restart, and confirm the modal drops them:**
 
@@ -331,16 +358,18 @@ foreach ($f in 'quotinator-curated.json','vilaboim_movie-quotes.json',
   Invoke-RestMethod -Method Post -Headers $headers `
     "http://localhost:19511/api/v1/notifications/$($_.id)/dismiss" | Out-Null
 }
+"before the restart: new=$((Count-Thrown) - $afterRestart)"
 docker restart qt-notif-11 | Out-Null
 foreach ($i in 1..30) {
   try { if ((Invoke-RestMethod "http://localhost:19511/api/v1/health").status -eq 'healthy') { break } }
   catch { Start-Sleep 2 }
 }
+$afterRestart = Count-Thrown
 $dismissed = (Invoke-WebRequest "http://localhost:19511/" -UseBasicParsing).Content
 "modal shows dismissed confirmations: $($dismissed.Contains('reseeded with nothing left to review'))"
 ```
 
-**Expected:** `False`. Without this half, the positive assertion above would pass just as happily
+**Expected:** `before the restart: new=0`, then `False`. Without this half, the positive assertion above would pass just as happily
 against a page that renders every notification ever written, or against a substring that happens to
 appear somewhere else in the markup.
 
@@ -388,6 +417,11 @@ That is the T1 finding reproduced exactly: the seeding ran, four files applied, 
 ## Cleanup
 
 ```powershell
+"before the stop: new=$((Count-Thrown) - $afterRestart)"
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-11
-Remove-Item -Recurse -Force (Join-Path $env:TEMP "qt-notif-11-bind")
+Remove-Item -LiteralPath (Join-Path $env:TEMP "qt-notif-11-bind-c") -Recurse -Force
+Remove-Item -LiteralPath (Join-Path $env:TEMP "qt-notif-11-bind-d") -Recurse -Force
 ```
+
+**Expected:** `new=0`. The two folders are step 7's; they were named `qt-notif-11-bind` here until
+2026-09-22, a folder nothing creates, so both were left behind by every run.
