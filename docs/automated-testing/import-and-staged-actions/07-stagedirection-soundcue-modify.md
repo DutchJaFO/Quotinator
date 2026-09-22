@@ -137,10 +137,12 @@ dotnet script scripts/testing/http.csx -- --method POST --url "$base/import/acti
 **Expected:** `0` before the apply, then `200`. Both rows then carry the corrected text
 and `CompletenessStatus: Complete` — read back by step 8.
 
-**The loop is not redundant with the two explicit decides.** A fixture needs at least one quote for
-`POST /import` to accept it, and that quote stages its own `Modify` action; leaving it undecided makes
-`apply` return `422` and the rest of the document unreachable. Measured during #339's full run, where
-the batch staged three actions and this step named two.
+**The loop is there for anything else the batch stages.** A fixture needs at least one quote for
+`POST /import` to accept it. During #339's full run that quote staged a `Modify` of its own — three
+actions, where this step named two — and leaving it undecided made `apply` return `422`. Since #373 an
+unchanged quote stages as an `Unchanged` no-op instead, so today the loop decides nothing (measured
+2026-09-22: only the two named actions were pending). It stays, so a change to the fixture cannot leave
+`apply` refusing.
 
 ### 5. Re-import `smoke-171-172-v3.json` — a third `text`, still under `review`
 
