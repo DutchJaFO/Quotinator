@@ -433,10 +433,20 @@ Against a build of the branch, each document in full, each log read before every
 | *A conversation line in the wrong casing does not violate the foreign key* | Pass — `200`, `0 -> 0` |
 | *String-typed id fields render canonically over HTTP* | Pass after a fix — it staged its batch from the curated file, which since #373 answers `200` (`Expected 202, got 200`); it now stages the conflict fixture. Every id checked is lowercase |
 | *Generic-repository endpoints return correct data and lowercase ids* | Pass — all eight endpoints populated and lowercase; a Source resolves in both casings |
+| *A batch applied through the staged flow can be reversed* | Pass after a fix — it staged from the curated file (`Expected 202, got 200`); now the conflict fixture. Apply, preview and reverse all `200` |
+| *`POST /import?batchId=` applies an already-staged batch without re-uploading* | Pass after a fix — the curated preview's 37 actions all read `Applied` before the alias ran, so the comparison could not fail; the conflict fixture's `Quote Modify Decided` now moves to `Applied` |
+| *Discard* | Pass — the pending action `Discarded`, the no-op still `Applied`, quotes unchanged |
+| *Reverse and resurrection* | Pass after a fix — the curated import was 37 `Unchanged` no-ops, so the reversal removed nothing and the Airplane quotes were still there before the re-import. Two quotes of its own now read 2 → 0 after the reversal → 2 after the re-import |
+| *Bodyless request validation* | Pass — `422` and `404`, each with a `detail` |
+| *StageDirection and SoundCue Modify* | Pass — `Complete` rows block the third import; the reversal restores the original text. Step 4's reason for its decide-everything loop (a quote `Modify`) is gone since #373; the text now says so |
+| *Person Modify and lowercase-id reversal* | Pass — `Blocked` third import; `404` after the reversal, `Add` and `200` after the re-import. Same stale loop reason, corrected |
+| *Character/Source many-to-many identity* | Pass — links 15 → 16; a second Source makes a second Character |
+| *Source date from the resolving quote* | Pass — 434 of 473 sources dated; Airplane! 1980, Jurassic Park 1993, Frozen 2013 |
 
 Exceptions before each stop, beyond what a document provokes: #407's `DatabaseBackupUnavailableException`
 refusals in the two unreadable-database documents, alongside the corrupt file's own `SqliteException`s;
-#404's `ImportBatchStateException` for the audit document's refused reversal.
+#404's `ImportBatchStateException` and `ImportBatchNotFoundException` for every refused reversal (the
+audit, reverse-and-resurrection and bodyless-request documents).
 
 Every other document in `docs/automated-testing/`: every container gains the mount, so every document's
 environment changed. A document found broken is fixed in this issue and run again.
