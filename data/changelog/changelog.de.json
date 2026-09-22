@@ -62,7 +62,8 @@
       "Für das Herunterladen von Zitatquellen stehen jetzt bis zu einer Minute für den Verbindungsaufbau und bis zu neunzig Sekunden insgesamt zur Verfügung, statt zehn und dreißig Sekunden. Die kürzeren Grenzen machten aus einer zeitweise langsamen Verbindung häufiger eine ausgefallene Aktualisierung, als dass sie echte Wartezeit verhindert hätten (issues #323, #325)",
       "Kann das Datenverzeichnis nicht beschrieben werden, benennt die gemeldete Ursache dies jetzt direkt und nennt den Lösungsweg, statt ein Zurücksetzen der Datenbank vorzuschlagen — das in dasselbe Verzeichnis schreibt und daher nie hätte funktionieren können (issue #326)",
       "`Microsoft.OpenApi` von 2.11.0 auf 2.12.2 aktualisiert",
-      "`Scalar.AspNetCore` von 2.17.1 auf 2.17.2 aktualisiert",
+      "`Scalar.AspNetCore` von 2.17.1 auf 2.17.6 aktualisiert",
+      "`MSTest` von 4.4.0 auf 4.4.1 aktualisiert (nur Tests)",
       "`Serilog` von 4.3.0 auf 4.4.0 aktualisiert",
       "`github/codeql-action` von 4.37.7 auf 4.37.9 aktualisiert (nur CI)"
     ],

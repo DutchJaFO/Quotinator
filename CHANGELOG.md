@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-09-22 18:46 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-09-22 19:09 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -55,7 +55,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Quote source downloads now allow up to a minute to establish a connection, and up to ninety seconds in total, instead of ten and thirty seconds. The shorter limits turned an intermittently slow connection into a skipped update more often than they prevented a genuine wait (issues #323, #325)
 - When the data directory cannot be written, the reported reason now names that directly and states how to resolve it, instead of suggesting a database reset — which writes to the same directory and therefore could not have worked (issue #326)
 - `Microsoft.OpenApi` updated from 2.11.0 to 2.12.2
-- `Scalar.AspNetCore` updated from 2.17.1 to 2.17.2
+- `Scalar.AspNetCore` updated from 2.17.1 to 2.17.6
+- `MSTest` updated from 4.4.0 to 4.4.1 (test only)
 - `Serilog` updated from 4.3.0 to 4.4.0
 - `github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)
 

@@ -2068,7 +2068,7 @@ public class ImportActionPlannerTests
         List<ImportActionEntity> sourceActions = [.. actions.Where(a => a.EntityType == "Source")];
         Assert.HasCount(2, sourceActions, "Two distinct dates for the same title must stage two distinct Source Add actions, not one");
         Assert.AreNotEqual(sourceActions[0].EntityId, sourceActions[1].EntityId, "The two variants must get distinct ids");
-        List<string?> dates = [.. sourceActions.Select(a => System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(a.IncomingValue!)!.Date)];
+        List<string> dates = [.. sourceActions.Select(a => System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(a.IncomingValue!)!.Date ?? string.Empty)];
         Assert.Contains("1994", dates);
         Assert.Contains("2019", dates);
     }
@@ -2150,7 +2150,7 @@ public class ImportActionPlannerTests
         Assert.AreNotEqual(sourceActions[0].EntityId, sourceActions[1].EntityId);
         Assert.IsEmpty(actions.Where(a => a.Status.Parsed == ImportActionStatus.Pending),
             "An explicit declaration resolves outright — nothing is left for a curator to decide");
-        List<string?> dates = [.. sourceActions.Select(a => System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(a.IncomingValue!)!.Date)];
+        List<string> dates = [.. sourceActions.Select(a => System.Text.Json.JsonSerializer.Deserialize<SourceActionPayloadDto>(a.IncomingValue!)!.Date ?? string.Empty)];
         Assert.Contains("1994", dates);
         Assert.Contains("2019", dates);
     }

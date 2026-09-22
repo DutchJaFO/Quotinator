@@ -265,7 +265,7 @@ public class ImportRuleEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         var entityIds = doc.RootElement.GetProperty("rules").EnumerateArray()
-            .Select(r => r.GetProperty("entityId").GetString())
+            .Select(r => r.GetProperty("entityId").GetString() ?? string.Empty)
             .ToList();
         Assert.Contains("11111111-1111-1111-1111-111111111111", entityIds, "the pre-existing bundled rule must survive the merge");
         Assert.Contains("44444444-4444-4444-4444-444444444444", entityIds, "the newly generated rule must be included");

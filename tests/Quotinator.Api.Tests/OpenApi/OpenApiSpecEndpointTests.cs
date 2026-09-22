@@ -68,9 +68,9 @@ public class OpenApiSpecEndpointTests
             .First(p => p.GetProperty("name").GetString() == paramName);
 
         JsonElement typeProperty = parameter.GetProperty("schema").GetProperty("type");
-        List<string?> types = typeProperty.ValueKind == JsonValueKind.Array
-            ? [.. typeProperty.EnumerateArray().Select(t => t.GetString())]
-            : [typeProperty.GetString()];
+        List<string> types = typeProperty.ValueKind == JsonValueKind.Array
+            ? [.. typeProperty.EnumerateArray().Select(t => t.GetString() ?? string.Empty)]
+            : [typeProperty.GetString() ?? string.Empty];
 
         Assert.Contains("integer", types, $"{paramName} on {path} must publish an integer type on the live spec, not string");
     }
