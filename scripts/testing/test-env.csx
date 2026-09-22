@@ -46,6 +46,10 @@
 //                         pending migration the initializer cannot write, and reports 503 with
 //                         SQLite Error 14 — the original incident's own error code. Measured
 //                         2026-08-27 in both WAL-sidecar states, so sidecar state does not decide it.
+//   --own-keys            Give this container its own DataProtection key ring instead of the shared one
+//                         below. For a test whose subject is a cookie the running key ring cannot read;
+//                         it must restore the browser before it ends, or the next browser-driven test
+//                         reports that cookie as its own failure (see the suite index).
 //   --no-wait             Skip the readiness poll — for a container that publishes no port, or one
 //                         expected to degrade rather than become healthy.
 //   --wait-listening      Poll for any answer rather than a healthy one, for a degraded scenario
@@ -159,6 +163,28 @@ if (!fresh) Run($"stop -t 15 {name}", ignoreFailure: true, quiet: true);
 // still holding the database open would stop the new one from reading it.
 Run($"rm -f {name}", ignoreFailure: true, quiet: true);
 
+// One DataProtection key ring for every test container, so a cookie the browser pane kept from an
+// earlier one still decrypts. Without it each container starts with its own keys, and the first page a
+// browser-driven test opens logs a CryptographicException/AntiforgeryValidationException pair the test
+// did not cause — 2 to 7 lines, measured 2026-09-19, against 0 when both containers read one ring.
+//
+// The folder is never removed, by destroy or otherwise: deleting it makes the next browser-driven test
+// report that same pair once, for the same reason.
+//
+// Two options keep their own keys because sharing would change what they test: --read-only-data must
+// find its keys exactly where an unwritable /data leaves them, and --tmpfs-data sizes its tmpfs to run
+// out of space, which moving the keys off it would alter.
+string sharedKeys  = Path.GetFullPath(Path.Combine(".claude", "temp", "qt-keys"));
+string? tmpfsSize  = Value("--tmpfs-data");
+bool ownKeys       = Flag("--own-keys") || Flag("--read-only-data") || tmpfsSize is not null;
+string keysMount   = "";
+
+if (!ownKeys)
+{
+    Directory.CreateDirectory(sharedKeys);
+    keysMount = $"-v \"{sharedKeys}:/data/keys\" ";
+}
+
 string mount;
 string dataMode = Flag("--read-only-data") ? ":ro" : "";
 
@@ -201,11 +227,10 @@ string readOnly = Flag("--read-only") ? "--read-only " : "";
 // filesystem's free space, which no test can control. It replaces the mount entirely — the data is
 // gone when the container is, which is the point: this is for provoking a full disk, never for a
 // scenario that needs its database to survive a restart.
-string? tmpfsSize = Value("--tmpfs-data");
 if (tmpfsSize is not null)
     mount = $"--mount type=tmpfs,destination=/data,tmpfs-size={tmpfsSize}";
 
-Run($"run -d --name {name} {publish}{readOnly}{mount} {string.Join(" ", settings)} {image}");
+Run($"run -d --name {name} {publish}{readOnly}{mount} {keysMount}{string.Join(" ", settings)} {image}");
 
 if (port is null)
 {
