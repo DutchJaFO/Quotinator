@@ -198,12 +198,15 @@ showing the old data" fails rather than being read past.
 
 ### 12. Confirm a table-scoped clear leaves `Audit_Change` untouched
 
-**Step 10's unscoped clear emptied `Audit_Change`, so this step has to put rows back first.** Import
-the curated file again to generate them, read the count, run the scoped clear, and read it again:
+**Step 10's unscoped clear emptied `Audit_Change`, so this step has to put rows back first.** Import a
+file that really changes a stored quote — the suite's conflict fixture, applied with `newest-wins` —
+read the count, run the scoped clear, and read it again:
 
 ```powershell
+$fixture = Join-Path $env:TEMP "qt-db-02-fixture"
+dotnet script scripts/testing/stage-import-conflict.csx -- --imports $fixture | Out-Null
 dotnet script scripts/testing/http.csx -- --method POST --url "http://localhost:18302/api/v1/import" `
-  --file data/sources/quotinator-curated.json --expect 200 | Out-Null
+  --file (Join-Path $fixture "conflicting.json") --duplicate-resolution newest-wins --expect 200 | Out-Null
 docker stop -t 15 qt-db-02-default
 docker cp qt-db-02-default:/data/quotinatordata.db .claude/temp/smoke249c.db
 docker start qt-db-02-default
@@ -232,6 +235,10 @@ present: the scoped clear left all 13, so the behaviour is correct and only the 
 **On failure:** a zero `ChangesBefore` means the import produced no change rows, so the comparison
 proves nothing either way. Stop rather than recording a pass.
 
+**Until #411 this step re-imported the curated file**, which since #373 changes nothing already stored
+and so writes no change rows: `ChangesBefore` read `0`, the stop condition above. The conflict fixture
+re-states a bundled quote with different text, so applying it is a real change.
+
 ## Observed effect
 
 Partially established. The raw table counts and the purge traces are observed state and are asserted
@@ -247,8 +254,11 @@ tables as one combined concern everywhere else.
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-default
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-cap
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-db-02-noautopurge
-Remove-Item .claude/temp/smoke249.db, .claude/temp/smoke249.db-wal, .claude/temp/smoke249.db-shm, `
-            .claude/temp/smoke249b.db, .claude/temp/smoke249b.db-wal, .claude/temp/smoke249b.db-shm, `
-            .claude/temp/smoke249c.db, .claude/temp/smoke249d.db `
-            -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path $env:TEMP "qt-db-02-fixture") -Recurse -Force
+Get-ChildItem .claude/temp -Filter 'smoke249*' | Remove-Item
+Get-ChildItem .claude/temp -Filter 'smoke249*'
 ```
+
+**Expected:** the last listing is empty. Every copy gains `-wal`/`-shm` sidecars when DbInspector opens
+it, including the two step 12 copies without them; until #411 this cleanup named the files one by one
+and missed those.
