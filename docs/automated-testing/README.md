@@ -742,7 +742,7 @@ Options exist for the cases that genuinely differ, and a document passes only wh
 | `--wait-listening` | A degraded scenario where `503` is the expected outcome, so waiting for healthy would hang |
 | `--no-wait` | A container that should not be waited on before the next step |
 | `--read-only` | A read-only root filesystem, for a test whose subject is what happens when the application cannot write |
-| `--read-only-data` | `/data` itself mounted read-only — the case that degrades. Implies `--own-keys` |
+| `--read-only-data` | `/data` itself mounted read-only — the case that degrades. On `create` the new volume has no key ring at all; on `reenter` it keeps the shared ring it was created with, mounted read-only |
 | `--tmpfs-data <size>` | `/data` as a tmpfs with a hard ceiling, for provoking a full disk mid-write. Implies `--own-keys` |
 | `--own-keys` | The container's own DataProtection key ring instead of the suite's shared one — only for a test whose subject is a cookie the running key ring cannot read |
 
