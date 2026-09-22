@@ -9,8 +9,8 @@
 **Beyond the profile.** One container of this test's own, `qt-367`, publishing `19367`, on the current
 build, created with `--env Quotinator__AdminApiKey=t2-367`.
 
-A reseed run from `/notifications` takes about 11 seconds, during which the row used to keep reading
-`Active` with a live **Run** button — so the natural reading was that the click had done nothing, and a
+A reseed run from `/notifications` takes about 20 seconds (19 measured 2026-09-22), during which the
+row used to keep reading `Active` with a live action button — so the natural reading was that the click had done nothing, and a
 second confirmed click performed a second full reseed. This proves the row reports the run while it is
 happening, that the control is withdrawn for its duration, and that a process dying mid-run leaves
 nothing stranded.
@@ -34,6 +34,10 @@ briefly showed Blazor's own `Retry`/`Resume` disconnect overlay. Clicking throug
 (`document.querySelectorAll('button')`) is more reliable than coordinates, because the pane rescales
 and stale coordinates miss.
 
+**The log is read before each stop, except step 4's.** Step 4's restart interrupts a run on purpose, so
+what it logs is part of what that step observes; the cleanup reads what came after it, with the tab
+closed first so no page reconnects.
+
 ## Steps
 
 ### 1. Produce an action worth running
@@ -43,30 +47,41 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-367 --port 19367 
   --image quotinator:local --env Quotinator__AdminApiKey=t2-367
 
 $h = @{ "X-Api-Key" = "t2-367" }
+function Get-OpenReseedAlerts {
+  @((Invoke-RestMethod "http://localhost:19367/api/v1/notifications?pageSize=0").items |
+    Where-Object { $_.dismissTriggerKey -eq 'reseed' -and -not $_.isDismissed }).Count
+}
 Invoke-RestMethod -Method Post -Headers $h "http://localhost:19367/api/v1/admin/database/reset" | Out-Null
-Start-Sleep -Seconds 3
-$items = (Invoke-RestMethod "http://localhost:19367/api/v1/notifications?pageSize=0").items
-@($items | Where-Object { $_.dismissTriggerKey -eq 'reseed' -and -not $_.isDismissed }).Count
+$deadline = (Get-Date).AddSeconds(30)
+while ((Get-OpenReseedAlerts) -lt 1 -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
+Get-OpenReseedAlerts
 ```
 
 **Expected:** `1` — a reseed recommendation, whose action takes long enough for the state to be
-observable.
+observable. Polled for, at most 30 s, rather than waited on for a fixed time.
 
 ### 2. Confirm the row reports the run while it is running
 
-In the browser: open `http://localhost:19367/notifications`, click **Run**, then **Confirm**, and
-screenshot immediately — within the same round trip if the tooling allows, since the window is about
-11 seconds.
-
-**Expected:** the Status badge reads **Running…** with a spinning icon, and the row offers **no controls
-at all** — neither Run nor Dismiss:
+In the browser: open `http://localhost:19367/notifications`, then drive the click and read the state in
+one script, since the window is about 20 seconds and a separate read can miss it:
 
 ```js
-({ badge: document.querySelector('.badge.bg-info')?.textContent.trim(),
-   buttonsInRow: [...document.querySelectorAll('tbody button')].map(b => b.textContent.trim()) })
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const btn = t => [...document.querySelectorAll('tbody button')].find(b => b.textContent.trim() === t);
+let tries = 0;
+while (!btn('Confirm') && tries++ < 20) { btn('Reseed the database')?.click(); await sleep(500); }
+btn('Confirm').click();
+let badge = null;
+for (let i = 0; i < 20 && !badge; i++) { await sleep(150); badge = document.querySelector('.badge.bg-info')?.textContent.trim(); }
+({ badge, buttonsInRow: [...document.querySelectorAll('tbody button')].map(b => b.textContent.trim()) })
 ```
 
-**Expected:** `Running…` and `[]`.
+**The button is the action's own label, *Reseed the database*.** Until #411 this step said **Run**, a
+label the page no longer shows. The loop repeats the first click until **Confirm** appears, for the
+reason in Determinism.
+
+**Expected:** the Status badge reads **Running…** with a spinning icon, and the row offers **no controls
+at all** — neither *Reseed the database* nor Dismiss: `Running…` and `[]`.
 
 **Dismiss must be gone, not merely inert.** Leaving it live corrupts the recorded outcome: Blazor
 serialises circuit events, so the click queues behind the running handler and is applied *after* the
@@ -97,7 +112,10 @@ still passes in that state, which is why this step exists.
 ### 3. Confirm the run happened exactly once, and settles
 
 ```powershell
-Start-Sleep -Seconds 20
+$deadline = (Get-Date).AddSeconds(90)
+while (@(docker logs qt-367 2>&1 | Select-String 'reseed complete').Count -lt 1 -and (Get-Date) -lt $deadline) {
+  Start-Sleep -Seconds 1
+}
 (docker logs qt-367 2>&1 | Select-String "reseed requested").Count
 $items = (Invoke-RestMethod "http://localhost:19367/api/v1/notifications?pageSize=0").items
 @($items | Where-Object { $_.dismissTriggerKey -eq 'reseed' }) |
@@ -107,12 +125,19 @@ $items = (Invoke-RestMethod "http://localhost:19367/api/v1/notifications?pageSiz
 **Expected:** exactly `1` reseed request, and the alert `dismissed=True reason=resolved`. On the page
 with **All** selected, that row reads **Done** — not **Running…** and not **Dismissed**.
 
-The count is the assertion that matters: the Run control being withdrawn is what makes a second click
+The count is the assertion that matters: the control being withdrawn is what makes a second click
 impossible, and a second `reseed requested` would mean the withdrawal is cosmetic.
+
+**Wait for `reseed complete`, not for the alert.** Measured 2026-09-22: the alert records `resolved`
+one second after `reseed requested`, while the reseed itself ran for another 18 — and the page kept
+reading **Running…** until it finished. Waiting on the alert therefore reads the page mid-run. The
+log line is the one condition that marks the end of the run; the wait is bounded at 90 s rather than
+the fixed 20 s this step used until #411.
 
 ### 4. Confirm a restart during a run strands nothing
 
-Reset again for a fresh action, start it from the page as in step 2, then kill the process mid-run:
+Reset again for a fresh action and wait for its alert as in step 1, start it from the page with step 2's
+script, then restart the process mid-run:
 
 ```powershell
 docker restart qt-367 | Out-Null
@@ -158,6 +183,13 @@ Container, image and worktree were removed afterwards.
 
 ## Cleanup
 
+Close the browser tab, then read what was logged since step 4's restart, before the container goes:
+
 ```powershell
+$log = docker logs qt-367 2>&1
+$restartAt = @(for ($k = 0; $k -lt $log.Count; $k++) { if ($log[$k] -like '*Quotinator starting*') { $k } })[-1]
+"thrownSinceRestart=$(@(for ($k = $restartAt; $k -lt $log.Count; $k++) { if ($log[$k] -like '*Runtime - Exception*') { $k } }).Count)"
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-367
 ```
+
+**Expected:** `thrownSinceRestart=0`.
