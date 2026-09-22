@@ -47,9 +47,12 @@ neither is predicted**, since the changelog grows with every release.
 
 ```powershell
 $dataDir = "$PWD\.claude\temp\qt-notif-07-data"
+# A folder left by an earlier run holds both databases, and step 2 would then read the old files.
+if (Test-Path $dataDir) { Remove-Item -LiteralPath $dataDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-07 --port 18507 --bind $dataDir
+function Count-Thrown { @(docker logs qt-notif-07 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]').Count }
 ```
 
 **Expected:** the app reaches healthy, having initialised and imported the changelog during startup.
@@ -109,8 +112,10 @@ database rather than to the fallback.
 every startup, so this confirms the rebuild is idempotent rather than duplicating rows:
 
 ```powershell
+"before the restart: thrown=$(Count-Thrown)"
 docker restart qt-notif-07
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18507/api/v1/health" --wait-for 200 --status
+$afterRestart = Count-Thrown
 
 function ImportLines { @(docker logs qt-notif-07 2>&1 | Select-String -SimpleMatch '[Changelog - Import] refreshed') }
 $deadline = (Get-Date).AddSeconds(60)
@@ -120,7 +125,7 @@ Get-ChildItem $dataDir -Filter quotinatorchangelog.db | Select-Object Name, Leng
 ImportLines | ForEach-Object { $_.Line }
 ```
 
-**Expected:** after restart, the file is still present, and two `refreshed N entries` lines are listed —
+**Expected:** `thrown=0` before the restart, then the file still present, and two `refreshed N entries` lines listed —
 the first start's and the restart's — reporting the same entry count, as step 3 did. No duplication.
 
 **The log is polled for the second line, for at most 60 s.** Health answers before the post-restart
@@ -146,6 +151,9 @@ contents are wholly derived from JSON shipped in the image, so nothing user-auth
 ## Cleanup
 
 ```powershell
+"before the stop: new=$((Count-Thrown) - $afterRestart)"
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-07 --bind $dataDir
 Remove-Item $dataDir -Recurse -Force -ErrorAction SilentlyContinue
 ```
+
+**Expected:** `new=0` — counted from after step 5's restart, whose own shutdown lines stay in the log.
