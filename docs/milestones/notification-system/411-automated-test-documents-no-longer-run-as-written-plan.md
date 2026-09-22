@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 10)
+**Status:** In progress (step 11)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 10: share one key ring across test containers.
+Step 11: write the antiforgery document.
 
 ---
 
@@ -255,7 +255,27 @@ document that fails as written is fixed in this issue, like the five the Descrip
 
 ### 10. Share one key ring across test containers
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `test-env.csx` mounts `.claude/temp/qt-keys` at `/data/keys` unless `--own-keys`,
+`--read-only-data` or `--tmpfs-data` is given. Probed against the step 8 image, each log read before its
+container stopped:
+
+| Probe | Result |
+|---|---|
+| Two containers booted at the same moment on an empty ring | Both healthy, one key in the ring, no exception line — one wrote it, the other read it |
+| `--read-only` root | Mounts `/data` and `/data/keys`; healthy; no exception line |
+| `--read-only-data` | Mounts `/data` only — no shared ring |
+| Browser: shared-ring container a, then b | 0 lines on either |
+| Control: `--own-keys` container c, visited next | Exactly the pair — 2 lines. The browser was sending a's cookie, so b's 0 is a real result |
+| Remedy: b again, twice | The pair once, then nothing more |
+
+**The concurrency probe started its two containers with `docker run` directly.** Launching the script
+twice at once collides on dotnet-script's shared compilation cache, which is the script host's and not
+the application's; the containers it creates are the same either way.
+
+**Two measurements refine the Decisions above.** With the tab closed before each container change, the
+own-ring visit logs exactly the pair, not the 5 lines measured earlier: the extra three came from the
+old page reconnecting. And after the browser pane was reopened, the first visit logged nothing — the
+antiforgery cookie lives only for the browser session, so a fresh pane holds none.
 
 `test-env.csx`, on `create` and `reenter`: resolve `.claude/temp/qt-keys` against the working directory,
 create it if missing, and add `-v <that path>:/data/keys` — unless `--own-keys`, `--read-only-data` or
