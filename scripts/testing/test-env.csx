@@ -49,7 +49,8 @@
 //   --own-keys            Give this container its own DataProtection key ring instead of the shared one
 //                         below. For a test whose subject is a cookie the running key ring cannot read;
 //                         it must restore the browser before it ends, or the next browser-driven test
-//                         reports that cookie as its own failure (see the suite index).
+//                         reports that cookie as its own failure (see the suite index). A volume created
+//                         with it passes it on every reenter too.
 //   --no-wait             Skip the readiness poll — for a container that publishes no port, or one
 //                         expected to degrade rather than become healthy.
 //   --wait-listening      Poll for any answer rather than a healthy one, for a degraded scenario
@@ -171,22 +172,30 @@ Run($"rm -f {name}", ignoreFailure: true, quiet: true);
 // The folder is never removed, by destroy or otherwise: deleting it makes the next browser-driven test
 // report that same pair once, for the same reason.
 //
-// Two options keep their own keys because sharing would change what they test: --read-only-data must
-// find its keys exactly where an unwritable /data leaves them, and --tmpfs-data sizes its tmpfs to run
-// out of space, which moving the keys off it would alter.
+// --tmpfs-data keeps its own keys: it sizes its tmpfs to run out of space, which moving the keys off it
+// would alter.
+//
+// --read-only-data depends on the command. `create` is a brand-new volume that never had keys, and an
+// unwritable /data leaves it with none — so nothing is mounted. `reenter` keeps the install it re-enters,
+// and that install's keys are the shared ring it was created with; a read-only /data makes them
+// read-only, so the ring is mounted `:ro`. Mounting nothing there instead was measured to break
+// *Degraded-state pages survive a genuine migration failure* (2026-09-22): with no keys to read, `/` and
+// `/notifications` answered 500 where the same volume, keys and all, answered 200 before the shared ring.
+// A document that created its volume with --own-keys passes it on `reenter` too, and keeps its own.
 string sharedKeys  = Path.GetFullPath(Path.Combine(".claude", "temp", "qt-keys"));
 string? tmpfsSize  = Value("--tmpfs-data");
-bool ownKeys       = Flag("--own-keys") || Flag("--read-only-data") || tmpfsSize is not null;
+bool readOnlyData  = Flag("--read-only-data");
+bool ownKeys       = Flag("--own-keys") || tmpfsSize is not null || (fresh && readOnlyData);
 string keysMount   = "";
 
 if (!ownKeys)
 {
     Directory.CreateDirectory(sharedKeys);
-    keysMount = $"-v \"{sharedKeys}:/data/keys\" ";
+    keysMount = $"-v \"{sharedKeys}:/data/keys{(readOnlyData ? ":ro" : "")}\" ";
 }
 
 string mount;
-string dataMode = Flag("--read-only-data") ? ":ro" : "";
+string dataMode = readOnlyData ? ":ro" : "";
 
 if (bind is not null)
 {
