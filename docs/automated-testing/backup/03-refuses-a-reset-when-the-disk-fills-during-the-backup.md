@@ -41,8 +41,8 @@ $before = (Invoke-RestMethod "http://localhost:18383/api/v1/version").database.q
 "quotesBefore=$before"
 ```
 
-**Expected:** the seed completes, `df` reports roughly 1–2 MB available of 11 MB, and
-`quotesBefore` is non-zero.
+**Expected:** the seed completes, `df` reports well under a megabyte available of 11 MB — measured
+260 KB on 2026-09-22, where the 2026-08-28 dataset left 1–2 MB — and `quotesBefore` is non-zero.
 
 **On failure:** if `df` shows several MB free, the ceiling is too generous and the backup will succeed —
 the test would pass without ever reaching its own condition. If the seed itself fails, the ceiling is
