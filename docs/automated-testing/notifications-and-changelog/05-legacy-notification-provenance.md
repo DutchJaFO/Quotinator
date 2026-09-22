@@ -59,6 +59,8 @@ this one proves the `1.8.3` row is inserted **conditionally**, which only its se
 
 ```powershell
 $upgradedDir = "$PWD\.claude\temp\qt-notif-05-upgraded"
+# A folder left by an earlier run still holds its database, and the released image would start against it.
+if (Test-Path $upgradedDir) { Remove-Item -LiteralPath $upgradedDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $upgradedDir | Out-Null
 
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-05-upgraded --port 18505 `
@@ -117,9 +119,12 @@ Same build, no v1.8.3 stage. It needs its **own container name and its own direc
 1.8.3 row that half created and prove nothing:
 
 ```powershell
+docker logs qt-notif-05-upgraded 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-upgraded --bind $upgradedDir
 
 $freshDir = "$PWD\.claude\temp\qt-notif-05-fresh"
+# A leftover folder would hand this half an existing database — the one thing it must not have.
+if (Test-Path $freshDir) { Remove-Item -LiteralPath $freshDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $freshDir | Out-Null
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-05-fresh --port 19505 --bind $freshDir
 
@@ -127,8 +132,9 @@ dotnet run --project tools/Quotinator.Tools.DbInspector -- --db "$freshDir\quoti
   --sql "SELECT Application, Version, SequenceNumber FROM System_AppVersion ORDER BY SequenceNumber"
 ```
 
-**The first container must be removed before this one starts**, which is why the `destroy` is the first
-line of this step rather than being left to Cleanup.
+**The first container must be removed before this one starts**, which is why the `destroy` opens this
+step rather than being left to Cleanup — with the log read just before it, per the index's *Read the
+log before the application stops*. That read expects nothing.
 
 **Expected:** exactly one row, the current build's own version, and **no 1.8.3 row at all**.
 
@@ -148,6 +154,7 @@ existing is weaker evidence than the 1.8.3 row sorting first.
 ## Cleanup
 
 ```powershell
+docker logs qt-notif-05-fresh 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-upgraded --bind $upgradedDir
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-05-fresh --bind $freshDir
 Remove-Item $upgradedDir, $freshDir -Recurse -Force -ErrorAction SilentlyContinue

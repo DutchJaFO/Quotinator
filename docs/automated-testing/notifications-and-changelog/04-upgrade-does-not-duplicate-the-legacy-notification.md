@@ -52,6 +52,8 @@ digit, and hide a real duplicate the next time one occurs.
 
 ```powershell
 $dataDir = "$PWD\.claude\temp\qt-notif-04-data"
+# A folder left by an earlier run still holds its database, and the released image would start against it.
+if (Test-Path $dataDir) { Remove-Item -LiteralPath $dataDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-04-183 --port 18504 `
@@ -108,7 +110,10 @@ observation — it is the only thing distinguishing "enriched in place" from "re
 
 ## Cleanup
 
+Read the log before the stop, per the index's *Read the log before the application stops*:
+
 ```powershell
+docker logs qt-notif-04-current 2>&1 | Select-String -SimpleMatch '[Runtime - Exception]'
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-04-183 --bind $dataDir
 dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-04-current --bind $dataDir
 Remove-Item $dataDir -Recurse -Force -ErrorAction SilentlyContinue
