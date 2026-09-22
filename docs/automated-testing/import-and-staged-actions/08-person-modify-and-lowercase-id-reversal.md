@@ -135,10 +135,11 @@ Invoke-RestMethod "$base/masterdata/people/f0000005-0000-4000-8000-000000000005"
 **Expected:** the apply returns `200`, and the Person reads back `dateOfBirth` `1951-02-02` with
 `completenessStatus` `Complete`.
 
-**The loop is why this applies at all.** `POST /import` rejects a file with no quotes, so every fixture
-here carries one and it stages its own `Modify`; leaving it undecided makes `apply` return `422` and
-the rest of the document unreachable. Measured during #339's full run, where this batch staged two
-actions and the step named one.
+**The loop is there for anything else the batch stages.** `POST /import` rejects a file with no quotes,
+so every fixture here carries one. During #339's full run it staged a `Modify` of its own — two actions,
+where this step named one — and leaving it undecided made `apply` return `422`. Since #373 an unchanged
+quote stages as an `Unchanged` no-op, so today the loop decides nothing (measured 2026-09-22: only the
+Person was pending). It stays, so a change to the fixture cannot leave `apply` refusing.
 
 ### 5. Import `smoke-173-v3.json` — a third `dateOfBirth`, and read what it staged
 
