@@ -1,6 +1,6 @@
 # #411 — Automated-test documents no longer run as written
 
-**Status:** In progress (step 15)
+**Status:** In progress (step 16)
 **GitHub issue:** #411
 **Tiers required:** T1, T2
 **Depends on:** —
@@ -9,7 +9,7 @@
 
 ## Next action
 
-Step 15: T2 on every other document in the suite.
+Step 16: the developer's T1 pass — start the application in Visual Studio and confirm it reaches ready.
 
 ---
 
@@ -415,7 +415,9 @@ Against a build of the branch, each document in full, each log read before every
 
 ### 15. T2, second pass — everything else the change touched
 
-**Status:** In progress — 53 documents, each run as written with the log read before every stop.
+**Status:** ✅ Done — every document the earlier steps did not run, each run as written with the log
+read before every stop; with steps 8, 9 and 14 that is all 68. Every one passes except *Rule-file
+override endpoints*, which fails at step 4 on an application defect (below) and waits on its own issue.
 
 | Document | Result |
 |---|---|
@@ -503,7 +505,7 @@ The developer starts the application in Visual Studio.
 | 8 | ✅ | The already-reported conflict document reseeds only once the application answers | Live (T2) | Step 3 as written: the reseed succeeds |
 | 9 | ✅ | A new test container on the shared ring reads the browser's cookie | Live (T2) | *A cookie from another key ring is replaced on the first page, and logged only then*, step 2: no `[Runtime - Exception]` line; red before step 10 |
 | 10 | ✅ | Provoking the pair is possible on demand, and the remedy restores the browser | Live (T2) | Same document, steps 3 and 4: the pair once, then nothing |
-| 11 | ❌ | The browser-driven documents log no exception they did not cause | Live (T2) | *Notifications list, dismiss, render, and drive their action* before its step 7 stop, and *A file left awaiting review raises an alert, and resolving it retires the alert* before step 3 and step 9: no `[Runtime - Exception]` line |
-| 12 | ❌ | Every document whose environment changed still passes | Live (T2) | Steps 14 and 15: every document in the suite passes as written |
-| 13 | ❌ | A container's log is read before the application stops | Review | The index's *Read the log before the application stops*, and every document run in steps 14 and 15 read that way |
+| 11 | ✅ | The browser-driven documents log no exception they did not cause | Live (T2) | *Notifications list, dismiss, render, and drive their action* before its step 7 stop, and *A file left awaiting review raises an alert, and resolving it retires the alert* before step 3 and step 9: no `[Runtime - Exception]` line |
+| 12 | ❌ | Every document whose environment changed still passes | Live (T2) | Steps 14 and 15: every document in the suite passes as written, or declares the issue it waits on — 67 of 68 pass; *Rule-file override endpoints* fails on the `generate` defect and gains its header once that is filed |
+| 13 | ✅ | A container's log is read before the application stops | Review | The index's *Read the log before the application stops*, and every document run in steps 14 and 15 read that way |
 | 14 | ✅ | The smoke documents step 8 skipped pass | Live (T2) | Step 9: each of the six passes as written |
