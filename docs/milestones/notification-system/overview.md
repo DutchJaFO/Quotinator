@@ -45,7 +45,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#303](https://github.com/DutchJaFO/Quotinator/issues/303) | Notification + minimal review page: alert when a reseed leaves import actions pending review | Waiting for release | T1 ⬜ T2 ✅ | [303-pending-review-alert-and-review-page-plan.md](303-pending-review-alert-and-review-page-plan.md) |
 | [#304](https://github.com/DutchJaFO/Quotinator/issues/304) | Notification + action: let the user trigger a reseed (content changed upstream, or after a Reset) | Waiting for release | T1 ✅ T2 ✅ | [304-reseed-notification-action-plan.md](304-reseed-notification-action-plan.md) |
 | [#307](https://github.com/DutchJaFO/Quotinator/issues/307) | Changelog highlights: mark specific entries as notification-worthy | Waiting for release | T1 ✅ T2 ✅ | [307-changelog-notification-audience-key-plan.md](307-changelog-notification-audience-key-plan.md) |
-| [#308](https://github.com/DutchJaFO/Quotinator/issues/308) | Notification: multi-line/rich message layout | In progress | T1 ⬜ T2 ⬜ | [308-notification-rich-layout-plan.md](308-notification-rich-layout-plan.md) |
+| [#308](https://github.com/DutchJaFO/Quotinator/issues/308) | Notification: multi-line/rich message layout | In progress | T1 ⬜ T2 ✅ | [308-notification-rich-layout-plan.md](308-notification-rich-layout-plan.md) |
 | [#309](https://github.com/DutchJaFO/Quotinator/issues/309) | Move changelog content to database-backed System_Changelog table | Waiting for release | T1 ✅ T2 ✅ | [309-system-changelog-table-plan.md](309-system-changelog-table-plan.md) |
 | [#305](https://github.com/DutchJaFO/Quotinator/issues/305) | Database integrity check: verify all expected tables exist at startup, not just row counts | Planning | T1 ⬜ T2 ⬜ | [305-database-integrity-check-plan.md](305-database-integrity-check-plan.md) |
 | [#306](https://github.com/DutchJaFO/Quotinator/issues/306) | Changelog: empty 'Unreleased' section renders on the About page after a release tag | Planning | T1 ⬜ T2 ⬜ | [306-empty-unreleased-section-plan.md](306-empty-unreleased-section-plan.md) |
@@ -181,7 +181,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 14 | **#302** ✅ | Waiting for release |
 | 15 | **#303** ✅ | Waiting for release — T1 outstanding |
 | 16 | **#367** ✅ | Waiting for release — moved up so #308 designs against the finished status set |
-| 17 | **#308** 🚧 | In progress — reopened 2026-09-22: its per-type layout was never implemented, and two kinds have never been rendered under assertion. Finishes before #413, which no longer carries any rendering change |
+| 17 | **#308** 🚧 | In progress — reopened 2026-09-22; T2 complete 2026-09-23 (every kind through its own trigger on both surfaces, the unread map deleted), T1 outstanding. Finishes before #413, which no longer carries any rendering change |
 | 18 | **#375** ✅ | Waiting for release — T1 green after three rounds |
 | 19 | **#374** ✅ | Waiting for release |
 | 20 | **#378** ✅ | Waiting for release — found live while verifying #374, fixed same session |

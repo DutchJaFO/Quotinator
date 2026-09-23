@@ -143,6 +143,12 @@ is in the markup.
 **Resize the viewport to `420` high before running this** — at a normal window height nothing
 overflows and the fit assertions pass without testing anything.
 
+**Check `viewportHeight` is non-zero before believing any fit result.** The pane can report a
+zero-height viewport, and every element is then "off-screen": measured 2026-09-23 on step 8, a correct
+popup read `withinViewport: false` and `footerVisible: false` with `window.innerHeight: 0`. Set an
+explicit size and re-measure — see the index's *A count is evidence only if the instrument counts the
+right thing*.
+
 ```js
 const pre = { expandersOnPage: document.querySelectorAll('details.notification-detail').length,
    openButtonsOnPage: document.querySelectorAll('.notification-detail-open').length,

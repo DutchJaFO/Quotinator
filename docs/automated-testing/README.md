@@ -209,8 +209,21 @@ matches the correctly-cased row and reports a duplicate that does not exist — 
 run, against `import-and-staged-actions/12`'s `AIRPLANE!` fixture. Where casing *is* the subject, use
 `Select-String -CaseSensitive` or `-ceq`, and say at the command that the casing is the point.
 
+**Does the browser actually have a viewport?** Any assertion of the form *"this fits on screen"* —
+`getBoundingClientRect()` against `window.innerHeight`, a `95vh` cap, a visible footer — is measured
+against a viewport the pane can report as **zero**. Every element is then off-screen, every cap is
+`0px`, and a layout that is perfectly fine reads as broken. Found 2026-09-23 while re-running
+`notifications-and-changelog/13` after a component change: the startup popup reported its footer
+off-screen and its dialog outside the viewport, with `window.innerHeight: 0`, `max-height: 0px` and a
+dialog `0` pixels tall. Re-measured at an explicit `1100x800`, the same popup with all eleven rows
+expanded was `744` tall, inside the viewport, its body scrolling and its footer visible.
+
+**So read `window.innerHeight` in the same snippet and assert it is non-zero**, or set an explicit
+viewport size first. A fit assertion against a zero viewport is not a failure — it is no measurement at
+all.
+
 **And the expected number itself must be derived in the same run, never predicted.** That rule is
-stated above; these three are about the instrument rather than the expectation, and a document can get
+stated above; these four are about the instrument rather than the expectation, and a document can get
 the expectation right while the instrument makes it unreachable.
 
 **Stable resources are the exception, not the default.** A fixture owned by a test — created from

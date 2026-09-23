@@ -205,6 +205,10 @@ unfiltered `tbody tr` returns those too — measured 2026-09-23: `49` rows where
 forty reporting an empty title and a zero-length body. Filtering on the presence of a
 `.notification-body` cell keeps the selection to notification rows on either surface.
 
+**Read `window.innerHeight` alongside any fit assertion.** The pane can report a zero-height viewport,
+which makes every element read as off-screen — see the index's *A count is evidence only if the
+instrument counts the right thing*.
+
 **The popup offers no controls at all — no action button and no Dismiss.** `NotificationSummary` passes
 neither `ShowActionColumn` nor `ShowDismissAction`, so every row there is read-only; the page passes
 both. Assert the absence here: a row that grew a button in the popup would be a surface difference
