@@ -347,6 +347,7 @@
     <File Path="docs/knowledgebase/README.md" />
     <File Path="docs/knowledgebase/a-dialog-fills-almost-the-whole-window.md" />
     <File Path="docs/knowledgebase/a-quote-id-stops-working-after-an-upgrade.md" />
+    <File Path="docs/knowledgebase/a-reset-is-undone-by-the-next-restart.md" />
     <File Path="docs/knowledgebase/antiforgery-token-could-not-be-decrypted.md" />
     <File Path="docs/knowledgebase/generating-conflict-rules-answers-500.md" />
     <File Path="docs/knowledgebase/entry-template.md" />

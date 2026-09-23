@@ -259,8 +259,15 @@ rather than this issue's rendering.
 The popup renders once per process run, so this kind needs a restart to reach it — and on the container
 above that restart re-seeds the database, which **resolves the recommendation before it can be read**:
 measured 2026-09-23, the row came back `isDismissed=True`, `dismissReason=resolved`,
-`resolution=reseeded`, which is #304 working exactly as intended. A container with nothing to seed is
-the only place this kind survives a restart.
+`resolution=reseeded`. That re-seed is
+[#423](https://github.com/DutchJaFO/Quotinator/issues/423) — a reset is undone by the next restart,
+because startup loads the configured files whenever the quote table is empty rather than only on a
+fresh install. #304's producer is behaving correctly on top of it: the load really did happen, so it
+records the action as carried out.
+
+A container with nothing to seed is the only place this kind survives a restart today. **When #423 is
+fixed this step can drop its second container** and read the recommendation on the first one's popup,
+since the restart will then leave the database as the reset left it.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-notif-14b --port 19515 `

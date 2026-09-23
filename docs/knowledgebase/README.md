@@ -18,3 +18,4 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [Generating conflict rules answers 500 for a source](generating-conflict-rules-answers-500.md) | Yes, for that endpoint | 1.9.0-alpha onwards |
 | [A quote id that worked before an upgrade answers 404](a-quote-id-stops-working-after-an-upgrade.md) | No | upgrades from 1.8.2 or earlier |
 | [A dialog fills almost the whole window on a tall screen](a-dialog-fills-almost-the-whole-window.md) | No | 1.9.0-alpha onwards |
+| [Quotes come back after a restart, although the database was reset](a-reset-is-undone-by-the-next-restart.md) | No | 1.9.0-alpha onwards |

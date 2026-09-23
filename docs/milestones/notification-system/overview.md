@@ -80,6 +80,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#420](https://github.com/DutchJaFO/Quotinator/issues/420) | Generating conflict rules answers an unhandled 500 when a rule file holds two rules for one entity | Planning | T1 ⬜ T2 ⬜ | — |
 | [#421](https://github.com/DutchJaFO/Quotinator/issues/421) | A quote's id depends on whether the install was upgraded or fresh, after Migration009's dedupe | Planning | T1 ⬜ T2 ⬜ | — |
 | [#422](https://github.com/DutchJaFO/Quotinator/issues/422) | A modal's 95vh height cap never applies; Bootstrap's centred min-height overrides it | Planning | T1 ⬜ T2 ⬜ | — |
+| [#423](https://github.com/DutchJaFO/Quotinator/issues/423) | Seeding fills any empty database, so a reset is undone by the next restart | Planning | T1 ⬜ T2 ⬜ | — |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Planning | T1 ⬜ T2 ⬜ | — |
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
@@ -140,6 +141,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #420 ─── (none); found in #411's T2; blocks one #411 document — Planning
 #421 ─── (none); found in #411's T2, in #374's migration — Planning
 #422 ─── (none); found in #411's T2, in #308's modal — Planning
+#423 ─── (none); found in #308's T2; #156 decided it, #277 pinned the opposite, #304 depends on it — Planning
 #397 ─── (none); blocks #370 — Waiting for release
 #369 ─── depends on #303, #372, #389 — Waiting for release
 #389 ─── depends on #373, #376, #377 — Waiting for release
@@ -203,25 +205,26 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 36 | **#420** | Planning — found in #411's T2; one #411 document waits on it |
 | 37 | **#421** | Planning — found in #411's T2; before #371/#360 add migrations |
 | 38 | **#422** | Planning — found in #411's T2; code accuracy only, nothing unreachable |
-| 39 | **#371** | Planning — before #351/#360, which each add migrations |
-| 40 | **#350** | Planning |
-| 41 | **#327** 🚧 | In progress — depends on #326 (done), #348 |
-| 42 | **#328** | Planning |
-| 43 | **#339** 🚧 | In progress — blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
-| 44 | **#329** | Planning — before #324, which consumes its statistics |
-| 45 | **#330** | Planning — #331 depends on it |
-| 46 | **#331** | Planning — depends on #330 |
-| 47 | **#324** | Planning — after #329/#330/#331 |
-| 48 | **#305** | Planning — independent |
-| 49 | **#306** | Planning — independent |
-| 50 | **#351** | Planning — independent, placed late |
-| 51 | **#381** | Planning — independent, deliberately deferred (found live while verifying #374/#378) |
-| 52 | **#352** | Planning — after #349 |
-| 53 | **#353** | Planning — after #352 |
-| 54 | **#360** | Planning — before end-of-milestone migration consolidation |
-| 55 | **#390** | Planning — before #368, which depends on it |
-| 56 | **#368** | Planning — depends on #303, #304, #390 |
-| 57 | **#416** | Planning — filed 2026-09-19 during #411 and not yet sequenced; placed last until it is |
+| 39 | **#423** | Planning — found in #308's T2; a reset is undone by the next restart, and #304's recommendation resolves itself because of it |
+| 40 | **#371** | Planning — before #351/#360, which each add migrations |
+| 41 | **#350** | Planning |
+| 42 | **#327** 🚧 | In progress — depends on #326 (done), #348 |
+| 43 | **#328** | Planning |
+| 44 | **#339** 🚧 | In progress — blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
+| 45 | **#329** | Planning — before #324, which consumes its statistics |
+| 46 | **#330** | Planning — #331 depends on it |
+| 47 | **#331** | Planning — depends on #330 |
+| 48 | **#324** | Planning — after #329/#330/#331 |
+| 49 | **#305** | Planning — independent |
+| 50 | **#306** | Planning — independent |
+| 51 | **#351** | Planning — independent, placed late |
+| 52 | **#381** | Planning — independent, deliberately deferred (found live while verifying #374/#378) |
+| 53 | **#352** | Planning — after #349 |
+| 54 | **#353** | Planning — after #352 |
+| 55 | **#360** | Planning — before end-of-milestone migration consolidation |
+| 56 | **#390** | Planning — before #368, which depends on it |
+| 57 | **#368** | Planning — depends on #303, #304, #390 |
+| 58 | **#416** | Planning — filed 2026-09-19 during #411 and not yet sequenced; placed last until it is |
 
 ---
 
