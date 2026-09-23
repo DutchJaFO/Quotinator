@@ -135,17 +135,6 @@ public partial class NotificationTable
     internal static bool ShowsDismissControl(NotificationEntity notification, bool isExecuting) =>
         !notification.IsDismissed && !isExecuting;
 
-    /// <summary>How a notification's body is laid out, and which payload parts accompany it. #308.</summary>
-    /// <remarks>
-    /// **The body is always rendered** (developer, 2026-09-02): it is the summary of the payload
-    /// wherever there is one, so payload detail is never an alternative to it. A `PayloadOnly` member
-    /// was drafted and rejected for exactly that reason — the only thing that varies by type is whether
-    /// there is structured detail to show *beneath* the summary.
-    /// </remarks>
-    /// <param name="BodyIsMultiLine">Whether the body is expected to carry embedded line breaks.</param>
-    /// <param name="PayloadParts">The payload fields shown as detail beneath the body. Empty for a type with no structured detail worth showing.</param>
-    internal sealed record NotificationLayout(bool BodyIsMultiLine, IReadOnlyList<string> PayloadParts);
-
     /// <summary>A notification's payload detail as a table. #308.</summary>
     /// <param name="Headers">Column headings, already localised.</param>
     /// <param name="Rows">One row per payload entry, cells in the same order as <paramref name="Headers"/>.</param>
@@ -312,34 +301,6 @@ public partial class NotificationTable
     /// <param name="notification">The row being rendered.</param>
     internal static bool ShowsTitle(NotificationEntity notification) =>
         !string.IsNullOrWhiteSpace(notification.Title);
-
-    /// <summary>
-    /// The layout for <paramref name="kind"/>, or for a row that carries none. #308.
-    /// </summary>
-    /// <remarks>
-    /// Every member is listed explicitly rather than falling through a <c>_</c> arm, so a kind added
-    /// later fails <c>NotificationTableTests.EveryMetadataKind_HasALayout</c> instead of silently
-    /// inheriting a layout nobody chose for it. A row with no kind at all — #279's and #289's, which
-    /// predate typed metadata — takes the single-line default.
-    /// </remarks>
-    /// <param name="kind">The row's own metadata kind, or <see langword="null"/>.</param>
-    internal static NotificationLayout LayoutFor(NotificationMetadataKind? kind) => kind switch
-    {
-        // One line per changelog highlight, and one per cleanly-applied or staged file: these producers
-        // write several facts, and collapsing them into a paragraph is what #308 exists to stop.
-        // Measured against each type's own body template, 2026-09-02 — the payload earns a line only
-        // where it holds something the sentence does not. WhatsNew's DTO has no properties at all.
-        NotificationMetadataKind.WhatsNew            => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: []),
-        // The body states the totals ("1077 added and 61 updated"); the payload has the per-entity split.
-        NotificationMetadataKind.ReseedFileApplied   => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: ["counts"]),
-        // The body states the sum ("1 changes need your decision"); the payload says which statuses.
-        NotificationMetadataKind.ImportReviewPending => new NotificationLayout(BodyIsMultiLine: true, PayloadParts: ["counts"]),
-        NotificationMetadataKind.Announcement           => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
-        NotificationMetadataKind.SchemaVersionOvershoot => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
-        NotificationMetadataKind.ReseedRecommended      => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
-        null                                            => new NotificationLayout(BodyIsMultiLine: false, PayloadParts: []),
-        _ => throw new NotSupportedException($"No layout is defined for notification kind '{kind}'."),
-    };
 
     /// <summary>
     /// Classifies a notification's display status (#278). What has already happened to a row outranks

@@ -1148,6 +1148,7 @@ different question in each.
 | 11 | [A reseed confirms each file that applied cleanly, once per result](notifications-and-changelog/11-clean-reseed-confirmation.md) | no |
 | 12 | [A running notification action says so, and cannot be started twice](notifications-and-changelog/12-running-action-state.md) | no |
 | 13 | [A notification renders its title and body as separate things, and keeps its line breaks](notifications-and-changelog/13-notification-layout.md) | no |
+| 14 | [Every notification kind is produced by its own trigger and renders what its layout promises](notifications-and-changelog/14-every-kind-renders-what-its-layout-promises.md) | no |
 
 ### `import-and-staged-actions/`
 

@@ -391,7 +391,26 @@ naming the structure that produces it.
 
 ### 14. Assert what each variant renders, on both surfaces
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — written as
+[`14-every-kind-renders-what-its-layout-promises.md`](../../automated-testing/notifications-and-changelog/14-every-kind-renders-what-its-layout-promises.md),
+added to `Quotinator.slnx` and the suite index, and run green on 2026-09-23 against an image built from
+this branch. Its *Observed effect* carries the per-kind results.
+
+**Each kind arrives through its own trigger, not a constructed row** (developer direction,
+2026-09-23) — a constructed row proves rendering and nothing about the producer. A cold start with the
+conflict fixture produces four kinds, a consumer version one past the build produces the fifth, and a
+reset produces the sixth.
+
+**Three instrument defects were found and fixed while running it**, each of the class this suite keeps
+recording: `@($p.counts).Count` reads `1` for a payload with no `counts` at all; an unfiltered
+`tbody tr` counts the rows *inside* an expander's detail table (`49` where there are `9`); and the
+reseed recommendation is resolved by the restart that would have shown it in the popup, so step 8 gives
+that kind a container with nothing to seed.
+
+**One undocumented surface difference, recorded and worth a decision:** the startup popup passes
+neither `ShowActionColumn` nor `ShowDismissAction`, so it is entirely read-only, where the page offers
+both. The behaviour is coherent — the popup informs, the page acts — but unlike `DetailAsDialog` it
+carries no comment saying so at the call site.
 
 A new T2 document, *Every notification kind renders what its layout promises, on both surfaces*. One row
 per kind, constructed with the container stopped — the technique
@@ -412,7 +431,11 @@ rendered under assertion at all** — both are covered through the API only, by
 
 ### 15. Make a new variant fail these tests until it is handled
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — `NotificationTableTests.EveryLiveNotificationKind_IsNamedInTheVariantDocument`
+reads the document and asserts it names every `NotificationMetadataKind` member. Proven wired by
+mutation, 2026-09-23: red with the document renamed away (*"the per-kind rendering document is
+missing"*), red again with one kind's name replaced in it (*"SchemaVersionOvershoot is never named in
+the per-kind rendering document"*), green with the document intact — 61 tests in the group.
 
 **The unit half already exists, and it did not when step 4 was written.** #373 added
 `NotificationTableTests.RendersDetail` — a per-kind expectation declared in the tests — with
@@ -428,7 +451,24 @@ build until the document covers it too.
 
 ### 16. Resolve the map from what steps 14 and 15 needed
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done — **deleted**, by the criterion below: not one assertion in steps 14 or 15 needed it.
+Every per-kind expectation is derived from the payload's own type — the live document reads each row's
+`counts`, and `EveryMetadataKind_WithItsOwnPayload_RendersWhatItDeclares` reads what `PayloadDetail`
+returns. `NotificationLayout`, `LayoutFor` and `BodyIsMultiLine` are gone from
+`NotificationTable.razor.cs`.
+
+**Red first, by its own guard.** `NotificationTableTests.TheRenderingDecision_HasExactlyOneSource`
+asserts the component's source names `PayloadDetail` and neither `LayoutFor` nor `BodyIsMultiLine`: red
+before the deletion (*"LayoutFor declares a per-kind layout no renderer reads"*), green after. It
+forbids the reintroduction rather than the values, because the defect was the second source existing at
+all.
+
+**Two tests went with it, their intent kept:** `EveryMetadataKind_HasALayout` asserted every kind had a
+map *entry* — a property of the map, replaced by
+`EveryMetadataKind_DeclaresWhetherItRendersDetail` plus the per-kind rendering assertion;
+`NoMetadataKind_FallsBackToADefinedLayout` became `NoMetadataKind_RendersItsBodyAndNoDetail`, which
+reads the renderer instead of the map. `LayoutFor_AcrossKinds_PayloadDetailVaries` became
+`PayloadDetail_AcrossKinds_Varies`, asserting the same claim over real output.
 
 Decided by evidence, against a stated criterion rather than preference:
 
@@ -484,11 +524,11 @@ Either way `BodyIsMultiLine` goes: no renderer can read it without changing what
 | 35 | ✅ | The stored resolution survives the read path | Unit test | `NotificationWriterTests.DismissedAsResolved_TheResolutionSurvivesTheReadPath` — reads through `NotificationReader`, not `SELECT *`. Proven by mutation: removing `n.Resolution` from the read query's column list fails it |
 | 36 | ✅ | The by-trigger dismissal writes the resolution, not only the by-batch one | Unit test | `NotificationWriterTests.DismissedByTrigger_RecordsTheResolution` — the path reseed and reset actually take, which rows 17–18 did not exercise |
 | 37 | ✅ | A fourth modal cannot reintroduce the duplication unnoticed | Automated (T2) | same document step 7 — `usesOldBespokeMarkup: false`, asserting the copied class names absent. **A regression guard, not a proven-red row**: the markup it forbids existed while the assertion did not, so unlike row 31 it has no canary run behind it, and the document says so |
-| 38 | ⬜ | A detail control appears for exactly the kinds whose payload adds to their body | Automated (T2) | *Every notification kind renders what its layout promises*, step 3 — one row per kind; a dialog on the page for those kinds and none for the rest, asserted per kind rather than by a count |
-| 39 | ⬜ | Every kind renders its body and its title on the page | Automated (T2) | same document, step 2 — for each kind a non-empty `.notification-body`, and a `.notification-title` that is not part of it |
-| 40 | ⬜ | Every kind renders the same way in the startup popup | Automated (T2) | same document, step 4, after a restart — an expander rather than a dialog, and the same per-kind detail decision as row 38 |
-| 41 | ⬜ | A kind defined later fails these tests until it is covered | Unit test | `NotificationTableTests.EveryMetadataKind_DeclaresWhetherItRendersDetail` (exists, #373) plus a new guard asserting the live document names every `NotificationMetadataKind` member |
-| 42 | ⬜ | The rendering decision has exactly one source | Unit test | Whichever step 16 settles on: `LayoutFor`/`NotificationLayout`/`BodyIsMultiLine` absent, or `PayloadDetail` reading the map with a test that the rendered output matches what the map declares |
+| 38 | ✅ | A detail control appears for exactly the kinds whose payload adds to their body | Automated (T2) | *Every notification kind renders what its layout promises*, step 3 — one row per kind; a dialog on the page for those kinds and none for the rest, asserted per kind rather than by a count |
+| 39 | ✅ | Every kind renders its body and its title on the page | Automated (T2) | same document, step 2 — for each kind a non-empty `.notification-body`, and a `.notification-title` that is not part of it |
+| 40 | ✅ | Every kind renders the same way in the startup popup | Automated (T2) | same document, step 4, after a restart — an expander rather than a dialog, and the same per-kind detail decision as row 38 |
+| 41 | ✅ | A kind defined later fails these tests until it is covered | Unit test | `NotificationTableTests.EveryMetadataKind_DeclaresWhetherItRendersDetail` (exists, #373) plus a new guard asserting the live document names every `NotificationMetadataKind` member |
+| 42 | ✅ | The rendering decision has exactly one source | Unit test | `NotificationTableTests.TheRenderingDecision_HasExactlyOneSource` — the component's source names `PayloadDetail` and neither `LayoutFor` nor `BodyIsMultiLine`; red before the deletion, green after |
 
 **Rows 5, 9 and 10 cannot be replaced by unit tests.** A unit test can prove the markup and the
 stylesheet name the same class; only a rendered page proves the rule reaches the element. #303's nav

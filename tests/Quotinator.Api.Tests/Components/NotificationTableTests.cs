@@ -462,6 +462,62 @@ public class NotificationTableTests
     }
 
     /// <summary>
+    /// #308: the per-kind rendering decision has exactly one source — the payload's own type, read by
+    /// <see cref="NotificationTable.PayloadDetail"/>. A second, parallel declaration of the same
+    /// decision is what this forbids.
+    /// </summary>
+    /// <remarks>
+    /// `LayoutFor(kind) → NotificationLayout(BodyIsMultiLine, PayloadParts)` was such a declaration: it
+    /// stated which kinds show detail and which bodies wrap, and no renderer ever read it, so its tests
+    /// went red and green while the feature it described was never built. Asserted over the component's
+    /// own source, because the defect is the *existence* of the second source, not any value in it.
+    /// </remarks>
+    [TestMethod]
+    public void TheRenderingDecision_HasExactlyOneSource()
+    {
+        string componentDir = Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "src", "Quotinator.Api", "Components", "Controls");
+        string source = File.ReadAllText(Path.Combine(componentDir, "NotificationTable.razor.cs"));
+
+        Assert.Contains("PayloadDetail", source,
+            "The renderer's own per-kind decision is missing; the markup calls it.");
+        Assert.DoesNotContain("LayoutFor", source,
+            "LayoutFor declares a per-kind layout no renderer reads — the decision belongs to PayloadDetail alone.");
+        Assert.DoesNotContain("BodyIsMultiLine", source,
+            "BodyIsMultiLine declares per-kind line-break behaviour the stylesheet applies to every kind.");
+    }
+
+    /// <summary>
+    /// #308: the live document that renders every kind on both surfaces names every kind, so a kind
+    /// added later fails here until that document covers it too.
+    /// </summary>
+    /// <remarks>
+    /// A live document cannot enumerate a C# enum, so the enum is brought to the document instead. The
+    /// unit tests above prove what each kind renders; only a rendered page proves a reader sees it, and
+    /// a kind nobody added to the document is a kind no page was ever checked for.
+    /// </remarks>
+    [TestMethod]
+    public void EveryLiveNotificationKind_IsNamedInTheVariantDocument()
+    {
+        string document = Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "docs", "automated-testing", "notifications-and-changelog",
+            "14-every-kind-renders-what-its-layout-promises.md");
+
+        Assert.IsTrue(File.Exists(document),
+            $"The per-kind rendering document is missing: {Path.GetFullPath(document)}");
+
+        string text = File.ReadAllText(document);
+
+        foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
+        {
+            Assert.Contains(kind.ToString(), text,
+                $"{kind} is never named in the per-kind rendering document, so no surface was checked for it.");
+        }
+    }
+
+    /// <summary>
     /// The positive direction, per kind: a kind declared to render detail produces rows, and one
     /// declared not to produces none — both against its own valid payload.
     /// </summary>
@@ -579,24 +635,24 @@ public class NotificationTableTests
     }
 
     /// <summary>
-    /// #308: every notification type has a layout decision. Derived from the enum rather than a
-    /// maintained list, so a kind added later fails here instead of rendering unstyled.
+    /// #279's and #289's rows carry no metadata kind at all, so the absent case must render its body
+    /// and no detail rather than throwing on the way to a layout it has none of.
     /// </summary>
+    /// <remarks>
+    /// Replaces `NoMetadataKind_FallsBackToADefinedLayout`, which asserted `LayoutFor(null)` was
+    /// non-null — a property of a map no renderer read. `EveryMetadataKind_HasALayout` went with it:
+    /// every kind having an *entry* was only ever a property of that map, and what a kind renders is
+    /// asserted for real by `EveryMetadataKind_WithItsOwnPayload_RendersWhatItDeclares`.
+    /// </remarks>
     [TestMethod]
-    public void EveryMetadataKind_HasALayout()
+    public void NoMetadataKind_RendersItsBodyAndNoDetail()
     {
-        foreach (NotificationMetadataKind kind in Enum.GetValues<NotificationMetadataKind>())
-            Assert.IsNotNull(NotificationTable.LayoutFor(kind), $"{kind} has no defined layout.");
-    }
+        NotificationTable.PayloadTable detail = NotificationTable.PayloadDetail(
+            WithTitle("A headline", metadata: null, metadataKind: null));
 
-    /// <summary>
-    /// The negative case for the row above: #279's and #289's rows carry no metadata kind at all, so
-    /// the absent case needs a layout too rather than falling through to nothing.
-    /// </summary>
-    [TestMethod]
-    public void NoMetadataKind_FallsBackToADefinedLayout()
-        => Assert.IsNotNull(NotificationTable.LayoutFor(null),
-            "A row with no metadata kind still renders, so it still needs a layout.");
+        Assert.IsEmpty(detail.Rows, "A row with no metadata kind has no payload to show detail from.");
+        Assert.IsEmpty(detail.Headers, "A table with no rows must claim no columns.");
+    }
 
     /// <summary>
     /// #308 finding 1: every resolution reads as words, derived from the enum so a member added later
@@ -645,20 +701,25 @@ public class NotificationTableTests
     }
 
     /// <summary>
-    /// #308 finding 2: whether a type has structured detail *beneath* the summary is what varies. If no
-    /// type has any, `LayoutFor` is still the line-wrapping boolean the first pass delivered under a
-    /// longer name.
+    /// #308 finding 2: whether a type has structured detail *beneath* the summary is what varies —
+    /// asserted over what the renderer actually produces, not over a declaration beside it.
     /// </summary>
+    /// <remarks>
+    /// Replaces `LayoutFor_AcrossKinds_PayloadDetailVaries`, which read the same claim off
+    /// `LayoutFor`'s map: it was red while the map's arms were empty and green once two were filled in,
+    /// neither state requiring a renderer to exist.
+    /// </remarks>
     [TestMethod]
-    public void LayoutFor_AcrossKinds_PayloadDetailVaries()
+    public void PayloadDetail_AcrossKinds_Varies()
     {
         List<bool> hasDetail =
             [.. Enum.GetValues<NotificationMetadataKind>()
-                    .Select(k => NotificationTable.LayoutFor(k)!.PayloadParts.Count > 0)
+                    .Select(k => NotificationTable.PayloadDetail(
+                        WithTitle("A headline", metadata: MetadataFor(k), metadataKind: k)).Rows.Count > 0)
                     .Distinct()];
 
         Assert.HasCount(2, hasDetail,
-            "Every type answers the same way, so no per-type decision is being made — some types have " +
+            "Every type renders the same way, so no per-type decision is being made — some types have " +
             "structured detail worth showing and some do not.");
     }
 
