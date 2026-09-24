@@ -29,7 +29,12 @@ reaches Blazor; **or** any change to `DatabaseInitializer`/`QuotinatorDatabaseIn
 or schema/table-wipe logic (reseed, reset, backup) needs a targeted check (affected page renders, the
 specific migration/reset path is exercised) on top of the baseline, not instead of it.
 
-**Gate:** user starts the app in Visual Studio and confirms it starts without error; affected pages render correctly. This is exclusively the developer's own action — an AI assistant never runs `dotnet run` itself to perform or substitute for this gate (see CLAUDE.md's Commands section).
+**Gate:** user starts the app in Visual Studio and confirms it starts without error. That is the whole
+gate — see "T1 confirms the thing still starts" below. Anything beyond startup is a **named extra test**
+the developer is asked for explicitly, never an extra clause folded into this one: a plan doc's T1 row
+says the application still starts, and rendering, behaviour and data checks belong to T2. This is
+exclusively the developer's own action — an AI assistant never runs `dotnet run` itself to perform or
+substitute for this gate (see CLAUDE.md's Commands section).
 
 ---
 
