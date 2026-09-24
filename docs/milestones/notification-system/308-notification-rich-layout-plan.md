@@ -1,6 +1,6 @@
 # #308 — Notification: multi-line/rich message layout
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #308
 **Tiers required:** T1, T2
 **Depends on:** #312, #302, #303, #304, #367
@@ -517,10 +517,17 @@ wrong tier — `docs/release-verification.md` says **"T1 confirms the thing stil
 whole job,"** and **"T2 verifies what this issue actually targeted."** A six-kind, two-surface sweep is
 the second sentence, not the first.
 
-So row 16 keeps T1's actual job and the sweep moves to T2 as row 43. Nothing is verified less: the
-document already produced every kind through its own trigger and asserted what each one renders. What
-it did not do was let anyone *see* it, which is what row 16 was really asking for — and the index
-already allows for that, requiring only that the assertion beside a screenshot be machine-checkable.
+So row 16 becomes T1's actual job — the application still starts — and the sweep moves to T2 as row 43.
+Nothing is verified less: the document already produced every kind through its own trigger and asserted
+what each one renders. What it did not do was let anyone *see* it, which is what row 16 was really
+asking for — and the index already allows for that, requiring only that the assertion beside a
+screenshot be machine-checkable.
+
+**Row 16 says "starts" and nothing else, deliberately.** It first kept a clause about the notifications
+page rendering too, which is the same mistake in miniature: a rendering check folded into the tier that
+does not do rendering checks, three sentences after quoting the rule that says so. Rendering is rows
+30–43, on both surfaces, in images. If T1 ever needs something beyond startup, it is asked for as a
+named extra test, never as an extra clause on this row.
 
 **The suite had no way to write a screenshot to a file.** The index has allowed one as evidence since
 #339, provided the assertion beside it is machine-checkable — but the picture only ever existed inside
@@ -568,7 +575,7 @@ Fifteen images, and four things they established that no assertion in this plan 
 | 13 | ✅ | Every unit test above is wired to behaviour | Mutation | proven at step 1 by two opposing stubs: `ShowsTitle => false` fails rows 1, 4, 6, 7; `ShowsTitle => true` fails rows 2 and 3, which assert an absence and cannot fail against the first. Row 8 went red on a wrong column list before going green |
 | 14 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
 | 15 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
-| 16 | ❌ | The application starts in Visual Studio and the notifications page renders | Live (T1) | developer confirms startup without error and the page rendering whichever kinds that database holds — the per-type sweep is row 43, see step 18 |
+| 16 | ✅ | The application still starts | Live (T1) | developer's own run, 2026-09-24 — clean banner at `data v22, app v9` after migrating from `data v3, app v5`, 795 quotes, no exception during startup or migration. Rendering is rows 30–43, see step 18 |
 | 17 | ✅ | A notification resolved by an action records which resolution it was | Unit test | `NotificationWriterTests.DismissedAsResolved_RecordsTheResolution` — proven by mutation (hard-coding a resolution fails it) |
 | 18 | ✅ | A notification dismissed by the user records no resolution | Unit test | `NotificationWriterTests.DismissedByUser_RecordsNoResolution` — negative; the field means "how the action settled it", not "how it went inactive". Wired via `Sql.Notifications.UpdateDismissById`: the by-batch mutation does **not** reach this path, so proving it needed the by-id query mutated instead |
 | 19 | ✅ | The migration and the baseline accept the same `Resolution` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` — extended with all four members and a rejected value, on both paths |
