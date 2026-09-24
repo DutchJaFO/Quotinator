@@ -558,6 +558,11 @@ Three shapes currently break this, and each has an answer:
   reading an absence by eye cannot fail.
 - **"Take a screenshot."** Worth keeping as evidence, but the *assertion* alongside it has to be
   machine-checkable, or the screenshot is the only record and nothing compares it to anything.
+  `scripts/testing/capture-page.csx` is how a document does both in one call: it loads a URL in
+  headless Edge, evaluates the step's own JavaScript, prints what that returns, and writes a PNG —
+  so the assertion and the picture describe the same moment, and the picture comes from a line
+  anyone can run again. A `{x, y, width, height}` return value crops the shot to that element.
+  Images belong in `.claude/temp/`, never in a tracked folder.
 
 **A step that genuinely cannot be automated is a finding, not an exemption** — say what blocks it, in
 the document, so it reads as known rather than as an oversight.

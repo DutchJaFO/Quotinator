@@ -471,6 +471,7 @@
     <File Path="scripts/SOURCES.md" />
   </Folder>
   <Folder Name="/scripts/testing/">
+    <File Path="scripts/testing/capture-page.csx" />
     <File Path="scripts/testing/conflict-rule.csx" />
     <File Path="scripts/testing/corrupt-csv-cell.csx" />
     <File Path="scripts/testing/execute-sql.csx" />

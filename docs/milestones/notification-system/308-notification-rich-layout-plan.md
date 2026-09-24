@@ -505,6 +505,50 @@ Decided by evidence, against a stated criterion rather than preference:
 Either way `BodyIsMultiLine` goes: no renderer can read it without changing what line breaks do, and
 `white-space: pre-line` already gives every kind the behaviour it claims to request.
 
+### 18. Capture every kind, because row 16 was asking T1 for something T1 cannot do
+
+**Status:** ✅ Done — 2026-09-24, row 43 green.
+
+Row 16 read *"Every layout renders correctly on the developer's own machine — one confirmed rendering
+per type, on both surfaces"*, and the developer could not run it: four of the six kinds cannot be
+produced in a working database without rolling its schema version forward, resetting it, or staging a
+conflict against it. That is not a gap in the developer's environment. It is a row written against the
+wrong tier — `docs/release-verification.md` says **"T1 confirms the thing still starts. That is its
+whole job,"** and **"T2 verifies what this issue actually targeted."** A six-kind, two-surface sweep is
+the second sentence, not the first.
+
+So row 16 keeps T1's actual job and the sweep moves to T2 as row 43. Nothing is verified less: the
+document already produced every kind through its own trigger and asserted what each one renders. What
+it did not do was let anyone *see* it, which is what row 16 was really asking for — and the index
+already allows for that, requiring only that the assertion beside a screenshot be machine-checkable.
+
+**The suite had no way to write a screenshot to a file.** The index has allowed one as evidence since
+#339, provided the assertion beside it is machine-checkable — but the picture only ever existed inside
+whichever tool was driving the browser, so it could not be attached to a run, compared with a later one,
+or shown to anyone. A capture that cannot be repeated is the same problem as a screenshot nobody can
+see, and this suite is re-run whole at every milestone close.
+
+So the capability came first: `scripts/testing/capture-page.csx` drives headless Edge over the DevTools
+Protocol — no NuGet package, no driver binary. It loads a URL, evaluates the step's own JavaScript,
+prints what that returns, and writes the PNG; a `{x, y, width, height}` return value crops the shot to
+that element, so a row's own `getBoundingClientRect()` is what bounds its image. One call produces both
+halves, which is what stops the assertion and the picture describing different moments.
+
+Fifteen images, and four things they established that no assertion in this plan had stated:
+
+- The dialog's counts table carries a bold **Total** in its `tfoot`, so a step counting `tbody tr`
+  reads `2` where three lines render — and would keep passing if the totals stopped adding up. The
+  document now reads `tfoot` separately.
+- The page's review row carries a *Review each change* link beside its `Decide` button; the same kind
+  in the popup carries neither.
+- The startup popup is per browser session, not per application run — two fresh sessions against one
+  running container both rendered it, so the per-kind popup captures need no restart between them.
+- **A capture that killed its browser left every Blazor circuit half-open**: thirteen captures produced
+  72 `WebSocketException`s against a container that had logged `0`. The script now closes the browser
+  over the protocol; re-measured, `0` before three captures and `0` after. An instrument that adds
+  exceptions to the log a document reads for exceptions is a defect in the instrument, not a cost of
+  capturing.
+
 ## Verification checklist
 
 | # | Status | Requirement | Method | Verification |
@@ -524,7 +568,7 @@ Either way `BodyIsMultiLine` goes: no renderer can read it without changing what
 | 13 | ✅ | Every unit test above is wired to behaviour | Mutation | proven at step 1 by two opposing stubs: `ShowsTitle => false` fails rows 1, 4, 6, 7; `ShowsTitle => true` fails rows 2 and 3, which assert an absence and cannot fail against the first. Row 8 went red on a wrong column list before going green |
 | 14 | ✅ | Build is clean | Build | `dotnet build --configuration Release` → 0 warnings, 0 errors |
 | 15 | ✅ | No regression | Test run | `dotnet test --configuration Release -m:1` all green |
-| 16 | ❌ | Every layout renders correctly on the developer's own machine | Live (T1) | one confirmed rendering per type, on both surfaces |
+| 16 | ❌ | The application starts in Visual Studio and the notifications page renders | Live (T1) | developer confirms startup without error and the page rendering whichever kinds that database holds — the per-type sweep is row 43, see step 18 |
 | 17 | ✅ | A notification resolved by an action records which resolution it was | Unit test | `NotificationWriterTests.DismissedAsResolved_RecordsTheResolution` — proven by mutation (hard-coding a resolution fails it) |
 | 18 | ✅ | A notification dismissed by the user records no resolution | Unit test | `NotificationWriterTests.DismissedByUser_RecordsNoResolution` — negative; the field means "how the action settled it", not "how it went inactive". Wired via `Sql.Notifications.UpdateDismissById`: the by-batch mutation does **not** reach this path, so proving it needed the by-id query mutated instead |
 | 19 | ✅ | The migration and the baseline accept the same `Resolution` values | Unit test | `DatabaseInitializerOwnershipTests.DataOwnedBaseline_And_IncrementalReplay_AcceptSameNotificationCheckConstraintValues` — extended with all four members and a rejected value, on both paths |
@@ -551,6 +595,8 @@ Either way `BodyIsMultiLine` goes: no renderer can read it without changing what
 | 40 | ✅ | Every kind renders the same way in the startup popup | Automated (T2) | same document, step 4, after a restart — an expander rather than a dialog, and the same per-kind detail decision as row 38 |
 | 41 | ✅ | A kind defined later fails these tests until it is covered | Unit test | `NotificationTableTests.EveryMetadataKind_DeclaresWhetherItRendersDetail` (exists, #373) plus a new guard asserting the live document names every `NotificationMetadataKind` member |
 | 42 | ✅ | The rendering decision has exactly one source | Unit test | `NotificationTableTests.TheRenderingDecision_HasExactlyOneSource` — the component's source names `PayloadDetail` and neither `LayoutFor` nor `BodyIsMultiLine`; red before the deletion, green after |
+| 43 | ✅ | Every kind's rendering can be seen, not only asserted, on both surfaces | Automated (T2) + screenshot | *Every notification kind is produced by its own trigger…*, 2026-09-24 — fifteen images: each surface whole, each of the six kinds on each of the two surfaces, the dialog's detail and the popup's two expanders |
+| 44 | ✅ | A capture is a command the next run repeats, not an act of driving a browser | Automated (T2) | `scripts/testing/capture-page.csx` — every image in that document comes from a `Capture-Row` call or an explicit `dotnet script` line, each printing the assertion its own shot was taken against. Its teardown proven by measurement: `72` `WebSocketException`s before the graceful close, `0` after |
 
 **Rows 5, 9 and 10 cannot be replaced by unit tests.** A unit test can prove the markup and the
 stylesheet name the same class; only a rendered page proves the rule reaches the element. #303's nav
