@@ -6,7 +6,7 @@ This is the authoritative reference for abbreviations and domain terms used in t
 it to this file in the same commit. Domain terms that carry a project-specific meaning should also
 be listed here, especially where a common word is used in a narrower sense than usual.
 
-XML `<summary>` tags in source code are not affected by this policy — they are a build requirement
+XML `<summary>` tags in source code are not affected by this policy: they are a build requirement
 and follow standard C# documentation conventions.
 
 ---
@@ -28,11 +28,12 @@ and follow standard C# documentation conventions.
 | FK | Foreign Key | A database column referencing the primary key of another table. |
 | GHSA | GitHub Security Advisory | GitHub's identifier scheme for security advisories, often paired with a CVE identifier. |
 | HA | Home Assistant | The home automation platform. Quotinator ships as a Home Assistant add-on. |
+| IL | Intermediate Language | The instruction set a .NET compiler emits into an assembly. The #313 guard's assembly analysis reads it to judge what a test actually constructs, whatever the source spelling. |
 | ISO | International Organization for Standardization | Referenced in the context of ISO 639-1 (language codes) and ISO 8601 (date formats). |
 | MCP | Model Context Protocol | The protocol used to expose Quotinator as a tool to AI assistants. |
 | NVD | National Vulnerability Database | The US government repository of standards-based vulnerability management data. |
 | PK | Primary Key | The unique identifier column on a database table. In this project always a UUID. |
-| POCO | Plain Old CLR Object | A simple class with no framework base class or attributes required by its runtime behaviour — used here for JSON DTOs deserialized via `JsonSerializer`. |
+| POCO | Plain Old CLR Object | A simple class with no framework base class or attributes required by its runtime behaviour: used here for JSON DTOs deserialized via `JsonSerializer`. |
 | PR | Pull Request | A GitHub pull request proposing changes from one branch into another. |
 | REST | Representational State Transfer | The architectural style used by the Quotinator HTTP API. |
 | SMO | SQL Server Management Objects | Microsoft's .NET library for SQL Server administration. Mentioned in `docs/sql-safety.md` when explaining why the T-SQL parser was rejected. |
@@ -52,19 +53,19 @@ and follow standard C# documentation conventions.
 |---|---|
 | aggregate root | An entity that owns a cluster of related objects and is the single entry point for operations on that cluster. In the repository layer, an aggregate root repository may write to more than one table in a single transaction (see #75). |
 | `character` | A fictional character in a film, series, book, or other fictional work who delivers a quote. Distinct from `person`. |
-| `ConflictRuleOutcome` | What a matched conflict-resolution rule found when judged against the current import (#374): `Apply` (stored value differs from what the rule wants — change it), `AlreadyApplied` (stored value already matches — nothing to do), `Stale` (the rule's incoming side has moved since authoring — hold for review, re-author the rule), or `Retirable` (the incoming side has moved *into* agreement — hold for review, but the remedy is deleting the rule instead). Replaces an earlier single `isStale` flag that conflated "already correct" with "cannot apply". |
+| `ConflictRuleOutcome` | What a matched conflict-resolution rule found when judged against the current import (#374): `Apply` (stored value differs from what the rule wants; change it), `AlreadyApplied` (stored value already matches; nothing to do), `Stale` (the rule's incoming side has moved since authoring; hold for review, re-author the rule), or `Retirable` (the incoming side has moved *into* agreement; hold for review, but the remedy is deleting the rule instead). Replaces an earlier single `isStale` flag that conflated "already correct" with "cannot apply". |
 | exception ending | Where a thrown exception finishes: handled at a point where a response could be formed (expected behaviour), or escaping a request, a thread or an unobserved task with nothing handling it (dangerous). Each ending has its own log line, and every line about one exception carries the same id, so the two are told apart by what follows the thrown line rather than by the throw itself (#397). See `docs/logging.md`'s *Exception lines*. |
-| first-chance exception | The runtime's notification that an exception has been thrown, raised *before* any `catch` is searched for — so it says nothing about whether the exception will be handled, and its stack trace holds only the throwing frame. What `AppDomain.FirstChanceException` reports, and what the thrown line is written from. |
-| `ImportBatch` | A single import operation — one run of the seed script or one call to the import endpoint. Tracks the provenance of records. Distinct from `SeedBatch`. |
-| junction table | An associative table that implements a many-to-many relationship by holding pairs of foreign keys (e.g. `QuoteTag` linking `Quotes` to `Tags`). All junction tables in Quotinator extend `RecordBase` — see ADR 002. |
-| Knowledgebase | Quotinator's user-facing answer store: diagnostics (what a message means and what it costs), questions, and guides, under one lookup mechanism. Narrower than "documentation" — the Knowledgebase is what an *operator* consults about a running instance, not how the software is built. See `docs/knowledgebase.md`. |
+| first-chance exception | The runtime's notification that an exception has been thrown, raised *before* any `catch` is searched for, so it says nothing about whether the exception will be handled, and its stack trace holds only the throwing frame. What `AppDomain.FirstChanceException` reports, and what the thrown line is written from. |
+| `ImportBatch` | A single import operation: one run of the seed script or one call to the import endpoint. Tracks the provenance of records. Distinct from `SeedBatch`. |
+| junction table | An associative table that implements a many-to-many relationship by holding pairs of foreign keys (e.g. `QuoteTag` linking `Quotes` to `Tags`). All junction tables in Quotinator extend `RecordBase`: see ADR 002. |
+| Knowledgebase | Quotinator's user-facing answer store: diagnostics (what a message means and what it costs), questions, and guides, under one lookup mechanism. Narrower than "documentation": the Knowledgebase is what an *operator* consults about a running instance, not how the software is built. See `docs/knowledgebase.md`. |
 | diagnostic code | A Knowledgebase identifier of the form `QTN-<AREA>-<NNN>` (e.g. `QTN-DB-014`), carried by a log line, health response, notification body and degraded UI alike so one condition is looked up the same way everywhere. Unique and permanent; never reused. See `docs/knowledgebase.md`. |
 | status code | A reusable Knowledgebase marker of the form `QTN-<STATUS>` (e.g. `QTN-INV`), stating that a condition is already known, under investigation, or expected. Shared by many conditions, unlike a diagnostic code. See `docs/knowledgebase.md`. |
 | `person` | A real-world individual (author, public figure) who said or wrote a quote. Distinct from `character`. |
-| `ResolvedToExisting` | The outcome of an import action whose fields *did* differ from what arrived, but whose resolution settled on the values already stored — so nothing is written differently (#377). Distinct from `Unchanged` (the file and the database agreed to begin with), from `Modified` (a write actually happened), and from `Skipped` (a real difference discarded by a `Skip` policy rather than resolved away). Terminal: staged `Applied`, so it is never applied and leaves no change-log entry. |
+| `ResolvedToExisting` | The outcome of an import action whose fields *did* differ from what arrived, but whose resolution settled on the values already stored, so nothing is written differently (#377). Distinct from `Unchanged` (the file and the database agreed to begin with), from `Modified` (a write actually happened), and from `Skipped` (a real difference discarded by a `Skip` policy rather than resolved away). Terminal: staged `Applied`, so it is never applied and leaves no change-log entry. |
 | `RecordBase` | The abstract base class for all database-backed entities. Provides a UUID primary key and soft-delete audit columns (`DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted`). |
 | `SafeValue<T>` | A wrapper for database column values that may be imprecisely formatted (e.g. a date stored as `"1994"` rather than a full timestamp). Preserves the raw string alongside the parsed value. |
-| `Season` | An ordered grouping of Sources within a Series (see ADR 011) — a television series' seasons, but deliberately not television-specific: a magazine's volumes or a podcast's seasons fit the same shape. Keyed by (`SeriesId`, `Number`) rather than a name, since an ordinal only identifies a season within its parent. |
+| `Season` | An ordered grouping of Sources within a Series (see ADR 011): a television series' seasons, but deliberately not television-specific: a magazine's volumes or a podcast's seasons fit the same shape. Keyed by (`SeriesId`, `Number`) rather than a name, since an ordinal only identifies a season within its parent. |
 | `SeedBatch` | A group of source files processed together in a single seeding run, sharing a duplicate-resolution policy. Distinct from `ImportBatch`. |
-| `source` | In the quote schema, `source` refers to the media title or occasion from which a quote is drawn — a film title, book title, TV series, or speech event. It does **not** mean an import data source. |
+| `source` | In the quote schema, `source` refers to the media title or occasion from which a quote is drawn: a film title, book title, TV series, or speech event. It does **not** mean an import data source. |
 | `type` | The classification of a quote's origin. Valid values: `movie`, `tv`, `anime`, `book`, `person`. |
