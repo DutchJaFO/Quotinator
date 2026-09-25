@@ -1,0 +1,12 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+internal static class Sample
+{
+    internal static object Make()
+    {
+        WebApplicationFactory<Program> factory = new();
+        return factory;
+    }
+}

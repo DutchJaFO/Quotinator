@@ -1,0 +1,8 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+internal sealed class Sample
+{
+    internal WebApplicationFactory<Program> Factory { get; } = new();
+}

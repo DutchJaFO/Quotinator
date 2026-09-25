@@ -1,0 +1,8 @@
+using Bare = Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program>;
+
+namespace Fixture;
+
+internal static class Sample
+{
+    internal static object Make() => new Bare();
+}

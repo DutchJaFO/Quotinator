@@ -1,0 +1,10 @@
+namespace Fixture;
+
+internal static class Sample
+{
+    internal static object? Make()
+    {
+        Type? type = Type.GetType("Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory`1[[Program, Quotinator.Api]], Microsoft.AspNetCore.Mvc.Testing");
+        return type is null ? null : Activator.CreateInstance(type);
+    }
+}

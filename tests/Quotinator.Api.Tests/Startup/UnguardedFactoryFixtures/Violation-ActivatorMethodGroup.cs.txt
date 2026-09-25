@@ -1,0 +1,9 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+internal static class Sample
+{
+    // A method group, not a call: nothing here is an invocation expression.
+    internal static Func<WebApplicationFactory<Program>> Maker => Activator.CreateInstance<WebApplicationFactory<Program>>;
+}

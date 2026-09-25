@@ -1,0 +1,15 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+// Declared over an open type parameter, so the declaration alone names no WebApplicationFactory<Program>;
+// only the construction closes it over Program.
+internal class OpenFactory<TEntryPoint> : WebApplicationFactory<TEntryPoint>
+    where TEntryPoint : class
+{
+}
+
+internal static class Sample
+{
+    internal static object Make() => new OpenFactory<Program>();
+}

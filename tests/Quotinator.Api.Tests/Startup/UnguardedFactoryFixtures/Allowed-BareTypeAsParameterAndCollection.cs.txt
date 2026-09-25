@@ -1,0 +1,12 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+internal sealed class Sample
+{
+    private readonly List<WebApplicationFactory<Program>> _all = [];
+
+    internal void Run() => Use(new GuardedFactory());
+
+    private void Use(WebApplicationFactory<Program> factory) => _all.Add(factory);
+}

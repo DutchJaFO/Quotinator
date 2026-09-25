@@ -1,0 +1,12 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+internal class Sneaky : WebApplicationFactory<Program>
+{
+}
+
+internal static class Sample
+{
+    internal static object Make() => new Sneaky();
+}

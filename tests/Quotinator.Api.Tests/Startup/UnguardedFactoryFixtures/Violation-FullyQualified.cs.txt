@@ -1,0 +1,6 @@
+namespace Fixture;
+
+internal static class Sample
+{
+    internal static object Make() => new global::Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<global::Program>();
+}

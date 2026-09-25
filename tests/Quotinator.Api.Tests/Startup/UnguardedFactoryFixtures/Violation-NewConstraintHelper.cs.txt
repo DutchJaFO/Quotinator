@@ -1,0 +1,10 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+internal static class Sample
+{
+    internal static object Make() => Create<WebApplicationFactory<Program>>();
+
+    private static T Create<T>() where T : new() => new T();
+}

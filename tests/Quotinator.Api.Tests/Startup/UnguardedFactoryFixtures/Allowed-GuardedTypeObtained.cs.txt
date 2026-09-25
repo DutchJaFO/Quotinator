@@ -1,0 +1,9 @@
+namespace Fixture;
+
+internal static class Sample
+{
+    // typeof the guarded factory, and a generic-definition typeof: neither names the closed bare type.
+    internal static Type Guarded => typeof(GuardedFactory);
+
+    internal static Type Definition => typeof(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<>);
+}

@@ -1,0 +1,8 @@
+namespace Fixture;
+
+internal static class Sample
+{
+    internal static object Make() => Create<GuardedFactory>();
+
+    private static T Create<T>() where T : new() => new T();
+}

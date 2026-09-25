@@ -1,0 +1,14 @@
+namespace Fixture;
+
+internal sealed class Sample
+{
+    private readonly GuardedFactory _field = new();
+
+    internal static object Make()
+    {
+        using GuardedFactory factory = new();
+        return factory;
+    }
+
+    internal object Field => _field;
+}

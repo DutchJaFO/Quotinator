@@ -1,0 +1,10 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+internal static class Sample
+{
+    internal static void Run() => Use(new());
+
+    private static void Use(WebApplicationFactory<Program> factory) => factory.Dispose();
+}

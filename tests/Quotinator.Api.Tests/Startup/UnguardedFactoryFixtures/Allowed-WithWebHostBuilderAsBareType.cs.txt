@@ -1,0 +1,15 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+internal static class Sample
+{
+    // Held in a variable of the bare type, but produced by the guarded factory: the framework's delegated
+    // factory routes host creation back through the guarded one.
+    internal static WebApplicationFactory<Program> Make()
+    {
+        GuardedFactory guarded = new();
+        WebApplicationFactory<Program> configured = guarded.WithWebHostBuilder(_ => { });
+        return configured;
+    }
+}

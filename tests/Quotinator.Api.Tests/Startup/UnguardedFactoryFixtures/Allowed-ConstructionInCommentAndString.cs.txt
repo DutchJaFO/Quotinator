@@ -1,0 +1,8 @@
+namespace Fixture;
+
+internal static class Sample
+{
+    // new WebApplicationFactory<Program>(): mentioned in a comment, constructed nowhere.
+    // Returned rather than held in a const, so the string reaches the IL and both layers judge it.
+    internal static string Advice() => "Use the guarded factory, never new WebApplicationFactory<Program>().";
+}

@@ -1,0 +1,9 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+// Stands in for QuotinatorWebApplicationFactory, which is internal to the test assembly and so cannot be
+// referenced from a fixture compiled on its own. Compiled together with every fixture.
+internal sealed class GuardedFactory : WebApplicationFactory<Program>
+{
+}

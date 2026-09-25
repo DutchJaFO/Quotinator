@@ -1,0 +1,8 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+internal static class Sample
+{
+    internal static Func<WebApplicationFactory<Program>> Maker => () => new();
+}

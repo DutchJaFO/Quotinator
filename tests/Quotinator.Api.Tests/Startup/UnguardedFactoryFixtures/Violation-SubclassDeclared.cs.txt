@@ -1,0 +1,7 @@
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace Fixture;
+
+internal class Sneaky : WebApplicationFactory<Program>
+{
+}

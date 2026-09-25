@@ -14,6 +14,7 @@
     <PackageReference Include="MSTest" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="JsonSchema.Net" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -34,5 +35,21 @@
              Link="i18ntext\%(Filename)%(Extension)"
              CopyToOutputDirectory="Always" />
   </ItemGroup>
+
+  <!-- Code samples the #313 guard is tested against. Plain text on purpose: compiled into this
+       project they would be scanned by the very guard they exist to test. -->
+  <ItemGroup>
+    <Content Include="Startup\UnguardedFactoryFixtures\*.cs.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Records exactly what the compiler received, so the #313 source analysis compiles this project
+       with the same sources, references, source generators and symbols rather than an approximation.
+       An approximation that failed to bind would resolve nothing, and a guard resolving nothing passes. -->
+  <Target Name="WriteCompilationInputsForFactoryGuard" AfterTargets="CoreCompile">
+    <WriteLinesToFile File="$(OutDir)compilation-inputs\sources.txt" Lines="@(Compile->'%(FullPath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <WriteLinesToFile File="$(OutDir)compilation-inputs\references.txt" Lines="@(ReferencePathWithRefAssemblies->'%(FullPath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <WriteLinesToFile File="$(OutDir)compilation-inputs\analyzers.txt" Lines="@(Analyzer->'%(FullPath)')" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <WriteLinesToFile File="$(OutDir)compilation-inputs\defines.txt" Lines="$(DefineConstants)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
 
 </Project>
