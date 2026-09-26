@@ -1,6 +1,6 @@
 # #348: Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable
 
-**Status:** In progress (step 7)
+**Status:** In progress (step 8)
 **GitHub issue:** #348
 **Tiers required:** T1, T2
 **Depends on:** #349
@@ -20,7 +20,7 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**Execute step 7.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
+**Execute step 8.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
 issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
 of them unmet in the code; steps 7 onward close them, and every design question they raise was settled
 with the developer before this plan was written (see *Design*).
@@ -158,17 +158,64 @@ read-only mount. Both are fixed; `docs/automated-testing/backup/01` to `04` hold
 
 `BackupObstacleGuidance`, in the Api layer so `Quotinator.Data` stays domain-agnostic per ADR 004.
 
-### 7. Run every existing #348 test red
-**Status:** ⬜ Not started
+### 7. One statement per test, and every test red first
+**Status:** ✅ Done
 
 Found 2026-09-26: steps 2 to 6 were written implementation-first, and their evidence is mutation, which
-`docs/testing-policy.md` calls the recovery, not a substitute. Against a signature state (every
-`CheckBackupReadiness` answering `Succeeded`, `CreateBackup` attribution collapsed to `Unclassified`,
-`ResetAsync` without its refusal, the quota limit equal to the ceiling, `BackupObstacleGuidance`
-returning nothing), every test in `DatabaseBackupOutcomeTests`, `DatabaseBackupPreflightTests`,
-`DatabaseBackupQuotaTests`, and the backup tests in `DatabaseInitializerTests` and `AdminEndpointsTests`
-must fail on an assertion. A test that stays green is given a positive half that fails, or removed if no
-state of this issue can make it fail. Then restore, and all pass.
+`docs/testing-policy.md` calls the recovery, not a substitute. And 28 of #348's 34 tests asserted more
+than one statement, so a failure could not say which statement failed (developer, 2026-09-26: the Single
+Responsibility Principle, applied to tests).
+
+**The rules applied to each test:**
+
+1. It asserts one statement. A test asserting several is split into one test per statement. An
+   integration test may keep a precondition guard (the refusal helper's "the response is a 409") only as
+   a separately messaged assertion, so its failure is still traceable to one thing.
+2. It fails, on an assertion, against the state before the change it verifies.
+3. A test that cannot fail against any state of this issue is flawed, or its statement is. It is fixed
+   so it can fail, or deleted; never kept as a control that cannot fail.
+
+**The red states.** A test is red against the state before the change it verifies, so there is no single
+state:
+
+| State | What it is | Used by |
+|---|---|---|
+| A | Every new #348 behaviour at its default: the check answers `Succeeded`, `CreateBackup` returns a default result and writes nothing, `ResetAsync` runs without its refusal, the quota percentage has no default and the limit is the ceiling, the out-of-range warning is silent, the endpoint neither forwards the override nor maps a refusal nor writes the skip, and the guidance returns nothing | Every test not listed below |
+| B | Only the check at its default; the attempt real | The two "check agrees with the attempt" tests |
+| C | The guidance as `7c7aebbe` wrote it, offering the override for an unreadable source | Both "unreadable source does not offer the override" tests |
+| D | The guidance ignoring `overrideAlreadyTried`, as before `76d654a5` | Both "override already tried is not repeated" tests |
+| E | Only the guidance at its default; the endpoint's refusal mapping real | The four endpoint tests whose statement is the refusal body's text |
+
+`ResetDatabase_WhenNoBackupCanBeTaken_NamesTheObstacle` is red only on its precondition guard: the
+obstacle field and the `409` are one mapping, so no state has one without the other.
+
+**Removed, each because no state of this issue can make it fail:**
+
+- `ResetDatabase_WhenNoBackupCanBeTaken_DoesNotRebuildTheDatabase` asserted the spy's own refusal. The
+  guarantee it named is `DatabaseBackupQuotaTests.ResetAsync_WhenNoBackupCanBeTaken_NeverReachesTheDestructiveStep`,
+  at the layer that performs it.
+- `ResetDatabase_WhenBackupSucceeds_IsUnchanged` asserted a `200` and a completed reset, which predate
+  this issue, and no skip record, which a do-nothing also produces.
+- `CanCreateBackup_WhenNothingObstructsIt_ReportsThatItCan`, `UsageBelowTheQuota_ReportsThatABackupCanBeTaken`
+  and `UsageAtTheQuota_WithTheReserveAllowed_CanStillTakeABackup` asserted a "yes" that a check answering
+  yes to everything also gives. The reserve's effect is held by
+  `DatabaseBackupPreflightTests.CheckBackupReadiness_InsideTheReserve_AnswersDifferentlyWithTheReserveAllowed`.
+- Statements dropped while splitting, for the same reason: a failed backup reports no path, a successful
+  one reports `Succeeded` and no error, a no-backup startup writes no backup file, a reset with the
+  override ran and returned `200`, an unreadable source is not offered backup removal (no version ever
+  offered it), and the override-tried response still offers something (held by
+  `BackupObstacleGuidanceTests.OverrideAlreadyTried_KeepsTheOtherRemedies`).
+
+**Evidence, 2026-09-26.** First red run, before the split: 43 failed on assertions, 3 by exception (a
+body read before its status was checked), 6 passed; that is what exposed the removals above. After the
+split: state A 54 of 54 failed, B 2 of 2, C 2 of 2, D 2 of 2, E 4 of 4, every one on an assertion and
+none passing. Restored byte for byte; green at 0 warnings. A first attempt at the green run was invalid:
+restoring with `Copy-Item` kept the backups' old write times, so the build reused the red binaries. The
+restore now stamps the files, and every red state was rerun from clean with the same result.
+
+`DestinationFileNotWritable` and `DiskFilledDuringBackup` have no unit test of their attribution: neither
+condition can be produced in-process without a platform-specific permission or a size-capped volume.
+Both are proven by `docs/automated-testing/backup/04` and `backup/03`, which step 18 runs.
 
 ### 8. The migration step refuses without a backup
 **Status:** ⬜ Not started
@@ -291,18 +338,18 @@ touches.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | Every backup attempt reports which obstacle it hit | Unit test | `DatabaseBackupOutcomeTests`, each variant plus `SucceedingBackup_ReportsSucceededAndTheFileItWrote`; red in step 7 |
-| 2 | ❌ | An unrecognised failure reports as `Unclassified` and carries the underlying error | Unit test | `DatabaseBackupOutcomeTests.CopyFailureThatIsNotASqliteError_IsReportedAsUnclassified_CarryingTheUnderlyingError`; red in step 7 |
-| 3 | ❌ | The content load at startup refuses rather than proceeding unprotected, naming the variant | Unit test | `DatabaseInitializerTests.CreateBackup_InsufficientStorageSpace_RefusesToSeedRatherThanProceedUnprotected` and `...InitialiseAsync_BackupWriteFails_ReportsTheObstacleRatherThanThrowing`; red in step 7 |
-| 4 | ❌ | Reset refuses with a stated failure, never an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.ResetDatabase_WhenNoBackupCanBeTaken_*` and `DatabaseBackupQuotaTests.ResetAsync_WhenNoBackupCanBeTaken_NeverReachesTheDestructiveStep`; red in step 7 |
-| 5 | ❌ | The override proceeds, and only where the action can complete without a backup | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_ProceedsAndRebuilds`, `...WhenTheSourceIsUnreadable_DoesNotOfferAnOverrideThatCannotWork`, `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_ReachesTheDestructiveStepAndReportsTheSkip`; red in step 7 |
-| 6 | ❌ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip` (step 7) and step 13's log test |
-| 7 | ❌ | A healthy database is entirely unaffected | Unit test | `AdminEndpointsTests.ResetDatabase_WhenBackupSucceeds_IsUnchanged`; red in step 7 |
-| 8 | ❌ | A caller can ask whether a backup is possible without attempting one, in the same vocabulary | Unit test | `DatabaseBackupPreflightTests`, all cases; red in step 7 |
-| 9 | ❌ | The operating quota is honoured, the reserve is reachable only by override, the ceiling never is | Unit test | `DatabaseBackupQuotaTests.UsageBelowTheQuota_*`, `...UsageAtTheQuota_*`, `...UsageAtTheAbsoluteCeiling_*`; red in step 7 |
-| 10 | ❌ | The quota percentage is configurable and defaults to 90 | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_IsConfigurable` and `...QuotaPercent_DefaultsTo90`; red in step 7 |
-| 11 | ❌ | An out-of-range percentage is reported and the default used, never clamped, never fatal | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_OutOfRange_IsReportedAndTheDefaultUsed_NotClampedAndNotFatal`; red in step 7 |
-| 12 | ❌ | Each variant's message states cause and remedy, and names no remedy that cannot work | Unit test | A `BackupObstacleGuidanceTests` class: every `BackupOutcome` has a non-empty cause and remedies, and `SourceUnreadable` offers neither the override nor removing backups; red in step 7 |
+| 1 | ✅ | Every backup attempt reports which obstacle it hit | Unit test | `DatabaseBackupOutcomeTests`: one `*_IsReportedAs*` test per obstacle it can produce in-process, with `SucceedingBackup_ReportsWhereItWrote` and `...WritesTheFileItReports`; `DestinationFileNotWritable` and `DiskFilledDuringBackup` by `backup/04` and `backup/03` |
+| 2 | ✅ | An unrecognised failure reports as `Unclassified` and carries the underlying error | Unit test | `DatabaseBackupOutcomeTests.CopyFailureThatIsNotASqliteError_IsReportedAsUnclassified` and `..._CarriesTheUnderlyingError` |
+| 3 | ✅ | The content load at startup refuses rather than proceeding unprotected, naming the variant | Unit test | `DatabaseInitializerTests.InitialiseAsync_ContentLoadWithNoBackupPossible_IsRefused`, `..._NamesTheObstacle`, `..._LoadsNothing`, and `...ContentLoadWithAnUnwritableBackupDestination_NamesTheObstacle` |
+| 4 | ✅ | Reset refuses with a stated failure, never an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.ResetDatabase_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500`, `..._NamesTheObstacle`, `..._DescribesTheCause`, `..._OffersARemedy`; `DatabaseBackupQuotaTests.ResetAsync_WhenNoBackupCanBeTaken_Refuses`, `..._NamesTheObstacle`, `..._NeverReachesTheDestructiveStep` |
+| 5 | ✅ | The override is offered and forwarded only where the action can complete without a backup | Unit test | `AdminEndpointsTests.ResetDatabase_WhenTheQuotaIsFull_OffersTheOverride`, `...WhenTheSourceIsUnreadable_DoesNotOfferTheOverride`, `...WhenTheSourceIsUnreadable_OffersReplacingTheFile`, `...WhenTheOverrideWasTriedAndStillRefused_DoesNotOfferItAgain`, `...WithOverride_ForwardsTheOverride`; `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_ReportsThatTheBackupWasSkipped` |
+| 6 | ❌ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip` (red in step 7) and step 13's log test |
+| 7 | ✅ | Every #348 test asserts one statement, and each is red against the state before its change | Unit test | Step 7: states A to E, every test failing on an assertion; the tests that could not fail removed |
+| 8 | ✅ | A caller can ask whether a backup is possible without attempting one, and the answer agrees with an attempt | Unit test | `DatabaseBackupPreflightTests.CheckBackupReadiness_WhenTheBudgetIsExhausted_ReportsBudgetExceeded`, `..._AgreesWithTheAttempt`, and the same pair for an unwritable destination |
+| 9 | ✅ | The operating quota is honoured, the reserve is reachable only by override, the ceiling never is | Unit test | `DatabaseBackupQuotaTests.UsageAtTheQuota_IsRefused_WithoutReachingIntoTheReserve`, `...UsageAtTheAbsoluteCeiling_IsRefusedEvenWithTheReserveAllowed`; `DatabaseBackupPreflightTests.CheckBackupReadiness_InsideTheReserve_AnswersDifferentlyWithTheReserveAllowed` |
+| 10 | ✅ | The quota percentage is configurable and defaults to 90 | Unit test | `DatabaseBackupQuotaTests.ConfiguredQuotaPercent_IsTheLimitTheCheckRefusesOn` and `...QuotaPercent_DefaultsTo90` |
+| 11 | ✅ | An out-of-range percentage is reported and the default used, never clamped, never fatal | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_OutOfRange_UsesTheDefault` and `...QuotaPercent_OutOfRange_IsReported` |
+| 12 | ✅ | Each variant states cause and remedy, and names no remedy that cannot work | Unit test | `BackupObstacleGuidanceTests`: `EveryObstacle_HasACause`, `EveryObstacle_HasARemedy`, `RecognisedObstacle_IsNotDescribedAsTheUnrecognisedFallback`, `BudgetExceeded_OffersTheOverride`, `BudgetExceeded_OffersRemovingBackupsThroughTheApplication`, `SourceUnreadable_DoesNotOfferTheOverride`, `OverrideAlreadyTried_DoesNotRepeatTheOverride`, `OverrideAlreadyTried_KeepsTheOtherRemedies` |
 | 13 | ✅ | The two tests whose expectation changed were renamed to their new contract, not bent to pass | Unit test | Recorded in step 2: both renamed, each with a comment on what changed and why |
 | 14 | ✅ | The corrupt and truncated databases are recoverable end to end | Automated (T2) | `backup/01` and `backup/02`, executed 2026-08-28, each ending with the remedy proven by a `200` |
 | 15 | ❌ | A pending migration with no backup possible applies nothing and reports the obstacle and the step | Unit test | Step 8's test, and its positive counterpart that migrates when a backup is possible |
