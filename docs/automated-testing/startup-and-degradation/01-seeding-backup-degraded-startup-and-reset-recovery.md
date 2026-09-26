@@ -7,7 +7,7 @@
 ## Preconditions
 
 **Beyond the profile.** The data directory is a **bind mount** instead of the profile's named volume,
-so the host can manipulate the SQLite file directly — the whole test turns on breaking the schema from
+so the host can manipulate the SQLite file directly: the whole test turns on breaking the schema from
 outside the container. It runs its own container (`qt-startup-01`, stopped and started around a host
 edit), and the Constrained defect is a `DROP TABLE Quotinator_Quote` applied by the host while the
 container is stopped.
@@ -25,7 +25,7 @@ reached its own end state:
 
 **This document asserted the opposite of
 [`02-startup-backup-gating-and-storage-budget.md`](02-startup-backup-gating-and-storage-budget.md)
-until 2026-08-23** — that an ordinary restart *does* take a backup, and that this was a deliberate
+until 2026-08-23**: that an ordinary restart *does* take a backup, and that this was a deliberate
 tradeoff rather than a defect. It was neither a contradiction nor a difference of setup: #277 gated
 backups on each action's own real-work signal, and this document went on describing the behaviour from
 before that. Its own justification named the missing gate that #277 supplied.
@@ -35,7 +35,7 @@ before that. Its own justification named the missing gate that #277 supplied.
 - **The bind path is an absolute Windows path, built from `$PWD`.** One directory, on one filesystem,
   with nothing translating it on the way to `docker`. The POSIX-style path this document used before
   depended on Git Bash rewriting it, and when that rewriting misfired the container silently bound
-  `\Program Files\Git\data` and wrote nothing to the intended directory at all — after which the test
+  `\Program Files\Git\data` and wrote nothing to the intended directory at all: after which the test
   reads an empty directory and reports nonsense.
 - **The third start waits for *listening*, not for healthy.** That container is degraded by design and
   `/health` returns 503, so polling for a 200 would spend the whole timeout before failing for the
@@ -46,7 +46,7 @@ before that. Its own justification named the missing gate that #277 supplied.
 - **The backup count is compared before and after**, not asserted as an absolute.
 - **A backup protects a specific risky action, not a startup.** One is taken before a migration, so a
   partial failure still leaves a working database, and before a reseed, for the same reason. They exist
-  so a user can recover — which is why Reset is what the app offers after a failed migration. A startup
+  so a user can recover, which is why Reset is what the app offers after a failed migration. A startup
   with no migration pending and nothing to seed puts nothing at risk, so it takes none.
 
 ## Steps
@@ -66,14 +66,14 @@ docker logs qt-startup-01 2>&1 | Select-String -SimpleMatch '[Database - Init]'
 ```
 
 **Expected:** the init log shows `schema created at baseline` (fresh database, baseline path), and
-`backups=0` — the directory does not exist yet. A baseline run has nothing to lose, so no backup is
+`backups=0`: the directory does not exist yet. A baseline run has nothing to lose, so no backup is
 taken.
 
 **On failure:** an empty host directory, or an init log that never mentions the baseline, means the
 bind mount did not take effect. Stop: every step below reads and writes that directory, and against the
 wrong one they report nonsense.
 
-### 2. Restart unchanged — nothing is at risk, so nothing is backed up
+### 2. Restart unchanged: nothing is at risk, so nothing is backed up
 
 ```powershell
 "before the restart: thrown=$(Count-Thrown)"
@@ -90,7 +90,7 @@ already exists, so neither risky action runs and there is nothing to protect aga
 
 ### 3. Break the schema on the host side, then restart
 
-The container stays the one step 1 created — it is already bound to this directory, so nothing needs
+The container stays the one step 1 created: it is already bound to this directory, so nothing needs
 re-running. It is stopped only so the host can write to the database file safely:
 
 ```powershell
@@ -123,30 +123,30 @@ docker ps -a --filter name=qt-startup-01 --format "{{.Status}}"
 ```
 
 **Expected:** the log shows, in order: `[Database - Backup] backup complete`;
-`[Database - Init] seeding failed — restoring pre-seed backup, database left unchanged...` (ERR);
+`[Database - Init] seeding failed: restoring pre-seed backup, database left unchanged...` (ERR);
 `[Database - Init] pre-seed backup restored.` (INF); then
 `[Server] Database initialisation failed...` (CRIT/FTL) with the underlying
-`SqliteException: ... no such table: Quotinator_Quote` attached as the log event's exception — **not**
+`SqliteException: ... no such table: Quotinator_Quote` attached as the log event's exception: **not**
 a bare .NET unhandled-exception runtime dump.
 
-`backups=1` — the first backup this test has produced, because step 2 correctly took none. This is the
+`backups=1`: the first backup this test has produced, because step 2 correctly took none. This is the
 case a backup exists for: seeding was about to run against a database it could not repair, and the
 backup is what let it restore rather than leave a broken one behind. One file per `CreateBackup` call;
 its `-shm`/`-wal` sidecars are not separate backups.
 
-`docker ps -a` shows the container as `Up …`, **not** `Exited` — the app degrades, it does not crash.
+`docker ps -a` shows the container as `Up …`, **not** `Exited`: the app degrades, it does not crash.
 
-`new=0` before the stop. The degraded start then logs its own `SqliteException` — thrown, then handled
-by the restore — which is this step's subject, not noise.
+`new=0` before the stop. The degraded start then logs its own `SqliteException`: thrown, then handled
+by the restore, which is this step's subject, not noise.
 
-**Wait for `unhealthy`, not for a `503`.** A starting app answers `503` too — the startup wait page
-(#280) reports `status=starting` until initialisation finishes — so a wait on the status code returns at
+**Wait for `unhealthy`, not for a `503`.** A starting app answers `503` too: the startup wait page
+(#280) reports `status=starting` until initialisation finishes, so a wait on the status code returns at
 once and everything after it reads a half-started app. Measured 2026-09-22 with the old
 `--wait-for 503`: health read `starting` with no reason, `/quotes/random` answered the wait page's
 `200`, and the container had been up one second.
 
 **On failure:** an `Exited` container means the app crashed instead of degrading, which is the defect
-this test exists to catch — and there is then no server left to answer the degraded-surface and Reset
+this test exists to catch, and there is then no server left to answer the degraded-surface and Reset
 steps below. Stop and record the exit rather than running them against nothing. `health status=down`
 or `starting` means the wait gave up after 120 seconds rather than hanging.
 
@@ -172,7 +172,7 @@ dotnet script scripts/testing/http.csx -- --method POST `
   --url "http://localhost:18401/api/v1/admin/database/reset" --api-key wrong-key --expect 401 --status
 ```
 
-**Expected:** `401` both times, not `503` — confirming the health gate exempts `/api/v1/admin/*` from
+**Expected:** `401` both times, not `503`: confirming the health gate exempts `/api/v1/admin/*` from
 the 503 gate entirely, rather than blocking the route and only letting an authenticated call through.
 
 Both the missing key and the wrong key are tried: a route that answered `503` to one and `401` to the
@@ -200,23 +200,23 @@ $after = dotnet script scripts/testing/http.csx -- --url "http://localhost:18401
 
 **Expected:** `/health` returns `200` and `healthy`, proving `DatabaseHealthState.MarkHealthy()` clears
 the degraded state rather than requiring a process restart. `/quotes/random` returns `200`,
-`status=NoResults` and `items=0` — not `503`, and not real quote data, because the database is
+`status=NoResults` and `items=0`, not `503`, and not real quote data, because the database is
 genuinely empty after a Reset.
 
 ## Observed effect
 
-Well established here, unusually — the ordered log sequence above *is* the observed effect, and it is
+Well established here, unusually: the ordered log sequence above *is* the observed effect, and it is
 what the assertions are made against.
 
 **The three compounding gaps this came from**, all found during #254's own T1 pass:
 
 1. Migration-version tracking detected a pending migration only by comparing recorded counts. Rewriting
-   an unreleased migration's content in place — same slot, same final count — left an already-migrated
+   an unreleased migration's content in place (same slot, same final count) left an already-migrated
    database reading as "up to date" while its on-disk schema no longer matched. Seeding then crashed
    with no exception safety net, unlike the migration phase which already had one.
 2. That uncaught exception propagated out of `Main` before Kestrel ever bound. Under IIS Express/ANCM
    it rendered a raw stack-trace page to whoever was looking at the browser. An initial fix caught it
-   and exited the process cleanly — which broke the *only* documented remedy, since a fully-exited
+   and exited the process cleanly, which broke the *only* documented remedy, since a fully-exited
    process has no server left to receive a Reset request.
 3. Reset while degraded genuinely repairs the schema, but `DatabaseHealthState` is in-memory and does
    not observe that on its own. A first pass left the app reporting unhealthy forever after a

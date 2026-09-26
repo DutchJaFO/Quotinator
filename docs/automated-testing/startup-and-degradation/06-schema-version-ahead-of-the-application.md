@@ -8,15 +8,15 @@
 > [#350](https://github.com/DutchJaFO/Quotinator/issues/350) establishes that an overshoot must
 > **degrade** rather than run healthy: the missing migrations may have added, altered or removed things
 > this build does not expect, so the schema's shape is unknown and serving from it is a foot gun. Every
-> assertion below about `/health` returning `200` — and the step 3 note telling you not to "fix" a `503`
-> — is superseded by that issue, which owns rewriting this document. It is left in place meanwhile
+> assertion below about `/health` returning `200`, and the step 3 note telling you not to "fix" a `503`
+>: is superseded by that issue, which owns rewriting this document. It is left in place meanwhile
 > because deleting it before its replacement exists would trade a wrong test for no test.
 
 ## Preconditions
 
 **Beyond the profile.** The database is the one the Fresh profile's own startup creates, fully migrated,
 then given one extra `System_ConsumerSchemaVersion` row *after* the container has stopped. The container
-binds its data directory to a host path (`--bind`) so the row can be written from the host — a docker
+binds its data directory to a host path (`--bind`) so the row can be written from the host: a docker
 volume would put the file somewhere `execute-sql.csx` cannot reach.
 
 **This is deliberately not a degradation scenario**, and it is the only document in this category that
@@ -41,12 +41,12 @@ or get "fixed" by breaking correct behaviour.
   container races the app's own connections, and the result would depend on timing rather than on the
   state this test builds.
 - **The second start waits for *healthy*, not merely listening.** Unlike the degradation documents in
-  this category, healthy is the expected outcome — so the wait is itself part of the assertion, and a
+  this category, healthy is the expected outcome, so the wait is itself part of the assertion, and a
   build that wrongly degraded fails here rather than at a later step.
 - **Without step 2 there is no notification at all.** Confirmed in-process by
   `StartupResilienceTests.Startup_SchemaVersionAheadOfApplication_StaysHealthyAndSurfacesTheOvershoot`,
   whose assertion fails when the version is recorded at the level the database already holds instead of
-  one beyond it — so step 4 is discriminating rather than reporting a notification that is always there.
+  one beyond it, so step 4 is discriminating rather than reporting a notification that is always there.
 
 ## Steps
 
@@ -65,7 +65,7 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-startup-06 --port
 **Expected:** the environment reports healthy, leaving a fully migrated database in `$dataDir`.
 
 **On failure:** if the build cannot reach healthy on a fresh database, nothing below is about
-overshoot — stop and fix that first.
+overshoot: stop and fix that first.
 
 ### 2. Stop the container and record a version one beyond this build
 
@@ -81,7 +81,7 @@ dotnet script scripts/testing/execute-sql.csx -- --db "$dataDir\quotinatordata.d
 **Expected:** the log read before the stop finds nothing, then `OK — 1 row(s) affected.`
 
 **On failure:** a SQL error means the overshoot state was never built, and every step below would be
-asserting against an ordinary healthy database — which proves nothing. Stop.
+asserting against an ordinary healthy database, which proves nothing. Stop.
 
 ### 3. Restart, and confirm the application stays healthy
 
@@ -95,7 +95,7 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18406/api/v1/h
 
 **Expected:** the wait reports healthy and `/health` returns `200`.
 
-**On failure:** a `503` is the regression this document exists to catch — an overshoot being treated as
+**On failure:** a `503` is the regression this document exists to catch: an overshoot being treated as
 a fault. The schema is complete; only the bookkeeping is stale, and the application must keep working.
 Do not "fix" this by relaxing the expectation to `503`.
 
@@ -116,7 +116,7 @@ the body was reworded to *Reset the database from the admin endpoints…*; measu
 pattern read `False` against a body that still names the remedy. If it reads `False` again, read the
 body before concluding the remedy is gone.
 
-**On failure:** health at `200` with no notification is the worse half of this defect — the application
+**On failure:** health at `200` with no notification is the worse half of this defect: the application
 noticed the overshoot and told nobody, leaving an operator with stale bookkeeping they cannot discover.
 `found=False` fails the test even though step 3 passed.
 
@@ -129,7 +129,7 @@ docker logs qt-startup-06 2>&1 | Select-String -Pattern 'schema version overshoo
 **Expected:** one match, naming both the recorded and the known versions.
 
 **On failure:** no match while step 4 passed means the notification came from somewhere other than this
-startup's own detection — most likely a row left over from an earlier run against the same directory.
+startup's own detection: most likely a row left over from an earlier run against the same directory.
 Re-run from step 1 with a fresh `$dataDir`.
 
 ## Observed effect
@@ -140,7 +140,7 @@ Re-run from step 1 with a fresh `$dataDir`.
 log carries one warning at startup:
 
 > `[Database - Init] schema version overshoot detected: recorded data v11 (known: v11), recorded app v6
-> (known: v5) — schema is treated as complete, but a database Reset is recommended to true up the
+> (known: v5); the schema is treated as complete, but a database Reset is recommended to true up the
 > version bookkeeping`
 
 and `GET /api/v1/notifications` carries an `actionrequired` entry titled *Recorded schema version is

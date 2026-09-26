@@ -1,6 +1,6 @@
 # #348: Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable
 
-**Status:** In progress (step 8)
+**Status:** In progress (step 9)
 **GitHub issue:** #348
 **Tiers required:** T1, T2
 **Depends on:** #349
@@ -20,7 +20,7 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**Execute step 8.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
+**Execute step 9.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
 issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
 of them unmet in the code; steps 7 onward close them, and every design question they raise was settled
 with the developer before this plan was written (see *Design*).
@@ -218,16 +218,37 @@ condition can be produced in-process without a platform-specific permission or a
 Both are proven by `docs/automated-testing/backup/04` and `backup/03`, which step 18 runs.
 
 ### 8. The migration step refuses without a backup
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Found 2026-09-26: `ApplyMigrationsAsync` takes a backup, keeps only its path, and never checks whether it
 succeeded, so a failed backup lets every pending migration run unprotected. Its restore handler is
 filtered on that path, so a migration that then throws is not rolled back either.
 
-Red first: a migration pending with no backup possible applies no migration, leaves both schema-version
-counters unchanged, and returns a refusal naming the obstacle and the `Migration` step. Its positive
-counterpart: with a backup possible, the same database migrates. `DatabaseOperationResult` gains the
-refused step, as a `BackupGuardedStep` enum in `Quotinator.Data/Enums/`.
+`ApplyMigrationsAsync` now refuses before touching the schema when the backup fails, leaving both recorded
+versions as they were, and `InitialiseAsync` returns that refusal without reaching the content load.
+`DatabaseOperationResult.RefusedStep` names the refused step (`BackupGuardedStep`: `Migration`,
+`ContentLoad`, `Reset`), and each refusal logs its own `[Database - Backup]` line.
+
+Tests, one statement each, in `DatabaseInitializerTests`:
+`InitialiseAsync_MigrationPendingWithNoBackupPossible_IsRefused`, `..._NamesTheObstacle`,
+`..._NamesTheMigrationStep`, `..._AppliesNoMigration`, and
+`InitialiseAsync_ContentLoadWithNoBackupPossible_NamesTheContentLoadStep`; in `DatabaseBackupQuotaTests`,
+`ResetAsync_WhenNoBackupCanBeTaken_NamesTheResetStep`.
+
+Red run, 2026-09-26, against the unfixed code with the step accepted but not recorded: all six failed on
+assertions, after the fixture was corrected. Its first version started from an empty database, whose
+content load *also* refused for want of a backup; that refusal made `IsRefused` and `NamesTheObstacle`
+pass without the migration refusing at all. The fixture now loads content first, so the migration is the
+only guarded step pending. Green: Data 1,390, Core 1,722, Api 1,048, 0 warnings.
+
+The plan named a positive counterpart, "with a backup possible, the same database migrates". It is not
+written: before this change migrations always ran, so no state of the issue can make it fail.
+
+Sixteen log strings in the touched files lost their dashes (developer rule, 2026-09-26), so three
+automated documents that quote them were updated to the new text:
+`startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md`,
+`02-startup-backup-gating-and-storage-budget.md` and `06-schema-version-ahead-of-the-application.md`. A
+changed test is executed after the change, so step 18 runs all three.
 
 ### 9. Startup reports a refusal instead of discarding it
 **Status:** ⬜ Not started
@@ -352,7 +373,7 @@ touches.
 | 12 | ✅ | Each variant states cause and remedy, and names no remedy that cannot work | Unit test | `BackupObstacleGuidanceTests`: `EveryObstacle_HasACause`, `EveryObstacle_HasARemedy`, `RecognisedObstacle_IsNotDescribedAsTheUnrecognisedFallback`, `BudgetExceeded_OffersTheOverride`, `BudgetExceeded_OffersRemovingBackupsThroughTheApplication`, `SourceUnreadable_DoesNotOfferTheOverride`, `OverrideAlreadyTried_DoesNotRepeatTheOverride`, `OverrideAlreadyTried_KeepsTheOtherRemedies` |
 | 13 | ✅ | The two tests whose expectation changed were renamed to their new contract, not bent to pass | Unit test | Recorded in step 2: both renamed, each with a comment on what changed and why |
 | 14 | ✅ | The corrupt and truncated databases are recoverable end to end | Automated (T2) | `backup/01` and `backup/02`, executed 2026-08-28, each ending with the remedy proven by a `200` |
-| 15 | ❌ | A pending migration with no backup possible applies nothing and reports the obstacle and the step | Unit test | Step 8's test, and its positive counterpart that migrates when a backup is possible |
+| 15 | ✅ | A pending migration with no backup possible applies nothing and reports the obstacle and the step | Unit test | `DatabaseInitializerTests.InitialiseAsync_MigrationPendingWithNoBackupPossible_IsRefused`, `..._NamesTheObstacle`, `..._NamesTheMigrationStep`, `..._AppliesNoMigration`; the content-load and Reset steps by `...ContentLoadWithNoBackupPossible_NamesTheContentLoadStep` and `DatabaseBackupQuotaTests.ResetAsync_WhenNoBackupCanBeTaken_NamesTheResetStep` |
 | 16 | ❌ | A startup migration refusal marks the database unhealthy, naming the variant, remedies and entry | Unit test | Step 9's `WebApplicationFactory` test, and its healthy counterpart |
 | 17 | ❌ | A startup content-load refusal leaves the app healthy and raises one `BackupRefused` notification | Unit test | Step 9's `WebApplicationFactory` test, and its counterpart raising none when a backup is possible |
 | 18 | ❌ | The new payload kind is accepted by the migration and the baseline alike | Unit test | The schema-drift and CHECK-value tests in `DatabaseInitializerOwnershipTests`, extended |
