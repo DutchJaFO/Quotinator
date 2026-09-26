@@ -1,6 +1,6 @@
 # #348: Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable
 
-**Status:** Waiting for release
+**Status:** In progress
 **GitHub issue:** #348
 **Tiers required:** T1, T2
 **Depends on:** #349
@@ -20,10 +20,11 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**None until the release.** Every step is done and every verification row is ✅; the issue closes when a
-tag ships it, per `docs/workflow/issue-closure.md`. Steps 1 to 6 are the first pass (reached `Waiting for
-release` 2026-08-28). The issue was reopened 2026-09-26 when a re-verification against the issue's own
-requirements found three of them unmet in the code; steps 7 to 18 closed them.
+**Execute step 20.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
+issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
+of them unmet in the code; steps 7 to 18 closed them. Steps 19 to 25 correct the quota model, which the
+first pass built backwards (see *Quota: two levels* for the settled model); every design question they
+raise is answered there.
 
 ---
 
@@ -59,12 +60,51 @@ page copy produces.
 
 | Level | Value | Meaning |
 |---|---|---|
-| Operating quota | `BackupQuotaPercent` of the budget, default 90% | What normal operation uses |
-| Absolute ceiling | `MaxBackupStorageGb` | Never exceeded |
+| Operating quota | `BackupQuotaPercent` of the budget, default 90% | Above it, the backup is still taken and a warning notification raised |
+| Absolute ceiling | `MaxBackupStorageGb` | A backup that would exceed it is refused |
 
-The reserve between them lets an operator at the normal quota take one more backup at the moment it is
-needed most. Reaching into it takes the override, never a default. An out-of-range percentage is
-reported loudly and the default used: not a silent clamp, and not a crash.
+**The reserve is what lets a backup still be taken while the user is warned** (developer, 2026-09-26).
+Between the quota and the ceiling a backup proceeds, and a `Warning` notification says the backups folder
+is in the reserve, so the user can delete older backups, raise the quota, or whatever else brings it
+back under. Only a backup that would take the folder past the ceiling is refused, as `BudgetExceeded`.
+No override is involved: Reset's override means only "proceed without a backup", for when even the
+ceiling refuses.
+
+**No exceptions** (developer, 2026-09-26): every path that takes a backup warns and/or refuses by this
+rule, whether the application takes it (startup content load, migration, Reset, a reseed option) or the
+user does (`POST /backups`).
+
+**The warning clears once the folder is back under the quota** (developer, 2026-09-26), checked after
+every deletion and at every completed startup; raising the quota therefore clears it at the next
+startup.
+
+**An option that takes a backup says so when the folder is already at the quota** (developer,
+2026-09-26). Such a backup runs inside the reserve and may reach the ceiling while it is taken, since its
+size is not known in advance, so the user is told before choosing it rather than finding out from a
+refusal. The notification's availability reports this alongside the options it offers; the page shows
+it beside every option that takes a backup, and the notifications response carries it with
+`availableActions`, so no surface offers such a backup without the caution.
+
+**A notification whose condition can change while the application runs is re-checked on request**
+(developer, 2026-09-26). `POST /api/v1/notifications/refresh` runs every registered condition check, so
+a warning clears (or is raised) without a restart: for example after backups were removed outside the
+application. Each such kind supplies one check behind a common interface, registered once; the endpoint,
+the completed startup and every deletion run the same checks rather than code of their own. The quota
+warning is the only kind with a check today, and a later kind joins by registering one, with no change to
+the endpoint. It is open to every user, not only administrators, and limited by the `admin` rate-limit
+policy (developer, 2026-09-26), so it sits in the notifications group that carries that policy without
+the admin key filter.
+
+**Where the check runs.** Every backup is written by one method, `DatabaseInitializer.CreateBackup`, and
+every deletion by `DatabaseBackupWriter.Delete`, so refusal lives in the first and the warning is
+evaluated by one component, in `Quotinator.Data`, called from each place storage can have changed: the
+end of a completed startup, the end of a Reset, the on-demand backup, and every deletion. Not at the
+moment of the pre-migration backup: writing a notification into a table the build has not yet migrated
+is the unprotected write a migration refusal exists to prevent, so the completed startup evaluates it
+instead, after migrating. The first attempt (steps 5 and 11) read "reaching into the reserve takes the
+override" and refused at the quota; steps 19 to 25 correct that.
+
+An out-of-range percentage is reported loudly and the default used: not a silent clamp, and not a crash.
 
 ### Check, act, still catch
 
@@ -618,6 +658,150 @@ pane's console read. Green:
 
 T1 (row 28) passed on the developer's own run.
 
+### 19. Readiness refuses only at the ceiling, on every path
+**Status:** ✅ Done
+
+`CheckBackupReadiness` measures against the ceiling, and `allowReserve` goes: nothing reaches the reserve
+by override any more. Reset's `allowNoBackup` keeps its one meaning. The on-demand backup, Reset and the
+notification's options then all take a backup inside the reserve instead of refusing it, and the options
+offer *Back up, then reseed* there.
+
+Tests first, one statement each, each red against the current code: a readiness check inside the reserve
+reports `Succeeded`; Reset inside the reserve takes its backup and rebuilds; the on-demand backup inside
+the reserve succeeds; the executor offers *Back up, then reseed* inside the reserve; and a backup that
+would pass the ceiling is refused as `BudgetExceeded` on each of those paths. The tests that assert the
+old model (`UsageAtTheQuota_IsRefused_WithoutReachingIntoTheReserve`,
+`CheckBackupReadiness_InsideTheReserve_AnswersDifferentlyWithTheReserveAllowed`, and any step 11
+availability test that withholds an option inside the reserve) are rewritten to the new statement, each
+recorded here with what it asserted and what it asserts now.
+
+The availability also reports whether the folder is at or above the quota, so step 22 can caution every
+option that takes a backup. Tests: at the quota it reports the caution; below it, it does not.
+
+**Done 2026-09-27.** `CheckBackupReadiness` and `CreateBackup` now ask one function,
+`BackupStorageBudget.WouldPassTheCeiling`: what the folder holds plus the backup's estimated size (the
+database file's length, also shared) against the ceiling. So the check refuses exactly where the attempt
+does, which it did not before: it compared only what was already there against the quota. `allowReserve`
+and `BackupStorageBudget.LimitBytes` are gone; Reset's override now means only "proceed without a
+backup". The availability's `BackupCaution` is the backup status reader's own `ReserveInUse`, so the
+caution and the published status cannot disagree.
+
+Tests, one statement each. New, each red against the code before this step on its assertion:
+`DatabaseBackupPreflightTests.CheckBackupReadiness_InsideTheReserve_ReportsSucceeded`,
+`..._WhenTheBackupWouldPassTheCeiling_ReportsBudgetExceeded` and `..._AgreesWithTheAttempt` (the quota set
+to 100% so only the backup's own size can refuse), `DatabaseBackupQuotaTests.CreateBackupAsync_InsideTheReserve_TakesTheBackup`,
+`ResetAsync_InsideTheReserve_ReachesTheDestructiveStep`, and
+`NotificationActionExecutorTests.GetAvailabilityAsync_AtTheQuota_CautionsTheBackup` (against the property
+unset). `GetAvailabilityAsync_BelowTheQuota_DoesNotCautionTheBackup` was red against a caution that is
+always set.
+
+Rewritten to the corrected model, each red on its assertion against the code before this step:
+
+| Asserted | Now asserts |
+|---|---|
+| `CheckBackupReadiness_InsideTheReserve_AnswersDifferentlyWithTheReserveAllowed`: the reserve answers differently when an override asks | replaced by `..._InsideTheReserve_ReportsSucceeded` above |
+| `CheckBackupReadiness_OverTheQuotaByLessThanWhatIsFreedFirst_ReportsSucceeded`: freeing a backup clears the quota | `..._PastTheCeilingByLessThanWhatIsFreedFirst_ReportsSucceeded`: freeing a backup makes room under the ceiling |
+| `..._OverTheQuotaByMoreThanWhatIsFreedFirst_ReportsBudgetExceeded`: freeing too little leaves it over the quota | `..._PastTheCeilingByMoreThanWhatIsFreedFirst_ReportsBudgetExceeded`: freeing too little leaves no room under the ceiling |
+| `DatabaseBackupQuotaTests.UsageAtTheQuota_IsRefused_WithoutReachingIntoTheReserve` | replaced by `CreateBackupAsync_InsideTheReserve_TakesTheBackup` above |
+| `PublishedUsage_AgreesWithTheLimitAReadinessCheckRefusesOn`: two statements, the published quota and the refusal agree | `PublishedUsage_AgreesWithTheCeilingAReadinessCheckRefusesOn`: one statement, the refusal agrees with the published room under the ceiling, at four points across both limits |
+
+Removed: `UsageAtTheAbsoluteCeiling_IsRefusedEvenWithTheReserveAllowed` (superseded by the ceiling tests
+above, which can fail where it could not); `ConfiguredQuotaPercent_IsTheLimitTheCheckRefusesOn` (the quota
+no longer refuses; step 21's warning is where a configured quota takes effect, and tests it there);
+`BackupStorageBudgetTests.LimitBytes_*`, both, with the function. A rewrite of
+`QuotaPercent_OutOfRange_UsesTheDefault` onto `QuotaBytes` was red against a budget without its range
+check, then removed as a duplicate of `BackupStorageBudgetTests.QuotaBytes_OutOfRangePercentage_UsesTheDefaultShare`.
+Both test fixtures now create the database first: whether a backup would pass the ceiling depends on what
+it adds, and an absent file adds nothing.
+
+The out-of-range quota is still reported by the readiness check, which no longer uses the quota; step 21
+moves that report to the warning's check, which does.
+
+Text stating the old model, corrected: the Reset endpoint's description and its `docs/api-endpoints.md`
+row, and the comments on `DatabaseOptions.BackupQuotaPercent`, `BackupStorageUsage`,
+`BackupStatusResponse` and `BackupStorageBudget`. The Reset refusal's title is now *Reset refused: no
+backup could be taken*, followed into the Knowledgebase entry that quotes it; `backup/01`'s dated record
+of the old title stays as measured. Every file touched is dash-free, except the page-size range `(0–500)`
+in `AdminEndpoints.cs`: the same wording sits in nine endpoint files, so it waits on one decision for all
+nine, as the page titles do.
+
+Green: Data 1,411 (two fewer: four quota tests and two budget tests removed, four added), Core 1,730, Api
+1,132, 0 warnings. **One unexplained failure, recorded rather than dismissed:** in the first Api run after
+this step, `ChangelogDatabaseWiringTests`' two tests each timed out waiting 30 s for startup; both pass
+alone, and a full Api rerun passed all 1,132. Their factory runs the real startup against the real data
+directory, which includes a network source refresh. The first run's message was lost to an output filter,
+so the cause is not established; every run from here keeps its full log.
+### 20. The quota warning's notification kind
+**Status:** ⬜ Not started
+
+A `BackupQuotaReached` payload (the bytes used, the quota and the ceiling), a `BackupQuotaRestored`
+dismiss trigger, and a resolution recording that the folder came back under the quota. All three are
+CHECK-constrained columns of `System_Notification`, so one table rebuild (Data migration 25) widens them
+together, with the baseline updated to match, per ADR 008. The title and body keys in all three
+languages name what is used against both limits and the remedies: the backup list and delete endpoints,
+and `Quotinator:BackupQuotaPercent`.
+
+Tests: the ownership tests' per-kind DynamicData picks the new kind up; the trigger and the resolution
+each get the baseline and incremental-replay acceptance tests the kind has.
+
+### 21. Condition checks raise and clear the warning, on every path and on request
+**Status:** ⬜ Not started
+
+A condition-check interface in `Quotinator.Data`, and one component running every registered check. The
+quota check is the first: above the quota it raises the warning once while unresolved
+(`NotificationSeeding.SeedWhileUnresolvedAsync`); at or below it, it resolves any open warning by its
+trigger. The checks run at the end of a completed startup, at the end of a Reset, after the on-demand
+backup, after every deletion through `DatabaseBackupWriter.Delete`, and on
+`POST /api/v1/notifications/refresh`. The endpoint answers `200` with what each check did (raised,
+cleared, unchanged), per kind; it is named `RefreshNotifications`, tagged `Notifications`, and described
+in `docs/api-endpoints.md` and its `[Description]` attributes in the same commit.
+
+Tests, one statement each, red first: a completed startup whose backups sit in the reserve raises the
+warning; one below the quota raises none; the warning is raised once across two such startups; a Reset
+in the reserve raises it; the on-demand backup in the reserve raises it; a reseed option's backup in the
+reserve raises it; a deletion that brings the folder under the quota clears it; a deletion that leaves it
+above does not; a startup under a raised quota clears it; the notification names the bytes used, the
+quota and the ceiling. For the endpoint: it answers without an admin key; a folder brought under the quota outside the
+application clears the warning, one pushed above raises it, and the
+response reports what each check did; every registered check runs, proven with a second, test-only
+check alongside the quota's.
+
+### 22. Render and document the warning
+**Status:** ⬜ Not started
+
+The notification table's per-kind layout for the new kind (its payload says nothing its body does not,
+so it opens no detail), and a Knowledgebase entry for the warning, linked from it. The caution from
+step 19: beside every option that takes a backup (*Back up, then reseed*, *Remove the oldest backup,
+then back up and reseed*, and *Reset the database*, whose Reset takes one too) when the folder is at the quota, in all three languages, and in the
+notifications response next to `availableActions`. Tests, one statement each, red first: each such
+option carries the caution at the quota; neither carries it below; an option that takes no backup
+(*Reseed without a backup*) never carries it; the response carries it at the quota and not below. The
+`no-backup-could-be-taken` entry's `BudgetExceeded` section, `BackupStorageUsage`'s quota comment, and
+any other text stating the old model are corrected to the ceiling.
+
+### 23. Automated (T2) document for the reserve, red first
+**Status:** ⬜ Not started
+
+`backup/08`: fill the backups folder into the reserve, then prove a backup is still taken and the
+warning raised, on the on-demand path and at startup; delete a backup to bring it under and prove the
+warning clears; raise it again, remove a backup file from outside the application, and prove
+`POST /notifications/refresh` clears it with no restart; fill past the ceiling and prove the backup is
+refused. Run red against `7f83e92a` (the
+first model) before green.
+
+### 24. Documentation
+**Status:** ⬜ Not started
+
+The changelog's #348 entries in all three languages describe the warning rather than a refusal at the
+quota. The issue's requirement 8 still says the reserve is reached by override; its correction is drafted
+for the developer's approval, not edited unasked.
+
+### 25. Full verification
+**Status:** ⬜ Not started
+
+Build clean; the full suite green across three `-m:1` runs; every `backup/` document, notif/12 to 14,
+and the smoke set; T1 by the developer.
+
 ---
 
 ## Verification checklist
@@ -632,7 +816,7 @@ T1 (row 28) passed on the developer's own run.
 | 6 | ✅ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip` (red in step 7); `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_LogsTheSkippedBackup` and `ResetAsync_WhenTheBackupSucceeds_LogsNoSkippedBackup`; a reseed without a backup by step 12's `..._RecordsTheSkippedBackupInTheAuditTrail` and `..._LogsTheSkippedBackup` |
 | 7 | ✅ | Every #348 test asserts one statement, and each is red against the state before its change | Unit test | Step 7: states A to E, every test failing on an assertion; the tests that could not fail removed |
 | 8 | ✅ | A caller can ask whether a backup is possible without attempting one, and the answer agrees with an attempt | Unit test | `DatabaseBackupPreflightTests.CheckBackupReadiness_WhenTheBudgetIsExhausted_ReportsBudgetExceeded`, `..._AgreesWithTheAttempt`, and the same pair for an unwritable destination |
-| 9 | ✅ | The operating quota is honoured, the reserve is reachable only by override, the ceiling never is | Unit test | `DatabaseBackupQuotaTests.UsageAtTheQuota_IsRefused_WithoutReachingIntoTheReserve`, `...UsageAtTheAbsoluteCeiling_IsRefusedEvenWithTheReserveAllowed`; `DatabaseBackupPreflightTests.CheckBackupReadiness_InsideTheReserve_AnswersDifferentlyWithTheReserveAllowed` |
+| 9 | ❌ | Every path takes a backup inside the reserve and refuses only one that would pass the ceiling | Unit test | Step 19: readiness, Reset, the on-demand backup and the executor, each inside the reserve and past the ceiling |
 | 10 | ✅ | The quota percentage is configurable and defaults to 90 | Unit test | `DatabaseBackupQuotaTests.ConfiguredQuotaPercent_IsTheLimitTheCheckRefusesOn` and `...QuotaPercent_DefaultsTo90` |
 | 11 | ✅ | An out-of-range percentage is reported and the default used, never clamped, never fatal | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_OutOfRange_UsesTheDefault` and `...QuotaPercent_OutOfRange_IsReported` |
 | 12 | ✅ | Each variant states cause and remedy, and names no remedy that cannot work | Unit test | `BackupObstacleGuidanceTests`: `EveryObstacle_HasACause`, `EveryObstacle_HasARemedy`, `RecognisedObstacle_IsNotDescribedAsTheUnrecognisedFallback`, `BudgetExceeded_OffersTheOverride`, `BudgetExceeded_OffersRemovingBackupsThroughTheApplication`, `SourceUnreadable_DoesNotOfferTheOverride`, `OverrideAlreadyTried_DoesNotRepeatTheOverride`, `OverrideAlreadyTried_KeepsTheOtherRemedies` |
@@ -642,7 +826,7 @@ T1 (row 28) passed on the developer's own run.
 | 16 | ✅ | A startup migration refusal marks the database unhealthy, naming the variant, remedies and entry, and no remedy the startup cannot use | Unit test | `StartupBackupRefusalTests.Startup_MigrationRefusedForBackup_ReportsUnhealthy`, `..._ReasonNamesTheObstacle`, `..._ReasonCarriesTheRemedies`, `..._ReasonLinksTheKnowledgebaseEntry`; `BackupObstacleGuidanceTests.MigrationRefusedReason_DoesNotOfferTheOverride` |
 | 17 | ✅ | A startup content-load refusal raises one `BackupRefused` notification that requires action, clears on reseed, and names the obstacle and the step | Unit test | `DatabaseInitializerTests.InitialiseAsync_ContentLoadWithNoBackupPossible_RaisesABackupRefusedNotification`, `..._TheNotificationRequiresAction`, `..._TheNotificationClearsOnReseed`, `..._TheNotificationNamesTheObstacle`, `..._TheNotificationNamesTheContentLoadStep`, `InitialiseAsync_ContentLoadRefusedOnTwoStarts_RaisesOneNotification` |
 | 18 | ✅ | The new payload kind is accepted by the migration and the baseline alike | Unit test | `DatabaseInitializerOwnershipTests.NotificationMetadataKind_IsAcceptedByTheBaseline` and `..._IsAcceptedByTheIncrementalReplay`, per kind; the existing `DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
-| 19 | ✅ | Each option is offered exactly when it can run, and withheld otherwise, per obstacle | Unit test | Step 11's `NotificationActionExecutorTests`: every option offered and withheld, per obstacle; the availability's two answers; `DatabaseBackupPreflightTests`' three `...FreedFirst...` tests |
+| 19 | ❌ | Each option is offered exactly when it can run, and withheld otherwise, per obstacle | Unit test | Step 11's `NotificationActionExecutorTests`: every option offered and withheld, per obstacle; the availability's two answers, re-earned against the ceiling in step 19; `DatabaseBackupPreflightTests`' three `...FreedFirst...` tests |
 | 20 | ✅ | The offered options are visible over REST | Unit test | `NotificationEndpointsTests.GetNotifications_ListsTheOptionsTheExecutorOffers` and `..._DismissedNotification_ListsNoOptions` |
 | 21 | ✅ | A reseed from the notification backs up first, and runs without one only with the user's permission | Unit test | Step 12's `NotificationActionExecutorTests`: effect and refusal for each option, including #304's reseed recommendation; a refused Reset stays unhealthy and active |
 | 22 | ✅ | The Knowledgebase entry covers every obstacle, and the rendered link resolves to it | Unit test | `RepositoryStructureTests.KnowledgebaseLink_NamesAnEntryThatExists` and `NoBackupCouldBeTaken_HasASectionForTheObstacle` |
@@ -650,8 +834,14 @@ T1 (row 28) passed on the developer's own run.
 | 24 | ✅ | Startup content-load refusal, end to end | Automated (T2) | `backup/06`, red against the canary build, then green |
 | 25 | ✅ | Startup migration refusal, end to end | Automated (T2) | `backup/07`, red against the canary build, then green |
 | 26 | ✅ | Every test this issue adds or changes fails against its signature state, on an assertion | Unit test | Steps 7 to 15, each recording its red run |
-| 27 | ✅ | Build clean and the full suite green across three `-m:1` runs | Build | Step 18 |
-| 28 | ✅ | The application still starts | Live (T1) | The developer started `Quotinator.Api` in Visual Studio on 2026-09-26, against their existing database: a backup, Data v3 → v24 and App v5 → v9, then *Quotinator ready* serving 795 quotes |
+| 27 | ❌ | Build clean and the full suite green across three `-m:1` runs | Build | Step 25 (first passed at step 18, before the quota correction) |
+| 28 | ❌ | The application still starts | Live (T1) | The developer starts `Quotinator.Api` in Visual Studio after step 25 (first passed 2026-09-26, before the quota correction) |
+| 29 | ❌ | A backup that leaves the folder above the quota raises one warning, on every path | Unit test | Step 21: startup, Reset, the on-demand backup and a reseed option, each in the reserve; once across two startups; none below the quota |
+| 30 | ❌ | The warning clears once the folder is back under the quota, and only then | Unit test | Step 21: a deletion under the quota clears it, one leaving it above does not, a startup under a raised quota clears it |
+| 31 | ❌ | The warning kind, its trigger and its resolution are accepted by the migration and the baseline alike | Unit test | Step 20: the ownership tests per kind, trigger and resolution; the schema-drift parity test |
+| 32 | ❌ | Every option that takes a backup is cautioned when the folder is at the quota, on the page and over REST | Unit test | Step 19 and step 22: the availability, `NotificationTableTests`, `NotificationEndpointsTests` |
+| 33 | ❌ | The reserve, end to end: a backup taken and warned, cleared by a deletion and by a refresh without a restart, refused past the ceiling | Automated (T2) | `backup/08`, red against `7f83e92a`, then green |
+| 34 | ❌ | `POST /notifications/refresh` runs every registered condition check, needs no admin key, and reports what each did | Unit test | Step 21: answered without an admin key; the quota warning cleared and raised on request; a second, test-only check also run; the response per kind |
 
 ---
 
