@@ -11,13 +11,13 @@ namespace Quotinator.Data.Tests.Database;
 
 /// <summary>
 /// #348: the backup budget is two levels, not one: an operating quota (default 90% of
-/// <see cref="DatabaseOptions.MaxBackupStorageGb"/>) that normal operation stops at, and the absolute
-/// ceiling it never crosses.
+/// <see cref="DatabaseOptions.MaxBackupStorageGb"/>) above which a backup is still taken and a warning
+/// raised, and the absolute ceiling past which a backup is refused.
 /// <para>
 /// The reserve between them exists because a backup's size cannot be predicted: SQLite copies pages,
-/// so the source file's length only approximates the result. Keeping routine operation out of that
-/// reserve is what leaves room for the one backup an operator most needs: the one before a Reset, at
-/// the moment they have least space left.
+/// so the source file's length only approximates the result. The reserve is what lets a backup still be
+/// taken while the user is warned, so they can remove older backups or raise the quota before the
+/// ceiling refuses one (developer, 2026-09-26).
 /// </para>
 /// </summary>
 [TestClass]
@@ -35,6 +35,10 @@ public class DatabaseBackupQuotaTests
         _dbPath = Path.Combine(_tempDir, "test.db");
         _backups = Path.Combine(_tempDir, "backups");
         Directory.CreateDirectory(_backups);
+
+        // A real database, so every check weighs a backup of real size: whether a backup would pass the
+        // ceiling depends on what it adds, and an absent file adds nothing.
+        CreateSeededDatabaseAsync().GetAwaiter().GetResult();
     }
 
     [TestCleanup]
@@ -47,36 +51,32 @@ public class DatabaseBackupQuotaTests
     }
 
     /// <summary>
-    /// Above 90% but below 100%: inside the reserve, which routine operation must not consume, or it would
-    /// not be there when a Reset needed it.
+    /// Above 90% but below 100%: inside the reserve, where a backup the user asks for is still taken. The
+    /// warning that says so is the notification's concern, not this one's.
     /// </summary>
     [TestMethod]
-    public void UsageAtTheQuota_IsRefused_WithoutReachingIntoTheReserve()
+    public async Task CreateBackupAsync_InsideTheReserve_TakesTheBackup()
     {
         FillBackupsTo(percentOfCeiling: 95);
 
-        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer().CheckBackupReadiness());
-    }
+        DatabaseBackupResult result = await CreateInitializer().CreateBackupAsync();
 
-    /// <summary>The ceiling is absolute: the reserve is headroom below it, not permission to exceed it.</summary>
-    [TestMethod]
-    public void UsageAtTheAbsoluteCeiling_IsRefusedEvenWithTheReserveAllowed()
-    {
-        FillBackupsTo(percentOfCeiling: 100);
-
-        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer().CheckBackupReadiness(allowReserve: true));
+        Assert.AreEqual(BackupOutcome.Succeeded, result.Outcome);
     }
 
     /// <summary>
-    /// 60% used is inside the default 90% quota, and outside a configured 50% one: refusing here shows the
-    /// configured value is the one consulted.
+    /// A Reset inside the reserve takes its backup and runs, rather than refusing: only a backup that would
+    /// pass the ceiling stops it.
     /// </summary>
     [TestMethod]
-    public void ConfiguredQuotaPercent_IsTheLimitTheCheckRefusesOn()
+    public async Task ResetAsync_InsideTheReserve_ReachesTheDestructiveStep()
     {
-        FillBackupsTo(percentOfCeiling: 60);
+        FillBackupsTo(percentOfCeiling: 95);
+        RecordingInitializer initializer = new(NewOptions(), _dbPath);
 
-        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer(quotaPercent: 50).CheckBackupReadiness());
+        await initializer.ResetAsync();
+
+        Assert.IsTrue(initializer.ResetHookRan, "a Reset inside the reserve is taken, not refused");
     }
 
     /// <summary>
@@ -176,17 +176,6 @@ public class DatabaseBackupQuotaTests
         Assert.AreEqual(90, new DatabaseOptions { DbPath = _dbPath }.BackupQuotaPercent);
     }
 
-    /// <summary>
-    /// 150% taken at face value would raise the quota above the ceiling, the setting failing open; clamped
-    /// to 100 it would allow 95% usage. The 90% default refuses it.
-    /// </summary>
-    [TestMethod]
-    public void QuotaPercent_OutOfRange_UsesTheDefault()
-    {
-        FillBackupsTo(percentOfCeiling: 95);
-
-        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer(quotaPercent: 150).CheckBackupReadiness());
-    }
 
     /// <summary>An ignored configuration value says so; silently substituting the default is the failure this prevents.</summary>
     [TestMethod]
@@ -200,33 +189,35 @@ public class DatabaseBackupQuotaTests
     }
 
     /// <summary>
-    /// #349: the figures the status endpoint publishes and the limit a destructive action refuses on
-    /// are computed by the same code, so they cannot drift apart.
+    /// #349: the figures the status endpoint publishes and the limit a backup is refused on are computed by
+    /// the same code, so they cannot drift apart: the check refuses exactly when the published room left
+    /// under the ceiling is smaller than the backup.
     /// <para>
-    /// Checked across the quota boundary in both directions rather than at one point: agreement that
-    /// holds only where nothing is near a limit is not agreement. This is the same "check and attempt
-    /// agree" property #348 found was worth its own test, applied to the reader that now reports it.
+    /// Checked across both limits rather than at one point, since agreement that holds only where nothing
+    /// is near a limit is not agreement: below the quota, inside the reserve, one byte short of the
+    /// ceiling, and at it.
     /// </para>
     /// </summary>
     [TestMethod]
-    public void PublishedUsage_AgreesWithTheLimitAReadinessCheckRefusesOn()
+    public void PublishedUsage_AgreesWithTheCeilingAReadinessCheckRefusesOn()
     {
-        foreach (int percent in (int[])[50, 89, 95, 100])
+        const long ceilingBytes = 1_073_741_824L;
+        long backupBytes = new FileInfo(_dbPath).Length;
+        List<string> disagreements = [];
+
+        foreach (long used in (long[])[ceilingBytes / 2, ceilingBytes * 95 / 100, ceilingBytes - 1, ceilingBytes])
         {
-            FillBackupsTo(percentOfCeiling: percent);
+            FillBackupsToBytes(used);
 
-            DatabaseBackupReader reader = new(NewOptions(), NoOpDiskSpaceProvider.Instance);
-            Quotinator.Data.Models.BackupStorageUsage usage = reader.GetUsage();
-            BackupOutcome readiness = CreateInitializer().CheckBackupReadiness();
+            Quotinator.Data.Models.BackupStorageUsage usage = new DatabaseBackupReader(NewOptions(), NoOpDiskSpaceProvider.Instance).GetUsage();
+            bool publishedNoRoom  = usage.RemainingAgainstCeilingBytes < backupBytes;
+            bool refusedForBudget = CreateInitializer().CheckBackupReadiness() == BackupOutcome.BudgetExceeded;
 
-            bool reportedOverQuota = usage.UsedBytes >= usage.QuotaBytes;
-            bool refusedForBudget  = readiness == BackupOutcome.BudgetExceeded;
-
-            Assert.AreEqual(reportedOverQuota, refusedForBudget,
-                $"at {percent}% of the ceiling the reader reported reserveInUse={usage.ReserveInUse} while the "
-                + $"readiness check said {readiness}: the operator would be told one thing and get another");
-            Assert.AreEqual(reportedOverQuota, usage.ReserveInUse);
+            if (publishedNoRoom != refusedForBudget)
+                disagreements.Add($"{used} bytes used: published no room={publishedNoRoom}, refused={refusedForBudget}");
         }
+
+        Assert.IsEmpty(disagreements, "the operator would be told one thing and get another: " + string.Join("; ", disagreements));
     }
 
     /// <summary>
@@ -275,14 +266,14 @@ public class DatabaseBackupQuotaTests
     /// ceiling is 1 GB in these tests, so the files are sized from that rather than from any real
     /// database: this fixture is about headroom arithmetic, not about backup content.
     /// </summary>
-    private void FillBackupsTo(int percentOfCeiling)
+    private void FillBackupsTo(int percentOfCeiling) => FillBackupsToBytes(1_073_741_824L * percentOfCeiling / 100L);
+
+    private void FillBackupsToBytes(long bytes)
     {
-        const long ceilingBytes = 1_073_741_824L;
-        long target = ceilingBytes * percentOfCeiling / 100L;
         string filler = Path.Combine(_backups, "filler.db");
 
         using FileStream stream = new(filler, FileMode.Create, FileAccess.Write);
-        stream.SetLength(target);
+        stream.SetLength(bytes);
     }
 
     private DatabaseOptions NewOptions(int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent) =>

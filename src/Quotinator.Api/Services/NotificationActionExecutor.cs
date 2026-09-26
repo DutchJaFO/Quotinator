@@ -107,7 +107,11 @@ internal sealed class NotificationActionExecutor(
             ? null
             : databaseInitializer.CheckBackupReadiness(bytesFreedFirst: oldest.SizeBytes);
 
-        return new NotificationActionAvailability(batches.Select(batch => batch.Id.ToCanonicalId()), readiness, withOldestRemoved);
+        // The same figure the backup status endpoint publishes, so the caution and the status cannot
+        // disagree about whether the folder is at the quota.
+        bool caution = backupReader.GetUsage().ReserveInUse;
+
+        return new NotificationActionAvailability(batches.Select(batch => batch.Id.ToCanonicalId()), readiness, withOldestRemoved, caution);
     }
 
     /// <inheritdoc/>

@@ -17,10 +17,15 @@ namespace Quotinator.Api.Services;
 /// What the same check would answer once the oldest backup is removed, or <see langword="null"/> when
 /// there is no backup to remove (#348).
 /// </param>
+/// <param name="backupCaution">
+/// Whether the backups folder is already at the operating quota, so any backup taken now runs inside the
+/// reserve and may reach the ceiling while it is taken (#348).
+/// </param>
 public sealed class NotificationActionAvailability(
     IEnumerable<string> liveImportBatchIds,
     BackupOutcome backupReadiness = BackupOutcome.Succeeded,
-    BackupOutcome? backupReadinessWithOldestRemoved = null)
+    BackupOutcome? backupReadinessWithOldestRemoved = null,
+    bool backupCaution = false)
 {
     // Case-insensitive per ADR 012: a payload's batch id and a batch row's id are two independently
     // cased copies of the same value.
@@ -35,4 +40,10 @@ public sealed class NotificationActionAvailability(
 
     /// <summary>What the backup check would answer once the oldest backup is removed; <see langword="null"/> when none exists.</summary>
     public BackupOutcome? BackupReadinessWithOldestRemoved { get; } = backupReadinessWithOldestRemoved;
+
+    /// <summary>
+    /// Whether an option that takes a backup is offered with a caution: the folder is at the quota, so the
+    /// backup runs inside the reserve and may reach the ceiling while it is taken.
+    /// </summary>
+    public bool BackupCaution { get; } = backupCaution;
 }

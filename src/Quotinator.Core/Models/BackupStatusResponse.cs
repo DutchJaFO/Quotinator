@@ -26,7 +26,7 @@ public sealed record BackupStatusResponse
 }
 
 /// <summary>
-/// The storage half of <see cref="BackupStatusResponse"/> — the self-imposed quota and the physical
+/// The storage half of <see cref="BackupStatusResponse"/>: the self-imposed quota and the physical
 /// disk, reported side by side because they are independent and the backup path checks both.
 /// </summary>
 public sealed record BackupStorageResponse
@@ -37,10 +37,10 @@ public sealed record BackupStorageResponse
     /// <summary>How many backup files that total covers.</summary>
     public required int FileCount { get; init; }
 
-    /// <summary>What routine operation may use, in bytes.</summary>
+    /// <summary>The operating quota, in bytes: above it a backup is still taken, and a warning raised.</summary>
     public required long QuotaBytes { get; init; }
 
-    /// <summary>The absolute ceiling, in bytes.</summary>
+    /// <summary>The absolute ceiling, in bytes: a backup that would pass it is refused.</summary>
     public required long CeilingBytes { get; init; }
 
     /// <summary>The operating quota in force, as a percentage of the ceiling.</summary>

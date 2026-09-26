@@ -6,8 +6,8 @@ namespace Quotinator.Data.Database;
 /// Every figure here was previously computed inline: <c>ExistingBackupBytes</c> and
 /// <c>EffectiveQuotaPercent</c> were private to <see cref="DatabaseInitializer"/>, and the ceiling was
 /// written out as a literal multiplication at three separate call sites. A status endpoint publishing
-/// its own copy would have been a fourth, free to drift from the check that actually refuses a Reset —
-/// so the number an operator is shown and the number a destructive action is refused on are computed
+/// its own copy would have been a fourth, free to drift from the check that actually refuses a Reset.
+/// So the number an operator is shown and the number a destructive action is refused on are computed
 /// by the same code or not at all.
 /// </para>
 /// <para>
@@ -21,7 +21,7 @@ public static class BackupStorageBudget
     /// <summary>Bytes in one gigabyte, as <see cref="DatabaseOptions.MaxBackupStorageGb"/> means it.</summary>
     public const long BytesPerGigabyte = 1_073_741_824L;
 
-    /// <summary>The absolute ceiling in bytes, never exceeded by any caller.</summary>
+    /// <summary>The absolute ceiling in bytes: a backup that would pass it is refused.</summary>
     /// <param name="options">The database options carrying the configured budget.</param>
     public static long CeilingBytes(DatabaseOptions options) =>
         options.MaxBackupStorageGb * BytesPerGigabyte;
@@ -50,17 +50,20 @@ public static class BackupStorageBudget
         CeilingBytes(options) * EffectiveQuotaPercent(options, out _) / 100L;
 
     /// <summary>
-    /// The limit a caller is measured against: the operating quota normally, the absolute ceiling when
-    /// the caller has explicitly reached into the reserve between them.
+    /// Whether a backup of <paramref name="backupBytes"/> would take a folder already holding
+    /// <paramref name="usedBytes"/> past the absolute ceiling (#348). The one refusal the budget makes:
+    /// between the quota and the ceiling a backup is still taken, and a warning raised instead. Both the
+    /// readiness check and the attempt ask this, so they cannot disagree on where the ceiling falls.
     /// </summary>
-    /// <param name="options">The database options carrying the budget and the quota percentage.</param>
-    /// <param name="allowReserve">Whether the caller has explicitly accepted using the reserve.</param>
-    public static long LimitBytes(DatabaseOptions options, bool allowReserve) =>
-        allowReserve ? CeilingBytes(options) : QuotaBytes(options);
+    /// <param name="options">The database options carrying the budget.</param>
+    /// <param name="usedBytes">What the backups folder already holds.</param>
+    /// <param name="backupBytes">The size the new backup is estimated to add.</param>
+    public static bool WouldPassTheCeiling(DatabaseOptions options, long usedBytes, long backupBytes) =>
+        usedBytes + backupBytes > CeilingBytes(options);
 
     /// <summary>
     /// Total size of every file currently in the backups folder, in bytes. A folder that does not
-    /// exist is zero used, not an error — nothing has been backed up yet.
+    /// exist is zero used, not an error: nothing has been backed up yet.
     /// </summary>
     /// <param name="backupsPath">The backups folder.</param>
     public static long UsedBytes(string backupsPath) =>

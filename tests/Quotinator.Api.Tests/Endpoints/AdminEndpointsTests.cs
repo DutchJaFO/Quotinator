@@ -502,7 +502,7 @@ public class AdminEndpointsTests
 
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
 
-        public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
+        public BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
         public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success("spy-backup.db"));
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
 

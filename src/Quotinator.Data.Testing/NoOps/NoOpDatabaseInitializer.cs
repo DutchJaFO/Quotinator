@@ -53,7 +53,7 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public bool SchemaVersionOvershootDetected => false;
 
     /// <inheritdoc/>
-    public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
+    public BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
 
     /// <inheritdoc/>
     /// <remarks>

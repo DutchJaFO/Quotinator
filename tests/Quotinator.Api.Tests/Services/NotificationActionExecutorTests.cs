@@ -369,8 +369,8 @@ public class NotificationActionExecutorTests
     /// <summary>A reader over a folder that does not exist: no backups at all.</summary>
     private static DatabaseBackupReader NoBackups() => BackupsIn(Path.Combine(Path.GetTempPath(), "quotinator-348-none-" + Guid.NewGuid().ToString("N")));
 
-    private static DatabaseBackupReader BackupsIn(string folder) => new(
-        new DatabaseOptions { DbPath = Path.Combine(folder, "quotinatordata.db"), BackupsPath = folder },
+    private static DatabaseBackupReader BackupsIn(string folder, int maxBackupStorageGb = 1) => new(
+        new DatabaseOptions { DbPath = Path.Combine(folder, "quotinatordata.db"), BackupsPath = folder, MaxBackupStorageGb = maxBackupStorageGb },
         NoOpDiskSpaceProvider.Instance);
 
     private static IReadOnlyList<NotificationActionOption> ReseedOptions(BackupOutcome readiness, BackupOutcome? withOldestRemoved = null) =>
@@ -491,6 +491,39 @@ public class NotificationActionExecutorTests
         {
             Directory.Delete(folder, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// At the quota a backup runs inside the reserve, and may reach the ceiling while it is taken since its
+    /// size is not known in advance, so the user is told before choosing an option that takes one (#348,
+    /// developer 2026-09-26). 95% of a 1 GB ceiling against the 90% default quota.
+    /// </summary>
+    [TestMethod]
+    public async Task GetAvailabilityAsync_AtTheQuota_CautionsTheBackup()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "quotinator-348-caution-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            using (FileStream filler = new(Path.Combine(folder, "filler.db"), FileMode.Create, FileAccess.Write))
+                filler.SetLength(1_073_741_824L * 95 / 100);
+
+            NotificationActionAvailability availability = await CreateExecutor(backupReader: BackupsIn(folder)).GetAvailabilityAsync();
+
+            Assert.IsTrue(availability.BackupCaution);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public async Task GetAvailabilityAsync_BelowTheQuota_DoesNotCautionTheBackup()
+    {
+        NotificationActionAvailability availability = await CreateExecutor(backupReader: NoBackups()).GetAvailabilityAsync();
+
+        Assert.IsFalse(availability.BackupCaution);
     }
 
     // ── #348: the reseed action backs up first ──────────────────────────────────────────────────────
@@ -810,7 +843,7 @@ public class NotificationActionExecutorTests
         /// <summary>What it answers when bytes are freed first; the number freed decides, so a test can tell which backup was weighed.</summary>
         public Func<long, BackupOutcome>? ReadinessWhenFreed { get; init; }
 
-        public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0) =>
+        public BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0) =>
             bytesFreedFirst > 0 && ReadinessWhenFreed is not null ? ReadinessWhenFreed(bytesFreedFirst) : Readiness;
         /// <summary>Every backup and reseed, in the order they happened.</summary>
         public List<string> Calls { get; } = [];

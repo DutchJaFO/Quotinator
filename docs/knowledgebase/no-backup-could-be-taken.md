@@ -39,7 +39,7 @@ followed by what the obstacle means, what you can do about it, and a link to thi
 ```
 
 **When a Reset was refused,** `POST /api/v1/admin/database/reset` answers `409 Conflict` titled
-*"Reset refused — no backup could be taken"*, with the obstacle in `backupObstacle` and what you can do
+*"Reset refused: no backup could be taken"*, with the obstacle in `backupObstacle` and what you can do
 in `remedies`. The log reads:
 
 ```

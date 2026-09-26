@@ -619,11 +619,9 @@ public class DatabaseInitializer(
         // #348: check before acting. A Reset drops every table, so it is the last operation that should
         // run without a restore point, and a full backup folder or an unwritable destination is an
         // ordinary condition with a remedy, not something to discover by throwing halfway through.
-        // allowNoBackup is the operator accepting responsibility, so it also unlocks the reserve: and
-        // that ordering matters: a Reset blocked only by the operating quota should take a real backup
-        // out of the reserve rather than run with none at all. Proceeding unprotected is the last
-        // resort, not the first thing the override reaches for.
-        BackupOutcome readiness = CheckBackupReadiness(allowReserve: allowNoBackup);
+        // allowNoBackup is the operator accepting responsibility for proceeding with no restore point,
+        // and that is all it means: a Reset inside the reserve takes its backup without it.
+        BackupOutcome readiness = CheckBackupReadiness();
         if (readiness != BackupOutcome.Succeeded && !allowNoBackup)
         {
             Logger.LogResetRefusedNoBackup(readiness.ToString());
@@ -707,18 +705,17 @@ public class DatabaseInitializer(
     }
 
     /// <inheritdoc/>
-    public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0)
+    public BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0)
     {
-        long limitBytes    = BackupStorageBudget.LimitBytes(_options, allowReserve);
         long existingBytes = Math.Max(0L, BackupStorageBudget.UsedBytes(_options.BackupsPath) - bytesFreedFirst);
 
         WarnIfQuotaPercentOutOfRange();
 
-        // Headroom, not fit. What is already on disk can be known exactly; what a new backup will *add*
-        // cannot: SQLite copies pages, so the source file's length only approximates the result. The
-        // reserve between the quota and the ceiling is what absorbs that uncertainty, and reaching into
-        // it is the caller's explicit choice rather than something this check makes for them.
-        if (existingBytes >= limitBytes)
+        // The same comparison the attempt makes, so the two cannot disagree. Only the ceiling refuses:
+        // between the quota and the ceiling a backup is still taken and a warning raised, which is what
+        // the reserve is for (#348, developer 2026-09-26). The estimate is only an approximation, since
+        // SQLite copies pages, which is why an option offering a backup at the quota says so.
+        if (BackupStorageBudget.WouldPassTheCeiling(_options, existingBytes, EstimatedBackupBytes()))
             return BackupOutcome.BudgetExceeded;
 
         if (_diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath) + bytesFreedFirst <= 0L)
@@ -918,13 +915,16 @@ public class DatabaseInitializer(
     // what routine operation may consume, and it is enforced by CheckBackupReadiness, which every
     // caller that can afford to stop consults first. Only the arithmetic is now shared, so neither
     // side can drift from the other's idea of what a gigabyte or a percentage means.
+    // What a backup is expected to add: the database file's length. An approximation, since SQLite
+    // copies pages, and one the readiness check and the attempt share rather than each computing.
+    private long EstimatedBackupBytes() => File.Exists(_options.DbPath) ? new FileInfo(_options.DbPath).Length : 0L;
+
     internal DatabaseBackupResult CreateBackup(SqliteConnection connection, int fromVersion)
     {
-        long estimatedBytes = File.Exists(_options.DbPath) ? new FileInfo(_options.DbPath).Length : 0L;
-        long budgetBytes    = BackupStorageBudget.CeilingBytes(_options);
+        long estimatedBytes = EstimatedBackupBytes();
         long existingBytes  = BackupStorageBudget.UsedBytes(_options.BackupsPath);
 
-        if (existingBytes + estimatedBytes > budgetBytes)
+        if (BackupStorageBudget.WouldPassTheCeiling(_options, existingBytes, estimatedBytes))
         {
             Logger.LogBackupSkippedBudgetExceeded(_options.MaxBackupStorageGb, existingBytes, estimatedBytes);
             return DatabaseBackupResult.Failed(BackupOutcome.BudgetExceeded);

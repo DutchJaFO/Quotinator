@@ -3,7 +3,7 @@ using Quotinator.Data.Database;
 namespace Quotinator.Data.Tests.Database;
 
 /// <summary>
-/// The shared backup storage arithmetic (#349) — the numbers the status endpoint publishes and the
+/// The shared backup storage arithmetic (#349): the numbers the status endpoint publishes and the
 /// numbers a destructive action refuses on, now that both come from here.
 /// <para>
 /// This class exists separately from <c>DatabaseBackupQuotaTests</c>'s agreement test on purpose, and
@@ -11,8 +11,8 @@ namespace Quotinator.Data.Tests.Database;
 /// computing the same wrong number would also satisfy. These tests assert the values themselves.
 /// </para>
 /// <para>
-/// Every function is checked on both sides of its boundary — the configured value that is honoured as
-/// well as the one that is rejected, the folder that has files as well as the one that does not — so a
+/// Every function is checked on both sides of its boundary (the configured value that is honoured as
+/// well as the one that is rejected, the folder that has files as well as the one that does not), so a
 /// failure is predictable rather than merely detected.
 /// </para>
 /// </summary>
@@ -33,24 +33,24 @@ public class BackupStorageBudgetTests
 
     // ── Ceiling ──────────────────────────────────────────────────────────────
 
-    /// <summary>The ceiling is the configured gigabytes, in bytes — and scales with the setting.</summary>
+    /// <summary>The ceiling is the configured gigabytes, in bytes, and scales with the setting.</summary>
     [TestMethod]
     public void CeilingBytes_IsTheConfiguredGigabytes()
     {
         Assert.AreEqual(1_073_741_824L, BackupStorageBudget.CeilingBytes(Options(maxGb: 1)));
         Assert.AreEqual(4_294_967_296L, BackupStorageBudget.CeilingBytes(Options(maxGb: 4)),
-            "the ceiling has to track the setting — a constant would pass the single-gigabyte case alone");
+            "the ceiling has to track the setting: a constant would pass the single-gigabyte case alone");
     }
 
     // A test asserting BytesPerGigabyte == 2^30 was written and removed: both sides are compile-time
-    // constants, so the comparison is const-folded and can never fail whatever the constant becomes —
+    // constants, so the comparison is const-folded and can never fail whatever the constant becomes.
     // MSTEST0032 flags exactly this. The property it was reaching for is that the ceiling is computed in
     // 2^30 units, which CeilingBytes_IsTheConfiguredGigabytes asserts against a real return value and
     // can genuinely fail.
 
     // ── Quota percentage ─────────────────────────────────────────────────────
 
-    /// <summary>A percentage inside 1–100 is honoured, and is not reported as out of range.</summary>
+    /// <summary>A percentage inside 1 to 100 is honoured, and is not reported as out of range.</summary>
     [TestMethod]
     [DataRow(1)]
     [DataRow(50)]
@@ -84,7 +84,7 @@ public class BackupStorageBudgetTests
 
     /// <summary>
     /// An out-of-range value is never clamped into range. 150 clamped to 100 would raise the quota to
-    /// the ceiling — the setting failing open, which is worse than it being ignored.
+    /// the ceiling: the setting failing open, which is worse than it being ignored.
     /// </summary>
     [TestMethod]
     public void EffectiveQuotaPercent_OutOfRange_IsNotClamped()
@@ -114,33 +114,10 @@ public class BackupStorageBudgetTests
             BackupStorageBudget.QuotaBytes(Options(quotaPercent: 150)));
     }
 
-    /// <summary>Routine operation is measured against the quota; only an explicit caller reaches the ceiling.</summary>
-    [TestMethod]
-    public void LimitBytes_StopsAtTheQuota_UnlessTheReserveIsAllowed()
-    {
-        DatabaseOptions options = Options(quotaPercent: 90);
-
-        Assert.AreEqual(BackupStorageBudget.QuotaBytes(options),   BackupStorageBudget.LimitBytes(options, allowReserve: false));
-        Assert.AreEqual(BackupStorageBudget.CeilingBytes(options), BackupStorageBudget.LimitBytes(options, allowReserve: true));
-    }
-
-    /// <summary>
-    /// The reserve is real headroom, not a relabelling: the routine limit is strictly below the
-    /// ceiling. A quota of 100% would make the two equal and the reserve would silently not exist.
-    /// </summary>
-    [TestMethod]
-    public void LimitBytes_TheReserveIsNonEmptyAtTheDefaultQuota()
-    {
-        DatabaseOptions options = Options();
-
-        Assert.IsLessThan(
-            BackupStorageBudget.LimitBytes(options, allowReserve: true),
-            BackupStorageBudget.LimitBytes(options, allowReserve: false));
-    }
 
     // ── Used bytes ───────────────────────────────────────────────────────────
 
-    /// <summary>Files in the folder are summed — the positive case.</summary>
+    /// <summary>Files in the folder are summed: the positive case.</summary>
     [TestMethod]
     public void UsedBytes_SumsEveryFileInTheFolder()
     {
@@ -155,7 +132,7 @@ public class BackupStorageBudgetTests
     public void UsedBytes_EmptyFolder_IsZero() => Assert.AreEqual(0L, BackupStorageBudget.UsedBytes(_backups));
 
     /// <summary>
-    /// A folder that does not exist yet is zero used, not an exception — this runs before the first
+    /// A folder that does not exist yet is zero used, not an exception: this runs before the first
     /// backup has ever been taken, and on a status call against a fresh install.
     /// </summary>
     [TestMethod]
@@ -168,7 +145,7 @@ public class BackupStorageBudgetTests
 
     /// <summary>
     /// Only the folder's own files count; a subdirectory's contents do not. Asserted rather than left
-    /// to whichever enumeration overload was reached for — the quota is a claim about this folder, and
+    /// to whichever enumeration overload was reached for: the quota is a claim about this folder, and
     /// which files it covers has to be a decision rather than an accident.
     /// </summary>
     [TestMethod]

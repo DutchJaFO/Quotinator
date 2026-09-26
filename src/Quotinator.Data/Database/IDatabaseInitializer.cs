@@ -83,19 +83,13 @@ public interface IDatabaseInitializer
     /// handled around the attempt itself.
     /// </para>
     /// </summary>
-    /// <param name="allowReserve">
-    /// When <c>true</c>, measures against the absolute ceiling rather than the operating quota,
-    /// reaching into the reserve between them. Never a default: the reserve exists so an operator who
-    /// has reached the normal quota still has room for the one backup they most need, which only works
-    /// if routine operation cannot consume it.
-    /// </param>
     /// <param name="bytesFreedFirst">
     /// Answers as if this many bytes had been removed from the backups folder first (#348): what the
     /// check would say once an old backup is gone, so a caller can offer removing one only when that
     /// would actually clear the way. The same comparisons, not a second estimate of them.
     /// </param>
     /// <returns><see cref="BackupOutcome.Succeeded"/> when a backup can be taken; otherwise the obstacle.</returns>
-    BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0);
+    BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0);
 
     /// <summary>
     /// Takes a backup of the database now, because a caller asked for one (#349).

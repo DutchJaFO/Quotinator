@@ -31,6 +31,10 @@ public class DatabaseBackupPreflightTests
         Directory.CreateDirectory(_tempDir);
         _dbPath = Path.Combine(_tempDir, "test.db");
         _backups = Path.Combine(_tempDir, "backups");
+
+        // A real database, so every check weighs a backup of real size: whether a backup would pass the
+        // ceiling depends on what it adds, and an absent file adds nothing.
+        using SqliteConnection connection = SeededDatabase();
     }
 
     [TestCleanup]
@@ -79,47 +83,67 @@ public class DatabaseBackupPreflightTests
         Assert.AreEqual(initializer.CreateBackup(connection, fromVersion: 1).Outcome, initializer.CheckBackupReadiness());
     }
 
-    /// <summary>
-    /// The reserve is the caller's to unlock, so the check answers differently for the same directory
-    /// depending on whether it was asked for. Without this, the override could silently stop reaching the
-    /// reserve. Which answer is which is held by the quota tests.
-    /// </summary>
-    [TestMethod]
-    public void CheckBackupReadiness_InsideTheReserve_AnswersDifferentlyWithTheReserveAllowed()
-    {
-        Directory.CreateDirectory(_backups);
-        using (FileStream filler = new(Path.Combine(_backups, "filler.db"), FileMode.Create, FileAccess.Write))
-        {
-            // 95% of a 1 GB ceiling: past the 90% operating quota, below the ceiling itself.
-            filler.SetLength(1_073_741_824L * 95 / 100);
-        }
-
-        DatabaseInitializer initializer = CreateInitializer();
-
-        Assert.AreNotEqual(initializer.CheckBackupReadiness(allowReserve: false), initializer.CheckBackupReadiness(allowReserve: true));
-    }
-
     private const long OneGigabyte = 1_073_741_824L;
 
     /// <summary>
-    /// #348: the check answers as if an old backup were already gone, so the notification can offer
-    /// removing one only when that clears the way. 95% used against a 90% quota; freeing a tenth leaves 85%.
+    /// 95% of a 1 GB ceiling: past the 90% operating quota, inside the reserve. The reserve is what lets a
+    /// backup still be taken there, with a warning raised, rather than refused (#348, developer
+    /// 2026-09-26).
     /// </summary>
     [TestMethod]
-    public void CheckBackupReadiness_OverTheQuotaByLessThanWhatIsFreedFirst_ReportsSucceeded()
+    public void CheckBackupReadiness_InsideTheReserve_ReportsSucceeded()
     {
         FillTheBackupsFolder(OneGigabyte * 95 / 100);
 
-        Assert.AreEqual(BackupOutcome.Succeeded, CreateInitializer().CheckBackupReadiness(bytesFreedFirst: OneGigabyte / 10));
+        Assert.AreEqual(BackupOutcome.Succeeded, CreateInitializer().CheckBackupReadiness());
     }
 
-    /// <summary>Freeing a hundredth leaves 94%, still over the quota: removing that backup would delete it for nothing.</summary>
+    /// <summary>
+    /// One byte short of the ceiling, so only the backup itself would take the folder past it. The quota is
+    /// set to 100% so the ceiling is the only limit in play: what refuses here can only be the backup's
+    /// own size measured against it.
+    /// </summary>
     [TestMethod]
-    public void CheckBackupReadiness_OverTheQuotaByMoreThanWhatIsFreedFirst_ReportsBudgetExceeded()
+    public void CheckBackupReadiness_WhenTheBackupWouldPassTheCeiling_ReportsBudgetExceeded()
     {
-        FillTheBackupsFolder(OneGigabyte * 95 / 100);
+        FillTheBackupsFolder(OneGigabyte - 1);
 
-        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer().CheckBackupReadiness(bytesFreedFirst: OneGigabyte / 100));
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer(quotaPercent: 100).CheckBackupReadiness());
+    }
+
+    [TestMethod]
+    public void CheckBackupReadiness_WhenTheBackupWouldPassTheCeiling_AgreesWithTheAttempt()
+    {
+        FillTheBackupsFolder(OneGigabyte - 1);
+        DatabaseInitializer initializer = CreateInitializer(quotaPercent: 100);
+        using SqliteConnection connection = SeededDatabase();
+
+        Assert.AreEqual(initializer.CreateBackup(connection, fromVersion: 1).Outcome, initializer.CheckBackupReadiness());
+    }
+
+    /// <summary>
+    /// #348: the check answers as if an old backup were already gone, so the notification can offer
+    /// removing one only when that clears the way. The folder is full to the ceiling; freeing a megabyte
+    /// leaves room for a backup of a few kilobytes.
+    /// </summary>
+    [TestMethod]
+    public void CheckBackupReadiness_PastTheCeilingByLessThanWhatIsFreedFirst_ReportsSucceeded()
+    {
+        FillTheBackupsFolder(OneGigabyte);
+
+        Assert.AreEqual(BackupOutcome.Succeeded, CreateInitializer().CheckBackupReadiness(bytesFreedFirst: 1_048_576));
+    }
+
+    /// <summary>
+    /// Freeing one byte of a full folder leaves no room for the backup: removing that one would delete it
+    /// for nothing. The quota at 100% keeps the ceiling the only limit in play.
+    /// </summary>
+    [TestMethod]
+    public void CheckBackupReadiness_PastTheCeilingByMoreThanWhatIsFreedFirst_ReportsBudgetExceeded()
+    {
+        FillTheBackupsFolder(OneGigabyte);
+
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer(quotaPercent: 100).CheckBackupReadiness(bytesFreedFirst: 1));
     }
 
     /// <summary>A full volume is cleared the same way: the space a removed backup occupied becomes free.</summary>
@@ -156,13 +180,16 @@ public class DatabaseBackupPreflightTests
     // deterministically and identically on Windows and Linux, which an ACL would not.
     private void BlockTheBackupsDirectory() => File.WriteAllText(_backups, "not a directory");
 
-    private DatabaseInitializer CreateInitializer(int maxBackupStorageGb = 1, IDiskSpaceProvider? diskSpaceProvider = null)
+    private DatabaseInitializer CreateInitializer(
+        int maxBackupStorageGb = 1, IDiskSpaceProvider? diskSpaceProvider = null,
+        int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent)
     {
         DatabaseOptions options = new()
         {
             DbPath = _dbPath,
             BackupsPath = _backups,
             MaxBackupStorageGb = maxBackupStorageGb,
+            BackupQuotaPercent = quotaPercent,
         };
 
         return new DatabaseInitializer(new SqliteConnectionFactory(_dbPath), options, [],

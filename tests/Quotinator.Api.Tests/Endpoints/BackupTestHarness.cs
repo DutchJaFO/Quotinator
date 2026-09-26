@@ -193,7 +193,7 @@ internal sealed class BackupTestHarness : IDisposable
         }
 
         /// <inheritdoc/>
-        public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0) => Readiness;
+        public BackupOutcome CheckBackupReadiness(long bytesFreedFirst = 0) => Readiness;
 
         /// <inheritdoc/>
         public int SchemaVersion => _inner.SchemaVersion;
