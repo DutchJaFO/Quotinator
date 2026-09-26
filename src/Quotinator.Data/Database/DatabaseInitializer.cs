@@ -148,6 +148,13 @@ public class DatabaseInitializer(
         // staged, and which this pass therefore does not stage again. A rebuild for the same reason
         // migrations 20 and 21 needed one: SQLite cannot widen an inline CHECK.
         new SchemaMigration { Version = 22, Sql = ImportActionAlreadyReportedMigrations.WidenActionTypeForAlreadyReported },
+        // #348: MetadataKind gains 'BackupRefused': startup did not load content because no backup
+        // could be taken. A rebuild for the same reason migrations 15, 17 and 18 needed one.
+        new SchemaMigration { Version = 23, Sql = NotificationBackupRefusedMigrations.WidenMetadataKindForBackupRefused },
+        // #348: #279's announcement is reworded, and its content hash is part of its identity, so the
+        // stored row is rewritten to match rather than announced a second time. Data only: no schema
+        // change, so the baseline is unaffected.
+        new SchemaMigration { Version = 24, Sql = NotificationAnnouncementRewordMigrations.RewordOperationIdRename },
     ];
 
     // Data's own baseline fragment: creates every Data-owned table directly under its final,
@@ -347,7 +354,7 @@ public class DatabaseInitializer(
             Title             TEXT,
             Metadata          TEXT,
             MetadataKind      TEXT
-                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending')),
+                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused')),
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
             OriginalLanguage  TEXT    NOT NULL DEFAULT 'en',
             DismissReason     TEXT
@@ -507,6 +514,14 @@ public class DatabaseInitializer(
     protected virtual Task OnInitialisedAsync(SqliteConnection connection) => Task.CompletedTask;
 
     /// <summary>
+    /// Called when <see cref="OnInitialisedAsync"/> did not run because no backup could be taken first
+    /// (#348). The schema is intact, so a subclass may report the refusal from here, inside the machinery
+    /// that refused, per ADR 018. The base implementation does nothing.
+    /// </summary>
+    /// <param name="obstacle">What stopped the backup.</param>
+    protected virtual Task OnContentLoadRefusedAsync(BackupOutcome obstacle) => Task.CompletedTask;
+
+    /// <summary>
     /// Reports whether <see cref="OnInitialisedAsync"/> would perform genuine seeding work if called
     /// right now, mirroring <see cref="ApplyMigrationsAsync"/>'s own <c>dataPending</c>/
     /// <c>consumerPending</c> real-work gate for the migration step (#277). The base class has no
@@ -561,6 +576,7 @@ public class DatabaseInitializer(
         if (!backup.Succeeded)
         {
             Logger.LogSeedRefusedNoBackup(backup.Outcome.ToString());
+            await OnContentLoadRefusedAsync(backup.Outcome);
             return backup.Outcome;
         }
 
@@ -691,10 +707,10 @@ public class DatabaseInitializer(
     }
 
     /// <inheritdoc/>
-    public BackupOutcome CheckBackupReadiness(bool allowReserve = false)
+    public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0)
     {
         long limitBytes    = BackupStorageBudget.LimitBytes(_options, allowReserve);
-        long existingBytes = BackupStorageBudget.UsedBytes(_options.BackupsPath);
+        long existingBytes = Math.Max(0L, BackupStorageBudget.UsedBytes(_options.BackupsPath) - bytesFreedFirst);
 
         WarnIfQuotaPercentOutOfRange();
 
@@ -705,7 +721,7 @@ public class DatabaseInitializer(
         if (existingBytes >= limitBytes)
             return BackupOutcome.BudgetExceeded;
 
-        if (_diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath) <= 0L)
+        if (_diskSpaceProvider.GetAvailableFreeSpaceBytes(_options.BackupsPath) + bytesFreedFirst <= 0L)
             return BackupOutcome.InsufficientDiskSpace;
 
         try { Directory.CreateDirectory(_options.BackupsPath); }
@@ -955,7 +971,7 @@ public class DatabaseInitializer(
             Pooling    = false,
         }.ToString();
 
-        using SqliteConnection dest = new SqliteConnection(destConnectionString);
+        using SqliteConnection dest = new(destConnectionString);
         try { dest.Open(); }
         catch (Exception ex) { return DatabaseBackupResult.Failed(BackupOutcome.DestinationFileNotWritable, ex); }
 
@@ -996,7 +1012,7 @@ public class DatabaseInitializer(
     // rather than a partially-migrated or partially-rebuilt one.
     private static void RestoreBackup(SqliteConnection connection, string backupPath)
     {
-        using SqliteConnection source = new SqliteConnection($"Data Source={backupPath}");
+        using SqliteConnection source = new($"Data Source={backupPath}");
         source.Open();
         source.BackupDatabase(connection);
     }

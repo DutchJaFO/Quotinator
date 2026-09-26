@@ -11,10 +11,6 @@ namespace Quotinator.Data.Database;
 /// direction an exception is for what there is no other way to detect — here there is no other way to
 /// <em>escape</em>, which is a different problem with the same answer.
 /// </para>
-/// <para>
-/// Replaces <c>DatabaseBackupWriteException</c>, which named only the write and could not say which of
-/// the five obstacles occurred.
-/// </para>
 /// </summary>
 /// <param name="outcome">Which obstacle stopped the backup.</param>
 /// <param name="innerException">The underlying failure, where one was thrown.</param>

@@ -19,7 +19,7 @@ public class StartupSummaryLoggerTests
     #region Helpers
 
     /// <summary>
-    /// Builds the logger against a real Serilog pipeline via <see cref="CaptureSink"/> — a plain MEL
+    /// Builds the logger against a real Serilog pipeline via <see cref="CaptureSink"/>: a plain MEL
     /// test double's formatter callback does not apply Serilog's default string-quoting behaviour, so
     /// it cannot catch a missing <c>{:l}</c> literal specifier (#244 found this live: the banner's
     /// `$"""..."""` → message-template conversion initially omitted `:l` on every string placeholder,
@@ -33,7 +33,7 @@ public class StartupSummaryLoggerTests
         bool     logRequests         = false,
         bool     isHa                = false)
     {
-        CaptureSink sink    = new CaptureSink();
+        CaptureSink sink    = new();
         Serilog.Core.Logger serilog = new LoggerConfiguration()
             .MinimumLevel.Is(LogEventLevel.Information)
             .WriteTo.Sink(sink)
@@ -41,9 +41,9 @@ public class StartupSummaryLoggerTests
         ILogger<StartupSummaryLogger> logger = new SerilogLoggerFactory(serilog)
             .CreateLogger<StartupSummaryLogger>();
 
-        StubDbInitializer db      = new StubDbInitializer(migrationApplied);
-        StubVersionService version = new StubVersionService("1.2.3");
-        StartupSummaryLogger startupLogger = new StartupSummaryLogger(
+        StubDbInitializer db      = new(migrationApplied);
+        StubVersionService version = new("1.2.3");
+        StartupSummaryLogger startupLogger = new(
             logger, db, version,
             dataDir:            "/data",
             dbPath:             "/data/quotinatordata.db",
@@ -82,7 +82,7 @@ public class StartupSummaryLoggerTests
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
 
-        public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
+        public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
         public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success("stub-backup.db"));
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
         public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
@@ -98,7 +98,7 @@ public class StartupSummaryLoggerTests
     #endregion
 
     // -------------------------------------------------------------------------
-    #region LogStarting — opening banner
+    #region LogStarting: opening banner
 
     [TestMethod]
     public void LogStarting_LogsExactlyOneEntry()
@@ -127,7 +127,7 @@ public class StartupSummaryLoggerTests
     #endregion
 
     // -------------------------------------------------------------------------
-    #region LogReady — listening lines before banner
+    #region LogReady: listening lines before banner
 
     [TestMethod]
     public void LogReady_ListeningLinesLoggedBeforeBanner()
@@ -152,7 +152,7 @@ public class StartupSummaryLoggerTests
         Assert.HasCount(2, listeningLines);
     }
 
-    /// <summary>#244: the listening-address line is a string property — must carry the `{:l}`
+    /// <summary>#244: the listening-address line is a string property, and must carry the `{:l}`
     /// literal specifier, or Serilog wraps the address in quotes.</summary>
     [TestMethod]
     public void LogReady_ListeningLine_AddressNotQuoted()
@@ -168,7 +168,7 @@ public class StartupSummaryLoggerTests
     #endregion
 
     // -------------------------------------------------------------------------
-    #region LogReady — closing banner content
+    #region LogReady: closing banner content
 
     [TestMethod]
     public void LogReady_BannerContainsHashBorder()
@@ -209,7 +209,7 @@ public class StartupSummaryLoggerTests
     }
 
     /// <summary>#221: the five entity-type counts added alongside quotes/sources/characters/people
-    /// each get their own line under the "Statistics:" section, not crammed onto the schema line —
+    /// each get their own line under the "Statistics:" section, not crammed onto the schema line:
     /// found live via T1 that a single-line format doesn't scale as more entity types are added.</summary>
     [TestMethod]
     public void LogReady_BannerContainsNewEntityTypeStats_OnePerLine()
@@ -241,7 +241,7 @@ public class StartupSummaryLoggerTests
             "migration line must not appear when no migration ran");
     }
 
-    /// <summary>#244: found live via T2 — the empty-string `MigLine` value rendered as a literal `""`
+    /// <summary>#244: found live via T2: the empty-string `MigLine` value rendered as a literal `""`
     /// pair when the `{MigLine}` placeholder was missing its `:l` specifier (Serilog quotes an empty
     /// string the same as any other string). The schema line must end cleanly with no stray quotes.</summary>
     [TestMethod]
@@ -333,7 +333,7 @@ public class StartupSummaryLoggerTests
         Assert.Contains("OpenAPI spec:", AllMessages(sink));
     }
 
-    /// <summary>#244: every string-valued field in the closing banner must render unquoted — the
+    /// <summary>#244: every string-valued field in the closing banner must render unquoted: the
     /// `:l` literal specifier on every string placeholder, proven against Serilog's real rendering
     /// rather than a MEL test double that can't reproduce the quoting behaviour at all.</summary>
     [TestMethod]
@@ -357,7 +357,7 @@ public class StartupSummaryLoggerTests
     #endregion
 
     // -------------------------------------------------------------------------
-    #region ResolveUrls — HA ingress
+    #region ResolveUrls: HA ingress
 
     [TestMethod]
     public void ResolveUrls_HaMode_AllFieldsReturnHaMessage()
@@ -374,7 +374,7 @@ public class StartupSummaryLoggerTests
     #endregion
 
     // -------------------------------------------------------------------------
-    #region ResolveUrls — no addresses
+    #region ResolveUrls: no addresses
 
     [TestMethod]
     public void ResolveUrls_NoAddresses_AllFieldsReturnNotAvailable()
@@ -403,7 +403,7 @@ public class StartupSummaryLoggerTests
     #endregion
 
     // -------------------------------------------------------------------------
-    #region ResolveUrls — URL formatting
+    #region ResolveUrls: URL formatting
 
     [TestMethod]
     public void ResolveUrls_HttpWildcard_ReplacesWithLocalIp()
@@ -455,7 +455,7 @@ public class StartupSummaryLoggerTests
         (string restApi, _, _) = StartupSummaryLogger.ResolveUrls(
             ["http://localhost:5000"], isHa: false, sslEnabled: false, localIp: "192.168.1.5");
 
-        // Non-wildcard address is not replaced — it passes through as-is
+        // Non-wildcard address is not replaced; it passes through as-is
         Assert.AreEqual("http://localhost:5000/api/v1/", restApi);
     }
 

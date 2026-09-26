@@ -18,7 +18,7 @@ namespace Quotinator.Data.Tests.Notifications;
 /// <para>
 /// Deliberately a real-database test rather than one against fake reader/writer doubles, which is what
 /// this covered while it lived in <c>Quotinator.Api.Tests</c>. The behaviour under test is now a JSON
-/// payload written into a column and read back out to compare a key — a fake writer that records calls
+/// payload written into a column and read back out to compare a key; a fake writer that records calls
 /// in memory would report success without the payload ever surviving a round-trip through SQLite,
 /// which is the only thing that actually matters here.
 /// </para>
@@ -28,8 +28,8 @@ public class NotificationSeedingTests
 {
     public TestContext TestContext { get; set; } = null!;
 
-    // v1.8.3's announcement body, exactly as that release wrote it — the text migration 11's content
-    // hash is taken over, and still the text Program.cs's producer writes today.
+    // v1.8.3's announcement body, exactly as that release wrote it: the text migration 11's content hash is
+    // taken over. The producer wrote it until #348 reworded it; migration 24 moves stored rows to the new text.
     private const string V183AnnouncementBody =
         "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
         "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
@@ -46,7 +46,7 @@ public class NotificationSeedingTests
         _tempDir = Directory.CreateTempSubdirectory("quotinator_notification_seeding_test_").FullName;
         _dbPath = Path.Combine(_tempDir, "test.db");
 
-        // The schema the application actually creates — see CurrentSchema for why the hand-listed
+        // The schema the application actually creates; see CurrentSchema for why the hand-listed
         // replay this used to do drifts every time a migration touches System_Notification.
         await CurrentSchema.ApplyDataSchemaAsync(_dbPath);
 
@@ -73,7 +73,7 @@ public class NotificationSeedingTests
         Assert.HasCount(1, (await _reader.GetPagedAsync(1, 0)).Items);
     }
 
-    /// <summary>The same payload twice writes once — the whole point of the helper, across restarts.</summary>
+    /// <summary>The same payload twice writes once: the whole point of the helper, across restarts.</summary>
     [TestMethod]
     public async Task SeedOnceAsync_SameIdentityTwice_WritesOnce()
     {
@@ -123,10 +123,10 @@ public class NotificationSeedingTests
         await SeedWhatsNewAsync("1.9.10");
 
         Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items,
-            "A version that is a substring of another must not suppress it — exactly what the old Contains check got wrong.");
+            "A version that is a substring of another must not suppress it, exactly what the old Contains check got wrong.");
     }
 
-    /// <summary>Identity comes from metadata, never body text — an identifier appearing only in prose must not suppress a write.</summary>
+    /// <summary>Identity comes from metadata, never body text: an identifier appearing only in prose must not suppress a write.</summary>
     [TestMethod]
     public async Task SeedOnceAsync_IdentityAppearsInBodyButNotMetadata_StillWrites()
     {
@@ -138,7 +138,7 @@ public class NotificationSeedingTests
     }
 
     /// <summary>
-    /// A row whose <c>MetadataKind</c> is set is read back as that exact type — the round-trip the
+    /// A row whose <c>MetadataKind</c> is set is read back as that exact type: the round-trip the
     /// column exists to make trivial. Guards against the comparison silently falling back to "unknown
     /// shape, cannot identify", which would make every notification re-announce itself forever.
     /// </summary>
@@ -156,7 +156,7 @@ public class NotificationSeedingTests
     }
 
     /// <summary>
-    /// A row predating #312 has no <c>Metadata</c> at all. It must be skipped rather than throwing —
+    /// A row predating #312 has no <c>Metadata</c> at all. It must be skipped rather than throwing:
     /// otherwise one legacy row would break seeding on every subsequent startup.
     /// </summary>
     [TestMethod]
@@ -169,7 +169,7 @@ public class NotificationSeedingTests
         Assert.IsNotNull(written);
     }
 
-    /// <summary>A derived payload's own properties survive the round-trip — serialization uses the runtime type, not the declared one.</summary>
+    /// <summary>A derived payload's own properties survive the round-trip: serialization uses the runtime type, not the declared one.</summary>
     [TestMethod]
     public async Task SeedOnceAsync_DerivedMetadata_PersistsItsOwnProperties()
     {
@@ -189,12 +189,12 @@ public class NotificationSeedingTests
         SchemaVersionOvershootMetadataDto? readBack =
             JsonSerializer.Deserialize<SchemaVersionOvershootMetadataDto>(stored.Metadata);
         Assert.IsNotNull(readBack);
-        Assert.AreEqual(7, readBack.DataSchemaVersion, "A derived property was lost — serialization used the declared type instead of the runtime one.");
+        Assert.AreEqual(7, readBack.DataSchemaVersion, "A derived property was lost: serialization used the declared type instead of the runtime one.");
         Assert.AreEqual(5, readBack.AppSchemaVersion);
         Assert.AreEqual(NotificationMetadataKind.SchemaVersionOvershoot, stored.MetadataKind.Parsed);
     }
 
-    /// <summary>Seeding applies no expiry unless asked — #312 made expiry opt-in.</summary>
+    /// <summary>Seeding applies no expiry unless asked; #312 made expiry opt-in.</summary>
     [TestMethod]
     public async Task SeedOnceAsync_NoExpirySpecified_DoesNotExpire()
     {
@@ -206,13 +206,13 @@ public class NotificationSeedingTests
 
     /// <summary>
     /// A v1.8.3 notification, once the legacy backfills have run, suppresses the producer that would
-    /// otherwise re-announce it — end to end through the writer and reader, not against the migration
+    /// otherwise re-announce it, end to end through the writer and reader, not against the migration
     /// SQL alone.
     /// <para>
     /// Regression test for a duplicate reproduced against a real v1.8.3 database: #312 moved identity
     /// out of message text, so a row written before it could not be identified and #279's producer
     /// wrote a second copy on the first startup after upgrading. Every existing install was affected,
-    /// not only development machines — v1.8.3 does write this notification, it simply takes longer than
+    /// not only development machines: v1.8.3 does write this notification, it simply takes longer than
     /// a short smoke check because first-boot seeding runs first.
     /// </para>
     /// <para>
@@ -283,7 +283,7 @@ public class NotificationSeedingTests
     /// <summary>
     /// The unreleased section states what it is, and stores no null-valued property to be interpreted.
     /// <para>
-    /// Before #312's step 10 the two cases were told apart by <c>version</c> being null — a convention
+    /// Before #312's step 10 the two cases were told apart by <c>version</c> being null, a convention
     /// every reader had to know, and one that "not set", "failed to parse" and "the producer forgot" are
     /// all indistinguishable from. The stored payload now carries the state outright and omits the
     /// version entirely rather than writing <c>"version":null</c>.
@@ -307,7 +307,7 @@ public class NotificationSeedingTests
 
     /// <summary>
     /// A released and an unreleased entry are never the same notification, even when every other
-    /// identity component coincides — which is exactly why the state is part of the identity rather than
+    /// identity component coincides, which is exactly why the state is part of the identity rather than
     /// merely stored alongside it.
     /// </summary>
     [TestMethod]
@@ -329,12 +329,12 @@ public class NotificationSeedingTests
         NotificationEntity? second = await NotificationSeeding.SeedOnceAsync(
             _reader, _writer, NotificationType.Information, unreleased, body: "unreleased", appVersionId: null);
 
-        Assert.IsNotNull(second, "The release state is part of the identity — these are two different notifications.");
+        Assert.IsNotNull(second, "The release state is part of the identity; these are two different notifications.");
         Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items);
     }
 
     /// <summary>
-    /// The same unresolved condition, seen again on a later startup, writes once — the dedupe half
+    /// The same unresolved condition, seen again on a later startup, writes once: the dedupe half
     /// <see cref="NotificationSeeding.SeedWhileUnresolvedAsync"/> shares with
     /// <see cref="NotificationSeeding.SeedOnceAsync"/>, and the positive control for the test below.
     /// </summary>
@@ -344,7 +344,7 @@ public class NotificationSeedingTests
         NotificationEntity? first = await SeedWhileUnresolvedAsync("reseed-recommended", "first body");
         NotificationEntity? second = await SeedWhileUnresolvedAsync("reseed-recommended", "second body");
 
-        Assert.IsNotNull(first, "The first call must write — otherwise the suppression below proves nothing.");
+        Assert.IsNotNull(first, "The first call must write; otherwise the suppression below proves nothing.");
         Assert.IsNull(second, "The second call must report that it suppressed the write, not silently return an entity.");
         Assert.HasCount(1, (await _reader.GetPagedAsync(1, 0)).Items);
     }
@@ -364,7 +364,7 @@ public class NotificationSeedingTests
 
         NotificationEntity? second = await SeedWhileUnresolvedAsync("reseed-recommended", "second body");
 
-        Assert.IsNotNull(second, "A dismissed notification must not suppress — the condition recurred and is unresolved again.");
+        Assert.IsNotNull(second, "A dismissed notification must not suppress; the condition recurred and is unresolved again.");
         Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items,
             "Both notifications must remain in the history; the dismissed one is resolved, not deleted.");
     }
@@ -383,13 +383,13 @@ public class NotificationSeedingTests
 
         NotificationEntity? second = await SeedAsync("some-announcement", "second body");
 
-        Assert.IsNull(second, "SeedOnceAsync must still suppress against a dismissed row — that is its whole contract.");
+        Assert.IsNull(second, "SeedOnceAsync must still suppress against a dismissed row; that is its whole contract.");
         Assert.HasCount(1, (await _reader.GetPagedAsync(1, 0)).Items);
     }
 
     /// <summary>
     /// A different set of changed files is a different recommendation, so it writes rather than being
-    /// suppressed by the one already active (#304). Identity is the file set, not merely the reason —
+    /// suppressed by the one already active (#304). Identity is the file set, not merely the reason,
     /// which matters because both cases carry the same reason.
     /// </summary>
     [TestMethod]
@@ -423,14 +423,14 @@ public class NotificationSeedingTests
         NotificationEntity? afterSecondReset = await SeedAfterResetAsync();
 
         Assert.IsNotNull(afterSecondReset,
-            "The condition recurred after being resolved, so it must notify again — otherwise the operator "
+            "The condition recurred after being resolved, so it must notify again; otherwise the operator "
             + "is told nothing about a database that is once more empty.");
         Assert.HasCount(2, (await _reader.GetPagedAsync(1, 0)).Items);
     }
 
     /// <summary>
     /// The counterpart: without something dismissing it, a recurrence is suppressed. This is what makes
-    /// the dismiss wiring load-bearing rather than tidy — and what the test above would still pass
+    /// the dismiss wiring load-bearing rather than tidy, and what the test above would still pass
     /// against if dedupe had simply been switched off.
     /// </summary>
     [TestMethod]

@@ -8,11 +8,11 @@
 
 **Beyond the profile.** One container of this test's own, `qt-notif-14`, publishing `19514`, created
 with `--env Quotinator__AdminApiKey=t2-308` and a bind directory holding the shared conflict fixture in
-its `imports/` folder. It is restarted three times and reset once — each of those is a trigger, not
+its `imports/` folder. It is restarted three times and reset once; each of those is a trigger, not
 scaffolding.
 
-#308 defines a per-type layout across both surfaces. Two kinds — `ReseedRecommended` and
-`SchemaVersionOvershoot` — had never been rendered under assertion at all, and the per-type decision
+#308 defines a per-type layout across both surfaces. Two kinds, `ReseedRecommended` and
+`SchemaVersionOvershoot`, had never been rendered under assertion at all, and the per-type decision
 itself was only ever read off a lookup table no renderer consults. This asserts both halves for every
 kind: that the kind's own trigger produces it, and that what a reader then sees matches the decision.
 
@@ -31,18 +31,23 @@ rendering assertion passing over a page nobody could reach in practice:
 | `SchemaVersionOvershoot` | a consumer schema version rolled one past this build, then a restart |
 | `ReseedRecommended` | a database reset, which leaves the database empty |
 
+**`BackupRefused` is not produced here.** Its trigger is a startup that cannot take a backup, and that
+startup loads no content, so it cannot share a run with the kinds above, each of which needs content
+loaded. Its own trigger produces it, and both surfaces render it, in
+[`../backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md`](../backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md).
+
 **The reset comes last, and in its own step.** Reset rebuilds every table (#156), so it takes the other
-five kinds with it — which is why it cannot share a page with them and why nothing after it may assume
+five kinds with it, which is why it cannot share a page with them and why nothing after it may assume
 they are still there.
 
 **The overshoot's trigger is a version row, not a notification row.** Inserting `MAX(Version) + 1` into
 `System_ConsumerSchemaVersion` is what
 [`../startup-and-degradation/06-schema-version-ahead-of-the-application.md`](../startup-and-degradation/06-schema-version-ahead-of-the-application.md)
-uses, and the producer is what writes the notification — so this still exercises the producer rather
+uses, and the producer is what writes the notification, so this still exercises the producer rather
 than faking its output.
 
 **The detail expectation is derived, not listed.** Which kinds carry structured detail is read from each
-row's own payload — a kind has detail when its payload carries a non-empty `counts` array — so no list
+row's own payload (a kind has detail when its payload carries a non-empty `counts` array), so no list
 here can go stale when a kind is added.
 
 **`NotificationMetadataKind` is the source of the case list.** A kind added later must fail until it is
@@ -54,13 +59,13 @@ before the application stops*.
 
 **A rendering claim is only evidence if someone can see it.** Every surface this document opens is
 captured as well as read: one image of the whole surface, one per kind on it, and one more for each
-detail it opens — `<kind>-<surface>.png` and `<kind>-<surface>-detail.png`, into
+detail it opens: `<kind>-<surface>.png` and `<kind>-<surface>-detail.png`, into
 `.claude/temp/qt-notif-14/`, which is gitignored. Fifteen images, and none of them a tracked file: they
 are this run's evidence, produced again by the next run.
 
 The DOM snippets stay the machine-checkable half, per the index's *Every test must be able to run
-unattended*: nothing passes or fails on an image. The image records what an assertion cannot describe —
-spacing, wrapping, whether a body that reads correctly also looks like one — and it is the only way the
+unattended*: nothing passes or fails on an image. The image records what an assertion cannot describe
+(spacing, wrapping, whether a body that reads correctly also looks like one), and it is the only way the
 per-type decision reaches a reader who cannot produce these kinds themselves. Four of the six need a
 rolled-forward schema version, a reset, or a staged conflict to exist at all, so this run is the only
 place all six are ever together.
@@ -72,13 +77,13 @@ again, and the assertion and the picture describe the same moment because one ca
 
 **A kind is cropped to its own row by returning that row's rectangle.** The script uses an
 `{x, y, width, height}` return value as the capture region, so `getBoundingClientRect()` on the row is
-what bounds the image — no pixel bounds chosen by eye, and no hiding of neighbouring rows to fake an
+what bounds the image: no pixel bounds chosen by eye, and no hiding of neighbouring rows to fake an
 isolated shot. A row whose rectangle has zero height is not one that rendered small but one the viewport
 never laid out, and the index's *A count is evidence only if the instrument counts the right thing*
 applies to a capture exactly as it does to a count.
 
 **Match a title without an apostrophe in it.** The match text is interpolated into a single-quoted
-JavaScript string, and `What's new` closes it — `SyntaxError: missing ) after argument list`, measured
+JavaScript string, and `What's new` closes it: `SyntaxError: missing ) after argument list`, measured
 2026-09-24. Match `new (unreleased)` instead.
 
 ## Steps
@@ -117,12 +122,12 @@ function Capture-Row {
   $url    = if ($Surface -eq 'popup') { "http://localhost:$Port/" } else { "http://localhost:$Port/notifications" }
   $scope  = if ($Surface -eq 'popup') { "document.querySelector('.modal')" } else { "document" }
   $width  = if ($Surface -eq 'popup') { 1000 } else { 1280 }
-  $expand = if ($Expand) { "const d = row.querySelector('details.notification-detail'); if (d) d.open = true; await new Promise(r => setTimeout(r, 300));" } else { "" }
+  $expandJs = if ($Expand) { "const d = row.querySelector('details.notification-detail'); if (d) d.open = true; await new Promise(r => setTimeout(r, 300));" } else { "" }
   @"
 await new Promise(r => setTimeout(r, 800));
 const rows = [...$scope.querySelectorAll('tbody tr')].filter(r => r.querySelector('.notification-body'));
 const row  = rows.find(r => r.querySelector('.notification-title').textContent.includes('$Match'));
-$expand
+$expandJs
 const b = row.getBoundingClientRect();
 return { x: b.left + scrollX, y: b.top + scrollY, width: b.width, height: b.height,
          title: row.querySelector('.notification-title').textContent.trim(),
@@ -139,7 +144,13 @@ Read-Thrown
 **Expected:** `announcement=1 importreviewpending=1 reseedfileapplied=5 whatsnew=1`, and `thrown=0`.
 Four kinds, each written by the producer its trigger runs.
 
-**On failure:** a missing kind is a producer defect, not a rendering one — the rest of this document
+**`Capture-Row`'s script fragment is `$expandJs`, never `$expand`.** PowerShell names are
+case-insensitive, so `$expand` *is* the `[switch]$Expand` parameter: assigning it a string throws, and
+the page then receives a bare `False`. Measured 2026-09-26: every capture failed with `ReferenceError:
+False is not defined`, and each failed capture left four `WebSocketException`s in the log that the next
+stop's `Read-Thrown` counted.
+
+**On failure:** a missing kind is a producer defect, not a rendering one; the rest of this document
 would then asserting rendering for a row nobody can obtain. Stop and report which trigger produced
 nothing.
 
@@ -171,15 +182,15 @@ Pair each row with its kind through the API, so the assertion is per kind rather
 ```
 
 **Ask whether the key exists before counting it.** `@($p.counts).Count` reads `1` for a payload with no
-`counts` at all, because `@($null)` is a one-element array — so every kind would look as though it
+`counts` at all, because `@($null)` is a one-element array, so every kind would look as though it
 carried detail. Measured here 2026-09-23: the announcement and what's-new rows reported `counts=1`
 under that form and `0` under this one. See the index's *A count is evidence only if the instrument
 counts the right thing*.
 
 **Expected:** every row renders a non-empty body with its title as its own element and never inside it
 (`titleInsideBody: false`); `expandsInPlace: false` throughout, because the page opens a dialog;
-`opensDetail: true` for exactly the rows whose payload carries a non-empty `counts` array — the five
-`reseedfileapplied` rows and the one `importreviewpending` row — and `false` for `announcement` and
+`opensDetail: true` for exactly the rows whose payload carries a non-empty `counts` array (the five
+`reseedfileapplied` rows and the one `importreviewpending` row) and `false` for `announcement` and
 `whatsnew`, whose payloads carry no counts; and the review row is the only one with an extra button,
 reading `Decide`.
 
@@ -199,7 +210,7 @@ Capture-Row -Surface page -Match "needs review"     -Name importreviewpending-pa
 ```
 
 **Expected:** each call prints the row it found and its own rectangle, and the four match this step's
-own reading — `buttons` of `Dismiss` alone for the announcement and what's-new rows, `Details,
+own reading: `buttons` of `Dismiss` alone for the announcement and what's-new rows, `Details,
 Dismiss` for a reseeded file, `Details, Decide, Dismiss` for the review row.
 
 ### 3. Open a detail dialog and confirm it describes itself
@@ -233,10 +244,10 @@ return { x: b.left + scrollX, y: b.top + scrollY, width: b.width, height: b.heig
 ```
 
 **Read `tfoot` separately, or the totals go unasserted.** The dialog renders a bold **Total** line that
-is not a `tbody` row — measured 2026-09-24: `bodyRows` `2`, `footRows` `1`. A step counting only
+is not a `tbody` row; measured 2026-09-24: `bodyRows` `2`, `footRows` `1`. A step counting only
 `tbody tr` reads `2` where three lines render, and would keep passing if the totals stopped adding up.
 
-**Assert the shape, not the column list** — the counts a breakdown carries have changed twice since
+**Assert the shape, not the column list**: the counts a breakdown carries have changed twice since
 #308 (#374, #377), and naming them here would fail on the next addition while the behaviour is correct.
 
 ### 4. Trigger the overshoot, and confirm the fifth kind is produced and rendered
@@ -259,8 +270,8 @@ Kinds
 
 Open `http://localhost:19514/notifications` and read the overshoot row with the snippet from step 2.
 
-**Expected:** a non-empty body, its title its own element, `opensDetail: false` — its payload carries
-version numbers, which its body already states — and one extra button reading `Reset the database`.
+**Expected:** a non-empty body, its title its own element, `opensDetail: false` (its payload carries
+version numbers, which its body already states), and one extra button reading `Reset the database`.
 
 ```powershell
 Capture-Row -Surface page -Match "schema version" -Name schemaversionovershoot-page
@@ -292,12 +303,12 @@ const modal = document.querySelector('.modal');
 }))
 ```
 
-**Expected:** the same five kinds, the same detail decision — `expandsInPlace: true` for exactly the
-rows whose payload carries counts — and `opensDetail: false` throughout. That surface difference is
+**Expected:** the same five kinds, the same detail decision (`expandsInPlace: true` for exactly the
+rows whose payload carries counts), and `opensDetail: false` throughout. That surface difference is
 what #308 settled: a dialog on the page, an expander in the popup.
 
 **Capture the popup, then each kind in it**, the same way as step 2 but against the modal's own rows.
-The two detail-carrying kinds are captured expanded — that image is what shows the surface difference
+The two detail-carrying kinds are captured expanded: that image is what shows the surface difference
 as a difference, rather than as two booleans that happen to disagree:
 
 ```powershell
@@ -321,24 +332,25 @@ Capture-Row -Surface popup -Match "reseeded cleanly" -Name reseedfileapplied-pop
 Capture-Row -Surface popup -Match "needs review"     -Name importreviewpending-popup-detail -Expand
 ```
 
-**Expected:** the whole-surface call reports `rows: 8`, `anyButton: false`, `expanders: 6`,
-`dialogs: 0`, and every per-kind call reports `buttons` empty.
+**Expected:** the whole-surface call reports `rows: 9`, `anyButton: false`, `expanders: 6`,
+`dialogs: 0`, and every per-kind call reports `buttons` empty. Nine is step 1's eight rows plus the
+overshoot; this line read `8` until 2026-09-26, one fewer than its own steps produce.
 
 **The popup is per browser session, not per application run.** Measured 2026-09-24: two fresh sessions
 against the same running container both rendered it, so these five captures need no restart between
-them — each `capture-page.csx` call is its own session. The restart above is still what *produces* the
+them: each `capture-page.csx` call is its own session. The restart above is still what *produces* the
 overshoot row; it is not what makes the popup appear.
 
 **Count notification rows, not table rows.** An expander holds a detail table of its own, so an
-unfiltered `tbody tr` returns those too — measured 2026-09-23: `49` rows where there are `9`, the extra
+unfiltered `tbody tr` returns those too; measured 2026-09-23: `49` rows where there are `9`, the extra
 forty reporting an empty title and a zero-length body. Filtering on the presence of a
 `.notification-body` cell keeps the selection to notification rows on either surface.
 
 **Read `window.innerHeight` alongside any fit assertion.** The pane can report a zero-height viewport,
-which makes every element read as off-screen — see the index's *A count is evidence only if the
+which makes every element read as off-screen; see the index's *A count is evidence only if the
 instrument counts the right thing*.
 
-**The popup offers no controls at all — no action button and no Dismiss.** `NotificationSummary` passes
+**The popup offers no controls at all: no action button and no Dismiss.** `NotificationSummary` passes
 neither `ShowActionColumn` nor `ShowDismissAction`, so every row there is read-only; the page passes
 both. Assert the absence here: a row that grew a button in the popup would be a surface difference
 nobody decided.
@@ -378,7 +390,8 @@ Kinds
 Open `http://localhost:19514/notifications` and read that row with the snippet from step 2.
 
 **Expected:** a non-empty body, its title its own element, `opensDetail: false`, and one extra button
-reading `Reseed the database` — the operation's own name, never `Run`.
+reading `Back up, then reseed`, the option's own name, never `Run`. A backup can be taken here, so it is
+the only option offered (#348).
 
 ```powershell
 Capture-Row -Surface page -Match "no quotes" -Name reseedrecommended-page
@@ -389,11 +402,11 @@ rather than this issue's rendering.
 
 ### 8. Render that last kind in the popup too, where nothing can reseed it away
 
-The popup renders once per process run, so this kind needs a restart to reach it — and on the container
+The popup renders once per process run, so this kind needs a restart to reach it, and on the container
 above that restart re-seeds the database, which **resolves the recommendation before it can be read**:
 measured 2026-09-23, the row came back `isDismissed=True`, `dismissReason=resolved`,
 `resolution=reseeded`. That re-seed is
-[#423](https://github.com/DutchJaFO/Quotinator/issues/423) — a reset is undone by the next restart,
+[#423](https://github.com/DutchJaFO/Quotinator/issues/423): a reset is undone by the next restart,
 because startup loads the configured files whenever the quote table is empty rather than only on a
 fresh install. #304's producer is behaving correctly on top of it: the load really did happen, so it
 records the action as carried out.
@@ -409,18 +422,29 @@ Invoke-RestMethod -Method Post -Headers @{ 'X-Api-Key' = 't2-308' } `
   "http://localhost:19515/api/v1/admin/database/reset?allowNoBackup=true" | Out-Null
 docker restart qt-notif-14b
 dotnet script scripts/testing/http.csx -- --url "http://localhost:19515/api/v1/health" --wait-for 200 --status
-(Invoke-RestMethod "http://localhost:19515/api/v1/notifications?pageSize=0").items |
-  ForEach-Object { "$($_.metadataKind) dismissed=$($_.isDismissed)" }
+function Get-Items14b { (Invoke-RestMethod "http://localhost:19515/api/v1/notifications?pageSize=0").items }
+$deadline = (Get-Date).AddSeconds(30)
+$items14b = Get-Items14b
+while (-not @($items14b | Where-Object { $_.metadataKind -eq 'whatsnew' }).Count -and (Get-Date) -lt $deadline) {
+  Start-Sleep -Seconds 1
+  $items14b = Get-Items14b
+}
+$items14b | ForEach-Object { "$($_.metadataKind) dismissed=$($_.isDismissed)" }
 ```
 
 **Expected:** `reseedrecommended dismissed=False`, alongside the announcement and what's-new rows this
-boot wrote. A reset on an empty container is the only trigger for this kind — measured: a cold start
+boot wrote. A reset on an empty container is the only trigger for this kind; measured: a cold start
 with no sources writes none.
+
+**Poll for the what's-new row; do not read once.** Its producer runs detached after startup, so a
+listing taken the moment health answers `200` can precede it. Measured 2026-09-26: one run listed it,
+the next listed only `announcement` and `reseedrecommended`, and the popup read seconds later showed all
+three.
 
 Open `http://localhost:19515/` and read the popup with step 5's snippet.
 
-**Expected:** the recommendation renders its title and body, `expandsInPlace: false` — its payload
-carries no counts — and **no buttons at all**, per the read-only popup above.
+**Expected:** the recommendation renders its title and body, `expandsInPlace: false` (its payload
+carries no counts), and **no buttons at all**, per the read-only popup above.
 
 ```powershell
 Capture-Row -Surface popup -Match "no quotes" -Name reseedrecommended-popup -Port 19515
@@ -435,19 +459,19 @@ dotnet script scripts/testing/test-env.csx -- destroy --name qt-notif-14b
 
 **Expected:** only the restart's own two shutdown lines.
 
-## Canary — run red against the build before #308
+## Canary: run red against the build before #308
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Built from
-`69c01776` — the commit before #308's first feature commit — as `quotinator:canary308c` via
+`69c01776` (the commit before #308's first feature commit) as `quotinator:canary308c` via
 `git worktree add` and `docker build`, 2026-09-23:
 
 | Step | Assertion | Pre-work result |
 |---|---|---|
-| 1 | four kinds from the cold start | **fails** — three: `announcement`, `importreviewpending`, `whatsnew` |
-| 2 | each row has a `.notification-body` cell | **fails** — `0` of `3` rows; the class does not exist |
-| 2 | a title element distinct from the body | **fails** — `0` title elements |
-| 2 | a detail control for the kinds carrying counts | **fails** — `0` dialogs and `0` expanders, for any kind |
-| 2 | the review row's button names its action | **fails** — the only labels are `Run` and `Dismiss` |
+| 1 | four kinds from the cold start | **fails**, three: `announcement`, `importreviewpending`, `whatsnew` |
+| 2 | each row has a `.notification-body` cell | **fails**: `0` of `3` rows; the class does not exist |
+| 2 | a title element distinct from the body | **fails**: `0` title elements |
+| 2 | a detail control for the kinds carrying counts | **fails**: `0` dialogs and `0` expanders, for any kind |
+| 2 | the review row's button names its action | **fails**: the only labels are `Run` and `Dismiss` |
 
 Every per-kind assertion depends on markup that build does not emit, so the document cannot pass there
 by accident. Container, image, bind directory and worktree removed afterwards.
@@ -477,7 +501,7 @@ detail the dialog opens and the two the popup expands in place.
 
 **One defect in the instrument, found and fixed rather than tolerated.** A capture that killed its
 browser left every Blazor circuit half-open: thirteen captures against one container produced **72
-`WebSocketException`s**, where the same container logged `0` before any capture ran — noise this suite
+`WebSocketException`s**, where the same container logged `0` before any capture ran: noise this suite
 would have been generating for itself, in the middle of the log the document reads for real exceptions.
 `capture-page.csx` now closes the browser over the protocol instead. Re-measured on a container of its
 own: `0` before three captures and `0` after.

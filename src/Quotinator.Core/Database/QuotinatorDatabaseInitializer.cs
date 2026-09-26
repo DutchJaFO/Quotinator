@@ -111,13 +111,65 @@ public sealed class QuotinatorDatabaseInitializer(
 
         await SeedIfEmptyAsync(connection, resolution.EffectiveBatches);
         await ReSeedGenresIfEmptyAsync(connection, resolution.EffectiveBatches);
+        await ResolveReseedIfContentLoadedAsync(connection, quotesBeforeSeeding);
         await RecommendReseedIfSourceContentChangedAsync(resolution, quotesBeforeSeeding);
         await LogDatabaseStatsAsync(connection);
     }
 
     /// <summary>
+    /// #348: startup did not load content because no backup could be taken first. The schema is intact,
+    /// so the refusal is reported as a notification rather than by degrading, and it offers the reseed
+    /// that resolves it. Deduplicated while unresolved: the same refusal recurs on every start until then.
+    /// </summary>
+    /// <param name="obstacle">What stopped the backup.</param>
+    protected override async Task OnContentLoadRefusedAsync(BackupOutcome obstacle)
+    {
+        BackupRefusedMetadataDto metadata = new()
+        {
+            Step = BackupGuardedStep.ContentLoad,
+            Obstacle = obstacle,
+            ReleaseState = NotificationReleaseState.NotApplicable,
+        };
+
+        object[] bodyArgs = [obstacle.ToString()];
+
+        await NotificationSeeding.SeedWhileUnresolvedAsync(
+            _notificationReader, _notificationWriter, NotificationType.ActionRequired, metadata,
+            body: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.BackupRefusedContentLoadBody, bodyArgs),
+            // Provenance is left unstated for the same reason as the reseed recommendation below: this runs
+            // before the app version row for this boot is recorded.
+            appVersionId: null,
+            title: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.BackupRefusedContentLoadTitle),
+            dismissTrigger: NotificationDismissTrigger.Reseed,
+            translations: NotificationTranslations.Build(
+                _notificationTextSource,
+                NotificationMessageKeys.BackupRefusedContentLoadTitle,
+                NotificationMessageKeys.BackupRefusedContentLoadBody,
+                bodyArgs: bodyArgs));
+    }
+
+    /// <summary>
+    /// #348: a start that loaded content into an empty database has done what a reseed does, so it
+    /// resolves every notification waiting for one, such as an earlier start's backup refusal. Only once
+    /// the whole load has returned, and only if content is actually there: a notification is updated
+    /// after the action that settles it, never during it, so the seed itself no longer does this per file.
+    /// </summary>
+    /// <param name="connection">The open connection the load used.</param>
+    /// <param name="quotesBeforeSeeding">The quote count before the load, which is what says it had work to do.</param>
+    private async Task ResolveReseedIfContentLoadedAsync(SqliteConnection connection, int quotesBeforeSeeding)
+    {
+        if (quotesBeforeSeeding > 0)
+            return;
+
+        if (await connection.ExecuteScalarAsync<int>(Sql.Quotes.CountAll) == 0)
+            return;
+
+        await _notificationWriter.DismissByTriggerAsync(NotificationDismissTrigger.Reseed, NotificationResolution.Reseeded);
+    }
+
+    /// <summary>
     /// #304 trigger 1: when a source file's content actually changed upstream and this database already
-    /// held content, the stored data no longer reflects the sources — so recommend a reseed rather than
+    /// held content, the stored data no longer reflects the sources, so recommend a reseed rather than
     /// performing one. Reseeding automatically here is explicitly out of the question (developer
     /// direction on #304): it would discard user content on a background startup path with nothing asked.
     /// </summary>
@@ -142,7 +194,7 @@ public sealed class QuotinatorDatabaseInitializer(
         if (changedFiles.Count == 0) return;
 
         // Ordered above so the same set of files produces the same identity regardless of the order the
-        // refresh happened to report them in — otherwise a parallel refresh could re-notify for a
+        // refresh happened to report them in; otherwise a parallel refresh could re-notify for a
         // condition already active.
         ReseedRecommendedMetadataDto metadata = new()
         {
@@ -171,11 +223,11 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <summary>
     /// #302: confirms that one file reseeded with nothing left to review, reporting what it actually
     /// did per entity type. Written from inside the seeding loop rather than reconstructed afterward
-    /// from <see cref="DatabaseInitializer.LastSeedReport"/> — the clean-apply branch is the only place
+    /// from <see cref="DatabaseInitializer.LastSeedReport"/>: the clean-apply branch is the only place
     /// that knows both which file and that it left nothing pending.
     /// </summary>
     /// <param name="fileName">The seed file that applied cleanly.</param>
-    /// <param name="origin">Which directory the file came from — part of what identifies the confirmation, since <paramref name="fileName"/> is a bare name that both directories can hold.</param>
+    /// <param name="origin">Which directory the file came from, part of what identifies the confirmation, since <paramref name="fileName"/> is a bare name that both directories can hold.</param>
     /// <param name="actions">Every import action the file produced, which is what the breakdown counts.</param>
     private async Task ConfirmFileAppliedCleanlyAsync(string fileName, SeedBatchOrigin origin, IReadOnlyList<ImportActionEntity> actions)
     {
@@ -184,24 +236,24 @@ public sealed class QuotinatorDatabaseInitializer(
             .Select(group => new ReseedEntityCountDto
             {
                 EntityType = group.Key,
-                // #373: how many of this type the file carried, whatever became of them — so the
+                // #373: how many of this type the file carried, whatever became of them, so the
                 // confirmation can say "13 incoming, 0 new, 13 already stored" rather than leaving the
                 // reader to infer it from three zeroes.
                 Incoming   = group.Count(),
                 Added      = group.Count(a => a.ActionType.Parsed == ImportActionKind.Add),
                 Unchanged  = group.Count(a => a.ActionType.Parsed == ImportActionKind.Unchanged),
-                // #374: found live — AppliedPolicy always echoes the *file's* own configured policy
+                // #374: found live: AppliedPolicy always echoes the *file's* own configured policy
                 // (every Modify branch in ImportActionPlanner stamps the same batch-wide `policy`
                 // parameter, never a per-row "how this specific field was actually resolved" value), so
                 // excluding Review here excluded every genuinely-changed row from a Review-policy file,
-                // not just the ones that happened not to change — the confirmation reported "107 came
+                // not just the ones that happened not to change. The confirmation reported "107 came
                 // in, 106 added, 0 updated" for a batch whose own report line said one Source was
-                // modified. Review carries no such guarantee of a no-op — an action stamped Review that
+                // modified. Review carries no such guarantee of a no-op: an action stamped Review that
                 // got this far already resolved cleanly (no ambiguity, or a rule fired), and a real field
                 // did change. Matches the batch's own RecordCount rule below.
                 Modified   = group.Count(a => a.ActionType.Parsed == ImportActionKind.Modify
                                            && a.AppliedPolicy.Parsed is not DuplicateResolutionPolicy.Skip),
-                // #374: Skip means "always keep the existing side" — a real difference arrived and was
+                // #374: Skip means "always keep the existing side": a real difference arrived and was
                 // discarded on purpose. That is neither Unchanged (nothing differed) nor Modified
                 // (nothing was kept as-is), and folding it into either would hide that the file actually
                 // wanted to change this row. Reported as its own bucket instead of silently vanishing
@@ -218,7 +270,7 @@ public sealed class QuotinatorDatabaseInitializer(
                 // conflict from content the file stopped mentioning.
                 AlreadyReported = group.Count(a => a.ActionType.Parsed == ImportActionKind.AlreadyReported),
                 // #373: every remaining outcome, recorded whether or not it can occur on this branch.
-                // A confirmation is written from the clean-apply path, so these are normally zero — and
+                // A confirmation is written from the clean-apply path, so these are normally zero, and
                 // a non-zero one is precisely the thing worth finding quickly, which is why they are
                 // stated rather than assumed absent. "Any information that tells us what happened during
                 // an import/reseed is valuable" (developer, 2026-09-02).
@@ -228,7 +280,7 @@ public sealed class QuotinatorDatabaseInitializer(
                 Stale      = group.Count(a => a.Status.Parsed == ImportActionStatus.Stale),
             })
             // #373: every entity type that arrived is kept, whatever became of it. Filtering on the
-            // outcome buckets would drop exactly the rows this issue exists to surface — an
+            // outcome buckets would drop exactly the rows this issue exists to surface: an
             // unchanged-only breakdown, or one whose entire content was blocked.
             .Where(count => count.Incoming > 0)
             .OrderBy(count => count.EntityType, StringComparer.OrdinalIgnoreCase)];
@@ -244,7 +296,7 @@ public sealed class QuotinatorDatabaseInitializer(
         // #373: what arrived leads, then what became of it.
         // #374: Skipped is stated in its own right rather than folded into Unchanged/Modified.
         // #377 (developer, 2026-09-09): the sentence names only the outcomes that actually occurred.
-        // Listing every bucket unconditionally meant a run of zeroes that grew with each one added —
+        // Listing every bucket unconditionally meant a run of zeroes that grew with each one added;
         // and it is safe to omit them precisely *because* the completeness work landed first: every
         // count this sentence can state is now visible per entity type in the notification's own detail
         // table and in the seed log, so a clause left out is a clause the reader can still go and find.
@@ -306,7 +358,7 @@ public sealed class QuotinatorDatabaseInitializer(
             title: NotificationTranslations.Original(_notificationTextSource, NotificationMessageKeys.ReseedFileAppliedTitle),
             // Deliberately no dismissTrigger: POST /admin/database/reseed dismisses every Reseed-triggered
             // row once ReseedAsync returns, which would wipe out the confirmations that same call wrote.
-            // #377: per-language body arguments, because one of them is the composed summary — its
+            // #377: per-language body arguments, because one of them is the composed summary: its
             // separator, its final conjunction and its clause order are all language-specific, so it
             // cannot be one string substituted into every translation.
             translations: NotificationTranslations.Build(
@@ -322,7 +374,7 @@ public sealed class QuotinatorDatabaseInitializer(
     /// it without knowing to check <c>/import/actions</c> or read the log.
     /// </summary>
     /// <param name="fileName">The seed file whose actions are staged.</param>
-    /// <param name="origin">Which directory the file came from — part of what identifies the alert.</param>
+    /// <param name="origin">Which directory the file came from, part of what identifies the alert.</param>
     /// <param name="batchId">The batch those actions belong to; what the alert's own dismissal matches on.</param>
     /// <param name="actions">Every import action the file produced, which is what the breakdown counts.</param>
     private async Task AlertReviewPendingAsync(string fileName, SeedBatchOrigin origin, string batchId, IReadOnlyList<ImportActionEntity> actions)
@@ -374,19 +426,19 @@ public sealed class QuotinatorDatabaseInitializer(
     }
 
     /// <summary>
-    /// #374, step 9 — a self-contradicting file (the same raw title claimed under more than one date,
+    /// #374, step 9: a self-contradicting file (the same raw title claimed under more than one date,
     /// with no rule or alias resolving which is right) is handled correctly by
     /// <c>ImportActionPlanner.ResolveSourceAsync</c> already: each date resolves to its own, distinct
     /// Source row rather than corrupting the first. This makes that outcome visible at cold start
     /// instead of leaving it silent (step 1's original finding: it only became visible on a later
-    /// reseed, once the accumulated rows were already there to compare against). Reporting-only — it
+    /// reseed, once the accumulated rows were already there to compare against). Reporting-only: it
     /// changes nothing about which rows get created, only whether anyone is told.
     /// </summary>
     /// <param name="fileName">The seed file whose own actions are being checked.</param>
     /// <param name="actions">Every action this file's import staged.</param>
     /// <param name="declaredSources">
     /// This file's own <c>sources[]</c> entries. A title whose every dated variant was declared here is
-    /// not a contradiction — the declaration *is* the answer this warning asks for, so repeating the
+    /// not a contradiction: the declaration *is* the answer this warning asks for, so repeating the
     /// question would train a reader to ignore it. Only an undeclared second date still warns.
     /// </param>
     private void ReportSelfContradictingSources(
@@ -473,7 +525,7 @@ public sealed class QuotinatorDatabaseInitializer(
         try
         {
             // #372: no deletion, and no emptiness check. A reseed imports the designated files and
-            // nothing else — deciding what data survives is a second, independent job, and CLAUDE.md's
+            // nothing else; deciding what data survives is a second, independent job, and CLAUDE.md's
             // endpoint side-effect policy gives it to Reset, which rebuilds from the baseline. Starting
             // from scratch is Reset then Reseed, two explicit actions. The gate belongs to cold start
             // alone: here it would suppress the report the operator ran the reseed to get.
@@ -498,18 +550,18 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <inheritdoc/>
     /// <remarks>
     /// #156: Reset's one job is rebuilding the schema to an empty baseline (plus system content via
-    /// <see cref="DatabaseInitializer.SeedSystemContentAsync"/>) — it no longer reimports bundled or
+    /// <see cref="DatabaseInitializer.SeedSystemContentAsync"/>): it no longer reimports bundled or
     /// user quote content, matching the Single Responsibility endpoint-side-effect policy (a caller
     /// resetting to start fresh must not be forced to re-accept optional bundled content every time).
     /// <see cref="ResolveEffectiveBatchesAsync"/> is still called so <paramref name="forceSourceRefresh"/>
-    /// keeps its existing effect of refreshing the on-disk source cache — a disk-level concern
-    /// independent of database content, outside that policy's scope — but its returned batches are
+    /// keeps its existing effect of refreshing the on-disk source cache (a disk-level concern
+    /// independent of database content, outside that policy's scope), but its returned batches are
     /// discarded here, never imported.
     /// </remarks>
     protected override async Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh)
     {
         await ResolveEffectiveBatchesAsync(forceSourceRefresh);
-        Logger.LogInformation("[Database - Init] reset requested — rebuilding schema from baseline...");
+        Logger.LogInformation("[Database - Init] reset requested: rebuilding schema from baseline...");
 
         await SharedSeedLock.WaitAsync();
         try
@@ -521,7 +573,7 @@ public sealed class QuotinatorDatabaseInitializer(
             SharedSeedLock.Release();
         }
 
-        // Reset performs no seeding — LastSeedReport must not keep echoing whatever the last real
+        // Reset performs no seeding: LastSeedReport must not keep echoing whatever the last real
         // seed/reseed reported, which would misleadingly suggest this Reset call imported something.
         LastSeedReport = [];
 
@@ -542,7 +594,7 @@ public sealed class QuotinatorDatabaseInitializer(
     //
     // `NotificationDismissReason.Obsolete` itself stays, and that is a separate decision from removing
     // its producer. Databases upgraded from an earlier build hold rows already carrying it, so the enum
-    // member, its CHECK constraint and `NotificationTable`'s rendering of it all have to keep working —
+    // member, its CHECK constraint and `NotificationTable`'s rendering of it all have to keep working:
     // deleting the member would need a migration and would break the reading of history that already
     // exists. It currently has no producer, which is a fact worth stating rather than a gap to fill;
     // #369, which deals with review rows whose batch is genuinely gone, is where one may reappear.
@@ -550,8 +602,8 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <inheritdoc/>
     /// <remarks>
     /// #221: builds a real <see cref="FileImportReport"/> per file via
-    /// <see cref="ImportActionPlanner.PlanAsync"/> — the same classifier the real seeding pipeline
-    /// uses — but never calls <see cref="IImportActionCoordinator.StageAsync"/> or
+    /// <see cref="ImportActionPlanner.PlanAsync"/> (the same classifier the real seeding pipeline
+    /// uses), but never calls <see cref="IImportActionCoordinator.StageAsync"/> or
     /// <see cref="IImportActionService.ApplyBatchAsync"/>, so nothing is ever written. This is safe
     /// because <c>PlanAsync</c> itself only ever reads (every database call in it is a <c>SELECT</c>).
     /// See <see cref="SeedPreviewResult.Reports"/> for the one known limitation this implies (no
@@ -559,7 +611,7 @@ public sealed class QuotinatorDatabaseInitializer(
     /// </remarks>
     public override async Task<SeedPreviewResult> PreviewSeedAsync()
     {
-        // Preview reflects whatever is already cached on disk — it never triggers a network call,
+        // Preview reflects whatever is already cached on disk; it never triggers a network call,
         // even when Quotinator__AutoUpdateSources is true, so calling it has no side effects.
         SourceCacheResolution resolution       = await ResolveEffectiveBatchesAsync(forceRefresh: false, allowNetworkOverride: false);
         IReadOnlyList<SeedBatch> effectiveBatches = resolution.EffectiveBatches;
@@ -604,7 +656,7 @@ public sealed class QuotinatorDatabaseInitializer(
 
     /// <summary>
     /// Resolves <see cref="_batches"/> to their effective form for this call via
-    /// <see cref="_sourceCacheUpdater"/>. <see cref="_batches"/> itself is never mutated — this
+    /// <see cref="_sourceCacheUpdater"/>. <see cref="_batches"/> itself is never mutated; this
     /// singleton is shared across concurrent Preview/Reseed/Reset calls, so each caller gets its
     /// own local effective list instead of a shared field that could race.
     /// </summary>
@@ -639,13 +691,13 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <para>
     /// Cold start's own entry point, and the only one that asks whether there is anything to do. An
     /// explicit reseed calls <see cref="ImportDesignatedFilesAsync"/> directly and never consults this
-    /// gate — see #372: on that path the check is not a safeguard, it suppresses the report the
+    /// gate (see #372): on that path the check is not a safeguard, it suppresses the report the
     /// operator ran the reseed to get.
     /// </para>
     /// <para>
     /// **"Empty" means no seedable content, not that no table has rows.** The check counts quotes on
     /// purpose. Broadening it to "any <c>Quotinator_</c> table has rows" would break the moment a
-    /// baseline-seeded reference table exists — genres become one in #310/#268 — because a brand-new
+    /// baseline-seeded reference table exists (genres become one in #310/#268), because a brand-new
     /// database would then read as already seeded and the seed would be skipped in silence. A
     /// user-updatable table is content however generic it looks: <c>Universe</c> is the near-miss.
     /// </para>
@@ -670,7 +722,7 @@ public sealed class QuotinatorDatabaseInitializer(
 
         if (effectiveBatches.Count == 0)
         {
-            Logger.LogWarning("[Database - Seed] no source files configured — database will be empty");
+            Logger.LogWarning("[Database - Seed] no source files configured: database will be empty");
             return;
         }
 
@@ -720,7 +772,7 @@ public sealed class QuotinatorDatabaseInitializer(
                 ImportActionBatchStatusResponse? applyResult = await _actionService.ApplyBatchAsync(batchIdStr, InitiatorType.Seed);
 
                 // #374: `applyResult is null` alone no longer means "every action in this batch is
-                // resolved" — TryApplyBatchAsync's isolated hold lets an unrelated Blocked/Pending Add
+                // resolved": TryApplyBatchAsync's isolated hold lets an unrelated Blocked/Pending Add
                 // (e.g. a quote-uniqueness collision, or a series-capable Source's own date conflict)
                 // apply everything else around it instead of holding the whole batch, so `null` can come
                 // back with that one action still genuinely outstanding. Checked directly against the
@@ -729,14 +781,14 @@ public sealed class QuotinatorDatabaseInitializer(
                 //
                 // Deliberately batch-local, not global: a quote the accumulation-prevention dedup
                 // recognised as already unresolved from an earlier batch produces no action here at all,
-                // and that is correct — the rest of this batch's own content (everything else the file
+                // and that is correct: the rest of this batch's own content (everything else the file
                 // describes) can still genuinely apply/confirm cleanly on its own terms, independent of
                 // a handful of permanent conflicts sitting in an unrelated, still-active alert elsewhere.
                 bool hasOutstandingReviewItems = actions.Any(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale);
                 if (applyResult is null && !hasOutstandingReviewItems)
                 {
                     int imported = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Add);
-                    // #374: Skip alone excluded — see ConfirmFileAppliedCleanlyAsync's Modified count for why Review must not be.
+                    // #374: Skip alone excluded; see ConfirmFileAppliedCleanlyAsync's Modified count for why Review must not be.
                     int updated  = actions.Count(a => a.EntityType == ImportActionEntityTypes.Quote && a.ActionType.Parsed == ImportActionKind.Modify
                                                    && a.AppliedPolicy.Parsed is not DuplicateResolutionPolicy.Skip);
 
@@ -754,7 +806,7 @@ public sealed class QuotinatorDatabaseInitializer(
                         PerformedAt = DateTime.UtcNow,
                     }, connection);
 
-                    // #249: the batch reached zero pending actions — its Import_Action rows have
+                    // #249: the batch reached zero pending actions: its Import_Action rows have
                     // served their purpose (resolving this import). Purge them when the relevant
                     // per-origin setting allows it; a temporary developer investigation of a specific
                     // source flips that one setting off first, so this stays a no-op for it.
@@ -777,7 +829,7 @@ public sealed class QuotinatorDatabaseInitializer(
                     // Ungated on which caller began the seed. It was reseed-only until #302 was reopened
                     // (2026-09-02): the same four files applying identically produced four confirmations
                     // from the UI and none at startup, and the suppression rested on the startup modal's
-                    // aggregate summary already covering a first install — which carries no file names,
+                    // aggregate summary already covering a first install, which carries no file names,
                     // no origin, and no added-versus-updated split.
                     await ConfirmFileAppliedCleanlyAsync(fileName, batch.Origin, actions);
                 }
@@ -785,7 +837,7 @@ public sealed class QuotinatorDatabaseInitializer(
                 {
                     stagedFiles.Add(fileName);
                     // #374: applyResult can be null here (an isolated hold applied everything else in
-                    // the batch) — the count then comes from the actions this batch actually staged,
+                    // the batch), and the count then comes from the actions this batch actually staged,
                     // the same source hasOutstandingReviewItems above already checked.
                     int outstandingCount = applyResult?.PendingActionIds.Count
                         ?? actions.Count(a => a.Status.Parsed is ImportActionStatus.Pending or ImportActionStatus.Blocked or ImportActionStatus.Stale);
@@ -817,7 +869,7 @@ public sealed class QuotinatorDatabaseInitializer(
 
         if (effectiveBatches.Count == 0)
         {
-            Logger.LogWarning("[Database - Seed] cannot re-seed genres — no source files configured");
+            Logger.LogWarning("[Database - Seed] cannot re-seed genres: no source files configured");
             return;
         }
 
@@ -872,7 +924,7 @@ public sealed class QuotinatorDatabaseInitializer(
     {
         ImportBatchType type   = DetermineType(seedBatch.Origin);
         DuplicateResolutionPolicy policy = filePolicy.ForQuotes;
-        ImportBatchEntity batch = new ImportBatchEntity
+        ImportBatchEntity batch = new()
         {
             Name           = Path.GetFileName(seedFile.FilePath),
             Type           = new SafeValue<ImportBatchType?>(type.ToString(), type),
@@ -883,32 +935,32 @@ public sealed class QuotinatorDatabaseInitializer(
         };
         await _importBatches.InsertAsync(batch);
 
-        // #251 — capture this file's own content for provenance. Skipped only when the file is
+        // #251: capture this file's own content for provenance. Skipped only when the file is
         // genuinely missing (already surfaced separately via LoadSourceFileAsync's own SeedFileIssue
-        // path elsewhere in this seed pass) — a real failure during the write itself is not swallowed
+        // path elsewhere in this seed pass); a real failure during the write itself is not swallowed
         // here; it propagates and is caught by the outer seeding backup/restore/rethrow net #254
         // already wraps this whole hook in, the same as any other seeding failure.
         if (File.Exists(seedFile.FilePath))
         {
             bool isUserImports = seedBatch.Origin == SeedBatchOrigin.UserImports;
             FileResourceOrigin fileResourceOrigin   = seedBatch.Origin.ToFileResourceOrigin();
-            // "sources"/"imports" per #252 — the only two local directories any write path has ever
+            // "sources"/"imports" per #252, the only two local directories any write path has ever
             // captured from; a future consumer of System/User origin unrelated to quote sources
             // registers its own key without stretching what these two mean.
             string homeDirectoryKey     = isUserImports ? "imports" : "sources";
             string content = await File.ReadAllTextAsync(seedFile.FilePath);
-            // OriginalFolderPath is null here — today's directory scan is flat (no subfolders under
+            // OriginalFolderPath is null here: today's directory scan is flat (no subfolders under
             // data/sources/ or {dataDir}/imports/), confirmed via ManifestSeedPlanner's own
             // non-recursive Directory.GetFiles call, so there is no folder segment to record yet.
             await _fileResources.WriteAsync(
                 Path.GetFileName(seedFile.FilePath), originalFolderPath: null, fileResourceOrigin, content, batch.Id,
                 seedFile.Converter, seedFile.ConverterOptions?.GetRawText(), homeDirectoryKey);
 
-            // Also capture the manifest.json that drove this seed pass, linked to this same batch —
+            // Also capture the manifest.json that drove this seed pass, linked to this same batch,
             // content-hash dedup means only a new Import_FileResourceBatch link row is added for every
             // file in the same directory after the first, correctly reflecting that one manifest.json
             // version governed every batch created from it this session. Uses seedBatch.SourceDirectory
-            // rather than seedFile.FilePath's own directory — ISourceCacheUpdater rewrites a downloaded
+            // rather than seedFile.FilePath's own directory: ISourceCacheUpdater rewrites a downloaded
             // file's FilePath to a separate cache directory that never contains manifest.json, which
             // would silently miss the link for every downloaded source otherwise (found live in a T2 pass).
             string manifestDir  = seedBatch.SourceDirectory ?? Path.GetDirectoryName(seedFile.FilePath)!;
@@ -925,10 +977,10 @@ public sealed class QuotinatorDatabaseInitializer(
         return batch;
     }
 
-    // Origin decides the type, not URL presence — a user-imports-folder file that happens to
+    // Origin decides the type, not URL presence: a user-imports-folder file that happens to
     // declare its own url/github manifest entry is still UserSeed, never Seed, so provenance
     // always reflects which folder the file was actually scanned from. A bundled file is always
-    // Seed regardless of whether it has a URL — "System" is reserved for the database's own
+    // Seed regardless of whether it has a URL; "System" is reserved for the database's own
     // System_-prefixed infrastructure tables (see Sql.Schema.GetUserTables), not for quote
     // content provenance; internally-authored bundled content (e.g. quotinator-curated.json) is
     // still replaceable, re-seeded content, just like externally-sourced bundled content.
@@ -946,7 +998,7 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <summary>
     /// #68: full extended parse (quotes plus stageDirections/soundCues/conversations), used by
     /// <see cref="SeedIfEmptyInternalAsync"/> to plan the three new entity types alongside quotes.
-    /// <see cref="LoadQuotesFromFile"/> wraps this for the two call sites that only need the quotes —
+    /// <see cref="LoadQuotesFromFile"/> wraps this for the two call sites that only need the quotes;
     /// one parsing implementation, not two.
     /// </summary>
     private (ParsedSourceFileDto Parsed, SeedFileIssue? Issue) LoadSourceFileAsync(string filePath)
@@ -956,14 +1008,14 @@ public sealed class QuotinatorDatabaseInitializer(
         string json = File.ReadAllText(filePath);
         if (SourceQuoteFileReader.TryParseExtended(json, out ParsedSourceFileDto? parsed)) return (parsed!, null);
 
-        Logger.LogWarning("[Database - Seed] {File} is empty or not valid JSON — skipping", Path.GetFileName(filePath));
+        Logger.LogWarning("[Database - Seed] {File} is empty or not valid JSON, skipping", Path.GetFileName(filePath));
         return (new ParsedSourceFileDto { Quotes = [] }, SeedFileIssue.InvalidJson);
     }
 
     /// <summary>
     /// Single-line, grep-friendly rendering of a <see cref="FileImportReport"/> for the seed log (#221).
     /// <para>
-    /// `internal` rather than `private` so the line itself can be asserted (#373) — it is a hand-written
+    /// `internal` rather than `private` so the line itself can be asserted (#373): it is a hand-written
     /// format string listing every count by name, which is exactly the shape that silently omits a
     /// count added later. Same reasoning as `NotificationTable`'s `internal static` layout helpers.
     /// </para>
@@ -978,10 +1030,10 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <summary>
     /// #181: loads a source's own per-source conflict-resolution rule file, referenced by the
     /// manifest entry's <c>ruleFile</c> property. Missing/absent/invalid all resolve to
-    /// <see cref="ConflictRuleLookup.Empty"/> — a rule file is an optimisation, never a hard
+    /// <see cref="ConflictRuleLookup.Empty"/>: a rule file is an optimisation, never a hard
     /// requirement for seeding to proceed, matching <see cref="LoadSourceFileAsync"/>'s own
     /// fail-open convention for the source file itself. #153: prefers a registered, hash-verified
-    /// override over the bundled/image copy, when one exists — see
+    /// override over the bundled/image copy, when one exists; see
     /// <see cref="EffectiveRuleFileResolver"/>.
     /// </summary>
     private async Task<ConflictRuleLookup> LoadConflictRulesAsync(string? ruleFilePath, SeedBatchOrigin origin)
@@ -993,7 +1045,7 @@ public sealed class QuotinatorDatabaseInitializer(
 
         if (!File.Exists(effectivePath))
         {
-            Logger.LogWarning("[Database - Seed] conflict-resolution rule file {File} referenced in manifest but not found — continuing without rules",
+            Logger.LogWarning("[Database - Seed] conflict-resolution rule file {File} referenced in manifest but not found, continuing without rules",
                 Path.GetFileName(effectivePath));
             return ConflictRuleLookup.Empty;
         }
@@ -1006,7 +1058,7 @@ public sealed class QuotinatorDatabaseInitializer(
         }
         catch (JsonException ex)
         {
-            Logger.LogWarning(ex, "[Database - Seed] conflict-resolution rule file {File} is not valid JSON — continuing without rules",
+            Logger.LogWarning(ex, "[Database - Seed] conflict-resolution rule file {File} is not valid JSON, continuing without rules",
                 Path.GetFileName(effectivePath));
             return ConflictRuleLookup.Empty;
         }
@@ -1015,9 +1067,9 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <summary>
     /// #181: loads a source's own per-source title-alias file, referenced by the manifest entry's
     /// <c>sourceAliasFile</c> property. Missing/absent/invalid all resolve to
-    /// <see cref="SourceAliasLookup.Empty"/> — same fail-open convention as <see cref="LoadConflictRulesAsync"/>.
+    /// <see cref="SourceAliasLookup.Empty"/>, by the same fail-open convention as <see cref="LoadConflictRulesAsync"/>.
     /// #153: prefers a registered, hash-verified override over the bundled/image copy, when one
-    /// exists — see <see cref="EffectiveRuleFileResolver"/>.
+    /// exists; see <see cref="EffectiveRuleFileResolver"/>.
     /// </summary>
     private async Task<SourceAliasLookup> LoadSourceAliasesAsync(string? sourceAliasFilePath, SeedBatchOrigin origin)
     {
@@ -1028,7 +1080,7 @@ public sealed class QuotinatorDatabaseInitializer(
 
         if (!File.Exists(effectivePath))
         {
-            Logger.LogWarning("[Database - Seed] source-alias file {File} referenced in manifest but not found — continuing without aliases",
+            Logger.LogWarning("[Database - Seed] source-alias file {File} referenced in manifest but not found, continuing without aliases",
                 Path.GetFileName(effectivePath));
             return SourceAliasLookup.Empty;
         }
@@ -1041,7 +1093,7 @@ public sealed class QuotinatorDatabaseInitializer(
         }
         catch (JsonException ex)
         {
-            Logger.LogWarning(ex, "[Database - Seed] source-alias file {File} is not valid JSON — continuing without aliases",
+            Logger.LogWarning(ex, "[Database - Seed] source-alias file {File} is not valid JSON, continuing without aliases",
                 Path.GetFileName(effectivePath));
             return SourceAliasLookup.Empty;
         }
@@ -1050,7 +1102,7 @@ public sealed class QuotinatorDatabaseInitializer(
     /// <summary>
     /// #219: loads a source's own per-source quote-exclusion file, referenced by the manifest entry's
     /// <c>excludeFile</c> property. Missing/absent/invalid all resolve to
-    /// <see cref="QuoteExclusionLookup.Empty"/> — same fail-open convention as
+    /// <see cref="QuoteExclusionLookup.Empty"/>, by the same fail-open convention as
     /// <see cref="LoadConflictRulesAsync"/>/<see cref="LoadSourceAliasesAsync"/>.
     /// </summary>
     private async Task<QuoteExclusionLookup> LoadQuoteExclusionsAsync(string? quoteExclusionFilePath, SeedBatchOrigin origin)
@@ -1062,7 +1114,7 @@ public sealed class QuotinatorDatabaseInitializer(
 
         if (!File.Exists(effectivePath))
         {
-            Logger.LogWarning("[Database - Seed] quote-exclusion file {File} referenced in manifest but not found — continuing without exclusions",
+            Logger.LogWarning("[Database - Seed] quote-exclusion file {File} referenced in manifest but not found, continuing without exclusions",
                 Path.GetFileName(effectivePath));
             return QuoteExclusionLookup.Empty;
         }
@@ -1075,7 +1127,7 @@ public sealed class QuotinatorDatabaseInitializer(
         }
         catch (JsonException ex)
         {
-            Logger.LogWarning(ex, "[Database - Seed] quote-exclusion file {File} is not valid JSON — continuing without exclusions",
+            Logger.LogWarning(ex, "[Database - Seed] quote-exclusion file {File} is not valid JSON, continuing without exclusions",
                 Path.GetFileName(effectivePath));
             return QuoteExclusionLookup.Empty;
         }

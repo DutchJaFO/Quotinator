@@ -53,11 +53,11 @@ public sealed class NoOpDatabaseInitializer : IDatabaseInitializer
     public bool SchemaVersionOvershootDetected => false;
 
     /// <inheritdoc/>
-    public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
+    public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Reports a written file without writing one — this type exists so a test touches no database and
+    /// Reports a written file without writing one: this type exists so a test touches no database and
     /// no filesystem. A test that cares what a backup attempt actually did supplies its own
     /// initializer rather than relying on this.
     /// </remarks>

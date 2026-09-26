@@ -10,7 +10,7 @@
 build, created with `--env Quotinator__AdminApiKey=t2-367`.
 
 A reseed run from `/notifications` takes about 20 seconds (19 measured 2026-09-22), during which the
-row used to keep reading `Active` with a live action button — so the natural reading was that the click had done nothing, and a
+row used to keep reading `Active` with a live action button, so the natural reading was that the click had done nothing, and a
 second confirmed click performed a second full reseed. This proves the row reports the run while it is
 happening, that the control is withdrawn for its duration, and that a process dying mid-run leaves
 nothing stranded.
@@ -18,13 +18,13 @@ nothing stranded.
 ## Determinism
 
 **The state is deliberately not persisted, so every assertion here is about one process.** #367's
-executing state is a process-scoped in-memory registry, not a column — see its
+executing state is a process-scoped in-memory registry, not a column; see its
 [plan](../../milestones/notification-system/367-executing-notification-state-plan.md) for why a stored
 marker was rejected. Step 4 is the test of that choice: what a restart clears is exactly what a stored
 column would have left behind.
 
 **Only the page path claims the registry.** `POST /admin/database/reseed` runs the same reseed without
-going through `/notifications`, so it never marks anything executing. Steps 1–3 must be driven through
+going through `/notifications`, so it never marks anything executing. Steps 1 to 3 must be driven through
 the page; an API call would pass while proving nothing.
 
 **Expect the click to need retrying.** These controls need the Blazor circuit, and a click issued
@@ -57,7 +57,7 @@ while ((Get-OpenReseedAlerts) -lt 1 -and (Get-Date) -lt $deadline) { Start-Sleep
 Get-OpenReseedAlerts
 ```
 
-**Expected:** `1` — a reseed recommendation, whose action takes long enough for the state to be
+**Expected:** `1`: a reseed recommendation, whose action takes long enough for the state to be
 observable. Polled for, at most 30 s, rather than waited on for a fixed time.
 
 ### 2. Confirm the row reports the run while it is running
@@ -69,24 +69,25 @@ one script, since the window is about 20 seconds and a separate read can miss it
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const btn = t => [...document.querySelectorAll('tbody button')].find(b => b.textContent.trim() === t);
 let tries = 0;
-while (!btn('Confirm') && tries++ < 20) { btn('Reseed the database')?.click(); await sleep(500); }
+while (!btn('Confirm') && tries++ < 20) { btn('Back up, then reseed')?.click(); await sleep(500); }
 btn('Confirm').click();
 let badge = null;
 for (let i = 0; i < 20 && !badge; i++) { await sleep(150); badge = document.querySelector('.badge.bg-info')?.textContent.trim(); }
 ({ badge, buttonsInRow: [...document.querySelectorAll('tbody button')].map(b => b.textContent.trim()) })
 ```
 
-**The button is the action's own label, *Reseed the database*.** Until #411 this step said **Run**, a
-label the page no longer shows. The loop repeats the first click until **Confirm** appears, for the
-reason in Determinism.
+**The button is the option's own label, *Back up, then reseed*.** Since #348 a reseed offers each option
+that can run as its own button, and on this container a backup can be taken, so that is the only one.
+Until #411 this step said **Run**, and until #348 *Reseed the database*: labels the page no longer shows.
+The loop repeats the first click until **Confirm** appears, for the reason in Determinism.
 
 **Expected:** the Status badge reads **Running…** with a spinning icon, and the row offers **no controls
-at all** — neither *Reseed the database* nor Dismiss: `Running…` and `[]`.
+at all**: neither *Back up, then reseed* nor Dismiss: `Running…` and `[]`.
 
 **Dismiss must be gone, not merely inert.** Leaving it live corrupts the recorded outcome: Blazor
 serialises circuit events, so the click queues behind the running handler and is applied *after* the
 action has recorded `Resolved`, overwriting it with `Dismissed`. The action still completes, so the row
-ends up claiming the user declined something that ran — the defect #304's reason column exists to
+ends up claiming the user declined something that ran: the defect #304's reason column exists to
 prevent. Verify the reason in step 3, not just the button's absence here.
 
 **A screenshot cannot tell a spinning icon from a static arc**, so assert the animation itself rather
@@ -99,13 +100,13 @@ const cs = getComputedStyle(s);
    playState: s.getAnimations()[0]?.playState, ariaHidden: s.getAttribute('aria-hidden') })
 ```
 
-**Expected:** `spinner-border`, `infinite`, `running`, and `aria-hidden="true"` — the badge's own text
+**Expected:** `spinner-border`, `infinite`, `running`, and `aria-hidden="true"`: the badge's own text
 already says it is running, so the icon must not be announced a second time. After the run settles,
 `document.querySelectorAll('.spinner-border').length` is `0`: an animation left spinning on a finished
 row says the opposite of the truth.
 
 **On failure:** a row still reading `Active` with a live Run button is the original defect. Check that
-the handler flushes a render *before* awaiting the executor — `StateHasChanged` alone only queues one,
+the handler flushes a render *before* awaiting the executor; `StateHasChanged` alone only queues one,
 and without the yield the circuit stays on the previous frame for the whole action. Every unit test
 still passes in that state, which is why this step exists.
 
@@ -113,26 +114,26 @@ still passes in that state, which is why this step exists.
 
 ```powershell
 $deadline = (Get-Date).AddSeconds(90)
-while (@(docker logs qt-367 2>&1 | Select-String 'reseed complete').Count -lt 1 -and (Get-Date) -lt $deadline) {
-  Start-Sleep -Seconds 1
-}
+while ((Get-OpenReseedAlerts) -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
 (docker logs qt-367 2>&1 | Select-String "reseed requested").Count
 $items = (Invoke-RestMethod "http://localhost:19367/api/v1/notifications?pageSize=0").items
 @($items | Where-Object { $_.dismissTriggerKey -eq 'reseed' }) |
   ForEach-Object { "dismissed=$($_.isDismissed) reason=$($_.dismissReason)" }
+(Invoke-RestMethod "http://localhost:19367/api/v1/quotes?page=1&pageSize=1").totalCount
 ```
 
-**Expected:** exactly `1` reseed request, and the alert `dismissed=True reason=resolved`. On the page
-with **All** selected, that row reads **Done** — not **Running…** and not **Dismissed**.
+**Expected:** exactly `1` reseed request, the alert `dismissed=True reason=resolved`, and a full seed's
+quote count (`795`). On the page with **All** selected, that row reads **Done**, not **Running…** and
+not **Dismissed**.
 
 The count is the assertion that matters: the control being withdrawn is what makes a second click
 impossible, and a second `reseed requested` would mean the withdrawal is cosmetic.
 
-**Wait for `reseed complete`, not for the alert.** Measured 2026-09-22: the alert records `resolved`
-one second after `reseed requested`, while the reseed itself ran for another 18 — and the page kept
-reading **Running…** until it finished. Waiting on the alert therefore reads the page mid-run. The
-log line is the one condition that marks the end of the run; the wait is bounded at 90 s rather than
-the fixed 20 s this step used until #411.
+**Wait for the alert, and nothing else.** The action records its outcome only after the reseed has
+returned, so the alert closing is the end of the run. The quote count is what proves it: read the moment
+the alert closes, it must already be a full seed. Until #348 the reseed's own content load closed the
+alert one second into an 18-second run, so this step waited on a log line instead; a count below `795`
+here means that defect is back. The wait is bounded at 90 s.
 
 ### 4. Confirm a restart during a run strands nothing
 
@@ -150,31 +151,31 @@ $html = (Invoke-WebRequest "http://localhost:19367/notifications" -UseBasicParsi
 (Invoke-RestMethod "http://localhost:19367/api/v1/quotes?page=1&pageSize=1").totalCount
 ```
 
-**Expected:** `False`, and a quote count well below a full seed (measured: `13` — only the first bundled
+**Expected:** `False`, and a quote count well below a full seed (measured: `13`, only the first bundled
 file had landed), confirming the run really was interrupted rather than finishing first. A restart that
 completed the reseed proves nothing about stranding.
 
 **On failure:** a row still reading **Running…** after a restart means the state outlived the process
-that owned the run — the notification is now permanently unrunnable, with no Run control and no way
+that owned the run: the notification is now permanently unrunnable, with no Run control and no way
 back. That is the failure mode a stored column would have had, and this step is what keeps the
 in-memory choice honest if anyone later persists it.
 
-## Canary — this document was run red before it was run green
+## Canary: this document was run red before it was run green
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*: run against
 the finished build, this document establishes that something happens, not that it would have caught the
-absence it exists for. It was therefore run against `b67292cb` — #367's plan commit, before any
-implementation — via `git worktree add`, `docker build -t quotinator:canary367`, and the same steps.
+absence it exists for. It was therefore run against `b67292cb` (#367's plan commit, before any
+implementation) via `git worktree add`, `docker build -t quotinator:canary367`, and the same steps.
 
 Measured on the pre-work build, 2026-09-01:
 
 | Step | Assertion | Pre-work result |
 |---|---|---|
-| 1 | a runnable reseed alert exists | passes — setup only, correctly insensitive |
-| 2 | badge reads `Running…` | **fails** — reads `Active` |
-| 2 | a spinner is present | **fails** — `spinner-border` count `0` |
-| 2 | the row offers no controls | **fails** — `["Run", "Dismiss"]`, both live |
-| 3 | the outcome records `resolved` | **fails** — records `dismissed`, with the reseed completed (799 quotes) |
+| 1 | a runnable reseed alert exists | passes: setup only, correctly insensitive |
+| 2 | badge reads `Running…` | **fails**: reads `Active` |
+| 2 | a spinner is present | **fails**: `spinner-border` count `0` |
+| 2 | the row offers no controls | **fails**: `["Run", "Dismiss"]`, both live |
+| 3 | the outcome records `resolved` | **fails**: records `dismissed`, with the reseed completed (799 quotes) |
 
 Step 1 passing on the pre-work build is the correct outcome, not a weakness: it stages the fixture and
 is meant to be insensitive to this issue's change. Every step that asserts #367's own behaviour failed.

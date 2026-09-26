@@ -17,11 +17,11 @@ namespace Quotinator.Api.Tests.Startup;
 /// <summary>
 /// Regression guard for a real bug found live while implementing #279's Step 9: the app's
 /// #279-operation-id-rename notification is seeded via the *real* <c>INotificationReader</c>/
-/// <c>INotificationWriter</c> (not overridden here, deliberately — most endpoint test files don't
+/// <c>INotificationWriter</c> (not overridden here, deliberately: most endpoint test files don't
 /// override them either), while <see cref="NoOpDatabaseInitializer"/> never creates
 /// <c>System_Notification</c>. The first wiring shared its <c>try</c>/<c>catch</c> with
 /// <c>Program.cs</c>'s critical DB-init block, so the resulting "no such table" exception marked the
-/// whole app unhealthy — 336 of 663 <c>Quotinator.Api.Tests</c> immediately failed. This test proves
+/// whole app unhealthy: 336 of 663 <c>Quotinator.Api.Tests</c> immediately failed. This test proves
 /// the fix directly: a failure to seed the announcement notification must never affect
 /// <see cref="Quotinator.Api.Startup.DatabaseHealthState"/>.
 /// </summary>
@@ -36,7 +36,7 @@ public class ProgramNotificationSeedingRegressionTests
             {
                 services.AddSingleton<IQuoteService>(new FakeQuoteService());
                 services.AddSingleton<IDatabaseInitializer>(NoOpDatabaseInitializer.Instance);
-                // INotificationReader/INotificationWriter deliberately NOT overridden — this test
+                // INotificationReader/INotificationWriter deliberately NOT overridden; this test
                 // exists specifically to prove the real implementations' failure against a
                 // non-existent System_Notification table doesn't propagate.
             }));
@@ -48,7 +48,7 @@ public class ProgramNotificationSeedingRegressionTests
     }
 
     /// <summary>
-    /// #289: the second concrete producer for #278's notification mechanism — proves the actual
+    /// #289: the second concrete producer for #278's notification mechanism, proving the actual
     /// Program.cs wiring, not just <c>NotificationSeeding.SeedOnceAsync</c> in isolation (covered by
     /// <c>Quotinator.Data.Tests.Notifications.NotificationSeedingTests</c>, where #312 moved both the
     /// helper and its tests). A stub
@@ -58,7 +58,7 @@ public class ProgramNotificationSeedingRegressionTests
     [TestMethod]
     public async Task Startup_SchemaVersionOvershootDetected_SeedsActionRequiredNotification()
     {
-        FakeNotificationWriter writer = new FakeNotificationWriter();
+        FakeNotificationWriter writer = new();
 
         using WebApplicationFactory<Program> factory = new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
@@ -73,16 +73,16 @@ public class ProgramNotificationSeedingRegressionTests
         await client.GetAsync("/api/v1/health", TestContext.CancellationToken);
 
         // #279's own unconditional operation-id-rename notification also seeds whenever dbHealth is
-        // healthy, alongside this one — assert on the specific #289 message, not the total count.
+        // healthy, alongside this one; assert on the specific #289 message, not the total count.
         string? overshootMessage = writer.WrittenMessages.SingleOrDefault(m => m.Contains("data v3") && m.Contains("app v5"));
         Assert.IsNotNull(overshootMessage, "the schema-version-overshoot notification must have been seeded");
     }
 
     /// <summary>
-    /// #293: same incident class as the two tests above — a live HA v1.8.2 → v1.8.3-beta migration
+    /// #293: same incident class as the two tests above: a live HA v1.8.2 → v1.8.3-beta migration
     /// failure left the database mid-degraded, and <c>DatabaseStatsSummary</c>
     /// (rendered on both Home's degraded modal and the always-reachable <c>/stats</c> page) crashed
-    /// the whole page trying to query <c>Import_FileResource</c>/<c>Import_Batch</c> — tables the
+    /// the whole page trying to query <c>Import_FileResource</c>/<c>Import_Batch</c>, tables the
     /// failed migration never created. Throwing fakes prove the fix actually skips those calls while
     /// degraded, rather than merely tolerating whatever exception they happen to throw.
     /// </summary>
@@ -126,7 +126,7 @@ public class ProgramNotificationSeedingRegressionTests
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task<DatabaseOperationResult> InitialiseAsync() => throw new InvalidOperationException("simulated migration failure");
 
-        public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
+        public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
         public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success("stub-backup.db"));
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
         public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());
@@ -187,7 +187,7 @@ public class ProgramNotificationSeedingRegressionTests
         public IReadOnlyList<FileImportReport> LastSeedReport => [];
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
 
-        public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
+        public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
         public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success("stub-backup.db"));
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
         public Task<DatabaseOperationResult> ResetAsync(bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) => Task.FromResult(DatabaseOperationResult.Success());

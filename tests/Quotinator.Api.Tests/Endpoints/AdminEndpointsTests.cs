@@ -190,7 +190,7 @@ public class AdminEndpointsTests
     [TestMethod]
     public async Task ResetDatabase_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500()
     {
-        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.SourceUnreadable };
+        SpyDatabaseInitializer spy = new() { RefuseWith = BackupOutcome.SourceUnreadable };
         using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
 
         HttpResponseMessage response = await CreateClientWithKey(factory)
@@ -246,7 +246,7 @@ public class AdminEndpointsTests
     public async Task Reset_WhenRefused_WritesNoReseedRecommendation()
     {
         FakeNotificationWriter writer = new();
-        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded };
+        SpyDatabaseInitializer spy = new() { RefuseWith = BackupOutcome.BudgetExceeded };
         using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy, writer);
 
         await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
@@ -319,7 +319,7 @@ public class AdminEndpointsTests
     [TestMethod]
     public async Task ResetDatabase_WhenTheOverrideWasTriedAndStillRefused_DoesNotOfferItAgain()
     {
-        SpyDatabaseInitializer spy = new SpyDatabaseInitializer
+        SpyDatabaseInitializer spy = new()
         {
             RefuseWith = BackupOutcome.DestinationFileNotWritable,
             RefuseEvenWithOverride = true,
@@ -334,7 +334,7 @@ public class AdminEndpointsTests
     [TestMethod]
     public async Task ResetDatabase_WithOverride_ForwardsTheOverride()
     {
-        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded };
+        SpyDatabaseInitializer spy = new() { RefuseWith = BackupOutcome.BudgetExceeded };
         using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
 
         await CreateClientWithKey(factory)
@@ -346,8 +346,8 @@ public class AdminEndpointsTests
     [TestMethod]
     public async Task ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip()
     {
-        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded };
-        RecordingAuditWriter audit = new RecordingAuditWriter();
+        SpyDatabaseInitializer spy = new() { RefuseWith = BackupOutcome.BudgetExceeded };
+        RecordingAuditWriter audit = new();
         using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy, auditWriter: audit);
 
         await CreateClientWithKey(factory)
@@ -416,7 +416,7 @@ public class AdminEndpointsTests
     [TestMethod]
     public async Task ResetDatabase_CorrectKey_CallsDismissByTriggerWithDatabaseReset()
     {
-        FakeNotificationWriter notificationWriter = new FakeNotificationWriter();
+        FakeNotificationWriter notificationWriter = new();
         using WebApplicationFactory<Program> factory = CreateFactory(TestKey, notificationWriter: notificationWriter);
         HttpResponseMessage response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
 
@@ -429,7 +429,7 @@ public class AdminEndpointsTests
     [TestMethod]
     public async Task ResetDatabase_NoQueryParam_DefaultsPreserveSchemaVersionFalse()
     {
-        SpyDatabaseInitializer spy = new SpyDatabaseInitializer();
+        SpyDatabaseInitializer spy = new();
         using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
         HttpResponseMessage response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
 
@@ -441,7 +441,7 @@ public class AdminEndpointsTests
     [TestMethod]
     public async Task ResetDatabase_PreserveSchemaVersionTrue_Returns200AndPassesFlagThrough()
     {
-        SpyDatabaseInitializer spy = new SpyDatabaseInitializer();
+        SpyDatabaseInitializer spy = new();
         using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
         HttpResponseMessage response = await CreateClientWithKey(factory)
             .PostAsync("/api/v1/admin/database/reset?preserveSchemaVersion=true", null, TestContext.CancellationToken);
@@ -457,7 +457,7 @@ public class AdminEndpointsTests
     [TestMethod]
     public async Task ResetRefusedForBudget_RemedyNamesTheBackupEndpoints()
     {
-        SpyDatabaseInitializer spy = new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded };
+        SpyDatabaseInitializer spy = new() { RefuseWith = BackupOutcome.BudgetExceeded };
         using WebApplicationFactory<Program> factory = CreateFactory(TestKey, spy);
 
         HttpResponseMessage response = await CreateClientWithKey(factory)
@@ -502,7 +502,7 @@ public class AdminEndpointsTests
 
         public Task<DatabaseOperationResult> InitialiseAsync() => Task.FromResult(DatabaseOperationResult.Success());
 
-        public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => BackupOutcome.Succeeded;
+        public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0) => BackupOutcome.Succeeded;
         public Task<DatabaseBackupResult> CreateBackupAsync() => Task.FromResult(DatabaseBackupResult.Success("spy-backup.db"));
         public Task ReseedAsync(bool forceSourceRefresh = false) => Task.CompletedTask;
 

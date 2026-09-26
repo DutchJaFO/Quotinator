@@ -1,14 +1,14 @@
 # The log reports that the what's-new notification could not be seeded, after a reset
 
 **Kind:** diagnostic
-**Entry code:** —
+**Entry code:** none
 **Status code:** `QTN-KNOWN`
 **Affected versions:** 1.9.0-alpha onwards
 **GitHub issue:** [#419](https://github.com/DutchJaFO/Quotinator/issues/419)
 
 ## Symptom
 
-One `Error` line repeated as the exception is rethrown — ten times when measured — each naming the same
+One `Error` line repeated as the exception is rethrown (ten times when measured), each naming the same
 exception id:
 
 ```
@@ -19,7 +19,7 @@ Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 19: 'FOREIGN KE
 followed by one `Warning`:
 
 ```
-[Server] Failed to seed the #81 what's-new notification — non-fatal, startup continues.
+[Server] Failed to seed the #81 what's-new notification; non-fatal, startup continues.
 ```
 
 It appears only when a database reset was run within about a second of the application becoming
@@ -28,7 +28,7 @@ healthy.
 ## Does it prevent the app or API from functioning?
 
 **No.** Startup continues and every endpoint serves normally. The one consequence is that the what's-new
-notification is missing for that boot — the next restart writes it.
+notification is missing for that boot; the next restart writes it.
 
 ## Cause
 
@@ -41,7 +41,7 @@ time cannot produce this.
 
 ## Remedy
 
-Nothing is required — the notification returns on the next restart, and no data is affected. To avoid
+Nothing is required: the notification returns on the next restart, and no data is affected. To avoid
 it, leave a second or two between the application reporting healthy and running a reset.
 
 ## Notes

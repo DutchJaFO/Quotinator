@@ -4,6 +4,8 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Quotinator.Api.Enums;
+using Quotinator.Api.Services;
 using Quotinator.Api.Tests.Fakes;
 using Quotinator.Core.Services;
 using Quotinator.Data.Database;
@@ -11,6 +13,7 @@ using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 
@@ -23,7 +26,8 @@ public class NotificationEndpointsTests
     private const string TestKey = "test-admin-key";
 
     private static WebApplicationFactory<Program> CreateFactory(
-        string? adminApiKey = null, FakeNotificationReader? notificationReader = null, FakeNotificationWriter? notificationWriter = null) =>
+        string? adminApiKey = null, FakeNotificationReader? notificationReader = null, FakeNotificationWriter? notificationWriter = null,
+        INotificationActionExecutor? actionExecutor = null) =>
         new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
@@ -35,6 +39,8 @@ public class NotificationEndpointsTests
                 services.AddSingleton<ICallerContext>(new NoOpCallerContext());
                 services.AddSingleton<INotificationReader>(notificationReader ?? new FakeNotificationReader());
                 services.AddSingleton<INotificationWriter>(notificationWriter ?? new FakeNotificationWriter());
+                if (actionExecutor is not null)
+                    services.AddScoped(_ => actionExecutor);
             });
 
             // ConfigureAppConfiguration runs after all file-based sources (including
@@ -63,7 +69,64 @@ public class NotificationEndpointsTests
         AppVersionId = appVersionId,
     };
 
-    // ── GET /notifications — list ────────────────────────────────────────────
+    // ── GET /notifications: the options each notification offers (#348) ─────
+
+    /// <summary>
+    /// A requirement visible only in rendered HTML cannot be verified live, so what a notification can do
+    /// right now is published on the list itself, exactly as the executor answers it.
+    /// </summary>
+    [TestMethod]
+    public async Task GetNotifications_ListsTheOptionsTheExecutorOffers()
+    {
+        FakeNotificationReader reader = new();
+        reader.Seed(new NotificationEntity
+        {
+            Type              = new SafeValue<NotificationType?>(nameof(NotificationType.ActionRequired), NotificationType.ActionRequired),
+            Body              = "reseed me",
+            DismissTriggerKey = new SafeValue<NotificationDismissTrigger?>(nameof(NotificationDismissTrigger.Reseed), NotificationDismissTrigger.Reseed),
+        });
+        OfferingExecutor executor = new([NotificationActionOption.BackUpThenReseed, NotificationActionOption.ReseedWithoutBackup]);
+
+        using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader, actionExecutor: executor);
+        JsonDocument doc = JsonDocument.Parse(await factory.CreateClient().GetStringAsync("/api/v1/notifications", TestContext.CancellationToken));
+
+        Assert.AreSequenceEqual(
+            ["backupthenreseed", "reseedwithoutbackup"],
+            [.. doc.RootElement.GetProperty("items")[0].GetProperty("availableActions").EnumerateArray().Select(e => e.GetString())]);
+    }
+
+    /// <summary>A dismissed notification can no longer be acted on, whatever its action could otherwise do.</summary>
+    [TestMethod]
+    public async Task GetNotifications_DismissedNotification_ListsNoOptions()
+    {
+        FakeNotificationReader reader = new();
+        reader.Seed(new NotificationEntity
+        {
+            Type              = new SafeValue<NotificationType?>(nameof(NotificationType.ActionRequired), NotificationType.ActionRequired),
+            Body              = "already settled",
+            IsDismissed       = true,
+            DismissTriggerKey = new SafeValue<NotificationDismissTrigger?>(nameof(NotificationDismissTrigger.Reseed), NotificationDismissTrigger.Reseed),
+        });
+        OfferingExecutor executor = new([NotificationActionOption.BackUpThenReseed]);
+
+        using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader, actionExecutor: executor);
+        JsonDocument doc = JsonDocument.Parse(await factory.CreateClient().GetStringAsync("/api/v1/notifications", TestContext.CancellationToken));
+
+        Assert.AreEqual(0, doc.RootElement.GetProperty("items")[0].GetProperty("availableActions").GetArrayLength());
+    }
+
+    /// <summary>Answers every notification's options with a fixed list, so the endpoint's own mapping is what a test observes.</summary>
+    private sealed class OfferingExecutor(IReadOnlyList<NotificationActionOption> options) : INotificationActionExecutor
+    {
+        public bool CanExecute(NotificationDismissTrigger trigger) => true;
+        public bool CanExecute(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability) => options.Count > 0;
+        public IReadOnlyList<NotificationActionOption> AvailableOptions(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability) => options;
+        public Task<NotificationActionAvailability> GetAvailabilityAsync() => Task.FromResult(new NotificationActionAvailability([]));
+        public Task<NotificationActionResult> ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null, NotificationActionOption? option = null) =>
+            throw new NotSupportedException("Listing never runs an action.");
+    }
+
+    // ── GET /notifications: list ─────────────────────────────────────────────
 
     [TestMethod]
     public async Task GetNotifications_Returns200WithPageShape()
@@ -82,7 +145,7 @@ public class NotificationEndpointsTests
     [TestMethod]
     public async Task GetNotifications_IncludesDismissedNotifications()
     {
-        FakeNotificationReader reader = new FakeNotificationReader();
+        FakeNotificationReader reader = new();
         NotificationEntity dismissed = BuildNotification(message: "already dismissed");
         dismissed.IsDismissed = true;
         reader.Seed(dismissed);
@@ -104,7 +167,7 @@ public class NotificationEndpointsTests
     public async Task GetNotifications_ReturnsAppVersionId()
     {
         Guid appVersionId = Guid.NewGuid();
-        FakeNotificationReader reader = new FakeNotificationReader();
+        FakeNotificationReader reader = new();
         NotificationEntity attributed = BuildNotification(message: "written by a known version", appVersionId: appVersionId);
         reader.Seed(attributed);
 
@@ -166,7 +229,7 @@ public class NotificationEndpointsTests
     [TestMethod]
     public async Task GetNotifications_PageSizeZero_ReturnsAllRowsAsOnePage()
     {
-        FakeNotificationReader reader = new FakeNotificationReader();
+        FakeNotificationReader reader = new();
         for (int i = 0; i < 3; i++) reader.Seed(BuildNotification(message: $"notification {i}"));
 
         using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader);
@@ -193,7 +256,7 @@ public class NotificationEndpointsTests
     [TestMethod]
     public async Task GetNotifications_PageBeyondLast_Returns422DistinctDetail()
     {
-        FakeNotificationReader reader = new FakeNotificationReader();
+        FakeNotificationReader reader = new();
         reader.Seed(BuildNotification());
 
         using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader);
@@ -207,7 +270,7 @@ public class NotificationEndpointsTests
     [TestMethod]
     public async Task DismissNotification_ExistingId_MarksDismissed()
     {
-        FakeNotificationWriter writer = new FakeNotificationWriter();
+        FakeNotificationWriter writer = new();
         NotificationEntity notification = BuildNotification();
         writer.Seed(notification);
 
@@ -243,7 +306,7 @@ public class NotificationEndpointsTests
     [TestMethod]
     public async Task DismissNotification_NoApiKey_Returns401()
     {
-        FakeNotificationWriter writer = new FakeNotificationWriter();
+        FakeNotificationWriter writer = new();
         NotificationEntity notification = BuildNotification();
         writer.Seed(notification);
 
@@ -272,13 +335,13 @@ public class NotificationEndpointsTests
     }
 
     /// <summary>
-    /// The live response carries #312's shape — <c>title</c>, <c>body</c>, <c>metadata</c>,
-    /// <c>metadataKind</c> — and no longer carries <c>message</c>.
+    /// The live response carries #312's shape (<c>title</c>, <c>body</c>, <c>metadata</c>,
+    /// <c>metadataKind</c>) and no longer carries <c>message</c>.
     /// <para>
     /// Asserted against the serialized JSON rather than a deserialized DTO, because the requirement is
     /// about the wire format a client sees. A DTO round-trip would pass just as happily if a property
     /// were renamed on both sides, and the removal of <c>message</c> is a breaking change for any
-    /// existing client — exactly the kind of thing that must fail a test rather than be noticed later.
+    /// existing client: exactly the kind of thing that must fail a test rather than be noticed later.
     /// </para>
     /// </summary>
     [TestMethod]
@@ -307,7 +370,7 @@ public class NotificationEndpointsTests
         Assert.Contains("\"metadataKind\":\"announcement\"", json);
         Assert.Contains("GetAllImportBatches", json, "The metadata payload must reach the client, not be dropped in mapping.");
         Assert.DoesNotContain("\"message\"", json,
-            "#312 renamed Message to Body — a client still seeing 'message' means the rename never reached the wire.");
+            "#312 renamed Message to Body; a client still seeing 'message' means the rename never reached the wire.");
     }
 
     // ── Language resolution (#319) ───────────────────────────────────────────
@@ -369,7 +432,7 @@ public class NotificationEndpointsTests
             .GetAsync("/api/v1/notifications?lang=not-a-language", TestContext.CancellationToken);
 
         Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode,
-            "InputValidation.TryNormalizeLang's existing contract — same status as /quotes returns for the same input.");
+            "InputValidation.TryNormalizeLang's existing contract: the same status as /quotes returns for the same input.");
     }
 
     /// <summary>The response carries the three language fields every `lang`-accepting read endpoint reports.</summary>

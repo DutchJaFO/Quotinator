@@ -7,14 +7,14 @@ namespace Quotinator.Data.Database;
 public interface IDatabaseInitializer
 {
     /// <summary>
-    /// The consuming project's own schema version applied at startup — what operators track
+    /// The consuming project's own schema version applied at startup: what operators track
     /// release-over-release. Available after <see cref="InitialiseAsync"/> completes.
     /// </summary>
     int SchemaVersion { get; }
 
     /// <summary>
     /// Quotinator.Data's own internal schema version (its own infrastructure tables, e.g.
-    /// <c>System_AuditEntries</c>) — tracked independently of <see cref="SchemaVersion"/> so the
+    /// <c>System_AuditEntries</c>), tracked independently of <see cref="SchemaVersion"/> so the
     /// consuming project's version numbering stays stable regardless of Data's own migration
     /// count. Available after <see cref="InitialiseAsync"/> completes.
     /// </summary>
@@ -58,7 +58,7 @@ public interface IDatabaseInitializer
 
     /// <summary>
     /// <c>true</c> when the database's recorded Data or Consumer schema version exceeds this build's
-    /// own known migration count (#289) — the state a migration squash produces on a database that
+    /// own known migration count (#289): the state a migration squash produces on a database that
     /// already applied the pre-squash migrations. The schema itself is treated as complete (nothing is
     /// replayed), but the recorded version is stale relative to this build; an explicit database Reset
     /// resolves the mismatch. Available after <see cref="InitialiseAsync"/> completes.
@@ -76,8 +76,8 @@ public interface IDatabaseInitializer
     /// <summary>
     /// Whether a backup can be taken right now, and if not, which obstacle is in the way (#348).
     /// <para>
-    /// Cheap and read-mostly — it inspects storage headroom and whether the destination can be written,
-    /// never database content — so a caller can ask before acting rather than discovering the answer by
+    /// Cheap and read-mostly (it inspects storage headroom and whether the destination can be written,
+    /// never database content), so a caller can ask before acting rather than discovering the answer by
     /// failing. It cannot see every obstacle: an unreadable source only reveals itself to an actual
     /// attempt, and the state can change between checking and acting, which is why exceptions are still
     /// handled around the attempt itself.
@@ -89,13 +89,18 @@ public interface IDatabaseInitializer
     /// has reached the normal quota still has room for the one backup they most need, which only works
     /// if routine operation cannot consume it.
     /// </param>
+    /// <param name="bytesFreedFirst">
+    /// Answers as if this many bytes had been removed from the backups folder first (#348): what the
+    /// check would say once an old backup is gone, so a caller can offer removing one only when that
+    /// would actually clear the way. The same comparisons, not a second estimate of them.
+    /// </param>
     /// <returns><see cref="BackupOutcome.Succeeded"/> when a backup can be taken; otherwise the obstacle.</returns>
-    BackupOutcome CheckBackupReadiness(bool allowReserve = false);
+    BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0);
 
     /// <summary>
     /// Takes a backup of the database now, because a caller asked for one (#349).
     /// <para>
-    /// Every other backup in this application happens as a side effect of something else — a
+    /// Every other backup in this application happens as a side effect of something else: a
     /// migration, a seed, a Reset. This is the one an operator invokes deliberately, to have a restore
     /// point before doing something they are not sure about. It is also what lets #352's restore
     /// endpoint refuse to take a backup of its own: the operator takes one here first if they want
@@ -103,7 +108,7 @@ public interface IDatabaseInitializer
     /// </para>
     /// </summary>
     /// <returns>
-    /// The file that was written, or which obstacle stopped it — the same
+    /// The file that was written, or which obstacle stopped it: the same
     /// <see cref="DatabaseBackupResult"/> every internal backup already produces, so an on-demand
     /// backup reports its failures in exactly the vocabulary the rest of the application uses.
     /// </returns>
@@ -117,21 +122,21 @@ public interface IDatabaseInitializer
     /// </returns>
     Task<DatabaseOperationResult> InitialiseAsync();
 
-    /// <summary>Imports from all configured source files without deleting anything first (#372) — adds what is missing, leaves already-correct content untouched, and raises a decision where content disagrees. Schema migration history is preserved. Updates the row-count properties when done.</summary>
+    /// <summary>Imports from all configured source files without deleting anything first (#372): adds what is missing, leaves already-correct content untouched, and raises a decision where content disagrees. Schema migration history is preserved. Updates the row-count properties when done.</summary>
     /// <param name="forceSourceRefresh">
     /// When <c>true</c>, bypasses the auto-update TTL check for every manifest entry with a
     /// <c>downloadUrl</c>, refreshing all of them from the network regardless of freshness. Has no
-    /// effect when <c>Quotinator__AutoUpdateSources</c> is <c>false</c> — an explicit no-network
+    /// effect when <c>Quotinator__AutoUpdateSources</c> is <c>false</c>: an explicit no-network
     /// declaration is never overridden by a force flag. Defaults to <c>false</c>.
     /// </param>
     Task ReseedAsync(bool forceSourceRefresh = false);
 
     /// <summary>
     /// Drops and rebuilds the entire database from the fresh-database baseline schema. Does not
-    /// reimport any source file afterward — reimporting bundled/user content is a separate, deliberate
+    /// reimport any source file afterward; reimporting bundled/user content is a separate, deliberate
     /// operator decision (a subsequent reseed), not something Reset should force as a side effect.
     /// Updates the row-count properties when done. No table is protected from the wipe, including
-    /// audit-trail tables — see ADR 014.
+    /// audit-trail tables; see ADR 014.
     /// </summary>
     /// <param name="preserveSchemaVersion">
     /// When <c>true</c>, existing schema migration history is left untouched instead of being cleared
@@ -154,13 +159,13 @@ public interface IDatabaseInitializer
 
     /// <summary>
     /// Scans all configured source files without touching the database and returns a preview of what a
-    /// full import would do — file quote counts and any cross-file duplicate quote IDs.
+    /// full import would do: file quote counts and any cross-file duplicate quote IDs.
     /// </summary>
     Task<SeedPreviewResult> PreviewSeedAsync();
 
     /// <summary>
     /// Refreshes the download cache for every configured source that declares a
-    /// <c>downloadUrl</c>/<c>github</c>, without touching the database or reimporting any data —
+    /// <c>downloadUrl</c>/<c>github</c>, without touching the database or reimporting any data:
     /// the reimport itself only happens on the next reseed/reset/startup. Has no effect when the
     /// auto-update mechanism is disabled entirely.
     /// </summary>

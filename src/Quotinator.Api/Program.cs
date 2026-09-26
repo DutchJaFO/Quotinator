@@ -83,12 +83,12 @@ builder.Services.AddOpenApi(options =>
         {
             new() { Name = ApiTags.System,        Description = "Endpoints for monitoring and verifying the health of the API." },
             new() { Name = ApiTags.Quotes,        Description = "Endpoints for fetching and searching quotes." },
-            new() { Name = ApiTags.Admin,         Description = "Administrative endpoints for database maintenance. Require `X-Api-Key` authentication. Protected by a concurrency-1 limiter — only one operation runs at a time; any concurrent request receives `429 Too Many Requests` immediately." },
+            new() { Name = ApiTags.Admin,         Description = "Administrative endpoints for database maintenance. Require `X-Api-Key` authentication. Protected by a concurrency-1 limiter: only one operation runs at a time; any concurrent request receives `429 Too Many Requests` immediately." },
             new() { Name = ApiTags.Import,        Description = "Endpoints for importing quote data and reviewing/resolving merge conflicts. Write operations require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter." },
             new() { Name = ApiTags.Conversations, Description = "Endpoints for fetching multi-line conversations (a stage direction and/or sound cue alongside one or more quotes)." },
-            new() { Name = ApiTags.MasterData,    Description = "Endpoints for fetching the shared reference data — Sources, Characters, People, Series, and Universes — that quotes and conversations are built from." },
+            new() { Name = ApiTags.MasterData,    Description = "Endpoints for fetching the shared reference data (Sources, Characters, People, Series, and Universes) that quotes and conversations are built from." },
             new() { Name = ApiTags.Notifications, Description = "Endpoints for listing startup and maintenance notifications, and for dismissing them. Dismissing requires `X-Api-Key` authentication; listing does not." },
-            new() { Name = ApiTags.Backup,        Description = "Endpoints for managing database backups — listing what exists, taking one on demand, downloading one so it survives the container, removing one to free quota, and reporting whether a backup can be taken right now. All require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter. They remain reachable while the database is degraded, which is the state they exist for." },
+            new() { Name = ApiTags.Backup,        Description = "Endpoints for managing database backups: listing what exists, taking one on demand, downloading one so it survives the container, removing one to free quota, and reporting whether a backup can be taken right now. All require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter. They remain reachable while the database is degraded, which is the state they exist for." },
         };
 
         document.Info = new()
@@ -163,7 +163,7 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-// Data directory — configurable so the HA add-on can point this at /data (the supervisor's
+// Data directory: configurable so the HA add-on can point this at /data (the supervisor's
 // persistent volume) while standalone Docker keeps the default /app/data.
 // The HA supervisor sets Quotinator__DataDir via config.yaml env_vars. When that env var
 // is absent (e.g. HA caches an older config), fall back to /data if it is already a mounted
@@ -179,7 +179,7 @@ string dataDir = builder.Configuration["Quotinator:DataDir"]
     ?? HaFallbackDir()
     ?? Path.Combine(AppContext.BaseDirectory, "data");
 
-// #326: one cause, one message, wherever it is first noticed — the database failing to open, or a
+// #326: one cause, one message, wherever it is first noticed: the database failing to open, or a
 // directory failing to be created below. DatabaseHealthState.MarkFailed is first-wins, so whichever
 // gets there first, the operator sees the same actionable text rather than two descriptions of one
 // problem. Deliberately says a Reset cannot help: the generic database-init reason recommends exactly
@@ -187,7 +187,7 @@ string dataDir = builder.Configuration["Quotinator:DataDir"]
 const string DataDirectoryNotWritableReason =
     "The data directory cannot be written. This usually means the volume is mounted read-only, or " +
     "the container user lacks write permission on it. Restore write access to the data directory " +
-    "and restart. A database Reset cannot resolve this — it writes too.";
+    "and restart. A database Reset cannot resolve this: it writes too.";
 
 // Walks the chain because the failure can arrive nested: DatabaseInitializer restores its backup and
 // rethrows on any migration exception, so the SqliteException that actually describes the cause is not
@@ -196,8 +196,8 @@ static bool IsDataDirectoryNotWritable(Exception? exception)
 {
     for (Exception? current = exception; current is not null; current = current.InnerException)
     {
-        // 14 SQLITE_CANTOPEN — the directory cannot be written, so SQLite cannot create the file or
-        // its -shm wal-index. 8 SQLITE_READONLY — the directory is writable but the file is not.
+        // 14 SQLITE_CANTOPEN: the directory cannot be written, so SQLite cannot create the file or
+        // its -shm wal-index. 8 SQLITE_READONLY: the directory is writable but the file is not.
         if (current is SqliteException sqlite && sqlite.SqliteErrorCode is 14 or 8) return true;
         if (current is UnauthorizedAccessException or IOException) return true;
     }
@@ -206,7 +206,7 @@ static bool IsDataDirectoryNotWritable(Exception? exception)
 }
 
 // #326: this and the keys/ creation below both run before app.StartAsync(), so an unguarded throw
-// here kills the process before Kestrel binds — no wait page, no /health, no OpenAPI, nothing to tell
+// here kills the process before Kestrel binds: no wait page, no /health, no OpenAPI, nothing to tell
 // the operator what happened. Recorded and reported once dbHealth exists rather than thrown.
 string? dataDirectoryFailure = null;
 try
@@ -218,9 +218,9 @@ catch (Exception ex) when (IsDataDirectoryNotWritable(ex))
     dataDirectoryFailure = DataDirectoryNotWritableReason;
 }
 
-// Duplicate-resolution policy from config — lowest-priority tier; a manifest's own
+// Duplicate-resolution policy from config, the lowest-priority tier; a manifest's own
 // duplicateResolution section overrides this when present. Quotinator:DefaultConflictPolicy is a
-// flat key (env Quotinator__DefaultConflictPolicy) — the 5 nested per-type keys below keep their
+// flat key (env Quotinator__DefaultConflictPolicy); the 5 nested per-type keys below keep their
 // existing paths, minus the now-redundant "Default" sibling that used to live under
 // Quotinator:DuplicateResolution. Parsing itself lives in ConflictPolicyParser (Quotinator.Data)
 // so it's unit-testable outside these top-level statements.
@@ -236,7 +236,7 @@ bool createMissingManifest  = builder.Configuration.GetValue("Quotinator:CreateM
 bool includeDefaultSources  = builder.Configuration.GetValue("Quotinator:IncludeDefaultSources", true);
 
 // Auto-update: whether the app checks manifest downloadUrl/github entries for a fresher copy at
-// all (master switch — false means pure offline mode, no network calls ever), and how long a
+// all (master switch: false means pure offline mode, no network calls ever), and how long a
 // downloaded copy is considered fresh before the next check re-verifies it.
 bool autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoUpdateSources", true);
 int sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
@@ -246,19 +246,19 @@ int sourceRefreshConnectTimeoutSeconds = builder.Configuration.GetValue<int?>("Q
     ?? SourceCacheUpdater.DefaultConnectTimeoutSeconds;
 
 // #249: once a seeded batch reaches zero pending actions, its Import_Action (conflict-resolution)
-// rows have served their purpose and are purged automatically — separate settings per origin so a
+// rows have served their purpose and are purged automatically, with separate settings per origin so a
 // developer investigating one specific source (bundled or user-imports) can temporarily retain that
 // origin's resolution history without affecting the other.
 bool autoPurgeBundledImportActions = builder.Configuration.GetValue("Quotinator:AutoPurgeBundledImportActions", true);
 bool autoPurgeUserImportActions    = builder.Configuration.GetValue("Quotinator:AutoPurgeUserImportActions", true);
 
-// Unicode-aware LIKE-style matching (issue #222) — opt-in, off by default until validated against
+// Unicode-aware LIKE-style matching (issue #222): opt-in, off by default until validated against
 // real-world non-ASCII search traffic. See docs/milestones/maintenance-milestone-v1.8.0/
 // 222-unicode-like-matching-plan.md for why this isn't unconditional.
 bool unicodeAwareSearch = builder.Configuration.GetValue("Quotinator:UnicodeAwareSearch", false);
 
 // Bundled sources are always read from the Docker image (AppContext.BaseDirectory/data/sources/).
-// No file copy to the persistent volume is needed — only the database and DataProtection keys
+// No file copy to the persistent volume is needed: only the database and DataProtection keys
 // need to be on a writable, persistent path.
 string bundledSourcesDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.SourcesFolder);
 
@@ -268,7 +268,7 @@ string importsDir = builder.Configuration["Quotinator:ImportsPath"] is { Length:
     ? customImportsPath
     : Path.Combine(dataDir, DataPaths.ImportsFolder);
 
-// Auto-update download caches — always under the persistent data volume, never the read-only
+// Auto-update download caches: always under the persistent data volume, never the read-only
 // bundled image path, so both are writable in every deployment shape including the HA add-on.
 // "Internal" is the default cache for bundled-manifest entries; "external" for user-imports entries.
 string internalDownloadDir = Path.Combine(dataDir, DataPaths.SourcesFolder, DataPaths.DownloadedSourcesFolder);
@@ -304,7 +304,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-// Optional HTTPS via Kestrel — for direct-access deployments without a terminating proxy.
+// Optional HTTPS via Kestrel, for direct-access deployments without a terminating proxy.
 // When running in a container, port binding is handled here instead of ASPNETCORE_HTTP_PORTS
 // so that HTTPS on 8080 and HTTP on 8099 (HA ingress) do not conflict.
 bool   sslEnabled  = builder.Configuration.GetValue<bool>("Quotinator:Ssl");
@@ -318,7 +318,7 @@ if (isContainer)
 {
     builder.WebHost.ConfigureKestrel(kestrel =>
     {
-        // Port 8099 is always plain HTTP — used by the HA ingress (internal traffic only).
+        // Port 8099 is always plain HTTP, used by the HA ingress (internal traffic only).
         kestrel.ListenAnyIP(8099);
 
         if (sslEnabled && File.Exists(sslCertFile) && File.Exists(sslKeyFile))
@@ -328,7 +328,7 @@ if (isContainer)
     });
 }
 
-// Omit null properties from all JSON responses — verified against System.Text.Json docs:
+// Omit null properties from all JSON responses; verified against System.Text.Json docs:
 // JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull skips any
 // property whose value is null at serialization time, application-wide (not merely a formatting
 // choice for one endpoint).
@@ -341,7 +341,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddSingleton<AdminApiKeyFilter>();
 
 builder.Services.AddExceptionHandler<BadRequestExceptionHandler>();
-// #397: last in the chain, so it sees only what every handler above it declined — which is what makes
+// #397: last in the chain, so it sees only what every handler above it declined, which is what makes
 // its line an "escaped the request" report rather than a duplicate of a handled exception.
 builder.Services.AddExceptionHandler<UnhandledRequestExceptionHandler>();
 // #397: since .NET 10 the middleware logs nothing for an exception a handler reports as handled, which
@@ -352,7 +352,7 @@ builder.Services.Configure<ExceptionHandlerOptions>(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IVersionService, VersionService>();
 // #309: bundled changelog files read from the Docker image (AppContext.BaseDirectory/data/changelog/),
-// mirroring bundledSourcesDir above — no longer compiled resources, per ADR 005's revision.
+// mirroring bundledSourcesDir above; no longer compiled resources, per ADR 005's revision.
 string bundledChangelogDir = Path.Combine(AppContext.BaseDirectory, "data", DataPaths.ChangelogFolder);
 builder.Services.AddSingleton<IChangelogService>(sp =>
     new ChangelogService(
@@ -366,7 +366,7 @@ string backupsDir = builder.Configuration["Quotinator:BackupPath"] is { Length: 
 int             maxBackupStorageGb = builder.Configuration.GetValue("Quotinator:MaxBackupStorageGb", 1);
 int             backupQuotaPercent = builder.Configuration.GetValue("Quotinator:BackupQuotaPercent", DatabaseOptions.DefaultBackupQuotaPercent);
 DatabaseOptions dbOptions          = new() { DbPath = dbPath, BackupsPath = backupsDir, MaxBackupStorageGb = maxBackupStorageGb, BackupQuotaPercent = backupQuotaPercent };
-// useMemoryTempStore: true — see SqliteConnectionFactory.cs's own comment for the #294 incident this
+// useMemoryTempStore: true; see SqliteConnectionFactory.cs's own comment for the #294 incident this
 // opts into working around. Safe here because Quotinator's own dataset (hundreds to low-thousands of
 // quotes) makes the resulting RAM cost negligible; Quotinator.Data itself stays unopinionated and
 // defaults to false since it doesn't know a future consumer's dataset size.
@@ -383,12 +383,12 @@ builder.Services.AddSingleton<IDatabaseBackupReader>(sp =>
 builder.Services.AddSingleton<IDatabaseBackupWriter>(_ => new DatabaseBackupWriter(dbOptions));
 builder.Services.AddSingleton<IDbConnectionFactory>(_ => connectionFactory);
 
-// #309: separate database for changelog content (ADR 018) — no relational or transactional coupling
+// #309: separate database for changelog content (ADR 018): no relational or transactional coupling
 // to domain data, so it lives outside quotinatordata.db entirely, as its own file beside it.
 //
 // Step 14: this was a shared-cache in-memory database held open by a dedicated keep-alive connection.
 // That storage mode is destroyed the moment its last connection closes, and was found live to take the
-// database-backed read path down thirteen minutes into a run — silently, because the JSON fallback
+// database-backed read path down thirteen minutes into a run, silently, because the JSON fallback
 // covered for it. A file has no such lifetime. Its contents are rebuilt from the bundled JSON at every
 // startup, so nothing user-authored is ever stored here and neither Reset nor the pre-migration backup
 // touches it. useMemoryTempStore: true for the same #294 reason as the main database.
@@ -400,7 +400,7 @@ builder.Services.AddSingleton<ChangelogDatabaseInitializer>();
 builder.Services.AddSingleton<ChangelogRepository>();
 builder.Services.AddSingleton<ChangelogSystemContentImporter>();
 // JoinQueryRepository/IJoinStrategy per ADR 017. Factory overload (not the bare AddSingleton<
-// JoinQueryRepository<T>>() every other join query below uses) — those all resolve the main
+// JoinQueryRepository<T>>() every other join query below uses): those all resolve the main
 // database's own unkeyed IDbConnectionFactory; this one must resolve the changelog database's keyed
 // factory instead, which the container can't supply implicitly at registration time.
 builder.Services.AddSingleton<IJoinStrategy<ChangelogLineRow>, ChangelogWithLinesStrategy>();
@@ -414,7 +414,7 @@ builder.Services.AddTransient<IUnitOfWork>(sp =>
     new SqliteUnitOfWork(sp.GetRequiredService<IDbConnectionFactory>()));
 // InitiatorContext implements both interfaces over the same AsyncLocal-backed instance, so
 // SqliteRepository<T>'s existing ICallerContext.Agent reads are unaffected by IInitiatorContext's
-// introduction — same singleton, same per-async-context isolation, just a richer surface for callers
+// introduction: same singleton, same per-async-context isolation, just a richer surface for callers
 // that need InitiatedByType/InitiatedById too.
 builder.Services.AddSingleton<InitiatorContext>();
 builder.Services.AddSingleton<ICallerContext>(sp => sp.GetRequiredService<InitiatorContext>());
@@ -429,12 +429,12 @@ builder.Services.AddSingleton<ISourceFileOverrideRegistry, SourceFileOverrideReg
 builder.Services.AddSingleton<IFileResourceRepository, SqliteFileResourceRepository>();
 builder.Services.AddSingleton<IImportActionCoordinator, ImportActionResolutionCoordinator>();
 builder.Services.AddSingleton<IImportActionService, SqliteImportActionService>();
-// #319: JoinQueryRepository/IJoinStrategy per ADR 017 — the notification reads became two-table
+// #319: JoinQueryRepository/IJoinStrategy per ADR 017: the notification reads became two-table
 // projections over System_NotificationTranslation. Registered through the service-provider factory
 // overload rather than AddSingleton<JoinQueryRepository<T>>() like the joins above, because all three
 // notification strategies return the same NotificationEntity: three registrations of one closed
-// generic would collapse to whichever landed last. The alternative — three identical row types whose
-// only purpose is to make DI's type-based resolution work — would read worse than the problem it
+// generic would collapse to whichever landed last. The alternative (three identical row types whose
+// only purpose is to make DI's type-based resolution work) would read worse than the problem it
 // solves. Per CLAUDE.md's DI policy this is the factory overload's intended use, not a bare `new`.
 builder.Services.AddSingleton<INotificationReader>(sp => new NotificationReader(
     sp.GetRequiredService<IDbConnectionFactory>(),
@@ -445,18 +445,20 @@ builder.Services.AddSingleton<INotificationReader>(sp => new NotificationReader(
     new JoinQueryRepository<NotificationEntity>(
         sp.GetRequiredService<IDbConnectionFactory>(), new NotificationJoinStrategies.ByMetadataKind())));
 builder.Services.AddSingleton<INotificationWriter, NotificationWriter>();
+// #348: the audited take-and-remove the backup endpoints and the notification's reseed action share.
+builder.Services.AddSingleton<BackupOperations>();
 builder.Services.AddSingleton<INotificationActionExecutor, NotificationActionExecutor>();
 builder.Services.AddSingleton<IAppVersionTracker, AppVersionTracker>();
 
 // #59: restorable-repository access for Quote/Source/Character/Person, needed only by batch-undo
-// (reversal) — nothing else in the app soft-deletes these tables today. Fully generic, already
+// (reversal); nothing else in the app soft-deletes these tables today. Fully generic, already
 // tested against a synthetic fixture in Quotinator.Data.Tests; no new repository code required.
 builder.Services.AddSingleton<IRestorableRepository<QuoteEntity>, SqliteRestorableRepository<QuoteEntity>>();
 builder.Services.AddSingleton<IRestorableRepository<SourceEntity>, SqliteRestorableRepository<SourceEntity>>();
 builder.Services.AddSingleton<IRestorableRepository<CharacterEntity>, SqliteRestorableRepository<CharacterEntity>>();
 builder.Services.AddSingleton<IRestorableRepository<PersonEntity>, SqliteRestorableRepository<PersonEntity>>();
 
-// #68: same rationale as above, for Conversation/StageDirection/SoundCue — needed by
+// #68: same rationale as above, for Conversation/StageDirection/SoundCue, needed by
 // SqliteImportActionService's stale-Add-target hard-delete and batch-reversal soft-delete/restore.
 // ConversationLines/StageDirectionTranslations/SoundCueTranslations are detail rows (like
 // QuoteGenres/QuoteTranslations) and never get their own repository.
@@ -466,7 +468,7 @@ builder.Services.AddSingleton<IRestorableRepository<SoundCueEntity>, SqliteResto
 
 // #193: listable-repository capability, needed by #184-#189's masterdata list endpoints.
 // SeriesEntity/UniverseEntity get their first repository of any kind here; the other four resolve to
-// their existing IRestorableRepository<T> singleton above — a second interface binding onto the same
+// their existing IRestorableRepository<T> singleton above: a second interface binding onto the same
 // object (SqliteRestorableRepository<T> already implements IListableRepository<T> transitively, since
 // it extends SqliteRepository<T>), not a second instance.
 builder.Services.AddSingleton<IListableRepository<SeriesEntity>, SqliteRepository<SeriesEntity>>();
@@ -488,7 +490,7 @@ builder.Services.AddSingleton<IListableRepository<StageDirectionEntity>>(sp => (
 builder.Services.AddSingleton<IListableRepository<SoundCueEntity>>(sp => (IListableRepository<SoundCueEntity>)sp.GetRequiredService<IRestorableRepository<SoundCueEntity>>());
 
 // #184/#284: resolves a Source's SeriesId to its Series' (Id, Name). SQL execution goes through
-// JoinQueryRepository/IJoinStrategy per ADR 017 — a join the generic IListableRepository<T>/
+// JoinQueryRepository/IJoinStrategy per ADR 017: a join the generic IListableRepository<T>/
 // IRepository<T> above cannot express (single-table SELECT * only), even though adopting the pattern
 // here doesn't unlock new capability over a hand-rolled query; see ADR 017 for why that's still the
 // right call.
@@ -498,7 +500,7 @@ builder.Services.AddSingleton<IJoinStrategy<SourceSeriesReferenceRow>, SourceSer
 builder.Services.AddSingleton<JoinQueryRepository<SourceSeriesReferenceRow>>();
 builder.Services.AddSingleton<ISourceSeriesReferenceReader, SourceSeriesReferenceReader>();
 
-// #375: resolves a Source's SeasonId to its Season's (Id, Number, Title, Subtitle) — same ADR 017
+// #375: resolves a Source's SeasonId to its Season's (Id, Number, Title, Subtitle), for the same ADR 017
 // reasoning as ISourceSeriesReferenceReader above.
 builder.Services.AddSingleton<IJoinStrategy<SourceSeasonReferenceRow>, SourceSeasonReferenceStrategy>();
 builder.Services.AddSingleton<JoinQueryRepository<SourceSeasonReferenceRow>>();
@@ -506,15 +508,15 @@ builder.Services.AddSingleton<IJoinStrategy<SourceSeasonReferencesBatchRow>, Sou
 builder.Services.AddSingleton<JoinQueryRepository<SourceSeasonReferencesBatchRow>>();
 builder.Services.AddSingleton<ISourceSeasonReferenceReader, SourceSeasonReferenceReader>();
 
-// #185/#284: resolves a Character's linked Sources (via CharacterSources, #179) to their (Id, Title) —
-// same ADR 017 reasoning as ISourceSeriesReferenceReader above.
+// #185/#284: resolves a Character's linked Sources (via CharacterSources, #179) to their (Id, Title),
+// for the same ADR 017 reasoning as ISourceSeriesReferenceReader above.
 builder.Services.AddSingleton<IJoinStrategy<SourceRow>, CharacterSourceReferenceStrategy>();
 builder.Services.AddSingleton<JoinQueryRepository<SourceRow>>();
 builder.Services.AddSingleton<IJoinStrategy<LinkRow>, CharacterSourceReferencesBatchStrategy>();
 builder.Services.AddSingleton<JoinQueryRepository<LinkRow>>();
 builder.Services.AddSingleton<ICharacterSourceLinkReader, CharacterSourceLinkReader>();
 
-// #187/#284: resolves a Series' UniverseId to its Universe's (Id, Name) — same ADR 017 reasoning as
+// #187/#284: resolves a Series' UniverseId to its Universe's (Id, Name), for the same ADR 017 reasoning as
 // ISourceSeriesReferenceReader above.
 builder.Services.AddSingleton<IJoinStrategy<UniverseReferenceRow>, SeriesUniverseReferenceStrategy>();
 builder.Services.AddSingleton<JoinQueryRepository<UniverseReferenceRow>>();
@@ -522,7 +524,7 @@ builder.Services.AddSingleton<IJoinStrategy<SeriesUniverseReferenceRow>, SeriesU
 builder.Services.AddSingleton<JoinQueryRepository<SeriesUniverseReferenceRow>>();
 builder.Services.AddSingleton<ISeriesUniverseReferenceReader, SeriesUniverseReferenceReader>();
 
-// #375: resolves a Season's SeriesId to its Series' (Id, Name) — same ADR 017 reasoning as
+// #375: resolves a Season's SeriesId to its Series' (Id, Name), for the same ADR 017 reasoning as
 // ISeriesUniverseReferenceReader above.
 builder.Services.AddSingleton<IJoinStrategy<SeasonSeriesReferenceRow>, SeasonSeriesReferenceStrategy>();
 builder.Services.AddSingleton<JoinQueryRepository<SeasonSeriesReferenceRow>>();
@@ -531,28 +533,28 @@ builder.Services.AddSingleton<JoinQueryRepository<SeasonSeriesReferencesBatchRow
 builder.Services.AddSingleton<ISeasonSeriesReferenceReader, SeasonSeriesReferenceReader>();
 
 // #189: resolves each Conversation's active line count via ConversationLines. Deliberately stays on
-// a raw connection, not JoinQueryRepository/IJoinStrategy — ADR 017's one documented exemption, since
+// a raw connection, not JoinQueryRepository/IJoinStrategy: ADR 017's one documented exemption, since
 // this read's QueryAsync<dynamic> works around two real Dapper/SQLite bugs that IJoinStrategy<TResult>'s
 // concrete-TResult requirement can't accommodate (see the reader's own code comment for the two bugs).
 builder.Services.AddSingleton<IConversationLineCountReader, ConversationLineCountReader>();
 
-// #192: resolves a Series/Universe name to its id — the resolveIdByName delegate #196's
+// #192: resolves a Series/Universe name to its id: the resolveIdByName delegate #196's
 // EntityFilterParsing.ResolveAsync needs for the quote read path's Series/Universe filters.
 builder.Services.AddSingleton<ISeriesNameResolver, SeriesNameResolver>();
 builder.Services.AddSingleton<IUniverseNameResolver, UniverseNameResolver>();
 
 // Seed batches are resolved lazily inside the IDatabaseInitializer factory below, rather than
 // eagerly before builder.Build(), so manifest planning (including auto-create) logs through the
-// real Serilog pipeline at the same point in startup as the rest of seeding — not through a
+// real Serilog pipeline at the same point in startup as the rest of seeding, not through a
 // separate bootstrap console logger that runs before the "Quotinator starting" banner.
 builder.Services.AddSingleton<IManifestSeedPlanner, ManifestSeedPlanner>();
 builder.Services.AddSingleton<IImportBatchRepository, SqliteImportBatchRepository>();
 
-// Overridable via Quotinator:SourceRefreshTimeoutSeconds — see SourceCacheUpdater.DefaultHttpTimeoutSeconds
+// Overridable via Quotinator:SourceRefreshTimeoutSeconds; see SourceCacheUpdater.DefaultHttpTimeoutSeconds
 // for why 30 s is the default.
 // #323: the primary handler must be configured explicitly. SocketsHttpHandler's ConnectTimeout and
 // PooledConnectionLifetime both default to infinite, so a stalled connect has no budget of its own and
-// a pooled connection never rotates — see SourceCacheUpdater's two Default* constants for the full why.
+// a pooled connection never rotates; see SourceCacheUpdater's two Default* constants for the full why.
 builder.Services
     .AddHttpClient(SourceCacheUpdater.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(sourceRefreshTimeoutSeconds))
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
@@ -560,8 +562,8 @@ builder.Services
         ConnectTimeout           = TimeSpan.FromSeconds(sourceRefreshConnectTimeoutSeconds),
         PooledConnectionLifetime = TimeSpan.FromMinutes(SourceCacheUpdater.DefaultPooledConnectionLifetimeMinutes),
 
-        // No ConnectCallback (#325, reverted). A manifest entry is a plain download link — an ordinary
-        // URI or an IP-based one — and it is resolved and fetched as such, by the default handler. The
+        // No ConnectCallback (#325, reverted). A manifest entry is a plain download link (an ordinary
+        // URI or an IP-based one), and it is resolved and fetched as such, by the default handler. The
         // custom address-family race that briefly lived here was disproportionate to what it protected:
         // a source refresh is best-effort, SourceCacheUpdater already falls back to the local copy when
         // a download fails, and the refresh runs again next cycle. What it cost was a family preference
@@ -573,7 +575,7 @@ builder.Services
         // (#329), not a reason to take over connection establishment.
     });
 
-// Converters are stateless, hardcoded per source — no DI registration needed for the individual
+// Converters are stateless, hardcoded per source: no DI registration needed for the individual
 // plugin instances themselves (CLAUDE.md's DI policy: bare `new` is permitted for a computed value
 // assembled before a factory closure, same shape already used for SourceCacheOptions itself).
 Dictionary<string, IQuoteSourceConverter> quoteSourceConverters = new IQuoteSourceConverter[]
@@ -584,7 +586,7 @@ Dictionary<string, IQuoteSourceConverter> quoteSourceConverters = new IQuoteSour
 }.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
 
 // Real canonical-schema validation needs Quotinator.Core's SourceQuoteDto, but Quotinator.Data (home of
-// SourceCacheUpdater) must not depend on Quotinator.Core — so the validator is built here, at the
+// SourceCacheUpdater) must not depend on Quotinator.Core, so the validator is built here, at the
 // composition root, and injected as a plain delegate.
 static bool ValidateCanonicalSchema(string json) => SourceQuoteFileReader.TryParse(json, out _);
 
@@ -595,7 +597,7 @@ builder.Services.AddSingleton<ISourceCacheUpdater>(sp => new SourceCacheUpdater(
     sp.GetRequiredService<ILogger<SourceCacheUpdater>>()));
 
 // #153: a generated ruleFile/sourceAliasFile override is written under the same two persistent,
-// writable cache directories SourceCacheUpdater already uses above — never the bundled/image sources
+// writable cache directories SourceCacheUpdater already uses above, never the bundled/image sources
 // directory, which is read-only in a real deployment.
 builder.Services.AddSingleton<IRuleFileOverridePathResolver>(_ =>
     new RuleFileOverridePathResolver(internalDownloadDir, externalDownloadDir, bundledSourcesDir, importsDir));
@@ -660,7 +662,7 @@ builder.Services.AddSingleton<RequestLoggingMiddleware>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.DatabaseHealthState>();
 
 // #367: which notification actions are running right now. Singleton because the answer must be the
-// same for every circuit — a per-circuit flag would show the clicking user that something started
+// same for every circuit: a per-circuit flag would show the clicking user that something started
 // while leaving a second session free to start it again.
 builder.Services.AddSingleton<Quotinator.Api.Startup.NotificationExecutionState>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.StartupUxState>();
@@ -671,7 +673,7 @@ builder.Services.AddSingleton<IApiLocalizer>(
     new ApiLocalizer(Path.Combine(AppContext.BaseDirectory, "i18ntext")));
 // #304: the same instance under its Quotinator.Data-side contract, so a notification producer in
 // Quotinator.Core can build per-language text without Data depending on Core (ADR 018's dependency
-// edge). Resolved from the registration above rather than constructed again — a second ApiLocalizer
+// edge). Resolved from the registration above rather than constructed again: a second ApiLocalizer
 // would re-read every UI.*.json file and hold a duplicate table for the life of the process.
 builder.Services.AddSingleton<INotificationTextSource>(sp => sp.GetRequiredService<IApiLocalizer>());
 builder.Services.AddI18nText(options =>
@@ -707,7 +709,7 @@ LogEventLevel serilogLevel = haLogLevel.ToLowerInvariant() switch
     _         => LogEventLevel.Information
 };
 
-// Configured in code — not via ReadFrom.Configuration — because the HA supervisor container
+// Configured in code (not via ReadFrom.Configuration) because the HA supervisor container
 // denies directory listing on /app, which Serilog.Settings.Configuration scans for sink DLLs.
 builder.Host.UseSerilog((ctx, _, config) =>
 {
@@ -746,7 +748,7 @@ Quotinator.Api.Startup.StartupSummaryLogger startupLog = new(
 startupLog.LogStarting();
 
 // #280: database initialisation now runs after Kestrel starts listening (see the StartAsync/
-// WaitForShutdownAsync split at the bottom of this file) — StartupWaitMiddleware serves a wait page
+// WaitForShutdownAsync split at the bottom of this file): StartupWaitMiddleware serves a wait page
 // for every non-exempt request until it completes, instead of the app being completely unreachable
 // during this window as it was before. dbHealth is still resolved here since it's referenced by name
 // throughout the rest of this section's setup.
@@ -784,17 +786,17 @@ app.Use(async (context, next) =>
 });
 
 // Degrades to a clear 503 (instead of a raw per-request exception) once DatabaseHealthState
-// records a failed startup initialisation — see DatabaseHealthGateMiddleware's own remarks. Must
+// records a failed startup initialisation; see DatabaseHealthGateMiddleware's own remarks. Must
 // run before request logging/exception handling so a degraded request never reaches a handler
 // that would throw.
 app.UseMiddleware<DatabaseHealthGateMiddleware>();
 
-// Optional request logging — logs every endpoint call as two lines (start + end) with a
+// Optional request logging: logs every endpoint call as two lines (start + end) with a
 // per-request correlation ID. Off by default. Enable with log_requests: true in the add-on
 // config (or Quotinator__LogRequests=true). All endpoints are logged; header values are never
 // captured (X-Api-Key, Authorization, Cookie must not appear in logs).
 //
-// Registered before UseExceptionHandler() so it wraps it, not the reverse — the completion log
+// Registered before UseExceptionHandler() so it wraps it, not the reverse: the completion log
 // line reads context.Response.StatusCode in a finally block, and an exception thrown deeper in
 // the pipeline unwinds through that finally before the response status has actually been set by
 // whichever middleware handles it. Logging registered after UseExceptionHandler would therefore
@@ -814,7 +816,7 @@ app.UseMiddleware<StartupWaitMiddleware>();
 app.UseRateLimiter();
 
 // Populate ICallerContext.Agent from the User-Agent header for audit trail entries.
-// Only the value is read — the header name is not logged or stored anywhere.
+// Only the value is read; the header name is not logged or stored anywhere.
 app.Use(async (context, next) =>
 {
     ICallerContext callerContext = context.RequestServices.GetRequiredService<ICallerContext>();
@@ -868,7 +870,7 @@ app.MapGet(ApiRoutes.Version, (IVersionService vs, IWebHostEnvironment env, IDat
    .WithName("Version")
    .WithTags(ApiTags.System)
    .WithSummary("API version")
-   .WithDescription("Returns the running version, environment, and database schema version with row counts. While startup database initialisation is still running, returns only {\"status\":\"starting\",\"version\":...} — the environment/database fields don't exist yet.");
+   .WithDescription("Returns the running version, environment, and database schema version with row counts. While startup database initialisation is still running, returns only {\"status\":\"starting\",\"version\":...}; the environment/database fields don't exist yet.");
 
 app.MapQuoteEndpoints();
 app.MapAdminEndpoints();
@@ -909,7 +911,7 @@ app.MapGet(ApiRoutes.CultureSet, (string? culture, string redirectUri, HttpConte
 })
 .ExcludeFromDescription();
 
-// #280: Kestrel is now listening — StartupWaitMiddleware is already serving a wait page for every
+// #280: Kestrel is now listening: StartupWaitMiddleware is already serving a wait page for every
 // non-exempt request (registered above, before this point was reached), so initialisation runs here,
 // after StartAsync, instead of before it as it did prior to #280.
 await app.StartAsync();
@@ -918,8 +920,8 @@ await app.StartAsync();
 // init try/catch below: a changelog-database failure must never affect the main database's own
 // initialisation or health status, matching ADR 018's fallback requirement (IChangelogReader, once
 // built, falls back to the JSON-file-based IChangelogService regardless of why the changelog database
-// is unavailable). Schema creation itself stays synchronous here — it's a single connection and a
-// couple of DDL statements, fast enough not to matter — but the content refresh below is deliberately
+// is unavailable). Schema creation itself stays synchronous here (it's a single connection and a
+// couple of DDL statements, fast enough not to matter), but the content refresh below is deliberately
 // NOT awaited inline; see that block's own comment.
 //
 // Step 14 removed a keep-alive connection that was eagerly resolved here: it existed only to stop the
@@ -932,16 +934,16 @@ try
 catch (Exception ex)
 {
     app.Services.GetRequiredService<ILogger<Program>>()
-        .LogWarning(ex, "[Database - Init] failed to initialise the changelog database — " +
+        .LogWarning(ex, "[Database - Init] failed to initialise the changelog database; " +
             "non-fatal, startup continues. The changelog will fall back to reading its JSON files directly.");
 }
 
 // #309: the changelog content refresh (one atomic parent+children insert per release, across every
-// loaded language) runs detached in the background rather than being awaited here — found live: awaiting
+// loaded language) runs detached in the background rather than being awaited here. Found live: awaiting
 // it inline pushed StartupPhaseState.MarkComplete() (below) meaningfully later, widening the window a
 // request can observe "starting" instead of the app's real health, for content whose own read path
 // (IChangelogReader, once built) already tolerates the changelog database not being ready yet by falling
-// back to the JSON-backed IChangelogService — the same fallback it uses for a genuine failure. There is
+// back to the JSON-backed IChangelogService, the same fallback it uses for a genuine failure. There is
 // nothing else in this process that can race the keyed changelog connection factory before this runs.
 _ = Task.Run(async () =>
 {
@@ -958,14 +960,14 @@ _ = Task.Run(async () =>
     {
         readiness.MarkFailed();
         app.Services.GetRequiredService<ILogger<Program>>()
-            .LogWarning(ex, "[Database - Import] failed to refresh changelog content — non-fatal, " +
+            .LogWarning(ex, "[Database - Import] failed to refresh changelog content; non-fatal, " +
                 "startup continues. The changelog will fall back to reading its JSON files directly.");
     }
 });
 
 IAppVersionTracker appVersionTracker = app.Services.GetRequiredService<IAppVersionTracker>();
 
-// A database initialisation failure must never crash the whole process outright — that would
+// A database initialisation failure must never crash the whole process outright: that would
 // also make POST /api/v1/admin/database/reset unreachable, the one endpoint actually capable of
 // resolving the underlying schema/version mismatch (found live, 2026-08-02: exiting on this
 // exception meant the operator's own documented remedy could never be reached). Catching it here
@@ -975,23 +977,23 @@ IAppVersionTracker appVersionTracker = app.Services.GetRequiredService<IAppVersi
 // throw the same raw exception per-request.
 try
 {
-    await dbInitializer.InitialiseAsync();
-}
-catch (DatabaseBackupWriteException ex)
-{
-    ILogger<Program> startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
-    const string failureReason =
-        "Database initialisation failed while writing a pre-change safety backup. This usually " +
-        "means the data directory ran out of disk space or lost write access mid-write. Resolve " +
-        "by freeing disk space or restoring write access, then restart.";
-    startupLogger.LogStartupDatabaseInitFailed(ex, failureReason);
-    dbHealth.MarkFailed(failureReason);
+    DatabaseOperationResult initialisation = await dbInitializer.InitialiseAsync();
+
+    // #348: a refused migration leaves the schema behind this build, so serving from it is not safe. It
+    // degrades rather than raising a notification, because writing that row into a table the build has
+    // not migrated is the unprotected write the refusal exists to prevent.
+    if (initialisation is { RefusedStep: BackupGuardedStep.Migration, BackupObstacle: BackupOutcome obstacle })
+    {
+        string failureReason = BackupObstacleGuidance.MigrationRefusedReason(obstacle);
+        app.Services.GetRequiredService<ILogger<Program>>().LogStartupMigrationRefused(failureReason);
+        dbHealth.MarkFailed(failureReason);
+    }
 }
 // #326: an unwritable data directory is a different fault with a different remedy, and the generic
-// reason below actively misdirects for it — it tells the operator to run a database Reset, which also
+// reason below actively misdirects for it: it tells the operator to run a database Reset, which also
 // writes and therefore cannot work here. Measured by scripts/testing/sqlite-storage-probe.csx: an unwritable
 // directory surfaces SQLITE_CANTOPEN (14), a writable directory holding a read-only file surfaces
-// SQLITE_READONLY (8). Matched on SqliteErrorCode, never SqliteExtendedErrorCode — the extended code
+// SQLITE_READONLY (8). Matched on SqliteErrorCode, never SqliteExtendedErrorCode: the extended code
 // varies by cause (526 CANTOPEN_ISDIR for a directory at the database path) while the primary code
 // does not.
 catch (Exception ex) when (IsDataDirectoryNotWritable(ex))
@@ -1012,21 +1014,21 @@ catch (Exception ex)
     dbHealth.MarkFailed(failureReason);
 }
 
-// #81: the version this app instance was running as of its *previous* healthy startup — the lower
+// #81: the version this app instance was running as of its *previous* healthy startup, the lower
 // bound of the what's-new catch-up range. Read here rather than before migrations, and the ordering is
 // load-bearing, not incidental.
 //
 // It originally ran before InitialiseAsync, on the reasoning that a missing System_AppVersion table
-// (a fresh install, or the first boot after #81 introduced it) reads as null — "nothing to catch up
+// (a fresh install, or the first boot after #81 introduced it) reads as null: "nothing to catch up
 // on". #312 broke that: this query now selects Application and orders by SequenceNumber, columns
-// migrations 6 and 7 add, so a database where the table already exists but those columns do not — any
-// database at data v4 or v5, i.e. one that ran a build between #81 and #312 — threw
+// migrations 6 and 7 add, so a database where the table already exists but those columns do not (any
+// database at data v4 or v5, i.e. one that ran a build between #81 and #312) threw
 // `no such column: Application` straight past the missing-table catch and killed startup. Found live
 // in T1 on exactly such a database; T2 could not have caught it, since it upgraded from v1.8.3, where
 // the table does not exist at all and the catch does apply.
 //
 // Reading after migrations is not a workaround, it is the correct order: migrations 6 and 7 only add
-// columns and backfill SequenceNumber — they never touch a recorded Version — so "which version ran
+// columns and backfill SequenceNumber; they never touch a recorded Version, so "which version ran
 // last" is identical either side of them, while only the later position is guaranteed to have a schema
 // matching the query. Widening the catch to swallow `no such column` was rejected: it would leave the
 // same trap armed for the next column added to this query, and CLAUDE.md's "no exception-based
@@ -1037,7 +1039,7 @@ catch (Exception ex)
 // #326: gated and guarded, matching RecordCurrentAsync immediately below. This was the one statement
 // in the whole post-StartAsync sequence that could still terminate the process: AppVersionTracker
 // catches only "no such table: System_AppVersion", so a data directory that cannot be written threw
-// SQLITE_CANTOPEN straight past it and killed startup before StartupPhaseState.MarkComplete() —
+// SQLITE_CANTOPEN straight past it and killed startup before StartupPhaseState.MarkComplete(),
 // taking the degraded UI, /health, the OpenAPI surface and POST /admin/database/reset down with it.
 // A failure here leaves lastActiveVersion null, which the #81 producer below already treats as
 // "nothing to catch up on", and that producer is itself gated on dbHealth.IsHealthy anyway.
@@ -1051,24 +1053,24 @@ if (dbHealth.IsHealthy)
     catch (Exception ex)
     {
         app.Services.GetRequiredService<ILogger<Program>>()
-            .LogWarning(ex, "[Server] Failed to read the last active app version — non-fatal, startup continues. " +
+            .LogWarning(ex, "[Server] Failed to read the last active app version; non-fatal, startup continues. " +
                 "The what's-new notification has no catch-up range this startup.");
     }
 }
 
 string? lastActiveVersion = lastActive?.Version;
 
-// #81: System_AppVersion is meant to always carry the current version once startup is healthy —
+// #81: System_AppVersion is meant to always carry the current version once startup is healthy:
 // the same "structurally required, not the caller's optional content" reasoning CLAUDE.md's endpoint
 // side-effect policy applies elsewhere, just applied to a startup step instead of an endpoint. Fast,
 // synchronous, single-row write against the already-open main database (matching #279's/#289's own
-// synchronous read+write producers) — safe to await inline, unlike #309's changelog database or the
+// synchronous read+write producers): safe to await inline, unlike #309's changelog database or the
 // slower catch-up logic below.
 //
 // #312 moved this ahead of the notification producers below, which it used to follow. Every producer
 // now stamps AppVersionId on what it writes, and a foreign key cannot reference a row that does not
 // exist yet. Ordering is safe because lastActiveVersion was captured further up, before migrations
-// ran — recording the current version here cannot disturb what the catch-up range already read.
+// ran; recording the current version here cannot disturb what the catch-up range already read.
 AppVersionRecord? currentVersion = null;
 if (dbHealth.IsHealthy)
 {
@@ -1079,29 +1081,26 @@ if (dbHealth.IsHealthy)
     catch (Exception ex)
     {
         app.Services.GetRequiredService<ILogger<Program>>()
-            .LogWarning(ex, "[Server] Failed to record the current app version — non-fatal, startup continues. " +
+            .LogWarning(ex, "[Server] Failed to record the current app version; non-fatal, startup continues. " +
                 "The what's-new notification's catch-up range may be inaccurate on the next restart, and " +
                 "notifications written during this startup carry no app-version provenance.");
     }
 }
 
-// #279: first concrete producer for #278's notification mechanism — announces the two breaking
+// #279: first concrete producer for #278's notification mechanism: announces the two breaking
 // operationId renames this release ships. Idempotent across restarts (NotificationSeeding compares
 // this payload structurally against notification history), so this call is safe to leave in place
 // indefinitely rather than needing to be removed after the first deploy. Deliberately outside the
 // critical DB-init try/catch above and in its own non-fatal guard: a failure here (e.g. a test's
 // NoOpDatabaseInitializer, which never creates System_Notification) must never mark the whole app
-// unhealthy — writing an announcement notification is inherently non-critical, unlike schema init itself.
+// unhealthy; writing an announcement notification is inherently non-critical, unlike schema init itself.
 if (dbHealth.IsHealthy)
 {
     try
     {
         // Hoisted so the payload's content hash covers exactly the text that gets written. Hashing a
         // second copy of the same words would be a copy that can drift.
-        const string announcementBody =
-            "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
-            "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
-            "This only affects a generated API client keyed by operation ID — routes and behaviour are unchanged.";
+        const string announcementBody = OperationIdRenameAnnouncement.Body;
 
         await NotificationSeeding.SeedOnceAsync(
             app.Services.GetRequiredService<INotificationReader>(),
@@ -1110,7 +1109,7 @@ if (dbHealth.IsHealthy)
             new AnnouncementMetadataDto
             {
                 Announcement = "GetAllImportBatches",
-                // The release this announcement is about — v1.8.3 shipped the renames — not the version
+                // The release this announcement is about (v1.8.3 shipped the renames), not the version
                 // running now, which the row's own AppVersionId records. The two coincide only until
                 // the next release.
                 ReleaseState = NotificationReleaseState.Released,
@@ -1120,8 +1119,8 @@ if (dbHealth.IsHealthy)
             title: "Two API operation IDs were renamed",
             body: announcementBody,
             appVersionId: currentVersion?.Id,
-            // #319: every language at once. The English above stays the notification's own text — the
-            // content hash is taken over it, and the read path falls back to it — so only the other
+            // #319: every language at once. The English above stays the notification's own text (the
+            // content hash is taken over it, and the read path falls back to it), so only the other
             // languages become translation rows.
             translations: NotificationTranslations.Build(
                 app.Services.GetRequiredService<IApiLocalizer>(),
@@ -1131,14 +1130,14 @@ if (dbHealth.IsHealthy)
     catch (Exception ex)
     {
         app.Services.GetRequiredService<ILogger<Program>>()
-            .LogWarning(ex, "[Server] Failed to seed the #279 operation-id-rename notification — non-fatal, startup " +
+            .LogWarning(ex, "[Server] Failed to seed the #279 operation-id-rename notification; non-fatal, startup " +
                 "continues. This does not mean the database is broken or corrupted: it means a table the current " +
                 "schema version implies should exist (e.g. System_Notification) is actually missing on disk, a " +
                 "mismatch normal operation shouldn't produce.");
     }
 }
 
-// #289: second producer for #278's notification mechanism — announces a schema-version-overshoot
+// #289: second producer for #278's notification mechanism: announces a schema-version-overshoot
 // (the recorded version exceeds this build's own known migration count, which only happens after a
 // migration squash on a database that already applied the pre-squash migrations). The dedupe key
 // includes the actual detected versions, not a fixed string like #279's: repeats of the same
@@ -1161,7 +1160,7 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
             {
                 DataSchemaVersion = dbInitializer.DataSchemaVersion,
                 AppSchemaVersion  = dbInitializer.SchemaVersion,
-                // Not about a release at all — this describes the database's own recorded state, which
+                // Not about a release at all: this describes the database's own recorded state, which
                 // no version number characterises. Said outright rather than borrowing the running
                 // version, which would also make the same unresolved overshoot re-announce itself on
                 // every upgrade.
@@ -1169,7 +1168,7 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
             },
             // #319: both recorded versions are substituted into each language's own template, so the
             // numbers are not embedded in prose written once in English. The structured values stay in
-            // the metadata payload above — this is the same pair, rendered.
+            // the metadata payload above; this is the same pair, rendered.
             title: NotificationTranslations.Original(
                        localizer, ApiMessages.NotificationSchemaOvershootTitle),
             body: NotificationTranslations.Original(
@@ -1186,23 +1185,23 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
     catch (Exception ex)
     {
         app.Services.GetRequiredService<ILogger<Program>>()
-            .LogWarning(ex, "[Server] Failed to seed the #289 schema-version-overshoot notification — non-fatal, startup continues.");
+            .LogWarning(ex, "[Server] Failed to seed the #289 schema-version-overshoot notification; non-fatal, startup continues.");
     }
 }
 
-// #81: third producer for #278's notification mechanism — announces every release's
+// #81: third producer for #278's notification mechanism: announces every release's
 // notification-flagged changelog highlights (#307's ChangelogReservedAudience.Notification
 // convention) missed since lastActiveVersion (captured above, before migrations ran), one
 // notification per release. Reads via IChangelogReader (#309), which falls back to the JSON-backed
-// IChangelogService on its own if the changelog database isn't ready or available — this producer
+// IChangelogService on its own if the changelog database isn't ready or available, so this producer
 // doesn't need to know or care which path served the document. "Seen" state is the existing
 // notification history itself (dismissing via POST /notifications/{id}/dismiss stops it reappearing);
 // no separate cookie or localStorage marker is needed. Runs detached, like #309's own changelog-import
-// task — found live: awaiting IChangelogReader.GetDocumentAsync inline here delayed
+// task. Found live: awaiting IChangelogReader.GetDocumentAsync inline here delayed
 // StartupPhaseState.MarkComplete() enough to reintroduce the exact race #309's Step 6 fix already
 // solved once, this time affecting far more of the test suite since every WebApplicationFactory-based
 // test spins up its own full startup sequence. Timing relative to MarkComplete() doesn't matter for
-// correctness here, the same as #279's/#289's producers — writing an announcement is inherently
+// correctness here, the same as #279's/#289's producers: writing an announcement is inherently
 // non-critical.
 if (dbHealth.IsHealthy)
 {
@@ -1228,18 +1227,18 @@ if (dbHealth.IsHealthy)
         catch (Exception ex)
         {
             app.Services.GetRequiredService<ILogger<Program>>()
-                .LogWarning(ex, "[Server] Failed to seed the #81 what's-new notification — non-fatal, startup continues.");
+                .LogWarning(ex, "[Server] Failed to seed the #81 what's-new notification; non-fatal, startup continues.");
         }
     });
 }
 
-// #280: initialisation (successful or not) is now finished — StartupWaitMiddleware stops
+// #280: initialisation (successful or not) is now finished: StartupWaitMiddleware stops
 // intercepting requests from this point on. Marked complete regardless of dbHealth's outcome: a
 // failed startup has its own existing degraded-state UI (DatabaseHealthGateMiddleware/#263's
 // modals), not the wait page.
 app.Services.GetRequiredService<Quotinator.Api.Startup.StartupPhaseState>().MarkComplete();
 
-// "Ready" now means truly ready (initialisation complete), not merely "Kestrel bound" — logged
+// "Ready" now means truly ready (initialisation complete), not merely "Kestrel bound"; logged
 // directly here instead of via the ApplicationStarted event hook, which fires as soon as StartAsync
 // returns, before initialisation even begins under this model.
 List<string> readyAddresses = [.. app.Services

@@ -1,6 +1,8 @@
 using Quotinator.Api.Components.Controls;
 using Quotinator.Api.Enums;
+using Quotinator.Api.Formatting;
 using Quotinator.Api.Services;
+using Quotinator.Constants.Api;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
@@ -11,7 +13,7 @@ namespace Quotinator.Api.Tests.Components;
 /// <summary>
 /// Exercises <see cref="NotificationTable.TypeLabel(NotificationType?, Quotinator.Api.I18nText.UI)"/>,
 /// <see cref="NotificationTable.BadgeClass"/>, and <see cref="NotificationTable.GetDisplayStatus"/>
-/// (#278) — the label/badge/status mapping shared by <c>NotificationSummary</c> (the startup-modal
+/// (#278): the label/badge/status mapping shared by <c>NotificationSummary</c> (the startup-modal
 /// summary) and <c>Notifications</c> (the full history page, including its Status filter). This
 /// project has no Blazor component-rendering test infrastructure (no bUnit), so these pure mapping
 /// methods are unit-tested directly rather than via a rendered component.
@@ -43,7 +45,7 @@ public class NotificationTableTests
     [TestMethod]
     public void TypeLabelAndBadgeClass_NullType_FallBackToPlaceholder()
     {
-        Assert.AreEqual("—", NotificationTable.TypeLabel(null, Text));
+        Assert.AreEqual(LocalTimestamp.Absent, NotificationTable.TypeLabel(null, Text));
         Assert.AreEqual("bg-secondary", NotificationTable.BadgeClass(null));
     }
 
@@ -71,7 +73,7 @@ public class NotificationTableTests
 
     /// <summary>
     /// A value read back with no <see cref="DateTimeKind"/> is still treated as UTC, which is what it
-    /// is — SQLite hands back an unspecified kind, and assuming local there would leave the display
+    /// is: SQLite hands back an unspecified kind, and assuming local there would leave the display
     /// correct only on a machine that happens to run in UTC.
     /// </summary>
     [TestMethod]
@@ -86,10 +88,10 @@ public class NotificationTableTests
     /// <summary>No timestamp renders as an em dash rather than an empty cell or a default date.</summary>
     [TestMethod]
     public void Local_Null_RendersEmDash()
-        => Assert.AreEqual("—", NotificationTable.Local(null));
+        => Assert.AreEqual(LocalTimestamp.Absent, NotificationTable.Local(null));
 
     /// <summary>
-    /// #304: a notification whose action was carried out reads as done, not as declined. Found in T1 —
+    /// #304: a notification whose action was carried out reads as done, not as declined. Found in T1:
     /// running the reseed reported "Dismissed", which tells the user the opposite of what they did.
     /// </summary>
     [TestMethod]
@@ -119,7 +121,7 @@ public class NotificationTableTests
             NotificationTable.GetDisplayStatus(notification, DateTime.UtcNow));
     }
 
-    /// <summary>The user's own dismiss still reads as dismissed — the distinction only works if both sides hold.</summary>
+    /// <summary>The user's own dismiss still reads as dismissed; the distinction only works if both sides hold.</summary>
     [TestMethod]
     public void GetDisplayStatus_DismissedByUser_IsDismissed()
     {
@@ -178,7 +180,7 @@ public class NotificationTableTests
 
         Assert.AreEqual(NotificationDisplayStatus.Dismissed, NotificationTable.GetDisplayStatus(Build(isDismissed: true, expiresAt: null), now));
         Assert.AreEqual(NotificationDisplayStatus.Dismissed, NotificationTable.GetDisplayStatus(Build(isDismissed: true, expiresAt: now.AddHours(-1)), now),
-            "Dismissed must take priority over expiry — an already-dismissed row's expiry no longer matters for display.");
+            "Dismissed must take priority over expiry: an already-dismissed row's expiry no longer matters for display.");
     }
 
     /// <summary>
@@ -201,7 +203,7 @@ public class NotificationTableTests
     }
 
     /// <summary>
-    /// #367: the window is real, not theoretical — an action dismisses its own notification and only
+    /// #367: the window is real, not theoretical: an action dismisses its own notification and only
     /// then releases the registry, so a row can be both dismissed and still registered. It must read
     /// what happened to it, not what was happening a moment earlier.
     /// </summary>
@@ -245,7 +247,7 @@ public class NotificationTableTests
         {
             string key = $"Notifications{status}Label";
             Assert.IsTrue(keys.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value),
-                $"{status} renders with no label — '{key}' is missing or empty in UI.en-GB.json.");
+                $"{status} renders with no label: '{key}' is missing or empty in UI.en-GB.json.");
         }
     }
 
@@ -268,7 +270,7 @@ public class NotificationTableTests
     /// <summary>
     /// #367, found in T1: Dismiss stayed live while the action ran, and clicking it corrupted the
     /// recorded outcome. Blazor serialises circuit events, so the click queues behind the running
-    /// handler and is applied <em>after</em> the action has set <c>Resolved</c> — overwriting it with
+    /// handler and is applied <em>after</em> the action has set <c>Resolved</c>; overwriting it with
     /// <c>Dismissed</c>. Reproduced against a container with a negative control: the same run without
     /// the click records <c>resolved</c>, with it records <c>dismissed</c>, and the reseed completes
     /// either way. A carried-out action must never read as one the user declined (#304).
@@ -282,10 +284,10 @@ public class NotificationTableTests
         Assert.IsFalse(NotificationTable.ShowsDismissControl(notification, isExecuting: true),
             "There is nothing to dismiss while the action runs, and the click would overwrite its outcome.");
         Assert.IsFalse(NotificationTable.ShowsDismissControl(Build(isDismissed: true, expiresAt: null), isExecuting: false),
-            "An already-dismissed row has no dismiss control — the pre-existing rule, unchanged.");
+            "An already-dismissed row has no dismiss control: the pre-existing rule, unchanged.");
     }
 
-    #region #369 — an action whose volatile subject is gone
+    #region #369: an action whose volatile subject is gone
 
     private const string LiveBatch = "7f00000a-0000-4000-8000-00000000000b";
     private const string GoneBatch = "7f00000c-0000-4000-8000-00000000000d";
@@ -307,7 +309,7 @@ public class NotificationTableTests
     };
 
     /// <summary>
-    /// #369: the panel asks the executor with the row's own payload and this render's availability —
+    /// #369: the panel asks the executor with the row's own payload and this render's availability:
     /// not with the trigger alone, which says an action is wired up and nothing about whether what it
     /// acts on still exists. A trigger-only check is exactly how the notification offered Keep/Take on a
     /// batch that was gone.
@@ -321,7 +323,7 @@ public class NotificationTableTests
         Assert.IsFalse(NotificationTable.ExecutorCanRun(executor, ReviewAlert(GoneBatch), availability),
             "The batch this alert names is gone, so its action cannot run.");
         Assert.AreEqual(GoneBatch, (executor.ReceivedMetadata as ImportReviewPendingMetadataDto)?.BatchId,
-            "The row's own payload must reach the executor — it is the only thing naming the batch.");
+            "The row's own payload must reach the executor; it is the only thing naming the batch.");
         Assert.AreSame(availability, executor.ReceivedAvailability,
             "The availability this render read must reach the executor, not one it reads for itself.");
 
@@ -350,7 +352,7 @@ public class NotificationTableTests
 
     /// <summary>
     /// #369, a control on precedence: what has already happened to a row outranks whether its action
-    /// could still run. A dismissed, expired or running row reports that — the ordering #367 set for
+    /// could still run. A dismissed, expired or running row reports that, the ordering #367 set for
     /// Executing. It passes before this issue's change as well, which is what a control is for.
     /// </summary>
     [TestMethod]
@@ -368,7 +370,7 @@ public class NotificationTableTests
 
     /// <summary>
     /// #369: "no longer possible" is said only of an action that exists and cannot run. A row with no
-    /// action at all, or one whose action can still run, reads as it always did — otherwise every
+    /// action at all, or one whose action can still run, reads as it always did; otherwise every
     /// informational notification would claim to have lost an action it never had.
     /// </summary>
     [TestMethod]
@@ -387,7 +389,7 @@ public class NotificationTableTests
 
     /// <summary>
     /// Answers the three-argument capability check the way the real executor does, and records what it
-    /// was handed — so a test can tell a seam that passes the row's payload from one that does not.
+    /// was handed, so a test can tell a seam that passes the row's payload from one that does not.
     /// </summary>
     private sealed class AnsweringExecutor : INotificationActionExecutor
     {
@@ -403,16 +405,18 @@ public class NotificationTableTests
             return metadata is ImportReviewPendingMetadataDto review && availability.ImportBatchExists(review.BatchId);
         }
 
+        public IReadOnlyList<NotificationActionOption> AvailableOptions(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability) => [];
+
         public Task<NotificationActionAvailability> GetAvailabilityAsync() =>
             throw new NotSupportedException("The table is handed its availability; it never reads one.");
 
-        public Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null) =>
+        public Task<NotificationActionResult> ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null, NotificationActionOption? option = null) =>
             throw new NotSupportedException("The table never runs an action itself.");
     }
 
     #endregion
 
-    #region #308 — title/body layout
+    #region #308: title/body layout
 
     private static NotificationEntity WithTitle(string? title, string? metadata = null, NotificationMetadataKind? metadataKind = null)
     {
@@ -423,7 +427,7 @@ public class NotificationTableTests
             Title       = title,
             Body        = notification.Body,
             Metadata    = metadata,
-            // #373: previously never set, so PayloadDetail — which dispatches on it — returned an empty
+            // #373: previously never set, so PayloadDetail (which dispatches on it) returned an empty
             // table for every fixture, and every assertion over that table held vacuously.
             MetadataKind = new SafeValue<NotificationMetadataKind?>(metadataKind?.ToString() ?? string.Empty, metadataKind),
             IsDismissed = notification.IsDismissed,
@@ -433,7 +437,7 @@ public class NotificationTableTests
 
     /// <summary>
     /// #373: which kinds render structured detail, declared once. Derived from the enum by the tests
-    /// below, so a kind added later fails until it is listed here — the same guarantee
+    /// below, so a kind added later fails until it is listed here: the same guarantee
     /// <c>NotificationMetadataKinds.PayloadTypes</c> gives for payload types, applied to what each kind
     /// actually renders.
     /// </summary>
@@ -445,11 +449,13 @@ public class NotificationTableTests
         [NotificationMetadataKind.ReseedRecommended]      = false,
         [NotificationMetadataKind.ReseedFileApplied]      = true,
         [NotificationMetadataKind.ImportReviewPending]    = true,
+        // #348: its options and Knowledgebase link are rendered beside the body (step 15), not as a detail table.
+        [NotificationMetadataKind.BackupRefused]          = false,
     };
 
     /// <summary>
     /// Every kind is declared above. Without this, a new member would simply be absent from the map and
-    /// the tests below would skip it silently — which is the failure this whole group exists to prevent.
+    /// the tests below would skip it silently, which is the failure this whole group exists to prevent.
     /// </summary>
     [TestMethod]
     public void EveryMetadataKind_DeclaresWhetherItRendersDetail()
@@ -462,7 +468,7 @@ public class NotificationTableTests
     }
 
     /// <summary>
-    /// #308: the per-kind rendering decision has exactly one source — the payload's own type, read by
+    /// #308: the per-kind rendering decision has exactly one source: the payload's own type, read by
     /// <see cref="NotificationTable.PayloadDetail"/>. A second, parallel declaration of the same
     /// decision is what this forbids.
     /// </summary>
@@ -483,7 +489,7 @@ public class NotificationTableTests
         Assert.Contains("PayloadDetail", source,
             "The renderer's own per-kind decision is missing; the markup calls it.");
         Assert.DoesNotContain("LayoutFor", source,
-            "LayoutFor declares a per-kind layout no renderer reads — the decision belongs to PayloadDetail alone.");
+            "LayoutFor declares a per-kind layout no renderer reads; the decision belongs to PayloadDetail alone.");
         Assert.DoesNotContain("BodyIsMultiLine", source,
             "BodyIsMultiLine declares per-kind line-break behaviour the stylesheet applies to every kind.");
     }
@@ -519,7 +525,7 @@ public class NotificationTableTests
 
     /// <summary>
     /// The positive direction, per kind: a kind declared to render detail produces rows, and one
-    /// declared not to produces none — both against its own valid payload.
+    /// declared not to produces none, both against its own valid payload.
     /// </summary>
     [TestMethod]
     public void EveryMetadataKind_WithItsOwnPayload_RendersWhatItDeclares()
@@ -561,7 +567,7 @@ public class NotificationTableTests
     }
 
     /// <summary>
-    /// The other negative: a notification carrying no payload at all. Distinct from an unreadable one —
+    /// The other negative: a notification carrying no payload at all. Distinct from an unreadable one:
     /// #279's and #289's rows predate typed metadata entirely and have none.
     /// </summary>
     [TestMethod]
@@ -584,7 +590,7 @@ public class NotificationTableTests
     /// <summary>
     /// #308: <c>Title</c> is nullable in #312's schema and the two producers that shipped before it
     /// (#279, #289) carry none, so an absent title must render nothing rather than an empty element.
-    /// Whitespace counts as absent — a title of spaces would render as a blank line above the body.
+    /// Whitespace counts as absent: a title of spaces would render as a blank line above the body.
     /// </summary>
     [TestMethod]
     [DataRow(null)]
@@ -595,7 +601,7 @@ public class NotificationTableTests
 
     /// <summary>
     /// Positive control for the row above. Without it, a cell that rendered nothing at all would
-    /// satisfy "no title element" perfectly — the same trap `11-clean-reseed-confirmation.md`'s canary
+    /// satisfy "no title element" perfectly: the same trap `11-clean-reseed-confirmation.md`'s canary
     /// found in its own first step.
     /// </summary>
     [TestMethod]
@@ -612,7 +618,7 @@ public class NotificationTableTests
     /// #308: the markup and the stylesheet must name the same class for the body cell.
     /// </summary>
     /// <remarks>
-    /// This proves the two halves agree — never that the rule reaches the element. #303's nav entry is
+    /// This proves the two halves agree, never that the rule reaches the element. #303's nav entry is
     /// the standing example: the class was present the whole time the icon was missing. The rendered
     /// proof is the T2 document's computed-style assertion.
     /// </remarks>
@@ -631,7 +637,7 @@ public class NotificationTableTests
         Assert.Contains($".{NotificationTable.BodyCellClass}", css,
             "The stylesheet must define a rule for it, or the class is decoration.");
         Assert.Contains("pre-line", css,
-            "Line breaks are rendered by white-space: pre-line, not by markup — see step 3.");
+            "Line breaks are rendered by white-space: pre-line, not by markup; see step 3.");
     }
 
     /// <summary>
@@ -640,7 +646,7 @@ public class NotificationTableTests
     /// </summary>
     /// <remarks>
     /// Replaces `NoMetadataKind_FallsBackToADefinedLayout`, which asserted `LayoutFor(null)` was
-    /// non-null — a property of a map no renderer read. `EveryMetadataKind_HasALayout` went with it:
+    /// non-null, a property of a map no renderer read. `EveryMetadataKind_HasALayout` went with it:
     /// every kind having an *entry* was only ever a property of that map, and what a kind renders is
     /// asserted for real by `EveryMetadataKind_WithItsOwnPayload_RendersWhatItDeclares`.
     /// </remarks>
@@ -667,7 +673,7 @@ public class NotificationTableTests
         {
             string key = $"NotificationResolution{resolution}";
             Assert.IsTrue(keys.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value),
-                $"{resolution} has no label — '{key}' is missing or empty in UI.en-GB.json.");
+                $"{resolution} has no label: '{key}' is missing or empty in UI.en-GB.json.");
         }
     }
 
@@ -676,7 +682,7 @@ public class NotificationTableTests
     /// pass delivered said only whether the body wraps, which is not a layout.
     /// </summary>
     /// <remarks>
-    /// The body leads for every type, with no exception (developer, 2026-09-02) — it is the summary of
+    /// The body leads for every type, with no exception (developer, 2026-09-02): it is the summary of
     /// the payload wherever there is one, so structured detail is never an alternative to it. A draft
     /// of this row allowed a `PayloadOnly` type; it was rejected, and this asserts the rule that
     /// replaced it: a type that renders detail must also name the columns for it, so detail can never
@@ -691,7 +697,7 @@ public class NotificationTableTests
                 WithTitle("A headline", metadata: MetadataFor(kind), metadataKind: kind));
 
             Assert.AreEqual(detail.Rows.Count > 0, detail.Headers.Count > 0,
-                $"{kind} has {detail.Rows.Count} row(s) and {detail.Headers.Count} column heading(s) — " +
+                $"{kind} has {detail.Rows.Count} row(s) and {detail.Headers.Count} column heading(s): " +
                 "a table with rows must name its columns, and one with no rows must claim none.");
 
             foreach (IReadOnlyList<string> row in detail.Rows)
@@ -701,7 +707,7 @@ public class NotificationTableTests
     }
 
     /// <summary>
-    /// #308 finding 2: whether a type has structured detail *beneath* the summary is what varies —
+    /// #308 finding 2: whether a type has structured detail *beneath* the summary is what varies:
     /// asserted over what the renderer actually produces, not over a declaration beside it.
     /// </summary>
     /// <remarks>
@@ -719,7 +725,7 @@ public class NotificationTableTests
                     .Distinct()];
 
         Assert.HasCount(2, hasDetail,
-            "Every type renders the same way, so no per-type decision is being made — some types have " +
+            "Every type renders the same way, so no per-type decision is being made; some types have " +
             "structured detail worth showing and some do not.");
     }
 
@@ -727,7 +733,7 @@ public class NotificationTableTests
     /// A valid, deserializable payload per kind.
     /// <para>
     /// #373: every one of these previously omitted <c>releaseState</c>, which
-    /// <c>NotificationMetadataDto</c> declares <c>required</c> — so deserialization threw,
+    /// <c>NotificationMetadataDto</c> declares <c>required</c>, so deserialization threw,
     /// <c>TryDeserialize</c> swallowed it, and every fixture yielded an empty table. Combined with
     /// <see cref="WithTitle"/> never setting the kind, that made two independent reasons for the same
     /// vacuum, and one test that could not fail.
@@ -739,12 +745,14 @@ public class NotificationTableTests
             """{"releaseState":"NotApplicable","fileName":"a.json","origin":"System","counts":[{"entityType":"Quote","added":2,"modified":1}]}""",
         NotificationMetadataKind.ImportReviewPending =>
             """{"releaseState":"NotApplicable","fileName":"a.json","origin":"User","batchId":"b","counts":[{"status":"Pending","count":1}]}""",
+        NotificationMetadataKind.BackupRefused =>
+            """{"releaseState":"NotApplicable","step":"ContentLoad","obstacle":"BudgetExceeded"}""",
         _ => """{"releaseState":"NotApplicable"}""",
     };
 
     /// <summary>
     /// #373: a payload written before this issue added its fields still renders, reading the absent
-    /// ones as zero. Distinct from the unreadable case below — this payload is perfectly valid, just
+    /// ones as zero. Distinct from the unreadable case below: this payload is perfectly valid, just
     /// older.
     /// </summary>
     [TestMethod]
@@ -766,7 +774,7 @@ public class NotificationTableTests
     }
 
     /// <summary>
-    /// #374: a row with nothing added or modified but something skipped by policy must still surface —
+    /// #374: a row with nothing added or modified but something skipped by policy must still surface:
     /// before this fix, the row filter (<c>Added &gt; 0 || Modified &gt; 0</c>) dropped it entirely,
     /// hiding from the UI the exact information the underlying confirmation had just stopped hiding.
     /// </summary>
@@ -786,7 +794,7 @@ public class NotificationTableTests
 
     /// <summary>
     /// #378 (developer, 2026-09-08): the payload has always carried `Unchanged` (#373), and the summary
-    /// sentence already states its total — the table just never showed it per entity type, hiding real
+    /// sentence already states its total; the table just never showed it per entity type, hiding real
     /// information a curator reading the detail popup for a "reseeded cleanly" file would otherwise have
     /// to take on faith. Purely a display change: no new computation, `Unchanged` was already there.
     /// </summary>
@@ -826,7 +834,7 @@ public class NotificationTableTests
     /// <summary>
     /// #376: the bucket for a conflict an earlier pass already staged. Without a column of its own it
     /// would be invisible while still counting toward <c>incoming</c>, so the row's own numbers would
-    /// stop adding up on screen — the same disagreement between summary and detail #377 found.
+    /// stop adding up on screen: the same disagreement between summary and detail #377 found.
     /// </summary>
     [TestMethod]
     public void AlreadyReportedColumn_ShowsTheActualCount()
@@ -843,8 +851,8 @@ public class NotificationTableTests
     }
 
     /// <summary>
-    /// #376: a row carrying <em>only</em> an already-reported count is the whole point of the bucket —
-    /// a file whose every conflict is already on the review queue — and must not be dropped by the row
+    /// #376: a row carrying <em>only</em> an already-reported count is the whole point of the bucket
+    /// (a file whose every conflict is already on the review queue), and must not be dropped by the row
     /// filter. Same defect #374 fixed for a skipped-only row and #377 for a resolved-only one.
     /// </summary>
     [TestMethod]
@@ -861,8 +869,8 @@ public class NotificationTableTests
     }
 
     /// <summary>
-    /// #377: a row carrying <em>only</em> a resolved-to-existing count is real information — the file
-    /// brought something that differed and it resolved back to what was stored — and must not be dropped
+    /// #377: a row carrying <em>only</em> a resolved-to-existing count is real information (the file
+    /// brought something that differed and it resolved back to what was stored), and must not be dropped
     /// by the row filter. The same defect #374 fixed for a skipped-only row.
     /// </summary>
     [TestMethod]
@@ -881,7 +889,7 @@ public class NotificationTableTests
     /// <summary>
     /// #377: the general guard, and the one that would have caught this without anybody looking at a
     /// screenshot. Every outcome the confirmation's own sentence states must have somewhere to appear in
-    /// the table beneath it — otherwise the summary and its detail describe different things, which is
+    /// the table beneath it; otherwise the summary and its detail describe different things, which is
     /// what T1 found. Derived from the payload's own properties rather than a list, so a bucket added
     /// later fails here until the table is widened to hold it.
     /// </summary>
@@ -908,7 +916,7 @@ public class NotificationTableTests
 
     /// <summary>
     /// #377 (developer, 2026-09-09): "we should never be missing any values in the table. Skipping
-    /// values hides potential." An entity type that arrived is reported whatever became of it — a row
+    /// values hides potential." An entity type that arrived is reported whatever became of it: a row
     /// filtered out for having no outcomes hides exactly the case worth noticing, which is content that
     /// arrived and did nothing.
     /// </summary>
@@ -922,13 +930,13 @@ public class NotificationTableTests
             WithTitle("Source file reseeded cleanly", metadata: payload,
                       metadataKind: NotificationMetadataKind.ReseedFileApplied));
 
-        Assert.IsNotEmpty(detail.Rows, "Seven items arrived and nothing is recorded as having happened to them — that is a finding, not a row to hide.");
+        Assert.IsNotEmpty(detail.Rows, "Seven items arrived and nothing is recorded as having happened to them; that is a finding, not a row to hide.");
         Assert.Contains("7", detail.Rows[0], "…and the incoming count is what says so.");
     }
 
     /// <summary>
-    /// #378: before this fix, a row with nothing added, modified, or skipped — everything already
-    /// matched — was dropped entirely by the same "states nothing" filter #374 already relaxed for
+    /// #378: before this fix, a row with nothing added, modified, or skipped (everything already
+    /// matched) was dropped entirely by the same "states nothing" filter #374 already relaxed for
     /// Skipped. Now that Unchanged is a real column, "0 0 0 N" states something (N items already
     /// matched), so the row must render rather than vanish.
     /// </summary>
@@ -998,7 +1006,7 @@ public class NotificationTableTests
         Assert.Contains(FieldResolutionChoice.Replace, choices);
 
         Assert.IsEmpty(NotificationTable.ChoicesFor(NotificationDismissTrigger.Reseed),
-            "A single-outcome action offers no choice — it would be a control with one option.");
+            "A single-outcome action offers no choice: it would be a control with one option.");
     }
 
     // ── #383: the detail table carries a totals line ────────────────────────────────────────────
@@ -1040,7 +1048,7 @@ public class NotificationTableTests
 
     /// <summary>
     /// #383 row 2. A single entity type makes the totals line repeat its only row, and it is rendered
-    /// anyway — for now. Whether to suppress it there is deliberately left open until the rendered
+    /// anyway, for now. Whether to suppress it there is deliberately left open until the rendered
     /// result has been seen (developer, 2026-09-09), so this test pins today's answer and a later
     /// change to it is a visible change rather than a silent one.
     /// </summary>
@@ -1054,7 +1062,7 @@ public class NotificationTableTests
             WithTitle("Source file reseeded cleanly", metadata: payload,
                       metadataKind: NotificationMetadataKind.ReseedFileApplied));
 
-        Assert.HasCount(1, detail.Rows, "Fixture guard — one entity type, so one data row.");
+        Assert.HasCount(1, detail.Rows, "Fixture guard: one entity type, so one data row.");
         Assert.IsNotEmpty(detail.Totals, "A single-row table still carries its totals line today.");
         Assert.AreEqual("13", detail.Totals[1], "Incoming totals the single row's own value.");
     }
@@ -1067,7 +1075,7 @@ public class NotificationTableTests
     [TestMethod]
     public void PayloadDetail_ImportReviewPending_HasNoTotals()
     {
-        // fileName, origin and batchId are `required` on the DTO — omitting them makes the payload
+        // fileName, origin and batchId are `required` on the DTO; omitting them makes the payload
         // undeserializable, and PayloadDetail then returns an empty table for a reason that has
         // nothing to do with totals. The fixture guard below is what caught that while writing this.
         const string payload =
@@ -1077,12 +1085,12 @@ public class NotificationTableTests
             WithTitle("Import needs review", metadata: payload,
                       metadataKind: NotificationMetadataKind.ImportReviewPending));
 
-        Assert.IsNotEmpty(detail.Rows, "Fixture guard — the sibling payload still renders its own rows.");
+        Assert.IsNotEmpty(detail.Rows, "Fixture guard: the sibling payload still renders its own rows.");
         Assert.IsEmpty(detail.Totals, "Only the reseed breakdown carries totals.");
     }
 
     /// <summary>
-    /// #383 row 4. The leading cell is a translated label, never a hardcoded string — the same rule
+    /// #383 row 4. The leading cell is a translated label, never a hardcoded string: the same rule
     /// every column heading here already follows, and the reason `PayloadDetail` takes the resolved
     /// text table at all.
     /// </summary>
@@ -1099,6 +1107,106 @@ public class NotificationTableTests
         Assert.AreEqual(BaselineStrings()["NotificationsDetailTotalLabel"], detail.Totals[0],
             "The label is whatever the English baseline says it is, so a translation change moves it.");
     }
+
+    // ── #348: a reseed row offers each option that can run, and links why the others cannot ──────────
+
+    private static NotificationEntity ReseedRow(NotificationMetadataKind kind = NotificationMetadataKind.BackupRefused) => new()
+    {
+        Type              = new SafeValue<NotificationType?>(nameof(NotificationType.ActionRequired), NotificationType.ActionRequired),
+        Body              = "Quotinator did not load its content.",
+        DismissTriggerKey = new SafeValue<NotificationDismissTrigger?>(nameof(NotificationDismissTrigger.Reseed), NotificationDismissTrigger.Reseed),
+        MetadataKind      = new SafeValue<NotificationMetadataKind?>(kind.ToString(), kind),
+        Metadata          = MetadataFor(kind),
+    };
+
+    /// <summary>Answers every row's options with a fixed list, so what the table renders from it is what a test observes.</summary>
+    private sealed class OfferingExecutor(params NotificationActionOption[] options) : INotificationActionExecutor
+    {
+        public bool CanExecute(NotificationDismissTrigger trigger) => true;
+        public bool CanExecute(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability) => options.Length > 0;
+        public IReadOnlyList<NotificationActionOption> AvailableOptions(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability) => options;
+        public Task<NotificationActionAvailability> GetAvailabilityAsync() => throw new NotSupportedException("The table is handed its availability.");
+        public Task<NotificationActionResult> ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null, NotificationActionOption? option = null) =>
+            throw new NotSupportedException("The table never runs an action itself.");
+    }
+
+    [TestMethod]
+    public void ReseedRow_RendersEveryOptionTheExecutorOffers()
+    {
+        OfferingExecutor executor = new(NotificationActionOption.RemoveOldestBackupThenReseed, NotificationActionOption.ReseedWithoutBackup);
+
+        Assert.AreSequenceEqual(
+            [NotificationActionOption.RemoveOldestBackupThenReseed, NotificationActionOption.ReseedWithoutBackup],
+            NotificationTable.OptionButtons(executor, ReseedRow(), new NotificationActionAvailability([])));
+    }
+
+    /// <summary>An option the executor withholds would refuse once clicked, which is what requirement 7 forbids.</summary>
+    [TestMethod]
+    public void ReseedRow_RendersNoOptionTheExecutorWithholds()
+    {
+        OfferingExecutor executor = new(NotificationActionOption.BackUpThenReseed);
+
+        Assert.DoesNotContain(NotificationActionOption.ReseedWithoutBackup,
+            NotificationTable.OptionButtons(executor, ReseedRow(), new NotificationActionAvailability([])));
+    }
+
+    /// <summary>An import review keeps its own two-outcome control; option buttons are a reseed's.</summary>
+    [TestMethod]
+    public void ImportReviewRow_RendersNoOptionButtons()
+    {
+        OfferingExecutor executor = new(NotificationActionOption.KeepExisting, NotificationActionOption.TakeIncoming);
+
+        Assert.IsEmpty(NotificationTable.OptionButtons(executor, ReviewAlert(LiveBatchId), new NotificationActionAvailability([LiveBatchId])));
+    }
+
+    [TestMethod]
+    [DataRow(NotificationActionOption.BackUpThenReseed)]
+    [DataRow(NotificationActionOption.RemoveOldestBackupThenReseed)]
+    [DataRow(NotificationActionOption.ReseedWithoutBackup)]
+    public void ReseedOption_HasItsOwnLabel(NotificationActionOption option)
+    {
+        Assert.IsTrue(BaselineStrings().TryGetValue(NotificationTable.OptionLabelKeyFor(option), out string? label) && !string.IsNullOrWhiteSpace(label));
+    }
+
+    /// <summary>Going without a restore point is the user's decision, so it is asked for rather than assumed.</summary>
+    [TestMethod]
+    public void ReseedWithoutBackup_AsksPermission()
+    {
+        Assert.IsTrue(NotificationTable.AsksPermission(NotificationActionOption.ReseedWithoutBackup));
+    }
+
+    /// <summary>An option that keeps a restore point has nothing to ask permission for.</summary>
+    [TestMethod]
+    [DataRow(NotificationActionOption.BackUpThenReseed)]
+    [DataRow(NotificationActionOption.RemoveOldestBackupThenReseed)]
+    public void OptionThatBacksUp_DoesNotAskPermission(NotificationActionOption option)
+    {
+        Assert.IsFalse(NotificationTable.AsksPermission(option));
+    }
+
+    /// <summary>The user is told why there is no backup before agreeing to go without one.</summary>
+    [TestMethod]
+    public void PermissionText_NamesTheObstacle()
+    {
+        Quotinator.Api.I18nText.UI text = new() { NotificationsReseedWithoutBackupConfirm = "No backup can be taken right now ({0})." };
+
+        Assert.Contains(nameof(BackupOutcome.BudgetExceeded), NotificationTable.PermissionText(BackupOutcome.BudgetExceeded, text), StringComparison.Ordinal);
+    }
+
+    [TestMethod]
+    public void BackupRefusedRow_LinksTheKnowledgebaseEntry()
+    {
+        Assert.AreEqual(KnowledgebaseLinks.NoBackupCouldBeTaken, NotificationTable.KnowledgebaseLinkFor(ReseedRow()));
+    }
+
+    /// <summary>A reseed recommended for changed content has nothing blocked to explain.</summary>
+    [TestMethod]
+    public void ReseedRecommendedRow_LinksNoKnowledgebaseEntry()
+    {
+        Assert.IsNull(NotificationTable.KnowledgebaseLinkFor(ReseedRow(NotificationMetadataKind.ReseedRecommended)));
+    }
+
+    private const string LiveBatchId = "7f00000a-0000-4000-8000-00000000000b";
 
     private static Dictionary<string, string> BaselineStrings()
     {

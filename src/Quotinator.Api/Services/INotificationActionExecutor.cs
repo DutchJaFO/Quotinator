@@ -1,3 +1,4 @@
+using Quotinator.Api.Enums;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Notifications;
 
@@ -5,10 +6,10 @@ namespace Quotinator.Api.Services;
 
 /// <summary>
 /// Executes the concrete server-side action a notification's <see cref="NotificationDismissTrigger"/>
-/// references — invoked from the Blazor Notifications page's Action column (#278), never from the
+/// references, invoked from the Blazor Notifications page's Action column (#278), never from the
 /// read-only startup-modal summary. One case per trigger; extend by adding a case (and whatever
 /// dependency that action needs) to <see cref="NotificationActionExecutor"/> when a second trigger
-/// type is introduced — that switch is the single place mapping a trigger to real work.
+/// type is introduced; that switch is the single place mapping a trigger to real work.
 /// </summary>
 internal interface INotificationActionExecutor
 {
@@ -20,7 +21,7 @@ internal interface INotificationActionExecutor
 
     /// <summary>
     /// Whether <paramref name="trigger"/>'s action can still be carried out for the notification whose
-    /// payload is <paramref name="metadata"/> — wired up, <b>and</b> not dependent on something that has
+    /// payload is <paramref name="metadata"/>: wired up, <b>and</b> not dependent on something that has
     /// since gone (#369).
     /// </summary>
     /// <remarks>
@@ -36,6 +37,15 @@ internal interface INotificationActionExecutor
     bool CanExecute(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability);
 
     /// <summary>
+    /// The options <paramref name="trigger"/>'s action offers for this notification right now, each only
+    /// while it can actually run (#348). Empty when nothing can run, which is what hides the action.
+    /// </summary>
+    /// <param name="trigger">The trigger the notification carries.</param>
+    /// <param name="metadata">The notification's own payload, or <see langword="null"/> when it has none.</param>
+    /// <param name="availability">The volatile state read once for this render, via <see cref="GetAvailabilityAsync"/>.</param>
+    IReadOnlyList<NotificationActionOption> AvailableOptions(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability);
+
+    /// <summary>
     /// Reads, once, every piece of volatile state a trigger's capability check depends on (#369).
     /// </summary>
     Task<NotificationActionAvailability> GetAvailabilityAsync();
@@ -48,7 +58,7 @@ internal interface INotificationActionExecutor
     /// <param name="metadata">
     /// The originating notification's metadata, or <see langword="null"/> when it has none (every row
     /// written before #312, and any notification whose action needs no parameters). This is what lets
-    /// an action operate on something specific rather than only ever on everything — #304's
+    /// an action operate on something specific rather than only ever on everything. #304's
     /// <c>Reseed</c> needs to mean "reseed *this* file", which a bare trigger cannot express.
     /// <para>
     /// Deliberately the payload rather than the <c>NotificationEntity</c>: a later milestone wants
@@ -58,9 +68,19 @@ internal interface INotificationActionExecutor
     /// </param>
     /// <param name="choice">
     /// Which side wins, for a trigger whose action offers more than one outcome (#303's
-    /// <see cref="NotificationDismissTrigger.ImportReviewResolved"/> — keep what is stored, or take what
+    /// <see cref="NotificationDismissTrigger.ImportReviewResolved"/>: keep what is stored, or take what
     /// the file brought). <see langword="null"/> for every trigger with a single outcome; a trigger that
     /// needs one and does not get it throws rather than picking a side on the operator's behalf.
     /// </param>
-    Task ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null);
+    /// <param name="option">
+    /// Which of the trigger's options to run (#348), as <see cref="AvailableOptions"/> offered it.
+    /// <see langword="null"/> for a reseed means <see cref="NotificationActionOption.BackUpThenReseed"/>,
+    /// the one option that never gives up a restore point. Passing
+    /// <see cref="NotificationActionOption.ReseedWithoutBackup"/> is the user's permission to go without
+    /// one, given after being shown why a backup cannot be taken.
+    /// </param>
+    /// <returns>Whether the action ran, or the backup obstacle that stopped it before anything changed.</returns>
+    Task<NotificationActionResult> ExecuteAsync(
+        NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null,
+        FieldResolutionChoice? choice = null, NotificationActionOption? option = null);
 }

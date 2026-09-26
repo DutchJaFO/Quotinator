@@ -1,5 +1,6 @@
 @using Quotinator.Api.Enums
 @using Quotinator.Data.Enums
+@using Quotinator.Constants.Api
 
 <table class="table table-sm">
     <thead>
@@ -43,7 +44,7 @@
                     }
                     @if (detail.Rows.Count > 0 && !DetailAsDialog)
                     {
-                        @* Collapsed in place. A native disclosure element rather than a JS component —
+                        @* Collapsed in place. A native disclosure element rather than a JS component:
                            no circuit and no state of our own.
                            Do not name the element inside this comment: a literal tag in a Razor comment
                            is parsed as markup, which broke real startup here (#308, 2026-09-02). *@
@@ -70,7 +71,7 @@
                                         </tr>
                                     }
                                 </tbody>
-                                @* #383: a footer, not a last row — see PayloadTable.Totals. *@
+                                @* #383: a footer, not a last row; see PayloadTable.Totals. *@
                                 @if (detail.Totals.Count > 0)
                                 {
                                     <tfoot>
@@ -91,13 +92,19 @@
                         <button type="button" class="btn btn-link btn-sm notification-detail-open"
                                 @onclick="() => DetailDialogForId = notification.Id">@Text.NotificationsDetailToggle</button>
                     }
+                    @if (KnowledgebaseLinkFor(notification) is string knowledgebaseLink)
+                    {
+                        @* #348: why the options this row does not offer are blocked. It leaves the app,
+                           so it opens in a new tab, per CLAUDE.md's external-link rule. *@
+                        <div><a href="@knowledgebaseLink" target="_blank" rel="noopener noreferrer">@Text.KnowledgebaseEntryLink</a></div>
+                    }
                 </td>
                 <td>@Local(notification.ExpiresAt.Parsed)</td>
                 <td>
                     @switch (GetDisplayStatus(notification, Now, Executing.IsExecuting(notification.Id), ActionIsUnavailable(notification)))
                     {
                         case NotificationDisplayStatus.ActionUnavailable:
-                            @* #369: still active — nobody has decided anything — but what its action acts
+                            @* #369: still active (nobody has decided anything), but what its action acts
                                on is gone. Said through the state, which is what explains the empty
                                Action cell beside it. *@
                             <span class="badge bg-secondary">@Text.NotificationsActionUnavailableLabel</span>
@@ -130,7 +137,34 @@
                 @if (ShowActionColumn)
                 {
                     <td>
-                        @if (CanExecuteAction(notification))
+                        @if (CanExecuteAction(notification) && Options(notification) is { Count: > 0 } options)
+                        {
+                            @* #348: each option that can run now is its own button; one the executor
+                               withholds is not rendered, rather than rendered and then refused. *@
+                            @if (ConfirmingOption is { } confirming && confirming.Id == notification.Id)
+                            {
+                                @if (AsksPermission(confirming.Option))
+                                {
+                                    <div class="form-text">@PermissionText(Availability.BackupReadiness, Text)</div>
+                                    <div><a href="@KnowledgebaseLinks.NoBackupCouldBeTaken" target="_blank" rel="noopener noreferrer">@Text.KnowledgebaseEntryLink</a></div>
+                                }
+                                else
+                                {
+                                    <div class="form-text">@Text.NotificationsConfirmActionWarning</div>
+                                }
+                                <button type="button" class="btn btn-sm btn-danger me-1" @onclick="() => ConfirmOptionAsync(confirming)">@Text.NotificationsConfirmActionButton</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => ConfirmingOption = null">@Text.NotificationsCancelActionButton</button>
+                            }
+                            else
+                            {
+                                @foreach (NotificationActionOption option in options)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-danger me-1 mb-1"
+                                            @onclick="() => ConfirmingOption = (notification.Id, option)">@OptionLabel(option)</button>
+                                }
+                            }
+                        }
+                        else if (CanExecuteAction(notification))
                         {
                             @if (ConfirmingActionForId == notification.Id)
                             {
@@ -160,7 +194,7 @@
                                 @if (OffersResolutionChoice(notification))
                                 {
                                     @* #303: the coarse options above settle a whole batch one way. The page is
-                                       where a mixed backlog gets cleared action by action — and where #66's
+                                       where a mixed backlog gets cleared action by action, and where #66's
                                        item-by-item UX will eventually live. *@
                                     <a class="btn btn-sm btn-link" href="import-review">@Text.ImportReviewOpenPageLink</a>
                                 }
@@ -185,11 +219,11 @@
 @if (DetailDialogForId is Guid openId && Notifications.FirstOrDefault(n => n.Id == openId) is { } open)
 {
     @* Rendered outside the table so it overlays the page rather than stretching a cell, and through
-       ModalDialog rather than a backdrop of its own — this is the third place needing a modal, and the
+       ModalDialog rather than a backdrop of its own: this is the third place needing a modal, and the
        two before it had already had to be fixed separately for the same overflow. Backdrop click closes
        here: unlike the startup modals there is nothing to acknowledge, so dismissing it costs nothing. *@
     @* #377: sized to its content rather than to a fixed maximum. The breakdown's width is data-dependent
-       — it grew to seven columns and the last one sat outside the old 32rem edge — so any figure chosen
+       (it grew to seven columns and the last one sat outside the old 32rem edge), so any figure chosen
        here is a guess with an expiry date. MaxWidth is now only the viewport guard, and the table
        scrolls within itself below for the case where even that is not enough. *@
     <ModalDialog OnClose="() => DetailDialogForId = null" CloseOnBackdropClick="true"
@@ -220,7 +254,7 @@
                         </tr>
                     }
                 </tbody>
-                @* #383: the same footer as the in-place table above — both render sites, or the
+                @* #383: the same footer as the in-place table above: both render sites, or the
                    dialog and the popup disagree about the same payload. *@
                 @if (openDetail.Totals.Count > 0)
                 {

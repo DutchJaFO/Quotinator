@@ -21,28 +21,28 @@ the startup modal.
 ## Determinism
 
 **Assert the computed style, never the class name.** A class can be present on an element the stylesheet
-never reaches — that is exactly how #303's nav entry shipped with the class applied and no icon
+never reaches: that is exactly how #303's nav entry shipped with the class applied and no icon
 rendered, caught only by a screenshot. `getComputedStyle(cell).whiteSpace` answers whether the rule
 arrived; a line-box count answers whether it did anything.
 
 **Every fixture this document reads is made here, not hoped for.**
 
 - *A multi-line body* comes from a real producer: #81's what's-new body carries one line per highlight.
-- *An untitled row*: no producer emits one any more — #319 backfilled titles onto the shipped
-  announcement — but the column is nullable and a database written before #312 holds such rows, so
+- *An untitled row*: no producer emits one any more (#319 backfilled titles onto the shipped
+  announcement), but the column is nullable and a database written before #312 holds such rows, so
   step 1 clears one title directly.
 - *An actionable row and a review to resolve* come from `scripts/testing/stage-import-conflict.csx`,
-  whose file stages one pending quote change at cold start and raises the pending-review alert — see
+  whose file stages one pending quote change at cold start and raises the pending-review alert; see
   [`../import-and-staged-actions/20-pending-review-alert.md`](../import-and-staged-actions/20-pending-review-alert.md)
   for why the bundled sources cannot produce one. Until 2026-09-22 steps 6 and 7 assumed an alert and a
   recommendation nothing in this document created, and step 1 wrote through a `$bind` only step 9
   defined; the document could not be run as written.
 
-**The page is read before the restart, the modal after it.** The modal renders once per process run —
-#302's own T1 finding — so it needs a restart the page does not, and running the page's steps first
+**The page is read before the restart, the modal after it.** The modal renders once per process run
+(#302's own T1 finding), so it needs a restart the page does not, and running the page's steps first
 keeps both on one container.
 
-**Close the browser tab before every stop**, and read the log before it — see the index's *Read the log
+**Close the browser tab before every stop**, and read the log before it; see the index's *Read the log
 before the application stops*.
 
 ## Steps
@@ -80,7 +80,7 @@ $afterRestart = Count-Thrown
 **Expected:** `titled` at least `1`, `untitled = 0`, `multi-line bodies = 1` (what's-new),
 `review alerts = 1`, `thrown=0`, `OK — 1 row(s) affected.`, `200`, and `untitled now = 1`.
 
-The reseed is synchronous — its response arrives when it is done — so nothing waits after it. An earlier
+The reseed is synchronous (its response arrives when it is done), so nothing waits after it. An earlier
 revision slept five seconds here for no stated reason.
 
 **On failure:** `multi-line bodies = 0` leaves step 4 nothing to measure, and `review alerts = 0` leaves
@@ -108,15 +108,15 @@ rows.map(r => ({ hasTitle: !!r.querySelector('.notification-title'),
                  bodyText: r.querySelector('.notification-body')?.textContent.trim().length ?? 0 }))
 ```
 
-**Expected:** exactly one row with `hasTitle: false` — step 1's — and **every** row with `bodyText > 0`.
+**Expected:** exactly one row with `hasTitle: false` (step 1's) and **every** row with `bodyText > 0`.
 The second half is the positive control: without it, a cell rendering nothing at all would satisfy "no
 title element" perfectly.
 
 ### 4. Confirm a two-line body renders as two lines
 
 **Counting line boxes needs a `Range`, and the count alone proves nothing.** `getClientRects()` on the
-cell returns one border-box rect however many lines it holds — measured, so do not assert on it. And a
-raw line count conflates wrapping with explicit breaks. The assertion is the A/B — the same cell
+cell returns one border-box rect however many lines it holds (measured), so do not assert on it. And a
+raw line count conflates wrapping with explicit breaks. The assertion is the A/B: the same cell
 measured under `pre-line` and under `normal`:
 
 ```js
@@ -134,19 +134,19 @@ cell.style.whiteSpace = '';
 **Expected:** `whiteSpace: 'pre-line'` and `breaksHonoured: true`. Measured 2026-09-22: `4` lines under
 `pre-line` against `2` under `normal`. The figures move with window width; the inequality does not.
 
-**On failure:** `whiteSpace: 'normal'` means the stylesheet never reached the element — check that the
+**On failure:** `whiteSpace: 'normal'` means the stylesheet never reached the element; check that the
 component's `.razor.css` is being emitted into the published static web assets, not just that the class
 is in the markup.
 
 ### 5. Confirm payload detail opens as a dialog on the page, as a table, and fits
 
-**Resize the viewport to `420` high before running this** — at a normal window height nothing
+**Resize the viewport to `420` high before running this**: at a normal window height nothing
 overflows and the fit assertions pass without testing anything.
 
 **Check `viewportHeight` is non-zero before believing any fit result.** The pane can report a
 zero-height viewport, and every element is then "off-screen": measured 2026-09-23 on step 8, a correct
 popup read `withinViewport: false` and `footerVisible: false` with `window.innerHeight: 0`. Set an
-explicit size and re-measure — see the index's *A count is evidence only if the instrument counts the
+explicit size and re-measure; see the index's *A count is evidence only if the instrument counts the
 right thing*.
 
 ```js
@@ -191,10 +191,10 @@ renders every count the payload carries.
 
 **Assert fit to the viewport, not a `95vh` figure.** `ModalDialog` sets `max-height: 95vh` inline, but
 Bootstrap's `.modal-dialog-centered` also sets `min-height: calc(100% - 3.5rem)`, and a larger
-`min-height` overrides `max-height` — so the dialog is `viewport − 56px` tall whenever it overflows, and
+`min-height` overrides `max-height`, so the dialog is `viewport − 56px` tall whenever it overflows, and
 `95vh` never binds. Measured 2026-09-22: `1218` in a `1274` viewport against a `95vh` of `1210.3`; `364`
 in `420`; `664` in `720`. The `95vh` form held below about `1120px` and failed above it. What the step
-exists for — the header and footer reachable, the body scrolling — is what it now asserts.
+exists for (the header and footer reachable, the body scrolling) is what it now asserts.
 
 **A table, not a list** (developer, 2026-09-02): every entry has the same shape, so columns line the
 numbers up where a bulleted sentence per row does not. `listsAnywhere` guards the regression.
@@ -204,7 +204,7 @@ markup instead of using `ModalDialog` would satisfy every other assertion here w
 defect this step exists for.
 
 **On failure:** an empty `result` means no breakdown was long enough, or the payload is stored but not
-rendered. A non-zero `expandersOnPage` means the surfaces are the wrong way round — the page opens a
+rendered. A non-zero `expandersOnPage` means the surfaces are the wrong way round: the page opens a
 dialog and the popup expands in place (developer, 2026-09-02).
 
 ### 6. Confirm the action buttons say what they do, and ask before acting
@@ -215,7 +215,7 @@ dialog and the popup expands in place (developer, 2026-09-02).
 
 **Expected:** no button reads `Run`, and the review alert's reads `Decide`.
 
-Then click **Decide**, read the row's buttons, and — before choosing — count what is still pending:
+Then click **Decide**, read the row's buttons, and, before choosing, count what is still pending:
 
 ```js
 [...document.querySelectorAll('tbody tr')].find(r => r.textContent.includes('needs review'))
@@ -227,15 +227,15 @@ Then click **Decide**, read the row's buttons, and — before choosing — count
 ```
 
 **Expected:** the row offers `Keep existing`, `Take incoming` and `Cancel`, and `pending before
-choosing = 1` — the click asked, and ran nothing.
+choosing = 1`: the click asked, and ran nothing.
 
-**Those labels are not new strings.** A reseed recommendation reads *Reseed the database* and a reset
-recommendation *Reset the database* — `AdminEndpoints`' own `.WithSummary(...)` text — and a review alert
+**Those labels are not new strings.** A reseed recommendation offers each option by its own name (*Back up, then reseed* where a backup can be taken, since #348), a reset
+recommendation *Reset the database* (`AdminEndpoints`' own `.WithSummary(...)` text), and a review alert
 *Decide*, the review page's `ImportReviewDecideColumn` heading. If a label diverges from the operation's
 existing name, the reader has to work out whether it is the same operation.
 
 **Do not run this step without an actionable row.** On a container whose notifications have no action,
-"no button reads `Run`" holds vacuously — which is how it once passed on the pre-work build.
+"no button reads `Run`" holds vacuously, which is how it once passed on the pre-work build.
 
 ### 7. Confirm a resolved notification says how it was resolved
 
@@ -253,7 +253,7 @@ Click **Take incoming**, then select **All** and read:
 
 **Expected:** `["Took the values from the file"]` and `pending after = 0`. Take a screenshot of the row:
 it reads `Done` beside a body still asking for the decision, and the resolution line is what corrects it
-— the body is frozen at write time.
+The body is frozen at write time.
 
 ### 8. Confirm the same holds in the startup modal, where detail expands in place
 
@@ -301,7 +301,7 @@ out
 
 **The two surfaces must genuinely differ.** If both report the same control, the `DetailAsDialog`
 parameter is not reaching one of them. The modal is size-constrained in a way the page is not, so a
-layout that reads correctly on one can wrap or clip on the other — which is why steps 2 and 4 are
+layout that reads correctly on one can wrap or clip on the other, which is why steps 2 and 4 are
 repeated here rather than assumed.
 
 ### 9. Confirm rendering survives a degraded startup
@@ -324,9 +324,9 @@ docker logs qt-layout-13d 2>&1 | Select-String -SimpleMatch '[Runtime - Exceptio
 ```
 
 **First expected:** `health -> 503`. If it is `200`, the container is not degraded and the rest of this
-step is meaningless — `--readonly`, an earlier spelling, is silently ignored by `test-env.csx`.
+step is meaningless: `--readonly`, an earlier spelling, is silently ignored by `test-env.csx`.
 
-**Expected:** parity with `/notifications`' current behaviour, not a bare `200` — measured 2026-09-01
+**Expected:** parity with `/notifications`' current behaviour, not a bare `200`; measured 2026-09-01
 and again 2026-09-22: `health 503`, `/notifications 500`, `/about 200`. The `500` is a pre-existing
 DataProtection defect on a read-only data directory (#332, #336), not this issue's; asserting parity
 passes now and keeps passing when that is fixed.
@@ -335,21 +335,21 @@ The log read before the stop shows what the read-only directory provokes: `IOExc
 `SqliteException` from startup, and the `CryptographicException` behind the `500`. That is this
 environment's expected output, not shutdown noise and not a new finding.
 
-## Canary — run red before any implementation existed
+## Canary: run red before any implementation existed
 
 Per `docs/testing-policy.md`'s *Red first applies to automated tests, not only unit tests*. Unlike
-#302's, #303's and #367's canaries — each of which needed a `git worktree` and a second image build
-after the fact — this one was **free**: the document was written at step 1 of the issue, when `HEAD`
+#302's, #303's and #367's canaries (each of which needed a `git worktree` and a second image build
+after the fact), this one was **free**: the document was written at step 1 of the issue, when `HEAD`
 was still the pre-work build. Run 2026-09-01 against `quotinator:local` at commit `52071f24`:
 
 | Step | Assertion | Pre-work result |
 |---|---|---|
-| 2 | a `.notification-body` cell exists | **fails** — `0` |
-| 2 | a `.notification-title` element exists | **fails** — `0` |
-| 4 | computed `white-space` is `pre-line` | **fails** — `normal` |
-| 4 | a multi-line body occupies ≥ 2 line boxes | **fails** — `1` |
+| 2 | a `.notification-body` cell exists | **fails**: `0` |
+| 2 | a `.notification-title` element exists | **fails**: `0` |
+| 4 | computed `white-space` is `pre-line` | **fails**: `normal` |
+| 4 | a multi-line body occupies ≥ 2 line boxes | **fails**: `1` |
 
-**Step 1 also failed, and that was the document's fault rather than the build's** — it expected
+**Step 1 also failed, and that was the document's fault rather than the build's**: it expected
 untitled rows that no producer emits any more. Finding that before implementing is the whole argument
 for writing the document first.
 
@@ -360,13 +360,13 @@ reordered on 2026-09-22 so the page is read before the modal's restart.
 
 | Step | Assertion | Pre-work result |
 |---|---|---|
-| 5 | a detail-open button exists on the page | **fails** — `0` |
-| 8 | the modal offers a collapsible detail element | **fails** — `0` |
-| 6 | no action button reads `Run` | **fails** — reads exactly `Run` |
-| 7 | a resolved row shows how it resolved | **fails** — `0` resolution lines |
+| 5 | a detail-open button exists on the page | **fails**: `0` |
+| 8 | the modal offers a collapsible detail element | **fails**: `0` |
+| 6 | no action button reads `Run` | **fails**: reads exactly `Run` |
+| 7 | a resolved row shows how it resolved | **fails**: `0` resolution lines |
 
 **Step 5's fit assertions have a different provenance.** They were added *because* the developer's own
-T1 pass found the dialog overflowing, on the startup popup and again on the detail popup — a red
+T1 pass found the dialog overflowing, on the startup popup and again on the detail popup: a red
 observation on a real build rather than a constructed one, not counted in the table above.
 `usesOldBespokeMarkup` has no red run at all: it is a regression guard, and is recorded here as one.
 

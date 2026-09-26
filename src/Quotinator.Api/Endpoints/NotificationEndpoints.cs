@@ -3,6 +3,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Quotinator.Api.Endpoints.Filters;
 using Quotinator.Api.Endpoints.Shared;
+using Quotinator.Api.Services;
 using Quotinator.Constants.Api;
 using Quotinator.Constants.RateLimiting;
 using Quotinator.Constants.Routes;
@@ -10,8 +11,10 @@ using Quotinator.Core.Helpers;
 using Quotinator.Core.Models;
 using Quotinator.Core.Services;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
 using Quotinator.Data.Helpers;
 using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Endpoints;
@@ -20,7 +23,7 @@ namespace Quotinator.Api.Endpoints;
 /// Registers <c>/api/v1/notifications</c> (#278). Mirrors
 /// <see cref="ImportFileResourceEndpoints"/>'s own precedent exactly: a read-only <c>publicGroup</c>
 /// (no API key) for listing, and a destructive <c>adminGroup</c> (<c>X-Api-Key</c> required) for
-/// dismissing. Its own <see cref="ApiTags.Notifications"/> category — status infrastructure, not
+/// dismissing. Its own <see cref="ApiTags.Notifications"/> category: status infrastructure, not
 /// database administration, matching why <see cref="ImportFileResourceEndpoints"/> isn't tagged
 /// <see cref="ApiTags.Admin"/> either.
 /// </summary>
@@ -40,6 +43,7 @@ internal static class NotificationEndpoints
 
         publicGroup.MapGet("/", async (
             INotificationReader notifications,
+            INotificationActionExecutor actionExecutor,
             IApiLocalizer localizer,
             [Description("Page number, 1-based."), DefaultValue(QueryParamDefaults.Page)] string? page = null,
             [Description("Number of entries per page (0-500). 0 means every notification as a single page."), DefaultValue(QueryParamDefaults.PageSize)] string? pageSize = null,
@@ -56,8 +60,12 @@ internal static class NotificationEndpoints
             IResult? beyondLastError = PaginationParsing.ValidatePageBeyondLast(pageValue, result.TotalPages, localizer);
             if (beyondLastError is not null) return beyondLastError;
 
+            // Read once for the whole page, as the notifications page does, so no row queries on its own.
+            NotificationActionAvailability availability = await actionExecutor.GetAvailabilityAsync();
+
             PagedItems<NotificationResponse> mapped = new(
-                [.. result.Items.Select(ToResponse)], result.Page, result.PageSize, result.TotalCount);
+                [.. result.Items.Select(n => ToResponse(n, AvailableActions(n, actionExecutor, availability)))],
+                result.Page, result.PageSize, result.TotalCount);
             return Results.Ok(mapped);
         })
         .WithName("GetNotifications")
@@ -65,10 +73,13 @@ internal static class NotificationEndpoints
         .Produces<PagedItems<NotificationResponse>>(StatusCodes.Status200OK)
         .Produces<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)
         .WithDescription(
-            "Returns a paginated list of the full notification history (#278) — including dismissed " +
+            "Returns a paginated list of the full notification history (#278), including dismissed " +
             "and expired notifications, newest first. See `GET /api/v1/health`/the startup modals for " +
             "the active-only subset. Maximum `pageSize` is 500. Each item carries `appVersionId`, the " +
-            "application version that wrote it, or `null` where provenance could not be determined.");
+            "application version that wrote it, or `null` where provenance could not be determined. Each item also carries " +
+            "`availableActions`: what its action can do right now, lowercase (for example `backupthenreseed`, " +
+            "`removeoldestbackupthenreseed`, `reseedwithoutbackup`, `resetdatabase`, `keepexisting`, `takeincoming`). An option " +
+            "is listed only while it can actually run, and a dismissed notification lists none (#348).");
 
         adminGroup.MapPost("/{id}/dismiss", async (
             string id,
@@ -98,7 +109,7 @@ internal static class NotificationEndpoints
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
     }
 
-    private static NotificationResponse ToResponse(NotificationEntity entity) => new()
+    private static NotificationResponse ToResponse(NotificationEntity entity, IReadOnlyList<string>? availableActions = null) => new()
     {
         Id                = entity.Id.ToCanonicalId(),
         Type              = entity.Type.Parsed?.ToString().ToLowerInvariant() ?? entity.Type.Raw,
@@ -120,17 +131,31 @@ internal static class NotificationEndpoints
         // resolved.
         Language          = entity.EffectiveLanguage ?? entity.OriginalLanguage,
         OriginalLanguage  = entity.OriginalLanguage,
+        AvailableActions  = availableActions ?? [],
         IsTranslated      = !string.Equals(
                                 entity.EffectiveLanguage ?? entity.OriginalLanguage,
                                 entity.OriginalLanguage,
                                 StringComparison.OrdinalIgnoreCase),
     };
 
+    // #348: what the row's action can do right now, lowercase like every other enum this endpoint
+    // publishes. The same answer the notifications page renders its controls from, including that a
+    // dismissed row offers nothing.
+    private static IReadOnlyList<string> AvailableActions(
+        NotificationEntity entity, INotificationActionExecutor executor, NotificationActionAvailability availability) =>
+        !entity.IsDismissed && entity.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger
+            ? [.. executor.AvailableOptions(
+                    trigger,
+                    NotificationMetadataKinds.TryDeserialize(entity.MetadataKind.Parsed, entity.Metadata),
+                    availability)
+                .Select(option => option.ToString().ToLowerInvariant())]
+            : [];
+
     // ?lang= selects the notification's *content* language, the way it does for quotes; Accept-Language
     // fills in only when it is absent. This is the deliberate extension CLAUDE.md's language rule does
     // not cover: a notification is persisted content that reads as a UI message, so it takes the
     // content treatment on the API and the UI treatment everywhere it renders. The prohibition that
-    // still stands unchanged is the specific one — ?lang= never drives error-message language.
+    // still stands unchanged is the specific one: ?lang= never drives error-message language.
     private static string ResolveLanguage(string? lang) =>
         lang ?? CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
 }

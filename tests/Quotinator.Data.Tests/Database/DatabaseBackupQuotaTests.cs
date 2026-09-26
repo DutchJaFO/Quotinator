@@ -120,7 +120,7 @@ public class DatabaseBackupQuotaTests
     public async Task ResetAsync_WhenNoBackupCanBeTaken_NeverReachesTheDestructiveStep()
     {
         FillBackupsTo(percentOfCeiling: 100);
-        RecordingInitializer initializer = new RecordingInitializer(NewOptions(), _dbPath);
+        RecordingInitializer initializer = new(NewOptions(), _dbPath);
 
         await initializer.ResetAsync();
 
@@ -136,6 +136,34 @@ public class DatabaseBackupQuotaTests
         DatabaseOperationResult result = await new RecordingInitializer(NewOptions(), _dbPath).ResetAsync(allowNoBackup: true);
 
         Assert.IsTrue(result.BackupSkippedByOverride);
+    }
+
+    private const string SkippedBackupLine = "reset proceeding WITHOUT a backup";
+
+    /// <summary>
+    /// #348 requirement 5 asks for the skip in the log as well as the audit trail: the log is where an
+    /// operator reading a failed restore looks first.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_WithTheOverride_LogsTheSkippedBackup()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+        CapturingLogger<DatabaseInitializer> logger = new();
+
+        await new RecordingInitializer(NewOptions(), _dbPath, logger).ResetAsync(allowNoBackup: true);
+
+        Assert.Contains(m => m.Contains($"{SkippedBackupLine} (BudgetExceeded)", StringComparison.Ordinal), logger.Messages);
+    }
+
+    /// <summary>A reset that did take its backup must not claim otherwise, or the line stops meaning anything.</summary>
+    [TestMethod]
+    public async Task ResetAsync_WhenTheBackupSucceeds_LogsNoSkippedBackup()
+    {
+        CapturingLogger<DatabaseInitializer> logger = new();
+
+        await new RecordingInitializer(NewOptions(), _dbPath, logger).ResetAsync();
+
+        Assert.DoesNotContain(m => m.Contains(SkippedBackupLine, StringComparison.Ordinal), logger.Messages);
     }
 
     /// <summary>
@@ -164,7 +192,7 @@ public class DatabaseBackupQuotaTests
     [TestMethod]
     public void QuotaPercent_OutOfRange_IsReported()
     {
-        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
+        CapturingLogger<DatabaseInitializer> logger = new();
 
         CreateInitializer(quotaPercent: 150, logger: logger).CheckBackupReadiness();
 
@@ -187,7 +215,7 @@ public class DatabaseBackupQuotaTests
         {
             FillBackupsTo(percentOfCeiling: percent);
 
-            DatabaseBackupReader reader = new DatabaseBackupReader(NewOptions(), NoOpDiskSpaceProvider.Instance);
+            DatabaseBackupReader reader = new(NewOptions(), NoOpDiskSpaceProvider.Instance);
             Quotinator.Data.Models.BackupStorageUsage usage = reader.GetUsage();
             BackupOutcome readiness = CreateInitializer().CheckBackupReadiness();
 
@@ -219,14 +247,14 @@ public class DatabaseBackupQuotaTests
     [TestMethod]
     public async Task CreateBackupAsync_LeavesNoHandleOnTheFileItWrote()
     {
-        RecordingInitializer initializer = new RecordingInitializer(NewOptions(), _dbPath);
+        RecordingInitializer initializer = new(NewOptions(), _dbPath);
         await CreateSeededDatabaseAsync();
 
         DatabaseBackupResult result = await initializer.CreateBackupAsync();
 
         Assert.AreEqual(BackupOutcome.Succeeded, result.Outcome);
 
-        using (FileStream stream = new FileStream(result.Path!, FileMode.Open, FileAccess.Read, FileShare.Read))
+        using (FileStream stream = new(result.Path!, FileMode.Open, FileAccess.Read, FileShare.Read))
             Assert.IsGreaterThan(0L, stream.Length);
 
         File.Delete(result.Path!);
@@ -235,7 +263,7 @@ public class DatabaseBackupQuotaTests
 
     private async Task CreateSeededDatabaseAsync()
     {
-        using SqliteConnection connection = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection connection = new($"Data Source={_dbPath}");
         await connection.OpenAsync();
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "CREATE TABLE IF NOT EXISTS Probe (Id INTEGER PRIMARY KEY)";
@@ -253,12 +281,12 @@ public class DatabaseBackupQuotaTests
         long target = ceilingBytes * percentOfCeiling / 100L;
         string filler = Path.Combine(_backups, "filler.db");
 
-        using FileStream stream = new FileStream(filler, FileMode.Create, FileAccess.Write);
+        using FileStream stream = new(filler, FileMode.Create, FileAccess.Write);
         stream.SetLength(target);
     }
 
     private DatabaseOptions NewOptions(int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent) =>
-        new DatabaseOptions
+        new()
         {
             DbPath = _dbPath,
             BackupsPath = _backups,
@@ -268,7 +296,7 @@ public class DatabaseBackupQuotaTests
 
     private DatabaseInitializer CreateInitializer(
         int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent, ILogger<DatabaseInitializer>? logger = null)
-        => new DatabaseInitializer(new SqliteConnectionFactory(_dbPath), NewOptions(quotaPercent), [],
+        => new(new SqliteConnectionFactory(_dbPath), NewOptions(quotaPercent), [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
             logger ?? NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider());
 
@@ -276,10 +304,10 @@ public class DatabaseBackupQuotaTests
     /// Records whether the destructive reset hook actually ran, which is the only way to tell a refusal
     /// apart from a reset that wiped the database and then reported failure.
     /// </summary>
-    private sealed class RecordingInitializer(DatabaseOptions options, string dbPath)
+    private sealed class RecordingInitializer(DatabaseOptions options, string dbPath, ILogger<DatabaseInitializer>? logger = null)
         : DatabaseInitializer(new SqliteConnectionFactory(dbPath), options, [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider())
+            logger ?? NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider())
     {
         public bool ResetHookRan { get; private set; }
 

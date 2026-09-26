@@ -88,7 +88,7 @@ public class DatabaseBackupPreflightTests
     public void CheckBackupReadiness_InsideTheReserve_AnswersDifferentlyWithTheReserveAllowed()
     {
         Directory.CreateDirectory(_backups);
-        using (FileStream filler = new FileStream(Path.Combine(_backups, "filler.db"), FileMode.Create, FileAccess.Write))
+        using (FileStream filler = new(Path.Combine(_backups, "filler.db"), FileMode.Create, FileAccess.Write))
         {
             // 95% of a 1 GB ceiling: past the 90% operating quota, below the ceiling itself.
             filler.SetLength(1_073_741_824L * 95 / 100);
@@ -99,9 +99,52 @@ public class DatabaseBackupPreflightTests
         Assert.AreNotEqual(initializer.CheckBackupReadiness(allowReserve: false), initializer.CheckBackupReadiness(allowReserve: true));
     }
 
+    private const long OneGigabyte = 1_073_741_824L;
+
+    /// <summary>
+    /// #348: the check answers as if an old backup were already gone, so the notification can offer
+    /// removing one only when that clears the way. 95% used against a 90% quota; freeing a tenth leaves 85%.
+    /// </summary>
+    [TestMethod]
+    public void CheckBackupReadiness_OverTheQuotaByLessThanWhatIsFreedFirst_ReportsSucceeded()
+    {
+        FillTheBackupsFolder(OneGigabyte * 95 / 100);
+
+        Assert.AreEqual(BackupOutcome.Succeeded, CreateInitializer().CheckBackupReadiness(bytesFreedFirst: OneGigabyte / 10));
+    }
+
+    /// <summary>Freeing a hundredth leaves 94%, still over the quota: removing that backup would delete it for nothing.</summary>
+    [TestMethod]
+    public void CheckBackupReadiness_OverTheQuotaByMoreThanWhatIsFreedFirst_ReportsBudgetExceeded()
+    {
+        FillTheBackupsFolder(OneGigabyte * 95 / 100);
+
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer().CheckBackupReadiness(bytesFreedFirst: OneGigabyte / 100));
+    }
+
+    /// <summary>A full volume is cleared the same way: the space a removed backup occupied becomes free.</summary>
+    [TestMethod]
+    public void CheckBackupReadiness_WithNoFreeDiskSpaceAndSpaceFreedFirst_ReportsSucceeded()
+    {
+        Assert.AreEqual(BackupOutcome.Succeeded,
+            CreateInitializer(diskSpaceProvider: new FixedDiskSpaceProvider(0)).CheckBackupReadiness(bytesFreedFirst: 1_000));
+    }
+
+    private void FillTheBackupsFolder(long bytes)
+    {
+        Directory.CreateDirectory(_backups);
+        using FileStream filler = new(Path.Combine(_backups, "filler.db"), FileMode.Create, FileAccess.Write);
+        filler.SetLength(bytes);
+    }
+
+    private sealed class FixedDiskSpaceProvider(long availableBytes) : IDiskSpaceProvider
+    {
+        public long GetAvailableFreeSpaceBytes(string path) => availableBytes;
+    }
+
     private SqliteConnection SeededDatabase()
     {
-        SqliteConnection connection = new SqliteConnection($"Data Source={_dbPath}");
+        SqliteConnection connection = new($"Data Source={_dbPath}");
         connection.Open();
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "CREATE TABLE IF NOT EXISTS Probe (Id INTEGER PRIMARY KEY);";
@@ -113,9 +156,9 @@ public class DatabaseBackupPreflightTests
     // deterministically and identically on Windows and Linux, which an ACL would not.
     private void BlockTheBackupsDirectory() => File.WriteAllText(_backups, "not a directory");
 
-    private DatabaseInitializer CreateInitializer(int maxBackupStorageGb = 1)
+    private DatabaseInitializer CreateInitializer(int maxBackupStorageGb = 1, IDiskSpaceProvider? diskSpaceProvider = null)
     {
-        DatabaseOptions options = new DatabaseOptions
+        DatabaseOptions options = new()
         {
             DbPath = _dbPath,
             BackupsPath = _backups,
@@ -124,6 +167,6 @@ public class DatabaseBackupPreflightTests
 
         return new DatabaseInitializer(new SqliteConnectionFactory(_dbPath), options, [],
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance,
-            NullLogger<DatabaseInitializer>.Instance, new DiskSpaceProvider());
+            NullLogger<DatabaseInitializer>.Instance, diskSpaceProvider ?? new DiskSpaceProvider());
     }
 }

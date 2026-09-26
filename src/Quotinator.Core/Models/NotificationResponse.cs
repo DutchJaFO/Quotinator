@@ -2,7 +2,7 @@ namespace Quotinator.Core.Models;
 
 /// <summary>
 /// Response shape for <c>GET /api/v1/notifications</c> (list) and the entity returned by
-/// <c>POST /api/v1/notifications/{id}/dismiss</c> — #278.
+/// <c>POST /api/v1/notifications/{id}/dismiss</c> (#278).
 /// </summary>
 public sealed class NotificationResponse
 {
@@ -17,7 +17,7 @@ public sealed class NotificationResponse
 
     /// <summary>
     /// The specific message text. Named <c>message</c> in responses until #312 split it from
-    /// <see cref="Title"/> — a breaking change for any client reading the old field name.
+    /// <see cref="Title"/>: a breaking change for any client reading the old field name.
     /// </summary>
     public required string Body { get; init; }
 
@@ -31,7 +31,7 @@ public sealed class NotificationResponse
     /// The <c>System_AppVersion</c> row for the application version that wrote this notification, or
     /// <see langword="null"/> for a row whose provenance could not be determined (#302).
     /// <para>
-    /// Exposed so provenance can be asserted from outside the database rather than taken on trust —
+    /// Exposed so provenance can be asserted from outside the database rather than taken on trust:
     /// it was previously stored but unobservable through any endpoint or UI.
     /// </para>
     /// </summary>
@@ -53,7 +53,7 @@ public sealed class NotificationResponse
     public string? DismissTriggerKey { get; init; }
 
     /// <summary>
-    /// Why this notification stopped being active — <c>dismissed</c> when the user set it aside,
+    /// Why this notification stopped being active: <c>dismissed</c> when the user set it aside,
     /// <c>resolved</c> when the thing it described was actually dealt with (#304).
     /// <see langword="null"/> while it is still active, and on rows dismissed before this was recorded,
     /// where the reason is genuinely unknown rather than being one value or the other.
@@ -61,7 +61,7 @@ public sealed class NotificationResponse
     public string? DismissReason { get; init; }
 
     /// <summary>
-    /// How this notification's own action settled it (#308) — <c>keptexisting</c>, <c>tookincoming</c>,
+    /// How this notification's own action settled it (#308): <c>keptexisting</c>, <c>tookincoming</c>,
     /// <c>reseeded</c> or <c>reset</c>. <see langword="null"/> whenever no action ran: while still
     /// active, when the user dismissed it by hand, when a reseed superseded it, and on every row
     /// written before this was recorded.
@@ -74,7 +74,7 @@ public sealed class NotificationResponse
     public string? Resolution { get; init; }
 
     /// <summary>
-    /// The language <see cref="Title"/> and <see cref="Body"/> are actually returned in (#319) — the
+    /// The language <see cref="Title"/> and <see cref="Body"/> are actually returned in (#319): the
     /// requested one when a translation existed, <see cref="OriginalLanguage"/> when it did not.
     /// </summary>
     public required string Language { get; init; }
@@ -84,4 +84,11 @@ public sealed class NotificationResponse
 
     /// <summary><see langword="true"/> when <see cref="Language"/> and <see cref="OriginalLanguage"/> differ.</summary>
     public required bool IsTranslated { get; init; }
+
+    /// <summary>
+    /// What this notification's action can do right now, lowercase (#348): for example
+    /// <c>backupthenreseed</c>, <c>removeoldestbackupthenreseed</c> or <c>reseedwithoutbackup</c>. Each
+    /// is listed only while it can actually run, so an empty list means no action is offered.
+    /// </summary>
+    public IReadOnlyList<string> AvailableActions { get; init; } = [];
 }

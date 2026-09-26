@@ -12,7 +12,7 @@ namespace Quotinator.Data.Tests.Database;
 
 /// <summary>
 /// Proves the #143 ownership split at the base <see cref="DatabaseInitializer"/> level, with zero
-/// consumer migrations/baseline involved — isolates Quotinator.Data's own behaviour from whatever
+/// consumer migrations/baseline involved: isolates Quotinator.Data's own behaviour from whatever
 /// a consuming project (e.g. Quotinator.Core) supplies.
 /// </summary>
 [TestClass]
@@ -60,7 +60,7 @@ public class DatabaseInitializerOwnershipTests
     /// Quotinator.Data's own baseline fragment (<c>DataBaselineSql</c>) must produce the exact same
     /// <c>Audit_Entry</c> schema as replaying Quotinator.Data's own numbered migrations
     /// (<c>DataOwnedMigrations</c>) incrementally. This is what actually enforces "Data's own
-    /// scripts stay in sync with each other," independent of whatever consumer exists — exercised
+    /// scripts stay in sync with each other," independent of whatever consumer exists, exercised
     /// here with zero consumer migrations and a no-op consumer baseline.
     /// </summary>
     [TestMethod]
@@ -82,12 +82,12 @@ public class DatabaseInitializerOwnershipTests
         List<string> schemaA = await DumpTableSchemaAsync(connA, "Audit_Entry");
         List<string> schemaB = await DumpTableSchemaAsync(connB, "Audit_Entry");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "Audit_Entry schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "Audit_Entry schema differs between Data's baseline and incremental paths: " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
     /// <summary>
-    /// A fresh database carries no application-version history at all — only whatever the running build
+    /// A fresh database carries no application-version history at all: only whatever the running build
     /// records for itself once startup completes.
     /// <para>
     /// #312's migration 9 backfills a <c>1.8.3</c> row on an upgrading database, and that must never
@@ -107,7 +107,7 @@ public class DatabaseInitializerOwnershipTests
         await connection.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(0, await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_AppVersion;"),
-            "A fresh database has no history — a migration's backfill must not be able to invent one for it.");
+            "A fresh database has no history; a migration's backfill must not be able to invent one for it.");
     }
 
     /// <summary>
@@ -134,7 +134,7 @@ public class DatabaseInitializerOwnershipTests
         List<string> schemaA = await DumpTableSchemaAsync(connA, "Import_Conflict");
         List<string> schemaB = await DumpTableSchemaAsync(connB, "Import_Conflict");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "Import_Conflict schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "Import_Conflict schema differs between Data's baseline and incremental paths: " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -161,7 +161,7 @@ public class DatabaseInitializerOwnershipTests
         List<string> schemaA = await DumpTableSchemaAsync(connA, "Audit_Change");
         List<string> schemaB = await DumpTableSchemaAsync(connB, "Audit_Change");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "Audit_Change schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "Audit_Change schema differs between Data's baseline and incremental paths: " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -189,7 +189,7 @@ public class DatabaseInitializerOwnershipTests
         List<string> schemaA = await DumpTableSchemaAsync(connA, "Import_Action");
         List<string> schemaB = await DumpTableSchemaAsync(connB, "Import_Action");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "Import_Action schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "Import_Action schema differs between Data's baseline and incremental paths: " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -213,7 +213,7 @@ public class DatabaseInitializerOwnershipTests
         List<string> schemaA = await DumpTableSchemaAsync(connA, "Import_SourceFileOverride");
         List<string> schemaB = await DumpTableSchemaAsync(connB, "Import_SourceFileOverride");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "Import_SourceFileOverride schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "Import_SourceFileOverride schema differs between Data's baseline and incremental paths: " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -243,13 +243,13 @@ public class DatabaseInitializerOwnershipTests
             List<string> schemaA = await DumpTableSchemaAsync(connA, table);
             List<string> schemaB = await DumpTableSchemaAsync(connB, table);
 
-            Assert.AreSequenceEqual(schemaB, schemaA, $"{table} schema differs between Data's baseline and incremental paths — " +
+            Assert.AreSequenceEqual(schemaB, schemaA, $"{table} schema differs between Data's baseline and incremental paths: " +
                 "update DataBaselineSql to match DataOwnedMigrations' final result.");
         }
     }
 
     /// <summary>
-    /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural round-trip
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text; this behavioural round-trip
     /// closes that gap for <c>Import_FileResource.Origin</c>/<c>LineEnding</c>'s enum values (#251,
     /// ADR 008), for both the baseline and incremental paths.
     /// </summary>
@@ -291,7 +291,7 @@ public class DatabaseInitializerOwnershipTests
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
                 "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
                 "VALUES (@id, 'x.json', 'Bundled', 'abc123', 'LF', 1, @now, @now, @now);",
-                new { id = Guid.NewGuid().ToString(), now }), "'Bundled' is the pre-#252 origin value — must be rejected now that the CHECK constraint only accepts 'System'/'User'/'Upload'.");
+                new { id = Guid.NewGuid().ToString(), now }), "'Bundled' is the pre-#252 origin value, and must be rejected now that the CHECK constraint only accepts 'System'/'User'/'Upload'.");
 
             await Assert.ThrowsExactlyAsync<SqliteException>(() => conn.ExecuteAsync(
                 "INSERT INTO Import_FileResource (Id, FileName, Origin, ContentHash, LineEnding, EndsWithTrailingNewline, FirstSeenAtUtc, LastSeenAtUtc, DateCreated) " +
@@ -301,16 +301,16 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
-    /// #252's version-7 migration remaps existing pre-generalization rows — proved directly against
+    /// #252's version-7 migration remaps existing pre-generalization rows, proved directly against
     /// version 6's own migration SQL (not the full <see cref="DatabaseInitializer"/> orchestration,
     /// which has no "stop after migration N" test hook) so this exercises exactly the scenario version
     /// 6 edited in place would have silently gotten wrong: a database that already ran version 6 before
     /// version 7 exists. Also proves the migration doesn't break the FK relationship
-    /// <c>Import_FileResourceLine</c>/<c>Import_FileResourceBatch</c> hold to <c>Import_FileResource</c>
-    /// — the table is dropped and recreated under the same name during the rebuild, which a naive
+    /// <c>Import_FileResourceLine</c>/<c>Import_FileResourceBatch</c> hold to <c>Import_FileResource</c>.
+    /// The table is dropped and recreated under the same name during the rebuild, which a naive
     /// reading of SQLite's rename-only FK auto-fixup behaviour could raise doubt about (see ADR 015's
     /// own remarks on <c>DomainPrefixRenameMigrations</c> for the *different* scenario where that
-    /// fixup genuinely does not apply — a name change, not this migration's same-name rebuild).
+    /// fixup genuinely does not apply: a name change, not this migration's same-name rebuild).
     /// </summary>
     [TestMethod]
     public async Task Migration007_RemapsPreGeneralizationOriginValuesAndPreservesChildRowLinks()
@@ -344,7 +344,7 @@ public class DatabaseInitializerOwnershipTests
             new { id = Guid.NewGuid().ToString(), fileResourceId = fileResourceId.ToString(), batchId = batchId.ToString(), now });
 
         // Advance to version 7. Foreign key enforcement must be off for the rebuild, matching
-        // ApplyMigrationsAsync's own PRAGMA foreign_keys toggling around the real migration phase —
+        // ApplyMigrationsAsync's own PRAGMA foreign_keys toggling around the real migration phase:
         // without this, SQLite treats DROP TABLE Import_FileResource as cascading the DELETE to
         // Import_FileResourceLine/Import_FileResourceBatch (ON DELETE CASCADE), silently losing the
         // rows this test exists to prove survive. Found live by this test's own first run.
@@ -356,7 +356,7 @@ public class DatabaseInitializerOwnershipTests
             "SELECT Origin, HomeDirectoryKey FROM Import_FileResource WHERE Id = @id;",
             new { id = fileResourceId.ToString() });
         Assert.AreEqual("System", origin, "Pre-#252 'Bundled' rows must be remapped to 'System', not just accepted by a widened CHECK.");
-        Assert.AreEqual("sources", homeDirectoryKey, "A remapped System-origin row must backfill HomeDirectoryKey to 'sources' — the only directory 'Bundled' content was ever captured from.");
+        Assert.AreEqual("sources", homeDirectoryKey, "A remapped System-origin row must backfill HomeDirectoryKey to 'sources', the only directory 'Bundled' content was ever captured from.");
 
         int lineCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Import_FileResourceLine WHERE FileResourceId = @id;", new { id = fileResourceId.ToString() });
@@ -368,7 +368,7 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
-    /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural round-trip
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text; this behavioural round-trip
     /// closes that gap for <c>Import_SourceFileOverride.Origin</c>'s enum values.
     /// </summary>
     [TestMethod]
@@ -404,7 +404,7 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
-    /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text; this behavioural
     /// round-trip closes that gap for <c>Import_Action.Status</c>'s <c>Blocked</c> value,
     /// <c>MarkCompletenessAs</c>'s constraint, and (#150, ADR 008) <c>AppliedPolicy</c>'s constraint,
     /// for both the baseline and incremental paths.
@@ -435,27 +435,27 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'NewestWins', 'Blocked', 'Complete', @now, @now);",
                 new { id, now });
 
-            // #153: Stale must be accepted identically by both paths too — migration 12 widened the
+            // #153: Stale must be accepted identically by both paths too: migration 12 widened the
             // CHECK constraint the same way migration 10 widened it for Blocked.
             await conn.ExecuteAsync(
                 "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Stale', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
-            // AppliedPolicy is nullable — a Pending/Blocked action has no policy decided yet.
+            // AppliedPolicy is nullable: a Pending/Blocked action has no policy decided yet.
             await conn.ExecuteAsync(
                 "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Modify', 'Widget', @id, '{}', 'Pending', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
-            // #373: ActionType gains 'Unchanged' — a record the import would leave exactly as it is.
+            // #373: ActionType gains 'Unchanged': a record the import would leave exactly as it is.
             // Both paths must accept it, which is what a table-rebuild migration is easy to get wrong.
             await conn.ExecuteAsync(
                 "INSERT INTO Import_Action (Id, BatchId, ActionType, EntityType, EntityId, IncomingValue, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Unchanged', 'Widget', @id, '{}', 'Applied', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
-            // #377: ActionType gains 'ResolvedToExisting' — a record whose fields differed from what
+            // #377: ActionType gains 'ResolvedToExisting': a record whose fields differed from what
             // arrived but whose resolution settled on the stored values, so nothing is written
             // differently. Same rebuild hazard as 'Unchanged' above, and the same both-paths check.
             await conn.ExecuteAsync(
@@ -463,7 +463,7 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'B', 'ResolvedToExisting', 'Widget', @id, '{}', 'Applied', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
-            // #376: ActionType gains 'AlreadyReported' — a record whose conflict an earlier pass
+            // #376: ActionType gains 'AlreadyReported': a record whose conflict an earlier pass
             // already staged, so this pass reports it rather than staging a duplicate. Same rebuild
             // hazard, same both-paths check.
             await conn.ExecuteAsync(
@@ -496,7 +496,7 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
-    /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text; this behavioural
     /// round-trip closes that gap for <c>Import_Conflict.AppliedPolicy</c>'s constraint
     /// (#150, ADR 008), for both the baseline and incremental paths.
     /// </summary>
@@ -525,7 +525,7 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'B', 'Quote', 'MergeTheirs', 'Resolved', @now, @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
-            // AppliedPolicy is nullable — a still-Pending conflict has no policy applied yet.
+            // AppliedPolicy is nullable: a still-Pending conflict has no policy applied yet.
             await conn.ExecuteAsync(
                 "INSERT INTO Import_Conflict (Id, BatchId, EntityType, Status, DetectedAt, DateCreated) " +
                 "VALUES (@id, 'B', 'Quote', 'Pending', @now, @now);",
@@ -604,7 +604,7 @@ public class DatabaseInitializerOwnershipTests
         List<string> schemaA = await DumpTableSchemaAsync(connA, "System_Notification");
         List<string> schemaB = await DumpTableSchemaAsync(connB, "System_Notification");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "System_Notification schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_Notification schema differs between Data's baseline and incremental paths: " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -613,7 +613,7 @@ public class DatabaseInitializerOwnershipTests
     /// </summary>
     /// <remarks>
     /// The parity tests above prove the baseline and the incremental path agree with <em>each other</em>
-    /// — they would agree just as happily about a column neither side should have. This pins what the
+    /// (they would agree just as happily about a column neither side should have). This pins what the
     /// table actually holds, which is what #308's "no storage change of its own" claim needs: it
     /// consumes #312's schema and #319's translation shape rather than extending either. Adding a column
     /// is still allowed; it just has to be a decision that updates this list, rather than a side effect
@@ -647,7 +647,7 @@ public class DatabaseInitializerOwnershipTests
 
         Assert.AreSequenceEqual(expected, columns,
             "System_Notification's columns changed. If that was intended, update this list in the same commit; " +
-            "#308 in particular must add none — it renders #312's schema rather than extending it.");
+            "#308 in particular must add none: it renders #312's schema rather than extending it.");
     }
 
     /// <summary>
@@ -676,12 +676,12 @@ public class DatabaseInitializerOwnershipTests
         List<string> schemaB = await DumpTableSchemaAsync(connB, "System_NotificationTranslation");
 
         Assert.IsNotEmpty(schemaA, "System_NotificationTranslation is missing from Data's baseline path.");
-        Assert.AreSequenceEqual(schemaB, schemaA, "System_NotificationTranslation schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_NotificationTranslation schema differs between Data's baseline and incremental paths: " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
     /// <summary>
-    /// <c>System_Notification.OriginalLanguage</c> reaches the same shape on both paths — a column
+    /// <c>System_Notification.OriginalLanguage</c> reaches the same shape on both paths: a column
     /// added by <c>ALTER TABLE</c> is the exact case where the baseline silently drifts.
     /// </summary>
     [TestMethod]
@@ -710,7 +710,7 @@ public class DatabaseInitializerOwnershipTests
     }
 
     /// <summary>
-    /// PRAGMA table_info/index_list do not capture CHECK constraint text — this behavioural round-trip
+    /// PRAGMA table_info/index_list do not capture CHECK constraint text; this behavioural round-trip
     /// closes that gap for <c>System_Notification.Type</c>/<c>DismissTriggerKey</c>'s enum values
     /// (#278, ADR 008), for both the baseline and incremental paths.
     /// </summary>
@@ -739,7 +739,7 @@ public class DatabaseInitializerOwnershipTests
                 "VALUES (@id, 'ActionRequired', 'Consider running a Reset.', 'DatabaseReset', @now);",
                 new { id = Guid.NewGuid().ToString(), now });
 
-            // DismissTriggerKey is nullable — most notifications carry no dismiss trigger.
+            // DismissTriggerKey is nullable: most notifications carry no dismiss trigger.
             await conn.ExecuteAsync(
                 "INSERT INTO System_Notification (Id, Type, Body, DateCreated) " +
                 "VALUES (@id, 'Information', 'Just letting you know.', @now);",
@@ -813,6 +813,56 @@ public class DatabaseInitializerOwnershipTests
         }
     }
 
+    /// <summary>Every payload kind the application can write, for the two storage tests below.</summary>
+    public static IEnumerable<object[]> NotificationMetadataKinds =>
+        Enum.GetNames<Quotinator.Data.Enums.NotificationMetadataKind>().Select(kind => new object[] { kind });
+
+    /// <summary>
+    /// #348: each kind is accepted by a fresh database's baseline. Enumerated from the enum rather than
+    /// listed, so a kind added without widening the CHECK fails here instead of at its first write.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(NotificationMetadataKinds))]
+    public async Task NotificationMetadataKind_IsAcceptedByTheBaseline(string kind)
+    {
+        using TempDatabase temp = new([]);
+        await CreateBareInitializer(temp.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" }).InitialiseAsync();
+
+        Assert.AreEqual(1, await InsertNotificationOfKindAsync(temp.DbPath, kind));
+    }
+
+    /// <summary>#348: the same, for a database that reached the current schema one migration at a time.</summary>
+    [TestMethod]
+    [DynamicData(nameof(NotificationMetadataKinds))]
+    public async Task NotificationMetadataKind_IsAcceptedByTheIncrementalReplay(string kind)
+    {
+        using TempDatabase temp = new([]);
+        await CreateBareInitializer(temp.DbPath, []).InitialiseForTestingAsync(forceIncremental: true);
+
+        Assert.AreEqual(1, await InsertNotificationOfKindAsync(temp.DbPath, kind));
+    }
+
+    /// <summary>
+    /// The row count the insert reports, or 0 when the CHECK rejects it: a rejection reads as a failed
+    /// assertion naming the kind, rather than as an exception the test did not expect.
+    /// </summary>
+    private async Task<int> InsertNotificationOfKindAsync(string dbPath, string kind)
+    {
+        using SqliteConnection conn = new($"Data Source={dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        try
+        {
+            return await conn.ExecuteAsync(
+                "INSERT INTO System_Notification (Id, Type, Body, Metadata, MetadataKind, DateCreated) " +
+                "VALUES (@id, 'Information', 'x', '{}', @kind, '2026-09-26 00:00:00');",
+                new { id = Guid.NewGuid().ToString(), kind });
+        }
+        catch (SqliteException)
+        {
+            return 0;
+        }
+    }
+
     /// <summary>
     /// Same proof as <see cref="DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemAuditEntriesSchema"/>,
     /// for <c>System_AppVersion</c> (added by #81's Data-owned migration 4).
@@ -836,7 +886,7 @@ public class DatabaseInitializerOwnershipTests
         List<string> schemaA = await DumpTableSchemaAsync(connA, "System_AppVersion");
         List<string> schemaB = await DumpTableSchemaAsync(connB, "System_AppVersion");
 
-        Assert.AreSequenceEqual(schemaB, schemaA, "System_AppVersion schema differs between Data's baseline and incremental paths — " +
+        Assert.AreSequenceEqual(schemaB, schemaA, "System_AppVersion schema differs between Data's baseline and incremental paths: " +
             "update DataBaselineSql to match DataOwnedMigrations' final result.");
     }
 
@@ -886,7 +936,7 @@ public class DatabaseInitializerOwnershipTests
         ];
         DatabaseInitializer db = CreateBareInitializer(temp.DbPath, consumerMigrations);
 
-        // No exception means the consumer migration's INSERT succeeded — proving Audit_Entry
+        // No exception means the consumer migration's INSERT succeeded, proving Audit_Entry
         // (created by Data's own migration 1) already existed by the time the consumer migration ran.
         await db.InitialiseAsync();
 
@@ -901,7 +951,7 @@ public class DatabaseInitializerOwnershipTests
 
     // ── Reset backup/restore safety net ─────────────────────────────────────────
 
-    // The base DatabaseInitializer's OnResetAsync is a no-op — only a subclass that overrides it
+    // The base DatabaseInitializer's OnResetAsync is a no-op: only a subclass that overrides it
     // (in production, QuotinatorDatabaseInitializer) actually calls DropAndRebuildAsync. This
     // minimal test-only subclass exists purely to exercise that method directly.
     private sealed class ResettableTestInitializer(
@@ -926,7 +976,7 @@ public class DatabaseInitializerOwnershipTests
 
     /// <summary>
     /// A genuine, unexpected failure during Reset's migration replay must leave the database exactly
-    /// as it was before the Reset attempt — proving the pre-reset backup is actually restored, not
+    /// as it was before the Reset attempt, proving the pre-reset backup is actually restored, not
     /// just that the failing transaction rolled back (which alone wouldn't undo the table drop that
     /// already happened before the failing migration ran).
     /// </summary>
@@ -942,7 +992,7 @@ public class DatabaseInitializerOwnershipTests
         ResettableTestInitializer db = CreateResettableInitializer(temp.DbPath, workingMigrations);
         await db.InitialiseAsync();
 
-        // A different, deliberately-broken migration list for the same database file — forces the
+        // A different, deliberately-broken migration list for the same database file: forces the
         // consumer phase to fail genuinely during Reset's replay (the working table was already
         // dropped by the time this runs).
         IReadOnlyList<SchemaMigration> poisonMigrations =

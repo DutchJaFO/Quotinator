@@ -1148,6 +1148,8 @@ different question in each.
 | 03 | [Refuses a reset when the disk fills during the backup](backup/03-refuses-a-reset-when-the-disk-fills-during-the-backup.md) | no |
 | 04 | [Refuses a reset when the backup folder cannot be written](backup/04-refuses-a-reset-when-the-backup-folder-cannot-be-written.md) | no |
 | 05 | [A full backup quota is resolvable from inside the application](backup/05-a-full-quota-is-resolvable-from-inside-the-application.md) | no |
+| 06 | [A startup that cannot take a backup loads nothing, and offers only the options that can run](backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md) | no |
+| 07 | [A migration that cannot take a backup leaves the database unmigrated, and says why](backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md) | no |
 
 ### `notifications-and-changelog/`
 

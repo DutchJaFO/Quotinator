@@ -8,7 +8,7 @@ using Quotinator.Data.Testing.Database;
 namespace Quotinator.Data.Tests.Database;
 
 /// <summary>
-/// Exercises the data-only backfills that repair rows written before #312's shape existed —
+/// Exercises the data-only backfills that repair rows written before #312's shape existed:
 /// <see cref="NotificationLegacyMetadataMigrations.BackfillAnnouncementProvenance"/> (migration 9) and
 /// <see cref="NotificationLegacyMetadataMigrations.BackfillWhatsNewReleaseState"/> (migration 10).
 /// <para>
@@ -32,8 +32,8 @@ public class NotificationLegacyBackfillMigrationTests
 
     private const string LegacyAnnouncementMetadata = """{"announcement":"GetAllImportBatches"}""";
 
-    // v1.8.3's announcement body, exactly as that release wrote it — the text migration 11's content
-    // hash is taken over, and still the text Program.cs's producer writes today.
+    // v1.8.3's announcement body, exactly as that release wrote it: the text migration 11's content hash is
+    // taken over. The producer wrote it until #348 reworded it; migration 24 moves stored rows to the new text.
     private const string V183AnnouncementBody =
         "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
         "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
@@ -43,7 +43,7 @@ public class NotificationLegacyBackfillMigrationTests
 
     /// <summary>
     /// The v1.8.3 announcement gains provenance, and the <c>System_AppVersion</c> row it points at is
-    /// created — v1.8.3 is the only version that could have written that notification, so its writer is
+    /// created: v1.8.3 is the only version that could have written that notification, so its writer is
     /// knowable rather than a guess.
     /// </summary>
     [TestMethod]
@@ -71,7 +71,7 @@ public class NotificationLegacyBackfillMigrationTests
 
     /// <summary>
     /// A database that never ran v1.8.3 gains no v1.8.3 row. It reaches this migration by having been
-    /// created fresh at an intermediate #312 build's baseline and then upgraded — history it never had
+    /// created fresh at an intermediate #312 build's baseline and then upgraded; history it never had
     /// must not be invented for it, which is why the insert is conditional on the legacy notification
     /// actually being there.
     /// </summary>
@@ -115,7 +115,7 @@ public class NotificationLegacyBackfillMigrationTests
 
     /// <summary>
     /// The backfilled row sorts *before* whatever history the database already holds. v1.8.3 predates
-    /// every row this table can contain — <c>System_AppVersion</c> did not exist in v1.8.3 — so
+    /// every row this table can contain (<c>System_AppVersion</c> did not exist in v1.8.3), so
     /// appending at the end would make "the version that ran last" answer 1.8.3 on a machine that has
     /// since run newer builds, and #81's catch-up would replay releases it already announced.
     /// </summary>
@@ -137,12 +137,12 @@ public class NotificationLegacyBackfillMigrationTests
             "SELECT Version FROM System_AppVersion ORDER BY SequenceNumber;")];
 
         Assert.AreSequenceEqual<string>(["1.8.3", "1.8.4"], byRecordingOrder,
-            "The backfilled 1.8.3 row must sort before history the database already holds — otherwise " +
+            "The backfilled 1.8.3 row must sort before history the database already holds; otherwise " +
             "\"the version that ran last\" answers 1.8.3 on a machine that has since run newer builds.");
     }
 
     /// <summary>
-    /// What's-new rows written by an intermediate #312 build carry no release state — step 10 made it a
+    /// What's-new rows written by an intermediate #312 build carry no release state: step 10 made it a
     /// required property, so without the backfill those rows cannot be deserialized, cannot be
     /// identified, and re-announce themselves. The state is derived from the very convention that wrote
     /// them: a <c>version</c> key present meant a tagged release, absent meant the unreleased section.
@@ -165,7 +165,7 @@ public class NotificationLegacyBackfillMigrationTests
         Assert.Contains("Unreleased", states, "A row carrying only a content hash described the unreleased section.");
     }
 
-    /// <summary>A row already carrying a release state is left exactly as it is — replaying the chain cannot rewrite correct data.</summary>
+    /// <summary>A row already carrying a release state is left exactly as it is; replaying the chain cannot rewrite correct data.</summary>
     [TestMethod]
     public async Task Migration10_RowThatAlreadyHasAReleaseState_IsLeftUntouched()
     {
@@ -269,7 +269,7 @@ public class NotificationLegacyBackfillMigrationTests
             "An overshoot is not about a release, so no version may be invented for it.");
     }
 
-    /// <summary>A row already stating its own release state is untouched — replaying cannot rewrite correct data.</summary>
+    /// <summary>A row already stating its own release state is untouched; replaying cannot rewrite correct data.</summary>
     [TestMethod]
     public async Task Migration11_RowThatAlreadyStatesItsReleaseState_IsLeftUntouched()
     {
@@ -282,6 +282,97 @@ public class NotificationLegacyBackfillMigrationTests
         await connection.ExecuteAsync(NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields);
 
         Assert.AreEqual(alreadyStated, await connection.ExecuteScalarAsync<string>("SELECT Metadata FROM System_Notification;"));
+    }
+
+    // The text the #279 producer writes since #348 reworded it: a copy, like V183AnnouncementBody,
+    // because this project cannot reach the producer. The Api's OperationIdRenameAnnouncementTests hold
+    // the producer's own text to the migration's.
+    private const string RewordedAnnouncementBody =
+        "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
+        "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
+        "This only affects a generated API client keyed by operation ID; routes and behaviour are unchanged.";
+
+    /// <summary>
+    /// #348: the reworded producer recognises the row v1.8.3 wrote once migration 24 has rewritten it,
+    /// so rewording the text does not announce it a second time on every installation.
+    /// </summary>
+    [TestMethod]
+    public async Task Migration24_V183Announcement_IsRecognisedByTheRewordedProducer()
+    {
+        using SqliteConnection connection = await V183AnnouncementThroughMigration24Async();
+
+        string metadata = (await connection.ExecuteScalarAsync<string>("SELECT Metadata FROM System_Notification;"))!;
+        AnnouncementMetadataDto current = new()
+        {
+            Announcement = "GetAllImportBatches",
+            ReleaseState = NotificationReleaseState.Released,
+            Version      = "1.8.3",
+            ContentHash  = NotificationContentHash.Of(RewordedAnnouncementBody),
+        };
+
+        Assert.IsTrue(current.IsSameNotificationAs(NotificationMetadataKinds.TryDeserialize(NotificationMetadataKind.Announcement, metadata)!));
+    }
+
+    [TestMethod]
+    public async Task Migration24_V183Announcement_CarriesTheRewordedBody()
+    {
+        using SqliteConnection connection = await V183AnnouncementThroughMigration24Async();
+
+        Assert.AreEqual(RewordedAnnouncementBody, await connection.ExecuteScalarAsync<string>("SELECT Body FROM System_Notification;"));
+    }
+
+    /// <summary>The translations migration 14 wrote carry the same wording change, or a Dutch or German reader keeps the old one.</summary>
+    [TestMethod]
+    [DataRow("nl", "Dit raakt alleen een gegenereerde API-client die op bewerkings-ID werkt; routes en gedrag zijn ongewijzigd.")]
+    [DataRow("de", "Betroffen ist nur ein generierter API-Client, der die Operations-ID verwendet; Routen und Verhalten bleiben unverändert.")]
+    public async Task Migration24_V183AnnouncementTranslation_CarriesTheRewordedBody(string language, string rewordedSentence)
+    {
+        using SqliteConnection connection = await V183AnnouncementThroughMigration24Async();
+
+        string? body = await connection.ExecuteScalarAsync<string>(
+            "SELECT Body FROM System_NotificationTranslation WHERE Language = @language;", new { language });
+
+        Assert.EndsWith(rewordedSentence, body!);
+    }
+
+    /// <summary>
+    /// The row v1.8.3 wrote, carried through the real chain from migration 8 to 14, then migration 24.
+    /// Seeded with the text v1.8.3 wrote, so the translations migration 14 adds are the ones it really adds.
+    /// </summary>
+    private async Task<SqliteConnection> V183AnnouncementThroughMigration24Async()
+    {
+        TempDatabase temp = new(SchemaThroughMigration8);
+        _databases.Add(temp);
+        SqliteConnection connection = await OpenAsync(temp);
+
+        await connection.ExecuteAsync(
+            "INSERT INTO System_Notification (Id, Type, Body, DateCreated, IsDismissed, IsDeleted, Metadata, MetadataKind) " +
+            "VALUES (@id, 'Warning', @body, '2026-08-16 09:00:00', 0, 0, @metadata, 'Announcement');",
+            new { id = Guid.NewGuid().ToString(), body = V183AnnouncementBody, metadata = LegacyAnnouncementMetadata });
+
+        foreach (string migration in (string[])
+        [
+            NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields,
+            NotificationTranslationMigrations.AddOriginalLanguageColumn,
+            NotificationTranslationMigrations.CreateNotificationTranslationTable,
+            NotificationTranslationMigrations.BackfillAnnouncementTranslations,
+            NotificationAnnouncementRewordMigrations.RewordOperationIdRename,
+        ])
+        {
+            await connection.ExecuteAsync(migration);
+        }
+
+        return connection;
+    }
+
+    private readonly List<TempDatabase> _databases = [];
+
+    [TestCleanup]
+    public void Cleanup()
+    {
+        SqliteConnection.ClearAllPools();
+        foreach (TempDatabase database in _databases)
+            database.Dispose();
     }
 
     private async Task<SqliteConnection> OpenAsync(TempDatabase temp)

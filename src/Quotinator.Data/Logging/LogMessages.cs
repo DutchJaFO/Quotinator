@@ -75,19 +75,19 @@ internal static partial class LogMessages
     public static partial void LogBackupSkippedInsufficientDiskSpace(this ILogger logger, long availableBytes, long estimatedBytes);
 
     /// <summary>Logs that seeding refused to run because no backup could be taken (#348).</summary>
-    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Backup] seeding refused: no backup could be taken ({Obstacle}). Proceeding would leave a schema change with no restore point, so the database is left untouched and startup degrades")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Backup] seeding refused: no backup could be taken ({Obstacle:l}). Loading content without one would leave no restore point, so the database is left untouched and nothing is loaded")]
     public static partial void LogSeedRefusedNoBackup(this ILogger logger, string obstacle);
 
     /// <summary>Logs that pending migrations refused to run because no backup could be taken (#348).</summary>
-    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Backup] migration refused: no backup could be taken ({Obstacle}). A migration changes the schema in a way only a backup can undo, so none is applied and the database stays at its recorded version")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Backup] migration refused: no backup could be taken ({Obstacle:l}). A migration changes the schema in a way only a backup can undo, so none is applied and the database stays at its recorded version")]
     public static partial void LogMigrationRefusedNoBackup(this ILogger logger, string obstacle);
 
     /// <summary>Logs that a Reset refused to run because no backup could be taken (#348).</summary>
-    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Backup] reset refused: no backup could be taken ({Obstacle}). A reset drops every table, so it does not run without a restore point unless the caller explicitly accepts that")]
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Database - Backup] reset refused: no backup could be taken ({Obstacle:l}). A reset drops every table, so it does not run without a restore point unless the caller explicitly accepts that")]
     public static partial void LogResetRefusedNoBackup(this ILogger logger, string obstacle);
 
     /// <summary>Logs that a Reset ran without a backup because the caller explicitly accepted the risk (#348).</summary>
-    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] reset proceeding WITHOUT a backup ({Obstacle}): the caller accepted responsibility. There is no restore point for this reset; do not look for one later")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] reset proceeding WITHOUT a backup ({Obstacle:l}): the caller accepted responsibility. There is no restore point for this reset; do not look for one later")]
     public static partial void LogResetProceedingWithoutBackup(this ILogger logger, string obstacle);
 
     /// <summary>Logs that the configured backup quota percentage is out of range and the default is being used (#348).</summary>

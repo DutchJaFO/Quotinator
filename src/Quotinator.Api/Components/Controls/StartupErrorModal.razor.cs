@@ -1,15 +1,16 @@
 using Microsoft.AspNetCore.Components;
 using Quotinator.Api.Startup;
+using Quotinator.Constants.Api;
 using Quotinator.Core.Services;
 using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 
 namespace Quotinator.Api.Components.Controls;
 
 /// <summary>
-/// Degraded startup error popup (#263) — the failure reason, the last known-good database status
+/// Degraded startup error popup (#263): the failure reason, the last known-good database status
 /// (the state #254's backup/restore safety net left the database at), and a button through to the
 /// degraded error layout. Shown by <see cref="Pages.Home"/> while <see cref="DatabaseHealthState.IsHealthy"/>
-/// is false. Rendered as a modal overlay, matching <see cref="StartupSuccessModal"/>'s presentation —
+/// is false. Rendered as a modal overlay, matching <see cref="StartupSuccessModal"/>'s presentation;
 /// unlike that one, it has no dismiss state of its own; it is shown for as long as Home renders it.
 /// </summary>
 public partial class StartupErrorModal
@@ -26,6 +27,16 @@ public partial class StartupErrorModal
 
     /// <summary>Invoked when the user clicks through to the degraded error layout.</summary>
     [Parameter] public EventCallback OnContinue { get; set; }
+
+    /// <summary>
+    /// The Knowledgebase entry a degraded reason names, or <see langword="null"/> when it names none
+    /// (#348). A refused migration's reason ends with its entry's address, which this renders as a link.
+    /// </summary>
+    /// <param name="reason">The recorded failure reason.</param>
+    internal static string? KnowledgebaseLinkIn(string? reason) =>
+        reason is not null && reason.Contains(KnowledgebaseLinks.NoBackupCouldBeTaken, StringComparison.Ordinal)
+            ? KnowledgebaseLinks.NoBackupCouldBeTaken
+            : null;
 
     #endregion
 

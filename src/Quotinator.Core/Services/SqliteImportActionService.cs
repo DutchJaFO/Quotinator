@@ -143,7 +143,7 @@ public sealed class SqliteImportActionService(
                     Decision   = choice,
                 }))];
 
-        // Nothing conflicted means nothing this can settle — a batch of Blocked completeness holds
+        // Nothing conflicted means nothing this can settle: a batch of Blocked completeness holds
         // needs #66's per-item route, and reporting it as decided would be a lie the operator acts on.
         if (rows.Count == 0) return 0;
 
@@ -193,7 +193,7 @@ public sealed class SqliteImportActionService(
     private static string? FieldValueToPlainString(string field, object? value) =>
         field == "genres" && value is List<string> genres ? ImportActionFieldRowMapper.EncodeGenres(genres) : value?.ToString();
 
-    // FieldMergeDecision.CustomValue round-trips through JsonSerializer as `object?` — on the way back
+    // FieldMergeDecision.CustomValue round-trips through JsonSerializer as `object?`: on the way back
     // out of storage, System.Text.Json has no concrete type to deserialize into, so it boxes a
     // JsonElement rather than the original string/List<string>. Unwrapped here, the same way
     // FieldValueToPlainString unwraps a freshly-built (never-serialized) field value.
@@ -214,7 +214,7 @@ public sealed class SqliteImportActionService(
         if (action is null)
             return ImportActionDecideResult.NotFound(actionId);
 
-        // #410: before any branch reads the payloads — an Add has no existing row to read, and a
+        // #410: before any branch reads the payloads: an Add has no existing row to read, and a
         // resolved action of any kind has nothing left to decide.
         if (action.Status.Parsed is ImportActionStatus.Applied or ImportActionStatus.Discarded)
             return ImportActionDecideResult.AlreadyResolved(actionId, action.Status.Raw);
@@ -345,7 +345,7 @@ public sealed class SqliteImportActionService(
             if (characterResult.UnresolvedFields.Count > 0)
                 return ImportActionDecideResult.Unresolved(actionId, characterResult.UnresolvedFields);
 
-            // #175: SourceId/SourceTitle/SourceType are never Modify-able (ADR 013 Decision 9) — the
+            // #175: SourceId/SourceTitle/SourceType are never Modify-able (ADR 013 Decision 9): the
             // resolved payload carries the existing row's own values through unchanged, only Name
             // comes from FieldMergeResolver's result.
             CharacterActionPayloadDto resolvedCharacterPayload = new(
@@ -370,7 +370,7 @@ public sealed class SqliteImportActionService(
             if (seriesResult.UnresolvedFields.Count > 0)
                 return ImportActionDecideResult.Unresolved(actionId, seriesResult.UnresolvedFields);
 
-            // UniverseName only carries through when the resolved universeId is the incoming one — see
+            // UniverseName only carries through when the resolved universeId is the incoming one: see
             // the matching comment in ImportActionPlanner.PlanSeriesAsync's merge branch.
             string? resolvedSeriesUniverseId = (string?)seriesResult.MergedFields["universeId"];
             SeriesActionPayloadDto resolvedSeriesPayload = new(
@@ -409,13 +409,13 @@ public sealed class SqliteImportActionService(
         IReadOnlyDictionary<string, object?> incoming  = QuoteFieldMerge.ToFieldMap(incomingPayload.Fields);
         Dictionary<string, FieldMergeDecision> decisions = ToDecisionMap(request);
 
-        // Validate immediately — an ambiguous field with no decision must fail here, not silently
+        // Validate immediately: an ambiguous field with no decision must fail here, not silently
         // defer the problem to apply time.
         FieldMergeResult result = QuoteFieldMerge.ResolveWithDecisions(existing, incoming, decisions);
         if (result.UnresolvedFields.Count > 0)
             return ImportActionDecideResult.Unresolved(actionId, result.UnresolvedFields);
 
-        // Store the fully resolved payload (not the raw decision request) — apply never needs to
+        // Store the fully resolved payload (not the raw decision request): apply never needs to
         // re-run FieldMergeResolver or know about policies/decisions at all.
         QuoteActionPayloadDto resolvedPayload = new()
         {
@@ -446,19 +446,24 @@ public sealed class SqliteImportActionService(
 
             // #304: content has just landed, which resolves a reseed recommendation as surely as a
             // reseed would. Dismissed here rather than at each endpoint because this is the single
-            // choke point both /import/ and /import/actions/apply funnel through — and because the
+            // choke point both /import/ and /import/actions/apply funnel through, and because the
             // recommendation dedupes against active rows, one left undismissed would suppress every
             // later occurrence silently. Inside the success branch on purpose: a batch that left
             // actions pending closed no gap.
-            // #308: `Reseeded` names what resolved it, not who asked — content landing is a reseed
+            // #308: `Reseeded` names what resolved it, not who asked: content landing is a reseed
             // whether the operator ran it from the notification or from the admin endpoint. Set here
             // rather than by the caller because this dismissal happens *during* the reseed, so a
             // caller's own later call finds the row already inactive and updates nothing.
-            await notificationWriter.DismissByTriggerAsync(
-                NotificationDismissTrigger.Reseed, NotificationResolution.Reseeded);
+            // #348: not while seeding. A seed applies one batch per file, so this would resolve the
+            // notification while the run it belongs to is still going, before it has a result. A
+            // notification is updated after the action that settles it has run, never during it: the
+            // seed run's owner resolves it once the whole run has returned.
+            if (initiatedByType is not InitiatorType.Seed)
+                await notificationWriter.DismissByTriggerAsync(
+                    NotificationDismissTrigger.Reseed, NotificationResolution.Reseeded);
 
             // #303: this batch's own review is over, so the alert reporting it is resolved. Scoped to
-            // this batch rather than the trigger alone — several files can each be awaiting review at
+            // this batch rather than the trigger alone: several files can each be awaiting review at
             // once, and clearing the trigger wholesale would dismiss alerts for batches nobody touched.
             // #308: resolution is the caller's to state and is usually absent. Only a notification's own
             // action chose a side wholesale; the REST path decides per field, so it has no single answer
@@ -467,7 +472,7 @@ public sealed class SqliteImportActionService(
                 NotificationDismissTrigger.ImportReviewResolved, batchId, NotificationDismissReason.Resolved, resolution);
 
             // #249: the caller opted in to purging this batch's conflict-resolution data the moment
-            // it's no longer needed — mirrors QuotinatorDatabaseInitializer's seeding-path auto-purge,
+            // it's no longer needed: mirrors QuotinatorDatabaseInitializer's seeding-path auto-purge,
             // including the Audit_Entry trace, but decided per-call here rather than via config.
             if (purgeOnSuccess)
             {
@@ -490,8 +495,8 @@ public sealed class SqliteImportActionService(
     }
 
     /// <summary>
-    /// #177: every caller of <see cref="ApplyBatchAsync"/> — the direct <c>/actions/apply</c> route and
-    /// both call sites in <see cref="SqliteQuoteImportService"/> — must mark the owning
+    /// #177: every caller of <see cref="ApplyBatchAsync"/> (the direct <c>/actions/apply</c> route and
+    /// both call sites in <see cref="SqliteQuoteImportService"/>) must mark the owning
     /// <see cref="ImportBatchEntity"/> <see cref="ImportBatchStatus.Applied"/> once every one of its actions
     /// has genuinely applied, or it can never satisfy <see cref="ReverseBatchAsync"/>'s own
     /// <c>Status == Applied</c> precondition. This is the single shared choke point for that write.
@@ -511,19 +516,19 @@ public sealed class SqliteImportActionService(
     }
 
     /// <summary>
-    /// #59: a soft-deleted row must never block a fresh insert at the same id — every existence
+    /// #59: a soft-deleted row must never block a fresh insert at the same id: every existence
     /// check the planner relies on for duplicate detection filters <c>IsDeleted = 0</c>, so
     /// re-importing previously-undone content stages a fresh Add against an id that is still
     /// physically occupied by a soft-deleted row, and <c>INSERT OR IGNORE</c> would otherwise
     /// silently no-op against it. Hard-deletes every Add action's target before the batch applies.
     /// <para/>
-    /// Must run in dependency order — Quote first, then Character, then Source/Person — not the
+    /// Must run in dependency order (Quote first, then Character, then Source/Person), not the
     /// apply-time insert order (Source/Person, then Character, then Quote): a stale Source or
     /// Character can still be physically referenced by a stale Quote/Character row (SQLite enforces
     /// foreign keys against the physical row, not the logical <c>IsDeleted</c> flag), so the
     /// referencing row must be cleared first regardless of which order the batch's own actions
     /// happen to apply in later. This runs once per batch, before <see cref="IImportActionCoordinator.TryApplyBatchAsync"/>
-    /// opens its own transaction — not inside it, since hard-deleting an already soft-deleted row is
+    /// opens its own transaction: not inside it, since hard-deleting an already soft-deleted row is
     /// idempotent and safe to repeat if a retry re-runs this pass.
     /// </summary>
     private async Task ClearStaleAddTargetsAsync(string batchId)
@@ -532,7 +537,7 @@ public sealed class SqliteImportActionService(
         List<ImportActionEntity> adds    = [.. actions.Where(a => a.ActionType.Parsed == ImportActionKind.Add)];
 
         // Like Source below, a Quote Add's id can be file-authored (or QuoteIdentity.StableId-derived)
-        // rather than always freshly computed the way Character/Series/Universe's always are — it is
+        // rather than always freshly computed the way Character/Series/Universe's always are: it is
         // canonicalized at ImportActionPlanner's capture point (ADR 012), so action.EntityId here is
         // already reliably canonical, but raw SQL (not the Guid-typed repository path) is still used
         // for consistency with Source/Person/Conversation/StageDirection/SoundCue below, all of which
@@ -541,23 +546,23 @@ public sealed class SqliteImportActionService(
         quoteConn.Open();
         foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Quote))
         {
-            // QuoteGenres/QuoteTranslations both carry a hard FK to Quotes(Id) — a stale Quote's
+            // QuoteGenres/QuoteTranslations both carry a hard FK to Quotes(Id): a stale Quote's
             // genre rows (written by every Add, per QuoteSeedWriter.InsertGenresAsync) still
             // physically exist even though only the Quote row itself was soft-deleted on reversal,
             // and block the hard-delete below with the same FK violation this whole method exists to
-            // avoid. Found live (T2), not by the unit suite — the test fixture used had no genres.
+            // avoid. Found live (T2), not by the unit suite: the test fixture used had no genres.
             await quoteConn.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote, new { id = action.EntityId });
             await quoteConn.ExecuteAsync(Sql.QuoteTranslations.DeleteForQuote, new { id = action.EntityId });
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Quote"), new { id = action.EntityId });
         }
 
         // Character/Person Add ids are always freshly computed via EntityIdentity (never a
-        // natural-key lookup result — a natural-key match means "already exists", which is a Modify,
-        // never an Add), and EntityIdentity.StableId always canonicalizes — safe to use the
+        // natural-key lookup result: a natural-key match means "already exists", which is a Modify,
+        // never an Add), and EntityIdentity.StableId always canonicalizes: safe to use the
         // repository's Guid-typed API here.
         foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Character))
         {
-            // #179: CharacterSources carries a real FK to Characters(Id) — its link row(s) must be
+            // #179: CharacterSources carries a real FK to Characters(Id): its link row(s) must be
             // removed first, or the hard-delete below violates the FK (found live via this exact
             // regression: ApplyResolvedActionAsync_ReAddAfterSoftDelete_ResurrectsSoftDeletedRow /
             // ReverseBatchAsync_ThenReImport_QuoteWithGenres_ResurrectsWithoutForeignKeyViolation).
@@ -565,21 +570,21 @@ public sealed class SqliteImportActionService(
             await _characterRepository.HardDeleteAsync(Guid.Parse(action.EntityId));
         }
 
-        // #162: unlike Character/Person, a Source Add's id is no longer always EntityIdentity-derived
-        // — an explicit sources[] entry supplies its own file-authored id, which is not guaranteed to
+        // #162: unlike Character/Person, a Source Add's id is no longer always EntityIdentity-derived:
+        // an explicit sources[] entry supplies its own file-authored id, which is not guaranteed to
         // be canonically cased the way EntityIdentity.StableId is. Raw SQL, not the Guid-typed
         // repository path, same reasoning as Conversation/StageDirection/SoundCue below.
         foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Source))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Source"), new { id = action.EntityId });
 
         // #173: a people[] entry supplies its own file-authored id, not guaranteed to be canonically
-        // cased — raw SQL, not the Guid-typed repository path, same fix #162 made for Source above.
+        // cased: raw SQL, not the Guid-typed repository path, same fix #162 made for Source above.
         foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Person))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Person"), new { id = action.EntityId });
 
         // #180: Series/Universe entries have no explicit-id file section (matched by Name only, like
         // Character/Person implicitly), so their Add id is always EntityIdentity-derived (always
-        // canonical) — the Guid-typed repository path would be safe here too, but raw SQL is used for
+        // canonical): the Guid-typed repository path would be safe here too, but raw SQL is used for
         // consistency with Sql.Series/Sql.Universe's own no-repository query set (#183/#187/#188 are
         // where a real IRestorableRepository<SeriesEntity>/<UniverseEntity> gets introduced).
         foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Series))
@@ -588,8 +593,8 @@ public sealed class SqliteImportActionService(
         foreach (ImportActionEntity? action in adds.Where(a => a.EntityType == ImportActionEntityTypes.Universe))
             await quoteConn.ExecuteAsync(RepositorySql.HardDelete("Quotinator_Universe"), new { id = action.EntityId });
 
-        // #68: Conversation/StageDirection/SoundCue ids are explicit-in-file, like Quote's — not
-        // EntityIdentity-derived like Character/Person's — so the same raw-SQL, no-forced-canonical-
+        // #68: Conversation/StageDirection/SoundCue ids are explicit-in-file, like Quote's (not
+        // EntityIdentity-derived like Character/Person's), so the same raw-SQL, no-forced-canonical-
         // casing approach applies here too, not the repository's Guid-typed path. Each clears its
         // own detail rows first (ConversationLines/*Translations), same FK-blocking reason as
         // QuoteGenres/QuoteTranslations above.
@@ -619,7 +624,7 @@ public sealed class SqliteImportActionService(
     {
         await _coordinator.DiscardBatchAsync(batchId, cancellationToken);
 
-        // #303: discarding resolves the review as surely as deciding it does — the operator dealt with
+        // #303: discarding resolves the review as surely as deciding it does: the operator dealt with
         // the batch, choosing to keep none of it. Leaving the alert active would ask them to review
         // actions they have already thrown away.
         await notificationWriter.DismissByTriggerAndBatchAsync(
@@ -634,12 +639,12 @@ public sealed class SqliteImportActionService(
 
         ImportBatchEntity batch = await _importBatchRepository.GetByIdAsync(batchGuid) ?? throw new ImportBatchNotFoundException(batchGuid);
         if (batch.IsDeleted)
-            throw new ImportBatchNotFoundException(batchGuid); // Already reversed — treated as absent, matching every other soft-deleted row in this codebase.
+            throw new ImportBatchNotFoundException(batchGuid); // Already reversed: treated as absent, matching every other soft-deleted row in this codebase.
 
         if (batch.Status.Parsed != ImportBatchStatus.Applied)
             throw new ImportBatchStateException(batchId, $"is not currently applied (status: {batch.Status.Raw}) and cannot be reversed.");
 
-        // #59 Scope changes decision 7: strict global LIFO stack, not a per-entity overlap check —
+        // #59 Scope changes decision 7: strict global LIFO stack, not a per-entity overlap check:
         // GetAllAsync is already newest-first, IsDeleted = 0 filtered (Sql.ImportBatches.SelectAll).
         // The first Applied entry in that list is, by definition, the only batch currently reversible.
         IReadOnlyList<ImportBatchEntity> liveBatches = await _importBatchRepository.GetAllAsync();
@@ -647,14 +652,14 @@ public sealed class SqliteImportActionService(
         if (topOfStack is null || topOfStack.Id != batchGuid)
         {
             string blocker = topOfStack is null ? "no batch" : $"'{topOfStack.Name}' ({topOfStack.Id})";
-            throw new ImportBatchStateException(batchId, $"is not the most recently applied batch — {blocker} must be reversed first.");
+            throw new ImportBatchStateException(batchId, $"is not the most recently applied batch: {blocker} must be reversed first.");
         }
 
         IReadOnlyList<ImportActionEntity> actions = await _actionReader.GetAllForBatchAsync(batchId);
         if (actions.Count == 0)
             throw new ImportBatchStateException(batchId, "has no actions and cannot be reversed.");
 
-        // Preview stops here — every blocking condition above has already been checked, so a caller
+        // Preview stops here: every blocking condition above has already been checked, so a caller
         // knows whether the real call would succeed, without anything being written.
         if (preview)
             return;
@@ -662,7 +667,7 @@ public sealed class SqliteImportActionService(
         IReadOnlyList<Guid>? stillApplied = await _coordinator.TryReverseBatchAsync(
             batchId, (actions, conn, tx) => ReverseAppliedActionsAsync(actions, conn, tx, initiatedByType), cancellationToken);
 
-        // Defensive only — batch.Status == Applied already guarantees every one of its actions is
+        // Defensive only: batch.Status == Applied already guarantees every one of its actions is
         // Applied too (they transition together in TryApplyBatchAsync), so this should be unreachable.
         if (stillApplied is not null)
             throw new ImportBatchStateException(batchId, "has actions that are not Applied and cannot be reversed.");
@@ -670,10 +675,10 @@ public sealed class SqliteImportActionService(
 
     /// <summary>
     /// The domain-specific whole-batch reversal callback passed to <see cref="IImportActionCoordinator.TryReverseBatchAsync"/>.
-    /// Sorts Quote → Character → Source/Person (spec item 4's bottom-up ordering — a Source/Character
+    /// Sorts Quote → Character → Source/Person (spec item 4's bottom-up ordering: a Source/Character
     /// still referenced by one of this batch's own about-to-be-removed quotes must not be kept just
     /// because it was checked before those quotes were cleared). As the last step, soft-deletes the
-    /// batch's own <c>ImportBatch</c> row — see Scope changes decision 6.
+    /// batch's own <c>ImportBatch</c> row: see Scope changes decision 6.
     /// </summary>
     private async Task ReverseAppliedActionsAsync(IReadOnlyList<ImportActionEntity> actions, IDbConnection connection, IDbTransaction transaction, InitiatorType initiatedByType)
     {
@@ -692,11 +697,11 @@ public sealed class SqliteImportActionService(
             [ImportActionEntityTypes.Source]       = 2,
             [ImportActionEntityTypes.Person]       = 2,
             // #180: reversed after Source (whose SeriesId may still point at it) and Universe after
-            // Series (whose UniverseId may still point at it) — same active-reference-respecting
+            // Series (whose UniverseId may still point at it): same active-reference-respecting
             // ordering reasoning as StageDirection/SoundCue below, one level shallower.
             [ImportActionEntityTypes.Series]         = 3,
             [ImportActionEntityTypes.Universe]       = 4,
-            // #68: reversed last — StageDirection/SoundCue's active-reference check (joined through
+            // #68: reversed last: StageDirection/SoundCue's active-reference check (joined through
             // Conversations, see Sql.StageDirections.CountActiveReferences' remark) needs Conversation
             // already reversed in this same pass, or it would still see the about-to-be-removed
             // Conversation's lines as live references and refuse to soft-delete a StageDirection/
@@ -714,7 +719,7 @@ public sealed class SqliteImportActionService(
                 case ImportActionEntityTypes.Character:
                     if (action.ActionType.Parsed == ImportActionKind.Modify)
                     {
-                        // #175: a Modify reversal restores the prior Name — it never deletes anything
+                        // #175: a Modify reversal restores the prior Name: it never deletes anything
                         // (SourceId/SourceTitle/SourceType are immutable once a Character exists, ADR
                         // 013 Decision 9, so nothing else needs restoring), so no active-reference
                         // check is needed, mirroring Source's own Modify-reversal branch above.
@@ -737,7 +742,7 @@ public sealed class SqliteImportActionService(
                 case ImportActionEntityTypes.Source:
                     if (action.ActionType.Parsed == ImportActionKind.Modify)
                     {
-                        // #162: a Modify reversal restores the prior field values — it never deletes
+                        // #162: a Modify reversal restores the prior field values: it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
                         SourceActionPayloadDto existingSourcePayload = JsonSerializer.Deserialize<SourceActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Sources.UpdateFieldsById, new
@@ -756,7 +761,7 @@ public sealed class SqliteImportActionService(
                     bool sourceRefs = await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Sources.CountActiveReferences, action.EntityId);
                     if (sourceRefs)
                         break;
-                    // #162: raw SQL, not the Guid-typed repository path — see ClearStaleAddTargetsAsync's
+                    // #162: raw SQL, not the Guid-typed repository path: see ClearStaleAddTargetsAsync's
                     // remark; a Source Add's id may now be an explicit, not-necessarily-canonically-cased
                     // file-authored id, not always an EntityIdentity-derived one.
                     await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_Source"), new { now, id = action.EntityId }, sqliteTransaction);
@@ -765,7 +770,7 @@ public sealed class SqliteImportActionService(
                 case ImportActionEntityTypes.Person:
                     if (action.ActionType.Parsed == ImportActionKind.Modify)
                     {
-                        // #173: a Modify reversal restores the prior field values — it never deletes
+                        // #173: a Modify reversal restores the prior field values: it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
                         PersonActionPayloadDto existingPersonPayload = JsonSerializer.Deserialize<PersonActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.People.UpdateFieldsById, new
@@ -781,7 +786,7 @@ public sealed class SqliteImportActionService(
                     }
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.People.CountActiveReferences, action.EntityId))
                         break;
-                    // #173: raw SQL, not the Guid-typed repository path — a people[] Add's id may now
+                    // #173: raw SQL, not the Guid-typed repository path: a people[] Add's id may now
                     // be an explicit, not-necessarily-canonically-cased file-authored id, same fix #162
                     // made for Source (SqliteImportActionService.cs's Source case above).
                     await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_Person"), new { now, id = action.EntityId }, sqliteTransaction);
@@ -790,7 +795,7 @@ public sealed class SqliteImportActionService(
                 case ImportActionEntityTypes.Series:
                     if (action.ActionType.Parsed == ImportActionKind.Modify)
                     {
-                        // #163: a Modify reversal restores the prior field values — it never deletes
+                        // #163: a Modify reversal restores the prior field values: it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
                         SeriesActionPayloadDto existingSeriesPayload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Series.UpdateFieldsById, new
@@ -814,7 +819,7 @@ public sealed class SqliteImportActionService(
                 case ImportActionEntityTypes.Universe:
                     if (action.ActionType.Parsed == ImportActionKind.Modify)
                     {
-                        // #163: a Modify reversal restores the prior Name — it never deletes anything,
+                        // #163: a Modify reversal restores the prior Name: it never deletes anything,
                         // so no active-reference check is needed (unlike an Add reversal).
                         UniverseActionPayloadDto existingUniversePayload = JsonSerializer.Deserialize<UniverseActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.Universe.UpdateFieldsById, new
@@ -826,7 +831,7 @@ public sealed class SqliteImportActionService(
                         await QuoteSeedWriter.LogChangeAsync(changeLog, "universe", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingUniversePayload, sqliteConnection, sqliteTransaction);
                         break;
                     }
-                    // A Universe Add is soft-deleted — see Series' remark above.
+                    // A Universe Add is soft-deleted: see Series' remark above.
                     if (await HasActiveReferencesAsync(sqliteConnection, sqliteTransaction, Sql.Universe.CountActiveReferences, action.EntityId))
                         break;
                     await sqliteConnection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_Universe"), new { now, id = action.EntityId }, sqliteTransaction);
@@ -835,7 +840,7 @@ public sealed class SqliteImportActionService(
                 case ImportActionEntityTypes.Conversation:
                     if (action.ActionType.Parsed == ImportActionKind.Modify)
                     {
-                        // #176: a Modify reversal restores the prior Description only — it never
+                        // #176: a Modify reversal restores the prior Description only: it never
                         // touches Lines and never deletes anything, so no active-reference check is
                         // needed (unlike an Add reversal).
                         ConversationActionPayloadDto existingConversationPayload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.ExistingValue!)!;
@@ -848,7 +853,7 @@ public sealed class SqliteImportActionService(
                         await QuoteSeedWriter.LogChangeAsync(changeLog, "conversation", action.EntityId, ChangeAction.Modified, oldValue: null, newValue: existingConversationPayload, sqliteConnection, sqliteTransaction);
                         break;
                     }
-                    // #68: id-keyed like Quote (explicit id-in-file, not EntityIdentity-derived) —
+                    // #68: id-keyed like Quote (explicit id-in-file, not EntityIdentity-derived):
                     // raw SQL, not the Guid-typed repository path, same reasoning as
                     // ReverseQuoteActionAsync's Add branch. No active-reference check: nothing else
                     // carries an FK to a Conversation (see Sql.Conversations' own remark). Its
@@ -860,7 +865,7 @@ public sealed class SqliteImportActionService(
                 case ImportActionEntityTypes.StageDirection:
                     if (action.ActionType.Parsed == ImportActionKind.Modify)
                     {
-                        // #171: a Modify reversal restores the prior field values — it never deletes
+                        // #171: a Modify reversal restores the prior field values: it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
                         StageDirectionActionPayloadDto existingStageDirectionPayload = JsonSerializer.Deserialize<StageDirectionActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.StageDirections.UpdateFieldsById, new
@@ -881,7 +886,7 @@ public sealed class SqliteImportActionService(
                 case ImportActionEntityTypes.SoundCue:
                     if (action.ActionType.Parsed == ImportActionKind.Modify)
                     {
-                        // #172: a Modify reversal restores the prior field values — it never deletes
+                        // #172: a Modify reversal restores the prior field values: it never deletes
                         // anything, so no active-reference check is needed (unlike an Add reversal).
                         SoundCueActionPayloadDto existingSoundCuePayload = JsonSerializer.Deserialize<SoundCueActionPayloadDto>(action.ExistingValue!)!;
                         await sqliteConnection.ExecuteAsync(Sql.SoundCues.UpdateFieldsById, new
@@ -915,7 +920,7 @@ public sealed class SqliteImportActionService(
 
         if (isAdd)
         {
-            // Raw SQL, not _quoteRepository.SoftDeleteAsync — see ClearStaleAddTargetsAsync's remarks
+            // Raw SQL, not _quoteRepository.SoftDeleteAsync: see ClearStaleAddTargetsAsync's remarks
             // on why Quote uses the same raw-SQL convention as Source/Person/Conversation/
             // StageDirection/SoundCue.
             await connection.ExecuteAsync(RepositorySql.SoftDelete("Quotinator_Quote"),
@@ -925,46 +930,46 @@ public sealed class SqliteImportActionService(
         }
 
         if (action.AppliedPolicy.Parsed == DuplicateResolutionPolicy.Skip)
-            return; // Nothing was ever written for a Skip-policy Modify — its reversal is a no-op write.
+            return; // Nothing was ever written for a Skip-policy Modify: its reversal is a no-op write.
 
         QuoteActionPayloadDto existingPayload = JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.ExistingValue!)!;
         IReadOnlyDictionary<string, object?> existingFields  = QuoteFieldMerge.ToFieldMap(existingPayload.Fields);
         // Only .Id and .Translations are actually taken from this template (see ApplyMergedFields'
-        // own remarks) — QuoteText/Source are required properties but immediately overwritten below.
+        // own remarks): QuoteText/Source are required properties but immediately overwritten below.
         SourceQuoteDto resolved = QuoteFieldMerge.ApplyMergedFields(existingFields, new SourceQuoteDto { Id = action.EntityId, QuoteText = string.Empty, Source = string.Empty });
 
         // #59 Risk 1: existingPayload.SourceId/CharacterId/PersonId are the *incoming* quote's
         // resolved ids at staging time (see ImportActionPlanner.PlanAsync), not the existing row's
-        // actual linkage — invisible when source/character/author text didn't change, wrong the
+        // actual linkage: invisible when source/character/author text didn't change, wrong the
         // moment it did. Re-resolve from the restored text via the same natural-key lookups the
         // planner itself uses; never trust the stored ids directly.
         Guid sourceId = await connection.ExecuteScalarAsync<Guid?>(Sql.Sources.SelectIdByTitleAndType,
-            new { title = resolved.Source, type = resolved.Type.ToString() }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Source '{resolved.Source}' ({resolved.Type}) no longer exists.");
+            new { title = resolved.Source, type = resolved.Type.ToString() }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed: action '{action.Id}''s original Source '{resolved.Source}' ({resolved.Type}) no longer exists.");
         Guid? characterId = null;
         if (!string.IsNullOrWhiteSpace(resolved.Character))
         {
             // #174/ADR 013: re-resolve via the same Series-scoped candidate lookup ResolveCharacterAsync
-            // itself uses — sourceId is already a real, existing row at this point (checked above), so
+            // itself uses: sourceId is already a real, existing row at this point (checked above), so
             // its own SeriesId (if any) is the correct Series-relatedness signal here too.
             string resolvedSourceId = sourceId.ToCanonicalId();
             string? seriesId = await connection.ExecuteScalarAsync<string?>(
                 Sql.Sources.SelectSeriesIdById, new { id = resolvedSourceId }, transaction);
             characterId = await connection.ExecuteScalarAsync<Guid?>(Sql.Characters.SelectGlobalCandidateId,
-                new { sourceId = resolvedSourceId, name = resolved.Character, sourceType = resolved.Type.ToString(), seriesId }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Character '{resolved.Character}' no longer exists.");
+                new { sourceId = resolvedSourceId, name = resolved.Character, sourceType = resolved.Type.ToString(), seriesId }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed: action '{action.Id}''s original Character '{resolved.Character}' no longer exists.");
         }
 
         Guid? personId = null;
         if (!string.IsNullOrWhiteSpace(resolved.Author))
         {
-            personId = await connection.ExecuteScalarAsync<Guid?>(Sql.People.SelectIdByName, new { name = resolved.Author }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed — action '{action.Id}''s original Person '{resolved.Author}' no longer exists.");
+            personId = await connection.ExecuteScalarAsync<Guid?>(Sql.People.SelectIdByName, new { name = resolved.Author }, transaction) ?? throw new ImportBatchStateException(action.BatchId, $"cannot be reversed: action '{action.Id}''s original Person '{resolved.Author}' no longer exists.");
         }
 
         await connection.ExecuteAsync(Sql.QuoteGenres.DeleteForQuote, new { id = resolved.Id }, transaction);
 
-        // ExistingBatchId — not action.BatchId (the reversing batch) — restores provenance to the
+        // ExistingBatchId, not action.BatchId (the reversing batch), restores provenance to the
         // batch that actually owns the content being brought back (#59 spec item 2 / Risk 2). Null
         // is itself a legitimate, meaningful value here (QuoteEntity.ImportBatchId's own remark:
-        // "Null for records predating provenance tracking") — restoring it must preserve that, not
+        // "Null for records predating provenance tracking"): restoring it must preserve that, not
         // crash trying to parse a batch id that never existed.
         await connection.ExecuteAsync(Sql.Quotes.UpdateOnNewestWins, new
         {
@@ -991,7 +996,7 @@ public sealed class SqliteImportActionService(
 
     /// <summary>
     /// Given a <c>Decided</c> action, writes it to the entity's own table. Dispatches on
-    /// <see cref="ImportActionEntity.EntityType"/> — Source/Character/Person are idempotent
+    /// <see cref="ImportActionEntity.EntityType"/>: Source/Character/Person are idempotent
     /// insert-if-not-exists using the precomputed stable id (safe even if a concurrently-applied
     /// batch already created the same row); Quote is a uniform, policy-agnostic write, since the
     /// planner/<see cref="DecideAsync"/> already computed the final resolved field values.
@@ -1042,14 +1047,14 @@ public sealed class SqliteImportActionService(
                 {
                         CharacterActionPayloadDto payload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.IncomingValue!)!;
                     // Defensive: CharacterSources.SourceId (#179) is a real FK, but System_ImportActions
-                    // rows apply in whatever order the coordinator returns them — this action's own
+                    // rows apply in whatever order the coordinator returns them: this action's own
                     // Source may not have applied yet. Idempotent, so re-running it here is safe either way.
                     await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, payload.SourceId, payload.SourceTitle, payload.SourceType, batchId, now, changeLog);
                     await EnsureCharacterExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload.SourceId, payload.Name, payload.SourceType, batchId, now, changeLog);
                 }
                 else
                 {
-                        // #175: Modify only ever writes Name — SourceType is immutable once a Character
+                        // #175: Modify only ever writes Name: SourceType is immutable once a Character
                         // exists (ADR 013 Decision 9), so this never touches CharacterSources.
                         CharacterActionPayloadDto payload = JsonSerializer.Deserialize<CharacterActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
@@ -1126,10 +1131,10 @@ public sealed class SqliteImportActionService(
                 {
                         SeriesActionPayloadDto payload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.IncomingValue!)!;
                     // Defensive: Series.UniverseId (#179) is a real FK, but System_ImportActions rows
-                    // apply in whatever order the coordinator returns them — this action's own Universe
+                    // apply in whatever order the coordinator returns them: this action's own Universe
                     // may not have applied yet. Idempotent, so re-running it here is safe either way.
                     // Uses payload.UniverseName (the Universe's own name), not payload.Name (the
-                    // Series' own name) — passing the wrong one would create the Universe row under
+                    // Series' own name): passing the wrong one would create the Universe row under
                     // the Series' name if this defensive insert ever genuinely fires.
                     if (payload.UniverseId is not null)
                         await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, payload.UniverseId, payload.UniverseName, batchId, now, changeLog);
@@ -1137,12 +1142,12 @@ public sealed class SqliteImportActionService(
                 }
                 else
                 {
-                        // #163: Modify writes Name and UniverseId — unlike Character's SourceType, a
+                        // #163: Modify writes Name and UniverseId: unlike Character's SourceType, a
                         // Series' UniverseId is not documented as immutable, so both are correctable.
                         SeriesActionPayloadDto payload = JsonSerializer.Deserialize<SeriesActionPayloadDto>(action.MergedFields
                         ?? throw new InvalidOperationException($"Action '{action.Id}' is Decided but has no resolved payload."))!;
                     // Uses payload.UniverseName (the Universe's own name), not payload.Name (the
-                    // Series' own name) — see the matching comment in the Add branch above.
+                    // Series' own name): see the matching comment in the Add branch above.
                     if (payload.UniverseId is not null)
                         await EnsureUniverseExistsAsync(sqliteConnection, sqliteTransaction, payload.UniverseId, payload.UniverseName, batchId, now, changeLog);
                     await sqliteConnection.ExecuteAsync(Sql.Series.UpdateFieldsById, new
@@ -1167,7 +1172,7 @@ public sealed class SqliteImportActionService(
                     // Defensive, for the same reason as Series' own Universe insert above: Season.SeriesId
                     // is a real FK and actions apply in whatever order the coordinator returns them, so
                     // this Season's own Series may not have applied yet. Idempotent either way. Uses
-                    // payload.SeriesName — the Series' own name — never the Season's title.
+                    // payload.SeriesName, the Series' own name, never the Season's title.
                     if (payload.SeriesId is not null)
                         await EnsureSeriesExistsAsync(sqliteConnection, sqliteTransaction, payload.SeriesId, payload.SeriesName ?? string.Empty, null, batchId, now, changeLog);
                     await EnsureSeasonExistsAsync(sqliteConnection, sqliteTransaction, action.EntityId, payload, batchId, now, changeLog);
@@ -1198,10 +1203,10 @@ public sealed class SqliteImportActionService(
             {
                     bool isAdd = action.ActionType.Parsed == ImportActionKind.Add;
 
-                // Skip means "existing row wins, untouched" — no write, no changelog, matching #64's
+                // Skip means "existing row wins, untouched": no write, no changelog, matching #64's
                 // policy exactly (the only difference from #149's model: the action row itself still
                 // exists for audit visibility via GET /import/actions, even though nothing was written).
-                // Only applies to a genuine duplicate Modify — a brand-new Add always writes, even
+                // Only applies to a genuine duplicate Modify: a brand-new Add always writes, even
                 // when the file's effective policy happens to be Skip (AppliedPolicy is stamped onto
                 // every action, Add included, but Skip has no meaning for a row with nothing to
                 // conflict against).
@@ -1224,9 +1229,9 @@ public sealed class SqliteImportActionService(
                     Genres           = payload.Fields.Genres,
                 };
 
-                // Defensive: same ordering caveat as Character above — this Quote's Source/Character/
+                // Defensive: same ordering caveat as Character above; this Quote's Source/Character/
                 // Person actions may not have applied yet. resolved.Date is the quote-level "date
-                // associated with the source" field (SourceQuoteDto.Date's own doc comment) — the same
+                // associated with the source" field (SourceQuoteDto.Date's own doc comment): the same
                 // value a Source's own explicit sources[] entry would carry, for a Source that only
                 // this quote ever introduces.
                 await EnsureSourceExistsAsync(sqliteConnection, sqliteTransaction, payload.SourceId, resolved.Source, resolved.Type.ToString(), batchId, now, changeLog, resolved.Date);
@@ -1238,7 +1243,7 @@ public sealed class SqliteImportActionService(
                 if (isAdd)
                 {
                     // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync,
-                    // before this batch's apply transaction opened — see that method's remarks for
+                    // before this batch's apply transaction opened: see that method's remarks for
                     // why it can't be done per-action, in insert order, here.
                     await sqliteConnection.ExecuteAsync(Sql.Quotes.Insert, new
                     {
@@ -1350,7 +1355,7 @@ public sealed class SqliteImportActionService(
                     break;
                 }
 
-                    // Trusts its referenced Quote/StageDirection/SoundCue rows already applied — see
+                    // Trusts its referenced Quote/StageDirection/SoundCue rows already applied: see
                     // PlanAsync's remark on why that ordering is safe to rely on here, unlike
                     // Character/Quote's defensive re-ensure.
                     ConversationActionPayloadDto payload = JsonSerializer.Deserialize<ConversationActionPayloadDto>(action.IncomingValue!)!;
@@ -1388,11 +1393,11 @@ public sealed class SqliteImportActionService(
     // ── Completeness (#165) ──────────────────────────────────────────────────
 
     /// <summary>
-    /// Persists the row's <c>CompletenessStatus</c> after an apply — <paramref name="markCompletenessAs"/>
+    /// Persists the row's <c>CompletenessStatus</c> after an apply: <paramref name="markCompletenessAs"/>
     /// (the decide-time override, if any) always wins; otherwise falls back to
     /// <see cref="CompletenessGuard.ComputeNextStatus"/> against the row's own current state. Callers
     /// pass their own <c>SelectCompletenessById</c>/<c>UpdateCompletenessById</c> query pair (one per
-    /// entity table) — this method itself has no table-specific knowledge.
+    /// entity table): this method itself has no table-specific knowledge.
     /// </summary>
     private static async Task ApplyCompletenessAsync(
         SqliteConnection connection, SqliteTransaction transaction,
@@ -1417,8 +1422,8 @@ public sealed class SqliteImportActionService(
         SqliteConnection connection, SqliteTransaction transaction, string id, string title, string type,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog, string? date = null, string? seriesId = null, string? seasonId = null)
     {
-        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
-        // #180: seriesId defaults to null — every defensive call site (Character/Quote's own "ensure
+        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync: see its remarks.
+        // #180: seriesId defaults to null: every defensive call site (Character/Quote's own "ensure
         // the referenced Source exists" checks) has no Series context of its own; only a genuine
         // Source Add action (which does) passes one.
         int inserted = await connection.ExecuteAsync(Sql.Sources.InsertIfNotExists,
@@ -1475,8 +1480,8 @@ public sealed class SqliteImportActionService(
         SqliteConnection connection, SqliteTransaction transaction, string id, string sourceId, string name, string sourceType,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
-        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
-        // #174/ADR 013: SourceType is only ever written here, on first insert (INSERT OR IGNORE — a
+        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync: see its remarks.
+        // #174/ADR 013: SourceType is only ever written here, on first insert (INSERT OR IGNORE: a
         // no-op against an already-existing row never touches its SourceType again). A Character's
         // Type anchor never changes after creation; only which Sources it links to can grow.
         int inserted = await connection.ExecuteAsync(Sql.Characters.InsertIfNotExists,
@@ -1485,7 +1490,7 @@ public sealed class SqliteImportActionService(
             await QuoteSeedWriter.LogChangeAsync(changeLog, "character", id, ChangeAction.Created,
                 oldValue: null, newValue: new { name }, connection, transaction);
 
-        // #179: Character<->Source is many-to-many via CharacterSources — always ensured alongside
+        // #179: Character<->Source is many-to-many via CharacterSources: always ensured alongside
         // the Character row itself, whether the Character was just inserted or already existed.
         await connection.ExecuteAsync(Sql.CharacterSources.InsertIfNotExists,
             new { Id = Guid.NewGuid().ToString(), CharacterId = id, SourceId = sourceId, DateCreated = now }, transaction);
@@ -1496,7 +1501,7 @@ public sealed class SqliteImportActionService(
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog,
         string? dateOfBirth = null, string? dateOfDeath = null)
     {
-        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
+        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync: see its remarks.
         int inserted = await connection.ExecuteAsync(Sql.People.InsertIfNotExists,
             new { Id = id, Name = name, DateOfBirth = dateOfBirth, DateOfDeath = dateOfDeath, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted > 0)
@@ -1504,12 +1509,12 @@ public sealed class SqliteImportActionService(
                 oldValue: null, newValue: new { name, dateOfBirth, dateOfDeath }, connection, transaction);
     }
 
-    /// <summary>#68: id-keyed like Quote (see <see cref="ImportActionEntityTypes.Conversation"/>'s remark), not natural-key-keyed like the three helpers above — <paramref name="id"/> is the file's own explicit id, used as-is.</summary>
+    /// <summary>#68: id-keyed like Quote (see <see cref="ImportActionEntityTypes.Conversation"/>'s remark), not natural-key-keyed like the three helpers above: <paramref name="id"/> is the file's own explicit id, used as-is.</summary>
     private static async Task EnsureStageDirectionExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, StageDirectionActionPayloadDto payload,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
-        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
+        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync: see its remarks.
         int inserted = await connection.ExecuteAsync(Sql.StageDirections.InsertIfNotExists,
             new { Id = id, payload.Text, payload.ImageUrl, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted == 0) return;
@@ -1530,12 +1535,12 @@ public sealed class SqliteImportActionService(
             oldValue: null, newValue: payload, connection, transaction);
     }
 
-    /// <summary>#68: id-keyed like <see cref="EnsureStageDirectionExistsAsync"/> — see its remark.</summary>
+    /// <summary>#68: id-keyed like <see cref="EnsureStageDirectionExistsAsync"/>: see its remark.</summary>
     private static async Task EnsureSoundCueExistsAsync(
         SqliteConnection connection, SqliteTransaction transaction, string id, SoundCueActionPayloadDto payload,
         Guid batchId, string now, QuoteSeedWriter.ChangeLogContext changeLog)
     {
-        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync — see its remarks.
+        // #59: stale-row hard-delete already happened in ClearStaleAddTargetsAsync: see its remarks.
         int inserted = await connection.ExecuteAsync(Sql.SoundCues.InsertIfNotExists,
             new { Id = id, payload.Text, payload.SoundFileUrl, payload.ImageUrl, ImportBatchId = batchId, DateCreated = now }, transaction);
         if (inserted == 0) return;
@@ -1572,7 +1577,7 @@ public sealed class SqliteImportActionService(
             DetectedAt       = action.DetectedAt,
             AppliedAt        = action.AppliedAt,
             DiscardedAt      = action.DiscardedAt,
-            // #374: an Add's ExistingValue is never a full payload to build fields from — it is either
+            // #374: an Add's ExistingValue is never a full payload to build fields from: it is either
             // absent, or (Quote only) a `{ conflictingQuoteId }` marker referencing a different row
             // entirely (step 7's quote-uniqueness collision). Only a Modify's ExistingValue is ever the
             // existing row's real fields.
@@ -1625,12 +1630,12 @@ public sealed class SqliteImportActionService(
         new()
         { ["description"] = payload.Description, ["lineCount"] = payload.Lines.Count };
 
-    /// <summary>Same key names as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload — must stay in sync (#163).</summary>
+    /// <summary>Same key names as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload: must stay in sync (#163).</summary>
     private static Dictionary<string, object?> ToFieldMap(SeriesActionPayloadDto payload) =>
         new()
         { ["name"] = payload.Name, ["universeId"] = payload.UniverseId };
 
-    /// <summary>Same key name as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload — must stay in sync (#163).</summary>
+    /// <summary>Same key name as <see cref="Quotinator.Core.Database.ImportActionPlanner"/>'s own private overload: must stay in sync (#163).</summary>
     private static Dictionary<string, object?> ToFieldMap(UniverseActionPayloadDto payload) =>
         new()
         { ["name"] = payload.Name };
@@ -1641,7 +1646,7 @@ public sealed class SqliteImportActionService(
             return [];
 
         // #374: a Pending Add (e.g. a series-capable Source's own date conflict) has no existing row to
-        // diff against — the reviewer is deciding where the whole new row belongs, not resolving a
+        // diff against: the reviewer is deciding where the whole new row belongs, not resolving a
         // per-field disagreement on an existing one. Every other Pending action pairs with Modify and
         // always carries a real ExistingValue, so this is the only case with nothing to compute here.
         if (action.ExistingValue is null)

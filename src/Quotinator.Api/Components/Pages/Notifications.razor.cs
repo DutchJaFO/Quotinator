@@ -13,12 +13,12 @@ using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 namespace Quotinator.Api.Components.Pages;
 
 /// <summary>
-/// Permanent notification history page (#278) — every notification (including dismissed/expired),
+/// Permanent notification history page (#278): every notification (including dismissed/expired),
 /// with a Dismiss action per active row and a Status filter (default: active only). Reachable via
 /// ordinary navigation, unlike the transient <see cref="Controls.StartupSuccessModal"/>/
 /// <see cref="Controls.StartupErrorModal"/> popups, so a user who already closed one of those can
 /// still review notification history afterward. Calls <see cref="INotificationReader"/>/
-/// <see cref="INotificationWriter"/> directly — server-side Blazor, same process — matching
+/// <see cref="INotificationWriter"/> directly (server-side Blazor, same process), matching
 /// <see cref="Stats"/>'s own precedent of sourcing data directly rather than through this project's
 /// own REST endpoints. Row rendering itself is shared with <see cref="Controls.NotificationSummary"/>
 /// via <see cref="Controls.NotificationTable"/>.
@@ -33,7 +33,7 @@ public partial class Notifications
         Text = await I18nText.GetTextTableAsync<Quotinator.Api.I18nText.UI>(this);
 
         // #326: this route is exempt from DatabaseHealthGateMiddleware, so it is reachable precisely
-        // when the database is not — and LoadAsync is a live query that throws SQLITE_CANTOPEN past
+        // when the database is not, and LoadAsync is a live query that throws SQLITE_CANTOPEN past
         // NotificationReader's missing-table catch when the data directory cannot be written. Rendering
         // an empty list is the degraded answer; crashing the page is not one. Same gate as
         // DatabaseStatsSummary (#293) and NotificationSummary.
@@ -85,7 +85,7 @@ public partial class Notifications
 
     private async Task LoadAsync()
     {
-        // #319: same rule as the startup popup — the page renders in the UI language, so its
+        // #319: same rule as the startup popup: the page renders in the UI language, so its
         // notifications resolve to that language too, falling back to each one's original.
         PagedItems<NotificationEntity> page = await NotificationReader.GetPagedAsync(
             1, 0, CultureInfo.CurrentUICulture.TwoLetterISOLanguageName);
@@ -123,7 +123,7 @@ public partial class Notifications
     /// </summary>
     /// <remarks>
     /// The repaint is the whole point and is easy to lose: without flushing a render first, the circuit
-    /// stays on the previous frame for the entire action — an ~11-second reseed leaves the row reading
+    /// stays on the previous frame for the entire action: an ~11-second reseed leaves the row reading
     /// Active with a live Run button, which is exactly what #367 reports. `StateHasChanged` alone only
     /// queues the render; the yield is what lets it reach the browser before the long await begins.
     /// </remarks>
@@ -147,6 +147,23 @@ public partial class Notifications
                 NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
 
             await RunActionAsync(request.Id, () => ActionExecutor.ExecuteAsync(trigger, metadata, request.Choice));
+        }
+
+        await LoadAsync();
+    }
+
+    /// <summary>#348: the same path, for an action whose option the user chose, and agreed to where it asks.</summary>
+    private async Task ExecuteOptionActionAsync((Guid Id, NotificationActionOption Option) request)
+    {
+        NotificationEntity? notification = AllNotifications.FirstOrDefault(n => n.Id == request.Id);
+        if (notification?.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger)
+        {
+            NotificationMetadataDto? metadata =
+                NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata);
+
+            // A refusal changes nothing and leaves the notification active; the reload that follows
+            // shows the options its obstacle still allows.
+            await RunActionAsync(request.Id, () => ActionExecutor.ExecuteAsync(trigger, metadata, option: request.Option));
         }
 
         await LoadAsync();

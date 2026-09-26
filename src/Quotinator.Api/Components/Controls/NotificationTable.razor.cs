@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using Quotinator.Api.Enums;
 using Quotinator.Api.Formatting;
 using Quotinator.Api.Services;
+using Quotinator.Constants.Api;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Notifications;
@@ -11,13 +12,13 @@ using I18nTextService = Toolbelt.Blazor.I18nText.I18nText;
 namespace Quotinator.Api.Components.Controls;
 
 /// <summary>
-/// Shared notification list table (#278) — Created/Type/Message/Expires/Status columns, with optional
+/// Shared notification list table (#278): Created/Type/Message/Expires/Status columns, with optional
 /// Action and Dismiss columns. Used by both <see cref="NotificationSummary"/> (the startup-modal
 /// summary, both optional columns <see langword="false"/>) and <see cref="Pages.Notifications"/> (the
 /// full history page, both <see langword="true"/>) so the two surfaces stay visually consistent. The
-/// caller is responsible for deciding what to render when <see cref="Notifications"/> is empty — this
+/// caller is responsible for deciding what to render when <see cref="Notifications"/> is empty; this
 /// component always renders a table, even an empty one. Executing an action always requires an inline
-/// confirm/cancel step first — this component never calls <see cref="INotificationActionExecutor"/>
+/// confirm/cancel step first: this component never calls <see cref="INotificationActionExecutor"/>
 /// itself, only <see cref="ActionExecutor"/>'s read-only <c>CanExecute</c> check; the actual execution
 /// is bubbled up via <see cref="OnExecuteAction"/> so the caller controls what happens afterward
 /// (reloading the list), matching how <see cref="OnDismiss"/> already works.
@@ -60,12 +61,18 @@ public partial class NotificationTable
     [Parameter] public EventCallback<(Guid Id, FieldResolutionChoice Choice)> OnExecuteChoiceAction { get; set; }
 
     /// <summary>
+    /// Raised instead of <see cref="OnExecuteAction"/> for a row whose action offers named options (#348),
+    /// carrying the option the user chose and, for one that goes without a backup, agreed to.
+    /// </summary>
+    [Parameter] public EventCallback<(Guid Id, NotificationActionOption Option)> OnExecuteOptionAction { get; set; }
+
+    /// <summary>
     /// #369: the volatile state this render's actions depend on, read once by the caller and handed to
-    /// every row — so no row runs a query of its own.
+    /// every row, so no row runs a query of its own.
     /// </summary>
     [Parameter, EditorRequired] public NotificationActionAvailability Availability { get; set; } = default!;
 
-    /// <summary>Renders a stored UTC timestamp in the host's time zone — see <see cref="LocalTimestamp"/>.</summary>
+    /// <summary>Renders a stored UTC timestamp in the host's time zone; see <see cref="LocalTimestamp"/>.</summary>
     /// <param name="utc">The stored UTC value, or <see langword="null"/>.</param>
     internal static string Local(DateTime? utc) => LocalTimestamp.Render(utc);
 
@@ -75,8 +82,8 @@ public partial class NotificationTable
     /// <paramref name="availability"/> (#369).
     /// </summary>
     /// <remarks>
-    /// The trigger alone cannot answer this — it says an action is wired up, not that the thing it acts on
-    /// still exists. Static and internal so it can be tested without rendering the component — this
+    /// The trigger alone cannot answer this: it says an action is wired up, not that the thing it acts on
+    /// still exists. Static and internal so it can be tested without rendering the component; this
     /// project has no bUnit.
     /// </remarks>
     /// <param name="executor">The executor whose capability check decides.</param>
@@ -90,12 +97,12 @@ public partial class NotificationTable
             availability);
 
     /// <summary>
-    /// Whether <paramref name="notification"/> carries an action that exists but can no longer run —
+    /// Whether <paramref name="notification"/> carries an action that exists but can no longer run:
     /// the fact <see cref="NotificationDisplayStatus.ActionUnavailable"/> reports (#369).
     /// </summary>
     /// <remarks>
     /// A row with no action at all is not "unavailable": it never had one to lose. Static and internal so
-    /// it can be tested without rendering the component — this project has no bUnit.
+    /// it can be tested without rendering the component; this project has no bUnit.
     /// </remarks>
     /// <param name="executor">The executor whose capability checks decide.</param>
     /// <param name="notification">The row being rendered.</param>
@@ -111,7 +118,7 @@ public partial class NotificationTable
     /// <remarks>
     /// #367: a running action withdraws the control rather than refusing the click afterwards. A second
     /// session sees the same withdrawal, which is what makes the guard legible instead of silent.
-    /// Static and internal so it can be tested without rendering the component — this project has no
+    /// Static and internal so it can be tested without rendering the component; this project has no
     /// bUnit.
     /// </remarks>
     /// <param name="notification">The row being rendered.</param>
@@ -124,8 +131,8 @@ public partial class NotificationTable
     /// Whether the Dismiss control is offered for <paramref name="notification"/>.
     /// </summary>
     /// <remarks>
-    /// #367, found in T1: withdrawn while the action runs. There is nothing to dismiss — the operator
-    /// already chose to act — and the click does not merely do nothing. Blazor serialises circuit
+    /// #367, found in T1: withdrawn while the action runs. There is nothing to dismiss (the operator
+    /// already chose to act), and the click does not merely do nothing. Blazor serialises circuit
     /// events, so it queues behind the running handler and is applied <em>after</em> the action has
     /// recorded <c>Resolved</c>, overwriting it with <c>Dismissed</c>: a carried-out action then reads
     /// as one the user declined, which is the defect #304 exists to prevent.
@@ -140,7 +147,7 @@ public partial class NotificationTable
     /// <param name="Rows">One row per payload entry, cells in the same order as <paramref name="Headers"/>.</param>
     /// <param name="Totals">
     /// A single column-wise summary line, or empty when the payload has none. #383: separate from
-    /// <paramref name="Rows"/> rather than appended to it, so the markup can put it in a table footer —
+    /// <paramref name="Rows"/> rather than appended to it, so the markup can put it in a table footer:
     /// a row appended to <paramref name="Rows"/> renders inside the body and reads as an entity named
     /// "Total", and every render site would have to know the last row is special.
     /// </param>
@@ -153,14 +160,14 @@ public partial class NotificationTable
     /// The payload detail rendered as a table, with no rows when the type has none. #308.
     /// </summary>
     /// <remarks>
-    /// A table rather than a list (developer, 2026-09-02): every entry has the same shape — an entity or
-    /// a status, then its counts — so columns line the numbers up and a bulleted sentence per row does
+    /// A table rather than a list (developer, 2026-09-02): every entry has the same shape (an entity or
+    /// a status, then its counts), so columns line the numbers up and a bulleted sentence per row does
     /// not.
     /// <para>
     /// Only the two types whose payload holds something their body does not: `ReseedFileApplied`'s
     /// per-entity-type breakdown (the body states only the totals) and `ImportReviewPending`'s
     /// per-status counts (the body states only the sum). The other four were measured against their own
-    /// body templates and add nothing — `WhatsNew`'s payload has no properties at all.
+    /// body templates and add nothing: `WhatsNew`'s payload has no properties at all.
     /// </para>
     /// <para>
     /// A payload that cannot be read yields no rows rather than throwing: a row written by an older
@@ -206,7 +213,7 @@ public partial class NotificationTable
         List<ReseedEntityCountDto> counted =
             [.. applied.Counts
                 // #377 (developer, 2026-09-09): every value the summary sentence states must be
-                // findable in the detail — including how many arrived, which the sentence leads
+                // findable in the detail, including how many arrived, which the sentence leads
                 // with and the table had no column for. An entity type that arrived is reported
                 // whatever became of it, so a row with Incoming and no outcomes is kept: that is
                 // the case most worth noticing, not one to hide.
@@ -239,7 +246,7 @@ public partial class NotificationTable
                  c.AlreadyReported.ToString(CultureInfo.CurrentCulture)])],
             // #383: rendered even when there is only one entity type, where it necessarily repeats
             // that row. Whether to suppress it there is open until the rendered result has been seen
-            // (developer, 2026-09-09) — a footer that comes and goes may read worse than one whose
+            // (developer, 2026-09-09): a footer that comes and goes may read worse than one whose
             // shape is fixed, and that is a judgement about the effect rather than about the code.
             counted.Count == 0
                 ? []
@@ -278,13 +285,59 @@ public partial class NotificationTable
     /// <remarks>
     /// An import review has two, and hiding them behind a generic button meant the operator had to
     /// click to discover what the choices even were. A single-outcome action returns none rather than
-    /// one — a control offering a single option is a button, not a choice.
+    /// one: a control offering a single option is a button, not a choice.
     /// </remarks>
     /// <param name="trigger">The trigger the row carries.</param>
     internal static IReadOnlyList<FieldResolutionChoice> ChoicesFor(NotificationDismissTrigger trigger) =>
         trigger is NotificationDismissTrigger.ImportReviewResolved
             ? [FieldResolutionChoice.Keep, FieldResolutionChoice.Replace]
             : [];
+
+    /// <summary>
+    /// The option buttons a row renders (#348): for a reseed, exactly the options its action can run now,
+    /// each its own button. Every other trigger keeps its own single control, so this is empty for them.
+    /// </summary>
+    /// <param name="executor">The executor whose answer decides.</param>
+    /// <param name="notification">The row being rendered.</param>
+    /// <param name="availability">The volatile state read once for this render.</param>
+    internal static IReadOnlyList<NotificationActionOption> OptionButtons(
+        INotificationActionExecutor executor, NotificationEntity notification, NotificationActionAvailability availability) =>
+        notification.DismissTriggerKey.Parsed is NotificationDismissTrigger.Reseed
+            ? executor.AvailableOptions(
+                NotificationDismissTrigger.Reseed,
+                NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata),
+                availability)
+            : [];
+
+    /// <summary>The translation key for an option's button (#348).</summary>
+    /// <param name="option">The option the button runs.</param>
+    internal static string OptionLabelKeyFor(NotificationActionOption option) => option switch
+    {
+        NotificationActionOption.BackUpThenReseed             => nameof(Quotinator.Api.I18nText.UI.NotificationsBackUpThenReseedButton),
+        NotificationActionOption.RemoveOldestBackupThenReseed => nameof(Quotinator.Api.I18nText.UI.NotificationsRemoveOldestBackupThenReseedButton),
+        NotificationActionOption.ReseedWithoutBackup          => nameof(Quotinator.Api.I18nText.UI.NotificationsReseedWithoutBackupButton),
+        _                                                     => nameof(Quotinator.Api.I18nText.UI.NotificationsRunActionButton),
+    };
+
+    /// <summary>Whether running <paramref name="option"/> first asks the user's permission (#348).</summary>
+    /// <param name="option">The option the user chose.</param>
+    internal static bool AsksPermission(NotificationActionOption option) => option is NotificationActionOption.ReseedWithoutBackup;
+
+    /// <summary>What the user is asked before a reseed without a backup, naming why none can be taken (#348).</summary>
+    /// <param name="obstacle">What stops the backup now.</param>
+    /// <param name="text">The resolved UI strings.</param>
+    internal static string PermissionText(BackupOutcome obstacle, Quotinator.Api.I18nText.UI text) =>
+        // A plain Replace rather than string.Format: the template comes from a translation file, and a
+        // placeholder typo there must render as text rather than throw (CLAUDE.md's IApiLocalizer.Format rule).
+        text.NotificationsReseedWithoutBackupConfirm.Replace("{0}", obstacle.ToString(), StringComparison.Ordinal);
+
+    /// <summary>
+    /// The Knowledgebase entry a row links to, or <see langword="null"/> when it has none (#348). A
+    /// backup refusal links the entry explaining why the options it does not offer are blocked.
+    /// </summary>
+    /// <param name="notification">The row being rendered.</param>
+    internal static string? KnowledgebaseLinkFor(NotificationEntity notification) =>
+        notification.MetadataKind.Parsed is NotificationMetadataKind.BackupRefused ? KnowledgebaseLinks.NoBackupCouldBeTaken : null;
 
     /// <summary>The class the body cell carries, and the stylesheet targets. #308.</summary>
     internal const string BodyCellClass = "notification-body";
@@ -313,7 +366,7 @@ public partial class NotificationTable
     /// <remarks>
     /// Without the two flags, "Active" mirrors <c>Sql.Notifications.SelectActive</c>'s own active-set
     /// definition (<c>IsDismissed = 0 AND (ExpiresAt IS NULL OR ExpiresAt > @now)</c>), so it means the
-    /// same thing as the startup modals' own active set — which is why the Notifications page's filter
+    /// same thing as the startup modals' own active set, which is why the Notifications page's filter
     /// calls it without them.
     /// </remarks>
     /// <param name="notification">The row being classified.</param>
@@ -328,7 +381,7 @@ public partial class NotificationTable
             // declined. A row dismissed before the reason column existed has no recorded reason, and
             // keeps the original label rather than being guessed into one bucket or the other.
             // #303: a notification whose subject no longer exists is neither carried out nor declined,
-            // and reporting it as either would misstate what happened — the same defect #304's reason
+            // and reporting it as either would misstate what happened: the same defect #304's reason
             // column exists to prevent, one case further on.
             return notification.DismissReason.Parsed switch
             {
@@ -340,7 +393,7 @@ public partial class NotificationTable
         if (notification.ExpiresAt.Parsed is DateTime expiresAt && expiresAt <= now)
             return NotificationDisplayStatus.Expired;
         // #367: after Dismissed and Expired on purpose. An action dismisses its own notification and
-        // only then releases the registry, so a row can be both dismissed and still registered — it
+        // only then releases the registry, so a row can be both dismissed and still registered; it
         // must report what happened to it, not what was happening a moment earlier.
         if (isExecuting)
             return NotificationDisplayStatus.Executing;
@@ -359,7 +412,7 @@ public partial class NotificationTable
         NotificationType.Error          => text.NotificationTypeError,
         NotificationType.Success        => text.NotificationTypeSuccess,
         NotificationType.ActionRequired => text.NotificationTypeActionRequired,
-        _                                => "—",
+        _                                => LocalTimestamp.Absent,
     };
 
     /// <summary>Maps a <see cref="NotificationType"/> to its Bootstrap badge class.</summary>
@@ -402,7 +455,7 @@ public partial class NotificationTable
     private Guid? ConfirmingActionForId;
 
     // #308: which row's payload detail is open in the dialog, when DetailAsDialog is set. One at a
-    // time — the dialog covers the surface, so a second would be invisible behind the first.
+    // time: the dialog covers the surface, so a second would be invisible behind the first.
     private Guid? DetailDialogForId;
 
     private string TypeLabel(NotificationType? type) => TypeLabel(type, Text);
@@ -447,8 +500,8 @@ public partial class NotificationTable
     }
 
     /// <summary>
-    /// #303: a pending-review alert's action has two outcomes rather than one — keep what is stored, or
-    /// take what the file brought — so its confirm step offers both instead of a single Confirm.
+    /// #303: a pending-review alert's action has two outcomes rather than one (keep what is stored, or
+    /// take what the file brought), so its confirm step offers both instead of a single Confirm.
     /// </summary>
     private static bool OffersResolutionChoice(NotificationEntity notification) =>
         notification.DismissTriggerKey.Parsed == NotificationDismissTrigger.ImportReviewResolved;
@@ -460,6 +513,26 @@ public partial class NotificationTable
     }
 
     private void CancelAction() => ConfirmingActionForId = null;
+
+    /// <summary>#348: the row and option whose confirmation is showing, or <see langword="null"/> if none.</summary>
+    private (Guid Id, NotificationActionOption Option)? ConfirmingOption;
+
+    private IReadOnlyList<NotificationActionOption> Options(NotificationEntity notification) =>
+        OptionButtons(ActionExecutor, notification, Availability);
+
+    private string OptionLabel(NotificationActionOption option) => OptionLabelKeyFor(option) switch
+    {
+        nameof(Quotinator.Api.I18nText.UI.NotificationsBackUpThenReseedButton)             => Text.NotificationsBackUpThenReseedButton,
+        nameof(Quotinator.Api.I18nText.UI.NotificationsRemoveOldestBackupThenReseedButton) => Text.NotificationsRemoveOldestBackupThenReseedButton,
+        nameof(Quotinator.Api.I18nText.UI.NotificationsReseedWithoutBackupButton)          => Text.NotificationsReseedWithoutBackupButton,
+        _                                                                                  => Text.NotificationsRunActionButton,
+    };
+
+    private async Task ConfirmOptionAsync((Guid Id, NotificationActionOption Option) confirmed)
+    {
+        ConfirmingOption = null;
+        await OnExecuteOptionAction.InvokeAsync(confirmed);
+    }
 
     #endregion
 }

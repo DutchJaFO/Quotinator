@@ -8,6 +8,11 @@
     </Title>
     <ChildContent>
         <p class="text-muted">@FailureReason</p>
+        @if (KnowledgebaseLinkIn(FailureReason) is string knowledgebaseLink)
+        {
+            @* #348: the reason names the entry as text; this makes it followable. External, so a new tab. *@
+            <p><a href="@knowledgebaseLink" target="_blank" rel="noopener noreferrer">@Text.KnowledgebaseEntryLink</a></p>
+        }
 
         <p>@Text.StartupErrorLastKnownGood</p>
         <NotificationSummary />

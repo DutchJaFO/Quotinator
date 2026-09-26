@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Description>SQLite data access infrastructure for Quotinator — repositories, unit of work, type handlers, and connection factory.</Description>
+    <Description>SQLite data access infrastructure for Quotinator: repositories, unit of work, type handlers, and connection factory.</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,6 +34,10 @@
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Quotinator.Data.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <!-- #348: Data's log templates are rendered through Serilog in the Api tests, where the capture sink lives. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Quotinator.Api.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 

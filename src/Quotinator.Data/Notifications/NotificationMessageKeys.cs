@@ -7,7 +7,7 @@ namespace Quotinator.Data.Notifications;
 /// <para>
 /// Separate from <c>Quotinator.Constants.Api.ApiMessages</c>, which holds the keys for producers that
 /// run inside <c>Quotinator.Api</c> (#279's, #289's, #81's). The split is by which project writes the
-/// notification, not by what the text says: <c>Quotinator.Core</c> — where the seeding producer lives —
+/// notification, not by what the text says: <c>Quotinator.Core</c> (where the seeding producer lives)
 /// does not reference <c>Quotinator.Constants</c>, and adding that edge to reach four string constants
 /// would change the documented project graph for no benefit. Keys belong with the machinery that emits
 /// them, which for notifications is this project (ADR 018).
@@ -15,7 +15,7 @@ namespace Quotinator.Data.Notifications;
 /// <para>
 /// The strings themselves still live in the same three <c>UI.*.json</c> files as every other
 /// user-facing string, and <c>TranslationCompletenessTests</c> covers them exactly as it covers the
-/// rest — this class holds keys, never text.
+/// rest: this class holds keys, never text.
 /// </para>
 /// </summary>
 public static class NotificationMessageKeys
@@ -53,7 +53,7 @@ public static class NotificationMessageKeys
 
     /// <summary>
     /// The parts a reseed confirmation's summary sentence is composed from (#377). Only the outcomes
-    /// that actually occurred are included, so the sentence stops listing a run of zeroes — but every
+    /// that actually occurred are included, so the sentence stops listing a run of zeroes, but every
     /// count it can state remains visible per entity type in the notification's own detail table and in
     /// the seed log, which is what makes omitting a clause safe rather than lossy.
     /// </summary>
@@ -91,7 +91,7 @@ public static class NotificationMessageKeys
     /// <summary>Separator between all but the last two parts of the composed summary (#377).</summary>
     public const string ReseedSummarySeparator = "NotificationReseedSummarySeparator";
 
-    /// <summary>Join before the composed summary's final part — language-specific, hence a key (#377).</summary>
+    /// <summary>Join before the composed summary's final part: language-specific, hence a key (#377).</summary>
     public const string ReseedSummaryFinalJoin = "NotificationReseedSummaryFinalJoin";
 
     /// <summary>
@@ -121,4 +121,14 @@ public static class NotificationMessageKeys
     /// review. Same arguments as <see cref="ImportReviewPendingBundledBody"/>.
     /// </summary>
     public const string ImportReviewPendingUserBody = "NotificationImportReviewPendingUserBody";
+
+    /// <summary>Title for the notice that startup did not load content because no backup could be taken (#348).</summary>
+    public const string BackupRefusedContentLoadTitle = "NotificationBackupRefusedContentLoadTitle";
+
+    /// <summary>
+    /// Body for the same notice. Receives the obstacle's name as <c>{0}</c>: the name, not its
+    /// explanation, because the explanation is written once in the Knowledgebase entry the notification
+    /// links to, and a second copy here would drift from it.
+    /// </summary>
+    public const string BackupRefusedContentLoadBody = "NotificationBackupRefusedContentLoadBody";
 }

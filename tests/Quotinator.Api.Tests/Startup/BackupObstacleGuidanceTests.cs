@@ -87,4 +87,14 @@ public class BackupObstacleGuidanceTests
 
         Assert.HasCount(offered - 1, BackupObstacleGuidance.Remedies(BackupOutcome.BudgetExceeded, overrideAlreadyTried: true));
     }
+
+    /// <summary>
+    /// The override is a Reset parameter; a startup migration has none, so its reason must not offer one.
+    /// The first version of this reason did, by reusing the Reset remedies whole.
+    /// </summary>
+    [TestMethod]
+    public void MigrationRefusedReason_DoesNotOfferTheOverride()
+    {
+        Assert.DoesNotContain(OverrideMarker, BackupObstacleGuidance.MigrationRefusedReason(BackupOutcome.BudgetExceeded), StringComparison.Ordinal);
+    }
 }

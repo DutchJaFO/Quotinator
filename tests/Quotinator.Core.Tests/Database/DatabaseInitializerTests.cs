@@ -84,17 +84,17 @@ public class DatabaseInitializerTests
         IAppVersionTracker? appVersionTracker = null, ILogger<DatabaseInitializer>? logger = null,
         IChangeWriter? changeWriter = null)
     {
-        SqliteConnectionFactory factory       = new SqliteConnectionFactory(_dbPath);
-        DatabaseOptions options       = new DatabaseOptions { DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1 };
-        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        SqliteConnectionFactory factory       = new(_dbPath);
+        DatabaseOptions options       = new() { DbPath = _dbPath, BackupsPath = _backups, MaxBackupStorageGb = maxBackupStorageGb ?? 1 };
+        SqliteImportBatchRepository importBatches = new(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
         ILogger<DatabaseInitializer> resolvedLogger = logger ?? NullLogger<DatabaseInitializer>.Instance;
-        ImportActionReader actionReader   = new ImportActionReader(factory);
-        ImportActionWriter actionWriter   = new ImportActionWriter(factory);
-        ImportActionResolutionCoordinator coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
+        ImportActionReader actionReader   = new(factory);
+        ImportActionWriter actionWriter   = new(factory);
+        ImportActionResolutionCoordinator coordinator    = new(actionReader, actionWriter, factory);
         // #377: defaults to NoOpChangeWriter as every existing test expects, but a test asserting what
         // an apply does or does not write to Audit_Change must pass the real ChangeWriter, or it passes
         // whether or not the behaviour is correct, because nothing writes a change entry at all.
-        SqliteImportActionService actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, changeWriter ?? NoOpChangeWriter.Instance,
+        SqliteImportActionService actionService  = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, changeWriter ?? NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -102,7 +102,10 @@ public class DatabaseInitializerTests
             new SqliteRestorableRepository<ConversationEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
-            importBatches, factory, NoOpNotificationWriter.Instance);
+            // #348: the real writer, as production has. With a no-op here, anything the import path does to
+            // notifications while seeding is invisible, and a test about when a notification clears passes
+            // whatever the answer.
+            importBatches, factory, new NotificationWriter(factory));
         return new QuotinatorDatabaseInitializer(factory, options, migrations, batches, importBatches,
             coordinator, actionService, actionWriter,
             auditWriter ?? NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, resolvedLogger,
@@ -1083,7 +1086,7 @@ public class DatabaseInitializerTests
             """
             {"quotes":[{"id":"e6111111-1111-4111-8111-111111111111","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
             """);
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "review-policy-modify-test");
 
@@ -1131,7 +1134,7 @@ public class DatabaseInitializerTests
             $$$"""
             {"quotes":[{"id":"{{{quoteId}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":["drama"],"translations":{}}]}
             """);
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "noop-modify-test");
 
@@ -1147,7 +1150,7 @@ public class DatabaseInitializerTests
 
     private async Task<int> ModifiedChangeEntryCountAsync(string entityId)
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Audit_Change WHERE LOWER(EntityId) = LOWER(@entityId) AND LOWER(Action) = 'modified';",
@@ -1190,14 +1193,14 @@ public class DatabaseInitializerTests
         File.WriteAllText(ruleFile, """{"rules":[]}""");
         WriteSourceFixtureFile(quoteFile, quoteId, "Stored Series");
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
             ManifestPolicy.HardcodedDefault, $"{name}-test");
 
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         // Null here would mean the cold start never created the row, which makes the rest of the test
         // meaningless rather than merely awkward: asserted rather than null-forgiven.
@@ -1302,7 +1305,7 @@ public class DatabaseInitializerTests
             $$$"""
             {"quotes":[{"id":"{{{id}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
             """);
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "genuine-modify-test");
 
@@ -1361,7 +1364,7 @@ public class DatabaseInitializerTests
     /// <summary>The RecordCount of the most recently applied batch: what a reseed claims it wrote.</summary>
     private async Task<int> LatestBatchRecordCountAsync()
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         // Ordered by rowid, not AppliedAt: both timestamps are second-resolution, so a cold start and
         // the reseed that follows it within the same second tie, and the cold start's own RecordCount
@@ -1399,7 +1402,7 @@ public class DatabaseInitializerTests
             $$$"""
             {"quotes":[{"id":"{{{id}}}","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
             """);
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "genuine-record-count-test");
 
@@ -1418,7 +1421,7 @@ public class DatabaseInitializerTests
 
     private async Task<(string? DateModified, string? ImportBatchId)> QuoteStampAsync(string id)
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         return await conn.QuerySingleAsync<(string? DateModified, string? ImportBatchId)>(
             "SELECT DateModified, ImportBatchId FROM Quotinator_Quote WHERE LOWER(Id) = LOWER(@id);", new { id });
@@ -1439,7 +1442,7 @@ public class DatabaseInitializerTests
             """
             {"quotes":[{"id":"e6222222-2222-4222-8222-222222222222","quote":"Another test line.","originalLanguage":"en","source":"Some Other Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}]}
             """);
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Skip))],
             ManifestPolicy.HardcodedDefault, "skip-policy-modify-test");
 
@@ -1733,7 +1736,7 @@ public class DatabaseInitializerTests
                 {"id":"e5211111-1111-4111-8111-111111111111","quote":"Keep your friends close, but your enemies closer.","originalLanguage":"en","source":"The Godfather Part II","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}
             ],"sources":[]}
             """);
-        SeedBatch batch = new SeedBatch([new SeedFile(collisionFile, null)], ManifestPolicy.HardcodedDefault, "blocked-collision-test");
+        SeedBatch batch = new([new SeedFile(collisionFile, null)], ManifestPolicy.HardcodedDefault, "blocked-collision-test");
 
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
@@ -1778,7 +1781,7 @@ public class DatabaseInitializerTests
                 {"id":"e6311111-1111-4111-8111-111111111111","quote":"Frankly, my dear, I don't give a damn.","originalLanguage":"en","source":"Gone With the Wind","date":"1939","character":"rhett butler","author":null,"type":"movie","genres":[],"translations":{}}
             ],"sources":[]}
             """);
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(caseOnlyFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "case-only-modify-test");
 
@@ -1842,7 +1845,7 @@ public class DatabaseInitializerTests
                 "fields":[{"field":"date","resolution":"keep"}]
             }]}
             """);
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(staleFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
             ManifestPolicy.HardcodedDefault, "stale-rule-conflict-test");
 
@@ -1923,7 +1926,7 @@ public class DatabaseInitializerTests
             File.WriteAllText(ruleFile, secondRuleFileJson);
         }
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(first,  null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
              new SeedFile(second, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
             ManifestPolicy.HardcodedDefault, $"{name}-test");
@@ -2048,7 +2051,7 @@ public class DatabaseInitializerTests
             """
             {"quotes":[{"id":"37644444-4444-4444-8444-444444444444","quote":"An undated line.","originalLanguage":"en","source":"Backfill Film","date":null,"character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}
             """);
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "blocked-backfill-test");
 
@@ -2233,7 +2236,7 @@ public class DatabaseInitializerTests
             {"quotes":[],"sources":[{"title":"First Film","type":"movie","date":"1991"}]}
             """);
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile,  null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
              new SeedFile(sourceFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "new-conflict-test");
@@ -2307,7 +2310,7 @@ public class DatabaseInitializerTests
         // for the later rule to release.
         File.WriteAllText(ruleFile, """{"rules":[]}""");
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile,  null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
              new SeedFile(sourceFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
             ManifestPolicy.HardcodedDefault, "becomes-resolvable-test");
@@ -2401,7 +2404,7 @@ public class DatabaseInitializerTests
             {"quotes":[],"sources":[{"title":"Inert Film","type":"movie","date":"1999"}]}
             """);
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile,  null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
              new SeedFile(sourceFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "already-reported-inert-test");
@@ -2488,7 +2491,7 @@ public class DatabaseInitializerTests
             {"quotes":[],"sources":[{"title":"Alert First Film","type":"movie","date":"1991"}]}
             """);
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quoteFile,  null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
              new SeedFile(sourceFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "alert-new-test");
@@ -2601,7 +2604,7 @@ public class DatabaseInitializerTests
                 "fields":[{"field":"date","resolution":"keep"}]
             }]}
             """);
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(keepFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
             ManifestPolicy.HardcodedDefault, "keep-rule-source-link-test");
 
@@ -2658,7 +2661,7 @@ public class DatabaseInitializerTests
                 "fields":[{"field":"quoteText","resolution":"keep"}]
             }]}
             """);
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(keepFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: ruleFile)],
             ManifestPolicy.HardcodedDefault, "keep-rule-against-nothing-test");
 
@@ -2994,7 +2997,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         string? character = await conn.ExecuteScalarAsync<string?>(
@@ -3015,7 +3018,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([NikhilNamal17WithRuleFileBatch()]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         (string QuoteId, string ExpectedTitle, string ExpectedDate)[] cases =
@@ -3065,7 +3068,7 @@ public class DatabaseInitializerTests
                 {"id":"e7021111-1111-4111-8111-111111111111","quote":"A line from an unattributable, disagreeing year.","originalLanguage":"en","source":"Test Show","date":"2020","character":"Test Character","author":null,"type":"tv","genres":[],"translations":{}}
             ],"sources":[]}
             """);
-        SeedBatch batch = new SeedBatch([new SeedFile(tvFile, null)], ManifestPolicy.HardcodedDefault, "tv-disagreeing-year-test");
+        SeedBatch batch = new([new SeedFile(tvFile, null)], ManifestPolicy.HardcodedDefault, "tv-disagreeing-year-test");
 
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
@@ -3077,7 +3080,7 @@ public class DatabaseInitializerTests
         QuoteActionPayloadDto payload = System.Text.Json.JsonSerializer.Deserialize<QuoteActionPayloadDto>(action.IncomingValue!)!;
         Assert.AreEqual("Test Character", payload.Fields.Character, "The character it already claims must still be visible in the staged payload");
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         string? title = await conn.ExecuteScalarAsync<string?>(
             "SELECT Title FROM Quotinator_Source WHERE Id = @sourceId AND IsDeleted = 0;", new { sourceId = payload.SourceId });
@@ -3124,7 +3127,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Series WHERE IsDeleted = 0;"), db.SeriesCount);
@@ -3183,10 +3186,10 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
-        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        ImportActionReader actionReader = new(new SqliteConnectionFactory(_dbPath));
         int actionsBefore = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
         int batchesBefore = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Import_Batch;");
 
@@ -3237,11 +3240,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AutoPurgeBundledTrue_FullyAppliedBundledBatch_PurgesImportActionRows()
     {
-        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
+        SeedBatch batch = new([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false);
         await db.InitialiseAsync();
 
-        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        ImportActionReader actionReader = new(new SqliteConnectionFactory(_dbPath));
         int remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
 
         Assert.AreEqual(0, remaining, "a fully-applied bundled batch's Import_Action rows must be purged when AutoPurgeBundledImportActions is true");
@@ -3250,11 +3253,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AutoPurgeBundledFalse_FullyAppliedBundledBatch_RetainsImportActionRows()
     {
-        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
+        SeedBatch batch = new([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], autoPurgeBundledImportActions: false, autoPurgeUserImportActions: true);
         await db.InitialiseAsync();
 
-        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        ImportActionReader actionReader = new(new SqliteConnectionFactory(_dbPath));
         int remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
 
         Assert.IsGreaterThan(0, remaining, "a bundled batch's Import_Action rows must be retained when AutoPurgeBundledImportActions is false, regardless of the user-imports setting");
@@ -3263,11 +3266,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AutoPurgeUserImportsTrue_FullyAppliedUserOriginBatch_PurgesImportActionRows()
     {
-        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "user", SeedBatchOrigin.UserImports);
+        SeedBatch batch = new([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "user", SeedBatchOrigin.UserImports);
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], autoPurgeBundledImportActions: false, autoPurgeUserImportActions: true);
         await db.InitialiseAsync();
 
-        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        ImportActionReader actionReader = new(new SqliteConnectionFactory(_dbPath));
         int remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
 
         Assert.AreEqual(0, remaining, "a fully-applied user-imports batch's Import_Action rows must be purged when AutoPurgeUserImportActions is true, independent of the bundled setting");
@@ -3276,11 +3279,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AutoPurgeUserImportsFalse_UserOriginBatch_RetainsImportActionRowsEvenWhenBundledTrue()
     {
-        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "user", SeedBatchOrigin.UserImports);
+        SeedBatch batch = new([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "user", SeedBatchOrigin.UserImports);
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false);
         await db.InitialiseAsync();
 
-        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        ImportActionReader actionReader = new(new SqliteConnectionFactory(_dbPath));
         int remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
 
         Assert.IsGreaterThan(0, remaining, "a user-imports batch must not be purged by the bundled setting: the two per-origin settings are independent");
@@ -3289,9 +3292,9 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_AutoPurgeEnabled_WritesAuditEntryRecordingThePurge()
     {
-        SeedBatch batch            = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
+        SeedBatch batch            = new([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated", SeedBatchOrigin.Bundled);
         List<AuditEntryEntity> capturedEntries  = [];
-        CapturingAuditEntryWriter capturingWriter  = new CapturingAuditEntryWriter(capturedEntries);
+        CapturingAuditEntryWriter capturingWriter  = new(capturedEntries);
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], autoPurgeBundledImportActions: true, autoPurgeUserImportActions: false, auditWriter: capturingWriter);
         await db.InitialiseAsync();
 
@@ -3323,7 +3326,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_CuratedFileOnly_SeedsFkChainCorrectly()
     {
-        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        SeedBatch batch = new([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
@@ -3344,11 +3347,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_CuratedFileOnly_SeedsPersonDatesFromExplicitEntries()
     {
-        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        SeedBatch batch = new([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         List<(string Name, string? DateOfBirth, string? DateOfDeath)> people = [.. (await conn.QueryAsync<(string Name, string? DateOfBirth, string? DateOfDeath)>(
@@ -3367,7 +3370,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         string? airplaneDate = await conn.ExecuteScalarAsync<string?>(
@@ -3391,7 +3394,7 @@ public class DatabaseInitializerTests
         File.WriteAllText(datedQuoteFile,
             """{"quotes":[{"id":"e1111111-1111-4111-8111-111111111111","quote":"A test line.","originalLanguage":"en","source":"Test Film","date":"1999","character":null,"author":null,"type":"movie","genres":[],"translations":{}}],"sources":[]}""");
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [
                 new SeedFile(datelessEntryFile, null),
                 new SeedFile(datedQuoteFile, null),
@@ -3401,7 +3404,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         string? date = await conn.ExecuteScalarAsync<string?>(
@@ -3428,8 +3431,8 @@ public class DatabaseInitializerTests
                 {"id":"e2211111-1111-4111-8111-111111111111","quote":"Roads? Where we're going, we don't need roads.","originalLanguage":"en","source":"Back to the future","date":"1985","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
             ],"sources":[]}
             """);
-        SeedBatch batch = new SeedBatch([new SeedFile(contradictingFile, null)], ManifestPolicy.HardcodedDefault, "self-contradiction-test");
-        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
+        SeedBatch batch = new([new SeedFile(contradictingFile, null)], ManifestPolicy.HardcodedDefault, "self-contradiction-test");
+        CapturingLogger<DatabaseInitializer> logger = new();
 
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], logger: logger);
         await db.InitialiseAsync();
@@ -3463,8 +3466,8 @@ public class DatabaseInitializerTests
                 {"title":"The Lion King","type":"movie","date":"2019"}
             ]}
             """);
-        SeedBatch batch = new SeedBatch([new SeedFile(declaredFile, null)], ManifestPolicy.HardcodedDefault, "declared-two-versions-test");
-        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
+        SeedBatch batch = new([new SeedFile(declaredFile, null)], ManifestPolicy.HardcodedDefault, "declared-two-versions-test");
+        CapturingLogger<DatabaseInitializer> logger = new();
 
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], logger: logger);
         await db.InitialiseAsync();
@@ -3491,8 +3494,8 @@ public class DatabaseInitializerTests
                 {"title":"The Lion King","type":"movie","date":"1994"}
             ]}
             """);
-        SeedBatch batch = new SeedBatch([new SeedFile(partialFile, null)], ManifestPolicy.HardcodedDefault, "partly-declared-test");
-        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
+        SeedBatch batch = new([new SeedFile(partialFile, null)], ManifestPolicy.HardcodedDefault, "partly-declared-test");
+        CapturingLogger<DatabaseInitializer> logger = new();
 
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], logger: logger);
         await db.InitialiseAsync();
@@ -3512,8 +3515,8 @@ public class DatabaseInitializerTests
                 {"id":"e2311111-1111-4111-8111-111111111111","quote":"Great Scott!","originalLanguage":"en","source":"Back to the Future","date":"1985","character":null,"author":null,"type":"movie","genres":[],"translations":{}}
             ],"sources":[]}
             """);
-        SeedBatch batch = new SeedBatch([new SeedFile(consistentFile, null)], ManifestPolicy.HardcodedDefault, "self-consistency-control-test");
-        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
+        SeedBatch batch = new([new SeedFile(consistentFile, null)], ManifestPolicy.HardcodedDefault, "self-consistency-control-test");
+        CapturingLogger<DatabaseInitializer> logger = new();
 
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], logger: logger);
         await db.InitialiseAsync();
@@ -3531,11 +3534,11 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task InitialiseAsync_CuratedFileOnly_SeedsConversationsStageDirectionsAndSoundCues()
     {
-        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        SeedBatch batch = new([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         int conversationCount    = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Conversation WHERE IsDeleted = 0;");
@@ -3552,7 +3555,7 @@ public class DatabaseInitializerTests
             "SELECT DISTINCT ImportBatchId FROM Quotinator_Conversation UNION SELECT DISTINCT ImportBatchId FROM Quotinator_StageDirection UNION SELECT DISTINCT ImportBatchId FROM Quotinator_SoundCue;");
         Assert.HasCount(1, distinctBatchIds.ToList(), "All conversation-related rows from one file should share one ImportBatchId");
 
-        ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
+        ImportActionReader actionReader = new(new SqliteConnectionFactory(_dbPath));
         List<string> actionEntityTypes = [];
         foreach (string? entityType in new[] { "Conversation", "StageDirection", "SoundCue" })
         {
@@ -3576,12 +3579,12 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task ReseedAsync_CuratedFileOnly_ReproducesSameConversationCountsNotDoubled()
     {
-        SeedBatch batch = new SeedBatch([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
+        SeedBatch batch = new([new SeedFile(CuratedFile, null)], ManifestPolicy.HardcodedDefault, "curated");
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
         await db.ReseedAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(4, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Conversation WHERE IsDeleted = 0;"));
@@ -3616,7 +3619,7 @@ public class DatabaseInitializerTests
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [
                 new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
                 new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: rulesPath),
@@ -3626,7 +3629,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(0, (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", null, 1, 0)).TotalCount,
@@ -3660,7 +3663,7 @@ public class DatabaseInitializerTests
                 .Replace("QUOTE_ID", quoteId));
 
         string internalDownloadDir = Path.Combine(_tempDir, "sources", "download");
-        RuleFileOverridePathResolver pathResolver = new RuleFileOverridePathResolver(internalDownloadDir, Path.Combine(_tempDir, "imports", "download"));
+        RuleFileOverridePathResolver pathResolver = new(internalDownloadDir, Path.Combine(_tempDir, "imports", "download"));
         string overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
         Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
         // Override says Replace: the applied text must come from here instead.
@@ -3669,8 +3672,8 @@ public class DatabaseInitializerTests
                 .Replace("QUOTE_ID", quoteId);
         File.WriteAllText(overridePath, overrideContent);
 
-        SourceFileOverrideRegistry registry = new SourceFileOverrideRegistry(new SqliteConnectionFactory(_dbPath));
-        SeedBatch batch = new SeedBatch(
+        SourceFileOverrideRegistry registry = new(new SqliteConnectionFactory(_dbPath));
+        SeedBatch batch = new(
             [
                 new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
                 new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: bundledRulesPath),
@@ -3687,7 +3690,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], ruleFileOverridePathResolver: pathResolver, sourceFileOverrideRegistry: registry);
         await db.ReseedAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual("Changed text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id;", new { id = quoteId }),
@@ -3718,7 +3721,7 @@ public class DatabaseInitializerTests
                 .Replace("QUOTE_ID", quoteId));
 
         string internalDownloadDir = Path.Combine(_tempDir, "sources2", "download");
-        RuleFileOverridePathResolver pathResolver = new RuleFileOverridePathResolver(internalDownloadDir, Path.Combine(_tempDir, "imports2", "download"));
+        RuleFileOverridePathResolver pathResolver = new(internalDownloadDir, Path.Combine(_tempDir, "imports2", "download"));
         string overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
         Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
         // An override file exists on disk, but is never registered below.
@@ -3726,8 +3729,8 @@ public class DatabaseInitializerTests
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Replace"}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
 
-        SourceFileOverrideRegistry registry = new SourceFileOverrideRegistry(new SqliteConnectionFactory(_dbPath));
-        SeedBatch batch = new SeedBatch(
+        SourceFileOverrideRegistry registry = new(new SqliteConnectionFactory(_dbPath));
+        SeedBatch batch = new(
             [
                 new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
                 new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review), RuleFilePath: bundledRulesPath),
@@ -3737,7 +3740,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], ruleFileOverridePathResolver: pathResolver, sourceFileOverrideRegistry: registry);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual("Original text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id;", new { id = quoteId }),
@@ -3759,7 +3762,7 @@ public class DatabaseInitializerTests
             """[{"id":"QUOTE_ID","quote":"Changed text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
                 .Replace("QUOTE_ID", quoteId));
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [
                 new SeedFile(baselinePath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
                 new SeedFile(conflictPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review)),
@@ -3792,7 +3795,7 @@ public class DatabaseInitializerTests
         File.WriteAllText(aliasPath,
             """{"aliases":[{"title":"Marvel's The Avengers","type":"movie","canonicalTitle":"The Avengers","canonicalType":"movie"}]}""");
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [
                 new SeedFile(canonicalPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins)),
                 new SeedFile(misspeltPath, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins), SourceAliasFilePath: aliasPath),
@@ -3802,7 +3805,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Source WHERE Title = 'The Avengers';"),
@@ -3951,7 +3954,7 @@ public class DatabaseInitializerTests
 
     private async Task InsertAuditMarkerAsync()
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(
             "INSERT INTO Audit_Entry (Id, TableName, RecordId, Operation, Agent, PerformedAt, DateCreated) " +
@@ -3967,7 +3970,7 @@ public class DatabaseInitializerTests
 
     private async Task InsertSchemaVersionMarkerAsync()
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(
             "INSERT INTO System_SchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
@@ -3975,7 +3978,7 @@ public class DatabaseInitializerTests
 
     private async Task<int> CountSchemaVersionMarkerRowsAsync()
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_SchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
@@ -3983,7 +3986,7 @@ public class DatabaseInitializerTests
 
     private async Task InsertConsumerSchemaVersionMarkerAsync()
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync(
             "INSERT INTO System_ConsumerSchemaVersion (Version, AppliedAt) VALUES (1, @marker);", new { marker = MarkerValue });
@@ -3991,7 +3994,7 @@ public class DatabaseInitializerTests
 
     private async Task<int> CountConsumerSchemaVersionMarkerRowsAsync()
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM System_ConsumerSchemaVersion WHERE AppliedAt = @marker;", new { marker = MarkerValue });
@@ -4007,7 +4010,7 @@ public class DatabaseInitializerTests
     [TestMethod]
     public async Task GetAllTables_ReturnsEveryTableRegardlessOfPrefix()
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("CREATE TABLE System_FooBar (Id INTEGER);");
         await conn.ExecuteAsync("CREATE TABLE Import_FooBar (Id INTEGER);");
@@ -4029,7 +4032,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int legacyCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'SchemaVersion';");
@@ -4054,7 +4057,7 @@ public class DatabaseInitializerTests
     /// </summary>
     private async Task DowngradeToLegacyNamesAsync()
     {
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("DELETE FROM System_SchemaVersion;");
         await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion;");
@@ -4143,7 +4146,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db2 = CreateInitializer([], migrations: [], useBaseline: false);
         await db2.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         int legacyCount = await conn.ExecuteScalarAsync<int>(
@@ -4195,7 +4198,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
         await DowngradeToLegacyNamesAsync();
 
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(
@@ -4211,7 +4214,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db2 = CreateInitializer([], migrations: [], useBaseline: false);
         await db2.InitialiseAsync();
 
-        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection verifyConn = new($"Data Source={_dbPath}");
         await verifyConn.OpenAsync(TestContext.CancellationToken);
         int legacyCount = await verifyConn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'AuditEntries';");
@@ -4254,7 +4257,7 @@ public class DatabaseInitializerTests
 
         int countAfterInit = db.QuoteCount;
 
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync("DELETE FROM System_ConsumerSchemaVersion WHERE Version >= 3;");
@@ -4263,7 +4266,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db2 = CreateInitializer([AllFilesBatch()]);
         await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.InitialiseAsync());
 
-        using (SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection verifyConn = new($"Data Source={_dbPath}"))
         {
             await verifyConn.OpenAsync(TestContext.CancellationToken);
             int quoteCountAfterFailedAttempt = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote;");
@@ -4300,7 +4303,7 @@ public class DatabaseInitializerTests
         string quoteIdA = Guid.NewGuid().ToString("D");
         string quoteIdB = Guid.NewGuid().ToString("D");
         string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(
@@ -4318,7 +4321,7 @@ public class DatabaseInitializerTests
         await dbToV9.InitialiseForTestingAsync(forceIncremental: true);
 
         Assert.AreEqual(9, dbToV9.SchemaVersion, "Migration009 must complete, not throw on the pre-existing duplicate");
-        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection verifyConn = new($"Data Source={_dbPath}");
         await verifyConn.OpenAsync(TestContext.CancellationToken);
         int remaining = await verifyConn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Quotinator_Quote WHERE QuoteText = @text AND SourceId = @sourceId;",
@@ -4351,7 +4354,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
         Assert.IsGreaterThan(0, db.QuoteCount, "Precondition: the first InitialiseAsync call must have actually seeded data");
 
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
@@ -4374,13 +4377,13 @@ public class DatabaseInitializerTests
     private (QuotinatorDatabaseInitializer Db, string DbPath) CreateForcedIncrementalInitializer()
     {
         string dbPath        = Path.Combine(_tempDir, $"test_incremental_{Guid.NewGuid():N}.db");
-        SqliteConnectionFactory factory       = new SqliteConnectionFactory(dbPath);
-        DatabaseOptions options       = new DatabaseOptions { DbPath = dbPath, BackupsPath = _backups };
-        SqliteImportBatchRepository importBatches = new SqliteImportBatchRepository(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
-        ImportActionReader actionReader  = new ImportActionReader(factory);
-        ImportActionWriter actionWriter  = new ImportActionWriter(factory);
-        ImportActionResolutionCoordinator coordinator   = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        SqliteImportActionService actionService = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
+        SqliteConnectionFactory factory       = new(dbPath);
+        DatabaseOptions options       = new() { DbPath = dbPath, BackupsPath = _backups };
+        SqliteImportBatchRepository importBatches = new(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance);
+        ImportActionReader actionReader  = new(factory);
+        ImportActionWriter actionWriter  = new(factory);
+        ImportActionResolutionCoordinator coordinator   = new(actionReader, actionWriter, factory);
+        SqliteImportActionService actionService = new(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, NoOpChangeWriter.Instance,
             new SqliteRestorableRepository<QuoteEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SourceEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<CharacterEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
@@ -4389,7 +4392,7 @@ public class DatabaseInitializerTests
             new SqliteRestorableRepository<StageDirectionEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             new SqliteRestorableRepository<SoundCueEntity>(factory, NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance),
             importBatches, factory, NoOpNotificationWriter.Instance);
-        QuotinatorDatabaseInitializer db = new QuotinatorDatabaseInitializer(factory, options, QuotinatorMigrations.All, [], importBatches,
+        QuotinatorDatabaseInitializer db = new(factory, options, QuotinatorMigrations.All, [], importBatches,
             coordinator, actionService, actionWriter,
             NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<DatabaseInitializer>.Instance,
             NoOpSourceCacheUpdater.Instance, autoUpdateSources: false,
@@ -4448,7 +4451,7 @@ public class DatabaseInitializerTests
             [new SeedBatch([new SeedFile(file, null)], ManifestPolicy.HardcodedDefault, "season-test")]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         (int Number, string? Title, string? Subtitle)? season =
@@ -4480,7 +4483,7 @@ public class DatabaseInitializerTests
             [new SeedBatch([new SeedFile(file, null)], ManifestPolicy.HardcodedDefault, "season-test")]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         string? seasonId = await conn.ExecuteScalarAsync<string?>(
@@ -4509,7 +4512,7 @@ public class DatabaseInitializerTests
             [new SeedBatch([new SeedFile(file, null)], ManifestPolicy.HardcodedDefault, "season-test")]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         int count = await conn.ExecuteScalarAsync<int>(
@@ -4546,7 +4549,7 @@ public class DatabaseInitializerTests
             [new SeedBatch([new SeedFile(referenceFile, null), new SeedFile(quoteFile, null)], ManifestPolicy.HardcodedDefault, "season-backfill")]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         (string? date, string? seasonId) = await conn.QuerySingleAsync<(string?, string?)>(
@@ -4570,7 +4573,7 @@ public class DatabaseInitializerTests
                 ManifestPolicy.HardcodedDefault, "bundled sources")]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         List<(int Number, string? Title, string? Subtitle)> seasons =
@@ -4640,7 +4643,7 @@ public class DatabaseInitializerTests
         Assert.AreNotEqual(lowerSeriesId, upperSeriesId, StringComparer.Ordinal,
             "Fixture guard: the id must contain hex letters, or this test proves nothing.");
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
@@ -4671,7 +4674,7 @@ public class DatabaseInitializerTests
             [new SeedBatch([new SeedFile(file, null)], ManifestPolicy.HardcodedDefault, "movie-test")]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         string? seasonId = await conn.ExecuteScalarAsync<string?>(
@@ -4693,7 +4696,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         List<string> schema = await DumpTableSchemaAsync(conn, "Quotinator_Season");
@@ -4721,7 +4724,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         IEnumerable<(string name, int notnull)> columns =
@@ -4744,7 +4747,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         int notnull = await conn.ExecuteScalarAsync<int>(
@@ -4771,9 +4774,9 @@ public class DatabaseInitializerTests
         (QuotinatorDatabaseInitializer dbB, string dbPathB) = CreateForcedIncrementalInitializer();
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using SqliteConnection connA = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection connA = new($"Data Source={_dbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using SqliteConnection connB = new SqliteConnection($"Data Source={dbPathB}");
+        using SqliteConnection connB = new($"Data Source={dbPathB}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
         foreach (string table in ConsumerDomainTables)
@@ -4800,9 +4803,9 @@ public class DatabaseInitializerTests
         (QuotinatorDatabaseInitializer dbB, string dbPathB) = CreateForcedIncrementalInitializer();
         await dbB.InitialiseForTestingAsync(forceIncremental: true);
 
-        using SqliteConnection connA = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection connA = new($"Data Source={_dbPath}");
         await connA.OpenAsync(TestContext.CancellationToken);
-        using SqliteConnection connB = new SqliteConnection($"Data Source={dbPathB}");
+        using SqliteConnection connB = new($"Data Source={dbPathB}");
         await connB.OpenAsync(TestContext.CancellationToken);
 
         foreach (SqliteConnection? conn in new[] { connA, connB })
@@ -4887,7 +4890,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         foreach (string table in ConversationTablesWithRecordBase)
@@ -4907,7 +4910,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
@@ -4932,7 +4935,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
@@ -4968,7 +4971,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
@@ -4997,7 +5000,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int dataRows     = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_SchemaVersion;");
         int consumerRows = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM System_ConsumerSchemaVersion;");
@@ -5026,7 +5029,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
         Assert.IsFalse(db.SchemaVersionOvershootDetected, "Sanity check: a normal fresh database has no overshoot");
 
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(
@@ -5072,7 +5075,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
         int quoteCountBefore = db.QuoteCount;
 
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync("DROP TABLE System_ConsumerSchemaVersion;");
@@ -5086,7 +5089,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db2 = CreateInitializer([AllFilesBatch()]);
         await Assert.ThrowsExactlyAsync<SqliteException>(() => db2.InitialiseAsync());
 
-        using (SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection verifyConn = new($"Data Source={_dbPath}"))
         {
             await verifyConn.OpenAsync(TestContext.CancellationToken);
             int quoteCountAfterFailedAttempt = await verifyConn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote;");
@@ -5108,7 +5111,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         string now = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
 
@@ -5142,7 +5145,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         HashSet<string> columns = (await conn.QueryAsync<string>(
@@ -5197,7 +5200,7 @@ public class DatabaseInitializerTests
         string character1Id = Guid.NewGuid().ToString();
         string character2Id = Guid.NewGuid().ToString();
 
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
@@ -5256,7 +5259,7 @@ public class DatabaseInitializerTests
         (string _, string _, string? character1Id, string? character2Id) =
             await SeedPreMergeCharactersAsync(seriesId1: seriesId, seriesId2: seriesId);
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         int survivorCount = await conn.ExecuteScalarAsync<int>(
@@ -5289,7 +5292,7 @@ public class DatabaseInitializerTests
         (string _, string _, string? character1Id, string? character2Id) = await SeedPreMergeCharactersAsync(
             name: "Gandalf", name2: "GANDALF", seriesId1: seriesId, seriesId2: seriesId);
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         int survivorCount = await conn.ExecuteScalarAsync<int>(
@@ -5312,7 +5315,7 @@ public class DatabaseInitializerTests
         await SeedPreMergeCharactersAsync(name: "Gandalf", type1: "Movie", type2: "Book",
             seriesId1: seriesId, seriesId2: seriesId);
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         int survivorCount = await conn.ExecuteScalarAsync<int>(
@@ -5325,7 +5328,7 @@ public class DatabaseInitializerTests
     {
         await SeedPreMergeCharactersAsync(name: "Sam", seriesId1: null, seriesId2: null);
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         int survivorCount = await conn.ExecuteScalarAsync<int>(
@@ -5352,7 +5355,7 @@ public class DatabaseInitializerTests
         string character2Id = Guid.NewGuid().ToString();
         string quoteId       = Guid.NewGuid().ToString();
 
-        using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
+        using (SqliteConnection conn = new($"Data Source={_dbPath}"))
         {
             await conn.OpenAsync(TestContext.CancellationToken);
             await conn.ExecuteAsync(QuotinatorMigrations.Migration001_InitialSchema);
@@ -5388,7 +5391,7 @@ public class DatabaseInitializerTests
             await conn.ExecuteAsync(QuotinatorMigrations.CharacterGlobalIdentityMerge);
         }
 
-        using SqliteConnection verifyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection verifyConn = new($"Data Source={_dbPath}");
         await verifyConn.OpenAsync(TestContext.CancellationToken);
 
         string? resolvedCharacterId = await verifyConn.ExecuteScalarAsync<string>(
@@ -5404,7 +5407,7 @@ public class DatabaseInitializerTests
             seriesId1: seriesId, seriesId2: seriesId,
             completeness1: "Incomplete", completeness2: "Complete");
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         string? survivorStatus = await conn.ExecuteScalarAsync<string>(
@@ -5418,7 +5421,7 @@ public class DatabaseInitializerTests
         (string _, string _, string? character1Id, string? character2Id) = await SeedPreMergeCharactersAsync(
             name: "Sam", type1: "Movie", type2: "Book", seriesId1: null, seriesId2: null);
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         string? type1 = await conn.ExecuteScalarAsync<string>("SELECT SourceType FROM Characters WHERE Id = @id;", new { id = character1Id });
@@ -5434,7 +5437,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         foreach (string? table in new[] { "Quotinator_Universe", "Quotinator_Series", "Quotinator_CharacterSource" })
@@ -5479,13 +5482,13 @@ public class DatabaseInitializerTests
             }
             """);
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quotesFile, null), new SeedFile(overlayFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.Review))],
             ManifestPolicy.HardcodedDefault, "overlay-test");
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
 
         int pendingCount = (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", "Source", 1, 0)).TotalCount;
@@ -5512,19 +5515,19 @@ public class DatabaseInitializerTests
             }
             """);
 
-        SeedBatch batch = new SeedBatch(
+        SeedBatch batch = new(
             [new SeedFile(quotesFile, null), new SeedFile(overlayFile, null, Policy: new ManifestPolicy(DuplicateResolutionPolicy.NewestWins))],
             ManifestPolicy.HardcodedDefault, "overlay-test-seed");
         QuotinatorDatabaseInitializer db = CreateInitializer([batch]);
         await db.InitialiseAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         string? seriesId = await conn.ExecuteScalarAsync<string?>("SELECT SeriesId FROM Quotinator_Source WHERE Id = @id;", new { id = sourceId });
         Assert.IsNotNull(seriesId, "Sanity check: NewestWins applies immediately, so SeriesId must already be set before the second pass");
 
         Guid reapplyBatchId = Guid.NewGuid();
-        using SqliteConnection reapplyConn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection reapplyConn = new($"Data Source={_dbPath}");
         await reapplyConn.OpenAsync(TestContext.CancellationToken);
         IReadOnlyList<ImportActionEntity> actions = await Quotinator.Core.Database.ImportActionPlanner.PlanAsync(
             (SqliteConnection)reapplyConn, [], reapplyBatchId, DuplicateResolutionPolicy.Review,
@@ -5622,7 +5625,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db1 = CreateInitializer([], QuotinatorMigrations.All, useBaseline: true);
         await db1.InitialiseAsync();
 
-        SchemaMigration extraMigration = new SchemaMigration
+        SchemaMigration extraMigration = new()
         {
             Version = QuotinatorMigrations.All.Count + 1,
             Sql     = "CREATE TABLE IF NOT EXISTS Test_277_Dummy (Id INTEGER);",
@@ -5670,7 +5673,7 @@ public class DatabaseInitializerTests
     {
         await InitialiseWithMigrationPendingAndNoDiskSpaceAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int tables = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '{PendingMigrationTable}';");
         Assert.AreEqual(0, tables, "the pending migration's table was created, so the migration ran without a backup");
@@ -5698,7 +5701,7 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db1 = CreateInitializer([SimpleQuoteBatch()], QuotinatorMigrations.All, useBaseline: true);
         await db1.InitialiseAsync();
 
-        SchemaMigration pending = new SchemaMigration
+        SchemaMigration pending = new()
         {
             Version = QuotinatorMigrations.All.Count + 1,
             Sql     = $"CREATE TABLE IF NOT EXISTS {PendingMigrationTable} (Id INTEGER);",
@@ -5735,11 +5738,104 @@ public class DatabaseInitializerTests
     {
         await InitialiseWithContentPendingAndNoDiskSpaceAsync();
 
-        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        using SqliteConnection conn = new($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote WHERE IsDeleted = 0;");
         Assert.AreEqual(0, quoteCount);
     }
+
+    /// <summary>
+    /// #348: the refusal is reported where the operator looks, not only in the log. The schema is intact,
+    /// so writing the notification is safe.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_RaisesABackupRefusedNotification()
+    {
+        await InitialiseWithContentPendingAndNoDiskSpaceAsync();
+
+        Assert.HasCount(1, await BackupRefusedNotificationsAsync());
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_TheNotificationRequiresAction()
+    {
+        await InitialiseWithContentPendingAndNoDiskSpaceAsync();
+
+        Assert.Contains(n => n.Type.Parsed == NotificationType.ActionRequired, await BackupRefusedNotificationsAsync());
+    }
+
+    /// <summary>Content arriving is what resolves it, which is exactly what the existing Reseed trigger means.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_TheNotificationClearsOnReseed()
+    {
+        await InitialiseWithContentPendingAndNoDiskSpaceAsync();
+
+        Assert.Contains(n => n.DismissTriggerKey.Parsed == NotificationDismissTrigger.Reseed, await BackupRefusedNotificationsAsync());
+    }
+
+    /// <summary>The obstacle decides which options can be offered, so it travels as data, not only as prose.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_TheNotificationNamesTheObstacle()
+    {
+        await InitialiseWithContentPendingAndNoDiskSpaceAsync();
+
+        Assert.Contains(p => p.Obstacle == BackupOutcome.InsufficientDiskSpace, await BackupRefusedPayloadsAsync());
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_TheNotificationNamesTheContentLoadStep()
+    {
+        await InitialiseWithContentPendingAndNoDiskSpaceAsync();
+
+        Assert.Contains(p => p.Step == BackupGuardedStep.ContentLoad, await BackupRefusedPayloadsAsync());
+    }
+
+    /// <summary>The refusal recurs on every start until resolved; it is one unresolved condition, not one per start.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadRefusedOnTwoStarts_RaisesOneNotification()
+    {
+        await InitialiseWithContentPendingAndNoDiskSpaceAsync();
+        await CreateInitializer([SimpleQuoteBatch()], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0)).InitialiseAsync();
+
+        Assert.HasCount(1, await BackupRefusedNotificationsAsync());
+    }
+
+    /// <summary>
+    /// A reseed resolves nothing on its own. Its first file landing is not a positive result for the
+    /// run, so the notification stays active until whoever ran the reseed has it back successfully.
+    /// </summary>
+    [TestMethod]
+    public async Task ReseedAsync_LeavesTheRefusalForItsCallerToResolve()
+    {
+        await InitialiseWithContentPendingAndNoDiskSpaceAsync();
+
+        await CreateInitializer([SimpleQuoteBatch()], useBaseline: true).ReseedAsync();
+
+        Assert.Contains(n => !n.IsDismissed, await BackupRefusedNotificationsAsync());
+    }
+
+    /// <summary>A later start that does load the content has resolved the refusal, once the load has finished.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadedAfterAnEarlierRefusal_ResolvesTheRefusal()
+    {
+        await InitialiseWithContentPendingAndNoDiskSpaceAsync();
+
+        await CreateInitializer([SimpleQuoteBatch()], useBaseline: true).InitialiseAsync();
+
+        Assert.Contains(n => n.IsDismissed && n.Resolution.Parsed == NotificationResolution.Reseeded, await BackupRefusedNotificationsAsync());
+    }
+
+    private async Task<List<NotificationEntity>> BackupRefusedNotificationsAsync() =>
+        [.. (await NotificationsAsync()).Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.BackupRefused)];
+
+    /// <summary>
+    /// Asserted over the set rather than on a single row, so no notification at all fails the assertion
+    /// instead of throwing; how many there are is its own test.
+    /// </summary>
+    private async Task<List<BackupRefusedMetadataDto>> BackupRefusedPayloadsAsync() =>
+        [.. (await BackupRefusedNotificationsAsync())
+            .Select(n => NotificationMetadataKinds.TryDeserialize(n.MetadataKind.Parsed, n.Metadata))
+            .OfType<BackupRefusedMetadataDto>()];
 
     private async Task<DatabaseOperationResult> InitialiseWithContentPendingAndNoDiskSpaceAsync()
     {

@@ -17,9 +17,9 @@ namespace Quotinator.Api.Tests.Endpoints;
 /// Shared setup for the backup endpoints (#349): a real, disposable backups folder and a test host
 /// whose reader and writer point at it.
 /// <para>
-/// Deliberately real rather than faked. The behaviour these endpoints are judged on — a traversal
+/// Deliberately real rather than faked. The behaviour these endpoints are judged on (a traversal
 /// attempt that resolves outside the folder, a delete that removes one file and not its neighbour, a
-/// download that returns the same bytes that were written — is filesystem behaviour, and a fake reader
+/// download that returns the same bytes that were written) is filesystem behaviour, and a fake reader
 /// would assert only that the handler called it. Nothing here opens a database: that is the property
 /// the degraded-reachability tests depend on.
 /// </para>
@@ -40,7 +40,7 @@ internal sealed class BackupTestHarness : IDisposable
 
     /// <summary>
     /// The initializer the host resolves. Its backup behaviour is settable so a test can arrange a
-    /// refusal or a pre-flight answer after construction — the folder it writes into is this
+    /// refusal or a pre-flight answer after construction: the folder it writes into is this
     /// harness's own, which is only known once the harness exists.
     /// </summary>
     internal BackupStubInitializer Db { get; }
@@ -97,7 +97,7 @@ internal sealed class BackupTestHarness : IDisposable
     internal HttpClient AnonymousClient() => _factory.CreateClient();
 
     /// <summary>
-    /// Puts the host into the degraded state these endpoints exist to be usable in — the same state
+    /// Puts the host into the degraded state these endpoints exist to be usable in: the same state
     /// <c>Program.cs</c> records when startup initialisation fails, set directly rather than by
     /// arranging a real failure, so the test is about reachability and not about how the failure
     /// arose.
@@ -193,7 +193,7 @@ internal sealed class BackupTestHarness : IDisposable
         }
 
         /// <inheritdoc/>
-        public BackupOutcome CheckBackupReadiness(bool allowReserve = false) => Readiness;
+        public BackupOutcome CheckBackupReadiness(bool allowReserve = false, long bytesFreedFirst = 0) => Readiness;
 
         /// <inheritdoc/>
         public int SchemaVersion => _inner.SchemaVersion;
@@ -237,7 +237,7 @@ internal sealed class BackupTestHarness : IDisposable
         public Task<SourceCacheResolution> RefreshSourcesAsync(bool force = false) => _inner.RefreshSourcesAsync(force);
     }
 
-    /// <summary>Captures whole audit entries, not just their operation names — #349 asserts what was recorded about the file.</summary>
+    /// <summary>Captures whole audit entries, not just their operation names: #349 asserts what was recorded about the file.</summary>
     internal sealed class RecordingAuditWriter : IAuditEntryWriter
     {
         /// <summary>Every entry written, in order.</summary>
