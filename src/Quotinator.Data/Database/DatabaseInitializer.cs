@@ -40,24 +40,24 @@ public class DatabaseInitializer(
 
     // Quotinator.Data's own migrations, for its own tables (Audit_Entry/Audit_Change/Import_Conflict/
     // Import_Action/Import_SourceFileOverride currently; any future Import_/Audit_/System_-prefixed
-    // table Quotinator.Data itself defines). Never passed through the constructor — Quotinator.Data
+    // table Quotinator.Data itself defines). Never passed through the constructor: Quotinator.Data
     // owns and maintains these scripts itself, and they always apply before any consumer-supplied
     // migration, tracked in their own System_SchemaVersion table, independent of the consumer's own
     // System_ConsumerSchemaVersion count. ImportBatches/Import_Batch is NOT here despite ADR 015
-    // classifying it as Data-owned — see DomainPrefixRenameMigrations' own remarks for why that
+    // classifying it as Data-owned: see DomainPrefixRenameMigrations' own remarks for why that
     // specific rename must instead live in Quotinator.Core's migration list (#254).
     // #155: version 2 consolidates every Data-owned migration shipped since v1.7.2's single frozen
-    // migration (version 1) — see DataConsolidatedMigrations.SinceV172 for the full reasoning.
+    // migration (version 1): see DataConsolidatedMigrations.SinceV172 for the full reasoning.
     // #289: version 3 consolidates every Data-owned migration added since v1.8.2 (the former versions
     // 3-8: two AppliedPolicy CHECK constraints, the domain-prefix rename, FileResource's tables, its
-    // Origin generalization, and System_Notification) — see DataConsolidatedMigrations.SinceV182.
+    // Origin generalization, and System_Notification): see DataConsolidatedMigrations.SinceV182.
     // None of the former versions 3-8 had shipped in a tagged release, but this project's own local
     // dev database had already applied all of them via each issue's own T1 pass earlier in this
-    // milestone (confirmed live before squashing, not assumed) — per ADR 015's revision (from #254),
+    // milestone (confirmed live before squashing, not assumed): per ADR 015's revision (from #254),
     // "unreleased" is not the right test for whether a migration is safe to edit; the real test is
     // whether any real database, including a developer's own, has already applied it. The squash was
     // done anyway, by deliberate developer decision, with the local dev database being reset as part
-    // of this same work — see #289's plan doc. ApplyMigrationsAsync's own schema-version-overshoot
+    // of this same work: see #289's plan doc. ApplyMigrationsAsync's own schema-version-overshoot
     // detection is the safety net for every other database (a second developer's machine, a CI cache)
     // that may be in the same already-migrated state and isn't being reset alongside this one.
     private static readonly IReadOnlyList<SchemaMigration> DataOwnedMigrations =
@@ -70,7 +70,7 @@ public class DatabaseInitializer(
         // every release missed since then, not just the one currently running.
         new SchemaMigration { Version = 4, Sql = AppVersionMigrations.CreateAppVersionTable },
         // #312: System_Notification gains a Title/Body split, a typed Metadata payload, and an
-        // AppVersionId provenance reference — the foundation the milestone's remaining producers and
+        // AppVersionId provenance reference: the foundation the milestone's remaining producers and
         // its richer rendering both build on.
         new SchemaMigration { Version = 5, Sql = NotificationSchemaMigrations.SplitMessageAndAddMetadata },
         // #312: System_AppVersion becomes an append-only Application+Version history, so a
@@ -80,11 +80,11 @@ public class DatabaseInitializer(
         // resolution) nor SQLite's implicit rowid is a trustworthy answer to "which version ran last".
         new SchemaMigration { Version = 7, Sql = AppVersionHistoryMigrations.AddSequenceNumberColumn },
         // #312: give v1.8.3's already-shipped notification the structured identity #312 introduced,
-        // so the upgrade recognises it instead of announcing it a second time. Data-only — no schema
+        // so the upgrade recognises it instead of announcing it a second time. Data-only: no schema
         // change, so the baseline needs no counterpart (a fresh database has no legacy row to fix).
         new SchemaMigration { Version = 8, Sql = NotificationLegacyMetadataMigrations.BackfillAnnouncementMetadata },
         // #312: and give that same notification the provenance it predates, creating the 1.8.3
-        // System_AppVersion row it references — conditional on the row actually being there, so a
+        // System_AppVersion row it references: conditional on the row actually being there, so a
         // database that never ran v1.8.3 gains no history it never had.
         new SchemaMigration { Version = 9, Sql = NotificationLegacyMetadataMigrations.BackfillAnnouncementProvenance },
         // #312: what's-new rows written by an intermediate build state their release state implicitly
@@ -92,65 +92,65 @@ public class DatabaseInitializer(
         // brought up to that shape rather than becoming unreadable and re-announcing themselves.
         new SchemaMigration { Version = 10, Sql = NotificationLegacyMetadataMigrations.BackfillWhatsNewReleaseState },
         // #312: release state, the version a notification is about, and its content hash became common
-        // to every payload rather than what's-new's alone — the remaining kinds' stored rows are
+        // to every payload rather than what's-new's alone: the remaining kinds' stored rows are
         // brought onto that shape so they stay identifiable instead of re-announcing themselves.
         new SchemaMigration { Version = 11, Sql = NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields },
         // #319: a notification records which language its own Title/Body are written in, so a reader
         // requesting a language with no translation falls back to the original rather than to nothing.
         new SchemaMigration { Version = 12, Sql = NotificationTranslationMigrations.AddOriginalLanguageColumn },
-        // #319: and gains a sibling table holding one translated Title/Body per language — the same
+        // #319: and gains a sibling table holding one translated Title/Body per language: the same
         // arrangement Quotinator_Quote/Quotinator_QuoteTranslation already uses, which is what keeps
         // the original text (and therefore every producer's content hash) on the parent row untouched.
         new SchemaMigration { Version = 13, Sql = NotificationTranslationMigrations.CreateNotificationTranslationTable },
         // #319: v1.8.3's shipped announcement is the only notification any released build persisted,
         // so it is the whole of the translation backfill. Data-only and conditional on that row being
-        // present — a database that never ran v1.8.3 matches nothing and gains nothing, so the
+        // present: a database that never ran v1.8.3 matches nothing and gains nothing, so the
         // baseline needs no counterpart.
         //
         // This migration's matching predicate was edited after it had already run on the developer's
-        // own database — a T1 pass found it matched nothing, because it compared the whole Metadata
+        // own database: a T1 pass found it matched nothing, because it compared the whole Metadata
         // string and migration 11 had already json_insert'ed further fields into that column. Editing
         // it in place is a **one-time exception** granted by deliberate developer decision (2026-08-29)
         // and rests on a specific circumstance: that database was being restored from a v1.8.3 backup
         // between test runs, so no database was left stranded at a version whose script had changed.
-        // ADR 015's revision (from #254) is unchanged and still governs — "unreleased" is not the test,
+        // ADR 015's revision (from #254) is unchanged and still governs: "unreleased" is not the test,
         // and the next migration in this position gets a new version number, exactly as #254 requires.
         new SchemaMigration { Version = 14, Sql = NotificationTranslationMigrations.BackfillAnnouncementTranslations },
         // #304: DismissTriggerKey gains 'Reseed' and MetadataKind gains 'ReseedRecommended'. SQLite
-        // cannot widen a CHECK in place, so this is a table rebuild — both widenings share the one
+        // cannot widen a CHECK in place, so this is a table rebuild: both widenings share the one
         // rebuild rather than copying every row twice.
         new SchemaMigration { Version = 15, Sql = NotificationReseedTriggerMigrations.WidenDismissTriggerAndMetadataKind },
         // #304: record why a notification stopped being active, so running an action is not reported as
-        // a dismissal. A plain ADD COLUMN with its CHECK inline — no rebuild needed, since nothing
+        // a dismissal. A plain ADD COLUMN with its CHECK inline: no rebuild needed, since nothing
         // existing is being widened.
         new SchemaMigration { Version = 16, Sql = NotificationDismissReasonMigrations.AddDismissReasonColumn },
         // #302: MetadataKind gains 'ReseedFileApplied' for the per-file reseed confirmation. A rebuild
-        // again, for the same reason migration 15 needed one — SQLite cannot widen a CHECK in place.
+        // again, for the same reason migration 15 needed one: SQLite cannot widen a CHECK in place.
         new SchemaMigration { Version = 17, Sql = NotificationReseedFileAppliedMigrations.WidenMetadataKindForFileApplied },
         // #303: MetadataKind gains 'ImportReviewPending', DismissTriggerKey gains 'ImportReviewResolved',
-        // and DismissReason gains 'Obsolete'. All three widenings share one rebuild — migration 15's
+        // and DismissReason gains 'Obsolete'. All three widenings share one rebuild: migration 15's
         // precedent, for the same reason: constraints on one table, and separate migrations would copy
         // every row three times.
         new SchemaMigration { Version = 18, Sql = NotificationImportReviewMigrations.WidenForImportReview },
         // #308: Resolution records how a notification's own action settled it, where DismissReason says
-        // only that it settled. An added column with an inline CHECK, not a rebuild — migration 16's
+        // only that it settled. An added column with an inline CHECK, not a rebuild: migration 16's
         // precedent, since nothing existing is being widened.
         new SchemaMigration { Version = 19, Sql = NotificationResolutionMigrations.AddResolutionColumn },
-        // #373: ActionType gains 'Unchanged' — an import that would leave a record exactly as it is.
+        // #373: ActionType gains 'Unchanged': an import that would leave a record exactly as it is.
         // A rebuild, for the same reason migrations 15, 17 and 18 needed one: SQLite cannot widen an
         // inline CHECK. Nothing about existing rows changes; only the constraint admits one more value.
         new SchemaMigration { Version = 20, Sql = ImportActionUnchangedMigrations.WidenActionTypeForUnchanged },
-        // #377: ActionType gains 'ResolvedToExisting' — a record whose fields differed from what arrived
+        // #377: ActionType gains 'ResolvedToExisting': a record whose fields differed from what arrived
         // but whose resolution settled on the values already stored, so nothing is written differently.
         // A rebuild for the same reason migration 20 needed one: SQLite cannot widen an inline CHECK.
         new SchemaMigration { Version = 21, Sql = ImportActionResolvedToExistingMigrations.WidenActionTypeForResolvedToExisting },
-        // #376: ActionType gains 'AlreadyReported' — a record whose conflict an earlier pass already
+        // #376: ActionType gains 'AlreadyReported': a record whose conflict an earlier pass already
         // staged, and which this pass therefore does not stage again. A rebuild for the same reason
         // migrations 20 and 21 needed one: SQLite cannot widen an inline CHECK.
         new SchemaMigration { Version = 22, Sql = ImportActionAlreadyReportedMigrations.WidenActionTypeForAlreadyReported },
     ];
 
-    // Data's own baseline fragment — creates every Data-owned table directly under its final,
+    // Data's own baseline fragment: creates every Data-owned table directly under its final,
     // domain-prefixed name for a genuinely fresh database, skipping the historical
     // create-then-rename-then-RecordBase-migrate dance entirely. All tables carry RecordBase's
     // DateCreated/DateModified/DateDeleted/IsDeleted per ADR 002. Kept in sync with
@@ -469,12 +469,18 @@ public class DatabaseInitializer(
         await connection.OpenAsync();
 
         EnableWal(connection);
-        bool tookBaselinePath = await ApplyMigrationsAsync(connection);
-        BackupOutcome? obstacle = await RunInitialisedHookAsync(connection, tookBaselinePath);
+        MigrationsResult migrations = await ApplyMigrationsAsync(connection);
+
+        // #348: a refused migration leaves the schema behind this build, and loading content into a schema
+        // the build has not migrated is exactly the unprotected write the refusal exists to prevent.
+        if (migrations.Obstacle is BackupOutcome migrationObstacle)
+            return DatabaseOperationResult.RefusedForBackup(migrationObstacle, BackupGuardedStep.Migration);
+
+        BackupOutcome? obstacle = await RunInitialisedHookAsync(connection, migrations.TookBaselinePath);
 
         return obstacle is null
             ? DatabaseOperationResult.Success()
-            : DatabaseOperationResult.RefusedForBackup(obstacle.Value);
+            : DatabaseOperationResult.RefusedForBackup(obstacle.Value, BackupGuardedStep.ContentLoad);
     }
 
     /// <summary>
@@ -490,8 +496,8 @@ public class DatabaseInitializer(
         await connection.OpenAsync();
 
         EnableWal(connection);
-        bool tookBaselinePath = await ApplyMigrationsAsync(connection, forceIncremental);
-        await RunInitialisedHookAsync(connection, tookBaselinePath);
+        MigrationsResult migrations = await ApplyMigrationsAsync(connection, forceIncremental);
+        await RunInitialisedHookAsync(connection, migrations.TookBaselinePath);
     }
 
     /// <summary>
@@ -505,13 +511,13 @@ public class DatabaseInitializer(
     /// right now, mirroring <see cref="ApplyMigrationsAsync"/>'s own <c>dataPending</c>/
     /// <c>consumerPending</c> real-work gate for the migration step (#277). The base class has no
     /// domain knowledge of what a subclass actually seeds, so the base implementation conservatively
-    /// returns <c>true</c> (always back up) — override with a real, cheap count-check once domain
+    /// returns <c>true</c> (always back up): override with a real, cheap count-check once domain
     /// tables exist to check.
     /// </summary>
     protected virtual Task<bool> HasPendingContentSeedAsync(SqliteConnection connection) => Task.FromResult(true);
 
     // A failure determining whether content-seed has pending work is itself strong evidence something
-    // is structurally wrong (e.g. a domain table was dropped or renamed outside a normal migration) —
+    // is structurally wrong (e.g. a domain table was dropped or renamed outside a normal migration):
     // exactly the case a pre-seed backup exists to protect against. Treating the determination itself
     // as fail-open (skip backup on any exception) would remove that protection at the one moment it
     // matters most; assume "pending" instead, so a backup is still taken before the same query is
@@ -524,17 +530,17 @@ public class DatabaseInitializer(
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "[Database - Init] failed to determine whether content-seed has pending work — assuming yes, taking a backup before proceeding.");
+            Logger.LogWarning(ex, "[Database - Init] failed to determine whether content-seed has pending work, assuming yes, taking a backup before proceeding.");
             return true;
         }
     }
 
-    // Startup/reset collapses into three flows — normal startup, fresh install, and Reset — and every
+    // Startup/reset collapses into three flows (normal startup, fresh install, and Reset) and every
     // action within them reduces to the same shape: can we perform it → back up → execute. The
     // migration phase already gates its own backup on dataPending/consumerPending (see
     // ApplyMigrationsAsync); this mirrors that for the content-seed step via HasPendingContentSeedAsync
     // instead of inferring readiness from a different step's own flag (tookBaselinePath/
-    // MigrationApplied) — a flag-based gate was tried first and found to miss the startup immediately
+    // MigrationApplied): a flag-based gate was tried first and found to miss the startup immediately
     // following a Reset, where MigrationApplied stays null (Reset sets schema-version counters
     // directly via the baseline path) even though content-seed genuinely has real work to do. A
     // genuinely fresh (baseline) database has nothing to lose and is still skipped outright.
@@ -549,7 +555,7 @@ public class DatabaseInitializer(
         DatabaseBackupResult backup = CreateBackup(connection, Math.Max(DataSchemaVersion, SchemaVersion));
 
         // #348: no backup, no destructive step. Seeding writes content this database cannot get back
-        // if it goes wrong, and the backup is the only thing that could have got it back — so
+        // if it goes wrong, and the backup is the only thing that could have got it back: so
         // proceeding "anyway" trades a recoverable stop for an unrecoverable one. The caller degrades
         // and reports which obstacle it was; it does not throw, because nothing here is unforeseen.
         if (!backup.Succeeded)
@@ -564,7 +570,7 @@ public class DatabaseInitializer(
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "[Database - Init] seeding failed — restoring pre-seed backup, database left unchanged...");
+            Logger.LogError(ex, "[Database - Init] seeding failed: restoring pre-seed backup, database left unchanged...");
             if (backup.Path is not null)
             {
                 RestoreBackup(connection, backup.Path);
@@ -595,9 +601,9 @@ public class DatabaseInitializer(
         bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false)
     {
         // #348: check before acting. A Reset drops every table, so it is the last operation that should
-        // run without a restore point — and a full backup folder or an unwritable destination is an
+        // run without a restore point, and a full backup folder or an unwritable destination is an
         // ordinary condition with a remedy, not something to discover by throwing halfway through.
-        // allowNoBackup is the operator accepting responsibility, so it also unlocks the reserve — and
+        // allowNoBackup is the operator accepting responsibility, so it also unlocks the reserve: and
         // that ordering matters: a Reset blocked only by the operating quota should take a real backup
         // out of the reserve rather than run with none at all. Proceeding unprotected is the last
         // resort, not the first thing the override reaches for.
@@ -605,7 +611,7 @@ public class DatabaseInitializer(
         if (readiness != BackupOutcome.Succeeded && !allowNoBackup)
         {
             Logger.LogResetRefusedNoBackup(readiness.ToString());
-            return DatabaseOperationResult.RefusedForBackup(readiness);
+            return DatabaseOperationResult.RefusedForBackup(readiness, BackupGuardedStep.Reset);
         }
 
         using SqliteConnection connection = (SqliteConnection)_factory.CreateConnection();
@@ -615,9 +621,9 @@ public class DatabaseInitializer(
             Logger.LogResetProceedingWithoutBackup(readiness.ToString());
 
         // The backstop the pre-flight cannot replace. CheckBackupReadiness inspects storage and the
-        // destination — it never reads the database, so an unreadable *source* passes it and only
+        // destination: it never reads the database, so an unreadable *source* passes it and only
         // reveals itself here. Found live: a corrupt file cleared the check, then failed inside
-        // DropAllTablesAsync, which reaches sqlite_master, and reached the client as an unhandled 500 —
+        // DropAllTablesAsync, which reaches sqlite_master, and reached the client as an unhandled 500:
         // the very defect this issue exists to remove, surviving in a path the unit tests did not cover.
         //
         // The override cannot rescue this one either: a database SQLite will not open cannot be dropped
@@ -627,24 +633,24 @@ public class DatabaseInitializer(
         {
             await OnResetAsync(connection, preserveSchemaVersion, forceSourceRefresh);
         }
-        // The backup failed after the pre-flight passed — a disk that filled mid-copy, or any obstacle
+        // The backup failed after the pre-flight passed: a disk that filled mid-copy, or any obstacle
         // the check could not see in advance. It carries the outcome, so nothing is guessed here.
         catch (DatabaseBackupUnavailableException ex)
         {
             Logger.LogResetRefusedNoBackup(ex.Outcome.ToString());
-            return DatabaseOperationResult.RefusedForBackup(ex.Outcome);
+            return DatabaseOperationResult.RefusedForBackup(ex.Outcome, BackupGuardedStep.Reset);
         }
         catch (SqliteException ex) when (ex.SqliteErrorCode is 26 or 11 or 14 or 8)
         {
             // 26/11 are the source; 14/8 are the storage refusing a write the pre-flight's probe should
             // have caught first. Both are included because the backstop's job is to be wider than the
-            // check, not to mirror it — a code reaching here at all means the check missed something.
+            // check, not to mirror it: a code reaching here at all means the check missed something.
             BackupOutcome obstacle = ex.SqliteErrorCode is 26 or 11
                 ? BackupOutcome.SourceUnreadable
                 : BackupOutcome.DestinationFileNotWritable;
 
             Logger.LogResetRefusedNoBackup(obstacle.ToString());
-            return DatabaseOperationResult.RefusedForBackup(obstacle);
+            return DatabaseOperationResult.RefusedForBackup(obstacle, BackupGuardedStep.Reset);
         }
 
         return DatabaseOperationResult.Success(backupSkippedByOverride: readiness != BackupOutcome.Succeeded);
@@ -653,7 +659,7 @@ public class DatabaseInitializer(
     /// <inheritdoc/>
     public async Task<DatabaseBackupResult> CreateBackupAsync()
     {
-        // Check before acting, exactly as ResetAsync does — and for a second reason specific to this
+        // Check before acting, exactly as ResetAsync does, and for a second reason specific to this
         // caller: the status endpoint reports this same check, so an on-demand backup that ignored it
         // could succeed where status had just said it would not. A status endpoint that disagrees with
         // the action beside it is worse than no status endpoint.
@@ -693,7 +699,7 @@ public class DatabaseInitializer(
         WarnIfQuotaPercentOutOfRange();
 
         // Headroom, not fit. What is already on disk can be known exactly; what a new backup will *add*
-        // cannot — SQLite copies pages, so the source file's length only approximates the result. The
+        // cannot: SQLite copies pages, so the source file's length only approximates the result. The
         // reserve between the quota and the ceiling is what absorbs that uncertainty, and reaching into
         // it is the caller's explicit choice rather than something this check makes for them.
         if (existingBytes >= limitBytes)
@@ -705,7 +711,7 @@ public class DatabaseInitializer(
         try { Directory.CreateDirectory(_options.BackupsPath); }
         catch (Exception) { return BackupOutcome.DestinationDirectoryNotWritable; }
 
-        // Creating the directory proves nothing when it already exists — CreateDirectory is a no-op
+        // Creating the directory proves nothing when it already exists: CreateDirectory is a no-op
         // then, and returns happily on a read-only mount. Found live: a reset against `--read-only-data`
         // with backups/ already present cleared this check, then failed with SQLITE_CANTOPEN inside the
         // table drop and reached the client as an unhandled 500. So the check writes something, which is
@@ -726,11 +732,11 @@ public class DatabaseInitializer(
 
     // An out-of-range quota is a configuration error, and it is neither clamped silently nor allowed to
     // stop the application: a typo in one tuning value must not breach the never-crash contract. It is
-    // reported loudly and the default is used instead — which is a different thing from quietly
+    // reported loudly and the default is used instead, which is a different thing from quietly
     // rounding it into range, where the operator would never learn their setting was ignored.
     //
     // #349: the arithmetic itself moved to BackupStorageBudget so the status endpoint publishes the
-    // same numbers this class refuses on. What stays here is the reporting — a shared pure function is
+    // same numbers this class refuses on. What stays here is the reporting: a shared pure function is
     // the wrong place to decide that something deserves a log line.
     private void WarnIfQuotaPercentOutOfRange()
     {
@@ -747,13 +753,13 @@ public class DatabaseInitializer(
 
     /// <summary>
     /// Called unconditionally after a genuinely fresh database is created via the baseline path
-    /// (<see cref="ApplyBaselineAsync"/>) and after every <see cref="DropAndRebuildAsync"/> call —
+    /// (<see cref="ApplyBaselineAsync"/>) and after every <see cref="DropAndRebuildAsync"/> call:
     /// i.e. after both "first ever install" and "any reset," the two moments a database can be
     /// missing content it structurally needs to function. Override to populate designated system
     /// tables (vital, non-optional reference/configuration content) from whatever source the
     /// subclass chooses. This is deliberately separate from <see cref="OnReseedAsync"/>/
     /// <see cref="OnResetAsync"/>'s own bundled/user content reseeding, which is optional domain
-    /// data and — per #156 — is never triggered automatically by a Reset. Base implementation does
+    /// data and (per #156) is never triggered automatically by a Reset. Base implementation does
     /// nothing; there is no system content to seed until a subclass defines some (#156).
     /// </summary>
     protected virtual Task SeedSystemContentAsync(SqliteConnection connection) => Task.CompletedTask;
@@ -770,18 +776,18 @@ public class DatabaseInitializer(
     #region Protected utilities for subclasses
 
     /// <summary>
-    /// Drops the entire database — every table, with no protected/excluded set of any kind — and
+    /// Drops the entire database (every table, with no protected/excluded set of any kind) and
     /// recreates it from scratch via the same baseline path a fresh install uses (#156). Reset is a
     /// full wipe: <c>Audit_Entry</c> and every other <c>Import_</c>/<c>Audit_</c>/<c>System_</c>-prefixed
     /// table Quotinator.Data itself owns is dropped along with the consumer's own tables and does
-    /// not survive — a deliberate tradeoff (see ADR 014); an operator who wants to keep audit-trail
+    /// not survive: a deliberate tradeoff (see ADR 014); an operator who wants to keep audit-trail
     /// data retrieves it beforehand via the admin audit export endpoint (#249). When
     /// <paramref name="preserveSchemaVersion"/> is <c>true</c>, both <c>System_SchemaVersion</c>'s
     /// and <c>System_ConsumerSchemaVersion</c>'s granular per-version rows are snapshotted first and
     /// restored afterward, in place of the single collapsed row the baseline path would otherwise
-    /// leave — preserving history granularity symmetrically for both counters now that both are
+    /// leave: preserving history granularity symmetrically for both counters now that both are
     /// wiped, not just the consumer's. <see cref="SeedSystemContentAsync"/> is invoked exactly once
-    /// regardless of which path <see cref="ApplyMigrationsAsync"/> takes — once truly empty (which a
+    /// regardless of which path <see cref="ApplyMigrationsAsync"/> takes: once truly empty (which a
     /// full wipe always leaves it), that call already invokes it internally when a baseline is
     /// configured, so this method only calls it directly for the (rare) case where no baseline is
     /// configured and the incremental-replay-from-zero path runs instead. A full backup is always
@@ -801,13 +807,13 @@ public class DatabaseInitializer(
 
         // #348: the last gate before every table is dropped, and the one the pre-flight cannot stand in
         // for. Found live on a size-capped volume: the disk filled *during* the copy, SQLite abandoned a
-        // truncated backup file, and this method carried on and rebuilt the database anyway — returning
+        // truncated backup file, and this method carried on and rebuilt the database anyway: returning
         // 200 with the only restore point being an unusable fragment. Strictly worse than the unhandled
         // 500 this issue set out to remove, because it looked like success.
         //
         // Thrown rather than returned: this runs inside OnResetAsync, whose signature belongs to
         // subclasses, so there is no result to hand back from here. ResetAsync catches it and converts
-        // it into the same refusal a pre-flight failure produces — the exception is the transport, not
+        // it into the same refusal a pre-flight failure produces: the exception is the transport, not
         // the report.
         if (!resetBackup.Succeeded)
             throw new DatabaseBackupUnavailableException(resetBackup.Outcome, resetBackup.Error);
@@ -819,7 +825,7 @@ public class DatabaseInitializer(
             await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
             await DropAllTablesAsync(connection);
             await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
-            bool tookBaselinePath = await ApplyMigrationsAsync(connection, skipOwnBackup: true);
+            bool tookBaselinePath = (await ApplyMigrationsAsync(connection, skipOwnBackup: true)).TookBaselinePath;
 
             if (preserveSchemaVersion)
             {
@@ -837,7 +843,7 @@ public class DatabaseInitializer(
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "[Database - Init] reset failed — restoring pre-reset backup, database left unchanged...");
+            Logger.LogError(ex, "[Database - Init] reset failed: restoring pre-reset backup, database left unchanged...");
             if (backupPath is not null)
             {
                 RestoreBackup(connection, backupPath);
@@ -877,21 +883,21 @@ public class DatabaseInitializer(
         Logger.LogLegacyFilenameMigrationComplete(_options.DbPath);
     }
 
-    // Storage pre-flight check (#277) — two independent conditions: a hard budget on how large the
+    // Storage pre-flight check (#277), two independent conditions: a hard budget on how large the
     // BackupsPath folder's own accumulated backups may grow ("never exceed our budget," per explicit
-    // developer direction — independent of how much real disk space happens to be free), and a real
+    // developer direction: independent of how much real disk space happens to be free), and a real
     // free-space check via IDiskSpaceProvider (so a genuinely full disk is never written to,
     // regardless of budget headroom).
     //
     // #327: every obstacle is now *reported* rather than some being skipped silently and others thrown
     // as one undifferentiated exception. A backup exists to make a startup or a destructive action
-    // safe, so failing to take one is a failure to surface with options attached — and the five ways it
+    // safe, so failing to take one is a failure to surface with options attached, and the five ways it
     // can fail have five different remedies, which a caller can only offer if it is told which one it
     // hit. Attribution is structural, not message-parsing: each step is attempted on its own, so the
     // failing step names the fault. By the time BackupDatabase runs the destination is already proven
     // creatable and openable, which is what makes a failure there the source's.
     // #349: the two limits here answer different questions and are deliberately not the same number.
-    // This check enforces the absolute ceiling, at the point where the bytes are actually written —
+    // This check enforces the absolute ceiling, at the point where the bytes are actually written:
     // "never exceeded", per MaxBackupStorageGb's own definition. The operating quota is policy about
     // what routine operation may consume, and it is enforced by CheckBackupReadiness, which every
     // caller that can afford to stop consults first. Only the arithmetic is now shared, so neither
@@ -915,14 +921,14 @@ public class DatabaseInitializer(
             return DatabaseBackupResult.Failed(BackupOutcome.InsufficientDiskSpace);
         }
 
-        // #289: millisecond precision, not just seconds — found live when #289's migration squash
+        // #289: millisecond precision, not just seconds: found live when #289's migration squash
         // happened to make two real, distinct backups within the same test (Reset's own backup, then
         // the following InitialiseAsync's) land on the same fromVersion for the first time (previously
         // 6 vs 8, now both 5 after the squash). Second-precision timestamps let two same-version
-        // backups within the same second collide on an identical filename — SqliteConnection.
+        // backups within the same second collide on an identical filename: SqliteConnection.
         // BackupDatabase silently overwrites the existing file at that path rather than erroring, so
         // the second backup was never actually taking a distinct new file. Not specific to this one
-        // version-number coincidence — any two same-version backups within the same wall-clock second
+        // version-number coincidence: any two same-version backups within the same wall-clock second
         // could always have collided this way; milliseconds make that effectively impossible.
         string timestamp  = DateTime.UtcNow.ToString("yyyyMMddTHHmmssfff");
         string backupName = $"{Path.GetFileNameWithoutExtension(_options.DbPath)}_v{fromVersion}_{timestamp}Z.db";
@@ -935,7 +941,7 @@ public class DatabaseInitializer(
 
         // #349: pooling is off for this connection, and that is load-bearing rather than tidiness.
         // Microsoft.Data.Sqlite pools by default, so disposing a pooled connection returns it to the
-        // pool and keeps its file handle open for the life of the process — which left every backup
+        // pool and keeps its file handle open for the life of the process, which left every backup
         // this application ever wrote locked. Found in T1: downloading a backup taken moments earlier
         // failed with "the process cannot access the file because it is being used by another process",
         // and the other process was this one. Invisible on Unix, where a retained handle blocks
@@ -975,7 +981,7 @@ public class DatabaseInitializer(
     }
 
     // SQLITE_NOTADB (26) and SQLITE_CORRUPT (11) are the source; SQLITE_FULL (13) is the volume. Any
-    // other code is reported as unclassified rather than guessed at — an unnamed variant is an
+    // other code is reported as unclassified rather than guessed at: an unnamed variant is an
     // unanswered question, and a wrong name is worse than no name.
     private static BackupOutcome ClassifyCopyFailure(SqliteException ex) => ex.SqliteErrorCode switch
     {
@@ -984,7 +990,7 @@ public class DatabaseInitializer(
         _        => BackupOutcome.Unclassified,
     };
 
-    // Restores a backup file created by CreateBackup back into the live connection — the reverse
+    // Restores a backup file created by CreateBackup back into the live connection: the reverse
     // direction of the same SQLite online-backup API. Used when a migration attempt fails partway
     // through, so the caller is left with the database exactly as it was before the attempt started
     // rather than a partially-migrated or partially-rebuilt one.
@@ -1000,16 +1006,16 @@ public class DatabaseInitializer(
     // -------------------------------------------------------------------------
     #region Migrations
 
-    // journal_mode=WAL is persistent (stored in the database file itself), unlike temp_store — see
+    // journal_mode=WAL is persistent (stored in the database file itself), unlike temp_store: see
     // SqliteConnectionFactory.CreateConnection's own StateChange handler for why temp_store=MEMORY is
     // applied there instead, on every connection, rather than duplicated here.
     private static void EnableWal(SqliteConnection connection)
         => connection.Execute("PRAGMA journal_mode=WAL;");
 
     // One-time bootstrap step, run after both version tables exist (their rows are the insert
-    // target) but before either current migration version is read — SchemaVersion predates the
+    // target) but before either current migration version is read: SchemaVersion predates the
     // numbered migration list entirely, so splitting it can't itself be a numbered migration. A
-    // fresh database has no table literally named SchemaVersion, so this is a no-op — a new
+    // fresh database has no table literally named SchemaVersion, so this is a no-op: a new
     // database is never created under the old name. See #155 for why this splits explicitly by
     // hardcoded version number rather than renaming the table (a bare rename silently skipped
     // Data migrations 2-4 on a real v1.7.2 upgrade, since it copied the legacy counter's raw value
@@ -1024,10 +1030,17 @@ public class DatabaseInitializer(
         await connection.ExecuteAsync(Sql.Schema.DropLegacySchemaVersionTable);
     }
 
-    /// <summary>Applies pending migrations (or the baseline for a genuinely fresh database). Returns <c>true</c> when the baseline path was taken — the caller uses this to decide whether a pre-seed backup is worth taking (a freshly-created database has nothing to lose).</summary>
-    private async Task<bool> ApplyMigrationsAsync(SqliteConnection connection, bool forceIncremental = false, bool skipOwnBackup = false)
+    /// <summary>
+    /// What <see cref="ApplyMigrationsAsync"/> did: whether it took the baseline path, which the caller uses
+    /// to decide whether a pre-seed backup is worth taking (a freshly created database has nothing to lose),
+    /// and the obstacle when pending migrations were refused because no backup could be taken.
+    /// </summary>
+    private readonly record struct MigrationsResult(bool TookBaselinePath, BackupOutcome? Obstacle);
+
+    /// <summary>Applies pending migrations, or the baseline for a genuinely fresh database, unless no backup can be taken first.</summary>
+    private async Task<MigrationsResult> ApplyMigrationsAsync(SqliteConnection connection, bool forceIncremental = false, bool skipOwnBackup = false)
     {
-        // Must run before either CreateXVersionTable call below — those would otherwise make every
+        // Must run before either CreateXVersionTable call below: those would otherwise make every
         // fresh database register as "not empty" on the very next line, permanently disabling the
         // baseline path. A legacy (pre-split) database already has many other tables, so it never
         // reads as empty here regardless of whether the legacy SchemaVersion table has been split yet.
@@ -1040,7 +1053,7 @@ public class DatabaseInitializer(
         if (isEmptyDatabase && !forceIncremental && _consumerBaseline is not null)
         {
             await ApplyBaselineAsync(connection);
-            return true;
+            return new MigrationsResult(TookBaselinePath: true, Obstacle: null);
         }
 
         int dataCurrent     = await connection.ExecuteScalarAsync<int>(Sql.Schema.GetDataCurrentVersion);
@@ -1048,9 +1061,9 @@ public class DatabaseInitializer(
 
         // #289: a recorded version higher than this build's own known migration count is only
         // reachable after a migration squash, on a database that already applied the pre-squash
-        // migrations — the schema itself is complete (nothing to replay), only the counter is stale
+        // migrations: the schema itself is complete (nothing to replay), only the counter is stale
         // relative to this build. Detected here (not treated as a hard failure) so the caller can
-        // surface it via a notification instead — see IDatabaseInitializer.SchemaVersionOvershootDetected.
+        // surface it via a notification instead: see IDatabaseInitializer.SchemaVersionOvershootDetected.
         SchemaVersionOvershootDetected =
             dataCurrent > DataOwnedMigrations.Count || consumerCurrent > _consumerMigrations.Count;
 
@@ -1064,27 +1077,40 @@ public class DatabaseInitializer(
             Logger.LogSchemaUpToDate(dataCurrent, consumerCurrent);
             if (SchemaVersionOvershootDetected)
                 Logger.LogSchemaVersionOvershoot(dataCurrent, DataOwnedMigrations.Count, consumerCurrent, _consumerMigrations.Count);
-            return false;
+            return new MigrationsResult(TookBaselinePath: false, Obstacle: null);
         }
 
-        // skipOwnBackup: DropAndRebuildAsync (Reset) already took its own backup before this call —
+        // skipOwnBackup: DropAndRebuildAsync (Reset) already took its own backup before this call:
         // Data's counter is never wiped by Reset, so this condition would otherwise fire pointlessly
         // (a redundant second backup) on every Reset.
         DatabaseBackupResult? migrationBackup = !skipOwnBackup && (dataCurrent > 0 || consumerCurrent > 0)
             ? CreateBackup(connection, Math.Max(dataCurrent, consumerCurrent))
             : null;
+
+        // #348: no backup, no migration. This used to keep only the path and carry on, so a failed backup
+        // let every pending migration run unprotected, and the restore handler below, filtered on that
+        // path, could not roll back a migration that then threw. Nothing is applied and the recorded
+        // versions stand, so a later start with a backup possible migrates from exactly here.
+        if (migrationBackup is { Succeeded: false } refused)
+        {
+            DataSchemaVersion = dataCurrent;
+            SchemaVersion     = consumerCurrent;
+            Logger.LogMigrationRefusedNoBackup(refused.Outcome.ToString());
+            return new MigrationsResult(TookBaselinePath: false, Obstacle: refused.Outcome);
+        }
+
         string? backupPath = migrationBackup?.Path;
 
         // Some migrations recreate a table (SQLite has no ALTER ... CHECK) to widen a constraint,
         // which requires dropping a table that other tables still hold live foreign-key references
-        // to. Foreign key enforcement must be off for the duration — PRAGMA foreign_keys is a no-op
+        // to. Foreign key enforcement must be off for the duration: PRAGMA foreign_keys is a no-op
         // inside a transaction, so it cannot be toggled from within a migration's own SQL text.
         await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
         try
         {
             string? dataApplied = await ApplyMigrationPhaseAsync(
                 connection, "Data", DataOwnedMigrations, dataCurrent, Sql.Schema.InsertDataVersion);
-            // #289: Math.Max, not a bare assignment to DataOwnedMigrations.Count — when this side
+            // #289: Math.Max, not a bare assignment to DataOwnedMigrations.Count: when this side
             // overshoots while the other side has genuine pending work (so this whole method doesn't
             // take the early "both up to date" return above), ApplyMigrationPhaseAsync writes nothing
             // for this side (current >= migrations.Count), so the true recorded version stays
@@ -1101,7 +1127,7 @@ public class DatabaseInitializer(
         }
         catch (Exception ex) when (backupPath is not null)
         {
-            Logger.LogError(ex, "[Database - Init] migration failed — restoring pre-migration backup, database left unchanged...");
+            Logger.LogError(ex, "[Database - Init] migration failed: restoring pre-migration backup, database left unchanged...");
             RestoreBackup(connection, backupPath);
             Logger.LogInformation("[Database - Init] pre-migration backup restored.");
             throw;
@@ -1113,7 +1139,7 @@ public class DatabaseInitializer(
 
         Logger.LogSchemaUpdated(DataSchemaVersion, SchemaVersion);
 
-        return false;
+        return new MigrationsResult(TookBaselinePath: false, Obstacle: null);
     }
 
     private async Task ApplyBaselineAsync(SqliteConnection connection)
@@ -1152,7 +1178,7 @@ public class DatabaseInitializer(
     /// Applies one migration phase (either Quotinator.Data's own list or the consumer's own list)
     /// against its own version table, starting from <paramref name="current"/>. Returns a
     /// human-readable <c>"{Phase} vX → vY"</c> description if any migration in this phase actually
-    /// ran, or <c>null</c> if the phase was already up to date. No exception handling here — if a
+    /// ran, or <c>null</c> if the phase was already up to date. No exception handling here: if a
     /// migration's SQL throws, <c>using var tx</c> rolls back on unwind and the exception propagates
     /// untouched to the caller, which is responsible for the broader roll-back-to-previous-state
     /// (see <see cref="ApplyMigrationsAsync"/> and <see cref="DropAndRebuildAsync"/>).
@@ -1192,7 +1218,7 @@ public class DatabaseInitializer(
         };
 
     // Discovers all user tables at runtime and drops them.
-    // Table names come from sqlite_master (system metadata) — string interpolation is safe.
+    // Table names come from sqlite_master (system metadata): string interpolation is safe.
     private static async Task DropAllTablesAsync(SqliteConnection connection)
     {
         List<string> tables = [.. await connection.QueryAsync<string>(Sql.Schema.GetAllTables)];

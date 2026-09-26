@@ -5637,6 +5637,79 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
+    /// #348: a migration changes the schema in a way this database cannot undo on its own, and the backup
+    /// is what would undo it, so with no backup possible no migration runs.
+    /// </summary>
+    [TestMethod]
+    public async Task InitialiseAsync_MigrationPendingWithNoBackupPossible_IsRefused()
+    {
+        DatabaseOperationResult result = await InitialiseWithMigrationPendingAndNoDiskSpaceAsync();
+
+        Assert.IsFalse(result.Succeeded);
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_MigrationPendingWithNoBackupPossible_NamesTheObstacle()
+    {
+        DatabaseOperationResult result = await InitialiseWithMigrationPendingAndNoDiskSpaceAsync();
+
+        Assert.AreEqual(BackupOutcome.InsufficientDiskSpace, result.BackupObstacle);
+    }
+
+    /// <summary>A refused migration leaves the schema behind the build, which the caller reports differently from a refused content load.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_MigrationPendingWithNoBackupPossible_NamesTheMigrationStep()
+    {
+        DatabaseOperationResult result = await InitialiseWithMigrationPendingAndNoDiskSpaceAsync();
+
+        Assert.AreEqual(BackupGuardedStep.Migration, result.RefusedStep);
+    }
+
+    [TestMethod]
+    public async Task InitialiseAsync_MigrationPendingWithNoBackupPossible_AppliesNoMigration()
+    {
+        await InitialiseWithMigrationPendingAndNoDiskSpaceAsync();
+
+        using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        int tables = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '{PendingMigrationTable}';");
+        Assert.AreEqual(0, tables, "the pending migration's table was created, so the migration ran without a backup");
+    }
+
+    /// <summary>A refused content load leaves the schema intact, which the caller reports differently from a refused migration.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_NamesTheContentLoadStep()
+    {
+        DatabaseOperationResult result = await InitialiseWithContentPendingAndNoDiskSpaceAsync();
+
+        Assert.AreEqual(BackupGuardedStep.ContentLoad, result.RefusedStep);
+    }
+
+    private const string PendingMigrationTable = "Test_348_PendingMigration";
+
+    /// <summary>
+    /// A fully migrated database with its content already loaded, then a build carrying one more migration,
+    /// started with no free disk space: the migration is the only guarded step pending, and no backup can be
+    /// taken. Loading content first matters: an empty database would also refuse its content load, and that
+    /// refusal would satisfy these tests whether or not the migration refused.
+    /// </summary>
+    private async Task<DatabaseOperationResult> InitialiseWithMigrationPendingAndNoDiskSpaceAsync()
+    {
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([SimpleQuoteBatch()], QuotinatorMigrations.All, useBaseline: true);
+        await db1.InitialiseAsync();
+
+        SchemaMigration pending = new SchemaMigration
+        {
+            Version = QuotinatorMigrations.All.Count + 1,
+            Sql     = $"CREATE TABLE IF NOT EXISTS {PendingMigrationTable} (Id INTEGER);",
+        };
+
+        QuotinatorDatabaseInitializer db2 = CreateInitializer(
+            [], [.. QuotinatorMigrations.All, pending], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
+        return await db2.InitialiseAsync();
+    }
+
+    /// <summary>
     /// #348: loading content writes what this database cannot get back if it goes wrong, and the backup is
     /// the only thing that could have got it back, so with no backup possible the load does not run.
     /// </summary>

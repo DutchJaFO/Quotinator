@@ -103,6 +103,16 @@ public class DatabaseBackupQuotaTests
         Assert.AreEqual(BackupOutcome.BudgetExceeded, result.BackupObstacle);
     }
 
+    [TestMethod]
+    public async Task ResetAsync_WhenNoBackupCanBeTaken_NamesTheResetStep()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+
+        DatabaseOperationResult result = await new RecordingInitializer(NewOptions(), _dbPath).ResetAsync();
+
+        Assert.AreEqual(BackupGuardedStep.Reset, result.RefusedStep);
+    }
+
     /// <summary>
     /// A refusal that still wiped the database would be strictly worse than the unhandled 500 it replaced.
     /// </summary>

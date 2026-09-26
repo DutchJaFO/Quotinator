@@ -514,7 +514,7 @@ public class AdminEndpointsTests
             // Mirrors the real initializer: the override is what turns a refusal into a run, so a spy
             // that refused regardless would make the override untestable at this layer.
             if (RefuseWith is not null && (!allowNoBackup || RefuseEvenWithOverride))
-                return Task.FromResult(DatabaseOperationResult.RefusedForBackup(RefuseWith.Value));
+                return Task.FromResult(DatabaseOperationResult.RefusedForBackup(RefuseWith.Value, BackupGuardedStep.Reset));
 
             ResetRan = true;
             return Task.FromResult(DatabaseOperationResult.Success(backupSkippedByOverride: RefuseWith is not null));

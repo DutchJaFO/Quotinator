@@ -3,14 +3,14 @@ using Quotinator.Data.Enums;
 namespace Quotinator.Data.Database;
 
 /// <summary>
-/// The outcome of an initialisation or reset (#348) — whether it did what was asked, and if not, which
+/// The outcome of an initialisation or reset (#348): whether it did what was asked, and if not, which
 /// obstacle stopped it.
 /// <para>
 /// These operations used to return a bare <see cref="Task"/> and communicate failure by throwing.
 /// Per developer direction an exception is for a condition there is no other way to detect; a backup
 /// that cannot be taken is detected deliberately, before anything is attempted, so it is reported as a
 /// result. Exceptions are still caught around these paths, as the backstop for what the check could not
-/// foresee — not as the mechanism for what it did.
+/// foresee, not as the mechanism for what it did.
 /// </para>
 /// <para>
 /// Deliberately carries a typed <see cref="BackupOutcome"/> rather than a message.
@@ -31,6 +31,12 @@ public sealed class DatabaseOperationResult
     public BackupOutcome? BackupObstacle { get; init; }
 
     /// <summary>
+    /// Which guarded step refused, when one did: a caller reports a refused migration differently from a
+    /// refused content load. <see langword="null"/> when nothing was refused.
+    /// </summary>
+    public BackupGuardedStep? RefusedStep { get; init; }
+
+    /// <summary>
     /// Whether the operation ran without a backup because the caller explicitly accepted that. Recorded
     /// so a later "where is the backup" question has an answer that is not guesswork.
     /// </summary>
@@ -43,6 +49,7 @@ public sealed class DatabaseOperationResult
 
     /// <summary>An operation refused because no backup could be taken.</summary>
     /// <param name="obstacle">Which obstacle stopped it.</param>
-    public static DatabaseOperationResult RefusedForBackup(BackupOutcome obstacle) =>
-        new DatabaseOperationResult { Succeeded = false, BackupObstacle = obstacle };
+    /// <param name="step">Which guarded step refused.</param>
+    public static DatabaseOperationResult RefusedForBackup(BackupOutcome obstacle, BackupGuardedStep step) =>
+        new DatabaseOperationResult { Succeeded = false, BackupObstacle = obstacle, RefusedStep = step };
 }
