@@ -1,176 +1,289 @@
-# #348 — Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable
+# #348: Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable
 
-**Status:** Waiting for release
+**Status:** In progress (step 7)
 **GitHub issue:** #348
 **Tiers required:** T1, T2
-**Depends on:** none — found by #327, blocks #327's two remaining degradation documents
+**Depends on:** #349
 
 ---
 
 ## Description
 
-A backup exists to make a startup or a destructive admin action safe. When one cannot be taken the
-application does one of two wrong things depending on which obstacle it hit: it proceeds silently
-without a backup, or it throws an undifferentiated exception that reaches the caller as an unhandled
-`500`. Neither says *which* obstacle occurred, and the five obstacles have five different remedies.
+A backup exists to make a startup or a destructive admin action safe. When one could not be taken, the
+application either proceeded silently without one or threw an undifferentiated exception that reached
+the caller as an unhandled `500`, and neither said *which* of five obstacles occurred, although each has
+a different remedy. The sharpest symptom: on a corrupt or truncated database `/health` told the operator
+to run a Reset, and that exact call returned `500`.
 
-The sharpest symptom: on a corrupt or truncated database `/health` returns `503` telling the operator to
-run a database Reset, and that exact call returns `500`. The advertised remedy is the one that cannot
-run.
-
-Found by [#327](https://github.com/DutchJaFO/Quotinator/issues/327) while measuring its requirement 4 —
-not just whether a stated recovery route is reachable, but whether it can succeed.
-
----
+Found by [#327](https://github.com/DutchJaFO/Quotinator/issues/327) while measuring whether a stated
+recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**T1 is the only thing outstanding, and it is the developer's own to run.** All 14 verification rows
-are green: 21 unit tests, each shown able to fail by mutation, plus four documents in the new
-`docs/automated-testing/backup/` category all executed live against a built image.
+**Execute step 7.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
+issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
+of them unmet in the code; steps 7 onward close them, and every design question they raise was settled
+with the developer before this plan was written (see *Design*).
 
 ---
 
 ## Design
 
-Settled with the developer 2026-08-27; see #327's plan doc for the measurement that produced it.
+### The five variants, plus one
 
-### The five variants
+Read off `CreateBackup`'s control flow, not from the two that happened to surface first.
 
-Read off `CreateBackup`'s control flow rather than from the two that happened to surface first.
+| Outcome | Cause | Resolvable inside the application? |
+|---|---|---|
+| `BudgetExceeded` | The backups folder would exceed its quota | Yes: remove old backups (#349's endpoints) |
+| `InsufficientDiskSpace` | The volume has too little free space | Partly: removing backups reclaims some |
+| `DestinationDirectoryNotWritable` | The backups folder cannot be created | No: restore write access outside the app |
+| `DestinationFileNotWritable` | A file cannot be created in the backups folder | No: same remedy |
+| `SourceUnreadable` | The database file itself cannot be read | No: no backup of it is possible by any means |
+| `DiskFilledDuringBackup` | The volume filled while the copy ran | No: free space outside the app |
 
-| # | Cause | Today | Endpoint-resolvable? |
-|---|---|---|---|
-| 1 | Backups folder would exceed `MaxBackupStorageGb` | warn, `return null`, proceed | Yes, via [#349](https://github.com/DutchJaFO/Quotinator/issues/349) |
-| 2 | Free disk space below the estimate | warn, `return null`, proceed | Partly — deleting backups reclaims some |
-| 3 | `Directory.CreateDirectory(BackupsPath)` throws | `DatabaseBackupWriteException` | No — restore write access |
-| 4 | `dest.Open()` throws | `DatabaseBackupWriteException` | No — same remedy as 3 |
-| 5 | `connection.BackupDatabase(dest)` throws — source unreadable | `DatabaseBackupWriteException` | No — no backup is possible |
+Anything unrecognised is `Unclassified`, carrying the underlying error: an unnamed variant is an
+unanswered question, and a wrong name is worse than no name.
 
 ### Attribution is structural
 
-The three statements inside the old `try` are sequential and independent, so each is attempted on its
-own and the failing statement names the fault. By the time the copy runs, the destination is already
-proven creatable and openable — which is what makes a failure there the source's.
-
-One residual ambiguity is named rather than hidden: a disk that fills *during* the copy fails at the
-same statement as an unreadable source. That one splits on `SqliteException.SqliteErrorCode` — a typed
-code, not a parsed message. Anything unrecognised is `Unclassified`, carrying the underlying error,
-because an unnamed variant is an unanswered question and a wrong name is worse than no name.
+The three statements the old `try` wrapped are attempted one at a time, so the failing statement names
+the fault. By the time the copy runs, the destination is proven creatable and openable, which is what
+makes a failure there the source's. A disk that fills during the copy fails at the same statement as an
+unreadable source, and splits on the typed `SqliteException.SqliteErrorCode`, never a parsed message.
 
 ### Quota: two levels, not a prediction
 
-The current arithmetic decides a hard yes/no from `estimatedBytes`, the *source file's* length. SQLite
-copies pages, so that is an approximation of the result, not a measurement of it.
+`CreateBackup` used to decide yes or no from the source file's length, which only approximates what a
+page copy produces.
 
 | Level | Value | Meaning |
 |---|---|---|
-| Operating quota | `BackupQuotaPercent`, default 90% | What normal operation uses |
+| Operating quota | `BackupQuotaPercent` of the budget, default 90% | What normal operation uses |
 | Absolute ceiling | `MaxBackupStorageGb` | Never exceeded |
 
-The reserve between them is what makes the unpredictable size safe to live with: an operator at the
-normal quota still has room for one more backup at the moment a Reset is about to run. Using it requires
-the override, never a default.
+The reserve between them lets an operator at the normal quota take one more backup at the moment it is
+needed most. Reaching into it takes the override, never a default. An out-of-range percentage is
+reported loudly and the default used: not a silent clamp, and not a crash.
 
-### Refusal and override
+### Check, act, still catch
 
-Reset refuses rather than running its destructive step unprotected, returning a stated failure naming the
-variant and its remedy — never an unhandled `500`. The override means the operator accepts
-responsibility **and** the action can complete without a backup. A skipped backup is recorded twice: a
-warning log line, and an audit entry, so nobody hunts for a backup that was never made.
+Developer direction, 2026-08-27: exceptions only where nothing else can detect the condition; anything
+else is a response declaring success or failure and the reason. So a backup is **checked** first
+(`CheckBackupReadiness`, no exception), then **attempted** (`CreateBackup` returns a result), and
+exceptions are still **caught** as the backstop for what the check cannot see. A `200` means the
+endpoint did what was asked; any other status carries the reason and the remedies, if any.
 
-### How a refusal travels — a result, not an exception
+### Every guarded step refuses the same way (settled 2026-09-26)
 
-**Developer direction, 2026-08-27**, correcting this plan's first reading:
+Three steps write to the database and must never run without a backup unless the operator overrides:
+the **migration** at startup, the **content load** at startup, and **Reset**. Each checks, refuses with
+the obstacle, and leaves the database exactly as it was. `DatabaseOperationResult` says which step
+refused, so a caller can tell a migration refusal from a content-load refusal.
 
-> *"We only use exceptions when there is no other method of detecting the issue. Anything else simply
-> needs a response that declares success/failure + reason. This is why we use the status check to see if
-> we can do a backup. We still handle exceptions as despite the status check we may still get
-> exceptions."*
+### Where a refusal is reported (developer decision, 2026-09-26)
 
-So the order is **check, then act, then still catch**:
+| Refused step | Schema afterwards | Reported by |
+|---|---|---|
+| Migration at startup | Behind the build | `/health` 503 and the degraded pages, naming the variant, its remedies, and the Knowledgebase entry. No notification: writing a row into a table the build has not migrated is the unprotected write the refusal exists to prevent |
+| Content load at startup | Intact | An `ActionRequired` notification offering only the options that can run now, and linking the Knowledgebase entry for the ones that cannot |
+| Reset | Intact | The `409` response, as before |
 
-1. **Check.** The pre-flight reports whether a backup can be taken, in the variant vocabulary. This is
-   the normal path and it involves no exception, because a full backup folder is an ordinary operating
-   condition rather than an exceptional one.
-2. **Act.** `CreateBackup` returns a result declaring success or failure plus the reason. A caller that
-   must refuse returns its own failure result; it does not throw to communicate a condition it already
-   knows about.
-3. **Still catch.** The check cannot foresee everything — the state can change between checking and
-   acting, and a genuinely unforeseen failure is exactly what an exception is for. Exceptions remain
-   handled, as the backstop rather than as the mechanism.
+### A reseed offered to the user backs up first (developer direction, 2026-09-26)
 
-**The endpoint contract, same direction:** `200` means the endpoint did what was asked. Any other status
-is an error whose **response content carries the reason and the potential solutions, if any**. A refusal
-is therefore a non-2xx with the variant, its cause, and the remedies — naming which are actionable
-through [#349](https://github.com/DutchJaFO/Quotinator/issues/349)'s endpoints and which are not.
+A function does one thing (CLAUDE.md's side-effect policy), so `ReseedAsync` never takes a backup of its
+own; a reseed that did would be deciding a second thing on the caller's behalf. The caller that offers
+the user a reseed composes the steps instead: **check** whether a backup can be taken, **back up**, then
+**reseed**. When the check says a backup cannot be taken, the user is told why and asked for permission
+before the reseed runs without one, so they can choose to resolve the obstacle first.
 
-This replaces the "typed exception caught at the endpoint boundary" this plan first proposed. That shape
-would have made an expected, recoverable condition travel as an exception purely because the existing
-startup path already threw — reasoning from what the code does rather than from what the condition is.
+That caller is the notification executor's `Reseed` action, which serves both the backup-refusal
+notification and #304's reseed recommendation. Today it runs the reseed alone; step 12 makes it compose
+the three steps.
+
+### The notification's options (developer decision, 2026-09-26)
+
+Each is offered only when the pre-flight check, asked at render time, says it can complete now. That is
+requirement 7: the UI asks before it offers, rather than presenting an option that will then refuse.
+
+| Option | Offered when | What it does |
+|---|---|---|
+| Back up, then reseed | `CheckBackupReadiness()` now reports `Succeeded` | Takes a backup; reseeds only if it succeeded |
+| Remove the oldest backup, then back up and reseed | The obstacle is `BudgetExceeded` or `InsufficientDiskSpace`, a backup exists, and removing the oldest one would make the check succeed | Deletes that one backup through #349's audited delete path, then backs up and reseeds |
+| Reseed without a backup | The check reports an obstacle the reseed can complete without: never `SourceUnreadable` or `DiskFilledDuringBackup` | Asks for permission first, naming the obstacle and linking the Knowledgebase entry; on permission, reseeds and records the missing backup in the log and the audit trail |
+
+The refusal notification is resolved by content arriving, which is exactly what the existing `Reseed`
+dismiss trigger means, so it reuses that trigger. The one new kind is a `BackupRefused` payload (the
+obstacle and the refused step), with its CHECK-widening migration and baseline update per ADR 008 (new
+kinds added where the design needs them, developer, 2026-09-26).
+
+### The Knowledgebase explains what the notification cannot offer (developer decision, 2026-09-26)
+
+One entry, *Content was not loaded, or a migration did not run, because no backup could be taken*, with
+a section per outcome: which options are blocked for it, why, and the manual steps that resolve it. The
+notification and the degraded Home page link to it; a link leaving the app opens in a new tab, per
+CLAUDE.md's external-link rule.
 
 ---
 
 ## Steps
 
 ### 1. Write the verification checklist
-
-**Status:** ✅ Written — 14 rows, one per requirement, plus the design note the out-of-range case needed
-
-Every requirement in the issue gets a row, per `process.md`'s Planning step 5.
+**Status:** ✅ Done
 
 ### 2. Write the red tests
+**Status:** ✅ Done
 
-**Status:** ✅ Twenty-one written and green, each shown able to fail by mutation
-
-The fourteen named in the issue, plus the two whose expectation changes deliberately
-(`CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` and
-`InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason`). Confirm each is genuinely red before
-any of the existing uncommitted code is kept.
+Written after the implementation they test, which this plan recorded at the time. Step 7 replaces the
+mutation evidence gathered then with a red run, as `docs/testing-policy.md` requires.
 
 ### 3. Finish the outcome type and the call sites
+**Status:** ✅ Done
 
-**Status:** ✅ Attribution done and held to tests; the refusal it enables is step 4
-
-`BackupOutcome`, `DatabaseBackupResult` and `CreateBackup`'s structural attribution are in, all three
-call sites compile, and the solution builds at 0 warnings. `CreateBackup` is `internal` rather than
-private so `Quotinator.Data.Tests` can put each variant to its own assertion directly; driving five
-different failure states through a full initialisation would test the plumbing rather than the
-attribution, and two of them need injected providers regardless.
-
-**`DatabaseBackupOutcomeTests` — 5 tests, and each was shown able to fail.** They passed on first run,
-because the implementation was written before them (the wrong order, recorded in this plan's Next
-action). Passing was therefore not evidence of anything, so attribution was collapsed to a single
-`Unclassified` for every failure path and the suite re-run: **all four variant tests failed and the
-success control still passed**, which is what the discrimination claim actually rests on.
-
-**One deliberate red is now outstanding, and it must not be "fixed" by editing its expectation.**
-`DatabaseInitializerTests.InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason` fails with
-*"Expected exception of exact type DatabaseBackupWriteException but no exception was thrown"*. That is
-correct and expected at this point: the destination-failure path no longer throws, and nothing has yet
-replaced the throw with a refusal — so startup currently **proceeds unprotected**, which is exactly the
-defect requirement 2 names. The test is the red for step 4; it goes green when the refusal lands, not
-before, and not by changing what it asserts.
-
+`BackupOutcome`, `DatabaseBackupResult`, and `CreateBackup`'s structural attribution.
 
 ### 4. Reset refusal, override, logging and audit
+**Status:** ✅ Done
 
-**Status:** ✅ Refusal, override, `AuditOperation.BackupSkipped`, and the 409 response with cause and remedies
-
-Includes a new `AuditOperation.BackupSkipped`.
+The `409` with cause and remedies, the override, and `AuditOperation.BackupSkipped`. The first live pass
+found two further defects the unit tests could not see: a Reset that dropped every table after a backup
+abandoned mid-copy and returned `200`, and a pre-flight that trusted `Directory.CreateDirectory` on a
+read-only mount. Both are fixed; `docs/automated-testing/backup/01` to `04` hold them.
 
 ### 5. The quota model
-
-**Status:** ✅ Two levels in, configurable, out-of-range reported rather than clamped or thrown
-
-`BackupQuotaPercent` on `DatabaseOptions`, validated rather than clamped.
+**Status:** ✅ Done
 
 ### 6. Remedy text per variant
+**Status:** ✅ Done
 
-**Status:** ✅ `BackupObstacleGuidance` in the Api layer — six causes, remedies ordered most-actionable-first
+`BackupObstacleGuidance`, in the Api layer so `Quotinator.Data` stays domain-agnostic per ADR 004.
 
-Each states symptom, cause and remedy — the property #333's sweep needs to write a Knowledgebase entry
-later. No `QTN-` code is allocated here; see the Scope boundary in the issue.
+### 7. Run every existing #348 test red
+**Status:** ⬜ Not started
+
+Found 2026-09-26: steps 2 to 6 were written implementation-first, and their evidence is mutation, which
+`docs/testing-policy.md` calls the recovery, not a substitute. Against a signature state (every
+`CheckBackupReadiness` answering `Succeeded`, `CreateBackup` attribution collapsed to `Unclassified`,
+`ResetAsync` without its refusal, the quota limit equal to the ceiling, `BackupObstacleGuidance`
+returning nothing), every test in `DatabaseBackupOutcomeTests`, `DatabaseBackupPreflightTests`,
+`DatabaseBackupQuotaTests`, and the backup tests in `DatabaseInitializerTests` and `AdminEndpointsTests`
+must fail on an assertion. A test that stays green is given a positive half that fails, or removed if no
+state of this issue can make it fail. Then restore, and all pass.
+
+### 8. The migration step refuses without a backup
+**Status:** ⬜ Not started
+
+Found 2026-09-26: `ApplyMigrationsAsync` takes a backup, keeps only its path, and never checks whether it
+succeeded, so a failed backup lets every pending migration run unprotected. Its restore handler is
+filtered on that path, so a migration that then throws is not rolled back either.
+
+Red first: a migration pending with no backup possible applies no migration, leaves both schema-version
+counters unchanged, and returns a refusal naming the obstacle and the `Migration` step. Its positive
+counterpart: with a backup possible, the same database migrates. `DatabaseOperationResult` gains the
+refused step, as a `BackupGuardedStep` enum in `Quotinator.Data/Enums/`.
+
+### 9. Startup reports a refusal instead of discarding it
+**Status:** ⬜ Not started
+
+Found 2026-09-26: `Program.cs` awaits `InitialiseAsync()` and discards its result, so a refused content
+load leaves the app reporting healthy with nothing loaded and nothing said. Its handler for
+`DatabaseBackupWriteException` is dead code: nothing in `src/` throws that type any more.
+
+Red first, through `WebApplicationFactory` with a backup made impossible deterministically (a zero
+quota): a refused migration marks the database unhealthy with a reason naming the variant, its remedies
+and the Knowledgebase entry; a refused content load leaves the app healthy and raises the step 10
+notification. Positive counterparts: with a backup possible, startup is healthy and raises no such
+notification. The dead handler and `DatabaseBackupWriteException` are removed.
+
+### 10. The refused content load raises a notification
+**Status:** ⬜ Not started
+
+`NotificationMetadataKind.BackupRefused` (payload: the obstacle and the refused step), with its migration
+widening the CHECK, the baseline updated to match, and the schema-drift tests extended. The notification
+carries the existing `Reseed` dismiss trigger. Title and body in all three languages. Deduplicated
+against active rows while unresolved, like `Reseed`, since the refusal recurs on every start until
+resolved.
+
+### 11. Offer only the options that can run
+**Status:** ⬜ Not started
+
+`NotificationActionAvailability` gains the pre-flight answers (normal and with the reserve) and whether
+removing the oldest backup would clear the obstacle; the executor offers each option under exactly the
+conditions in *Design*. Every option is tested offered and withheld, per obstacle.
+
+The offered options also reach `GET /api/v1/notifications`, as an `availableActions` list on each
+notification. A requirement visible only in rendered HTML cannot be verified live (process.md), and this
+is the requirement the whole reopening is about.
+
+### 12. The reseed action backs up first
+**Status:** ⬜ Not started
+
+The executor's `Reseed` action composes the steps from the existing calls, adding none to
+`IDatabaseInitializer`: `CheckBackupReadiness`, then `CreateBackupAsync`, then `ReseedAsync`.
+
+- **Back up, then reseed:** reseeds only when the backup succeeded; a backup that fails after the check
+  passed stops before the reseed and leaves the notification active with that obstacle.
+- **Remove the oldest backup, then back up and reseed:** deletes through #349's audited path first.
+- **Reseed without a backup:** runs only with the user's permission, given after being shown the
+  obstacle and the Knowledgebase link; writes the missing backup to the log and the audit trail.
+
+Every path that reseeds dismisses with `Reseed`, as today. Each is tested for its effect (a backup file
+written before the reseed ran, content present, backup removed, audit and log written, notification
+dismissed) and for its refusal (no reseed, nothing deleted, notification still active). #304's reseed
+recommendation runs through the same action, so its existing tests are re-run and extended with a
+backup written before the reseed.
+
+### 13. Test the skip log line
+**Status:** ⬜ Not started
+
+Found 2026-09-26: requirement 5 asks for a log line **and** an audit entry. The audit entry is tested;
+`LogResetProceedingWithoutBackup` is not, although the issue named that test. Red first: an overridden
+Reset logs the skip; a Reset whose backup succeeds logs no skip line.
+
+### 14. Write the Knowledgebase entry
+**Status:** ⬜ Not started
+
+`docs/knowledgebase/no-backup-could-be-taken.md`, from `entry-template.md`, listed in the folder's
+README. Its symptoms quote the notification, the `503` reason and the `409` detail verbatim; a section
+per `BackupOutcome` names the blocked options, why each is blocked, and the manual resolution. Held by a
+repository test: every `BackupOutcome` member has its section, and the link the application renders
+names a file that exists.
+
+### 15. Render the options and the Knowledgebase link
+**Status:** ⬜ Not started
+
+`NotificationTable` renders each offered option as its own button and none that is withheld, beside a
+link to the entry. *Reseed without a backup* opens a confirmation naming the obstacle and linking the
+entry, and runs nothing until confirmed. `StartupErrorModal` renders the same link when the degraded
+reason is a refusal. All tested as components; labels and confirmation text in all three languages.
+
+### 16. Automated (T2) documents, red first
+**Status:** ⬜ Not started
+
+In `docs/automated-testing/backup/`, each run first against a canary build of the commit before step 8:
+
+- *A startup that cannot take a backup loads nothing, and offers only options that can run.* Reset a
+  database, restart with a zero quota: nothing loaded, the notification present with exactly the
+  options the state allows; then each option executed through the page, and the remedy proven by the
+  content arriving.
+- *A migration that cannot take a backup leaves the database unmigrated, and says why.* Upgraded +
+  Constrained: `503` naming the variant, schema version unchanged, the Knowledgebase link on the
+  degraded Home page; the sabotage removed, and the same volume migrates.
+
+Both indexed in `docs/automated-testing/README.md`.
+
+### 17. Documentation
+**Status:** ⬜ Not started
+
+`docs/api-endpoints.md` and the endpoint's `[Description]` for `availableActions`; the changelog's
+unreleased entry for #348 in all three languages.
+
+### 18. Full verification
+**Status:** ⬜ Not started
+
+Build clean; the full solution suite green across three consecutive `-m:1` runs; the T2 smoke set plus
+every `backup/` document, `startup-and-degradation/05`, and the notification documents the new kind
+touches.
 
 ---
 
@@ -178,122 +291,40 @@ later. No `QTN-` code is allocated here; see the Scope boundary in the issue.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ✅ | Every backup attempt reports which of the five obstacles it hit | Unit test | `DatabaseBackupOutcomeTests.BudgetExceeded_IsReportedAsBudgetExceeded`, `...InsufficientDiskSpace_IsReportedAsInsufficientDiskSpace`, `...UnwritableBackupsDirectory_IsReportedAsDestinationDirectoryNotWritable`, `...CorruptSourceDatabase_IsReportedAsSourceUnreadable`, plus `...SucceedingBackup_ReportsSucceededAndTheFileItWrote` as the control. Each shown able to fail by collapsing attribution to one outcome — 4 of 5 failed, the control correctly did not |
-| 2 | ✅ | An unrecognised failure reports as `Unclassified` and carries the underlying error | Unit test | `DatabaseBackupOutcomeTests.CopyFailureThatIsNotASqliteError_...` covers the generic catch, established by mutation since both paths return the same member. `ClassifyCopyFailure`'s `_ =>` is now genuinely unreachable rather than untested: 26/11 → `SourceUnreadable`, 13 → `DiskFilledDuringBackup`, and 14/8 are caught by `ResetAsync`'s backstop, so no remaining code reaches it by a route this project can produce. Recorded as unreachable-by-construction, not as a gap left open |
-| 3 | ✅ | Startup refuses rather than proceeding unprotected, naming the variant | Unit test | `DatabaseInitializerTests.CreateBackup_InsufficientStorageSpace_RefusesToSeedRatherThanProceedUnprotected` and `...InitialiseAsync_BackupWriteFails_ReportsTheObstacleRatherThanThrowing` — both assert the result's `BackupObstacle` and that the database is left untouched. Reporting the variant *to the operator* as a degraded health reason is the Api layer's half and is row 12 |
-| 4 | ✅ | Reset refuses, with a stated failure rather than an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.ResetDatabase_WhenNoBackupCanBeTaken_RefusesWithAStatedFailureRatherThanAnUnhandled500` and `...ResponseNamesTheCauseAndItsRemedies` (409 + `backupObstacle` + `remedies`), plus `DatabaseBackupQuotaTests.ResetAsync_WhenNoBackupCanBeTaken_NeverReachesTheDestructiveStep` — the endpoint-level "did not rebuild" assertion only proved the *spy* refused, so the real guarantee is checked against `OnResetAsync` at the Data layer |
-| 5 | ✅ | The override proceeds, and only where the action can complete without a backup | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_ProceedsAndRebuilds` (asserts the endpoint forwards it, not merely accepts it) and `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_ReachesTheDestructiveStepAndReportsTheSkip` |
-| 6 | ✅ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip`. `AuditOperation.BackupSkipped` needs no migration — `Audit_Entry.Operation` is `TEXT NOT NULL` with no CHECK constraint (verified 2026-08-27), so ADR 008's checklist does not apply |
-| 7 | ✅ | A healthy database is entirely unaffected | Unit test | `AdminEndpointsTests.ResetDatabase_WhenBackupSucceeds_IsUnchanged` — 200, the reset ran, and nothing claims a backup was skipped. The regression control for the whole issue |
-| 8 | ✅ | A caller can ask whether a backup is possible without attempting one, in the same variant vocabulary | Unit test | `IDatabaseInitializer.CheckBackupReadiness(bool allowReserve)`, driven by all four `DatabaseBackupQuotaTests` headroom cases. Consumed for real by `ResetAsync`, which checks before opening a connection — so it is exercised as a pre-flight, not only asserted directly |
-| 9 | ✅ | The operating quota is honoured, the reserve is reachable only by override, and the ceiling never is | Unit test | `DatabaseBackupQuotaTests.UsageBelowTheQuota_ReportsThatABackupCanBeTaken`, `...UsageAtTheQuota_IsRefused_WithoutReachingIntoTheReserve`, `...UsageAtTheQuota_WithTheReserveAllowed_CanStillTakeABackup`, `...UsageAtTheAbsoluteCeiling_IsRefusedEvenWithTheReserveAllowed`. Shown able to fail: with the quota mutated away so the limit is always the ceiling, 3 of 7 fail |
-| 10 | ✅ | The quota percentage is configurable and defaults to 90 | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_IsConfigurable` (60% usage passes a 90% quota and fails a 50% one, so the setting is genuinely consulted) and `...QuotaPercent_DefaultsTo90`, which reads the property off a real instance — comparing the constant to a literal is const-folded and can never fail, which MSTEST0032 flagged |
-| 11 | ✅ | An out-of-range percentage is reported loudly and the default used — never silently clamped, and never a crash | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_OutOfRange_IsReportedAndTheDefaultUsed_NotClampedAndNotFatal` — asserts both halves: the default applied (a clamp to 100 would have allowed the write) and the warning names the setting, so an ignored value is not silently substituted |
-| 12 | ✅ | Each variant's message states symptom, cause and remedy | Live | `BackupObstacleGuidance` — five named causes plus an explicit "not one this build recognises" for the sixth, each with remedies ordered most-actionable-first. `SourceUnreadable` deliberately omits removing old backups: the obstacle is the source, so freeing destination space changes nothing, and naming a remedy that cannot work is the defect #326 fixed. Lives in the Api layer, keeping `Quotinator.Data` domain-agnostic per ADR 004 |
-| 13 | ✅ | The two existing tests whose expectation changes are updated deliberately, not to make a red run pass | Unit test | Both rewritten with names stating the new contract, not edited assertions under old names: `CreateBackup_InsufficientStorageSpace_SkipsWithWarningNotException` → `..._RefusesToSeedRatherThanProceedUnprotected`, and `InitialiseAsync_BackupWriteFails_SurfacesDistinctFailureReason` → `..._ReportsTheObstacleRatherThanThrowing`. Each carries a comment saying what changed and why, so neither reads as a test bent to fit |
-| 14 | ✅ | The corrupt and truncated databases that started this are actually recoverable end to end | Live | T2, 2026-08-28, against a rebuilt `quotinator:local`. Corrupt file and truncated file both now answer `409` with `backupObstacle: SourceUnreadable`, the cause, and two workable remedies; `allowNoBackup=true` correctly still refuses; a healthy database still returns `200`. **This row found a defect four green unit tests had missed — see the note below** |
+| 1 | ❌ | Every backup attempt reports which obstacle it hit | Unit test | `DatabaseBackupOutcomeTests`, each variant plus `SucceedingBackup_ReportsSucceededAndTheFileItWrote`; red in step 7 |
+| 2 | ❌ | An unrecognised failure reports as `Unclassified` and carries the underlying error | Unit test | `DatabaseBackupOutcomeTests.CopyFailureThatIsNotASqliteError_IsReportedAsUnclassified_CarryingTheUnderlyingError`; red in step 7 |
+| 3 | ❌ | The content load at startup refuses rather than proceeding unprotected, naming the variant | Unit test | `DatabaseInitializerTests.CreateBackup_InsufficientStorageSpace_RefusesToSeedRatherThanProceedUnprotected` and `...InitialiseAsync_BackupWriteFails_ReportsTheObstacleRatherThanThrowing`; red in step 7 |
+| 4 | ❌ | Reset refuses with a stated failure, never an unhandled 500, and does not rebuild | Unit test | `AdminEndpointsTests.ResetDatabase_WhenNoBackupCanBeTaken_*` and `DatabaseBackupQuotaTests.ResetAsync_WhenNoBackupCanBeTaken_NeverReachesTheDestructiveStep`; red in step 7 |
+| 5 | ❌ | The override proceeds, and only where the action can complete without a backup | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_ProceedsAndRebuilds`, `...WhenTheSourceIsUnreadable_DoesNotOfferAnOverrideThatCannotWork`, `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_ReachesTheDestructiveStepAndReportsTheSkip`; red in step 7 |
+| 6 | ❌ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip` (step 7) and step 13's log test |
+| 7 | ❌ | A healthy database is entirely unaffected | Unit test | `AdminEndpointsTests.ResetDatabase_WhenBackupSucceeds_IsUnchanged`; red in step 7 |
+| 8 | ❌ | A caller can ask whether a backup is possible without attempting one, in the same vocabulary | Unit test | `DatabaseBackupPreflightTests`, all cases; red in step 7 |
+| 9 | ❌ | The operating quota is honoured, the reserve is reachable only by override, the ceiling never is | Unit test | `DatabaseBackupQuotaTests.UsageBelowTheQuota_*`, `...UsageAtTheQuota_*`, `...UsageAtTheAbsoluteCeiling_*`; red in step 7 |
+| 10 | ❌ | The quota percentage is configurable and defaults to 90 | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_IsConfigurable` and `...QuotaPercent_DefaultsTo90`; red in step 7 |
+| 11 | ❌ | An out-of-range percentage is reported and the default used, never clamped, never fatal | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_OutOfRange_IsReportedAndTheDefaultUsed_NotClampedAndNotFatal`; red in step 7 |
+| 12 | ❌ | Each variant's message states cause and remedy, and names no remedy that cannot work | Unit test | A `BackupObstacleGuidanceTests` class: every `BackupOutcome` has a non-empty cause and remedies, and `SourceUnreadable` offers neither the override nor removing backups; red in step 7 |
+| 13 | ✅ | The two tests whose expectation changed were renamed to their new contract, not bent to pass | Unit test | Recorded in step 2: both renamed, each with a comment on what changed and why |
+| 14 | ✅ | The corrupt and truncated databases are recoverable end to end | Automated (T2) | `backup/01` and `backup/02`, executed 2026-08-28, each ending with the remedy proven by a `200` |
+| 15 | ❌ | A pending migration with no backup possible applies nothing and reports the obstacle and the step | Unit test | Step 8's test, and its positive counterpart that migrates when a backup is possible |
+| 16 | ❌ | A startup migration refusal marks the database unhealthy, naming the variant, remedies and entry | Unit test | Step 9's `WebApplicationFactory` test, and its healthy counterpart |
+| 17 | ❌ | A startup content-load refusal leaves the app healthy and raises one `BackupRefused` notification | Unit test | Step 9's `WebApplicationFactory` test, and its counterpart raising none when a backup is possible |
+| 18 | ❌ | The new payload kind is accepted by the migration and the baseline alike | Unit test | The schema-drift and CHECK-value tests in `DatabaseInitializerOwnershipTests`, extended |
+| 19 | ❌ | Each option is offered exactly when it can run, and withheld otherwise, per obstacle | Unit test | Step 11's executor tests: every option, offered and withheld |
+| 20 | ❌ | The offered options are visible over REST | Unit test | `NotificationEndpointsTests`: `availableActions` lists exactly what the executor offers |
+| 21 | ❌ | A reseed from the notification backs up first, and runs without one only with the user's permission | Unit test | Step 12's executor tests: effect and refusal for each option, including #304's reseed recommendation |
+| 22 | ❌ | The Knowledgebase entry covers every obstacle, and the rendered link resolves to it | Unit test | Step 14's repository test |
+| 23 | ❌ | The notification renders offered options only, asks before reseeding without a backup, and both surfaces render the entry link | Unit test | `NotificationTableTests` and a `StartupErrorModal` component test |
+| 24 | ❌ | Startup content-load refusal, end to end | Automated (T2) | Step 16's first document, red against the canary build |
+| 25 | ❌ | Startup migration refusal, end to end | Automated (T2) | Step 16's second document, red against the canary build |
+| 26 | ❌ | Every test this issue adds or changes fails against its signature state, on an assertion | Unit test | Steps 7 to 15, each recording its red run |
+| 27 | ❌ | Build clean and the full suite green across three `-m:1` runs | Build | Step 18 |
 
 ---
 
-## Design note — an out-of-range quota percentage must not crash
+## Design note: an out-of-range quota percentage must not crash
 
-The issue says an out-of-range value is "a configuration error, not something to clamp silently".
-Taken literally that suggests throwing, which would breach the never-crash contract this milestone is
-built around: a typo in one tuning value must not stop the application starting.
-
-The project's existing precedent is the opposite extreme — an unrecognised `Quotinator:LogLevel` falls
-back to `Information` **silently**, with no warning at all (`Program.cs`'s `switch`). Neither extreme is
-right here, and the precedent is not adopted just because it exists.
-
-**Resolved:** report it loudly — a warning naming the supplied value and the accepted range — and use
-the default. That is not a silent clamp, and it is not a crash. The triage question in
-`docs/knowledgebase.md` supports treating it this way: a wrong quota percentage does not prevent the
-application or the API from functioning.
-
----
-
-## What the live pass caught that the unit tests did not
-
-Row 14 was expected to be a formality — every unit test was green and the design was settled. It was
-not a formality, and this is why the row exists.
-
-**The first live run still returned `500`.** Not the old `500`: a new one, from `DropAllTablesAsync`
-rather than `CreateBackup`. The reason is a gap the unit tests could not see, because they exercised
-the pre-flight and the attempt separately and never drove a corrupt file through the whole path:
-
-`CheckBackupReadiness` inspects storage headroom and whether the *destination* can be written. It never
-reads the database. So an unreadable **source** passes the check cleanly, `ResetAsync` proceeds, and the
-failure surfaces later — inside the table drop, which reaches `sqlite_master` on a file SQLite will not
-open. The refusal was in the right place for four of the five variants and the wrong place for the
-fifth.
-
-**The fix is the backstop the developer's own rule already provides for.** *"We still handle exceptions
-as despite the status check we may still get exceptions."* `ResetAsync` now catches `SQLITE_NOTADB`/
-`SQLITE_CORRUPT` around `OnResetAsync` and converts it into the same `SourceUnreadable` refusal result
-the pre-flight would have produced had it been able to see it. Check, act, still catch — with this being
-exactly the case the third clause exists for.
-
-**And it corrected a remedy that was wrong.** The `SourceUnreadable` guidance had offered
-*"Retry with allowNoBackup=true … this is the only way a reset can run"*. Measured: it is not. A database
-SQLite cannot open cannot be dropped table-by-table either, so the override has nothing to proceed with
-and `allowNoBackup=true` still refuses — confirmed live. That advice was the same defect #326 fixed for
-the data-directory case: naming a remedy that cannot work. It is gone, and
-`ResetDatabase_WhenTheSourceIsUnreadable_DoesNotOfferAnOverrideThatCannotWork` now holds it there.
-
----
-
-## The backup test category
-
-Created 2026-08-28 by developer decision: backup is significant enough to be its own category rather
-than a detail inside `startup-and-degradation/`. Startup is one caller among several, and the ways a
-backup can fail — five of them, five different remedies — are the subject there rather than a
-supporting fact in somebody else's scenario. The overlap at the edges is deliberate: a read-only data
-directory appears in both categories, answering a different question in each.
-
-`docs/automated-testing/backup/` holds four documents, all executed 2026-08-28 against
-`quotinator:local`:
-
-| # | Proves |
-|---|---|
-| 01 | A file that is not a database → `409 SourceUnreadable`, and the override is not offered because it cannot work |
-| 02 | A truncated real database reaches the same outcome by a different code path |
-| 03 | A disk that fills *during* the copy → `409 DiskFilledDuringBackup`, with the data still intact |
-| 04 | An unwritable backups folder → `409 DestinationFileNotWritable`, and the override stops being offered once it has been tried and failed |
-
-**`test-env.csx` gained `--tmpfs-data <size>`** for document 03: a data directory with a hard size
-ceiling, because a bind mount inherits the host's free space and no test can control that.
-
-### What "we can distinguish them, so we can prove them" caught
-
-The three variants left unproven after the unit-test pass were not, as this plan previously claimed,
-untestable. Pursuing them found two further defects, both worse than the one #348 was filed for:
-
-**A reset could destroy the database and report success.** With a disk that filled mid-copy, SQLite
-abandoned a truncated backup file, `DropAndRebuildAsync` read only the backup's *path* and never whether
-it succeeded, and the reset went on to drop every table — returning `200`. The operator would have been
-told it worked, with their data gone and the only restore point an unusable fragment. Strictly worse
-than an unhandled 500, because it looks like success. `DropAndRebuildAsync` now aborts, and document 03
-asserts the quote count is unchanged rather than only checking the status code.
-
-**The pre-flight answered a question it never asked.** `Directory.CreateDirectory` on a directory that
-already exists is a no-op that succeeds on a read-only mount, so the check reported ready and the reset
-died later with `SQLITE_CANTOPEN` — another unhandled 500. It now writes and deletes a probe file, which
-is the only way to establish that a file can be written there.
-
-Both were found by replicating conditions the startup-stability work had already built the means for.
-Neither would have been found by adding more unit tests.
-
-### Every document proves the negative *and* the positive
-
-Added 2026-08-28 on developer reminder, and it was a real gap rather than a formality. As first written,
-all four documents asserted only refusals — so **all four would have passed against a build that refused
-every reset**, which is the same class of hole as a test that cannot fail.
-
-Each now ends by removing its own sabotage and confirming a reset returns `200`. That step does two jobs
-at once: it is the positive control, and it is the proof that the remedy the refusal *names* actually
-resolves the condition — `01` and `02` delete the unreadable file, `03` gives the volume room, `04`
-remounts writable. All four executed 2026-08-28.
-
-The unit tests already carried both sides — `SucceedingBackup_…` as the control against four failure
-variants, `ResetDatabase_WhenBackupSucceeds_IsUnchanged` against the refusals, below-quota against
-at-quota, and the override reaching the destructive step against a refusal that does not.
+The issue calls an out-of-range value "a configuration error, not something to clamp silently". Taken
+literally that suggests throwing, which would breach the never-crash contract this milestone is built
+around. The project's existing precedent is the opposite extreme: an unrecognised `Quotinator:LogLevel`
+falls back to `Information` silently. Neither is right here, and the precedent is not adopted because it
+exists. Resolved: a warning naming the value and the accepted range, and the default used.

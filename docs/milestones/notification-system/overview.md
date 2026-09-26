@@ -60,7 +60,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#330](https://github.com/DutchJaFO/Quotinator/issues/330) | File metadata: sidecar and database record for every file we create or inspect | Planning | T1 ⬜ T2 ⬜ | [330-file-metadata-sidecar-and-record-plan.md](330-file-metadata-sidecar-and-record-plan.md) |
 | [#331](https://github.com/DutchJaFO/Quotinator/issues/331) | Source refresh: conditional requests so an unchanged source is not re-downloaded | Planning | T1 ⬜ T2 ⬜ | [331-conditional-source-requests-plan.md](331-conditional-source-requests-plan.md) |
 | [#339](https://github.com/DutchJaFO/Quotinator/issues/339) | Restructure the T2 suite into docs/automated-testing/, one document per test | In progress | T1 ⬜ T2 ✅ | [339-automated-testing-restructure-plan.md](339-automated-testing-restructure-plan.md) |
-| [#348](https://github.com/DutchJaFO/Quotinator/issues/348) | Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable | Waiting for release | T1 ⬜ T2 ✅ | [348-backup-outcomes-and-refusal-plan.md](348-backup-outcomes-and-refusal-plan.md) |
+| [#348](https://github.com/DutchJaFO/Quotinator/issues/348) | Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable | In progress | T1 ⬜ T2 ⬜ | [348-backup-outcomes-and-refusal-plan.md](348-backup-outcomes-and-refusal-plan.md) |
 | [#349](https://github.com/DutchJaFO/Quotinator/issues/349) | Admin endpoints to list, delete and report status for database backups | Waiting for release | T1 ✅ T2 ✅ | [349-backup-management-endpoints-plan.md](349-backup-management-endpoints-plan.md) |
 | [#350](https://github.com/DutchJaFO/Quotinator/issues/350) | A schema-version overshoot runs healthy instead of degrading, on a schema whose shape is unknown | Planning | T1 ⬜ T2 ⬜ | [350-overshoot-must-degrade-plan.md](350-overshoot-must-degrade-plan.md) |
 | [#351](https://github.com/DutchJaFO/Quotinator/issues/351) | AuditOperation is a string-constant set where the project's convention is an enum | Planning | T1 ⬜ T2 ⬜ | [351-audit-operation-enum-plan.md](351-audit-operation-enum-plan.md) |
@@ -123,7 +123,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #330 ─── (none); blocks #331: Planning
 #331 ─── depends on #330: Planning
 #339 ─── depends on #347 (v1.9.0 milestone); blocks #327, #328: In progress
-#348 ─── (none); blocks #327: Waiting for release
+#348 ─── depends on #349; blocks #327: In progress
 #349 ─── (none); soft-relates to #348: Waiting for release
 #350 ─── (none): Planning
 #352 ─── (none): Planning
@@ -175,7 +175,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 6 | **#83** ✅ | Waiting for release |
 | 7 | **#309** ✅ | Waiting for release |
 | 8 | **#326** ✅ | Waiting for release |
-| 9 | **#348** ✅ | Waiting for release; T1 outstanding |
+| 9 | **#348** 🚧 | In progress; reopened, startup refusals went unreported |
 | 10 | **#349** ✅ | Waiting for release |
 | 11 | **#307** ✅ | Waiting for release |
 | 12 | **#319** ✅ | Waiting for release; gateway for the producers below |
