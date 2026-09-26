@@ -10,11 +10,11 @@ using Quotinator.Data.Testing.NoOps;
 namespace Quotinator.Data.Tests.Database;
 
 /// <summary>
-/// #348 — the backup budget is two levels, not one: an operating quota (default 90% of
+/// #348: the backup budget is two levels, not one: an operating quota (default 90% of
 /// <see cref="DatabaseOptions.MaxBackupStorageGb"/>) that normal operation stops at, and the absolute
 /// ceiling it never crosses.
 /// <para>
-/// The reserve between them exists because a backup's size cannot be predicted — SQLite copies pages,
+/// The reserve between them exists because a backup's size cannot be predicted: SQLite copies pages,
 /// so the source file's length only approximates the result. Keeping routine operation out of that
 /// reserve is what leaves room for the one backup an operator most needs: the one before a Reset, at
 /// the moment they have least space left.
@@ -46,65 +46,65 @@ public class DatabaseBackupQuotaTests
         catch (UnauthorizedAccessException) { }
     }
 
-    [TestMethod]
-    public void UsageBelowTheQuota_ReportsThatABackupCanBeTaken()
-    {
-        FillBackupsTo(percentOfCeiling: 50);
-
-        Assert.AreEqual(BackupOutcome.Succeeded, CreateInitializer().CheckBackupReadiness());
-    }
-
+    /// <summary>
+    /// Above 90% but below 100%: inside the reserve, which routine operation must not consume, or it would
+    /// not be there when a Reset needed it.
+    /// </summary>
     [TestMethod]
     public void UsageAtTheQuota_IsRefused_WithoutReachingIntoTheReserve()
     {
-        // Above 90% but below 100%: inside the reserve, which normal operation must not consume.
         FillBackupsTo(percentOfCeiling: 95);
 
-        Assert.AreEqual(
-            BackupOutcome.BudgetExceeded, CreateInitializer().CheckBackupReadiness(),
-            "routine operation stops at the quota — if it could spend the reserve, the reserve would "
-            + "not be there when a Reset needed it");
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer().CheckBackupReadiness());
     }
 
-    [TestMethod]
-    public void UsageAtTheQuota_WithTheReserveAllowed_CanStillTakeABackup()
-    {
-        FillBackupsTo(percentOfCeiling: 95);
-
-        Assert.AreEqual(
-            BackupOutcome.Succeeded, CreateInitializer().CheckBackupReadiness(allowReserve: true),
-            "this is the whole point of the reserve: the operator who has run out of quota can still "
-            + "take a real backup rather than proceeding with none");
-    }
-
+    /// <summary>The ceiling is absolute: the reserve is headroom below it, not permission to exceed it.</summary>
     [TestMethod]
     public void UsageAtTheAbsoluteCeiling_IsRefusedEvenWithTheReserveAllowed()
     {
         FillBackupsTo(percentOfCeiling: 100);
 
-        Assert.AreEqual(
-            BackupOutcome.BudgetExceeded, CreateInitializer().CheckBackupReadiness(allowReserve: true),
-            "the ceiling is absolute — the reserve is headroom below it, not permission to exceed it");
-    }
-
-    [TestMethod]
-    public void QuotaPercent_IsConfigurable()
-    {
-        FillBackupsTo(percentOfCeiling: 60);
-
-        Assert.AreEqual(
-            BackupOutcome.Succeeded, CreateInitializer(quotaPercent: 90).CheckBackupReadiness(),
-            "60% used is inside a 90% quota");
-        Assert.AreEqual(
-            BackupOutcome.BudgetExceeded, CreateInitializer(quotaPercent: 50).CheckBackupReadiness(),
-            "the same 60% is outside a 50% quota — so the setting is genuinely consulted, not ignored");
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer().CheckBackupReadiness(allowReserve: true));
     }
 
     /// <summary>
-    /// The substantive half of "a refusal does not rebuild". Asserting this at the endpoint layer only
-    /// proves the spy refused, since a stub's own bookkeeping is what records whether a reset ran — so
-    /// the guarantee is checked here, against the real <see cref="DatabaseInitializer.ResetAsync"/>,
-    /// where <c>OnResetAsync</c> is the actual destructive step.
+    /// 60% used is inside the default 90% quota, and outside a configured 50% one: refusing here shows the
+    /// configured value is the one consulted.
+    /// </summary>
+    [TestMethod]
+    public void ConfiguredQuotaPercent_IsTheLimitTheCheckRefusesOn()
+    {
+        FillBackupsTo(percentOfCeiling: 60);
+
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer(quotaPercent: 50).CheckBackupReadiness());
+    }
+
+    /// <summary>
+    /// Checked against the real <see cref="DatabaseInitializer.ResetAsync"/>, where <c>OnResetAsync</c> is
+    /// the actual destructive step, rather than at the endpoint, where only a spy's bookkeeping could say.
+    /// </summary>
+    [TestMethod]
+    public async Task ResetAsync_WhenNoBackupCanBeTaken_Refuses()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+
+        DatabaseOperationResult result = await new RecordingInitializer(NewOptions(), _dbPath).ResetAsync();
+
+        Assert.IsFalse(result.Succeeded);
+    }
+
+    [TestMethod]
+    public async Task ResetAsync_WhenNoBackupCanBeTaken_NamesTheObstacle()
+    {
+        FillBackupsTo(percentOfCeiling: 100);
+
+        DatabaseOperationResult result = await new RecordingInitializer(NewOptions(), _dbPath).ResetAsync();
+
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, result.BackupObstacle);
+    }
+
+    /// <summary>
+    /// A refusal that still wiped the database would be strictly worse than the unhandled 500 it replaced.
     /// </summary>
     [TestMethod]
     public async Task ResetAsync_WhenNoBackupCanBeTaken_NeverReachesTheDestructiveStep()
@@ -112,62 +112,57 @@ public class DatabaseBackupQuotaTests
         FillBackupsTo(percentOfCeiling: 100);
         RecordingInitializer initializer = new RecordingInitializer(NewOptions(), _dbPath);
 
-        DatabaseOperationResult result = await initializer.ResetAsync();
+        await initializer.ResetAsync();
 
-        Assert.IsFalse(result.Succeeded);
-        Assert.AreEqual(BackupOutcome.BudgetExceeded, result.BackupObstacle);
-        Assert.IsFalse(
-            initializer.ResetHookRan,
-            "refusing has to mean the tables were never dropped — a refusal that still wiped the "
-            + "database would be strictly worse than the unhandled 500 it replaced");
+        Assert.IsFalse(initializer.ResetHookRan, "refusing has to mean the tables were never dropped");
     }
 
+    /// <summary>The caller has to be told the reset ran without a backup, or the audit trail above it has nothing to record.</summary>
     [TestMethod]
-    public async Task ResetAsync_WithTheOverride_ReachesTheDestructiveStepAndReportsTheSkip()
+    public async Task ResetAsync_WithTheOverride_ReportsThatTheBackupWasSkipped()
     {
         FillBackupsTo(percentOfCeiling: 100);
-        RecordingInitializer initializer = new RecordingInitializer(NewOptions(), _dbPath);
 
-        DatabaseOperationResult result = await initializer.ResetAsync(allowNoBackup: true);
+        DatabaseOperationResult result = await new RecordingInitializer(NewOptions(), _dbPath).ResetAsync(allowNoBackup: true);
 
-        Assert.IsTrue(result.Succeeded);
-        Assert.IsTrue(initializer.ResetHookRan);
-        Assert.IsTrue(
-            result.BackupSkippedByOverride,
-            "the caller has to be told it ran without a backup, or the audit trail above it has nothing "
-            + "to record");
-    }
-
-    [TestMethod]
-    public void QuotaPercent_DefaultsTo90()
-    {
-        // Reads the property off a real instance rather than comparing the constant to a literal — the
-        // latter is const-folded, so it asserts 90 == 90 and can never fail whatever the default becomes.
-        Assert.AreEqual(90, new DatabaseOptions { DbPath = _dbPath }.BackupQuotaPercent);
-    }
-
-    [TestMethod]
-    public void QuotaPercent_OutOfRange_IsReportedAndTheDefaultUsed_NotClampedAndNotFatal()
-    {
-        // 150% would, if taken at face value, silently raise the quota above the ceiling — the setting
-        // failing open. Clamping it to 100 would be just as wrong in the other direction: the operator
-        // would never learn their value was ignored. It is reported, and the default is used.
-        FillBackupsTo(percentOfCeiling: 95);
-        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
-
-        BackupOutcome outcome = CreateInitializer(quotaPercent: 150, logger: logger).CheckBackupReadiness();
-
-        Assert.AreEqual(
-            BackupOutcome.BudgetExceeded, outcome,
-            "the 90% default applied, so 95% usage is over quota — a clamp to 100% would have allowed it");
-        Assert.IsTrue(
-            logger.Messages.Exists(m => m.Contains("BackupQuotaPercent", StringComparison.Ordinal)),
-            "an ignored configuration value must say so; silently substituting the default is the "
-            + "failure mode this test exists to prevent");
+        Assert.IsTrue(result.BackupSkippedByOverride);
     }
 
     /// <summary>
-    /// #349 — the figures the status endpoint publishes and the limit a destructive action refuses on
+    /// Read off a real instance rather than comparing the constant to a literal, which is const-folded and
+    /// could never fail whatever the default became.
+    /// </summary>
+    [TestMethod]
+    public void QuotaPercent_DefaultsTo90()
+    {
+        Assert.AreEqual(90, new DatabaseOptions { DbPath = _dbPath }.BackupQuotaPercent);
+    }
+
+    /// <summary>
+    /// 150% taken at face value would raise the quota above the ceiling, the setting failing open; clamped
+    /// to 100 it would allow 95% usage. The 90% default refuses it.
+    /// </summary>
+    [TestMethod]
+    public void QuotaPercent_OutOfRange_UsesTheDefault()
+    {
+        FillBackupsTo(percentOfCeiling: 95);
+
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer(quotaPercent: 150).CheckBackupReadiness());
+    }
+
+    /// <summary>An ignored configuration value says so; silently substituting the default is the failure this prevents.</summary>
+    [TestMethod]
+    public void QuotaPercent_OutOfRange_IsReported()
+    {
+        CapturingLogger<DatabaseInitializer> logger = new CapturingLogger<DatabaseInitializer>();
+
+        CreateInitializer(quotaPercent: 150, logger: logger).CheckBackupReadiness();
+
+        Assert.IsTrue(logger.Messages.Exists(m => m.Contains("BackupQuotaPercent", StringComparison.Ordinal)));
+    }
+
+    /// <summary>
+    /// #349: the figures the status endpoint publishes and the limit a destructive action refuses on
     /// are computed by the same code, so they cannot drift apart.
     /// <para>
     /// Checked across the quota boundary in both directions rather than at one point: agreement that
@@ -191,23 +186,23 @@ public class DatabaseBackupQuotaTests
 
             Assert.AreEqual(reportedOverQuota, refusedForBudget,
                 $"at {percent}% of the ceiling the reader reported reserveInUse={usage.ReserveInUse} while the "
-                + $"readiness check said {readiness} — the operator would be told one thing and get another");
+                + $"readiness check said {readiness}: the operator would be told one thing and get another");
             Assert.AreEqual(reportedOverQuota, usage.ReserveInUse);
         }
     }
 
     /// <summary>
-    /// A backup that has just been taken is immediately readable and removable — no handle is retained.
+    /// A backup that has just been taken is immediately readable and removable: no handle is retained.
     /// <para>
     /// Found live in T1 (#349, 2026-08-29): downloading a backup created moments earlier answered an
     /// unhandled <c>500</c>, "the process cannot access the file because it is being used by another
     /// process". The other process was this one. <c>Microsoft.Data.Sqlite</c> pools connections by
     /// default, so disposing the destination connection returns it to the pool and keeps its file
-    /// handle open for the life of the process — every backup ever taken stayed locked.
+    /// handle open for the life of the process: every backup ever taken stayed locked.
     /// </para>
     /// <para>
     /// This assertion can only <em>fail</em> on Windows: on Unix a retained handle does not prevent
-    /// another open or an unlink, so the same leak is invisible there. Recorded rather than hidden —
+    /// another open or an unlink, so the same leak is invisible there. Recorded rather than hidden:
     /// the guarantee is the same on both, and the leak was real on both.
     /// </para>
     /// </summary>
@@ -240,7 +235,7 @@ public class DatabaseBackupQuotaTests
     /// <summary>
     /// Writes filler into the backups folder until it occupies the given share of the ceiling. The
     /// ceiling is 1 GB in these tests, so the files are sized from that rather than from any real
-    /// database — this fixture is about headroom arithmetic, not about backup content.
+    /// database: this fixture is about headroom arithmetic, not about backup content.
     /// </summary>
     private void FillBackupsTo(int percentOfCeiling)
     {

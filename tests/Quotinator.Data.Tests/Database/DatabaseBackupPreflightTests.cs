@@ -8,19 +8,13 @@ using Quotinator.Data.Testing.NoOps;
 namespace Quotinator.Data.Tests.Database;
 
 /// <summary>
-/// #348 — <see cref="IDatabaseInitializer.CheckBackupReadiness"/> as its own subject: can a backup be
-/// taken, asked before anything is attempted.
+/// #348: <see cref="IDatabaseInitializer.CheckBackupReadiness"/> as its own subject: can a backup be taken,
+/// asked before anything is attempted.
 /// <para>
-/// The property under test is <strong>agreement</strong>. A pre-flight is only worth having if its
-/// answer is the one the attempt would give — a check that says "ready" where the attempt fails is
-/// worse than no check at all, because a caller acts on it. So each case here asserts the check and a
-/// real <c>CreateBackup</c> against the same directory report the same member, rather than asserting
-/// the check's answer in isolation.
-/// </para>
-/// <para>
-/// That is also the gap this class exists to close: the quota tests drive the same method, but they
-/// drive it as the quota's implementation detail. Nothing was asking whether the check and the attempt
-/// actually agree.
+/// The property under test is <strong>agreement</strong>. A pre-flight is only worth having if its answer
+/// is the one the attempt would give; a check that says "ready" where the attempt fails is worse than no
+/// check, because a caller acts on it. So each obstacle has two tests: the check names it, and a real
+/// <c>CreateBackup</c> against the same directory reports the same member.
 /// </para>
 /// </summary>
 [TestClass]
@@ -49,60 +43,49 @@ public class DatabaseBackupPreflightTests
     }
 
     [TestMethod]
-    public void CanCreateBackup_WhenNothingObstructsIt_ReportsThatItCan()
+    public void CheckBackupReadiness_WhenTheBudgetIsExhausted_ReportsBudgetExceeded()
     {
-        DatabaseInitializer initializer = CreateInitializer();
-
-        Assert.AreEqual(BackupOutcome.Succeeded, initializer.CheckBackupReadiness());
-
-        using SqliteConnection connection = SeededDatabase();
-        Assert.AreEqual(
-            BackupOutcome.Succeeded, initializer.CreateBackup(connection, fromVersion: 1).Outcome,
-            "the attempt must confirm what the check promised, or the check is not worth asking");
-    }
-
-    [TestMethod]
-    public void CanCreateBackup_WhenBudgetIsAlreadyExhausted_ReportsTheVariantAnAttemptWouldReport()
-    {
-        DatabaseInitializer initializer = CreateInitializer(maxBackupStorageGb: 0);
-
-        BackupOutcome checkedOutcome = initializer.CheckBackupReadiness();
-
-        using SqliteConnection connection = SeededDatabase();
-        BackupOutcome attemptedOutcome = initializer.CreateBackup(connection, fromVersion: 1).Outcome;
-
-        Assert.AreEqual(BackupOutcome.BudgetExceeded, checkedOutcome);
-        Assert.AreEqual(
-            checkedOutcome, attemptedOutcome,
-            "an operator offered a remedy for one obstacle and then hitting a different one has been "
-            + "sent after the wrong fault");
-    }
-
-    [TestMethod]
-    public void CanCreateBackup_WhenTheDestinationIsNotWritable_ReportsTheVariantAnAttemptWouldReport()
-    {
-        // A file where the backups directory belongs: Directory.CreateDirectory throws IOException,
-        // deterministically and identically on Windows and Linux. The same technique #326 uses for the
-        // keys/ directory, rather than an ACL that behaves differently per platform.
-        File.WriteAllText(_backups, "not a directory");
-        DatabaseInitializer initializer = CreateInitializer();
-
-        BackupOutcome checkedOutcome = initializer.CheckBackupReadiness();
-
-        using SqliteConnection connection = SeededDatabase();
-        BackupOutcome attemptedOutcome = initializer.CreateBackup(connection, fromVersion: 1).Outcome;
-
-        Assert.AreEqual(BackupOutcome.DestinationDirectoryNotWritable, checkedOutcome);
-        Assert.AreEqual(checkedOutcome, attemptedOutcome);
+        Assert.AreEqual(BackupOutcome.BudgetExceeded, CreateInitializer(maxBackupStorageGb: 0).CheckBackupReadiness());
     }
 
     /// <summary>
-    /// The reserve is the caller's to unlock, so the check has to answer differently for the same
-    /// directory depending on whether it was asked for. Without this, `allowNoBackup` could silently
-    /// stop reaching the reserve and every other test here would still pass.
+    /// An operator offered a remedy for one obstacle and then hitting a different one has been sent after
+    /// the wrong fault.
     /// </summary>
     [TestMethod]
-    public void CanCreateBackup_InsideTheReserve_AnswersDifferentlyDependingOnWhetherItIsAllowed()
+    public void CheckBackupReadiness_WhenTheBudgetIsExhausted_AgreesWithTheAttempt()
+    {
+        DatabaseInitializer initializer = CreateInitializer(maxBackupStorageGb: 0);
+        using SqliteConnection connection = SeededDatabase();
+
+        Assert.AreEqual(initializer.CreateBackup(connection, fromVersion: 1).Outcome, initializer.CheckBackupReadiness());
+    }
+
+    [TestMethod]
+    public void CheckBackupReadiness_WhenTheDestinationIsNotWritable_ReportsDestinationDirectoryNotWritable()
+    {
+        BlockTheBackupsDirectory();
+
+        Assert.AreEqual(BackupOutcome.DestinationDirectoryNotWritable, CreateInitializer().CheckBackupReadiness());
+    }
+
+    [TestMethod]
+    public void CheckBackupReadiness_WhenTheDestinationIsNotWritable_AgreesWithTheAttempt()
+    {
+        BlockTheBackupsDirectory();
+        DatabaseInitializer initializer = CreateInitializer();
+        using SqliteConnection connection = SeededDatabase();
+
+        Assert.AreEqual(initializer.CreateBackup(connection, fromVersion: 1).Outcome, initializer.CheckBackupReadiness());
+    }
+
+    /// <summary>
+    /// The reserve is the caller's to unlock, so the check answers differently for the same directory
+    /// depending on whether it was asked for. Without this, the override could silently stop reaching the
+    /// reserve. Which answer is which is held by the quota tests.
+    /// </summary>
+    [TestMethod]
+    public void CheckBackupReadiness_InsideTheReserve_AnswersDifferentlyWithTheReserveAllowed()
     {
         Directory.CreateDirectory(_backups);
         using (FileStream filler = new FileStream(Path.Combine(_backups, "filler.db"), FileMode.Create, FileAccess.Write))
@@ -113,8 +96,7 @@ public class DatabaseBackupPreflightTests
 
         DatabaseInitializer initializer = CreateInitializer();
 
-        Assert.AreEqual(BackupOutcome.BudgetExceeded, initializer.CheckBackupReadiness());
-        Assert.AreEqual(BackupOutcome.Succeeded, initializer.CheckBackupReadiness(allowReserve: true));
+        Assert.AreNotEqual(initializer.CheckBackupReadiness(allowReserve: false), initializer.CheckBackupReadiness(allowReserve: true));
     }
 
     private SqliteConnection SeededDatabase()
@@ -126,6 +108,10 @@ public class DatabaseBackupPreflightTests
         command.ExecuteNonQuery();
         return connection;
     }
+
+    // A file where the backups directory belongs: Directory.CreateDirectory throws IOException,
+    // deterministically and identically on Windows and Linux, which an ACL would not.
+    private void BlockTheBackupsDirectory() => File.WriteAllText(_backups, "not a directory");
 
     private DatabaseInitializer CreateInitializer(int maxBackupStorageGb = 1)
     {

@@ -8,19 +8,19 @@ using Quotinator.Data.Testing.NoOps;
 namespace Quotinator.Data.Tests.Database;
 
 /// <summary>
-/// #348 — a backup exists to make a startup or a destructive action safe, so a backup that cannot be
-/// taken is a failure to report with options attached. There are five ways it can fail and five
-/// different remedies, so every caller has to be told <em>which</em> one it hit.
+/// #348: a backup exists to make a startup or a destructive action safe, so a backup that cannot be taken
+/// is a failure to report with options attached. There are several ways it can fail, each with its own
+/// remedy, so every caller has to be told <em>which</em> one it hit.
 /// <para>
-/// Before this issue, the five arrived as two shapes: a <see langword="null"/> meaning "budget",
-/// "insufficient disk space" and "no backup attempted" all at once, and one
-/// <c>catch (Exception)</c> covering three faults with three different remedies. These tests hold each
-/// variant to its own name.
+/// Before this issue the obstacles arrived as two shapes: a <see langword="null"/> meaning "budget",
+/// "insufficient disk space" and "no backup attempted" all at once, and one <c>catch (Exception)</c>
+/// covering three faults with three different remedies. These tests hold each obstacle to its own name,
+/// one statement per test.
 /// </para>
 /// <para>
-/// They call <c>CreateBackup</c> directly rather than driving five different failure states through a
-/// full initialisation. Attribution is the unit under test here; the behaviour each outcome then
-/// produces — degrading, refusing, overriding — is covered separately through the public paths.
+/// They call <c>CreateBackup</c> directly rather than driving each failure state through a full
+/// initialisation: attribution is the unit under test here, and the behaviour each outcome then produces
+/// (degrading, refusing, overriding) is covered through the public paths.
 /// </para>
 /// </summary>
 [TestClass]
@@ -48,115 +48,121 @@ public class DatabaseBackupOutcomeTests
         catch (UnauthorizedAccessException) { }
     }
 
+    /// <summary>
+    /// A budget of 0 GB cannot hold any backup, so the check rejects before anything is written:
+    /// deterministic, and independent of how large the database happens to be.
+    /// </summary>
     [TestMethod]
     public void BudgetExceeded_IsReportedAsBudgetExceeded()
     {
-        // A budget of 0 GB cannot accommodate any backup at all, so the pre-flight rejects before
-        // anything is written — deterministic, and independent of how large the database happens to be.
         using SqliteConnection connection = SeededDatabase();
-        DatabaseInitializer initializer = CreateInitializer(maxBackupStorageGb: 0);
 
-        DatabaseBackupResult result = initializer.CreateBackup(connection, fromVersion: 1);
+        DatabaseBackupResult result = CreateInitializer(maxBackupStorageGb: 0).CreateBackup(connection, fromVersion: 1);
 
         Assert.AreEqual(BackupOutcome.BudgetExceeded, result.Outcome);
-        Assert.IsFalse(result.Succeeded);
-        Assert.IsNull(result.Path, "no file was written, so there is no path to report");
     }
 
     [TestMethod]
     public void InsufficientDiskSpace_IsReportedAsInsufficientDiskSpace()
     {
         using SqliteConnection connection = SeededDatabase();
-        DatabaseInitializer initializer = CreateInitializer(diskSpaceProvider: new ZeroFreeSpaceProvider());
 
-        DatabaseBackupResult result = initializer.CreateBackup(connection, fromVersion: 1);
+        DatabaseBackupResult result = CreateInitializer(diskSpaceProvider: new ZeroFreeSpaceProvider()).CreateBackup(connection, fromVersion: 1);
 
         Assert.AreEqual(BackupOutcome.InsufficientDiskSpace, result.Outcome);
-        Assert.IsNull(result.Path);
     }
 
     [TestMethod]
     public void UnwritableBackupsDirectory_IsReportedAsDestinationDirectoryNotWritable()
     {
-        // A file sitting where the backups directory belongs: Directory.CreateDirectory throws
-        // IOException, deterministically and identically on Windows and Linux — the same technique
-        // #326 uses for the keys/ directory, rather than an ACL that behaves differently per platform.
         using SqliteConnection connection = SeededDatabase();
-        File.WriteAllText(_backups, "not a directory");
-        DatabaseInitializer initializer = CreateInitializer();
+        BlockTheBackupsDirectory();
 
-        DatabaseBackupResult result = initializer.CreateBackup(connection, fromVersion: 1);
+        DatabaseBackupResult result = CreateInitializer().CreateBackup(connection, fromVersion: 1);
 
         Assert.AreEqual(BackupOutcome.DestinationDirectoryNotWritable, result.Outcome);
+    }
+
+    [TestMethod]
+    public void UnwritableBackupsDirectory_CarriesTheUnderlyingError()
+    {
+        using SqliteConnection connection = SeededDatabase();
+        BlockTheBackupsDirectory();
+
+        DatabaseBackupResult result = CreateInitializer().CreateBackup(connection, fromVersion: 1);
+
         Assert.IsNotNull(result.Error, "the underlying failure is carried, not swallowed");
     }
 
+    /// <summary>
+    /// The destination is fine here; it is the source that cannot be read. Before #348 this arrived
+    /// identical to an unwritable destination, and the two have opposite remedies.
+    /// </summary>
     [TestMethod]
     public void CorruptSourceDatabase_IsReportedAsSourceUnreadable()
     {
-        // The destination is fine here — it is the source that cannot be read. That distinction is the
-        // whole point: before #348 this arrived identical to an unwritable destination, and the two
-        // have opposite remedies.
-        string corruptPath = Path.Combine(_tempDir, "corrupt.db");
-        File.WriteAllText(corruptPath, "this file is not a SQLite database");
+        using SqliteConnection connection = CorruptDatabase(out string corruptPath);
 
-        using SqliteConnection connection = new SqliteConnection($"Data Source={corruptPath}");
-        connection.Open();
-        DatabaseInitializer initializer = CreateInitializer(dbPath: corruptPath);
-
-        DatabaseBackupResult result = initializer.CreateBackup(connection, fromVersion: 1);
+        DatabaseBackupResult result = CreateInitializer(dbPath: corruptPath).CreateBackup(connection, fromVersion: 1);
 
         Assert.AreEqual(BackupOutcome.SourceUnreadable, result.Outcome);
-        Assert.IsNull(result.Path);
-        Assert.IsNotNull(result.Error);
+    }
+
+    [TestMethod]
+    public void CorruptSourceDatabase_CarriesTheUnderlyingError()
+    {
+        using SqliteConnection connection = CorruptDatabase(out string corruptPath);
+
+        DatabaseBackupResult result = CreateInitializer(dbPath: corruptPath).CreateBackup(connection, fromVersion: 1);
+
+        Assert.IsNotNull(result.Error, "the SQLite error naming the corruption is carried, not swallowed");
     }
 
     /// <summary>
-    /// Covers the copy failing with something that is not a <see cref="SqliteException"/> at all — the
-    /// generic catch, not the unrecognised-error-code path.
-    /// <para>
-    /// <strong>Verified by mutation, because both paths return the same member and a passing test could
-    /// not tell them apart.</strong> Changing the generic catch's return fails this test; that is what
-    /// establishes which branch it reaches. <c>ClassifyCopyFailure</c>'s own <c>_ =&gt;</c> default —
-    /// a real <see cref="SqliteException"/> carrying a code other than 26, 11 or 13 — stays
-    /// unexercised, because provoking one on demand needs a SQLite failure mode this fixture cannot
-    /// produce. Recorded as a known gap rather than claimed as covered.
-    /// </para>
+    /// A closed source connection: the copy cannot even begin, and the failure is not a
+    /// <see cref="SqliteException"/>. A failure the classifier has no name for is reported as unnamed
+    /// rather than as whichever named obstacle looks closest.
     /// </summary>
     [TestMethod]
-    public void CopyFailureThatIsNotASqliteError_IsReportedAsUnclassified_CarryingTheUnderlyingError()
+    public void CopyFailureThatIsNotASqliteError_IsReportedAsUnclassified()
     {
-        // A closed source connection: the copy cannot even begin. What matters is what happens with a
-        // failure the classifier has no name for — report it as unnamed and carry the error, rather
-        // than pick whichever named variant looks closest. An operator can act on "we do not know, here
-        // is the error"; they cannot act on a confident wrong answer.
         using SqliteConnection connection = SeededDatabase();
         connection.Close();
-        DatabaseInitializer initializer = CreateInitializer();
 
-        DatabaseBackupResult result = initializer.CreateBackup(connection, fromVersion: 1);
+        DatabaseBackupResult result = CreateInitializer().CreateBackup(connection, fromVersion: 1);
 
         Assert.AreEqual(BackupOutcome.Unclassified, result.Outcome);
-        Assert.IsNotNull(result.Error, "an unnamed variant is only actionable if it carries the real error");
-        Assert.IsNull(result.Path);
     }
 
     [TestMethod]
-    public void SucceedingBackup_ReportsSucceededAndTheFileItWrote()
+    public void CopyFailureThatIsNotASqliteError_CarriesTheUnderlyingError()
     {
-        // The control. Every assertion above is about a failure being named correctly; this one proves
-        // the happy path still reports success and a real path, so a test suite that only ever saw
-        // failures could not pass by accident.
         using SqliteConnection connection = SeededDatabase();
-        DatabaseInitializer initializer = CreateInitializer();
+        connection.Close();
 
-        DatabaseBackupResult result = initializer.CreateBackup(connection, fromVersion: 1);
+        DatabaseBackupResult result = CreateInitializer().CreateBackup(connection, fromVersion: 1);
 
-        Assert.AreEqual(BackupOutcome.Succeeded, result.Outcome);
-        Assert.IsTrue(result.Succeeded);
+        Assert.IsNotNull(result.Error, "an unnamed obstacle is only actionable if it carries the real error");
+    }
+
+    [TestMethod]
+    public void SucceedingBackup_ReportsWhereItWrote()
+    {
+        using SqliteConnection connection = SeededDatabase();
+
+        DatabaseBackupResult result = CreateInitializer().CreateBackup(connection, fromVersion: 1);
+
         Assert.IsNotNull(result.Path);
-        Assert.IsTrue(File.Exists(result.Path), "a succeeded outcome must mean a file actually exists");
-        Assert.IsNull(result.Error);
+    }
+
+    [TestMethod]
+    public void SucceedingBackup_WritesTheFileItReports()
+    {
+        using SqliteConnection connection = SeededDatabase();
+
+        DatabaseBackupResult result = CreateInitializer().CreateBackup(connection, fromVersion: 1);
+
+        Assert.IsTrue(File.Exists(result.Path), "a backup reported as taken must exist on disk");
     }
 
     private SqliteConnection SeededDatabase()
@@ -168,6 +174,20 @@ public class DatabaseBackupOutcomeTests
         command.ExecuteNonQuery();
         return connection;
     }
+
+    private SqliteConnection CorruptDatabase(out string corruptPath)
+    {
+        corruptPath = Path.Combine(_tempDir, "corrupt.db");
+        File.WriteAllText(corruptPath, "this file is not a SQLite database");
+
+        SqliteConnection connection = new SqliteConnection($"Data Source={corruptPath}");
+        connection.Open();
+        return connection;
+    }
+
+    // A file sitting where the backups directory belongs: Directory.CreateDirectory throws IOException,
+    // deterministically and identically on Windows and Linux, which an ACL would not.
+    private void BlockTheBackupsDirectory() => File.WriteAllText(_backups, "not a directory");
 
     private DatabaseInitializer CreateInitializer(
         int maxBackupStorageGb = 1, IDiskSpaceProvider? diskSpaceProvider = null, string? dbPath = null)

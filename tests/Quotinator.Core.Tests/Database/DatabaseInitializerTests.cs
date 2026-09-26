@@ -91,7 +91,7 @@ public class DatabaseInitializerTests
         ImportActionReader actionReader   = new ImportActionReader(factory);
         ImportActionWriter actionWriter   = new ImportActionWriter(factory);
         ImportActionResolutionCoordinator coordinator    = new ImportActionResolutionCoordinator(actionReader, actionWriter, factory);
-        // #377: defaults to NoOpChangeWriter as every existing test expects — but a test asserting what
+        // #377: defaults to NoOpChangeWriter as every existing test expects, but a test asserting what
         // an apply does or does not write to Audit_Change must pass the real ChangeWriter, or it passes
         // whether or not the behaviour is correct, because nothing writes a change entry at all.
         SqliteImportActionService actionService  = new SqliteImportActionService(actionReader, coordinator, actionWriter, NoOpAuditEntryWriter.Instance, changeWriter ?? NoOpChangeWriter.Instance,
@@ -157,7 +157,7 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// The database was empty, so the seed itself applied the new content — recommending a reseed of
+    /// The database was empty, so the seed itself applied the new content: recommending a reseed of
     /// content that just landed would be noise.
     /// </summary>
     [TestMethod]
@@ -170,7 +170,7 @@ public class DatabaseInitializerTests
 
         Assert.IsEmpty((await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedRecommended),
-            "The seed applied the changed content on this very run — there is nothing left to recommend. "
+            "The seed applied the changed content on this very run: there is nothing left to recommend. "
             + "Scoped to the recommendation on 2026-09-02: the same run now also confirms each file it applied.");
     }
 
@@ -189,7 +189,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// Seeds a database, then initialises a second time against the same file with the given refresh
-    /// outcome — the "already had content, then sources changed" shape trigger 1 fires on.
+    /// outcome: the "already had content, then sources changed" shape trigger 1 fires on.
     /// </summary>
     private async Task SeedThenReinitialiseAsync(SourceRefreshOutcome outcome, bool autoUpdateSources)
     {
@@ -209,7 +209,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// The issue's whole point. Reseed's one job is importing the designated files; deleting first is
-    /// a second, independent decision about what data survives — the shape CLAUDE.md's endpoint
+    /// a second, independent decision about what data survives: the shape CLAUDE.md's endpoint
     /// side-effect policy forbids and #156 already removed from Reset.
     /// <para>
     /// The table set is read from the schema, never listed here. A list is what let three tables fall
@@ -218,7 +218,7 @@ public class DatabaseInitializerTests
     /// <para>
     /// **Row counts alone cannot prove this, and asserting only them was the first attempt.** Ids are
     /// content-derived hashes, so truncate-then-reimport restores every row the files describe,
-    /// byte-identical — counts, ids and links all match, and the assertion passes against the very
+    /// byte-identical: counts, ids and links all match, and the assertion passes against the very
     /// deletion it exists to catch. The locally authored quote is what makes the two distinguishable.
     /// </para>
     /// </summary>
@@ -242,7 +242,7 @@ public class DatabaseInitializerTests
         }
 
         Assert.IsTrue(await QuoteExistsAsync(localQuoteId),
-            "A quote no source file describes cannot be re-created by an import — if it is gone, the "
+            "A quote no source file describes cannot be re-created by an import: if it is gone, the "
             + "reseed deleted it. This is the assertion the row counts above cannot make.");
     }
 
@@ -260,7 +260,7 @@ public class DatabaseInitializerTests
         // A second instance, so LastSeedReport starts empty and can only be filled by the reseed.
         // Reusing the seeded instance is what made this control useless on its first draft: its report
         // still held the cold start's, so a reseed that did nothing at all passed it (measured at
-        // step 2, 2026-09-02 — it stayed green exactly when it should have gone red).
+        // step 2, 2026-09-02: it stayed green exactly when it should have gone red).
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.ReseedAsync();
 
@@ -271,7 +271,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// A row removed since the last import comes back, and nothing else changes. This is what makes a
-    /// reseed useful against a populated database — it repairs, rather than replacing wholesale.
+    /// reseed useful against a populated database: it repairs, rather than replacing wholesale.
     /// </summary>
     [TestMethod]
     public async Task Reseed_WithARowRemoved_ReAddsOnlyThatRow()
@@ -296,7 +296,7 @@ public class DatabaseInitializerTests
         await db.ReseedAsync();
 
         Assert.AreEqual(before["Quotinator_Quote"], (await DomainRowCountsAsync())["Quotinator_Quote"],
-            "The missing quote is re-added by an ordinary import — no deletion required.");
+            "The missing quote is re-added by an ordinary import: no deletion required.");
 
         // The "only that row" half. Without it, a reseed that wiped everything and reimported would
         // also land on the same total and pass.
@@ -306,7 +306,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// Content changed locally is not overwritten; the disagreement is staged for a decision. Asserts
-    /// both halves deliberately — that the stored value survived *and* that an action was raised —
+    /// both halves deliberately: that the stored value survived *and* that an action was raised:
     /// because either alone is satisfied by a reseed that does nothing at all.
     /// </summary>
     [TestMethod]
@@ -334,7 +334,7 @@ public class DatabaseInitializerTests
             "SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id;", new { id = editedId });
 
         Assert.AreEqual(localEdit, stored,
-            "The local edit must survive — a reseed resolves a disagreement by asking, not by overwriting.");
+            "The local edit must survive: a reseed resolves a disagreement by asking, not by overwriting.");
         Assert.IsGreaterThan(0, await StagedActionCountAsync(),
             "And the disagreement must be staged. Without this half, a reseed that imported nothing "
             + "would satisfy the assertion above perfectly.");
@@ -344,7 +344,7 @@ public class DatabaseInitializerTests
     /// `Quotinator_CharacterSource` joins two tables the reseed empties while leaving the join itself
     /// populated. Nothing else in the suite reads these rows.
     /// <para>
-    /// **A regression guard, not a reproduction of a live bug — the original claim was wrong.** With
+    /// **A regression guard, not a reproduction of a live bug: the original claim was wrong.** With
     /// unchanged source content the deletion is invisible here: ids are content-derived, so the
     /// reimport re-creates the same Characters and Sources and every link resolves again. Orphans
     /// require content whose id actually changes across a reimport, which this fixture does not
@@ -391,7 +391,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// An explicit reseed never consults whether content already exists. The check is not a safeguard
-    /// there — it suppresses the report the operator ran the reseed to get.
+    /// there: it suppresses the report the operator ran the reseed to get.
     /// </summary>
     [TestMethod]
     public async Task Reseed_OnPopulatedDatabase_ImportsRegardlessOfExistingContent()
@@ -403,7 +403,7 @@ public class DatabaseInitializerTests
             "The database must be populated, or this tests the empty case by accident.");
 
         // A second instance over the same database, so its own LastSeedReport starts empty and can
-        // only be filled by the reseed below — the setter is protected, and clearing it is not the
+        // only be filled by the reseed below: the setter is protected, and clearing it is not the
         // test's to do anyway.
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.ReseedAsync();
@@ -433,13 +433,13 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// "Empty" means no seedable content — not that no table has rows (developer, 2026-09-02). Nothing
+    /// "Empty" means no seedable content, not that no table has rows (developer, 2026-09-02). Nothing
     /// exercises the distinction today, because Quotinator has no baseline-seeded reference table:
     /// genres are still a closed enum. It arrives with #310/#268, and a gate broadened to "any row
     /// anywhere" would then read a brand-new database as already seeded and skip the seed silently.
     /// <para>
-    /// `Universe` stands in for that future table here — it is the near-miss the rule names, generic
-    /// in shape but the operator's to edit — so this asserts the gate ignores rows that are not
+    /// `Universe` stands in for that future table here (it is the near-miss the rule names, generic
+    /// in shape but the operator's to edit), so this asserts the gate ignores rows that are not
     /// content, using the only table available to say it with.
     /// </para>
     /// </summary>
@@ -472,7 +472,7 @@ public class DatabaseInitializerTests
 
         await db.ResetAsync();
         Assert.AreEqual(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
-            "Reset's own job is rebuilding the schema — it leaves no content behind.");
+            "Reset's own job is rebuilding the schema: it leaves no content behind.");
 
         await db.ReseedAsync();
         Assert.IsGreaterThan(0, (await DomainRowCountsAsync())["Quotinator_Quote"],
@@ -540,7 +540,7 @@ public class DatabaseInitializerTests
         // #376: derived from the type's own properties, not from a list of assertions written by hand.
         // The previous shape was that list, and it failed exactly as its own summary predicted: #376
         // added AlreadyReported, the `required` modifier forced it into the fixture above, and nothing
-        // forced a matching assertion — so the count was omitted from the log line and this test passed
+        // forced a matching assertion, so the count was omitted from the log line and this test passed
         // anyway. Found in T1, by reading a real seed log and noticing the field was not there. A
         // maintained list cannot catch the omission it exists to catch.
         PropertyInfo[] properties = typeof(EntityTypeActionCounts).GetProperties();
@@ -552,13 +552,13 @@ public class DatabaseInitializerTests
         {
             string token = $"{char.ToLowerInvariant(property.Name[0])}{property.Name[1..]}={property.GetValue(counts)}";
             Assert.Contains(token, line,
-                $"The log line omits {property.Name} — a count that exists but is never printed reports nothing.");
+                $"The log line omits {property.Name}: a count that exists but is never printed reports nothing.");
         }
     }
 
     /// <summary>
     /// #373: the confirmation list stops growing. A cold start reports what it added; the reseed that
-    /// follows reports the same rows as unchanged — genuinely different outcomes, so genuinely two
+    /// follows reports the same rows as unchanged: genuinely different outcomes, so genuinely two
     /// confirmations. Every reseed after that reports the same thing again and is deduped away.
     /// <para>
     /// The unbounded growth this issue removes was the *false* second set: every quote counted as
@@ -572,22 +572,22 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        // #374: 2, not 3 — NikhilNamal17 always carries at least one genuine, permanent tv-date conflict
+        // #374: 2, not 3: NikhilNamal17 always carries at least one genuine, permanent tv-date conflict
         // under AllFilesBatch's un-curated wiring (see InitialiseAsync_AllSourceFiles_SeedsExpectedCounts'
         // own comment), so that file takes the review-alert branch instead of the clean-confirmation one,
-        // on every run, cold start included — it never has "nothing left to review" to confirm.
+        // on every run, cold start included: it never has "nothing left to review" to confirm.
         Assert.AreEqual(2, await ReseedConfirmationCountAsync(),
             "Two of the three files apply cleanly from the cold start; NikhilNamal17 always has a genuine conflict to report instead.");
 
         await db.ReseedAsync();
         int afterFirstReseed = await ReseedConfirmationCountAsync();
-        // #374: +3, not +2 — on a reseed specifically (unlike the cold start above), NikhilNamal17 also
+        // #374: +3, not +2: on a reseed specifically (unlike the cold start above), NikhilNamal17 also
         // confirms: its tv-date conflict quotes were already reported once and this pass's own dedup
-        // check does not re-stage them, so the rest of its content applies cleanly as Unchanged — see
+        // check does not re-stage them, so the rest of its content applies cleanly as Unchanged: see
         // Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile's own comment for the full
         // reasoning behind cold start (2) and reseed (3) differing.
         Assert.AreEqual(5, afterFirstReseed,
-            "The reseed reports the same rows as unchanged — a different outcome from 'added', so its own confirmation — for all three files.");
+            "The reseed reports the same rows as unchanged (a different outcome from 'added', so its own confirmation) for all three files.");
 
         await db.ReseedAsync();
         Assert.AreEqual(afterFirstReseed, await ReseedConfirmationCountAsync(),
@@ -599,7 +599,7 @@ public class DatabaseInitializerTests
     /// next run alone.
     /// <para>
     /// A cold start now confirms what it added and the reseed after it confirms the same rows as
-    /// unchanged — two genuinely different outcomes, so two confirmations per file. A test counting
+    /// unchanged: two genuinely different outcomes, so two confirmations per file. A test counting
     /// "confirmations after a reseed" would otherwise be counting both runs. Same reason step 2 of
     /// `11-clean-reseed-confirmation.md` dismisses before reseeding.
     /// </para>
@@ -627,7 +627,7 @@ public class DatabaseInitializerTests
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
-        // #373: the cold start confirms too, so its confirmations are cleared first — this test is
+        // #373: the cold start confirms too, so its confirmations are cleared first: this test is
         // about the reseed's own, and counting both would measure two runs.
         await DismissExistingConfirmationsAsync();
         await db.ReseedAsync();
@@ -636,14 +636,14 @@ public class DatabaseInitializerTests
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed)];
 
         // #374: on a *reseed* specifically, NikhilNamal17 still gets its own confirmation, unlike the
-        // cold-start case (Initialise_FirstEmptyDatabaseSeed_WritesOnePerFile, 2 not 3) — its tv-date
+        // cold-start case (Initialise_FirstEmptyDatabaseSeed_WritesOnePerFile, 2 not 3): its tv-date
         // conflict quotes were already reported once (that alert is still live, undismissed, from the
         // cold start) and this pass's own dedup check (Sql.Quotes.SelectHasUnresolvedActionById) correctly
         // does not re-stage them, so nothing new happens for those specific quotes this run. The rest of
         // the file's content genuinely does apply cleanly again (as Unchanged), which is exactly what
-        // this notification reports — it is not a claim that the file has zero open conflicts anywhere.
+        // this notification reports: it is not a claim that the file has zero open conflicts anywhere.
         Assert.HasCount(3, confirmations,
-            "All three files have something to confirm on this reseed — an unresolved older conflict "
+            "All three files have something to confirm on this reseed: an unresolved older conflict "
             + "does not suppress a fresh confirmation for the rest of that file's own unchanged content.");
         Assert.IsTrue(confirmations.All(n => n.Type.Parsed == NotificationType.Success),
             "A file that reseeded with nothing NEW left to review is a Success, not an ActionRequired.");
@@ -652,7 +652,7 @@ public class DatabaseInitializerTests
     /// <summary>
     /// #302, reopened 2026-09-02: reverses `Initialise_FirstEmptyDatabaseSeed_WritesNoPerFileNotification`.
     /// The suppression rested on the startup modal's aggregate summary already covering cold start; it
-    /// does not — no file names, no origin, no added-versus-updated split. Replaced rather than edited
+    /// does not: no file names, no origin, no added-versus-updated split. Replaced rather than edited
     /// in place: a test that asserted an absence and now asserts a presence fails for different reasons.
     /// </summary>
     [TestMethod]
@@ -679,9 +679,9 @@ public class DatabaseInitializerTests
         List<NotificationEntity> confirmations = [.. (await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied)];
 
-        // #374: 2, not 3 — see Reseed_AgainstCurrentContent_StopsAddingConfirmations' own comment.
+        // #374: 2, not 3: see Reseed_AgainstCurrentContent_StopsAddingConfirmations' own comment.
         Assert.HasCount(2, confirmations,
-            "Two of AllFilesBatch's three files apply cleanly — one confirmation each, "
+            "Two of AllFilesBatch's three files apply cleanly: one confirmation each, "
             + "exactly as Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile asserts for the other path.");
     }
 
@@ -712,12 +712,12 @@ public class DatabaseInitializerTests
             "The positive control: without it, two empty sets would satisfy the comparison below.");
 
         // #373 changed what "the same" means here, and the original assertion is worth stating because
-        // it was right for its own issue. #372 asserted the two payload sets were identical — true when
+        // it was right for its own issue. #372 asserted the two payload sets were identical: true when
         // a reseed truncated and re-added everything, so both runs reported the same Adds. Now the cold
         // start reports what it added and the reseed reports those same rows as unchanged: different
         // payloads, describing genuinely different outcomes.
         //
-        // What #372 was actually proving — that neither path is gated out of confirming — survives, and
+        // What #372 was actually proving (that neither path is gated out of confirming) survives, and
         // is what this asserts.
         Assert.IsNotEmpty(afterReseed, "The reseed confirms too; neither path is gated out of reporting.");
         Assert.IsGreaterThanOrEqualTo(fromColdStart.Count, afterReseed.Count,
@@ -729,17 +729,17 @@ public class DatabaseInitializerTests
     /// actions waiting for review, so confirming that specific batch reseeded cleanly would be a lie.
     /// </summary>
     /// <remarks>
-    /// #374 — corrected 2026-09-04, found live (T2 Docker, a real reseed). Before the accumulation-
+    /// #374: corrected 2026-09-04, found live (T2 Docker, a real reseed). Before the accumulation-
     /// prevention dedup covered every quote id, a reseed of this fixture's unresolved content re-staged
     /// a brand-new duplicate Pending action per conflicting quote every time, which kept this reseed's
-    /// own batch permanently non-empty of Pending items — suppressing the confirmation was correct
+    /// own batch permanently non-empty of Pending items: suppressing the confirmation was correct
     /// *for that reason*. Once the dedup means an already-known-unresolved quote produces no action in
     /// this batch at all, the reseed's own batch consists only of the file's genuinely-unchanged
-    /// content (hundreds of quotes, none of them the handful of permanent conflicts) — which really did
+    /// content (hundreds of quotes, none of them the handful of permanent conflicts), which really did
     /// apply/confirm cleanly, exactly the "an unresolved older conflict does not suppress a fresh
     /// confirmation for the rest of that file's own unchanged content" principle
     /// <see cref="Reseed_FileAppliedCleanly_WritesOneSuccessNotificationPerFile"/> already established.
-    /// The cold start is unaffected either way — its own first-ever batch genuinely does contain the
+    /// The cold start is unaffected either way: its own first-ever batch genuinely does contain the
     /// new Pending rows, so it correctly writes no confirmation.
     /// </remarks>
     [TestMethod]
@@ -752,15 +752,15 @@ public class DatabaseInitializerTests
         // way this fixture behaved, and would silently stop testing the awaiting-review path the day the
         // bundled content stopped producing conflicts.
         Assert.IsGreaterThan(0, await StagedActionCountAsync(),
-            "This fixture exists to leave actions awaiting review — if it no longer does, it is testing nothing.");
+            "This fixture exists to leave actions awaiting review: if it no longer does, it is testing nothing.");
         Assert.IsEmpty((await NotificationsAsync()).Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied),
-            "Cold start's own first-ever batch genuinely contains the new Pending rows — there is nothing clean to confirm yet.");
+            "Cold start's own first-ever batch genuinely contains the new Pending rows: there is nothing clean to confirm yet.");
 
         await db.ReseedAsync();
 
         Assert.IsGreaterThan(0, await StagedActionCountAsync(), "The same permanent conflicts are still genuinely unresolved after the reseed.");
         Assert.IsNotEmpty((await NotificationsAsync()).Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied),
-            "The reseed's own batch contains only the file's genuinely-unchanged content (the still-open conflicts are deduped, not re-staged) — that content really did apply cleanly");
+            "The reseed's own batch contains only the file's genuinely-unchanged content (the still-open conflicts are deduped, not re-staged): that content really did apply cleanly");
     }
 
     /// <summary>
@@ -787,20 +787,20 @@ public class DatabaseInitializerTests
         await noFiles.ReseedAsync();
 
         Assert.AreEqual(afterRealReseed, ConfirmationCount(await NotificationsAsync()),
-            "No files were seeded, so no per-file confirmation exists to write — not even an empty one.");
+            "No files were seeded, so no per-file confirmation exists to write, not even an empty one.");
     }
 
     /// <summary>
     /// #373: counts active confirmations only. A cold start now confirms what it added and the reseed
     /// after it confirms the same rows as unchanged, so a test isolating the reseed dismisses the cold
-    /// start's first — and a counter that included dismissed rows would still see both.
+    /// start's first, and a counter that included dismissed rows would still see both.
     /// </summary>
     private static int ConfirmationCount(IReadOnlyList<NotificationEntity> notifications)
         => notifications.Count(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed);
 
     /// <summary>
     /// Third of the four seeding variants: files present, but from the user imports directory rather
-    /// than the bundled one. The confirmation must not be a bundled-content feature — the clean-apply
+    /// than the bundled one. The confirmation must not be a bundled-content feature: the clean-apply
     /// branch it is written from sits directly after an auto-purge step that *does* branch on origin
     /// (<c>_autoPurgeUserImportActions</c> versus <c>_autoPurgeBundledImportActions</c>), so origin is
     /// live in this code path and needs proving rather than assuming.
@@ -817,12 +817,12 @@ public class DatabaseInitializerTests
         await db.ReseedAsync();
 
         Assert.AreEqual(1, ConfirmationCount(await NotificationsAsync()),
-            "One user-import file applied cleanly, so it gets one confirmation — origin does not gate this.");
+            "One user-import file applied cleanly, so it gets one confirmation: origin does not gate this.");
     }
 
     /// <summary>
     /// Fourth variant: both origins in one reseed. The count is per file across both batches, not per
-    /// batch and not bundled-only — the loop runs over every batch's files, and nothing about the
+    /// batch and not bundled-only: the loop runs over every batch's files, and nothing about the
     /// confirmation is scoped to a single batch.
     /// </summary>
     [TestMethod]
@@ -896,7 +896,7 @@ public class DatabaseInitializerTests
         // now be nine and would say nothing about the behaviour under test.
         Assert.HasCount(3, (await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ReseedFileApplied && !n.IsDismissed).ToList(),
-            "Three fresh confirmations after dismissal — a dismissed notification must not suppress the next occurrence.");
+            "Three fresh confirmations after dismissal: a dismissed notification must not suppress the next occurrence.");
     }
 
     /// <summary>
@@ -923,7 +923,7 @@ public class DatabaseInitializerTests
         Assert.IsTrue(confirmations.All(n => n.ExpiresAt.Parsed is null),
             "No expiry: the configured default was removed in #312, and the operator dismisses these instead.");
         Assert.IsTrue(confirmations.All(n => !n.IsDismissed),
-            "The reseed endpoint dismisses Reseed-triggered rows after ReseedAsync returns — a confirmation " +
+            "The reseed endpoint dismisses Reseed-triggered rows after ReseedAsync returns: a confirmation " +
             "carrying that trigger would be wiped out by the very reseed that wrote it.");
     }
 
@@ -938,8 +938,8 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         // #302's reopening makes the cold start above write confirmations of its own, stamped with
-        // whatever version existed then. Dedupe would suppress the reseed's rewrite — the result is
-        // identical, so there is genuinely nothing new to report — and the test would assert against
+        // whatever version existed then. Dedupe would suppress the reseed's rewrite (the result is
+        // identical, so there is genuinely nothing new to report), and the test would assert against
         // rows the reseed never touched. Dismissing them first is what leaves the reseed something to
         // write, and mirrors what step 2 of 11-clean-reseed-confirmation.md now does for the same reason.
         NotificationWriter dismisser = new(new SqliteConnectionFactory(_dbPath));
@@ -962,14 +962,14 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// With nothing recorded, the initializer records the current version before writing rather than
-    /// stamping null — a notification whose origin cannot be named is what #312 had to repair later.
+    /// stamping null: a notification whose origin cannot be named is what #312 had to repair later.
     /// </summary>
     [TestMethod]
     public async Task Reseed_WithNoRecordedVersion_RecordsOneBeforeWriting()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
-        // #373: the cold start confirms too, so its confirmations are cleared first — this test is
+        // #373: the cold start confirms too, so its confirmations are cleared first: this test is
         // about the reseed's own, and counting both would measure two runs.
         await DismissExistingConfirmationsAsync();
         await db.ReseedAsync();
@@ -979,7 +979,7 @@ public class DatabaseInitializerTests
 
         Assert.IsNotEmpty(confirmations);
         Assert.IsTrue(confirmations.All(n => n.AppVersionId is not null),
-            "No notification may be written with unknown provenance — record the version first instead.");
+            "No notification may be written with unknown provenance: record the version first instead.");
     }
 
     /// <summary>
@@ -1011,7 +1011,7 @@ public class DatabaseInitializerTests
     /// #373 reversed the original claim, which was that a type with nothing added and nothing modified
     /// is omitted entirely. That is exactly the silence this issue removes: it left a reader unable to
     /// tell a type that arrived and already matched from one the file never carried. The rule that
-    /// survives is the one underneath it — a row is present because something arrived, never as a
+    /// survives is the one underneath it: a row is present because something arrived, never as a
     /// meaningless pair of zeros.
     /// </para>
     /// </summary>
@@ -1028,7 +1028,7 @@ public class DatabaseInitializerTests
         Assert.IsEmpty(counts.Where(c => c.Incoming == 0),
             "Every row is there because something arrived. A row with nothing incoming states nothing at all.");
         Assert.IsNotEmpty(counts.Where(c => c.Unchanged > 0),
-            "And the reseed's own rows are unchanged ones — the case that used to be omitted entirely.");
+            "And the reseed's own rows are unchanged ones: the case that used to be omitted entirely.");
     }
 
     /// <summary>
@@ -1038,12 +1038,12 @@ public class DatabaseInitializerTests
     /// helper this replaced: it picked <c>.First()</c> of several <c>ReseedFileApplied</c> notifications
     /// with no guarantee about which file that was, and <c>Sql.Notifications.SelectPage</c>'s
     /// <c>ORDER BY DateCreated DESC</c> has no secondary tiebreaker against
-    /// <c>SafeDateValue.TimestampFormat</c>'s whole-second precision — exactly the condition three files
+    /// <c>SafeDateValue.TimestampFormat</c>'s whole-second precision: exactly the condition three files
     /// processed in one reseed's tight loop can hit.
     /// <para>
-    /// Constructs two notifications directly (no database, no timing dependency) — one deliberately
+    /// Constructs two notifications directly (no database, no timing dependency): one deliberately
     /// shaped like the file whose breakdown would have failed the original assertion (an entity type
-    /// with zero unchanged rows), the other like the file whose breakdown would have passed it — and
+    /// with zero unchanged rows), the other like the file whose breakdown would have passed it: and
     /// proves <see cref="AllConfirmationCounts"/> finds the passing evidence regardless of which one a
     /// tied sort would have surfaced first.
     /// </para>
@@ -1062,17 +1062,17 @@ public class DatabaseInitializerTests
         Assert.IsNotEmpty(countsOneOrder.Where(c => c.Unchanged > 0),
             "Aggregating both confirmations must find the unchanged evidence regardless of input order.");
         Assert.IsNotEmpty(countsOtherOrder.Where(c => c.Unchanged > 0),
-            "The reverse order must find the same evidence — proving this is order-independent, not luck.");
+            "The reverse order must find the same evidence: proving this is order-independent, not luck.");
         Assert.HasCount(2, countsOneOrder, "Both files' rows must be present, not just whichever came first.");
     }
 
     /// <summary>
-    /// #374 — found live (T1, a real reseed): a Review-policy file's confirmation reported "107 items
-    /// came in, 106 added, 0 updated and 0 already stored" — the numbers do not add up, because the
-    /// one genuinely-modified row (a Source's SeriesName correction, auto-resolved cleanly — no
+    /// #374: found live (T1, a real reseed): a Review-policy file's confirmation reported "107 items
+    /// came in, 106 added, 0 updated and 0 already stored": the numbers do not add up, because the
+    /// one genuinely-modified row (a Source's SeriesName correction, auto-resolved cleanly: no
     /// ambiguity, nothing to review) was silently excluded from every bucket. `ConfirmFileAppliedCleanlyAsync`
     /// excluded any Modify tagged `AppliedPolicy = Review`, but that field always echoes the *file's*
-    /// own configured policy, not what happened to this specific row — a Review-tagged Modify reaching
+    /// own configured policy, not what happened to this specific row: a Review-tagged Modify reaching
     /// this code path (already proven clean of Pending/Blocked/Stale) genuinely wrote a change.
     /// </summary>
     [TestMethod]
@@ -1094,32 +1094,32 @@ public class DatabaseInitializerTests
             """
             {"quotes":[{"id":"e6111111-1111-4111-8111-111111111111","quote":"A test line.","originalLanguage":"en","source":"Some Film","date":null,"character":"A Character","author":null,"type":"movie","genres":[],"translations":{}}]}
             """);
-        // The character field was empty on cold start, filled in on reseed — a genuine, non-ambiguous
+        // The character field was empty on cold start, filled in on reseed: a genuine, non-ambiguous
         // change (nothing to disagree about, per FieldMergeResolver's own "empty side auto-fills"
         // rule), so it auto-resolves under Review without ever becoming Pending.
         await db.ReseedAsync();
 
-        // Two confirmations exist by now (cold start's own, then the reseed's) — the reseed's is the
+        // Two confirmations exist by now (cold start's own, then the reseed's): the reseed's is the
         // one with a genuine Modified row; cold start's own Quote was a brand-new Add.
         List<ReseedEntityCountDto> quoteCounts = [.. AllConfirmationCounts(await NotificationsAsync())
             .Where(c => c.EntityType == "Quote" && c.Modified > 0)];
 
         Assert.ContainsSingle(quoteCounts);
         ReseedEntityCountDto counts = quoteCounts[0];
-        Assert.AreEqual(1, counts.Modified, "The character fill-in is a genuine, non-ambiguous change under Review — it must count as modified, not vanish");
+        Assert.AreEqual(1, counts.Modified, "The character fill-in is a genuine, non-ambiguous change under Review: it must count as modified, not vanish");
         Assert.AreEqual(counts.Incoming, counts.Added + counts.Modified + counts.Unchanged + counts.ResolvedToExisting + counts.AlreadyReported + counts.Skipped,
-                $"Incoming={counts.Incoming} must equal Added({counts.Added}) + Modified({counts.Modified}) + Unchanged({counts.Unchanged}) + Skipped({counts.Skipped}) — the confirmation's own numbers must add up");
+                $"Incoming={counts.Incoming} must equal Added({counts.Added}) + Modified({counts.Modified}) + Unchanged({counts.Unchanged}) + Skipped({counts.Skipped}): the confirmation's own numbers must add up");
     }
 
     // ── #377: a no-op Modify is not a write, and must leave no trace of one ─────────────────────
 
     /// <summary>
-    /// #377: seeds a quote carrying a character, then re-states it without one — the exact asymmetry
+    /// #377: seeds a quote carrying a character, then re-states it without one: the exact asymmetry
     /// mechanism 1 produces in the bundled corpus, where vilaboim's raw format has no year and
     /// NikhilNamal17's does. <c>FieldMergeResolver</c> keeps the stored value, so the resolution writes
     /// nothing; the planner stages a Modify anyway.
     /// <para>
-    /// The real <see cref="ChangeWriter"/> is passed deliberately — with the class default
+    /// The real <see cref="ChangeWriter"/> is passed deliberately: with the class default
     /// (<c>NoOpChangeWriter</c>) nothing writes an <c>Audit_Change</c> row at all, so both halves of
     /// these assertions would pass whether or not the fix works.
     /// </para>
@@ -1159,7 +1159,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// #377: a Source linked to one Series, with a second Series present for the incoming side to point
-    /// at. `seriesId` is the field to differ on — `date` joined the Source's natural key in #374, so
+    /// at. `seriesId` is the field to differ on: `date` joined the Source's natural key in #374, so
     /// changing that creates a second variant rather than a Modify.
     /// </summary>
     private static void WriteSourceFixtureFile(string path, string quoteId, string seriesName) =>
@@ -1185,7 +1185,7 @@ public class DatabaseInitializerTests
         string quoteFile = Path.Combine(_tempDir, $"{name}.json");
         string ruleFile  = Path.Combine(_tempDir, $"{name}-rules.json");
 
-        // The rule file must exist before the cold start but resolve nothing yet — the ids it needs are
+        // The rule file must exist before the cold start but resolve nothing yet: the ids it needs are
         // only knowable once the rows have been created.
         File.WriteAllText(ruleFile, """{"rules":[]}""");
         WriteSourceFixtureFile(quoteFile, quoteId, "Stored Series");
@@ -1200,7 +1200,7 @@ public class DatabaseInitializerTests
         using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         // Null here would mean the cold start never created the row, which makes the rest of the test
-        // meaningless rather than merely awkward — asserted rather than null-forgiven.
+        // meaningless rather than merely awkward: asserted rather than null-forgiven.
         async Task<string> RequiredIdAsync(string sql, string what)
         {
             string? id = await conn.ExecuteScalarAsync<string?>(sql);
@@ -1222,7 +1222,7 @@ public class DatabaseInitializerTests
     /// <para>
     /// End-to-end at the reporting surface, which the planner-level pairs do not reach: it is the
     /// confirmation an operator actually reads. The fixture reproduces the shape the bundled corpus
-    /// produces (a rule whose outcome is already stored — `AlreadyApplied`) without reading
+    /// produces (a rule whose outcome is already stored: `AlreadyApplied`) without reading
     /// `data/sources/`, per `docs/testing-policy.md`.
     /// </para>
     /// </summary>
@@ -1233,7 +1233,7 @@ public class DatabaseInitializerTests
             await SeedSourceWithSeriesLinkAsync("source-noop", "77f22222-2222-4222-8222-222222222222");
 
         // The file now links the Source to a different Series, and a Keep rule sends the resolution
-        // straight back to the stored link — so the Source differs, resolves, and writes nothing.
+        // straight back to the stored link, so the Source differs, resolves, and writes nothing.
         // Date is deliberately left alone: it joined the Source's natural key in #374, so changing it
         // creates a second variant rather than a Modify, and no Modify means nothing to classify.
         WriteSeriesLinkRule(ruleFile, ids, FieldResolutionChoice.Keep);
@@ -1245,7 +1245,7 @@ public class DatabaseInitializerTests
             .Single(c => c.EntityType == ImportActionEntityTypes.Source && c.ResolvedToExisting > 0);
 
         Assert.AreEqual(0, sourceCounts.Modified,
-            "The rule keeps the stored date, so nothing is written — counting it as modified is the defect this issue exists for.");
+            "The rule keeps the stored date, so nothing is written: counting it as modified is the defect this issue exists for.");
         Assert.AreEqual(1, sourceCounts.ResolvedToExisting,
             "…and it is still accounted for, in the bucket that says what actually happened.");
         Assert.AreEqual(sourceCounts.Incoming,
@@ -1255,7 +1255,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// #377: the control the test above needs. The same fixture with a `Replace` rule writes the
-    /// incoming date, and must still be counted as modified — without this, a build counting every
+    /// incoming date, and must still be counted as modified: without this, a build counting every
     /// rule-resolved Source as a no-op passes the positive perfectly.
     /// </summary>
     [TestMethod]
@@ -1272,7 +1272,7 @@ public class DatabaseInitializerTests
         ReseedEntityCountDto sourceCounts = AllConfirmationCounts(await NotificationsAsync())
             .Single(c => c.EntityType == ImportActionEntityTypes.Source && c.Modified > 0);
 
-        Assert.AreEqual(1, sourceCounts.Modified, "Replace takes the incoming date — a real write, and still reported as one.");
+        Assert.AreEqual(1, sourceCounts.Modified, "Replace takes the incoming date: a real write, and still reported as one.");
         Assert.AreEqual(0, sourceCounts.ResolvedToExisting, "A real write is not a no-op.");
     }
 
@@ -1290,7 +1290,7 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #377 row 14, negative half — the control without which an apply path that logged nothing at all
+    /// #377 row 14, negative half: the control without which an apply path that logged nothing at all
     /// would pass the positive.
     /// </summary>
     [TestMethod]
@@ -1316,12 +1316,12 @@ public class DatabaseInitializerTests
         await db.ReseedAsync();
 
         Assert.IsGreaterThan(0, await ModifiedChangeEntryCountAsync(id),
-            "Filling an empty field is a real write and must still be recorded — a fix that silenced the change log entirely would pass row 14's positive half");
+            "Filling an empty field is a real write and must still be recorded: a fix that silenced the change log entirely would pass row 14's positive half");
     }
 
     /// <summary>
     /// #377 row 15: the accumulating half. Measured against the real corpus at planning time as +25
-    /// `Audit_Change` rows per reseed, 24 of them false — and ADR 014 means none can ever be purged.
+    /// `Audit_Change` rows per reseed, 24 of them false, and ADR 014 means none can ever be purged.
     /// </summary>
     [TestMethod]
     public async Task Reseed_Repeatedly_ChangeEntryCountNeverGrows()
@@ -1335,13 +1335,13 @@ public class DatabaseInitializerTests
         int afterSecond = await ModifiedChangeEntryCountAsync(id);
 
         Assert.AreEqual(afterFirst, afterSecond,
-            $"Reseeding unchanged content must not add change entries — grew {afterFirst} → {afterSecond}");
+            $"Reseeding unchanged content must not add change entries: grew {afterFirst} → {afterSecond}");
         Assert.AreEqual(0, afterSecond, "and the stable value is zero, not a stable non-zero one");
     }
 
     /// <summary>
     /// #377 row 16: <c>UpdateOnNewestWins</c> rewrites <c>DateModified</c> <em>and</em>
-    /// <c>ImportBatchId</c> unconditionally, so a no-op does not merely restamp a timestamp — it
+    /// <c>ImportBatchId</c> unconditionally, so a no-op does not merely restamp a timestamp: it
     /// re-attributes which import batch owns the row, which is a real data change.
     /// </summary>
     [TestMethod]
@@ -1358,7 +1358,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(beforeBatch, afterBatch, "and the row still belongs to the batch that actually wrote it");
     }
 
-    /// <summary>The RecordCount of the most recently applied batch — what a reseed claims it wrote.</summary>
+    /// <summary>The RecordCount of the most recently applied batch: what a reseed claims it wrote.</summary>
     private async Task<int> LatestBatchRecordCountAsync()
     {
         using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
@@ -1387,7 +1387,7 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #377 row 13, negative half — a RecordCount stuck at zero would pass the positive half while
+    /// #377 row 13, negative half: a RecordCount stuck at zero would pass the positive half while
     /// under-reporting every genuine reseed.
     /// </summary>
     [TestMethod]
@@ -1428,7 +1428,7 @@ public class DatabaseInitializerTests
     /// #374: a Skip-policy file's row that genuinely differed from what is stored must not vanish from
     /// the confirmation. Before this fix it counted toward neither <see cref="ReseedEntityCountDto.Unchanged"/>
     /// (a real difference did arrive) nor <see cref="ReseedEntityCountDto.Modified"/> (deliberately
-    /// excluded for Skip) — leaving no visible record that the file wanted to change this row at all,
+    /// excluded for Skip): leaving no visible record that the file wanted to change this row at all,
     /// even though it still counted toward <see cref="ReseedEntityCountDto.Incoming"/>.
     /// </summary>
     [TestMethod]
@@ -1451,7 +1451,7 @@ public class DatabaseInitializerTests
             {"quotes":[{"id":"e6222222-2222-4222-8222-222222222222","quote":"Another test line.","originalLanguage":"en","source":"Some Other Film","date":null,"character":"A Character","author":null,"type":"movie","genres":[],"translations":{}}]}
             """);
         // The character field differs from what is stored, but Skip means "always keep the existing
-        // side" — the difference is discarded on purpose rather than applied.
+        // side": the difference is discarded on purpose rather than applied.
         await db.ReseedAsync();
 
         List<ReseedEntityCountDto> quoteCounts = [.. AllConfirmationCounts(await NotificationsAsync())
@@ -1461,9 +1461,9 @@ public class DatabaseInitializerTests
         ReseedEntityCountDto counts = quoteCounts[0];
         Assert.AreEqual(1, counts.Skipped, "A row that genuinely differed and was kept as-is under Skip must be reported as skipped");
         Assert.AreEqual(0, counts.Modified, "Skip never applies a change, so it must not also count as modified");
-        Assert.AreEqual(0, counts.Unchanged, "The row did differ — it is not the same as one that arrived identical");
+        Assert.AreEqual(0, counts.Unchanged, "The row did differ: it is not the same as one that arrived identical");
         Assert.AreEqual(counts.Incoming, counts.Added + counts.Modified + counts.Unchanged + counts.ResolvedToExisting + counts.AlreadyReported + counts.Skipped,
-                $"Incoming={counts.Incoming} must equal Added({counts.Added}) + Modified({counts.Modified}) + Unchanged({counts.Unchanged}) + Skipped({counts.Skipped}) — the confirmation's own numbers must add up");
+                $"Incoming={counts.Incoming} must equal Added({counts.Added}) + Modified({counts.Modified}) + Unchanged({counts.Unchanged}) + Skipped({counts.Skipped}): the confirmation's own numbers must add up");
     }
 
     private static NotificationEntity ConfirmationNotification(string fileName, IReadOnlyList<ReseedEntityCountDto> counts)
@@ -1491,7 +1491,7 @@ public class DatabaseInitializerTests
     /// Replaces an earlier <c>.First()</c>-based lookup that assumed "the" confirmation could be
     /// picked out of several without naming which file it wanted. Nothing makes that assumption true:
     /// <c>Sql.Notifications.SelectPage</c> orders by <c>DateCreated DESC</c> with no tiebreaker, and
-    /// <c>SafeDateValue.TimestampFormat</c> ("yyyy-MM-dd HH:mm:ss") truncates to whole seconds — three
+    /// <c>SafeDateValue.TimestampFormat</c> ("yyyy-MM-dd HH:mm:ss") truncates to whole seconds: three
     /// files processed in the same reseed's tight loop routinely land in the same second, and SQLite's
     /// own tie-break order for equal sort keys is unspecified. A test asserting something true of "the
     /// reseed as a whole" (every entity type it touched is named, none show zero incoming, at least one
@@ -1518,7 +1518,7 @@ public class DatabaseInitializerTests
         => (ImportReviewPendingMetadataDto)NotificationMetadataKinds
             .TryDeserialize(alert.MetadataKind.Parsed, alert.Metadata)!;
 
-    /// <summary>The <c>Import_Batch</c> rows that still exist — a reseed truncates the table, so a
+    /// <summary>The <c>Import_Batch</c> rows that still exist: a reseed truncates the table, so a
     /// batch from an earlier run is gone even though its alert remains until step 7 dismisses it.</summary>
     private async Task<IReadOnlyList<string>> LiveBatchIdsAsync()
     {
@@ -1536,11 +1536,11 @@ public class DatabaseInitializerTests
         await db.ReseedAsync();
 
         Assert.IsGreaterThan(0, await StagedActionCountAsync(),
-            "This fixture exists to leave actions awaiting review — if it no longer does, it is testing nothing.");
+            "This fixture exists to leave actions awaiting review: if it no longer does, it is testing nothing.");
 
         // Counted against the batches that still exist, not against every alert ever written. The first
         // seed staged one batch and the reseed truncated it in favour of another, so two alerts exist
-        // at this point — dismissing the one whose batch is gone is step 7's job, and rows 20/21 assert
+        // at this point: dismissing the one whose batch is gone is step 7's job, and rows 20/21 assert
         // it. Anchoring here on live batches states what step 5 delivers and stays true afterwards.
         IReadOnlyList<string> liveBatchIds = await LiveBatchIdsAsync();
         List<NotificationEntity> alerts = [.. (await NotificationsAsync())
@@ -1548,7 +1548,7 @@ public class DatabaseInitializerTests
         List<NotificationEntity> forLiveBatches = [.. alerts.Where(n =>
             liveBatchIds.Contains(FirstReviewAlertPayloadOf(n).BatchId, StringComparer.OrdinalIgnoreCase))];
 
-        // #372: both the cold start's batch and the reseed's survive now — the reseed removes nothing —
+        // #372: both the cold start's batch and the reseed's survive now, because the reseed removes nothing,
         // so each staged run has its own live alert. The claim that matters is unchanged: an alert
         // exists, and it names a batch that is still there to be reviewed.
         Assert.IsNotEmpty(forLiveBatches, "A staged file that still has a batch has an alert.");
@@ -1571,13 +1571,13 @@ public class DatabaseInitializerTests
 
         Assert.IsGreaterThan(0, ConfirmationCount(all),
             "Positive control: the clean-apply branch must have produced its confirmations here.");
-        // #374: 1, not 0 — NikhilNamal17 always has a genuine, permanent tv-date conflict under
+        // #374: 1, not 0: NikhilNamal17 always has a genuine, permanent tv-date conflict under
         // AllFilesBatch's un-curated wiring (see Reseed_AgainstCurrentContent_StopsAddingConfirmations'
         // own comment) and takes the alert branch; the other two files still take the confirmation
-        // branch above, which is what "mutually exclusive per file" actually means — not that the whole
+        // branch above, which is what "mutually exclusive per file" actually means, not that the whole
         // batch is all-confirmation or all-alert.
         Assert.AreEqual(1, ReviewAlertCount(all),
-            "The one file with something left to review gets an alert; the two that applied cleanly do not — mutually exclusive per file.");
+            "The one file with something left to review gets an alert; the two that applied cleanly do not: mutually exclusive per file.");
     }
 
     /// <summary>
@@ -1593,7 +1593,7 @@ public class DatabaseInitializerTests
         Assert.IsGreaterThan(0, await StagedActionCountAsync(),
             "The first seed has to have staged something for this test to mean anything.");
         Assert.AreEqual(1, ReviewAlertCount(await NotificationsAsync()),
-            "Unlike #302's confirmation, the alert is not gated on isReseed — a first install can need review too.");
+            "Unlike #302's confirmation, the alert is not gated on isReseed: a first install can need review too.");
     }
 
     /// <summary>The counts describe each reviewable state, not one undifferentiated total.</summary>
@@ -1629,7 +1629,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(Path.GetFileName(NikhilNamal17File), payload.FileName);
         Assert.AreEqual(FileResourceOrigin.System, payload.Origin);
         Assert.IsTrue(Guid.TryParse(payload.BatchId, out _),
-            $"BatchId must be a real batch id — dismissal matches on it. Got: '{payload.BatchId}'");
+            $"BatchId must be a real batch id: dismissal matches on it. Got: '{payload.BatchId}'");
     }
 
     /// <summary>Provenance, on the same terms #302 established: never written without a known version.</summary>
@@ -1645,16 +1645,16 @@ public class DatabaseInitializerTests
 
         Assert.IsNotEmpty(alerts);
         Assert.IsTrue(alerts.All(n => n.AppVersionId is not null),
-            "No notification may be written with unknown provenance — record the version first instead.");
+            "No notification may be written with unknown provenance: record the version first instead.");
     }
 
     /// <summary>
     /// Reversed by #372. This asserted that a reseed truncates `Import_Batch`, leaving every alert
-    /// describing one of those batches pointing at a review that can no longer be performed — so each
+    /// describing one of those batches pointing at a review that can no longer be performed, so each
     /// was dismissed as `Obsolete`.
     /// <para>
     /// A reseed removes nothing now, so the batch survives and the review it reports is still
-    /// performable. The alert stays active, and `Obsolete` lost its only producer — see #372's step 4,
+    /// performable. The alert stays active, and `Obsolete` lost its only producer: see #372's step 4,
     /// which records that the enum member is kept for rows already written but no longer has a path
     /// that creates one.
     /// </para>
@@ -1677,15 +1677,15 @@ public class DatabaseInitializerTests
         Assert.IsFalse(original.IsDismissed,
             "Its batch was not removed, so the review it reports can still be carried out.");
         Assert.Contains(FirstReviewAlertPayloadOf(original).BatchId, await LiveBatchIdsAsync(), StringComparer.OrdinalIgnoreCase,
-            "And the batch it names still exists — the positive control for the assertion above.");
+            "And the batch it names still exists: the positive control for the assertion above.");
     }
 
     /// <summary>
-    /// #374 — corrected 2026-09-04, found live (T2 Docker, a real reseed). Before the accumulation-
+    /// #374: corrected 2026-09-04, found live (T2 Docker, a real reseed). Before the accumulation-
     /// prevention dedup (<c>Sql.Quotes.SelectHasUnresolvedActionById</c>) covered every quote id rather
     /// than only the tv-date-conflict mechanism it was first written for, a reseed of this fixture's
     /// still-unresolved content re-staged a brand-new duplicate action per quote in a second batch,
-    /// and that batch got its own alert — the shape this test originally asserted (2 alerts, one per
+    /// and that batch got its own alert: the shape this test originally asserted (2 alerts, one per
     /// batch). Once the dedup covers every quote id, the second reseed's own batch has nothing new to
     /// stage for content that is already known and unresolved, so there is nothing new to alert about
     /// either: the original alert is still live, still names a batch that still exists, and still
@@ -1707,19 +1707,19 @@ public class DatabaseInitializerTests
         List<NotificationEntity> alerts = [.. (await NotificationsAsync())
             .Where(n => n.MetadataKind.Parsed == NotificationMetadataKind.ImportReviewPending)];
 
-        Assert.ContainsSingle(alerts, "Nothing new was staged for already-known-unresolved content — the original alert already covers it, and raising a second would be a duplicate, not new information");
+        Assert.ContainsSingle(alerts, "Nothing new was staged for already-known-unresolved content: the original alert already covers it, and raising a second would be a duplicate, not new information");
         Assert.AreEqual(originalBatchId, FirstReviewAlertPayloadOf(alerts[0]).BatchId,
             "The surviving alert must be the original one from cold start, not a coincidentally-identical replacement");
     }
 
     /// <summary>
-    /// #374 — found live (T2 Docker, a real full-corpus reseed): the accumulation-prevention check
+    /// #374: found live (T2 Docker, a real full-corpus reseed): the accumulation-prevention check
     /// (<c>Sql.Quotes.SelectHasUnresolvedActionById</c>) was originally gated on <c>dateNeedsReview</c>
-    /// alone, the one mechanism it was first written for — leaving step 7's own <c>Blocked</c>
+    /// alone, the one mechanism it was first written for: leaving step 7's own <c>Blocked</c>
     /// quote-uniqueness collision completely unguarded. A real reseed doubled every <c>Blocked</c>
     /// collision (2 → 4) because #372's reseed never truncates <c>Import_Action</c> and the collision
     /// never resolves on its own, so the same never-before-seen id was re-detected and re-staged as a
-    /// brand-new duplicate every time — exactly the accumulation pattern this whole issue exists to fix,
+    /// brand-new duplicate every time: exactly the accumulation pattern this whole issue exists to fix,
     /// recurring in a sibling mechanism the original fix was never extended to.
     /// </summary>
     [TestMethod]
@@ -1759,9 +1759,9 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #374 — found live (T2 Docker, a real reseed): a case-only quote/title/character difference is now
+    /// #374: found live (T2 Docker, a real reseed): a case-only quote/title/character difference is now
     /// its own genuine, permanent ambiguity (developer decision), but nothing recognised an already-
-    /// reported one on a later reseed — the accumulation-prevention check the Add branch already had was
+    /// reported one on a later reseed: the accumulation-prevention check the Add branch already had was
     /// never extended to Modify, since before this fix a Modify's own ambiguous fields either
     /// auto-resolved or blocked a Complete row, never stayed genuinely Pending release over release.
     /// Measured live: a single known case-only conflict, left unresolved, made the real corpus's staged
@@ -1798,28 +1798,28 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #374 — found live (T1, the developer's own run against the real bundled corpus, 2026-09-04):
+    /// #374: found live (T1, the developer's own run against the real bundled corpus, 2026-09-04):
     /// `Sql.Quotes.SelectHasUnresolvedActionById`'s accumulation-prevention check only recognises
-    /// `Pending`/`Blocked`, never `Stale` — so a quote whose conflict rule genuinely cannot resolve it
+    /// `Pending`/`Blocked`, never `Stale`, so a quote whose conflict rule genuinely cannot resolve it
     /// stages a fresh `Stale` action on every single reseed, unbounded. Measured live against the real
-    /// corpus: `0 → 4 → 8 → 12`, exactly +4 per reseed, while `Pending` itself stayed flat — the exact
+    /// corpus: `0 → 4 → 8 → 12`, exactly +4 per reseed, while `Pending` itself stayed flat: the exact
     /// accumulation class this whole issue exists to fix, in the one status this session's own extension
     /// of the check never covered.
     /// </summary>
     /// <remarks>
-    /// **Corrected 2026-09-04, same day — the original fixture stopped reproducing Stale at all.** It
+    /// **Corrected 2026-09-04, same day: the original fixture stopped reproducing Stale at all.** It
     /// used two in-file duplicate quotes (an id shared by two raw occurrences differing only in
-    /// `date`) with a `Keep` rule whose own recorded snapshot matched the raw pairing — exactly the
+    /// `date`) with a `Keep` rule whose own recorded snapshot matched the raw pairing: exactly the
     /// shape #378 fixed (a Keep/Replace resolution now correctly re-links the quote to the *decided*
     /// date's own Source variant, not whichever raw occurrence happened to resolve last), so this
     /// fixture now resolves cleanly on every reseed instead of going Stale. The fixture was changed to a
-    /// rule whose recorded snapshot can never match any real incoming value at all (`"9999"`) — a
+    /// rule whose recorded snapshot can never match any real incoming value at all (`"9999"`): a
     /// genuinely, permanently unresolvable conflict independent of #378. This also changed cold start's
     /// own count from 0 to 1: the old fixture's recorded incoming value happened to match one of the two
     /// real raw occurrences, so only a reseed comparing against a stored row ever saw a mismatch;
     /// `"9999"` matches neither, so even the same-batch comparison at cold start detects it immediately.
     /// What this test keeps proving either way: a real Stale conflict doesn't accumulate on repeat
-    /// reseeds — not that this specific fixture goes Stale for a reason #378 has since fixed.
+    /// reseeds, not that this specific fixture goes Stale for a reason #378 has since fixed.
     /// </remarks>
     [TestMethod]
     public async Task Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows()
@@ -1858,7 +1858,7 @@ public class DatabaseInitializerTests
 
         // Unlike the original fixture (whose recorded incoming value matched one of the two real raw
         // occurrences, so only a reseed comparing against a stored row ever saw a mismatch), "9999" can
-        // never match either raw occurrence — so even the same-batch comparison at cold start already
+        // never match either raw occurrence, so even the same-batch comparison at cold start already
         // detects it, and this conflict stays genuinely, permanently Stale on every reseed by
         // construction. What matters, and what this test exists to prove, is that reseed1 does not
         // double the count already correctly staged at cold start.
@@ -1896,7 +1896,7 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #376: the fixture shape every accumulation test below shares — two files in one batch, both
+    /// #376: the fixture shape every accumulation test below shares: two files in one batch, both
     /// <c>review</c>. The first creates the entity; the second restates it with exactly one field
     /// different and no covering rule, so the disagreement stages an unresolved action that is never
     /// applied.
@@ -1934,7 +1934,7 @@ public class DatabaseInitializerTests
     /// <summary>
     /// #376: cold start, then two reseeds of unchanged content, asserting the unresolved count for
     /// each named entity type never grows. The "must actually stage something" assertion comes first
-    /// deliberately — a fixture that stages nothing would otherwise satisfy every equality below.
+    /// deliberately: a fixture that stages nothing would otherwise satisfy every equality below.
     /// </summary>
     private async Task AssertUnresolvedNeverGrowsAsync(QuotinatorDatabaseInitializer db, params string[] entityTypes)
     {
@@ -1958,15 +1958,15 @@ public class DatabaseInitializerTests
             Assert.IsGreaterThan(0, cold[entityType],
                 $"The fixture must actually stage an unresolved {entityType} action on cold start, or this test proves nothing");
             Assert.AreEqual(cold[entityType], first[entityType],
-                $"Reseeding unchanged content must not stage a duplicate unresolved {entityType} action on top of the still-unresolved one — grew {cold[entityType]} → {first[entityType]}");
+                $"Reseeding unchanged content must not stage a duplicate unresolved {entityType} action on top of the still-unresolved one: grew {cold[entityType]} → {first[entityType]}");
             Assert.AreEqual(cold[entityType], second[entityType],
-                $"A second reseed must not accumulate anything further for {entityType} — {cold[entityType]} → {first[entityType]} → {second[entityType]}");
+                $"A second reseed must not accumulate anything further for {entityType}: {cold[entityType]} → {first[entityType]} → {second[entityType]}");
         }
     }
 
     /// <summary>
     /// #376, the scenario the issue itself names: a Source matched by natural key whose declared date
-    /// disagrees with the stored one. Measured before the fix against this exact shape — 1 → 2 → 3.
+    /// disagrees with the stored one. Measured before the fix against this exact shape: 1 → 2 → 3.
     /// </summary>
     [TestMethod]
     public async Task Reseed_Repeatedly_WithASourceModifyConflict_PendingCountNeverGrows()
@@ -1983,7 +1983,7 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #376: the same defect through <c>PlanSourcesAsync</c>'s other branch — an entry carrying an
+    /// #376: the same defect through <c>PlanSourcesAsync</c>'s other branch: an entry carrying an
     /// explicit id is matched by it rather than by title/type, and takes its own separate exit.
     /// </summary>
     [TestMethod]
@@ -2029,12 +2029,12 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #376: the Source site the issue does not mention — <c>ResolveSourceAsync</c>'s date backfill,
+    /// #376: the Source site the issue does not mention: <c>ResolveSourceAsync</c>'s date backfill,
     /// which stages <c>Blocked</c> when the stored row is <c>Complete</c>, in a different method from
     /// the two <c>PlanSourcesAsync</c> branches.
     /// </summary>
     /// <remarks>
-    /// Cannot use the two-file fixture: <c>CompletenessStatus</c> is human-set only (#382 — every
+    /// Cannot use the two-file fixture: <c>CompletenessStatus</c> is human-set only (#382: every
     /// table defaults to <c>Incomplete</c>, <c>ComputeNextStatus</c> can only reach <c>NeedsReview</c>,
     /// and no entry DTO carries a completeness field at all), so no import file can produce the
     /// <c>Complete</c> row this branch requires. Set directly by SQL as test setup, which is honest
@@ -2057,12 +2057,12 @@ public class DatabaseInitializerTests
         await MarkSourceCompleteAsync("Backfill Film");
 
         // A second quote for the same title, now carrying a date, is what puts ResolveSourceAsync on
-        // the backfill path — against a row a curator has confirmed complete, so it must be Blocked.
+        // the backfill path: against a row a curator has confirmed complete, so it must be Blocked.
         //
         // The dated quote must come FIRST. #374 settles each Source variant once per pass
         // (`stagedVariantIds`), so whichever quote reaches the title first is the one whose date
         // claim is evaluated; with the undated quote leading, the variant is already settled and the
-        // dated one is skipped entirely — which is what the first draft of this fixture did, staging
+        // dated one is skipped entirely, which is what the first draft of this fixture did, staging
         // an Unchanged Source and nothing else.
         File.WriteAllText(quoteFile,
             """
@@ -2082,11 +2082,11 @@ public class DatabaseInitializerTests
         int third = await UnresolvedActionCountAsync(ImportActionEntityTypes.Source);
 
         Assert.IsGreaterThan(0, first, "A dated quote against a Complete date-less Source must be Blocked for review");
-        Assert.AreEqual(first, second, $"Reseeding unchanged content must not duplicate the still-unresolved Blocked action — grew {first} → {second}");
-        Assert.AreEqual(first, third, $"A further reseed must not accumulate anything more — {first} → {second} → {third}");
+        Assert.AreEqual(first, second, $"Reseeding unchanged content must not duplicate the still-unresolved Blocked action: grew {first} → {second}");
+        Assert.AreEqual(first, third, $"A further reseed must not accumulate anything more: {first} → {second} → {third}");
     }
 
-    /// <summary>#376: sets the state no import file can produce — see the Blocked backfill test's own remark.</summary>
+    /// <summary>#376: sets the state no import file can produce: see the Blocked backfill test's own remark.</summary>
     private async Task MarkSourceCompleteAsync(string title)
     {
         using SqliteConnection connection = new($"Data Source={_dbPath}");
@@ -2112,7 +2112,7 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #376: Universe diffs only <c>name</c>, which is also its natural key — so its conflict is
+    /// #376: Universe diffs only <c>name</c>, which is also its natural key, so its conflict is
     /// reachable through the explicit-id branch alone, where the id matches and the name differs.
     /// </summary>
     [TestMethod]
@@ -2146,7 +2146,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// #376: Person diffs <c>name</c>, <c>dateOfBirth</c> and <c>dateOfDeath</c>.
-    /// <c>PersonEntryDto.Id</c> is <c>required</c>, so a <c>people[]</c> entry must state one — and an
+    /// <c>PersonEntryDto.Id</c> is <c>required</c>, so a <c>people[]</c> entry must state one, and an
     /// entry omitting it does not merely skip that entry, it throws inside
     /// <c>SourceQuoteFileReader</c> and discards the entire file silently, which is how the first
     /// draft of this fixture produced zero actions and zero rows.
@@ -2166,7 +2166,7 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #376: Character is matched by explicit id only — no natural-key fallback — and diffs only
+    /// #376: Character is matched by explicit id only (no natural-key fallback) and diffs only
     /// <c>name</c> (ADR 013 Decision 9 makes SourceType immutable). Both files restate the Source so
     /// the Character's own link resolves on each pass.
     /// </summary>
@@ -2187,7 +2187,7 @@ public class DatabaseInitializerTests
     /// <summary>
     /// #376: the three id-keyed tail entities in one fixture, since one file reaches all three and
     /// each is asserted on its own count. Note that <c>ImportActionPlanner</c>'s own #68 comment still
-    /// claims these are "Add-only … no Modify/merge semantics" — that is stale, and this test is what
+    /// claims these are "Add-only … no Modify/merge semantics": that is stale, and this test is what
     /// pins the Modify branches they actually have.
     /// </summary>
     [TestMethod]
@@ -2252,7 +2252,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, cold, "Only the first title disagrees on cold start");
         Assert.AreEqual(2, await DistinctUnresolvedEntityCountAsync(ImportActionEntityTypes.Source),
-            "The newly-disagreeing title must be reported — a guard that suppressed it would be hiding a conflict, not preventing a duplicate");
+            "The newly-disagreeing title must be reported: a guard that suppressed it would be hiding a conflict, not preventing a duplicate");
     }
 
     /// <summary>
@@ -2275,8 +2275,8 @@ public class DatabaseInitializerTests
     /// #376, control for the placement decision: a conflict that becomes resolvable between reseeds
     /// must be staged and applied, not passed over as already-reported.
     /// <para>
-    /// This is what makes the check's placement observable. Run at the top of a branch — where #374's
-    /// Quote check sat — it fires before any rule is consulted, so the row is skipped and its stored
+    /// This is what makes the check's placement observable. Run at the top of a branch (where #374's
+    /// Quote check sat), it fires before any rule is consulted, so the row is skipped and its stored
     /// values are never corrected however good the rule is. Run at the point of staging, it fires only
     /// when the action about to be staged is itself unresolved, so a resolvable one goes through.
     /// </para>
@@ -2284,7 +2284,7 @@ public class DatabaseInitializerTests
     /// <remarks>
     /// <b>This asserts the stored row, not the unresolved count, and the first draft got that wrong.</b>
     /// It asserted the count drops to zero once a rule covers the conflict, which no mechanism provides:
-    /// <c>ImportActionResolutionCoordinator</c> never re-decides an already-staged <c>Pending</c> row —
+    /// <c>ImportActionResolutionCoordinator</c> never re-decides an already-staged <c>Pending</c> row:
     /// only a decision through the decide endpoint changes one. The original action stays exactly where
     /// it is; what changes is that the reseed now stages a <em>new</em>, Decided action and applies it.
     /// A <c>Replace</c> rule makes that observable, because the stored value moves to the rule's answer.
@@ -2333,13 +2333,13 @@ public class DatabaseInitializerTests
         await db.ReseedAsync();
 
         Assert.AreEqual("1999", await SourceDateAsync("Resolvable Film"),
-            "A rule now covers the conflict, so the reseed must resolve and apply it — a check placed before rule resolution would leave the stored value uncorrected forever");
+            "A rule now covers the conflict, so the reseed must resolve and apply it: a check placed before rule resolution would leave the stored value uncorrected forever");
     }
 
     /// <summary>
     /// #376: suppressing the duplicate must not make the record disappear. `Incoming` is derived from
     /// the staged actions themselves, so a pass that stages nothing for an already-known conflict drops
-    /// it from the file's own report — and a shrinking total is indistinguishable from content the file
+    /// it from the file's own report, and a shrinking total is indistinguishable from content the file
     /// stopped mentioning. This is why the suppression stages an `AlreadyReported` row instead.
     /// </summary>
     [TestMethod]
@@ -2357,7 +2357,7 @@ public class DatabaseInitializerTests
         int coldIncoming = SourceCountsFrom(await NotificationsAsync()).Sum(c => c.Incoming);
 
         await db.ReseedAsync();
-        // Every confirmation ever written, minus what cold start contributed — i.e. what the reseed
+        // Every confirmation ever written, minus what cold start contributed: i.e. what the reseed
         // itself reported.
         List<ReseedEntityCountDto> all = [.. SourceCountsFrom(await NotificationsAsync())];
         int reseedIncoming = all.Sum(c => c.Incoming) - coldIncoming;
@@ -2368,7 +2368,7 @@ public class DatabaseInitializerTests
         // At cold start the declaring file staged a Pending and so raised a review alert instead of a
         // clean confirmation, contributing nothing to this total; on the reseed it stages an
         // AlreadyReported row, which is clean, so it now reports a confirmation of its own. Measured
-        // 1 → 2. What must never happen is the opposite — a suppressed row staging nothing at all and
+        // 1 → 2. What must never happen is the opposite: a suppressed row staging nothing at all and
         // dropping out of Incoming, since a shrinking total reads as content the file stopped
         // mentioning.
         Assert.IsGreaterThanOrEqualTo(coldIncoming, reseedIncoming,
@@ -2377,12 +2377,12 @@ public class DatabaseInitializerTests
             Assert.AreEqual(counts.Incoming,
                 counts.Added + counts.Modified + counts.Unchanged + counts.ResolvedToExisting + counts.AlreadyReported + counts.Skipped
                 + counts.Blocked + counts.Pending + counts.Stale + counts.Discarded,
-                "The breakdown must add up with the new bucket in it — a term missing here is exactly how a row goes uncounted");
+                "The breakdown must add up with the new bucket in it: a term missing here is exactly how a row goes uncounted");
     }
 
     /// <summary>
     /// #376: the `AlreadyReported` row is terminal and writes nothing. It is staged `Applied`, and
-    /// `ImportActionResolutionCoordinator.TryApplyBatchAsync` applies only `Decided` rows — so nothing
+    /// `ImportActionResolutionCoordinator.TryApplyBatchAsync` applies only `Decided` rows, so nothing
     /// re-stamps `DateModified`, re-attributes `ImportBatchId`, or writes an `Audit_Change` row claiming
     /// a modification that did not happen. ADR 014 forbids ever purging a change entry, so a false one
     /// here would be permanent.
@@ -2421,22 +2421,22 @@ public class DatabaseInitializerTests
 
         Assert.ContainsSingle(staged, "The reseed must stage exactly one already-reported row for the known conflict");
         Assert.AreEqual(ImportActionStatus.Applied.ToString(), staged.Single().Status,
-            "Staged Applied, so the coordinator — which applies only Decided rows — never touches it again");
+            "Staged Applied, so the coordinator (which applies only Decided rows) never touches it again");
         Assert.AreEqual(changesAfterCold, await ModifiedChangeEntryCountAsync(sourceId),
-            "Nothing was written, so the change log must not claim a modification — ADR 014 means a false entry here can never be purged");
+            "Nothing was written, so the change log must not claim a modification: ADR 014 means a false entry here can never be purged");
         Assert.IsNull(await SourceDateAsync("Inert Film"),
             "…and the stored row is genuinely untouched, which is what makes the action inert rather than merely quiet");
     }
 
     /// <summary>
-    /// #376: the accumulation had a second face nobody was watching — the notification layer. Before
+    /// #376: the accumulation had a second face nobody was watching: the notification layer. Before
     /// this fix, a reseed re-staged the already-known conflict, which raised a *fresh*
     /// <c>ImportReviewPending</c> alert with its own batch id every single time. Measured against the
     /// pre-fix build: one alert at cold start, two after the first reseed, three after the second, for
     /// one unresolved conflict nobody had touched.
     /// <para>
     /// Suppressing the duplicate action removes the alert's own cause, so the count stays at one. The
-    /// original alert deliberately stays standing — the decision it points at is still outstanding —
+    /// original alert deliberately stays standing: the decision it points at is still outstanding:
     /// and this test asserts that too: an alert that vanished would be worse than one that duplicated.
     /// </para>
     /// </summary>
@@ -2461,13 +2461,13 @@ public class DatabaseInitializerTests
         int second = ReviewAlertCount(await NotificationsAsync());
 
         Assert.AreEqual(1, cold, "The declared date disagrees with the stored one, so exactly one alert is raised");
-        Assert.AreEqual(cold, first, $"Reseeding unchanged content must not raise a second alert for a conflict already on the review queue — grew {cold} → {first}");
-        Assert.AreEqual(cold, second, $"A further reseed must not raise another — {cold} → {first} → {second}");
+        Assert.AreEqual(cold, first, $"Reseeding unchanged content must not raise a second alert for a conflict already on the review queue: grew {cold} → {first}");
+        Assert.AreEqual(cold, second, $"A further reseed must not raise another: {cold} → {first} → {second}");
     }
 
     /// <summary>
     /// #376, the negative half of the test above. Without it, a change that stopped raising review
-    /// alerts altogether would pass that one perfectly while hiding every conflict from the operator —
+    /// alerts altogether would pass that one perfectly while hiding every conflict from the operator:
     /// a far worse outcome than the duplication it was meant to stop. A conflict this reseed is seeing
     /// for the first time must still reach the review queue.
     /// </summary>
@@ -2497,7 +2497,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
         int cold = ReviewAlertCount(await NotificationsAsync());
 
-        // A second, previously undeclared title now disagrees too — new information, not a repeat.
+        // A second, previously undeclared title now disagrees too: new information, not a repeat.
         File.WriteAllText(sourceFile,
             """
             {"quotes":[],"sources":[{"title":"Alert First Film","type":"movie","date":"1991"},{"title":"Alert Second Film","type":"movie","date":"1992"}]}
@@ -2506,14 +2506,14 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual(1, cold, "Only the first title disagrees on cold start");
         Assert.AreEqual(2, ReviewAlertCount(await NotificationsAsync()),
-            "The newly-disagreeing title must raise its own alert — a suppression that swallowed it would be hiding a conflict, not preventing a duplicate");
+            "The newly-disagreeing title must raise its own alert: a suppression that swallowed it would be hiding a conflict, not preventing a duplicate");
     }
 
     /// <summary>
     /// #376, the negative half of <see cref="Reseed_AnAlreadyReportedConflict_IsCountedInTheConfirmationRatherThanVanishing"/>.
     /// That test asserts a file whose conflict is already known reports a clean confirmation carrying
     /// the already-reported count. This one asserts the word "clean" still means something: a file
-    /// whose conflict is genuinely outstanding — the cold start, where it is first detected — reports
+    /// whose conflict is genuinely outstanding (the cold start, where it is first detected) reports
     /// no confirmation at all, only the review alert.
     /// </summary>
     [TestMethod]
@@ -2541,14 +2541,14 @@ public class DatabaseInitializerTests
         Assert.Contains(declaringFile, alertedFiles,
             "The file carrying the disagreement must raise a review alert on the pass that first detects it");
         Assert.DoesNotContain(declaringFile, confirmedFiles,
-            "…and must not also report itself reseeded cleanly on that same pass — a confirmation alongside an outstanding first detection is what would make 'clean' meaningless");
+            "…and must not also report itself reseeded cleanly on that same pass: a confirmation alongside an outstanding first detection is what would make 'clean' meaningless");
     }
 
     /// <summary>#376: only the Source rows of every reseed confirmation written so far.</summary>
     private static IEnumerable<ReseedEntityCountDto> SourceCountsFrom(IReadOnlyList<NotificationEntity> notifications)
         => AllConfirmationCounts(notifications).Where(c => c.EntityType == ImportActionEntityTypes.Source);
 
-    /// <summary>#376: the stored Source date — what "the resolution was actually applied" looks like from outside.</summary>
+    /// <summary>#376: the stored Source date: what "the resolution was actually applied" looks like from outside.</summary>
     private async Task<string?> SourceDateAsync(string title)
     {
         using SqliteConnection connection = new($"Data Source={_dbPath}");
@@ -2572,8 +2572,8 @@ public class DatabaseInitializerTests
     /// #378: a "Keep" resolution on a Quote's own <c>date</c> field must control which Source variant
     /// the quote actually links to, not just its reported/serialized field. Found live while verifying
     /// #374's own conflict-rule mechanism against the real bundled corpus (Auntie Mame's pre-existing
-    /// <c>Keep</c> rule): <c>date</c> is not a genuine <c>Quotinator_Quote</c> column — it is read back
-    /// via a join to whichever <c>Quotinator_Source</c> row the quote's <c>SourceId</c> points at — and
+    /// <c>Keep</c> rule): <c>date</c> is not a genuine <c>Quotinator_Quote</c> column (it is read back
+    /// via a join to whichever <c>Quotinator_Source</c> row the quote's <c>SourceId</c> points at), and
     /// <c>ImportActionPlanner.ResolveSourceAsync</c> resolves/creates a distinct Source variant per *raw*
     /// incoming date, independently of what the field-merge later decides. Fixed by
     /// <c>ReresolveSourceIdForDecidedDate</c>: re-picking the Source variant against the field-merge's
@@ -2612,7 +2612,7 @@ public class DatabaseInitializerTests
 
         Assert.AreEqual("1958", linkedSourceDate,
             "A 'Keep' resolution on a Quote's date field must control which Source variant the quote " +
-            "links to, not just the reported/serialized field — otherwise the resolution has no real " +
+            "links to, not just the reported/serialized field: otherwise the resolution has no real " +
             "effect and a later reseed compares against the wrong stored value forever.");
     }
 
@@ -2627,11 +2627,11 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// #378 (found live against the real bundled corpus, 2026-09-08, while verifying the fix above): a
-    /// `Keep`/`Replace` rule that matches a field while nothing exists yet must not be silently applied —
+    /// `Keep`/`Replace` rule that matches a field while nothing exists yet must not be silently applied:
     /// `Keep` would resolve the field to null, which is well-defined per `FieldMergeResolver` but can just
     /// as easily be a role-reversed or vestigial rule authored against a snapshot that no longer applies
     /// (developer: "we should flag that as a possible issue as it may be an accident"). Four real
-    /// `nikhilnamal17-conflict-rules.json` `quoteText` "Keep" rules turned out to be exactly this — their
+    /// `nikhilnamal17-conflict-rules.json` `quoteText` "Keep" rules turned out to be exactly this: their
     /// own recorded `existingRecord`/`incomingRecord` were already byte-identical, so the rule never did
     /// anything at all and was deleted as vestigial cruft, not fixed. This test proves the general case:
     /// such a rule now holds the Add for review (`Pending`) instead of either corrupting the field or
@@ -2669,7 +2669,7 @@ public class DatabaseInitializerTests
             .Where(a => a.EntityId.Equals("e6611111-1111-4111-8111-111111111111", StringComparison.OrdinalIgnoreCase) && a.EntityType == "Quote")];
 
         Assert.HasCount(1, actions,
-            "Exactly one action for this id — not two, even though both in-file occurrences independently see nothing existing yet");
+            "Exactly one action for this id, not two, even though both in-file occurrences independently see nothing existing yet");
         Assert.AreEqual(ImportActionStatus.Pending, actions[0].Status.Parsed,
             "A Keep rule matching against nothing must hold the Add for review, not silently apply it or silently ignore it");
 
@@ -2686,7 +2686,7 @@ public class DatabaseInitializerTests
     /// **Reversed by #372, and the original mechanism is worth stating.** This asserted exactly one
     /// active alert after four runs, because each reseed truncated `Import_Batch` and dismissed the
     /// alerts naming the batches it had just removed. A reseed removes nothing now, so every batch
-    /// survives and each run's alert stays live — four runs, four alerts, each naming a real batch with
+    /// survives and each run's alert stays live: four runs, four alerts, each naming a real batch with
     /// real pending actions. Nothing is stale and nothing is false; there are simply four attempts on
     /// record.
     /// </para>
@@ -2717,7 +2717,7 @@ public class DatabaseInitializerTests
         foreach (NotificationEntity alert in active)
         {
             Assert.Contains(FirstReviewAlertPayloadOf(alert).BatchId, liveBatchIds, StringComparer.OrdinalIgnoreCase,
-                "Every active alert must name a batch that still exists — an alert for a vanished batch "
+                "Every active alert must name a batch that still exists: an alert for a vanished batch "
                 + "asks for a review nobody can perform.");
         }
     }
@@ -2725,7 +2725,7 @@ public class DatabaseInitializerTests
     /// <summary>
     /// #372: every `Quotinator_`-prefixed table with its live row count, read from the schema rather
     /// than a list. A hand-maintained list is exactly what let `Series`, `Universe` and
-    /// `CharacterSource` fall out of the reseed's own delete set unnoticed — a test asserting
+    /// `CharacterSource` fall out of the reseed's own delete set unnoticed: a test asserting
     /// preservation must not repeat the mistake it exists to catch.
     /// </summary>
     private async Task<Dictionary<string, int>> DomainRowCountsAsync()
@@ -2748,7 +2748,7 @@ public class DatabaseInitializerTests
     /// <para>
     /// This is the only shape that can tell the two behaviours apart. Every id in this project is a
     /// hash of normalised content, so truncate-then-reimport reproduces byte-identical rows for
-    /// everything the files contain — row counts, ids and links all come back the same, and an
+    /// everything the files contain: row counts, ids and links all come back the same, and an
     /// assertion over them cannot fail against the deletion it exists to catch. Content the files do
     /// **not** contain is the difference: a delete loses it, an import leaves it alone.
     /// </para>
@@ -2811,7 +2811,7 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// Reports a fixed outcome for every candidate file, without touching the network — the refresh
+    /// Reports a fixed outcome for every candidate file, without touching the network: the refresh
     /// result is trigger 1's input, and the point here is what the initializer does with it.
     /// </summary>
     private sealed class StubSourceCacheUpdater(SourceRefreshOutcome outcome) : ISourceCacheUpdater
@@ -2840,7 +2840,7 @@ public class DatabaseInitializerTests
     /// <summary>
     /// #302: the same file under the same Review policy but with no rule file, so its conflicts have
     /// nothing to resolve them and stay pending. <see cref="NikhilNamal17WithRuleFileBatch"/> cannot
-    /// serve here — its rule file resolves every conflict, which is exactly what makes it a clean apply.
+    /// serve here: its rule file resolves every conflict, which is exactly what makes it a clean apply.
     /// </summary>
     private static SeedBatch NikhilNamal17AwaitingReviewBatch() => new(
         [
@@ -2852,7 +2852,7 @@ public class DatabaseInitializerTests
         ManifestPolicy.HardcodedDefault,
         "bundled sources");
 
-    /// <summary>#153: mirrors production's manifest-driven wiring — NikhilNamal17 seeded under its own
+    /// <summary>#153: mirrors production's manifest-driven wiring: NikhilNamal17 seeded under its own
     /// Review policy with its real ruleFile, matching what ManifestSeedPlanner actually builds (unlike
     /// <see cref="AllFilesBatch"/>, which never wires a rule file at all).</summary>
     /// <summary>
@@ -2861,12 +2861,12 @@ public class DatabaseInitializerTests
     /// </summary>
     /// <remarks>
     /// The declarations file is not decoration here. A title carrying two different dates is ambiguous
-    /// — either one date is wrong, or it names two works — and since 2026-09-08 that is staged
+    /// (either one date is wrong, or it names two works) and since 2026-09-08 that is staged
     /// <c>Pending</c> rather than resolved by silently creating a second Source. The answer "these are
     /// two distinct works" is a <c>sources[]</c> declaration, and those live in this shared file rather
     /// than in the raw corpus that happens to contain the quotes. Seeding the corpus without it
     /// therefore leaves genuinely unresolvable Pendings, which is a property of the fixture rather than
-    /// of the data — production always loads both.
+    /// of the data: production always loads both.
     /// </remarks>
     private static SeedBatch NikhilNamal17WithRuleFileBatch() => new(
         [
@@ -2886,31 +2886,31 @@ public class DatabaseInitializerTests
         "bundled sources");
 
     /// <summary>#153: seeding NikhilNamal17 alone, under its real Review policy and real rule file, must
-    /// produce zero Pending/Stale/Blocked actions — the same "no file left staged awaiting review"
+    /// produce zero Pending/Stale/Blocked actions: the same "no file left staged awaiting review"
     /// invariant CLAUDE.md's own live T2 checklist already asserts against the full bundled dataset.</summary>
     /// <remarks>
-    /// #374/#219: three specific, understood exceptions — genuine, permanent conflicts, not residual
+    /// #374/#219: three specific, understood exceptions: genuine, permanent conflicts, not residual
     /// defects. A fourth, previously-documented exception (a `Blocked` Shawshank Redemption duplicate:
     /// NikhilNamal17's own raw data carries the identical "Hope is a good thing..." quote twice, once
     /// under "Shawshank Redemption" and once under "The Shawshank Redemption", which
     /// nikhilnamal17-source-aliases.json already merges onto one canonical Source) is resolved as of
-    /// #219's quote-exclusion mechanism — nikhilnamal17-quote-exclusions.json excludes the duplicate id
+    /// #219's quote-exclusion mechanism: nikhilnamal17-quote-exclusions.json excludes the duplicate id
     /// outright, so it produces no action at all and is no longer in this list.
     /// <para/>
     /// Three `Pending` (developer decision, 2026-09-04): two "Mr. Robot" quotes and one "Arrow" quote
-    /// each carry a per-quote year (2017) that disagrees with the show's other quotes (2015) — a
+    /// each carry a per-quote year (2017) that disagrees with the show's other quotes (2015): a
     /// series-capable type with no Series data yet cannot tell "a genuinely new season" from "this one
     /// quote's year is simply wrong" (#375 already established these specific years are the latter, not
     /// season markers), so per the developer's stated principle ("every time we don't know what to do
     /// with the data that means we have a conflict to report") these are correctly reported for a
-    /// curator to resolve, not silently split into a second Source (which would fragment the show — found
+    /// curator to resolve, not silently split into a second Source (which would fragment the show: found
     /// live: "Arrow" and "Mr. Robot" each split into two Source rows before this exception existed) nor
     /// silently merged into the first (which would erase a difference that might, once Series data
     /// exists, turn out to matter).
     /// </remarks>
     /// <summary>
     /// Every quote id in the real bundled NikhilNamal17 corpus that is expected to stay genuinely
-    /// unresolved under Review with the real rule file applied — the single source of truth for this
+    /// unresolved under Review with the real rule file applied: the single source of truth for this
     /// number, consulted by
     /// <see cref="NikhilNamal17RealCorpusWithCurrentRuleFile_ResolvesCompletelyAndStaysStable"/>, the one
     /// test in this class allowed to depend on the real bundled corpus. This is unavoidably tied to the
@@ -2919,12 +2919,12 @@ public class DatabaseInitializerTests
     /// </summary>
     /// <remarks>
     /// **Emptied 2026-09-07/08.** The three tv-season entries (two Mr. Robot, one Arrow) that lived here
-    /// were never actually unresolvable — each show's own existing Source variant in the bundled corpus
+    /// were never actually unresolvable: each show's own existing Source variant in the bundled corpus
     /// is a single blanket date (2015) rather than one variant per season, so a `Custom` rule matching
     /// each quote's own date to that existing bucket resolves them the same way the movie-date rules do
     /// (developer directive: get reseed to zero pending now via the existing mechanism; per-season/
     /// per-episode date precision for these shows is separate future work, once an automated
-    /// quote-enrichment method exists — not a reason to leave a resolvable conflict sitting Pending).
+    /// quote-enrichment method exists, not a reason to leave a resolvable conflict sitting Pending).
     /// Left as an empty set, not deleted, so the very next genuine exception this corpus produces has
     /// an obvious, already-wired place to go.
     /// </remarks>
@@ -2935,19 +2935,19 @@ public class DatabaseInitializerTests
     /// fixture, never the real bundled corpus (developer directive, 2026-09-07/08): every other test in
     /// this class proves a specific mechanism works via a made-up scenario built to trigger it, isolated
     /// from whatever the real corpus happens to contain at any given time. This one test instead answers
-    /// a different, narrower, corpus-specific question — "does the real bundled data, combined with the
-    /// rule file actually shipped today, resolve completely?" — so that a future change to either one
+    /// a different, narrower, corpus-specific question: "does the real bundled data, combined with the
+    /// rule file actually shipped today, resolve completely?", so that a future change to either one
     /// that reopens a conflict is caught here, not discovered live. It covers cold start, two repeated
-    /// reseeds (the accumulation-prevention mechanism itself is proven synthetically elsewhere — see
+    /// reseeds (the accumulation-prevention mechanism itself is proven synthetically elsewhere: see
     /// <see cref="Reseed_Repeatedly_WithABlockedCollision_BlockedCountNeverGrows"/>,
     /// <see cref="Reseed_Repeatedly_WithACaseOnlyPendingModify_PendingCountNeverGrows"/>,
-    /// <see cref="Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows"/> — this test only needs
+    /// <see cref="Reseed_Repeatedly_WithAStaleRuleConflict_StaleCountNeverGrows"/>: this test only needs
     /// to confirm the real corpus doesn't regress against it), and that no review alert fires when
     /// nothing is left to review. Also the positive counterpart to
     /// <see cref="Reseed_Repeatedly_LeavesEveryActiveAlertPointingAtALiveBatch"/> (developer, 2026-09-02):
     /// "we always test positive and negative aspects ... we therefore also need a seeding test that does
     /// have 0 pending reviews so we have proof of the positive aspect." That negative test's fixture
-    /// deliberately has no rule file, so its batch can never apply — a real state, but on its own it
+    /// deliberately has no rule file, so its batch can never apply: a real state, but on its own it
     /// proves only that the stuck case stays stuck; this test is the ordinary path, with production's own
     /// data and rule file.
     /// </summary>
@@ -2969,10 +2969,10 @@ public class DatabaseInitializerTests
                 .Where(a => !KnownUnresolvedNikhilNamal17QuoteIds.Contains(a.EntityId))];
 
             Assert.IsEmpty(unresolved,
-                $"{when}: every action must auto-resolve under Review with the real rule file (the known exceptions excepted) — found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
+                $"{when}: every action must auto-resolve under Review with the real rule file (the known exceptions excepted): found: {string.Join(" | ", unresolved.Select(u => $"{u.EntityId}:{u.Status.Raw} existing={u.ExistingValue} incoming={u.IncomingValue}"))}");
 
             Assert.DoesNotContain(a => a.EntityId == "7e53658c-0c3a-6546-8c12-c5e4af23c9f8", allActions,
-                "The Shawshank duplicate is now excluded outright (#219) — it must produce no action at all, not merely an ignored Blocked one");
+                "The Shawshank duplicate is now excluded outright (#219): it must produce no action at all, not merely an ignored Blocked one");
         }
 
         await AssertFullyResolvedAsync("cold start");
@@ -3005,8 +3005,8 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #375: the four quotes step 7 resolved to a named episode land on that episode's own Source —
-    /// not the show-level one every other same-titled quote still points at — with the corrected date.
+    /// #375: the four quotes step 7 resolved to a named episode land on that episode's own Source
+    /// (not the show-level one every other same-titled quote still points at), with the corrected date.
     /// Verified against the real bundled rule file, since the point is that these rules actually apply.
     /// </summary>
     [TestMethod]
@@ -3041,13 +3041,13 @@ public class DatabaseInitializerTests
     /// <summary>
     /// #375: a series-capable quote whose own claimed year disagrees with its show's other quotes, with
     /// no Series data to tell a genuinely new season apart from a simply-wrong year (#374 developer
-    /// decision), is reported as a conflict (`Pending`) rather than silently applied — and its staged
+    /// decision), is reported as a conflict (`Pending`) rather than silently applied, and its staged
     /// payload's nearest-Source fallback still attaches to the show-level Source, carrying whatever
     /// character it already claims, exactly as it would for a quote with no year disagreement at all.
     /// </summary>
     /// <remarks>
     /// **Rewritten 2026-09-07/08 to a synthetic fixture.** Originally exercised via three specific real
-    /// NikhilNamal17 quotes (two Mr. Robot, one Arrow) — but a feature test must prove a mechanism via a
+    /// NikhilNamal17 quotes (two Mr. Robot, one Arrow), but a feature test must prove a mechanism via a
     /// scenario built to trigger it, not via whichever real quotes happen to disagree with their show's
     /// other quotes on a given day; those three were themselves resolved to zero Pending by #374's rule
     /// additions in the same session that added this rewrite (see
@@ -3093,30 +3093,30 @@ public class DatabaseInitializerTests
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        // #374: 798, not 799 — quotinator-curated.json's "Inigo Montoya" entry previously carried its
+        // #374: 798, not 799: quotinator-curated.json's "Inigo Montoya" entry previously carried its
         // own hand-invented id instead of the id NikhilNamal17's own entry for the identical quote
         // already computes, in violation of CLAUDE.md's import-file-minimalism policy (a correction
         // entry must reuse the id it's correcting, never mint a new one). Fixed by pointing the curated
-        // entry at the real id, which is what a `UNIQUE (QuoteText, SourceId)` index — added by this
-        // issue — surfaced: the two ids were always the same quote, just never recognised as one.
-        // #374: 792, not 798 — six tv quotes (Arrow/Game of Thrones/Mr. Robot/The Good Place, under
+        // entry at the real id, which is what a `UNIQUE (QuoteText, SourceId)` index (added by this
+        // issue) surfaced: the two ids were always the same quote, just never recognised as one.
+        // #374: 792, not 798: six tv quotes (Arrow/Game of Thrones/Mr. Robot/The Good Place, under
         // AllFilesBatch's un-curated wiring) each carry a per-quote year that disagrees with their
         // show's other quotes; a series-capable type with no Series data cannot tell that apart from a
         // genuinely new season, so per the developer's decision these are reported as Pending conflicts
-        // rather than applied — see InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates' own count.
+        // rather than applied: see InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates' own count.
         Assert.AreEqual(792, db.QuoteCount,     "Unique quotes");
-        // #374: 497, not 501 — the four tv titles above no longer fragment into a second Source row for
+        // #374: 497, not 501: the four tv titles above no longer fragment into a second Source row for
         // their disagreeing year (the fragmentation this whole feature exists to prevent); the movie
         // titles' own distinct-date variants are unaffected and still counted, matching
         // SourceId_SameTitleAndTypeDifferentDate_DiffersById and SameTitleDifferentDate_ResolvesToTwoSources.
         Assert.AreEqual(497, db.SourceCount,    "Sources");
         Assert.AreEqual(7,   db.CharacterCount, "Characters");
-        Assert.AreEqual(3,   db.PeopleCount,    "People (Winston Churchill, Neil Armstrong, Martin Luther King Jr. — curated)");
+        Assert.AreEqual(3,   db.PeopleCount,    "People (Winston Churchill, Neil Armstrong, Martin Luther King Jr.: curated)");
     }
 
     /// <summary>#221: the five entity-type counts added alongside Quote/Source/Character/People
     /// (Series/Universe/StageDirection/SoundCue/Conversation) are each populated from a live query
-    /// against their own table, not left at zero — cross-checked directly against SQL rather than a
+    /// against their own table, not left at zero: cross-checked directly against SQL rather than a
     /// hardcoded literal, since the exact bundled totals are incidental to this test's purpose.</summary>
     [TestMethod]
     public async Task InitialiseAsync_AllSourceFiles_PopulatesNewEntityTypeCounts()
@@ -3141,7 +3141,7 @@ public class DatabaseInitializerTests
 
     /// <summary>#221: cross-file duplicates between vilaboim and NikhilNamal17 show up as "modified" Quote
     /// actions in the per-file report (AllFilesBatch() uses ManifestPolicy.HardcodedDefault, i.e.
-    /// NewestWins, bypassing the bundled manifest.json's own "skip" override) — none pending or blocked,
+    /// NewestWins, bypassing the bundled manifest.json's own "skip" override): none pending or blocked,
     /// since NewestWins always resolves deterministically.</summary>
     [TestMethod]
     public async Task InitialiseAsync_AllSourceFiles_TracksCrossFileDuplicates()
@@ -3156,23 +3156,23 @@ public class DatabaseInitializerTests
         // #373: 42, not 45. Three of the 45 cross-file duplicate occurrences are byte-identical to the
         // row already stored, so they are reported as unchanged rather than as writes that never
         // happen. The figure was 45 only because every duplicate was called a modification.
-        // #374: 43, not 42 — quotinator-curated.json's "Inigo Montoya" entry now correctly reuses the
+        // #374: 43, not 42: quotinator-curated.json's "Inigo Montoya" entry now correctly reuses the
         // id NikhilNamal17's own identical-text entry already computes (see SeedsExpectedCounts' own
         // comment), so what was two separately-added quote rows is now one Add plus one genuine
         // cross-file Modify (the curated file's own Character attribution).
         Assert.AreEqual(43, modified, "Cross-file duplicates that genuinely differ, resolved as modified Quote actions");
-        // #374: 6, not 0 — a genuinely new season and a wrong per-quote year look identical without
+        // #374: 6, not 0: a genuinely new season and a wrong per-quote year look identical without
         // Series data, so this is reported as a conflict regardless of DuplicateResolutionPolicy (a
         // fundamentally different ambiguity than the one that policy resolves). AllFilesBatch wires no
         // rule file at all, so this count is independent of nikhilnamal17-conflict-rules.json's own
         // content and unaffected by what that file resolves to zero under Review (see
         // NikhilNamal17RealCorpusWithCurrentRuleFile_ResolvesCompletelyAndStaysStable).
         Assert.AreEqual(6, pending, "Series-capable Sources with no Series data and a disagreeing year are reported as conflicts, independent of policy");
-        Assert.AreEqual(0, blocked, "NewestWins never blocks — no Complete rows exist yet to block against");
+        Assert.AreEqual(0, blocked, "NewestWins never blocks: no Complete rows exist yet to block against");
     }
 
     /// <summary>#221: PreviewSeedAsync must produce the same rich per-file, per-entity-type report as a
-    /// real seed run, computed via a read-only <see cref="ImportActionPlanner.PlanAsync"/> call — but
+    /// real seed run, computed via a read-only <see cref="ImportActionPlanner.PlanAsync"/> call: but
     /// write nothing to the database. Run against an already-fully-seeded database (so the planner has
     /// real rows to resolve against, not just "everything new"), asserting both that the report has the
     /// expected shape and, critically, that System_ImportActions/ImportBatches row counts are completely
@@ -3209,27 +3209,27 @@ public class DatabaseInitializerTests
         // #373 reversed this assertion, and the old figure is the clearest single statement of the
         // defect: all 844 were counted as *modified* against a database already seeded from these very
         // files. 799 unique quotes plus 45 cross-file duplicate occurrences (AllFilesBatch's own
-        // vilaboim/NikhilNamal17 overlap) — every line matches a row that already exists.
-        // #374: 767/71/6, not 759/85/0 — the 844 total is unaffected (still every raw line accounted
+        // vilaboim/NikhilNamal17 overlap): every line matches a row that already exists.
+        // #374: 767/71/6, not 759/85/0: the 844 total is unaffected (still every raw line accounted
         // for). 14 quotes that used to need a Modify (their own date disagreed with the one shared,
         // wrongly-dated Source every same-titled quote pointed at) now resolve straight to Unchanged,
         // because each one's date now selects its own correctly-dated Source variant (steps 6-7). Six
-        // tv quotes (Arrow/Mr. Robot/etc. — see InitialiseAsync_AllSourceFiles_SeedsExpectedCounts' own
+        // tv quotes (Arrow/Mr. Robot/etc.: see InitialiseAsync_AllSourceFiles_SeedsExpectedCounts' own
         // comment) were never applied in the first place (a genuine, permanent conflict, not a database
         // row to compare against), so they preview as Pending rather than Unchanged/Modified/New.
         Assert.AreEqual(767, unchanged, "Most quote lines match an already-existing row exactly");
         Assert.AreEqual(71, modified,
-            "And 71 genuinely differ — the cross-file overlap where two source files disagree about the same quote");
-        // #374: 0, not 6 — a quote already reported as a Pending conflict by the earlier real seed is
+            "And 71 genuinely differ: the cross-file overlap where two source files disagree about the same quote");
+        // #374: 0, not 6: a quote already reported as a Pending conflict by the earlier real seed is
         // recognised as already-known (Sql.Quotes.SelectHasUnresolvedActionById) and never re-staged, even
-        // during a preview — the same dedup that keeps a real reseed from accumulating duplicates (see
+        // during a preview: the same dedup that keeps a real reseed from accumulating duplicates (see
         // Reseed_Repeatedly_WithABlockedCollision_BlockedCountNeverGrows and its siblings) applies here
         // too. The six known tv quotes are therefore omitted from this preview's report entirely, not
-        // counted as Pending in it — there is nothing new to preview about a conflict already on record.
+        // counted as Pending in it: there is nothing new to preview about a conflict already on record.
         Assert.AreEqual(0, pending, "An already-known Pending conflict has nothing new to preview and is omitted, not re-reported");
         Assert.AreEqual(838, unchanged + modified + pending,
             "798 unique quotes plus 46 cross-file duplicate occurrences, minus the six already-known tv conflicts this preview omits");
-        Assert.AreEqual(0, newCount, "Nothing is genuinely new — the database was already fully seeded from the same files");
+        Assert.AreEqual(0, newCount, "Nothing is genuinely new: the database was already fully seeded from the same files");
     }
 
     // ── #249: conflict-resolution data auto-purge ───────────────────────────
@@ -3283,7 +3283,7 @@ public class DatabaseInitializerTests
         ImportActionReader actionReader = new ImportActionReader(new SqliteConnectionFactory(_dbPath));
         int remaining    = (await actionReader.GetPagedAsync(null, null, null, 1, 0)).TotalCount;
 
-        Assert.IsGreaterThan(0, remaining, "a user-imports batch must not be purged by the bundled setting — the two per-origin settings are independent");
+        Assert.IsGreaterThan(0, remaining, "a user-imports batch must not be purged by the bundled setting: the two per-origin settings are independent");
     }
 
     [TestMethod]
@@ -3336,7 +3336,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// The curated file's explicit <c>people[]</c> entries (Winston Churchill, Neil Armstrong, Martin
-    /// Luther King Jr.) carry real dateOfBirth/dateOfDeath — added specifically to exercise the Person
+    /// Luther King Jr.) carry real dateOfBirth/dateOfDeath: added specifically to exercise the Person
     /// Add write path with real data, after a live T2 pass found it silently dropped both fields on a
     /// brand-new PersonEntity (see <c>SqliteImportActionServiceTests.ApplyBatchAsync_PersonAdd_WritesDateOfBirthAndDateOfDeath</c>
     /// for the isolated regression test; this is the end-to-end seeding equivalent).
@@ -3360,7 +3360,7 @@ public class DatabaseInitializerTests
         Assert.Contains(p => p is { Name: "Martin Luther King Jr.", DateOfBirth: "1929-01-15", DateOfDeath: "1968-04-04" }, people);
     }
 
-    /// <summary>#191: a Source discovered implicitly from a quote (never named in a sources[] section) still carries that quote's own Date once seeded — the curated file's own Airplane!/1980 entries are the fixture.</summary>
+    /// <summary>#191: a Source discovered implicitly from a quote (never named in a sources[] section) still carries that quote's own Date once seeded: the curated file's own Airplane!/1980 entries are the fixture.</summary>
     [TestMethod]
     public async Task InitialiseAsync_AllSourceFiles_SeedsSourceDatesFromQuotes()
     {
@@ -3376,10 +3376,10 @@ public class DatabaseInitializerTests
 
         int datedSourceCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Quotinator_Source WHERE Date IS NOT NULL AND IsDeleted = 0;");
-        Assert.IsGreaterThan(0, datedSourceCount, "At least some seeded Sources must now carry a Date — today every one of them is null");
+        Assert.IsGreaterThan(0, datedSourceCount, "At least some seeded Sources must now carry a Date: today every one of them is null");
     }
 
-    /// <summary>#245: a Source first created date-less via a sources[] entry (e.g. #180's Series-linking-only shape) must have its Date backfilled once a later-seeded file's quote supplies one — #191 only ever fixed the never-named-in-a-file case, not this one.</summary>
+    /// <summary>#245: a Source first created date-less via a sources[] entry (e.g. #180's Series-linking-only shape) must have its Date backfilled once a later-seeded file's quote supplies one: #191 only ever fixed the never-named-in-a-file case, not this one.</summary>
     [TestMethod]
     public async Task InitialiseAsync_DatelessSourcesEntryThenDatedQuoteInLaterFile_BackfillsSourceDate()
     {
@@ -3410,9 +3410,9 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #374, verification row 31 — a single file's own quotes claim two different dates for the same
+    /// #374, verification row 31: a single file's own quotes claim two different dates for the same
     /// (Title, Type) Source, with no rule or alias resolving which is right. Step 6's own mechanism
-    /// already resolves this correctly (two distinct Source rows, nothing left pending — see
+    /// already resolves this correctly (two distinct Source rows, nothing left pending: see
     /// <see cref="ImportActionPlannerTests.SameTitleDifferentDate_ResolvesToTwoSources"/>); this test is
     /// only about whether a curator is told, at cold start, rather than the disagreement staying silent
     /// until a later reseed happens to surface it (step 1's original finding).
@@ -3447,7 +3447,7 @@ public class DatabaseInitializerTests
     /// <c>quotinator-series-universe.json</c>, the reseed warned six times that each "claims 2 different
     /// dates … verify this is genuinely 2 distinct works". The declaration is that verification. A
     /// warning that fires on the answer as well as the question is one a reader learns to skip, which
-    /// costs the warning its value on the case that is still genuinely ambiguous — the one below it.
+    /// costs the warning its value on the case that is still genuinely ambiguous: the one below it.
     /// </remarks>
     [TestMethod]
     public async Task ColdStart_WithBothDatedVersionsDeclared_ReportsNoContradiction()
@@ -3470,7 +3470,7 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         Assert.DoesNotContain(m => m.Contains("different dates", StringComparison.OrdinalIgnoreCase), logger.Messages,
-            "Both versions are declared — the warning asks a question this file has already answered");
+            "Both versions are declared: the warning asks a question this file has already answered");
     }
 
     /// <summary>
@@ -3501,7 +3501,7 @@ public class DatabaseInitializerTests
             "An undeclared second date is still exactly the ambiguity this warning exists for");
     }
 
-    /// <summary>The control for <see cref="ColdStart_WithAFileThatContradictsItself_ReportsIt"/> — a file with no such disagreement must not report one.</summary>
+    /// <summary>The control for <see cref="ColdStart_WithAFileThatContradictsItself_ReportsIt"/>: a file with no such disagreement must not report one.</summary>
     [TestMethod]
     public async Task ColdStart_WithNoSelfContradiction_ReportsNothing()
     {
@@ -3563,8 +3563,8 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #68: reseeding (re-import from source, without deleting first — #372) reproduces the same
-    /// conversation/stage-direction/sound-cue counts, not doubled — exercises the parse-plan-apply path
+    /// #68: reseeding (re-import from source, without deleting first, per #372) reproduces the same
+    /// conversation/stage-direction/sound-cue counts, not doubled: exercises the parse-plan-apply path
     /// a second time against already-populated data. Live re-import dedup (Add-detection by explicit
     /// id) is covered
     /// directly against <c>SqliteQuoteImportService</c> in
@@ -3596,7 +3596,7 @@ public class DatabaseInitializerTests
     /// End-to-end seeding proof: a second file re-introducing an already-seeded quote under Review
     /// policy, with a matching per-source rule (Keep) for the only field that differs, auto-resolves
     /// and applies immediately at startup instead of leaving a Pending action stuck in
-    /// System_ImportActions — no manual decide/apply step needed.
+    /// System_ImportActions: no manual decide/apply step needed.
     /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_SecondFileReviewPolicyMatchingRule_AutoResolvesNoPendingActionLeft()
@@ -3630,14 +3630,14 @@ public class DatabaseInitializerTests
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(0, (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", null, 1, 0)).TotalCount,
-            "The rule fully covers the only ambiguous field — nothing should be left Pending");
+            "The rule fully covers the only ambiguous field: nothing should be left Pending");
         Assert.AreEqual("Original text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id;", new { id = quoteId }),
             "Keep must resolve to the existing (baseline) value");
     }
 
     /// <summary>
     /// #153: end-to-end proof that a registered, hash-verified override on the persistent volume is
-    /// preferred over the bundled rule file the manifest actually references — the override says
+    /// preferred over the bundled rule file the manifest actually references: the override says
     /// Replace where the bundled copy says Keep, and the applied result reflects Replace.
     /// </summary>
     [TestMethod]
@@ -3654,7 +3654,7 @@ public class DatabaseInitializerTests
         File.WriteAllText(conflictPath,
             """[{"id":"QUOTE_ID","quote":"Changed text.","originalLanguage":"en","source":"Test Film","date":"2000","character":null,"author":null,"type":"movie","genres":[],"translations":{}}]"""
                 .Replace("QUOTE_ID", quoteId));
-        // Bundled copy says Keep — if this were used, the applied text would stay "Original text.".
+        // Bundled copy says Keep: if this were used, the applied text would stay "Original text.".
         File.WriteAllText(bundledRulesPath,
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Keep"}]}]}"""
                 .Replace("QUOTE_ID", quoteId));
@@ -3663,7 +3663,7 @@ public class DatabaseInitializerTests
         RuleFileOverridePathResolver pathResolver = new RuleFileOverridePathResolver(internalDownloadDir, Path.Combine(_tempDir, "imports", "download"));
         string overridePath = pathResolver.Resolve(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled);
         Directory.CreateDirectory(Path.GetDirectoryName(overridePath)!);
-        // Override says Replace — the applied text must come from here instead.
+        // Override says Replace: the applied text must come from here instead.
         string overrideContent =
             """{"rules":[{"entityId":"QUOTE_ID","existingRecord":{"quoteText":"Original text."},"incomingRecord":{"quoteText":"Changed text."},"fields":[{"field":"quoteText","resolution":"Replace"}]}]}"""
                 .Replace("QUOTE_ID", quoteId);
@@ -3677,8 +3677,8 @@ public class DatabaseInitializerTests
             ],
             ManifestPolicy.HardcodedDefault, "override-test");
 
-        // The registry table must exist before InitialiseAsync runs migrations — the very first
-        // write in this test — so seed a bare, migration-free database via a throwaway initializer
+        // The registry table must exist before InitialiseAsync runs migrations (the very first
+        // write in this test), so seed a bare, migration-free database via a throwaway initializer
         // first, matching how every other test in this file lets InitialiseAsync create the schema.
         await CreateInitializer([batch]).InitialiseAsync();
         await registry.RegisterAsync(Path.GetFileName(bundledRulesPath), SeedBatchOrigin.Bundled,
@@ -3696,7 +3696,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// #153: an override file physically present on disk but never registered (or registered under a
-    /// stale hash) must never be silently trusted — falls back to the bundled rule file exactly as if
+    /// stale hash) must never be silently trusted: falls back to the bundled rule file exactly as if
     /// no override existed at all.
     /// </summary>
     [TestMethod]
@@ -3741,10 +3741,10 @@ public class DatabaseInitializerTests
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual("Original text.", await conn.ExecuteScalarAsync<string>("SELECT QuoteText FROM Quotinator_Quote WHERE Id = @id;", new { id = quoteId }),
-            "An unregistered override file must never be trusted — the bundled rule file (Keep) must be used instead");
+            "An unregistered override file must never be trusted: the bundled rule file (Keep) must be used instead");
     }
 
-    /// <summary>Regression guard: the same scenario with no rule file at all must behave exactly as before #181 — Pending, nothing overwritten.</summary>
+    /// <summary>Regression guard: the same scenario with no rule file at all must behave exactly as before #181: Pending, nothing overwritten.</summary>
     [TestMethod]
     public async Task InitialiseAsync_SecondFileReviewPolicyNoRuleFile_StagesPendingAsBefore()
     {
@@ -3770,13 +3770,13 @@ public class DatabaseInitializerTests
         await db.InitialiseAsync();
 
         Assert.AreEqual(1, (await new ImportActionReader(new SqliteConnectionFactory(_dbPath)).GetPagedAsync(null, "Pending", null, 1, 0)).TotalCount,
-            "No rule file was referenced — behaviour must be unchanged from before #181");
+            "No rule file was referenced: behaviour must be unchanged from before #181");
     }
 
     /// <summary>
     /// End-to-end proof of #181's source-title alias mechanism: a second file's quote references a
     /// misspelled Source title that an alias file maps to the first file's already-established
-    /// canonical Source — must resolve to that one Source, never create a duplicate.
+    /// canonical Source: must resolve to that one Source, never create a duplicate.
     /// </summary>
     [TestMethod]
     public async Task InitialiseAsync_SecondFileMisspelledSourceWithMatchingAlias_ResolvesToExistingSourceNoDuplicate()
@@ -3806,11 +3806,11 @@ public class DatabaseInitializerTests
         await conn.OpenAsync(TestContext.CancellationToken);
 
         Assert.AreEqual(1, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Source WHERE Title = 'The Avengers';"),
-            "The alias must resolve the misspelled title to the already-existing canonical Source — no duplicate");
+            "The alias must resolve the misspelled title to the already-existing canonical Source: no duplicate");
         Assert.AreEqual(2, await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote;"), "Both quotes must still be seeded");
     }
 
-    /// <summary>No source files configured — database is created but stays empty.</summary>
+    /// <summary>No source files configured: database is created but stays empty.</summary>
     [TestMethod]
     public async Task InitialiseAsync_EmptyBatches_DatabaseIsEmpty()
     {
@@ -3835,18 +3835,18 @@ public class DatabaseInitializerTests
 
     // ── Reset (#156: full wipe + baseline rebuild, no reseed, supersedes #141) ─────────────────
 
-    /// <summary>ResetAsync on an already-seeded database drops and recreates all tables at the empty baseline — it no longer reimports bundled/user content.</summary>
+    /// <summary>ResetAsync on an already-seeded database drops and recreates all tables at the empty baseline: it no longer reimports bundled/user content.</summary>
     [TestMethod]
     public async Task ResetAsync_AfterInitialise_RebuildsSchemaAndDoesNotReseed()
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([AllFilesBatch()]);
         await db.InitialiseAsync();
 
-        Assert.IsGreaterThan(0, db.QuoteCount, "Sanity check — initial seed must have produced quotes");
+        Assert.IsGreaterThan(0, db.QuoteCount, "Sanity check: initial seed must have produced quotes");
 
         await db.ResetAsync();
 
-        Assert.AreEqual(0, db.QuoteCount, "Reset's one job is rebuilding the schema to empty — it must not reimport bundled/user content (#156)");
+        Assert.AreEqual(0, db.QuoteCount, "Reset's one job is rebuilding the schema to empty: it must not reimport bundled/user content (#156)");
     }
 
     private const string MarkerValue = "manual-test-marker";
@@ -3859,7 +3859,7 @@ public class DatabaseInitializerTests
     private const string LegacyV3Marker = "legacy-v3-import-batches";
     private const string LegacyV4Marker = "legacy-v4-create-audit-entries-table";
 
-    /// <summary>A full Reset is a full wipe — Audit_Entry no longer survives, reversing #141's preserve-on-reset behaviour per #156/ADR 014 (an operator who wants to keep it exports it first via the admin audit export endpoint, #249).</summary>
+    /// <summary>A full Reset is a full wipe: Audit_Entry no longer survives, reversing #141's preserve-on-reset behaviour per #156/ADR 014 (an operator who wants to keep it exports it first via the admin audit export endpoint, #249).</summary>
     [TestMethod]
     public async Task ResetAsync_AfterInitialise_WipesExistingAuditEntries()
     {
@@ -3870,10 +3870,10 @@ public class DatabaseInitializerTests
 
         await db.ResetAsync();
 
-        Assert.AreEqual(0, await CountAuditMarkerRowsAsync(), "Full Reset must wipe existing Audit_Entry rows — no protected-table concept remains (#156)");
+        Assert.AreEqual(0, await CountAuditMarkerRowsAsync(), "Full Reset must wipe existing Audit_Entry rows: no protected-table concept remains (#156)");
     }
 
-    /// <summary>With the default parameter, Reset now also clears and replays System_SchemaVersion — Quotinator.Data's own tables are no longer excluded from the wipe (#156).</summary>
+    /// <summary>With the default parameter, Reset now also clears and replays System_SchemaVersion: Quotinator.Data's own tables are no longer excluded from the wipe (#156).</summary>
     [TestMethod]
     public async Task ResetAsync_DefaultParameter_AlsoReplaysDataSchemaVersion()
     {
@@ -3888,7 +3888,7 @@ public class DatabaseInitializerTests
             "Default Reset should clear and replay System_SchemaVersion too now, removing the pre-existing marker row");
     }
 
-    /// <summary>With preserveSchemaVersion:true, Reset now also leaves existing System_SchemaVersion rows untouched — symmetric with the consumer's own counter, since both are wiped by the full-database drop.</summary>
+    /// <summary>With preserveSchemaVersion:true, Reset now also leaves existing System_SchemaVersion rows untouched: symmetric with the consumer's own counter, since both are wiped by the full-database drop.</summary>
     [TestMethod]
     public async Task ResetAsync_PreserveSchemaVersionTrue_AlsoKeepsExistingDataVersionRows()
     {
@@ -3903,7 +3903,7 @@ public class DatabaseInitializerTests
             "preserveSchemaVersion:true should leave existing System_SchemaVersion rows untouched too");
     }
 
-    /// <summary>With the default parameter, Reset still clears and replays System_ConsumerSchemaVersion — unchanged historical behaviour for the consumer's own migrations.</summary>
+    /// <summary>With the default parameter, Reset still clears and replays System_ConsumerSchemaVersion: unchanged historical behaviour for the consumer's own migrations.</summary>
     [TestMethod]
     public async Task ResetAsync_DefaultParameter_StillReplaysConsumerSchemaVersion()
     {
@@ -3933,7 +3933,7 @@ public class DatabaseInitializerTests
             "preserveSchemaVersion:true should leave existing System_ConsumerSchemaVersion rows untouched");
     }
 
-    /// <summary>Reseed (not Reset) has always left Audit_Entry and System_SchemaVersion alone — this makes that behaviour explicit.</summary>
+    /// <summary>Reseed (not Reset) has always left Audit_Entry and System_SchemaVersion alone: this makes that behaviour explicit.</summary>
     [TestMethod]
     public async Task ReseedAsync_AfterInitialise_LeavesAuditEntriesAndSchemaVersionUntouched()
     {
@@ -4000,7 +4000,7 @@ public class DatabaseInitializerTests
     // ── Full-wipe table discovery (#156, supersedes #141's protected-table concept) ────────────
 
     /// <summary>
-    /// GetAllTables returns literally every real table, with no exclusion of any kind — #156
+    /// GetAllTables returns literally every real table, with no exclusion of any kind: #156
     /// retired the System_/Import_/Audit_ protected-table concept GetUserTables used to implement,
     /// since Reset is now a full, unconditional wipe.
     /// </summary>
@@ -4022,7 +4022,7 @@ public class DatabaseInitializerTests
         Assert.Contains("FooBar", tables, "Non-prefixed tables must still be included");
     }
 
-    /// <summary>A fresh database creates System_SchemaVersion directly — it is never created under the legacy name and then renamed.</summary>
+    /// <summary>A fresh database creates System_SchemaVersion directly: it is never created under the legacy name and then renamed.</summary>
     [TestMethod]
     public async Task InitialiseAsync_FreshDatabase_CreatesSystemSchemaVersionDirectly()
     {
@@ -4043,11 +4043,11 @@ public class DatabaseInitializerTests
     /// <summary>
     /// Builds a fully up-to-date database, then downgrades it back to a genuine v1.7.2 legacy shape:
     /// a single unified <c>SchemaVersion</c> table holding exactly the 4 rows that release actually
-    /// shipped (InitialSchema, ReseedGenres, ImportBatches, CreateAuditEntriesTable — confirmed
+    /// shipped (InitialSchema, ReseedGenres, ImportBatches, CreateAuditEntriesTable: confirmed
     /// directly against the `main` branch's own code, not assumed), plus the legacy <c>AuditEntries</c>
     /// table shape. Both new counter tables are cleared first so the split has a genuinely empty
     /// target to populate, matching what a real v1.7.2 database's tables looked like before the
-    /// #143 split existed at all. See #155 — this replaces an earlier version of this helper that
+    /// #143 split existed at all. See #155: this replaces an earlier version of this helper that
     /// used a single, arbitrary <c>Version = 1</c> row, which incidentally never exercised the real
     /// bug (the legacy rename silently skipping Data migrations 2-4 by numeric coincidence with the
     /// real, 4-row legacy value).
@@ -4065,7 +4065,7 @@ public class DatabaseInitializerTests
             new { m1 = LegacyV1Marker, m2 = LegacyV2Marker, m3 = LegacyV3Marker, m4 = LegacyV4Marker });
 
         // Rebuild AuditEntries under its true migration-1 legacy shape (auto-increment long Id, no
-        // RecordBase columns) rather than a bare rename — a bare rename would carry over migration
+        // RecordBase columns) rather than a bare rename: a bare rename would carry over migration
         // 5's RecordBase columns (added after this test's InitialiseAsync() call already ran the
         // full migration chain), which didn't exist in a genuinely pre-migration-2 database.
         await conn.ExecuteAsync("""
@@ -4086,10 +4086,10 @@ public class DatabaseInitializerTests
         await conn.ExecuteAsync("CREATE INDEX IX_AuditEntries_PerformedAt ON AuditEntries (PerformedAt);");
 
         // #253: Audit_Change/Import_Conflict/Import_Action/Import_SourceFileOverride are all created
-        // by migration 2 (SinceV172), not migration 1 — a genuinely pre-migration-2 database has none
+        // by migration 2 (SinceV172), not migration 1: a genuinely pre-migration-2 database has none
         // of them yet. Migration 2's own CREATE TABLE IF NOT EXISTS statements are idempotent against
         // a table that never existed under their old (pre-rename) names, but migration 3's ALTER
-        // TABLE ... RENAME TO is not — it fails outright if the final name is already taken. Dropping
+        // TABLE ... RENAME TO is not: it fails outright if the final name is already taken. Dropping
         // these four here (instead of just leaving them under their post-#253 final names) is what
         // makes replaying migrations 2+3 from this fixture safe, the same way the AuditEntries rebuild
         // above is.
@@ -4101,7 +4101,7 @@ public class DatabaseInitializerTests
         // #312/#81: same reasoning as the four drops above, for the two tables migrations 3-5 own.
         // This fixture reaches its "legacy" state by running the *full* migration chain and then
         // undoing it, so without these drops System_Notification still carries migration 5's already-
-        // renamed Body column — and migration 5's ALTER TABLE ... RENAME COLUMN Message TO Body is no
+        // renamed Body column, and migration 5's ALTER TABLE ... RENAME COLUMN Message TO Body is no
         // more idempotent than migration 3's RENAME TO, failing outright on replay with
         // 'no such column: "Message"'. Dropping both restores a genuinely pre-migration-3 state.
         // System_AppVersion goes too: migration 4 creates it, and migration 5's AppVersionId FK
@@ -4111,15 +4111,15 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #155 regression guard: a genuine v1.7.2 legacy <c>SchemaVersion</c> table (4 rows — Init/
-    /// ReseedGenres/ImportBatches/CreateAuditEntriesTable) must split correctly — versions 1-3 into
+    /// #155 regression guard: a genuine v1.7.2 legacy <c>SchemaVersion</c> table (4 rows: Init/
+    /// ReseedGenres/ImportBatches/CreateAuditEntriesTable) must split correctly: versions 1-3 into
     /// <c>System_ConsumerSchemaVersion</c> (each timestamp preserved), version 4 renumbered to 1 in
-    /// <c>System_SchemaVersion</c> (also preserved) — <em>not</em> a bare rename that copies the raw
+    /// <c>System_SchemaVersion</c> (also preserved): <em>not</em> a bare rename that copies the raw
     /// value 4 straight into Data's counter. The original bug this guards against: with a bare
     /// rename, <c>dataCurrent</c> reads 4 immediately, and since Data's own migrations 2-4 today
     /// (<c>RenameAuditEntriesToSystemAuditEntries</c>, <c>CreateImportConflictsTable</c>,
     /// <c>CreateChangeLogTable</c>) numerically coincide with that value, all three were silently
-    /// skipped as "already applied" even though none had ever actually run — leaving
+    /// skipped as "already applied" even though none had ever actually run: leaving
     /// <c>AuditEntries</c> never renamed and <c>System_ImportConflicts</c>/<c>System_ChangeLog</c>
     /// never created, while <c>DataSchemaVersion</c> still reported "fully up to date" once the
     /// later migrations ran. This test's own table-existence assertions are the direct proof the fix
@@ -4134,7 +4134,7 @@ public class DatabaseInitializerTests
 
         // This database's domain tables are already fully migrated (from the InitialiseAsync() call
         // above), so exercising a genuine replay of Consumer's own migrations 4-11 against them
-        // would hit real column/table conflicts — that end-to-end scenario against a truly
+        // would hit real column/table conflicts: that end-to-end scenario against a truly
         // legacy-shaped v1.7.2 database is step 5's job (a real git-worktree snapshot), not this
         // unit test's. Passing an empty Consumer migration list here means Consumer has nothing to
         // replay against, so nothing can conflict; Data's own fixed migration list still applies
@@ -4161,14 +4161,14 @@ public class DatabaseInitializerTests
         Assert.AreEqual((3, LegacyV3Marker), consumerRows[2]);
 
         // dataRows also includes migration 2's own row by this point (db2.InitialiseAsync()
-        // already replayed it, in the same call that ran the split) — only row 1 is under test
+        // already replayed it, in the same call that ran the split): only row 1 is under test
         // here: it must carry legacy version 4's original marker, proving the split renumbered it
         // to 1 rather than leaving it at its raw legacy value of 4 (which, pre-#155, the
-        // then-separate migrations 2-4 would have read as "already applied" and skipped — the
+        // then-separate migrations 2-4 would have read as "already applied" and skipped: the
         // original bug).
         Assert.AreEqual(LegacyV4Marker, dataRows.Single(r => r.Version == 1).AppliedAt);
 
-        // The actual bug symptom: these three tables must exist and be queryable — a bare rename
+        // The actual bug symptom: these three tables must exist and be queryable: a bare rename
         // left them permanently missing on a real v1.7.2 upgrade despite DataSchemaVersion claiming
         // "up to date".
         foreach (string? table in new[] { "Audit_Entry", "Import_Conflict", "Audit_Change" })
@@ -4204,7 +4204,7 @@ public class DatabaseInitializerTests
                 new { marker = MarkerValue });
         }
 
-        // Empty Consumer migration list — see InitialiseAsync_LegacyV172SchemaVersionTable_... above
+        // Empty Consumer migration list: see InitialiseAsync_LegacyV172SchemaVersionTable_... above
         // for why: this database's domain tables are already fully migrated, so a genuine replay of
         // Consumer's own migrations would hit real column/table conflicts unrelated to what this
         // test is actually about (Data migration 2's AuditEntries rename).
@@ -4231,7 +4231,7 @@ public class DatabaseInitializerTests
     /// <summary>
     /// Regression test for issue #106: if the App schema version is rolled back to v2 while the
     /// underlying tables already have v3 columns (ImportBatchId), the recorded version no longer
-    /// matches the actual schema — a genuine anomaly, not something InitialiseAsync should ever
+    /// matches the actual schema: a genuine anomaly, not something InitialiseAsync should ever
     /// silently guess its way through. It must fail loudly (no structural check, no message-matching
     /// recovery), leave the database exactly as it was before the attempt (backup restored), and
     /// require an explicit Reset to resolve. Uses the forced-incremental path so App migrations are
@@ -4239,7 +4239,7 @@ public class DatabaseInitializerTests
     /// back to "v2" from).
     /// </summary>
     /// <remarks>
-    /// Deletes every version row from 3 upward, not just "the last few" — <c>GetConsumerCurrentVersion</c>
+    /// Deletes every version row from 3 upward, not just "the last few": <c>GetConsumerCurrentVersion</c>
     /// computes <c>MAX(Version)</c>, not row count, so leaving any higher-numbered row in place (e.g.
     /// deleting only 3 and 4) would leave the computed version at whatever the highest remaining row is
     /// and InitialiseAsync would see nothing pending to replay, defeating the whole scenario. Deleting 3
@@ -4277,15 +4277,15 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #374, verification row 27 — a deliberately minimal fixture, not the bundled corpus (per the
+    /// #374, verification row 27: a deliberately minimal fixture, not the bundled corpus (per the
     /// row's own text: "the test keeps failing if the corpus changes"). Builds a database at exactly
     /// v8 (Migration008 applied, Migration009 not yet), inserts a genuine
     /// <c>(QuoteText, SourceId)</c> duplicate directly while no unique index exists to reject it, then
     /// replays Migration009 alone against that pre-existing duplicate. Migration009's own dedup step
     /// (an <c>ORDER BY rowid ASC LIMIT 1</c> correlated subquery, chosen specifically to avoid
-    /// <c>SqlAggregateGuard</c>'s CVE-2025-6965 heuristic — see the migration's own comment) must
+    /// <c>SqlAggregateGuard</c>'s CVE-2025-6965 heuristic: see the migration's own comment) must
     /// collapse the duplicate to one row before <c>CREATE UNIQUE INDEX</c> runs, or the migration
-    /// itself would throw on the corpus's own real duplicate — exactly what step 7's implementation
+    /// itself would throw on the corpus's own real duplicate: exactly what step 7's implementation
     /// found live against <c>InitialiseAsync_AllSourceFiles_SeedsExpectedCounts</c>.
     /// </summary>
     [TestMethod]
@@ -4331,17 +4331,17 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// Found live during #254's own T1 pass: migration version tracking only sees a pending
-    /// migration when the recorded count is behind the current count — rewriting an unreleased
+    /// migration when the recorded count is behind the current count: rewriting an unreleased
     /// migration's content in place (same slot, same final count) leaves an already-migrated-once
     /// database reading as "up to date" even though its actual on-disk schema no longer matches what
     /// the new content produces. Migrations skip cleanly in that case (nothing pending, no backup
     /// needed), but seeding runs unconditionally on every startup (a cheap existence/count check even
     /// when there is nothing to seed) and has no equivalent "is this even safe to attempt" signal to
-    /// key off — the mismatch can only surface once the check actually queries the live tables. Before
+    /// key off: the mismatch can only surface once the check actually queries the live tables. Before
     /// this fix, that left <c>OnInitialisedAsync</c> with zero exception safety net, unlike the
     /// migration phase's own backup/restore/rethrow. This test doesn't reproduce the exact version-
     /// count blind spot (that requires two different migration *contents* under the same *count*,
-    /// awkward to construct here) — it reproduces the general class the fix actually covers: seeding
+    /// awkward to construct here): it reproduces the general class the fix actually covers: seeding
     /// throwing on an already-migrated (non-baseline) database, for any reason.
     /// </summary>
     [TestMethod]
@@ -4369,7 +4369,7 @@ public class DatabaseInitializerTests
             "A seeding failure on an already-migrated (non-baseline) database must take exactly one backup before attempting to seed");
     }
 
-    // ── #143 — migration ownership split + baseline schema ─────────────────────
+    // ── #143: migration ownership split + baseline schema ─────────────────────
 
     private (QuotinatorDatabaseInitializer Db, string DbPath) CreateForcedIncrementalInitializer()
     {
@@ -4463,7 +4463,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual("Water", season.Value.Subtitle);
     }
 
-    /// <summary>#375: the control — the Season link is optional, and a Source that names no ordinal gets none.</summary>
+    /// <summary>#375: the control: the Season link is optional, and a Source that names no ordinal gets none.</summary>
     [TestMethod]
     public async Task ImportingASourceWithNoSeasonNumber_LinksItToNoSeason()
     {
@@ -4488,7 +4488,7 @@ public class DatabaseInitializerTests
         Assert.IsNull(seasonId, "A Source naming no season must not be linked to one.");
 
         int seasons = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Season WHERE IsDeleted = 0;");
-        Assert.AreEqual(1, seasons, "The declared season must still be created — declaring it and linking to it are separate.");
+        Assert.AreEqual(1, seasons, "The declared season must still be created: declaring it and linking to it are separate.");
     }
 
     /// <summary>#375: two series each with a season 1 are two distinct seasons. A globally unique key would collapse them.</summary>
@@ -4514,13 +4514,13 @@ public class DatabaseInitializerTests
 
         int count = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Quotinator_Season WHERE Number = 1 AND IsDeleted = 0;");
-        Assert.AreEqual(2, count, "Season 1 of two different series must be two rows — the natural key is (SeriesId, Number).");
+        Assert.AreEqual(2, count, "Season 1 of two different series must be two rows: the natural key is (SeriesId, Number).");
     }
 
     /// <summary>
     /// #375: a later file's quote backfilling a Source's Date must not clear its Season link. Found
     /// while wiring the apply path: <c>Sql.Sources.UpdateFieldsById</c> writes every field it names, and
-    /// the quote-driven backfill builds its payload from <c>SelectExistingByTitleAndType</c> — which did
+    /// the quote-driven backfill builds its payload from <c>SelectExistingByTitleAndType</c>, which did
     /// not return SeasonId, so the write would have set it to NULL. No compiler error, no failing test,
     /// just a silently dropped link on the next import that touched the row.
     /// </summary>
@@ -4552,12 +4552,12 @@ public class DatabaseInitializerTests
         (string? date, string? seasonId) = await conn.QuerySingleAsync<(string?, string?)>(
             "SELECT Date, SeasonId FROM Quotinator_Source WHERE Title = 'The Boy in the Iceberg' AND IsDeleted = 0;");
 
-        Assert.AreEqual("2005-02-21", date, "The quote must still backfill the Source's date — the control for the assertion below.");
+        Assert.AreEqual("2005-02-21", date, "The quote must still backfill the Source's date: the control for the assertion below.");
         Assert.IsNotNull(seasonId, "Backfilling the date must not clear the Season link.");
     }
 
     /// <summary>
-    /// #375: the bundled seasons file seeds the whole chain — Universe, Series, its three Seasons, the
+    /// #375: the bundled seasons file seeds the whole chain: Universe, Series, its three Seasons, the
     /// episode Source linked to Book One, and the quote attached to that episode. Verified against the
     /// real `data/sources/quotinator-seasons.json` rather than a fixture, because the point of the file
     /// is that curated reference data arrives ahead of the bulk import and actually resolves.
@@ -4602,7 +4602,7 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// #375: every quote id in the bundled seasons file is the one <see cref="QuoteIdentity.StableId"/>
-    /// derives from its own text and source — never hand-authored. An invented UUID would import once
+    /// derives from its own text and source: never hand-authored. An invented UUID would import once
     /// and then diverge from whatever a converter or a re-import computes for the same quote,
     /// duplicating the row instead of matching it.
     /// </summary>
@@ -4624,7 +4624,7 @@ public class DatabaseInitializerTests
     }
 
     /// <summary>
-    /// #375: a Season is found by its natural key regardless of the stored SeriesId's casing — the
+    /// #375: a Season is found by its natural key regardless of the stored SeriesId's casing: the
     /// case-insensitive-by-default rule, which matters for rows written before ADR 012's canonicalization.
     /// The fixture id contains hex letters on purpose; a digits-only GUID would match either way and
     /// prove nothing.
@@ -4679,12 +4679,12 @@ public class DatabaseInitializerTests
         Assert.IsNull(seasonId, "A movie has no season.");
 
         int quotes = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote WHERE IsDeleted = 0;");
-        Assert.AreEqual(1, quotes, "The quote must still seed — season support must not disturb material that has no seasons.");
+        Assert.AreEqual(1, quotes, "The quote must still seed: season support must not disturb material that has no seasons.");
     }
 
     /// <summary>
     /// #375: the Season table exists with its own columns and, crucially, the per-parent natural key.
-    /// Asserted explicitly rather than left to the drift test below — with no table in either path the
+    /// Asserted explicitly rather than left to the drift test below: with no table in either path the
     /// two agree trivially and the comparison passes while proving nothing.
     /// </summary>
     [TestMethod]
@@ -4710,7 +4710,7 @@ public class DatabaseInitializerTests
                     && line.Contains("SeriesId", StringComparison.Ordinal)
                     && line.Contains("Number", StringComparison.Ordinal),
             schema,
-            "Quotinator_Season needs UNIQUE (SeriesId, Number) — a globally unique Name cannot work for an "
+            "Quotinator_Season needs UNIQUE (SeriesId, Number): a globally unique Name cannot work for an "
             + $"ordinal that only means something within its parent. Indexes found: {string.Join(" | ", schema.Where(l => l.StartsWith("IDX", StringComparison.Ordinal)))}");
     }
 
@@ -4730,11 +4730,11 @@ public class DatabaseInitializerTests
 
         List<(string name, int notnull)> seasonIdColumn = [.. actual.Where(c => c.name == "SeasonId")];
         Assert.IsNotEmpty(seasonIdColumn, $"Quotinator_Source is missing SeasonId. Columns: {string.Join(", ", actual.Select(c => c.name))}");
-        Assert.AreEqual(0, seasonIdColumn[0].notnull, "SeasonId must be nullable — a Source with no Season is the ordinary case.");
+        Assert.AreEqual(0, seasonIdColumn[0].notnull, "SeasonId must be nullable: a Source with no Season is the ordinary case.");
     }
 
     /// <summary>
-    /// #375: the control for the two rows above — a quote still resolves a Source unconditionally.
+    /// #375: the control for the two rows above: a quote still resolves a Source unconditionally.
     /// A nullable quote parent was considered and rejected; this fails the moment SourceId becomes
     /// nullable or the quote read path stops requiring a Source.
     /// </summary>
@@ -4750,7 +4750,7 @@ public class DatabaseInitializerTests
         int notnull = await conn.ExecuteScalarAsync<int>(
             "SELECT \"notnull\" FROM pragma_table_info('Quotinator_Quote') WHERE name = 'SourceId';");
 
-        Assert.AreEqual(1, notnull, "Quote.SourceId must stay NOT NULL — every quote attaches to the nearest Source we can identify.");
+        Assert.AreEqual(1, notnull, "Quote.SourceId must stay NOT NULL: every quote attaches to the nearest Source we can identify.");
         Assert.Contains("JOIN Quotinator_Source", Quotinator.Core.Queries.Sql.Quotes.SelectRawById(),
             "The quote read path must keep requiring a Source rather than left-joining one.");
     }
@@ -4780,7 +4780,7 @@ public class DatabaseInitializerTests
         {
             List<string> schemaA = await DumpTableSchemaAsync(connA, table);
             List<string> schemaB = await DumpTableSchemaAsync(connB, table);
-            Assert.AreSequenceEqual(schemaB, schemaA, $"Table '{table}' schema differs between the baseline and incremental paths — " +
+            Assert.AreSequenceEqual(schemaB, schemaA, $"Table '{table}' schema differs between the baseline and incremental paths: " +
                 "update QuotinatorMigrations.Baseline to match QuotinatorMigrations.All's final result.");
         }
     }
@@ -4807,7 +4807,7 @@ public class DatabaseInitializerTests
 
         foreach (SqliteConnection? conn in new[] { connA, connB })
         {
-            // QuoteGenres.QuoteId is a FK to Quotes(Id) — irrelevant to the CHECK constraint being
+            // QuoteGenres.QuoteId is a FK to Quotes(Id): irrelevant to the CHECK constraint being
             // tested here, so disable enforcement rather than seed a matching Quotes row.
             await conn.ExecuteAsync("PRAGMA foreign_keys = OFF;");
 
@@ -4874,13 +4874,13 @@ public class DatabaseInitializerTests
         }
     }
 
-    // ── #67 — Conversations schema ──────────────────────────────────────────────
+    // ── #67: Conversations schema ──────────────────────────────────────────────
 
     private static readonly string[] ConversationTablesWithRecordBase =
         ["Quotinator_Conversation", "Quotinator_ConversationLine", "Quotinator_StageDirection", "Quotinator_StageDirectionTranslation",
          "Quotinator_SoundCue", "Quotinator_SoundCueTranslation"];
 
-    /// <summary>Every table added by #67 carries RecordBase's four audit columns — ADR 002 applies without exception, including the line/junction table and both translation tables.</summary>
+    /// <summary>Every table added by #67 carries RecordBase's four audit columns: ADR 002 applies without exception, including the line/junction table and both translation tables.</summary>
     [TestMethod]
     public async Task ConversationTables_AllHaveRecordBaseColumns()
     {
@@ -4961,7 +4961,7 @@ public class DatabaseInitializerTests
             new { id = Guid.NewGuid().ToString(), soundCueId, now }));
     }
 
-    /// <summary><see cref="ConversationLineType"/> round-trips through Dapper as a real enum, not an int — the <see cref="Quotinator.Data.Helpers.SafeEnumHandler{TEnum}"/> pattern already used for <see cref="Quotinator.Data.Enums.ImportBatchType"/>/<see cref="Quotinator.Data.Enums.ImportBatchStatus"/>.</summary>
+    /// <summary><see cref="ConversationLineType"/> round-trips through Dapper as a real enum, not an int: the <see cref="Quotinator.Data.Helpers.SafeEnumHandler{TEnum}"/> pattern already used for <see cref="Quotinator.Data.Enums.ImportBatchType"/>/<see cref="Quotinator.Data.Enums.ImportBatchStatus"/>.</summary>
     [TestMethod]
     public async Task ConversationLineType_RoundTripsThroughDapper()
     {
@@ -4990,7 +4990,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(ConversationLineType.StageDirection, line.LineType.Parsed);
     }
 
-    /// <summary>A fresh (zero-table) database takes the baseline path — both version tables end up with exactly one row each, at the final version.</summary>
+    /// <summary>A fresh (zero-table) database takes the baseline path: both version tables end up with exactly one row each, at the final version.</summary>
     [TestMethod]
     public async Task InitialiseAsync_TrulyEmptyDatabase_TakesBaselinePathNotIncremental()
     {
@@ -5005,7 +5005,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, dataRows,     "Baseline path should insert exactly one row into System_SchemaVersion");
         Assert.AreEqual(1, consumerRows, "Baseline path should insert exactly one row into System_ConsumerSchemaVersion");
         // The claim is that one collapsed row still reports the fully-migrated version, not that the
-        // version is any particular number — comparing against the real migration count (rather than a
+        // version is any particular number: comparing against the real migration count (rather than a
         // literal that silently goes stale whenever a milestone adds a migration) is what actually
         // rechecks the collapse instead of just restating whatever number was last typed in here.
         Assert.IsGreaterThan(0, db.DataSchemaVersion,
@@ -5016,7 +5016,7 @@ public class DatabaseInitializerTests
     /// <summary>
     /// #289: a recorded version higher than this build's own known migration count (the state a
     /// migration squash produces on a database that already applied the pre-squash migrations) is
-    /// treated as already-complete, not an error — no exception, the real recorded (higher) version is
+    /// treated as already-complete, not an error: no exception, the real recorded (higher) version is
     /// reported rather than the smaller known count, and the overshoot is flagged for the caller.
     /// </summary>
     [TestMethod]
@@ -5024,7 +5024,7 @@ public class DatabaseInitializerTests
     {
         QuotinatorDatabaseInitializer db = CreateInitializer([]);
         await db.InitialiseAsync();
-        Assert.IsFalse(db.SchemaVersionOvershootDetected, "Sanity check — a normal fresh database has no overshoot");
+        Assert.IsFalse(db.SchemaVersionOvershootDetected, "Sanity check: a normal fresh database has no overshoot");
 
         using (SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}"))
         {
@@ -5058,10 +5058,10 @@ public class DatabaseInitializerTests
     /// <summary>
     /// A database created before the #143 migration-ownership split has a single System_SchemaVersion
     /// table holding the old combined history (one row per migration, spanning both Data's and the
-    /// consumer's migrations together — 13 rows for the schema this test targets: 7 Data + 6 consumer),
+    /// consumer's migrations together; 13 rows for the schema this test targets, 7 Data + 6 consumer),
     /// with no System_ConsumerSchemaVersion table at all yet. This recorded state doesn't match the
     /// actual on-disk schema (which already has the consumer's columns), so ordinary startup must fail
-    /// loudly — no structural check, no message-matching recovery — leaving the database exactly as
+    /// loudly (no structural check, no message-matching recovery) leaving the database exactly as
     /// it was before the attempt (backup restored). An explicit Reset is the only sanctioned way to
     /// resolve it.
     /// </summary>
@@ -5099,7 +5099,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual(9, db3.SchemaVersion, "An explicit Reset must fully resolve the mismatch");
     }
 
-    // ── #179 — Series/Universe schema, Character↔Source many-to-many ───────────
+    // ── #179: Series/Universe schema, Character↔Source many-to-many ───────────
 
     /// <summary>Migration009 adds Universe and Series, both insertable/readable, with Series.UniverseId nullable.</summary>
     [TestMethod]
@@ -5155,7 +5155,7 @@ public class DatabaseInitializerTests
         {
             List<string> idxCols = [.. (await conn.QueryAsync<string>($"SELECT name FROM pragma_index_info('{idx}');"))];
             Assert.DoesNotContain("SourceId", idxCols, StringComparer.OrdinalIgnoreCase,
-                $"Index '{idx}' still references SourceId — the old UNIQUE(SourceId, Name) constraint must be gone");
+                $"Index '{idx}' still references SourceId: the old UNIQUE(SourceId, Name) constraint must be gone");
         }
     }
 
@@ -5163,10 +5163,10 @@ public class DatabaseInitializerTests
 
     /// <summary>
     /// #155: builds the pre-#174 precondition state directly rather than via a partial-migration
-    /// checkpoint — since consolidated migration 4 now fuses Series/CharacterSources schema creation
+    /// checkpoint, since consolidated migration 4 now fuses Series/CharacterSources schema creation
     /// and the character-merge logic into one atomic, non-reentrant migration, there is no longer any
     /// reachable migration-boundary between "schema exists" and "merge has run" to stop at (this was
-    /// already true of any *real* upgrade even before consolidation — nothing in migration 4 itself
+    /// already true of any *real* upgrade even before consolidation: nothing in migration 4 itself
     /// ever populates Sources.SeriesId, only the app's own later import/seeding path does, so the
     /// merge only ever found real candidates against a database that had *already* progressed through
     /// real usage between two separate release cycles; per #155, no release ever shipped these
@@ -5174,14 +5174,14 @@ public class DatabaseInitializerTests
     /// <para/>
     /// Per #155: never pass a truncated migration list to a <c>DatabaseInitializer</c>. Building the
     /// v3-equivalent schema here therefore doesn't use <c>CreateInitializer</c>/<c>InitialiseAsync</c>
-    /// at all — it executes the three real, frozen Consumer migrations directly against a raw
+    /// at all: it executes the three real, frozen Consumer migrations directly against a raw
     /// connection (the same technique <c>ImportBatchesTests</c>' rename test uses), then, as this
     /// class's own precondition doc above explains, no real migration replay can ever reach the exact
-    /// moment this test needs (Sources.SeriesId populated but the merge not yet run — a state that
+    /// moment this test needs (Sources.SeriesId populated but the merge not yet run: a state that
     /// cannot exist for any real upgrading user, since both now happen in the same atomic migration).
     /// So the two migration 4 fragments are likewise executed directly, as the specific pieces of real
     /// production SQL they are, to unit-test <c>CharacterGlobalIdentityMerge</c>'s own logic in
-    /// isolation against a hand-built but structurally realistic precondition — never through
+    /// isolation against a hand-built but structurally realistic precondition: never through
     /// <c>CreateInitializer</c>, truncated or otherwise.
     /// </summary>
     private async Task<(string source1Id, string source2Id, string character1Id, string character2Id)> SeedPreMergeCharactersAsync(
@@ -5219,7 +5219,7 @@ public class DatabaseInitializerTests
                 new { id = character2Id, sourceId = source2Id, name = name2, now = dateCreated2 });
 
             // Migration009's own Characters rebuild carries CompletenessStatus across from the
-            // pre-existing row — but that column doesn't exist yet at true v3 (it's added by an
+            // pre-existing row, but that column doesn't exist yet at true v3 (it's added by an
             // earlier part of migration 4 than the rebuild, applied moments from now). Set it
             // directly after the schema-creation portion runs, before the merge portion reads it.
             await conn.ExecuteAsync(QuotinatorMigrations.Migration004_ConsolidatedSinceV172Core);
@@ -5231,7 +5231,7 @@ public class DatabaseInitializerTests
                 "UPDATE Characters SET CompletenessStatus = @completeness WHERE Id = @id;",
                 new { id = character2Id, completeness = completeness2 });
 
-            // Sources.SeriesId is never populated by any migration itself — only the app's own later
+            // Sources.SeriesId is never populated by any migration itself: only the app's own later
             // import/seeding path does this in reality. Simulate that here for whichever Sources this
             // specific test wants linked into a (real or shared) Series.
             foreach (string? seriesId in new[] { seriesId1, seriesId2 }.Where(s => s is not null).Distinct())
@@ -5279,7 +5279,7 @@ public class DatabaseInitializerTests
     /// <summary>
     /// Character storage always preserves the exact casing a Name was originally written with, but the
     /// merge-candidate comparison itself is case-insensitive (confirmed directly by the developer
-    /// during ADR 013's authoring — corrects an initial draft that wrongly extended Sources.Title's
+    /// during ADR 013's authoring: corrects an initial draft that wrongly extended Sources.Title's
     /// case-sensitive precedent to Character).
     /// </summary>
     [TestMethod]
@@ -5294,7 +5294,7 @@ public class DatabaseInitializerTests
 
         int survivorCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Characters WHERE LOWER(Name) = 'gandalf' AND IsDeleted = 0;");
-        Assert.AreEqual(1, survivorCount, "Differing casing of the same Name must still merge — only storage preserves original casing, not the comparison");
+        Assert.AreEqual(1, survivorCount, "Differing casing of the same Name must still merge: only storage preserves original casing, not the comparison");
 
         string? survivorName = await conn.ExecuteScalarAsync<string>(
             "SELECT Name FROM Characters WHERE Id = @id;", new { id = character1Id });
@@ -5330,12 +5330,12 @@ public class DatabaseInitializerTests
 
         int survivorCount = await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM Characters WHERE Name = 'Sam' AND IsDeleted = 0;");
-        Assert.AreEqual(2, survivorCount, "Same Name, same Type, but no known Series relationship — conservative default must leave both rows separate");
+        Assert.AreEqual(2, survivorCount, "Same Name, same Type, but no known Series relationship: conservative default must leave both rows separate");
     }
 
     /// <summary>
     /// Per #155: no <c>CreateInitializer</c>/<c>InitialiseAsync</c> call anywhere in this test, same
-    /// reasoning as <see cref="SeedPreMergeCharactersAsync"/> above — the real, frozen Consumer
+    /// reasoning as <see cref="SeedPreMergeCharactersAsync"/> above: the real, frozen Consumer
     /// migrations build the base schema, migration 4's schema-creation fragment builds the
     /// Series/CharacterSources shape, then <see cref="QuotinatorMigrations.CharacterGlobalIdentityMerge"/>
     /// runs directly to unit-test its own quote-repointing behaviour against a hand-built precondition
@@ -5427,7 +5427,7 @@ public class DatabaseInitializerTests
         Assert.AreEqual("Book", type2);
     }
 
-    /// <summary>Every table added by #179 carries RecordBase's four audit columns — ADR 002 applies without exception, including the CharacterSources junction table.</summary>
+    /// <summary>Every table added by #179 carries RecordBase's four audit columns: ADR 002 applies without exception, including the CharacterSources junction table.</summary>
     [TestMethod]
     public async Task SeriesUniverseTables_AllHaveRecordBaseColumns()
     {
@@ -5447,9 +5447,9 @@ public class DatabaseInitializerTests
         }
     }
 
-    // ── #180: curated series/universe overlay — end-to-end through the real bundled-seed path ──
+    // ── #180: curated series/universe overlay: end-to-end through the real bundled-seed path ──
     // Unlike SqliteQuoteImportService.ImportAsync (the live POST /import endpoint), the bundled
-    // seed path's own LoadSourceFileAsync has no "at least one quote" requirement — appropriate
+    // seed path's own LoadSourceFileAsync has no "at least one quote" requirement: appropriate
     // here since this overlay file's whole purpose is Source/Series/Universe enrichment with an
     // intentionally empty quotes[] section, matching data/sources/quotinator-series-universe.json's
     // own real shape.
@@ -5457,13 +5457,13 @@ public class DatabaseInitializerTests
     // Confirmed with the developer (2026-07-16): under this file's Review policy, PlanSourcesAsync's
     // changed-field check has no "empty-existing-side is not a real conflict" special case (that
     // logic exists in FieldMergeResolver for MergeOurs/MergeTheirs and decide-time auto-resolution,
-    // but not for the Review "should this even go Pending" gate) — so a first-time null-to-value
+    // but not for the Review "should this even go Pending" gate), so a first-time null-to-value
     // SeriesId fill stages Pending exactly like a genuine disagreement does. This is accepted as-is
     // for #180, matching the plan doc's original "a human decides" intent, at the cost of a fresh
     // install staging one Pending action per Source the overlay touches (see the real
     // data/sources/quotinator-series-universe.json's ~75 entries) until each is decided and applied.
 
-    /// <summary>A Source with no existing SeriesId still stages a Pending action under this file's Review policy — the review gate has no first-time-fill exception, so nothing is silently applied.</summary>
+    /// <summary>A Source with no existing SeriesId still stages a Pending action under this file's Review policy: the review gate has no first-time-fill exception, so nothing is silently applied.</summary>
     [TestMethod]
     public async Task SeedSeriesUniverseOverlay_NoExistingSeriesId_StagesPendingUnderReviewPolicy()
     {
@@ -5493,10 +5493,10 @@ public class DatabaseInitializerTests
 
         string? seriesId = await conn.ExecuteScalarAsync<string?>(
             "SELECT SeriesId FROM Quotinator_Source WHERE Id = @id;", new { id = sourceId });
-        Assert.IsNull(seriesId, "Nothing applied yet — SeriesId stays null until the Pending action is decided and applied");
+        Assert.IsNull(seriesId, "Nothing applied yet: SeriesId stays null until the Pending action is decided and applied");
     }
 
-    /// <summary>Re-seeding the exact same overlay content a second time is a true no-op — SeriesId already matches, so nothing is staged at all.</summary>
+    /// <summary>Re-seeding the exact same overlay content a second time is a true no-op: SeriesId already matches, so nothing is staged at all.</summary>
     [TestMethod]
     public async Task SeedSeriesUniverseOverlay_AlreadyTagged_NoActionStaged()
     {
@@ -5521,7 +5521,7 @@ public class DatabaseInitializerTests
         using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         string? seriesId = await conn.ExecuteScalarAsync<string?>("SELECT SeriesId FROM Quotinator_Source WHERE Id = @id;", new { id = sourceId });
-        Assert.IsNotNull(seriesId, "Sanity check — NewestWins applies immediately, so SeriesId must already be set before the second pass");
+        Assert.IsNotNull(seriesId, "Sanity check: NewestWins applies immediately, so SeriesId must already be set before the second pass");
 
         Guid reapplyBatchId = Guid.NewGuid();
         using SqliteConnection reapplyConn = new SqliteConnection($"Data Source={_dbPath}");
@@ -5530,17 +5530,17 @@ public class DatabaseInitializerTests
             (SqliteConnection)reapplyConn, [], reapplyBatchId, DuplicateResolutionPolicy.Review,
             sources: [new Quotinator.Core.Import.SourceEntryDto { Id = sourceId, Title = "Test Movie", Type = Quotinator.Core.Enums.QuoteType.Movie, SeriesName = "Test Series" }]);
 
-        // #373: scoped to exclude Unchanged. "No change" is still exactly what this asserts — an
+        // #373: scoped to exclude Unchanged. "No change" is still exactly what this asserts: an
         // Unchanged action stages none; it records that the row arrived and already matched.
         Assert.AreEqual(0, actions.Count(a => a.EntityType == "Source" && a.ActionType.Parsed != ImportActionKind.Unchanged),
-            "Identical content — no change staged");
+            "Identical content: no change staged");
     }
 
     // -------------------------------------------------------------------------
     #region #277: backup real-work gating and storage pre-flight check
 
     // Restoring a WAL-mode backup (RestoreBackup reopens the backup file to read it) can leave
-    // transient -shm/-wal sidecar files alongside the real backup — count only the .db files
+    // transient -shm/-wal sidecar files alongside the real backup: count only the .db files
     // themselves, one per actual CreateBackup call.
     private int BackupFileCount() => Directory.Exists(_backups) ? Directory.GetFiles(_backups, "*.db").Length : 0;
 
@@ -5586,7 +5586,7 @@ public class DatabaseInitializerTests
     {
         QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
         await db1.InitialiseAsync();
-        Assert.AreEqual(0, BackupFileCount(), "Sanity check — the baseline path itself never backs up");
+        Assert.AreEqual(0, BackupFileCount(), "Sanity check: the baseline path itself never backs up");
 
         QuotinatorDatabaseInitializer db2 = CreateInitializer([], useBaseline: true);
         await db2.InitialiseAsync();
@@ -5600,23 +5600,23 @@ public class DatabaseInitializerTests
         SeedBatch batch = SimpleQuoteBatch();
         QuotinatorDatabaseInitializer db = CreateInitializer([batch], useBaseline: true);
         await db.InitialiseAsync();
-        Assert.AreEqual(0, BackupFileCount(), "Sanity check — the baseline path itself never backs up");
+        Assert.AreEqual(0, BackupFileCount(), "Sanity check: the baseline path itself never backs up");
 
         await db.ResetAsync();
-        Assert.IsNull(db.MigrationApplied, "Reset sets schema-version counters directly via the baseline path — MigrationApplied stays null even though content-seed has real work to do next");
+        Assert.IsNull(db.MigrationApplied, "Reset sets schema-version counters directly via the baseline path: MigrationApplied stays null even though content-seed has real work to do next");
         int afterReset = BackupFileCount();
         Assert.AreEqual(1, afterReset, "Reset's own backup must still fire");
 
         await db.InitialiseAsync();
 
-        Assert.AreEqual(afterReset + 1, BackupFileCount(), "The startup immediately after a Reset must still take a backup — this is the exact case a MigrationApplied-based gate was found to miss");
+        Assert.AreEqual(afterReset + 1, BackupFileCount(), "The startup immediately after a Reset must still take a backup: this is the exact case a MigrationApplied-based gate was found to miss");
     }
 
     [TestMethod]
     public async Task InitialiseAsync_MigrationPending_TakesBackup()
     {
         // Truncating QuotinatorMigrations.All would drop its own last entry (the domain-prefix
-        // rename to Quotinator_Quote), breaking every later query in this test — instead, append a
+        // rename to Quotinator_Quote), breaking every later query in this test: instead, append a
         // harmless extra migration so db2 sees a genuinely pending migration on top of an otherwise
         // fully-migrated, correctly-named database.
         QuotinatorDatabaseInitializer db1 = CreateInitializer([], QuotinatorMigrations.All, useBaseline: true);
@@ -5636,24 +5636,45 @@ public class DatabaseInitializerTests
         Assert.IsGreaterThan(before, BackupFileCount(), "A database with a pending migration must take a backup");
     }
 
+    /// <summary>
+    /// #348: loading content writes what this database cannot get back if it goes wrong, and the backup is
+    /// the only thing that could have got it back, so with no backup possible the load does not run.
+    /// </summary>
     [TestMethod]
-    public async Task CreateBackup_InsufficientStorageSpace_RefusesToSeedRatherThanProceedUnprotected()
+    public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_IsRefused()
     {
-        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
-        await db1.InitialiseAsync();
+        DatabaseOperationResult result = await InitialiseWithContentPendingAndNoDiskSpaceAsync();
 
-        SeedBatch batch = SimpleQuoteBatch();
-        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
-        DatabaseOperationResult result = await db2.InitialiseAsync();
+        Assert.IsFalse(result.Succeeded);
+    }
 
-        Assert.IsFalse(result.Succeeded, "seeding must not proceed when no backup could be taken");
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_NamesTheObstacle()
+    {
+        DatabaseOperationResult result = await InitialiseWithContentPendingAndNoDiskSpaceAsync();
+
         Assert.AreEqual(BackupOutcome.InsufficientDiskSpace, result.BackupObstacle);
-        Assert.AreEqual(0, BackupFileCount(), "Backup must be skipped, not written, when real free space is insufficient");
+    }
+
+    /// <summary>The database is left untouched rather than half-loaded with no restore point.</summary>
+    [TestMethod]
+    public async Task InitialiseAsync_ContentLoadWithNoBackupPossible_LoadsNothing()
+    {
+        await InitialiseWithContentPendingAndNoDiskSpaceAsync();
 
         using SqliteConnection conn = new SqliteConnection($"Data Source={_dbPath}");
         await conn.OpenAsync(TestContext.CancellationToken);
         int quoteCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Quotinator_Quote WHERE IsDeleted = 0;");
-        Assert.AreEqual(0, quoteCount, "the database is left untouched rather than half-seeded with no restore point");
+        Assert.AreEqual(0, quoteCount);
+    }
+
+    private async Task<DatabaseOperationResult> InitialiseWithContentPendingAndNoDiskSpaceAsync()
+    {
+        QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
+        await db1.InitialiseAsync();
+
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([SimpleQuoteBatch()], useBaseline: true, diskSpaceProvider: new FakeDiskSpaceProvider(0));
+        return await db2.InitialiseAsync();
     }
 
     [TestMethod]
@@ -5669,25 +5690,22 @@ public class DatabaseInitializerTests
         Assert.AreEqual(1, BackupFileCount(), "Backup must be written when both budget and real free space are sufficient");
     }
 
+    /// <summary>
+    /// An unwritable destination is detected, not unforeseen, so it is reported rather than thrown, and as
+    /// its own obstacle, distinguishable from a full quota or an unreadable source.
+    /// </summary>
     [TestMethod]
-    public async Task InitialiseAsync_BackupWriteFails_ReportsTheObstacleRatherThanThrowing()
+    public async Task InitialiseAsync_ContentLoadWithAnUnwritableBackupDestination_NamesTheObstacle()
     {
         QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
         await db1.InitialiseAsync();
 
-        // Blocks Directory.CreateDirectory(_backups) inside CreateBackup — a file already exists
-        // at that exact path, so creating it as a directory throws IOException.
+        // A file where the backups directory belongs, so creating it as a directory throws IOException.
         File.WriteAllText(_backups, "blocker");
 
-        SeedBatch batch = SimpleQuoteBatch();
-        QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true);
+        QuotinatorDatabaseInitializer db2 = CreateInitializer([SimpleQuoteBatch()], useBaseline: true);
         DatabaseOperationResult result = await db2.InitialiseAsync();
 
-        // #348 replaced the DatabaseBackupWriteException this used to assert. The destination being
-        // unwritable is detected, not unforeseen, so it is reported rather than thrown — and it is
-        // reported as its own variant, distinguishable from a budget ceiling or an unreadable source,
-        // which the single exception type could not express.
-        Assert.IsFalse(result.Succeeded);
         Assert.AreEqual(BackupOutcome.DestinationDirectoryNotWritable, result.BackupObstacle);
     }
 
@@ -5696,14 +5714,14 @@ public class DatabaseInitializerTests
     {
         QuotinatorDatabaseInitializer db1 = CreateInitializer([], useBaseline: true);
         await db1.InitialiseAsync();
-        Assert.AreEqual(0, BackupFileCount(), "Sanity check — the baseline path itself never backs up");
+        Assert.AreEqual(0, BackupFileCount(), "Sanity check: the baseline path itself never backs up");
 
         SeedBatch batch = SimpleQuoteBatch();
         QuotinatorDatabaseInitializer db2 = CreateInitializer([batch], useBaseline: true, auditWriter: new ThrowingAuditEntryWriter());
 
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => db2.InitialiseAsync());
 
-        Assert.AreEqual(1, BackupFileCount(), "The backup must have succeeded before the execute step failed — distinguishing this from a backup-write failure");
+        Assert.AreEqual(1, BackupFileCount(), "The backup must have succeeded before the execute step failed: distinguishing this from a backup-write failure");
     }
 
     #endregion
