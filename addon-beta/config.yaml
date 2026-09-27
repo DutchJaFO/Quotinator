@@ -1,25 +1,25 @@
 name: Quotinator (BETA)
 version: "1.8.3-beta2"
 slug: quotinator_beta
-description: Beta channel of Quotinator — a self-hosted quote REST API serving real, verified quotes from films, books, TV, and famous people. Same software as the stable add-on, tracking pre-release versions.
+description: Beta channel of Quotinator: a self-hosted quote REST API serving real, verified quotes from films, books, TV, and famous people. Same software as the stable add-on, tracking pre-release versions.
 url: https://github.com/DutchJaFO/Quotinator
 arch:
   - amd64
   - aarch64
 
-# Pre-built image from GitHub Container Registry — same image repository as the stable add-on.
+# Pre-built image from GitHub Container Registry: the same image repository as the stable add-on.
 # The supervisor appends the version tag automatically; this add-on's own version field is what
 # selects a pre-release tag instead of a final one.
 image: ghcr.io/dutchjafo/quotinator
 
-# Always visible in the add-on store, not gated behind HA's experimental/Advanced Mode — matches
+# Always visible in the add-on store, not gated behind HA's experimental/Advanced Mode; this matches
 # Music Assistant's own stable/beta precedent (see plan doc #166 Background).
 stage: stable
 
 startup: application
 boot: auto
 
-# SSL — optional HTTPS on the direct-access port (8080).
+# SSL: optional HTTPS on the direct-access port (8080).
 # Set ssl: true and supply the cert/key filenames (relative to /ssl/).
 # HA's Let's Encrypt add-on writes fullchain.pem + privkey.pem to /ssl/ automatically.
 # Leave ssl: false when using HA ingress or a reverse proxy for TLS termination.
@@ -29,7 +29,7 @@ options:
   ssl: false
   certfile: fullchain.pem
   keyfile: privkey.pem
-  auto_update_sources: true
+  auto_update_sources: false
   source_update_interval_hours: 24
   unicode_aware_search: false
   auto_purge_bundled_import_actions: true
@@ -80,23 +80,23 @@ env_vars:
   - name: Quotinator__AutoPurgeUserImportActions
     value: "{{ auto_purge_user_import_actions }}"
 
-# Direct access port — disabled by default; enable for MagicMirror, curl, or other
+# Direct access port: disabled by default; enable for MagicMirror, curl, or other
 # tools that need to reach the API outside of HA ingress.
 ports:
   8080/tcp: null
 ports_description:
-  8080/tcp: Direct web access — HTTP (ssl:false) or HTTPS (ssl:true)
+  8080/tcp: Direct web access, HTTP (ssl:false) or HTTPS (ssl:true)
 
-# Ingress — embeds the UI into the Home Assistant sidebar.
+# Ingress: embeds the UI into the Home Assistant sidebar.
 # Uses a dedicated internal port (8099) separate from the direct access port (8080).
 ingress: true
 ingress_port: 8099
 
-# AppArmor — custom profile in apparmor.txt restricts filesystem and network access.
+# AppArmor: custom profile in apparmor.txt restricts filesystem and network access.
 # Explicit true is required: the supervisor checks this key; relying on the default risks
 # the profile being silently ignored if the default is not applied before the check.
 apparmor: true
 
-# Data directory — quotes.json is stored here and persists across updates.
+# Data directory: quotes.json is stored here and persists across updates.
 map:
   - data:rw

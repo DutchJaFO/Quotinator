@@ -238,7 +238,7 @@ bool includeDefaultSources  = builder.Configuration.GetValue("Quotinator:Include
 // Auto-update: whether the app checks manifest downloadUrl/github entries for a fresher copy at
 // all (master switch: false means pure offline mode, no network calls ever), and how long a
 // downloaded copy is considered fresh before the next check re-verifies it.
-bool autoUpdateSources        = builder.Configuration.GetValue("Quotinator:AutoUpdateSources", true);
+bool autoUpdateSources        = Quotinator.Api.Startup.SourceRefreshSettings.AutoUpdateSources(builder.Configuration);
 int sourceUpdateIntervalHours = builder.Configuration.GetValue("Quotinator:SourceUpdateIntervalHours", 24);
 int sourceRefreshTimeoutSeconds = builder.Configuration.GetValue<int?>("Quotinator:SourceRefreshTimeoutSeconds")
     ?? SourceCacheUpdater.DefaultHttpTimeoutSeconds;

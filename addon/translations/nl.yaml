@@ -8,7 +8,7 @@ configuration:
     name: Verzoeken loggen
     description: >-
       Logt elk inkomend verzoek naar de quote API-eindpunten.
-      Standaard uitgeschakeld — schakel in om te bevestigen dat verzoeken aankomen zonder het debug-logniveau te activeren.
+      Standaard uitgeschakeld; schakel in om te bevestigen dat verzoeken aankomen zonder het debug-logniveau te activeren.
   ssl:
     name: SSL / HTTPS
     description: >-
@@ -38,8 +38,10 @@ configuration:
   auto_update_sources:
     name: Bronnen automatisch bijwerken
     description: >-
-      Controleert manifestvermeldingen met een download-URL op een nieuwere versie vóór het seeden.
-      Schakel uit voor volledig offline/geïsoleerde installaties — er worden dan nooit netwerkverzoeken gedaan.
+      Standaard uitgeschakeld: de bronbestanden die met elke release worden meegeleverd, worden gebruikt
+      zoals ze zijn. Indien ingeschakeld, worden manifestvermeldingen met een download-URL vóór het seeden
+      gecontroleerd op een nieuwere versie, waarvoor het netwerk nodig is. Indien uitgeschakeld, worden er
+      nooit netwerkverzoeken gedaan.
   source_update_interval_hours:
     name: Bijwerkinterval bronnen (uren)
     description: >-
@@ -50,7 +52,7 @@ configuration:
     description: >-
       Zorgt ervoor dat zoeken op quote, personage, auteur en bron ook overeenkomt met
       geaccentueerde en andere niet-ASCII-tekens, ongeacht hoofd-/kleine letters (bijv. é/É).
-      Standaard uitgeschakeld — nog niet gevalideerd tegen echt zoekverkeer.
+      Standaard uitgeschakeld: nog niet gevalideerd tegen echt zoekverkeer.
   auto_purge_bundled_import_actions:
     name: Meegeleverde importgeschiedenis automatisch opschonen
     description: >-
@@ -64,4 +66,4 @@ configuration:
       zodra deze haar werk heeft gedaan (geen openstaande beslissingen meer). Schakel tijdelijk
       uit tijdens het debuggen van je eigen import om die geschiedenis te bewaren.
 network:
-  8080/tcp: Directe webtoegang — HTTP (SSL uitgeschakeld) of HTTPS (SSL ingeschakeld)
+  8080/tcp: Directe webtoegang, HTTP (SSL uitgeschakeld) of HTTPS (SSL ingeschakeld)

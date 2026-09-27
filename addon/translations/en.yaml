@@ -8,7 +8,7 @@ configuration:
     name: Log requests
     description: >-
       Log each incoming request to the quote API endpoints.
-      Disabled by default — enable to confirm calls are arriving without needing debug log level.
+      Disabled by default; enable to confirm calls are arriving without needing debug log level.
   ssl:
     name: SSL / HTTPS
     description: >-
@@ -38,8 +38,9 @@ configuration:
   auto_update_sources:
     name: Auto-update sources
     description: >-
-      Check manifest entries that declare a download URL for a fresher copy before seeding.
-      Disable for fully offline/air-gapped installs — no network calls are ever made when off.
+      Off by default: the source files bundled with each release are used as they are. When on,
+      checks manifest entries that declare a download URL for a fresher copy before seeding, which
+      needs the network. When off, no network call is ever made.
   source_update_interval_hours:
     name: Source update interval (hours)
     description: >-
@@ -49,7 +50,7 @@ configuration:
     name: Unicode-aware search
     description: >-
       Makes quote, character, author, and source search match accented and other non-ASCII
-      characters regardless of case (e.g. é/É). Off by default — not yet validated against
+      characters regardless of case (e.g. é/É). Off by default: not yet validated against
       real-world search traffic.
   auto_purge_bundled_import_actions:
     name: Auto-purge bundled import history
@@ -64,4 +65,4 @@ configuration:
       pending decisions left), delete it automatically. Disable temporarily while debugging
       your own import so its resolution history is retained.
 network:
-  8080/tcp: Direct web access — HTTP (ssl disabled) or HTTPS (ssl enabled)
+  8080/tcp: Direct web access, HTTP (ssl disabled) or HTTPS (ssl enabled)

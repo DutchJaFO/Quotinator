@@ -10,12 +10,12 @@ public sealed class SourceCacheUpdater(
     SourceCacheOptions options,
     ILogger<SourceCacheUpdater> logger) : ISourceCacheUpdater
 {
-    /// <summary>Name of the <see cref="IHttpClientFactory"/> client registered for this component. Its timeout is configured at registration time, overridable via <c>Quotinator:SourceRefreshTimeoutSeconds</c> — see <see cref="DefaultHttpTimeoutSeconds"/>.</summary>
+    /// <summary>Name of the <see cref="IHttpClientFactory"/> client registered for this component. Its timeout is configured at registration time, overridable via <c>Quotinator:SourceRefreshTimeoutSeconds</c>; see <see cref="DefaultHttpTimeoutSeconds"/>.</summary>
     public const string HttpClientName = "SourceCacheUpdater";
 
     /// <summary>
     /// Default <see cref="HttpClientName"/> timeout in seconds, used when <c>Quotinator:SourceRefreshTimeoutSeconds</c>
-    /// is not set. A slow/unreachable upstream must never block startup, reseed, or reset indefinitely — the
+    /// is not set. A slow/unreachable upstream must never block startup, reseed, or reset indefinitely: the
     /// updater always falls back to the existing cached/local file on timeout. 30 s (raised from 5 s, 2026-08-09):
     /// a cold HttpClient's first request (fresh DNS + TCP + TLS) can legitimately exceed 5 s even against a
     /// healthy endpoint, which was tripping the fallback path more often than a genuinely unreachable upstream
@@ -23,7 +23,7 @@ public sealed class SourceCacheUpdater(
     /// <para>
     /// 90 s (raised from 30 s, 2026-08-20) to stay above <see cref="DefaultConnectTimeoutSeconds"/>. If the
     /// request budget were at or below the connect budget, the request would cancel first and the connect
-    /// budget would never apply — reintroducing exactly the defect #323 fixed, where a stalled connect was
+    /// budget would never apply, reintroducing exactly the defect #323 fixed, where a stalled connect was
     /// bounded by whichever request happened to be waiting on it. The margin above connect is what covers
     /// the transfer itself.
     /// </para>
@@ -31,12 +31,19 @@ public sealed class SourceCacheUpdater(
     public const int DefaultHttpTimeoutSeconds = 90;
 
     /// <summary>
+    /// Whether the source refresh runs when <c>Quotinator:AutoUpdateSources</c> is not configured (#424).
+    /// The one place the default is stated, so the application and both add-on configurations can be held
+    /// to the same value.
+    /// </summary>
+    public const bool DefaultAutoUpdateSources = false;
+
+    /// <summary>
     /// Default connect budget in seconds for <see cref="HttpClientName"/>'s primary handler, used when
     /// <c>Quotinator:SourceRefreshConnectTimeoutSeconds</c> is not set (#323).
     /// <para>
     /// <see cref="System.Net.Http.SocketsHttpHandler.ConnectTimeout"/> defaults to
     /// <see cref="System.Threading.Timeout.InfiniteTimeSpan"/>, which means a stalled connect or TLS
-    /// handshake has no budget of its own — it is bounded only by whichever request happens to be
+    /// handshake has no budget of its own: it is bounded only by whichever request happens to be
     /// waiting on it, and the attempt is not cancelled when that request gives up. Measured live
     /// 2026-08-17: two sources each burned the full <see cref="DefaultHttpTimeoutSeconds"/> window
     /// waiting on a connection that was never established, adding ~70 s to startup.
@@ -44,13 +51,13 @@ public sealed class SourceCacheUpdater(
     /// <para>
     /// Kept deliberately under <see cref="DefaultHttpTimeoutSeconds"/>: the request budget has to cover
     /// connect *plus* transfer, so a connect budget at parity would leave nothing for the download
-    /// itself. That relationship is the invariant — the specific numbers are not.
+    /// itself. That relationship is the invariant; the specific numbers are not.
     /// </para>
     /// <para>
     /// 60 s (raised from 10 s, 2026-08-20). The original 10 s was chosen only as a safe finite value
     /// when the real defect was an infinite budget; it was never measured as correct. Raising it costs
-    /// nothing user-visible — a refresh that is still connecting happens behind the startup wait page
-    /// (#280), which already tells the user work is in progress — while a marginal or slow link now has
+    /// nothing user-visible (a refresh that is still connecting happens behind the startup wait page
+    /// (#280), which already tells the user work is in progress), while a marginal or slow link now has
     /// a realistic chance of completing instead of being abandoned. Retry behaviour is #329's, and
     /// these values are expected to be tuned alongside it once that lands.
     /// </para>
@@ -80,7 +87,7 @@ public sealed class SourceCacheUpdater(
         if (forceRefresh && !allowNetwork)
         {
             logger.LogInformation(
-                "[Database - SourceRefresh] forceSourceRefresh requested but Quotinator__AutoUpdateSources is false — skipping network check");
+                "[Database - SourceRefresh] forceSourceRefresh requested but Quotinator__AutoUpdateSources is false; skipping network check");
         }
 
         // Flatten every (batch, file) pair that declares a downloadUrl, preserving order so the
@@ -102,7 +109,7 @@ public sealed class SourceCacheUpdater(
         {
             string sources = string.Join(", ", group.Select(g => $"{Path.GetFileName(g.File.FilePath)} ({g.File.DownloadUrl})"));
             logger.LogError(
-                "[Database - SourceRefresh] {Count} sources resolve to the same cache path {Path} — skipping all of them: {Sources}",
+                "[Database - SourceRefresh] {Count} sources resolve to the same cache path {Path}; skipping all of them: {Sources}",
                 group.Count, path, sources);
         }
 
@@ -154,7 +161,7 @@ public sealed class SourceCacheUpdater(
         bool cacheExists = File.Exists(targetPath);
 
         // Validating an existing cache hit (not just a freshly downloaded file) means a cache file
-        // corrupted before this validation existed — or corrupted by any future bug — self-heals on
+        // corrupted before this validation existed, or corrupted by any future bug, self-heals on
         // the next access, rather than being silently trusted forever just because it's not expired.
         bool cacheValid = cacheExists && IsCachedContentValid(targetPath, name);
 
@@ -173,7 +180,7 @@ public sealed class SourceCacheUpdater(
         if (downloaded)
             return (targetPath, new SourceRefreshResult(name, file.DownloadUrl!, SourceRefreshOutcome.Updated, LastRefreshedAtUtc: GetLastRefreshedAt(targetPath)));
 
-        // Failed — fall back to the cached copy if one exists and is valid (even if stale), else the original file.
+        // Failed: fall back to the cached copy if one exists and is valid (even if stale), else the original file.
         return cacheValid
             ? (targetPath, new SourceRefreshResult(name, file.DownloadUrl!, SourceRefreshOutcome.Failed, LastRefreshedAtUtc: GetLastRefreshedAt(targetPath)))
             : (file.FilePath, new SourceRefreshResult(name, file.DownloadUrl!, SourceRefreshOutcome.Failed));
@@ -193,13 +200,13 @@ public sealed class SourceCacheUpdater(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "[Database - SourceRefresh] cached copy of {File} could not be read — treating as invalid", name);
+            logger.LogWarning(ex, "[Database - SourceRefresh] cached copy of {File} could not be read; treating as invalid", name);
             return false;
         }
 
         if (options.ValidateCanonicalSchema(content)) return true;
 
-        logger.LogWarning("[Database - SourceRefresh] cached copy of {File} failed canonical-schema validation — treating as invalid", name);
+        logger.LogWarning("[Database - SourceRefresh] cached copy of {File} failed canonical-schema validation; treating as invalid", name);
         return false;
     }
 
@@ -223,7 +230,7 @@ public sealed class SourceCacheUpdater(
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning(
-                    "[Database - SourceRefresh] could not reach {Url} ({Status}) — using local {File}",
+                    "[Database - SourceRefresh] could not reach {Url} ({Status}); using local {File}",
                     file.DownloadUrl, (int)response.StatusCode, name);
                 return false;
             }
@@ -232,7 +239,7 @@ public sealed class SourceCacheUpdater(
 
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
             // Downloaded content is written to its own temp file first, kept separate from any
-            // conversion output — so a conversion failure leaves the raw download inspectable rather
+            // conversion output, so a conversion failure leaves the raw download inspectable rather
             // than risking a converter partially overwriting its own input mid-read.
             await File.WriteAllBytesAsync(rawTempPath, bytes, cancellationToken);
 
@@ -244,7 +251,7 @@ public sealed class SourceCacheUpdater(
                 if (converter is null)
                 {
                     logger.LogWarning(
-                        "[Database - SourceRefresh] converter '{Converter}' named for {File} is not registered in this build — using local {File}",
+                        "[Database - SourceRefresh] converter '{Converter}' named for {File} is not registered in this build; using local {File}",
                         file.Converter, name, name);
                     return false;
                 }
@@ -252,7 +259,7 @@ public sealed class SourceCacheUpdater(
                 if (converter.IsInternalOnly && origin == SeedBatchOrigin.UserImports)
                 {
                     logger.LogWarning(
-                        "[Database - SourceRefresh] converter '{Converter}' named for {File} is internal-only and cannot be selected from a user-writable manifest — using local {File}",
+                        "[Database - SourceRefresh] converter '{Converter}' named for {File} is internal-only and cannot be selected from a user-writable manifest; using local {File}",
                         file.Converter, name, name);
                     return false;
                 }
@@ -265,13 +272,13 @@ public sealed class SourceCacheUpdater(
                 catch (SourceConversionException ex)
                 {
                     logger.LogWarning(ex,
-                        "[Database - SourceRefresh] conversion of {File} via '{Converter}' failed — using local {File}",
+                        "[Database - SourceRefresh] conversion of {File} via '{Converter}' failed; using local {File}",
                         name, file.Converter, name);
                     return false;
                 }
             }
 
-            // Validation runs regardless of whether a converter ran — a source with no converter but
+            // Validation runs regardless of whether a converter ran: a source with no converter but
             // whose downloadUrl serves raw, non-canonical content is exactly the failure mode this
             // closes: fails validation here instead of silently corrupting the cache.
             if (options.ValidateCanonicalSchema is not null)
@@ -280,13 +287,13 @@ public sealed class SourceCacheUpdater(
                 if (!options.ValidateCanonicalSchema(content))
                 {
                     logger.LogWarning(
-                        "[Database - SourceRefresh] {Stage} content for {File} failed canonical-schema validation — using local {File}",
+                        "[Database - SourceRefresh] {Stage} content for {File} failed canonical-schema validation; using local {File}",
                         file.Converter is not null ? "converted" : "downloaded", name, name);
                     return false;
                 }
             }
 
-            // Atomic rename on the same volume — an interrupted move never leaves a half-written
+            // Atomic rename on the same volume: an interrupted move never leaves a half-written
             // cache file behind for the next seed operation to read.
             File.Move(preparedPath, targetPath, overwrite: true);
 
@@ -295,7 +302,7 @@ public sealed class SourceCacheUpdater(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "[Database - SourceRefresh] could not reach {Url} — using local {File}", file.DownloadUrl, name);
+            logger.LogWarning(ex, "[Database - SourceRefresh] could not reach {Url}; using local {File}", file.DownloadUrl, name);
             return false;
         }
         finally
@@ -313,7 +320,7 @@ public sealed class SourceCacheUpdater(
         }
         catch
         {
-            // Best-effort temp file cleanup — a leftover .tmp file is harmless and gets overwritten
+            // Best-effort temp file cleanup: a leftover .tmp file is harmless and gets overwritten
             // by the next attempt; never let cleanup failure mask the real outcome.
         }
     }

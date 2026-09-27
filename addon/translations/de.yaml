@@ -8,7 +8,7 @@ configuration:
     name: Anfragen protokollieren
     description: >-
       Protokolliert jede eingehende Anfrage an die Quote-API-Endpunkte.
-      Standardmäßig deaktiviert — aktivieren, um eingehende Anfragen ohne Debug-Protokollstufe zu bestätigen.
+      Standardmäßig deaktiviert; aktivieren, um eingehende Anfragen ohne Debug-Protokollstufe zu bestätigen.
   ssl:
     name: SSL / HTTPS
     description: >-
@@ -38,8 +38,10 @@ configuration:
   auto_update_sources:
     name: Quellen automatisch aktualisieren
     description: >-
-      Prüft Manifest-Einträge mit einer Download-URL vor dem Seeding auf eine neuere Version.
-      Deaktivieren für vollständig Offline-/Air-Gapped-Installationen — es werden dann nie Netzwerkanfragen gestellt.
+      Standardmäßig deaktiviert: die mit jeder Version mitgelieferten Quelldateien werden unverändert
+      verwendet. Wenn aktiviert, werden Manifest-Einträge mit einer Download-URL vor dem Seeding auf eine
+      neuere Version geprüft, wofür das Netzwerk benötigt wird. Wenn deaktiviert, werden nie
+      Netzwerkanfragen gestellt.
   source_update_interval_hours:
     name: Aktualisierungsintervall Quellen (Stunden)
     description: >-
@@ -50,7 +52,7 @@ configuration:
     description: >-
       Sorgt dafür, dass die Suche nach Zitat, Figur, Autor und Quelle unabhängig von
       Groß-/Kleinschreibung auch auf akzentuierte und andere Nicht-ASCII-Zeichen passt (z. B.
-      é/É). Standardmäßig deaktiviert — noch nicht anhand realer Suchanfragen validiert.
+      é/É). Standardmäßig deaktiviert: noch nicht anhand realer Suchanfragen validiert.
   auto_purge_bundled_import_actions:
     name: Verlauf gebündelter Importe automatisch bereinigen
     description: >-
@@ -64,4 +66,4 @@ configuration:
       seinen Zweck erfüllt hat (keine offenen Entscheidungen mehr). Vorübergehend deaktivieren,
       während der eigene Import debuggt wird, um dessen Verlauf zu behalten.
 network:
-  8080/tcp: Direkter Webzugriff — HTTP (SSL deaktiviert) oder HTTPS (SSL aktiviert)
+  8080/tcp: Direkter Webzugriff, HTTP (SSL deaktiviert) oder HTTPS (SSL aktiviert)
