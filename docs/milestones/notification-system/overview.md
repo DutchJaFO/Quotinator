@@ -81,6 +81,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#421](https://github.com/DutchJaFO/Quotinator/issues/421) | A quote's id depends on whether the install was upgraded or fresh, after Migration009's dedupe | Planning | T1 ⬜ T2 ⬜ | none |
 | [#422](https://github.com/DutchJaFO/Quotinator/issues/422) | A modal's 95vh height cap never applies; Bootstrap's centred min-height overrides it | Planning | T1 ⬜ T2 ⬜ | none |
 | [#423](https://github.com/DutchJaFO/Quotinator/issues/423) | Seeding fills any empty database, so a reset is undone by the next restart | Planning | T1 ⬜ T2 ⬜ | none |
+| [#424](https://github.com/DutchJaFO/Quotinator/issues/424) | Bundled sources are not auto-downloaded by default, and are refreshed by hand instead | In progress | T1 ⬜ T2 ⬜ | [424-sources-not-auto-downloaded-by-default-plan.md](424-sources-not-auto-downloaded-by-default-plan.md) |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Planning | T1 ⬜ T2 ⬜ | none |
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
@@ -142,6 +143,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #421 ─── (none); found in #411's T2, in #374's migration: Planning
 #422 ─── (none); found in #411's T2, in #308's modal: Planning
 #423 ─── (none); found in #308's T2; #156 decided it, #277 pinned the opposite, #304 depends on it: Planning
+#424 ─── (none); moved from v1.9.0, found in #348's verification: In progress
 #397 ─── (none); blocks #370: Waiting for release
 #369 ─── depends on #303, #372, #389: Waiting for release
 #389 ─── depends on #373, #376, #377: Waiting for release
@@ -176,55 +178,56 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 7 | **#309** ✅ | Waiting for release |
 | 8 | **#326** ✅ | Waiting for release |
 | 9 | **#348** 🚧 | In progress; the quota model is being corrected |
-| 10 | **#349** ✅ | Waiting for release |
-| 11 | **#307** ✅ | Waiting for release |
-| 12 | **#319** ✅ | Waiting for release; gateway for the producers below |
-| 13 | **#304** ✅ | Waiting for release |
-| 14 | **#302** ✅ | Waiting for release |
-| 15 | **#303** ✅ | Waiting for release; T1 outstanding |
-| 16 | **#367** ✅ | Waiting for release; moved up so #308 designs against the finished status set |
-| 17 | **#308** ✅ | Waiting for release; reopened 2026-09-22, closed 2026-09-24: every kind through its own trigger on both surfaces, the unread map deleted, fifteen captured images. Finishes before #413, which no longer carries any rendering change |
-| 18 | **#375** ✅ | Waiting for release; T1 green after three rounds |
-| 19 | **#374** ✅ | Waiting for release |
-| 20 | **#378** ✅ | Waiting for release; found live while verifying #374, fixed same session |
-| 21 | **#373** ✅ | Waiting for release; T1 green after the natural-key fix |
-| 22 | **#372** ✅ | Waiting for release; T1 green; a reseed leaves zero pending items |
-| 23 | **#377** ✅ | Waiting for release |
-| 24 | **#382** ✅ | Waiting for release |
-| 25 | **#383** ✅ | Waiting for release |
-| 26 | **#376** ✅ | Waiting for release |
-| 27 | **#389** ✅ | Waiting for release; found by #369's T2 |
-| 28 | **#369** ✅ | Waiting for release |
-| 29 | **#397** ✅ | Waiting for release; unblocks #370 |
-| 30 | **#370** ✅ | Waiting for release |
-| 31 | **#409** ✅ | Waiting for release |
-| 32 | **#410** ✅ | Waiting for release |
-| 33 | **#411** ✅ | Waiting for release |
-| 34 | **#413** | Planning; found in #370's T1; the #279 announcement, after #312 and #319 |
-| 35 | **#419** | Planning; found in #411's T2; a defect in #81's finished producer |
-| 36 | **#420** | Planning; found in #411's T2; one #411 document waits on it |
-| 37 | **#421** | Planning; found in #411's T2; before #371/#360 add migrations |
-| 38 | **#422** | Planning; found in #411's T2; code accuracy only, nothing unreachable |
-| 39 | **#423** | Planning; found in #308's T2; a reset is undone by the next restart, and #304's recommendation resolves itself because of it |
-| 40 | **#371** | Planning; before #351/#360, which each add migrations |
-| 41 | **#350** | Planning |
-| 42 | **#327** 🚧 | In progress; depends on #326 (done), #348 |
-| 43 | **#328** | Planning |
-| 44 | **#339** 🚧 | In progress; blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
-| 45 | **#329** | Planning; before #324, which consumes its statistics |
-| 46 | **#330** | Planning; #331 depends on it |
-| 47 | **#331** | Planning; depends on #330 |
-| 48 | **#324** | Planning; after #329/#330/#331 |
-| 49 | **#305** | Planning; independent |
-| 50 | **#306** | Planning; independent |
-| 51 | **#351** | Planning; independent, placed late |
-| 52 | **#381** | Planning; independent, deliberately deferred (found live while verifying #374/#378) |
-| 53 | **#352** | Planning; after #349 |
-| 54 | **#353** | Planning; after #352 |
-| 55 | **#360** | Planning; before end-of-milestone migration consolidation |
-| 56 | **#390** | Planning; before #368, which depends on it |
-| 57 | **#368** | Planning; depends on #303, #304, #390 |
-| 58 | **#416** | Planning; filed 2026-09-19 during #411 and not yet sequenced; placed last until it is |
+| 10 | **#424** 🚧 | In progress; the test hosts first, taken up during #348 |
+| 11 | **#349** ✅ | Waiting for release |
+| 12 | **#307** ✅ | Waiting for release |
+| 13 | **#319** ✅ | Waiting for release; gateway for the producers below |
+| 14 | **#304** ✅ | Waiting for release |
+| 15 | **#302** ✅ | Waiting for release |
+| 16 | **#303** ✅ | Waiting for release; T1 outstanding |
+| 17 | **#367** ✅ | Waiting for release; moved up so #308 designs against the finished status set |
+| 18 | **#308** ✅ | Waiting for release; reopened 2026-09-22, closed 2026-09-24: every kind through its own trigger on both surfaces, the unread map deleted, fifteen captured images. Finishes before #413, which no longer carries any rendering change |
+| 19 | **#375** ✅ | Waiting for release; T1 green after three rounds |
+| 20 | **#374** ✅ | Waiting for release |
+| 21 | **#378** ✅ | Waiting for release; found live while verifying #374, fixed same session |
+| 22 | **#373** ✅ | Waiting for release; T1 green after the natural-key fix |
+| 23 | **#372** ✅ | Waiting for release; T1 green; a reseed leaves zero pending items |
+| 24 | **#377** ✅ | Waiting for release |
+| 25 | **#382** ✅ | Waiting for release |
+| 26 | **#383** ✅ | Waiting for release |
+| 27 | **#376** ✅ | Waiting for release |
+| 28 | **#389** ✅ | Waiting for release; found by #369's T2 |
+| 29 | **#369** ✅ | Waiting for release |
+| 30 | **#397** ✅ | Waiting for release; unblocks #370 |
+| 31 | **#370** ✅ | Waiting for release |
+| 32 | **#409** ✅ | Waiting for release |
+| 33 | **#410** ✅ | Waiting for release |
+| 34 | **#411** ✅ | Waiting for release |
+| 35 | **#413** | Planning; found in #370's T1; the #279 announcement, after #312 and #319 |
+| 36 | **#419** | Planning; found in #411's T2; a defect in #81's finished producer |
+| 37 | **#420** | Planning; found in #411's T2; one #411 document waits on it |
+| 38 | **#421** | Planning; found in #411's T2; before #371/#360 add migrations |
+| 39 | **#422** | Planning; found in #411's T2; code accuracy only, nothing unreachable |
+| 40 | **#423** | Planning; found in #308's T2; a reset is undone by the next restart, and #304's recommendation resolves itself because of it |
+| 41 | **#371** | Planning; before #351/#360, which each add migrations |
+| 42 | **#350** | Planning |
+| 43 | **#327** 🚧 | In progress; depends on #326 (done), #348 |
+| 44 | **#328** | Planning |
+| 45 | **#339** 🚧 | In progress; blocked on [#347](https://github.com/DutchJaFO/Quotinator/issues/347) in the **v1.9.0** milestone |
+| 46 | **#329** | Planning; before #324, which consumes its statistics |
+| 47 | **#330** | Planning; #331 depends on it |
+| 48 | **#331** | Planning; depends on #330 |
+| 49 | **#324** | Planning; after #329/#330/#331 |
+| 50 | **#305** | Planning; independent |
+| 51 | **#306** | Planning; independent |
+| 52 | **#351** | Planning; independent, placed late |
+| 53 | **#381** | Planning; independent, deliberately deferred (found live while verifying #374/#378) |
+| 54 | **#352** | Planning; after #349 |
+| 55 | **#353** | Planning; after #352 |
+| 56 | **#360** | Planning; before end-of-milestone migration consolidation |
+| 57 | **#390** | Planning; before #368, which depends on it |
+| 58 | **#368** | Planning; depends on #303, #304, #390 |
+| 59 | **#416** | Planning; filed 2026-09-19 during #411 and not yet sequenced; placed last until it is |
 
 ---
 
