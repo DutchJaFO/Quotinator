@@ -88,7 +88,7 @@ builder.Services.AddOpenApi(options =>
             new() { Name = ApiTags.Conversations, Description = "Endpoints for fetching multi-line conversations (a stage direction and/or sound cue alongside one or more quotes)." },
             new() { Name = ApiTags.MasterData,    Description = "Endpoints for fetching the shared reference data (Sources, Characters, People, Series, and Universes) that quotes and conversations are built from." },
             new() { Name = ApiTags.Notifications, Description = "Endpoints for listing startup and maintenance notifications, and for dismissing them. Dismissing requires `X-Api-Key` authentication; listing does not." },
-            new() { Name = ApiTags.Backup,        Description = "Endpoints for managing database backups: listing what exists, taking one on demand, downloading one so it survives the container, removing one to free quota, and reporting whether a backup can be taken right now. All require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter. They remain reachable while the database is degraded, which is the state they exist for." },
+            new() { Name = ApiTags.Backup,        Description = "Endpoints for managing database backups: listing what exists, taking one on demand, downloading one so it survives the container, removing one to free space, and reporting whether a backup can be taken right now. All require `X-Api-Key` authentication and share the Admin endpoints' concurrency-1 limiter. They remain reachable while the database is degraded, which is the state they exist for." },
         };
 
         document.Info = new()
@@ -447,6 +447,11 @@ builder.Services.AddSingleton<INotificationReader>(sp => new NotificationReader(
 builder.Services.AddSingleton<INotificationWriter, NotificationWriter>();
 // #348: the audited take-and-remove the backup endpoints and the notification's reseed action share.
 builder.Services.AddSingleton<BackupOperations>();
+// #348: every notification whose condition can change while the application runs registers one check
+// here, and every place that re-checks (a completed startup, a Reset, a backup taken or removed, and
+// POST /notifications/refresh) runs them all through NotificationConditionChecks.
+builder.Services.AddSingleton<Quotinator.Data.Notifications.INotificationConditionCheck, Quotinator.Data.Notifications.BackupQuotaCheck>();
+builder.Services.AddSingleton<Quotinator.Data.Notifications.NotificationConditionChecks>();
 builder.Services.AddSingleton<INotificationActionExecutor, NotificationActionExecutor>();
 builder.Services.AddSingleton<IAppVersionTracker, AppVersionTracker>();
 
@@ -633,7 +638,8 @@ builder.Services.AddSingleton<IDatabaseInitializer>(sp =>
         sp.GetRequiredService<IAppVersionTracker>(),
         sp.GetRequiredService<IVersionService>(),
         sp.GetRequiredService<IDiskSpaceProvider>(),
-        QuotinatorMigrations.Baseline);
+        QuotinatorMigrations.Baseline,
+        sp.GetRequiredService<Quotinator.Data.Notifications.NotificationConditionChecks>());
 });
 // #285: resolves a Conversation's per-line quote/stage-direction/sound-cue lookups via
 // JoinQueryRepository/IJoinStrategy per ADR 017.
@@ -1238,6 +1244,24 @@ if (dbHealth.IsHealthy)
                 .LogWarning(ex, "[Server] Failed to seed the #81 what's-new notification; non-fatal, startup continues.");
         }
     });
+}
+
+// #348: a completed startup re-checks every notification whose condition can change while the
+// application runs. This is where the backups taken before migrating and before loading content are
+// accounted for: the warning they may call for cannot be written at the moment of the pre-migration
+// backup, into a table the build has not migrated yet, so it is written here, once the schema is current.
+// Only while healthy: a degraded database has nothing to write a notification into.
+if (dbHealth.IsHealthy)
+{
+    try
+    {
+        await app.Services.GetRequiredService<Quotinator.Data.Notifications.NotificationConditionChecks>().RunAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Services.GetRequiredService<ILogger<Program>>()
+            .LogWarning(ex, "[Server] Failed to re-check the notifications whose condition can change; non-fatal, startup continues.");
+    }
 }
 
 // #280: initialisation (successful or not) is now finished: StartupWaitMiddleware stops

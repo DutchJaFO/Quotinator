@@ -4,7 +4,7 @@ namespace Quotinator.Data.Enums;
 /// Why a database backup attempt did or did not produce a file (#327).
 /// <para>
 /// A backup exists to make a startup or a destructive admin action safe. When one cannot be taken, that
-/// is a failure to report with options attached — not something to pass over silently — so every caller
+/// is a failure to report with options attached, not something to pass over silently, so every caller
 /// needs to know <em>which</em> obstacle it hit, since the five have five different remedies.
 /// </para>
 /// <para>
@@ -19,8 +19,9 @@ public enum BackupOutcome
     Succeeded,
 
     /// <summary>
-    /// Writing this backup would push the backups folder past its configured size budget. Remedied by
-    /// removing older backups, or by raising the budget.
+    /// Writing this backup would push the backups folder past its ceiling, <c>MaxBackupStorageGb</c>. The
+    /// operating quota below it refuses nothing (#348). Remedied by removing older backups, or by raising
+    /// the ceiling.
     /// </summary>
     BudgetExceeded,
 
@@ -31,7 +32,7 @@ public enum BackupOutcome
     InsufficientDiskSpace,
 
     /// <summary>
-    /// The backups folder itself could not be created — typically a read-only mount or a permission
+    /// The backups folder itself could not be created, typically because of a read-only mount or a permission
     /// problem on the data directory. Remedied outside the container, by restoring write access.
     /// </summary>
     DestinationDirectoryNotWritable,
@@ -44,7 +45,7 @@ public enum BackupOutcome
     DestinationFileNotWritable,
 
     /// <summary>
-    /// The database being backed up could not be read — it is corrupt, truncated, or not a database at
+    /// The database being backed up could not be read: it is corrupt, truncated, or not a database at
     /// all. No backup of this file is possible by any means, which makes it the one variant whose
     /// remedy is not "fix the destination".
     /// </summary>

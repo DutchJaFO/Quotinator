@@ -319,6 +319,16 @@ public partial class NotificationTable
         _                                                     => nameof(Quotinator.Api.I18nText.UI.NotificationsRunActionButton),
     };
 
+    /// <summary>
+    /// Whether <paramref name="option"/> is offered with the backup caution (#348): it takes a backup, and the
+    /// backups folder is already at its quota, so that backup runs inside the reserve and may reach the
+    /// ceiling while it is taken.
+    /// </summary>
+    /// <param name="option">The option offered.</param>
+    /// <param name="availability">The volatile state read once for this render.</param>
+    internal static bool CautionsTheBackup(NotificationActionOption option, NotificationActionAvailability availability) =>
+        availability.BackupCaution && NotificationActionOptions.TakesABackup(option);
+
     /// <summary>Whether running <paramref name="option"/> first asks the user's permission (#348).</summary>
     /// <param name="option">The option the user chose.</param>
     internal static bool AsksPermission(NotificationActionOption option) => option is NotificationActionOption.ReseedWithoutBackup;
@@ -333,11 +343,16 @@ public partial class NotificationTable
 
     /// <summary>
     /// The Knowledgebase entry a row links to, or <see langword="null"/> when it has none (#348). A
-    /// backup refusal links the entry explaining why the options it does not offer are blocked.
+    /// backup refusal links the entry explaining why the options it does not offer are blocked; the quota
+    /// warning links the one explaining the reserve and how to clear it.
     /// </summary>
     /// <param name="notification">The row being rendered.</param>
-    internal static string? KnowledgebaseLinkFor(NotificationEntity notification) =>
-        notification.MetadataKind.Parsed is NotificationMetadataKind.BackupRefused ? KnowledgebaseLinks.NoBackupCouldBeTaken : null;
+    internal static string? KnowledgebaseLinkFor(NotificationEntity notification) => notification.MetadataKind.Parsed switch
+    {
+        NotificationMetadataKind.BackupRefused      => KnowledgebaseLinks.NoBackupCouldBeTaken,
+        NotificationMetadataKind.BackupQuotaReached => KnowledgebaseLinks.BackupsHaveReachedTheirQuota,
+        _                                           => null,
+    };
 
     /// <summary>The class the body cell carries, and the stylesheet targets. #308.</summary>
     internal const string BodyCellClass = "notification-body";
@@ -481,6 +496,7 @@ public partial class NotificationTable
         NotificationResolution.TookIncoming => Text.NotificationResolutionTookIncoming,
         NotificationResolution.Reseeded     => Text.NotificationResolutionReseeded,
         NotificationResolution.Reset        => Text.NotificationResolutionReset,
+        NotificationResolution.UnderQuota   => Text.NotificationResolutionUnderQuota,
         _ => resolution.ToString(),
     };
 
@@ -519,6 +535,16 @@ public partial class NotificationTable
 
     private IReadOnlyList<NotificationActionOption> Options(NotificationEntity notification) =>
         OptionButtons(ActionExecutor, notification, Availability);
+
+    // #348: whether any option the row's action offers is cautioned. Asked of every trigger, not only a
+    // reseed's option buttons, since a Reset takes a backup too and is offered as the row's single action.
+    private bool CautionsTheRow(NotificationEntity notification) =>
+        notification.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger
+        && ActionExecutor.AvailableOptions(
+                trigger,
+                NotificationMetadataKinds.TryDeserialize(notification.MetadataKind.Parsed, notification.Metadata),
+                Availability)
+            .Any(option => CautionsTheBackup(option, Availability));
 
     private string OptionLabel(NotificationActionOption option) => OptionLabelKeyFor(option) switch
     {

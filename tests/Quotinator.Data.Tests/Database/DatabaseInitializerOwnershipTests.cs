@@ -842,6 +842,85 @@ public class DatabaseInitializerOwnershipTests
         Assert.AreEqual(1, await InsertNotificationOfKindAsync(temp.DbPath, kind));
     }
 
+    /// <summary>Every dismiss trigger the application can write, for the two storage tests below.</summary>
+    public static IEnumerable<object[]> NotificationDismissTriggers =>
+        Enum.GetNames<Quotinator.Data.Enums.NotificationDismissTrigger>().Select(trigger => new object[] { trigger });
+
+    /// <summary>
+    /// #348: each dismiss trigger is accepted by a fresh database's baseline, enumerated from the enum for
+    /// the same reason the kinds are.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(NotificationDismissTriggers))]
+    public async Task NotificationDismissTrigger_IsAcceptedByTheBaseline(string trigger)
+    {
+        using TempDatabase temp = new([]);
+        await CreateBareInitializer(temp.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" }).InitialiseAsync();
+
+        Assert.AreEqual(1, await InsertNotificationWithAsync(temp.DbPath, "DismissTriggerKey", trigger));
+    }
+
+    /// <summary>#348: the same, for a database that reached the current schema one migration at a time.</summary>
+    [TestMethod]
+    [DynamicData(nameof(NotificationDismissTriggers))]
+    public async Task NotificationDismissTrigger_IsAcceptedByTheIncrementalReplay(string trigger)
+    {
+        using TempDatabase temp = new([]);
+        await CreateBareInitializer(temp.DbPath, []).InitialiseForTestingAsync(forceIncremental: true);
+
+        Assert.AreEqual(1, await InsertNotificationWithAsync(temp.DbPath, "DismissTriggerKey", trigger));
+    }
+
+    /// <summary>Every resolution the application can record, for the two storage tests below.</summary>
+    public static IEnumerable<object[]> NotificationResolutions =>
+        Enum.GetNames<Quotinator.Data.Enums.NotificationResolution>().Select(resolution => new object[] { resolution });
+
+    /// <summary>
+    /// #348: each resolution is accepted by a fresh database's baseline. The hand-written list above
+    /// covered the four members of its day; this one cannot fall behind the enum.
+    /// </summary>
+    [TestMethod]
+    [DynamicData(nameof(NotificationResolutions))]
+    public async Task NotificationResolution_IsAcceptedByTheBaseline(string resolution)
+    {
+        using TempDatabase temp = new([]);
+        await CreateBareInitializer(temp.DbPath, [], baseline: new SchemaBaseline { Sql = "SELECT 1;" }).InitialiseAsync();
+
+        Assert.AreEqual(1, await InsertNotificationWithAsync(temp.DbPath, "Resolution", resolution));
+    }
+
+    /// <summary>#348: the same, for a database that reached the current schema one migration at a time.</summary>
+    [TestMethod]
+    [DynamicData(nameof(NotificationResolutions))]
+    public async Task NotificationResolution_IsAcceptedByTheIncrementalReplay(string resolution)
+    {
+        using TempDatabase temp = new([]);
+        await CreateBareInitializer(temp.DbPath, []).InitialiseForTestingAsync(forceIncremental: true);
+
+        Assert.AreEqual(1, await InsertNotificationWithAsync(temp.DbPath, "Resolution", resolution));
+    }
+
+    /// <summary>
+    /// The row count an insert setting <paramref name="column"/> reports, or 0 when its CHECK rejects the
+    /// value. The column name is one of this class's own constants, never input.
+    /// </summary>
+    private async Task<int> InsertNotificationWithAsync(string dbPath, string column, string value)
+    {
+        using SqliteConnection conn = new($"Data Source={dbPath}");
+        await conn.OpenAsync(TestContext.CancellationToken);
+        try
+        {
+            return await conn.ExecuteAsync(
+                $"INSERT INTO System_Notification (Id, Type, Body, {column}, DateCreated) " +
+                "VALUES (@id, 'Information', 'x', @value, '2026-09-27 00:00:00');",
+                new { id = Guid.NewGuid().ToString(), value });
+        }
+        catch (SqliteException)
+        {
+            return 0;
+        }
+    }
+
     /// <summary>
     /// The row count the insert reports, or 0 when the CHECK rejects it: a rejection reads as a failed
     /// assertion naming the kind, rather than as an exception the test did not expect.

@@ -30,6 +30,7 @@ public static class NotificationMetadataKinds
         [NotificationMetadataKind.ReseedFileApplied]      = typeof(ReseedFileAppliedMetadataDto),
         [NotificationMetadataKind.ImportReviewPending]    = typeof(ImportReviewPendingMetadataDto),
         [NotificationMetadataKind.BackupRefused]          = typeof(BackupRefusedMetadataDto),
+        [NotificationMetadataKind.BackupQuotaReached]     = typeof(BackupQuotaReachedMetadataDto),
     };
 
     // A null-valued property states nothing and leaves the reader to decide what it was supposed to

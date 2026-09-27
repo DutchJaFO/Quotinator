@@ -53,6 +53,7 @@ namespace Quotinator.Core.Database;
 /// <param name="versionService">Names the running application and version, for the row <paramref name="appVersionTracker"/> records when none exists yet (#302).</param>
 /// <param name="diskSpaceProvider">Reports real available disk space for the backup pre-flight check (#277).</param>
 /// <param name="baseline">Optional consolidated DDL for Quotinator.Core's own schema, used to create a genuinely fresh database in one step instead of replaying <paramref name="migrations"/>. When omitted, a fresh database always takes the full incremental path.</param>
+/// <param name="conditionChecks">Re-checks the notifications whose condition a Reset can change (#348); none when omitted.</param>
 public sealed class QuotinatorDatabaseInitializer(
     IDbConnectionFactory factory,
     DatabaseOptions options,
@@ -78,7 +79,8 @@ public sealed class QuotinatorDatabaseInitializer(
     IAppVersionTracker appVersionTracker,
     IVersionService versionService,
     IDiskSpaceProvider diskSpaceProvider,
-    SchemaBaseline? baseline = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, diskSpaceProvider, baseline)
+    SchemaBaseline? baseline = null,
+    NotificationConditionChecks? conditionChecks = null) : DatabaseInitializer(factory, options, migrations, auditWriter, callerContext, logger, diskSpaceProvider, baseline)
 {
     private readonly IReadOnlyList<SeedBatch> _batches = batches;
     private readonly IImportBatchRepository _importBatches = importBatches;
@@ -114,6 +116,16 @@ public sealed class QuotinatorDatabaseInitializer(
         await ResolveReseedIfContentLoadedAsync(connection, quotesBeforeSeeding);
         await RecommendReseedIfSourceContentChangedAsync(resolution, quotesBeforeSeeding);
         await LogDatabaseStatsAsync(connection);
+    }
+
+    /// <summary>
+    /// #348: a Reset takes a backup and rebuilds every table, the notifications among them, so whatever
+    /// their conditions say is re-checked from scratch once it has completed.
+    /// </summary>
+    protected override async Task OnResetCompletedAsync()
+    {
+        if (conditionChecks is not null)
+            await conditionChecks.RunAsync();
     }
 
     /// <summary>

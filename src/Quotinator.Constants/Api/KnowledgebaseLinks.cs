@@ -15,4 +15,7 @@ public static class KnowledgebaseLinks
 
     /// <summary>Why no backup could be taken, which options that blocks, and how to resolve each obstacle.</summary>
     public const string NoBackupCouldBeTaken = Base + "no-backup-could-be-taken.md";
+
+    /// <summary>What the backup quota warning means, why a backup is still taken past it, and how to clear it.</summary>
+    public const string BackupsHaveReachedTheirQuota = Base + "backups-have-reached-their-quota.md";
 }

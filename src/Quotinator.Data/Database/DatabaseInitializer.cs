@@ -155,6 +155,9 @@ public class DatabaseInitializer(
         // stored row is rewritten to match rather than announced a second time. Data only: no schema
         // change, so the baseline is unaffected.
         new SchemaMigration { Version = 24, Sql = NotificationAnnouncementRewordMigrations.RewordOperationIdRename },
+        // #348: the backup quota warning, a new kind, dismiss trigger and resolution. One rebuild widens
+        // all three CHECKs, since they are on the same table.
+        new SchemaMigration { Version = 25, Sql = NotificationBackupQuotaMigrations.WidenForBackupQuotaWarning },
     ];
 
     // Data's own baseline fragment: creates every Data-owned table directly under its final,
@@ -346,7 +349,7 @@ public class DatabaseInitializer(
             IsDismissed       INTEGER NOT NULL DEFAULT 0,
             DismissedAt       TEXT,
             DismissTriggerKey TEXT
-                              CHECK (DismissTriggerKey IS NULL OR DismissTriggerKey IN ('DatabaseReset', 'Reseed', 'ImportReviewResolved')),
+                              CHECK (DismissTriggerKey IS NULL OR DismissTriggerKey IN ('DatabaseReset', 'Reseed', 'ImportReviewResolved', 'BackupQuotaRestored')),
             DateCreated       TEXT    NOT NULL,
             DateModified      TEXT,
             DateDeleted       TEXT,
@@ -354,13 +357,13 @@ public class DatabaseInitializer(
             Title             TEXT,
             Metadata          TEXT,
             MetadataKind      TEXT
-                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused')),
+                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused', 'BackupQuotaReached')),
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
             OriginalLanguage  TEXT    NOT NULL DEFAULT 'en',
             DismissReason     TEXT
                               CHECK (DismissReason IS NULL OR DismissReason IN ('Dismissed', 'Resolved', 'Obsolete')),
             Resolution        TEXT
-                              CHECK (Resolution IS NULL OR Resolution IN ('KeptExisting', 'TookIncoming', 'Reseeded', 'Reset'))
+                              CHECK (Resolution IS NULL OR Resolution IN ('KeptExisting', 'TookIncoming', 'Reseeded', 'Reset', 'UnderQuota'))
         );
         CREATE INDEX IF NOT EXISTS IX_System_Notification_Active ON System_Notification (IsDismissed, IsDeleted, ExpiresAt);
         CREATE INDEX IF NOT EXISTS IX_System_Notification_DismissTriggerKey ON System_Notification (DismissTriggerKey);
@@ -667,8 +670,16 @@ public class DatabaseInitializer(
             return DatabaseOperationResult.RefusedForBackup(obstacle, BackupGuardedStep.Reset);
         }
 
+        await OnResetCompletedAsync();
         return DatabaseOperationResult.Success(backupSkippedByOverride: readiness != BackupOutcome.Succeeded);
     }
+
+    /// <summary>
+    /// Called once a Reset has completed, after the rebuild and before its result is returned (#348): the
+    /// one point every Reset passes through, whoever asked for it. Override to re-check what a Reset
+    /// changes; the base does nothing.
+    /// </summary>
+    protected virtual Task OnResetCompletedAsync() => Task.CompletedTask;
 
     /// <inheritdoc/>
     public async Task<DatabaseBackupResult> CreateBackupAsync()
@@ -709,8 +720,6 @@ public class DatabaseInitializer(
     {
         long existingBytes = Math.Max(0L, BackupStorageBudget.UsedBytes(_options.BackupsPath) - bytesFreedFirst);
 
-        WarnIfQuotaPercentOutOfRange();
-
         // The same comparison the attempt makes, so the two cannot disagree. Only the ceiling refuses:
         // between the quota and the ceiling a backup is still taken and a warning raised, which is what
         // the reserve is for (#348, developer 2026-09-26). The estimate is only an approximation, since
@@ -743,20 +752,6 @@ public class DatabaseInitializer(
         return BackupOutcome.Succeeded;
     }
 
-    // An out-of-range quota is a configuration error, and it is neither clamped silently nor allowed to
-    // stop the application: a typo in one tuning value must not breach the never-crash contract. It is
-    // reported loudly and the default is used instead, which is a different thing from quietly
-    // rounding it into range, where the operator would never learn their setting was ignored.
-    //
-    // #349: the arithmetic itself moved to BackupStorageBudget so the status endpoint publishes the
-    // same numbers this class refuses on. What stays here is the reporting: a shared pure function is
-    // the wrong place to decide that something deserves a log line.
-    private void WarnIfQuotaPercentOutOfRange()
-    {
-        BackupStorageBudget.EffectiveQuotaPercent(_options, out bool outOfRange);
-        if (outOfRange)
-            Logger.LogBackupQuotaPercentOutOfRange(_options.BackupQuotaPercent, DatabaseOptions.DefaultBackupQuotaPercent);
-    }
 
     /// <summary>
     /// Called by <see cref="ResetAsync"/>. Override to replace the default no-op with a
@@ -909,12 +904,12 @@ public class DatabaseInitializer(
     // hit. Attribution is structural, not message-parsing: each step is attempted on its own, so the
     // failing step names the fault. By the time BackupDatabase runs the destination is already proven
     // creatable and openable, which is what makes a failure there the source's.
-    // #349: the two limits here answer different questions and are deliberately not the same number.
-    // This check enforces the absolute ceiling, at the point where the bytes are actually written:
-    // "never exceeded", per MaxBackupStorageGb's own definition. The operating quota is policy about
-    // what routine operation may consume, and it is enforced by CheckBackupReadiness, which every
-    // caller that can afford to stop consults first. Only the arithmetic is now shared, so neither
-    // side can drift from the other's idea of what a gigabyte or a percentage means.
+    // #349: the two limits answer different questions and are deliberately not the same number. This
+    // check enforces the absolute ceiling, at the point where the bytes are actually written: "never
+    // exceeded", per MaxBackupStorageGb's own definition. CheckBackupReadiness makes the same comparison
+    // beforehand, for every caller that can afford to stop. The operating quota refuses nothing (#348):
+    // past it a backup is still taken, and BackupQuotaCheck raises the warning. Only the arithmetic is
+    // shared, so no side can drift from another's idea of what a gigabyte or a percentage means.
     // What a backup is expected to add: the database file's length. An approximation, since SQLite
     // copies pages, and one the readiness check and the attempt share rather than each computing.
     private long EstimatedBackupBytes() => File.Exists(_options.DbPath) ? new FileInfo(_options.DbPath).Length : 0L;

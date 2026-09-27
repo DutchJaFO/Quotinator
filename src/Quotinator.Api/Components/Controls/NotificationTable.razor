@@ -152,6 +152,10 @@
                                 {
                                     <div class="form-text">@Text.NotificationsConfirmActionWarning</div>
                                 }
+                                @if (CautionsTheBackup(confirming.Option, Availability))
+                                {
+                                    <div class="form-text text-warning-emphasis">@Text.NotificationsBackupCaution</div>
+                                }
                                 <button type="button" class="btn btn-sm btn-danger me-1" @onclick="() => ConfirmOptionAsync(confirming)">@Text.NotificationsConfirmActionButton</button>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => ConfirmingOption = null">@Text.NotificationsCancelActionButton</button>
                             }
@@ -161,6 +165,12 @@
                                 {
                                     <button type="button" class="btn btn-sm btn-outline-danger me-1 mb-1"
                                             @onclick="() => ConfirmingOption = (notification.Id, option)">@OptionLabel(option)</button>
+                                }
+                                @if (CautionsTheRow(notification))
+                                {
+                                    @* #348: said before an option is chosen, not only after, so the user
+                                       weighs it while choosing between a backup and none. *@
+                                    <div class="form-text text-warning-emphasis">@Text.NotificationsBackupCaution</div>
                                 }
                             }
                         }
@@ -185,12 +195,21 @@
                                 }
                                 <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelAction">@Text.NotificationsCancelActionButton</button>
                                 <div class="form-text">@Text.NotificationsConfirmActionWarning</div>
+                                @if (CautionsTheRow(notification))
+                                {
+                                    <div class="form-text text-warning-emphasis">@Text.NotificationsBackupCaution</div>
+                                }
                             }
                             else
                             {
                                 @* #308: named for what it does. A generic "Run" says nothing, and for an
                                    irreversible action that is exactly what the button has to say. *@
                                 <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmingActionForId = notification.Id">@ActionLabel(notification)</button>
+                                @if (CautionsTheRow(notification))
+                                {
+                                    @* #348: a Reset takes a backup too. *@
+                                    <div class="form-text text-warning-emphasis">@Text.NotificationsBackupCaution</div>
+                                }
                                 @if (OffersResolutionChoice(notification))
                                 {
                                     @* #303: the coarse options above settle a whole batch one way. The page is

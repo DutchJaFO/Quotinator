@@ -131,4 +131,13 @@ public static class NotificationMessageKeys
     /// links to, and a second copy here would drift from it.
     /// </summary>
     public const string BackupRefusedContentLoadBody = "NotificationBackupRefusedContentLoadBody";
+
+    /// <summary>Title for the warning that the backups folder has reached its operating quota (#348).</summary>
+    public const string BackupQuotaReachedTitle = "NotificationBackupQuotaReachedTitle";
+
+    /// <summary>
+    /// Body for the same warning. Receives the bytes in use, the quota and the ceiling as <c>{0}</c>,
+    /// <c>{1}</c> and <c>{2}</c>, each already formatted as a size for reading.
+    /// </summary>
+    public const string BackupQuotaReachedBody = "NotificationBackupQuotaReachedBody";
 }

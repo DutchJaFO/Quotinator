@@ -91,4 +91,11 @@ public sealed class NotificationResponse
     /// is listed only while it can actually run, so an empty list means no action is offered.
     /// </summary>
     public IReadOnlyList<string> AvailableActions { get; init; } = [];
+
+    /// <summary>
+    /// Whether one of <see cref="AvailableActions"/> takes a backup while the backups folder is already at
+    /// its quota (#348): that backup runs inside the reserve and may reach the ceiling while it is taken, so
+    /// a client offering it says so, as the notifications page does.
+    /// </summary>
+    public bool BackupCaution { get; init; }
 }

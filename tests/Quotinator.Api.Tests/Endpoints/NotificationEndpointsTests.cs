@@ -99,6 +99,42 @@ public class NotificationEndpointsTests
             [.. doc.RootElement.GetProperty("items")[0].GetProperty("availableActions").EnumerateArray().Select(e => e.GetString())]);
     }
 
+    /// <summary>#348: a row offering a backup while the folder is at its quota says so, as the page does.</summary>
+    [TestMethod]
+    public async Task GetNotifications_AtTheQuota_CautionsARowOfferingABackup()
+    {
+        Assert.IsTrue(await BackupCautionOfTheOnlyRowAsync([NotificationActionOption.BackUpThenReseed], backupCaution: true));
+    }
+
+    [TestMethod]
+    public async Task GetNotifications_BelowTheQuota_DoesNotCautionTheRow()
+    {
+        Assert.IsFalse(await BackupCautionOfTheOnlyRowAsync([NotificationActionOption.BackUpThenReseed], backupCaution: false));
+    }
+
+    /// <summary>A reseed without a backup takes none, so there is nothing to caution about.</summary>
+    [TestMethod]
+    public async Task GetNotifications_AtTheQuota_DoesNotCautionARowOfferingNoBackup()
+    {
+        Assert.IsFalse(await BackupCautionOfTheOnlyRowAsync([NotificationActionOption.ReseedWithoutBackup], backupCaution: true));
+    }
+
+    private async Task<bool> BackupCautionOfTheOnlyRowAsync(IReadOnlyList<NotificationActionOption> options, bool backupCaution)
+    {
+        FakeNotificationReader reader = new();
+        reader.Seed(new NotificationEntity
+        {
+            Type              = new SafeValue<NotificationType?>(nameof(NotificationType.ActionRequired), NotificationType.ActionRequired),
+            Body              = "reseed me",
+            DismissTriggerKey = new SafeValue<NotificationDismissTrigger?>(nameof(NotificationDismissTrigger.Reseed), NotificationDismissTrigger.Reseed),
+        });
+
+        using WebApplicationFactory<Program> factory = CreateFactory(notificationReader: reader, actionExecutor: new OfferingExecutor(options, backupCaution));
+        JsonDocument doc = JsonDocument.Parse(await factory.CreateClient().GetStringAsync("/api/v1/notifications", TestContext.CancellationToken));
+
+        return doc.RootElement.GetProperty("items")[0].GetProperty("backupCaution").GetBoolean();
+    }
+
     /// <summary>A dismissed notification can no longer be acted on, whatever its action could otherwise do.</summary>
     [TestMethod]
     public async Task GetNotifications_DismissedNotification_ListsNoOptions()
@@ -120,12 +156,12 @@ public class NotificationEndpointsTests
     }
 
     /// <summary>Answers every notification's options with a fixed list, so the endpoint's own mapping is what a test observes.</summary>
-    private sealed class OfferingExecutor(IReadOnlyList<NotificationActionOption> options) : INotificationActionExecutor
+    private sealed class OfferingExecutor(IReadOnlyList<NotificationActionOption> options, bool backupCaution = false) : INotificationActionExecutor
     {
         public bool CanExecute(NotificationDismissTrigger trigger) => true;
         public bool CanExecute(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability) => options.Count > 0;
         public IReadOnlyList<NotificationActionOption> AvailableOptions(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata, NotificationActionAvailability availability) => options;
-        public Task<NotificationActionAvailability> GetAvailabilityAsync() => Task.FromResult(new NotificationActionAvailability([]));
+        public Task<NotificationActionAvailability> GetAvailabilityAsync() => Task.FromResult(new NotificationActionAvailability([], backupCaution: backupCaution));
         public Task<NotificationActionResult> ExecuteAsync(NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null, FieldResolutionChoice? choice = null, NotificationActionOption? option = null) =>
             throw new NotSupportedException("Listing never runs an action.");
     }

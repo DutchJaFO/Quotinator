@@ -73,9 +73,12 @@ obstacle allows it.
 
 ### `BudgetExceeded`
 
-The backups folder has reached its storage quota (by default 90% of `Quotinator:MaxBackupStorageGb`).
+The new backup would take the backups folder past its ceiling, `Quotinator:MaxBackupStorageGb`. The
+operating quota below the ceiling (by default 90% of it) refuses nothing: past the quota a backup is
+still taken, from the reserve, and a warning raised instead. See
+[Backups have reached their quota](backups-have-reached-their-quota.md).
 
-- **Blocked:** *Back up, then reseed*, because a new backup would exceed the quota.
+- **Blocked:** *Back up, then reseed*, because a new backup would pass the ceiling.
 - **Offered:** *Remove the oldest backup, then back up and reseed*, when removing your oldest backup
   frees enough; *Reseed without a backup*.
 - **Resolve:** remove old backups, from the notification's option or with

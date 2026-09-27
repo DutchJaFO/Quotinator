@@ -3,11 +3,11 @@ using Quotinator.Data.Entities;
 namespace Quotinator.Data.Enums;
 
 /// <summary>
-/// Identifies which action, if performed, supersedes a <see cref="NotificationEntity"/> — e.g. an
+/// Identifies which action, if performed, supersedes a <see cref="NotificationEntity"/>: e.g. an
 /// <see cref="NotificationType.ActionRequired"/> notification recommending a database Reset carries
 /// <see cref="DatabaseReset"/>, so <c>POST /admin/database/reset</c> can dismiss it automatically once
 /// that action actually completes (#278). Per ADR 008, backed by a matching (nullable-aware) SQL CHECK
-/// constraint. New members are added here — plus their own migration extending the CHECK — only as
+/// constraint. New members are added here, with their own migration extending the CHECK, only as
 /// concrete producer integrations need them, not speculatively.
 /// </summary>
 public enum NotificationDismissTrigger
@@ -29,7 +29,7 @@ public enum NotificationDismissTrigger
     Reseed,
 
     /// <summary>
-    /// Superseded by the staged import actions it reported being resolved — decided and applied, or
+    /// Superseded by the staged import actions it reported being resolved: decided and applied, or
     /// discarded (#303).
     /// <para>
     /// Unlike <see cref="Reseed"/>, this trigger classifies *what kind* of resolution supersedes the
@@ -38,5 +38,12 @@ public enum NotificationDismissTrigger
     /// carried in the notification's own payload.
     /// </para>
     /// </summary>
-    ImportReviewResolved
+    ImportReviewResolved,
+
+    /// <summary>
+    /// Superseded by the backups folder coming back under its operating quota (#348), checked after
+    /// every deletion, at every completed startup and on request. A recurring condition, like
+    /// <see cref="Reseed"/>: its producer raises it once while unresolved.
+    /// </summary>
+    BackupQuotaRestored
 }

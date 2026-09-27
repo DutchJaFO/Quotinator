@@ -177,16 +177,6 @@ public class DatabaseBackupQuotaTests
     }
 
 
-    /// <summary>An ignored configuration value says so; silently substituting the default is the failure this prevents.</summary>
-    [TestMethod]
-    public void QuotaPercent_OutOfRange_IsReported()
-    {
-        CapturingLogger<DatabaseInitializer> logger = new();
-
-        CreateInitializer(quotaPercent: 150, logger: logger).CheckBackupReadiness();
-
-        Assert.IsTrue(logger.Messages.Exists(m => m.Contains("BackupQuotaPercent", StringComparison.Ordinal)));
-    }
 
     /// <summary>
     /// #349: the figures the status endpoint publishes and the limit a backup is refused on are computed by

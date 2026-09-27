@@ -295,7 +295,8 @@ public class NotificationActionExecutorTests
     private static NotificationActionExecutor CreateExecutor(
         FakeImportBatchRepository? importBatches = null, SpyDatabaseInitializer? dbInitializer = null, IDatabaseBackupReader? backupReader = null,
         DatabaseHealthState? health = null, FakeNotificationWriter? notificationWriter = null, RecordingAuditEntryWriter? auditWriter = null,
-        ILogger<NotificationActionExecutor>? logger = null, string? backupsFolder = null, IDatabaseBackupWriter? backupWriter = null)
+        ILogger<NotificationActionExecutor>? logger = null, string? backupsFolder = null, IDatabaseBackupWriter? backupWriter = null,
+        NotificationConditionChecks? conditionChecks = null)
     {
         SpyDatabaseInitializer db = dbInitializer ?? new SpyDatabaseInitializer();
         IAuditEntryWriter audit = (IAuditEntryWriter?)auditWriter ?? NoOpAuditEntryWriter.Instance;
@@ -304,19 +305,21 @@ public class NotificationActionExecutorTests
             new SpyAppVersionTracker(), new FakeVersionService(), logger ?? NullLogger<NotificationActionExecutor>.Instance,
             new FakeImportActionService(), importBatches ?? new FakeImportBatchRepository(),
             backupReader ?? (backupsFolder is null ? NoBackups() : BackupsIn(backupsFolder)),
-            BackupsFor(db, audit, backupsFolder, backupWriter), audit, NoOpCallerContext.Instance);
+            BackupsFor(db, audit, backupsFolder, backupWriter, conditionChecks), audit, NoOpCallerContext.Instance);
     }
 
     /// <summary>The audited take-and-remove, over the given initializer and, where given, a real backups folder.</summary>
     private static BackupOperations BackupsFor(
-        SpyDatabaseInitializer db, IAuditEntryWriter? auditWriter = null, string? backupsFolder = null, IDatabaseBackupWriter? backupWriter = null) => new(
+        SpyDatabaseInitializer db, IAuditEntryWriter? auditWriter = null, string? backupsFolder = null, IDatabaseBackupWriter? backupWriter = null,
+        NotificationConditionChecks? conditionChecks = null) => new(
         db,
         backupWriter ?? new DatabaseBackupWriter(new DatabaseOptions
         {
             DbPath      = "unused.db",
             BackupsPath = backupsFolder ?? Path.Combine(Path.GetTempPath(), "quotinator-348-none-" + Guid.NewGuid().ToString("N")),
         }),
-        auditWriter ?? NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<BackupOperations>.Instance);
+        auditWriter ?? NoOpAuditEntryWriter.Instance, NoOpCallerContext.Instance, NullLogger<BackupOperations>.Instance,
+        conditionChecks ?? new NotificationConditionChecks([]));
 
     /// <summary>
     /// #369: an import-review alert outlives its batch, and once the batch is gone Keep and Take have
@@ -524,6 +527,38 @@ public class NotificationActionExecutorTests
         NotificationActionAvailability availability = await CreateExecutor(backupReader: NoBackups()).GetAvailabilityAsync();
 
         Assert.IsFalse(availability.BackupCaution);
+    }
+
+    /// <summary>
+    /// #348: the backup a reseed option takes changes the backups folder like any other, so the condition
+    /// checks run after it, through the same audited path the Backups API uses.
+    /// </summary>
+    [TestMethod]
+    public async Task Reseed_BackUpThenReseed_RunsTheConditionChecks()
+    {
+        RecordingConditionCheck check = new();
+
+        await CreateExecutor(conditionChecks: new NotificationConditionChecks([check]))
+            .ExecuteAsync(NotificationDismissTrigger.Reseed, option: NotificationActionOption.BackUpThenReseed);
+
+        Assert.IsTrue(check.Ran);
+    }
+
+    /// <summary>Records that it ran; changes nothing.</summary>
+    private sealed class RecordingConditionCheck : INotificationConditionCheck
+    {
+        /// <summary>Whether <see cref="CheckAsync"/> was called.</summary>
+        public bool Ran { get; private set; }
+
+        /// <inheritdoc/>
+        public NotificationMetadataKind Kind => NotificationMetadataKind.BackupQuotaReached;
+
+        /// <inheritdoc/>
+        public Task<NotificationConditionOutcome> CheckAsync()
+        {
+            Ran = true;
+            return Task.FromResult(NotificationConditionOutcome.Unchanged);
+        }
     }
 
     // ── #348: the reseed action backs up first ──────────────────────────────────────────────────────

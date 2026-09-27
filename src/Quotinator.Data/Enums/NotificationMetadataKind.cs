@@ -75,5 +75,13 @@ public enum NotificationMetadataKind
     /// the obstacle and the step that refused. Resolved by content arriving, so it carries the
     /// <c>Reseed</c> dismiss trigger.
     /// </summary>
-    BackupRefused
+    BackupRefused,
+
+    /// <summary>
+    /// The backups folder has reached its operating quota (#348): a backup was still taken, inside the
+    /// reserve, and the payload carries the bytes in use against the quota and the ceiling. Resolved by
+    /// the folder coming back under the quota, so it carries the <c>BackupQuotaRestored</c> dismiss
+    /// trigger.
+    /// </summary>
+    BackupQuotaReached
 }

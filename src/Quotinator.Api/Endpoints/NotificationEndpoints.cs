@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Quotinator.Api.Endpoints.Filters;
+using Quotinator.Api.Enums;
 using Quotinator.Api.Endpoints.Shared;
 using Quotinator.Api.Services;
 using Quotinator.Constants.Api;
@@ -29,6 +30,9 @@ namespace Quotinator.Api.Endpoints;
 /// </summary>
 internal static class NotificationEndpoints
 {
+    // Held as a const, per CLAUDE.md's endpoint naming rule, so the operation id it publishes is named once.
+    private const string RefreshNotificationsName = "RefreshNotifications";
+
     internal static void MapNotificationEndpoints(this WebApplication app)
     {
         RouteGroupBuilder publicGroup = app.MapGroup(ApiRoutes.Notifications)
@@ -64,7 +68,7 @@ internal static class NotificationEndpoints
             NotificationActionAvailability availability = await actionExecutor.GetAvailabilityAsync();
 
             PagedItems<NotificationResponse> mapped = new(
-                [.. result.Items.Select(n => ToResponse(n, AvailableActions(n, actionExecutor, availability)))],
+                [.. result.Items.Select(n => ToResponse(n, OfferedOptions(n, actionExecutor, availability), availability.BackupCaution))],
                 result.Page, result.PageSize, result.TotalCount);
             return Results.Ok(mapped);
         })
@@ -79,7 +83,34 @@ internal static class NotificationEndpoints
             "application version that wrote it, or `null` where provenance could not be determined. Each item also carries " +
             "`availableActions`: what its action can do right now, lowercase (for example `backupthenreseed`, " +
             "`removeoldestbackupthenreseed`, `reseedwithoutbackup`, `resetdatabase`, `keepexisting`, `takeincoming`). An option " +
-            "is listed only while it can actually run, and a dismissed notification lists none (#348).");
+            "is listed only while it can actually run, and a dismissed notification lists none (#348). `backupCaution` is " +
+            "`true` when the backups folder is at its quota and one of those options takes a backup, which may then " +
+            "reach the ceiling and be refused (#348).");
+
+        // #348: open to every user, not only administrators, and limited by the admin rate-limit policy
+        // like the rest of this group (developer, 2026-09-26).
+        publicGroup.MapPost("/refresh", async (NotificationConditionChecks conditionChecks) =>
+        {
+            IReadOnlyList<NotificationConditionCheckResult> results = await conditionChecks.RunAsync();
+
+            return Results.Ok(new NotificationRefreshResponse
+            {
+                Checks = [.. results.Select(result => new NotificationConditionCheckDto
+                {
+                    Kind    = result.Kind.ToString().ToLowerInvariant(),
+                    Outcome = result.Outcome.ToString().ToLowerInvariant(),
+                })],
+            });
+        })
+        .WithName(RefreshNotificationsName)
+        .WithSummary("Re-check every notification whose condition can change")
+        .Produces<NotificationRefreshResponse>(StatusCodes.Status200OK)
+        .WithDescription(
+            "Re-checks every notification whose condition can change while the application runs, and raises or " +
+            "resolves each to match, without a restart (#348): for example the backup quota warning clearing " +
+            "after backups were removed outside the application. Returns what each check did, as `checks`: its " +
+            "`kind` and its `outcome` (`raised`, `cleared` or `unchanged`). The same checks also run at startup, " +
+            "after a Reset, and after a backup is taken or removed. Needs no admin key.");
 
         adminGroup.MapPost("/{id}/dismiss", async (
             string id,
@@ -109,7 +140,8 @@ internal static class NotificationEndpoints
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
     }
 
-    private static NotificationResponse ToResponse(NotificationEntity entity, IReadOnlyList<string>? availableActions = null) => new()
+    private static NotificationResponse ToResponse(
+        NotificationEntity entity, IReadOnlyList<NotificationActionOption>? offeredOptions = null, bool backupCaution = false) => new()
     {
         Id                = entity.Id.ToCanonicalId(),
         Type              = entity.Type.Parsed?.ToString().ToLowerInvariant() ?? entity.Type.Raw,
@@ -131,24 +163,24 @@ internal static class NotificationEndpoints
         // resolved.
         Language          = entity.EffectiveLanguage ?? entity.OriginalLanguage,
         OriginalLanguage  = entity.OriginalLanguage,
-        AvailableActions  = availableActions ?? [],
+        AvailableActions  = [.. (offeredOptions ?? []).Select(option => option.ToString().ToLowerInvariant())],
+        // #348: at the quota, a row offering an option that takes a backup says so, the way the page does.
+        BackupCaution     = backupCaution && (offeredOptions ?? []).Any(NotificationActionOptions.TakesABackup),
         IsTranslated      = !string.Equals(
                                 entity.EffectiveLanguage ?? entity.OriginalLanguage,
                                 entity.OriginalLanguage,
                                 StringComparison.OrdinalIgnoreCase),
     };
 
-    // #348: what the row's action can do right now, lowercase like every other enum this endpoint
-    // publishes. The same answer the notifications page renders its controls from, including that a
+    // #348: what the row's action can do right now. The same answer the notifications page renders its controls from, including that a
     // dismissed row offers nothing.
-    private static IReadOnlyList<string> AvailableActions(
+    private static IReadOnlyList<NotificationActionOption> OfferedOptions(
         NotificationEntity entity, INotificationActionExecutor executor, NotificationActionAvailability availability) =>
         !entity.IsDismissed && entity.DismissTriggerKey.Parsed is NotificationDismissTrigger trigger
             ? [.. executor.AvailableOptions(
                     trigger,
                     NotificationMetadataKinds.TryDeserialize(entity.MetadataKind.Parsed, entity.Metadata),
-                    availability)
-                .Select(option => option.ToString().ToLowerInvariant())]
+                    availability)]
             : [];
 
     // ?lang= selects the notification's *content* language, the way it does for quotes; Accept-Language

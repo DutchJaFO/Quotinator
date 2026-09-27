@@ -21,12 +21,17 @@ namespace Quotinator.Api.Services;
 /// <param name="auditWriter">Records each backup taken or removed.</param>
 /// <param name="callerContext">Names who asked, for the audit entry.</param>
 /// <param name="logger">Logs each outcome under the caller's own tag.</param>
+/// <param name="conditionChecks">
+/// Re-checks the notifications whose condition can change, after each backup taken or removed (#348): the
+/// backup quota warning is raised or cleared by what these two operations do to the backups folder.
+/// </param>
 internal sealed class BackupOperations(
     IDatabaseInitializer databaseInitializer,
     IDatabaseBackupWriter backupWriter,
     IAuditEntryWriter auditWriter,
     ICallerContext callerContext,
-    ILogger<BackupOperations> logger)
+    ILogger<BackupOperations> logger,
+    Quotinator.Data.Notifications.NotificationConditionChecks conditionChecks)
 {
     /// <summary>Takes a backup now, logging the outcome and auditing a success.</summary>
     /// <param name="tag">The caller's <c>[Subsystem - Phase]</c> prefix, so the log names who asked.</param>
@@ -54,6 +59,7 @@ internal sealed class BackupOperations(
             PerformedAt = DateTime.UtcNow,
         });
 
+        await conditionChecks.RunAsync();
         return result;
     }
 
@@ -82,6 +88,7 @@ internal sealed class BackupOperations(
             PerformedAt = DateTime.UtcNow,
         });
 
+        await conditionChecks.RunAsync();
         return outcome;
     }
 }

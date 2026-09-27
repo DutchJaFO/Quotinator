@@ -20,4 +20,5 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [A dialog fills almost the whole window on a tall screen](a-dialog-fills-almost-the-whole-window.md) | No | 1.9.0-alpha onwards |
 | [Quotes come back after a restart, although the database was reset](a-reset-is-undone-by-the-next-restart.md) | No | 1.9.0-alpha onwards |
 | [Content was not loaded, or a migration did not run, because no backup could be taken](no-backup-could-be-taken.md) | Yes, when a migration was refused | 1.9.0-alpha onwards |
+| [Backups have reached their quota](backups-have-reached-their-quota.md) | No | 1.9.0-alpha onwards |
 | [Every database count reads 0 after a startup problem](degraded-startup-shows-every-count-as-zero.md) | No | 1.9.0-alpha onwards |

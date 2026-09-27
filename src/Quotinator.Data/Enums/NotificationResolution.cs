@@ -7,12 +7,12 @@ namespace Quotinator.Data.Enums;
 /// <remarks>
 /// Distinct from <see cref="NotificationDismissReason"/>, which says only *that* a notification stopped
 /// being active. Found in T1: a resolved review alert read `Done` while its body still said "1 changes
-/// need your decision before they can be applied" — the body is frozen at write time, and the
+/// need your decision before they can be applied": the body is frozen at write time, and the
 /// <c>FieldResolutionChoice</c> that settled it was discarded rather than stored, so nothing could say
 /// which way it went.
 /// <para>
 /// Only set when an action carried the notification to completion. A notification the operator simply
-/// dismissed, or one superseded by a reseed, has no resolution — those are
+/// dismissed, or one superseded by a reseed, has no resolution; those are
 /// <see cref="NotificationDismissReason"/>'s business.
 /// </para>
 /// </remarks>
@@ -29,4 +29,7 @@ public enum NotificationResolution
 
     /// <summary>The notification's database-reset action ran to completion (#289).</summary>
     Reset,
+
+    /// <summary>The backups folder came back under its operating quota (#348).</summary>
+    UnderQuota,
 }

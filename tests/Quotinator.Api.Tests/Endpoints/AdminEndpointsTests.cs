@@ -269,7 +269,7 @@ public class AdminEndpointsTests
     {
         JsonElement body = await RefusedResetBodyAsync(new SpyDatabaseInitializer { RefuseWith = BackupOutcome.BudgetExceeded });
 
-        Assert.Contains("quota", body.GetProperty("detail").GetString()!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ceiling", body.GetProperty("detail").GetString()!, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>An error that names no way out is not actionable.</summary>
@@ -420,9 +420,10 @@ public class AdminEndpointsTests
         using WebApplicationFactory<Program> factory = CreateFactory(TestKey, notificationWriter: notificationWriter);
         HttpResponseMessage response = await CreateClientWithKey(factory).PostAsync("/api/v1/admin/database/reset", null, TestContext.CancellationToken);
 
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.HasCount(1, notificationWriter.DismissByTriggerCalls);
-        Assert.AreEqual(Quotinator.Data.Enums.NotificationDismissTrigger.DatabaseReset, notificationWriter.DismissByTriggerCalls[0]);
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "precondition: the reset ran");
+        // Contains rather than exactly one (#348): a Reset now also re-checks the backup quota warning,
+        // which resolves it by its own trigger when the folder is under the quota.
+        Assert.Contains(Quotinator.Data.Enums.NotificationDismissTrigger.DatabaseReset, notificationWriter.DismissByTriggerCalls);
     }
 
     /// <summary>POST /admin/database/reset with no query parameter defaults preserveSchemaVersion to false (#141).</summary>

@@ -451,6 +451,8 @@ public class NotificationTableTests
         [NotificationMetadataKind.ImportReviewPending]    = true,
         // #348: its options and Knowledgebase link are rendered beside the body (step 15), not as a detail table.
         [NotificationMetadataKind.BackupRefused]          = false,
+        // #348: its payload holds the three sizes its body already states, so it opens nothing more.
+        [NotificationMetadataKind.BackupQuotaReached]     = false,
     };
 
     /// <summary>
@@ -747,6 +749,8 @@ public class NotificationTableTests
             """{"releaseState":"NotApplicable","fileName":"a.json","origin":"User","batchId":"b","counts":[{"status":"Pending","count":1}]}""",
         NotificationMetadataKind.BackupRefused =>
             """{"releaseState":"NotApplicable","step":"ContentLoad","obstacle":"BudgetExceeded"}""",
+        NotificationMetadataKind.BackupQuotaReached =>
+            """{"releaseState":"NotApplicable","usedBytes":1020054732,"quotaBytes":966367641,"ceilingBytes":1073741824}""",
         _ => """{"releaseState":"NotApplicable"}""",
     };
 
@@ -1184,6 +1188,35 @@ public class NotificationTableTests
         Assert.IsFalse(NotificationTable.AsksPermission(option));
     }
 
+    /// <summary>
+    /// #348: at the quota, every option that takes a backup is offered with the caution, since that backup
+    /// runs inside the reserve and may reach the ceiling. Reset takes one too, before it rebuilds.
+    /// </summary>
+    [TestMethod]
+    [DataRow(NotificationActionOption.BackUpThenReseed)]
+    [DataRow(NotificationActionOption.RemoveOldestBackupThenReseed)]
+    [DataRow(NotificationActionOption.ResetDatabase)]
+    public void OptionThatTakesABackup_AtTheQuota_IsCautioned(NotificationActionOption option)
+    {
+        Assert.IsTrue(NotificationTable.CautionsTheBackup(option, new NotificationActionAvailability([], backupCaution: true)));
+    }
+
+    [TestMethod]
+    [DataRow(NotificationActionOption.BackUpThenReseed)]
+    [DataRow(NotificationActionOption.RemoveOldestBackupThenReseed)]
+    [DataRow(NotificationActionOption.ResetDatabase)]
+    public void OptionThatTakesABackup_BelowTheQuota_IsNotCautioned(NotificationActionOption option)
+    {
+        Assert.IsFalse(NotificationTable.CautionsTheBackup(option, new NotificationActionAvailability([], backupCaution: false)));
+    }
+
+    /// <summary>A reseed without a backup takes none, so it is never cautioned, even at the quota.</summary>
+    [TestMethod]
+    public void ReseedWithoutBackup_AtTheQuota_IsNotCautioned()
+    {
+        Assert.IsFalse(NotificationTable.CautionsTheBackup(NotificationActionOption.ReseedWithoutBackup, new NotificationActionAvailability([], backupCaution: true)));
+    }
+
     /// <summary>The user is told why there is no backup before agreeing to go without one.</summary>
     [TestMethod]
     public void PermissionText_NamesTheObstacle()
@@ -1197,6 +1230,20 @@ public class NotificationTableTests
     public void BackupRefusedRow_LinksTheKnowledgebaseEntry()
     {
         Assert.AreEqual(KnowledgebaseLinks.NoBackupCouldBeTaken, NotificationTable.KnowledgebaseLinkFor(ReseedRow()));
+    }
+
+    [TestMethod]
+    public void BackupQuotaReachedRow_LinksTheKnowledgebaseEntry()
+    {
+        NotificationEntity row = new()
+        {
+            Type              = new SafeValue<NotificationType?>(nameof(NotificationType.Warning), NotificationType.Warning),
+            DismissTriggerKey = new SafeValue<NotificationDismissTrigger?>(nameof(NotificationDismissTrigger.BackupQuotaRestored), NotificationDismissTrigger.BackupQuotaRestored),
+            MetadataKind      = new SafeValue<NotificationMetadataKind?>(nameof(NotificationMetadataKind.BackupQuotaReached), NotificationMetadataKind.BackupQuotaReached),
+            Metadata          = MetadataFor(NotificationMetadataKind.BackupQuotaReached),
+        };
+
+        Assert.AreEqual(KnowledgebaseLinks.BackupsHaveReachedTheirQuota, NotificationTable.KnowledgebaseLinkFor(row));
     }
 
     /// <summary>A reseed recommended for changed content has nothing blocked to explain.</summary>
