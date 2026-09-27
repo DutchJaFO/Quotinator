@@ -1,32 +1,32 @@
-# A full backup quota is resolvable from inside the application
+# A full backups folder is resolvable from inside the application
 
 **Smoke:** no
 **Environment:** Fresh
-**Traces to:** #349
+**Traces to:** #349, #348
 
 ## Preconditions
 
 A normal seeded run on a writable bind mount. Nothing is sabotaged at the filesystem level until the
-final step: the quota is filled with a real file inside `backups/`, which is the same condition an
+final step: the backups folder is filled to its ceiling with a real file inside `backups/`, which is the same condition an
 installation reaches on its own after enough migrations and resets.
 
 This is the one obstacle of the five that an operator can resolve without leaving the application, and
-until #349 there was no way to do it — the remedy named an action with no route. The document exists to
+until #349 there was no way to do it: the remedy named an action with no route. The document exists to
 prove the loop closes.
 
 ## Determinism
 
-- **The quota, not the ceiling.** Filling to 95% of `MaxBackupStorageGb` puts usage above the 90%
-  operating quota while staying below the absolute ceiling. That is the band the reserve occupies, and it
-  is what a routine backup refuses on.
+- **The ceiling, not the quota.** The filler is the whole of `MaxBackupStorageGb`, so any backup would
+  pass the ceiling. Filling only past the 90% operating quota refuses nothing since #348: a backup there
+  is still taken, from the reserve below the ceiling, and a warning raised instead.
 - **`MaxBackupStorageGb` stays at its default 1 GB**, so the filler is sized from that. A smaller budget
-  cannot be configured — the setting is whole gigabytes.
+  cannot be configured, since the setting is whole gigabytes.
 - **One filler file, sparse.** `SetLength` allocates without writing a gigabyte of content, so the step is
   fast and does not depend on the host's write throughput.
 - **The stored backup is readable from the host, and that is itself part of what this document
   proves.** It was not, on the first run: the connection that writes a backup was pooled, so its file
   handle survived disposal and the file stayed locked for the life of the process. The first version of
-  this document worked around it by hashing inside the container and blamed the host filesystem — the
+  this document worked around it by hashing inside the container and blamed the host filesystem; the
   cause was ours, and it is fixed at source (`Pooling=false` on the destination connection). Hashing
   from the host now is the check that the leak has not returned.
 - **`$_.ErrorDetails.Message` is null in Windows PowerShell 5.1** for these responses. The body is read
@@ -70,12 +70,12 @@ that refused every backup would satisfy all of it without this step.
 **On failure:** if create refuses here the environment is not clean, and nothing below is measuring the
 quota.
 
-### 3. Fill the quota, and confirm status now says a backup is not possible
+### 3. Fill the folder to its ceiling, and confirm status now says a backup is not possible
 
 ```powershell
 $filler = Join-Path $dataDir "backups\filler.db"
 $stream = [System.IO.File]::Create($filler)
-$stream.SetLength([int64](1073741824 * 0.95))
+$stream.SetLength([int64]1073741824)
 $stream.Close()
 
 $status = Invoke-RestMethod -Uri "$base/status" -Headers $key
@@ -86,8 +86,8 @@ $status.remedies
 **Expected:** `canBackUp=False`, `obstacle=BudgetExceeded`, `reserveInUse=True`, and three remedies, the
 first of which names `GET /api/v1/admin/backups` and `DELETE /api/v1/admin/backups/{name}`.
 
-**On failure:** a `canBackUp=True` here means the status endpoint is not measuring against the operating
-quota, and step 4's refusal would be for some other reason.
+**On failure:** a `canBackUp=True` here means the status endpoint is not measuring against the ceiling,
+and step 4's refusal would be for some other reason.
 
 ### 4. Confirm a reset now refuses, naming the same obstacle
 
@@ -128,7 +128,7 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18385/api/v1/a
 **Expected:** the list reports both files with their sizes; the delete returns `204`; status returns to
 `canBackUp=True`, `reserveInUse=False`; and the reset returns `200`.
 
-**This closes the loop the issue was filed for** — the obstacle was reached, the message named a remedy,
+**This closes the loop the issue was filed for:** the obstacle was reached, the message named a remedy,
 the remedy was performed through the API alone with no filesystem access, and the action that had refused
 now succeeds.
 
@@ -146,7 +146,7 @@ $b = (Get-FileHash "$dataDir\downloaded.db"  -Algorithm SHA256).Hash
 **Expected:** `match=True`.
 
 **Two assertions in one.** The hashes matching says the download is byte-for-byte. Reading the *stored*
-file from the host at all says no handle is still held on it — the leak that made an immediate download
+file from the host at all says no handle is still held on it: the leak that made an immediate download
 fail with an unhandled `500` in T1. A `Get-FileHash` that cannot open the stored file is that leak
 returning, not a test problem.
 
@@ -174,14 +174,15 @@ try {
 **Expected:** `409`, and a detail saying the backup exists but could not be removed because the data
 directory is read-only.
 
-**This is the case the endpoint is most likely to meet in anger** — a read-only mount is what degrades
+**This is the case the endpoint is most likely to meet in anger:** a read-only mount is what degrades
 startup in the first place, and removing old backups is what the operator is then told to do. The
 listing still answers on the same mount, so the operator can see what is there even while unable to
 remove it.
 
 ## Observed effect
 
-**Measured 2026-08-29** against `quotinator:local`.
+**Measured 2026-08-29** against `quotinator:local`, before #348's reserve, when step 3 filled to 95% and
+the operating quota refused a backup. Step 3 has filled to the ceiling since.
 
 The loop closes exactly as intended. A fresh install reports `canBackUp=True` with `used=0` against a
 `966,367,641`-byte quota beneath a `1,073,741,824`-byte ceiling; `create` writes a real 4.5 MB backup and
@@ -193,26 +194,26 @@ container's own hash of the stored file.
 **This pass found three defects in this document and one in the application.**
 
 The document named the wrong admin key, used `$_.ErrorDetails.Message` (null in Windows PowerShell 5.1,
-so the obstacle read as empty), and worked around a locked backup file by hashing inside the container —
+so the obstacle read as empty), and worked around a locked backup file by hashing inside the container,
 attributing the lock to the host filesystem. That third one was wrong twice over: the lock was ours, and
 calling it a host property hid a real defect for a day. See the T1 note below.
 
 **Re-run 2026-08-29, after the handle leak was fixed.** Creating a backup and downloading it immediately
-now returns `200`, and the stored file is readable from the host, which it was not before — so step 6
+now returns `200`, and the stored file is readable from the host, which it was not before, so step 6
 hashes it directly rather than reaching into the container.
 
 **A second application defect was found in T1, which this T2 pass had missed entirely.** Downloading a
 backup created moments earlier answered an unhandled `500`: `Microsoft.Data.Sqlite` pools connections by
 default, so the destination connection that writes a backup returned to the pool on disposal and kept
 its file handle open for the life of the process. Every backup this application had ever written stayed
-locked. It is invisible on Unix — a retained handle blocks neither a second open nor an unlink — which
+locked. It is invisible on Unix (a retained handle blocks neither a second open nor an unlink), which
 is exactly why running this document in a Linux container could not catch it, and why the workaround
 above looked like a host quirk instead of evidence. The destination connection now opts out of pooling.
 
 The other application defect is step 7's subject, and it was not in the plan. `DELETE` against a read-only data
 directory answered an **unhandled `500`**: `File.Delete` threw, nothing caught it. That is precisely the
 defect class #348 was filed to remove, reintroduced one endpoint over, on the single path an operator is
-most likely to take — the read-only mount that degraded their startup is the same one that refuses the
+most likely to take: the read-only mount that degraded their startup is the same one that refuses the
 removal they were just told to perform. The writer now reports a typed outcome instead of throwing, and
 the endpoint answers `409` naming the condition and its remedy.
 

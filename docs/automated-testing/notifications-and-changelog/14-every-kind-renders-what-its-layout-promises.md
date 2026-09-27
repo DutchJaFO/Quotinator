@@ -36,6 +36,10 @@ startup loads no content, so it cannot share a run with the kinds above, each of
 loaded. Its own trigger produces it, and both surfaces render it, in
 [`../backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md`](../backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md).
 
+**`BackupQuotaReached` is not produced here either.** Its trigger is a backups folder filled past its
+operating quota, which no other kind here needs and which would slow every step that takes a backup. Its
+own trigger produces it in `backup/08`, #348's document for the reserve.
+
 **The reset comes last, and in its own step.** Reset rebuilds every table (#156), so it takes the other
 five kinds with it, which is why it cannot share a page with them and why nothing after it may assume
 they are still there.

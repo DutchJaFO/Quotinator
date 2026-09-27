@@ -20,7 +20,7 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**Execute step 20.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
+**Execute step 23.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
 issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
 of them unmet in the code; steps 7 to 18 closed them. Steps 19 to 25 correct the quota model, which the
 first pass built backwards (see *Quota: two levels* for the settled model); every design question they
@@ -732,7 +732,7 @@ alone, and a full Api rerun passed all 1,132. Their factory runs the real startu
 directory, which includes a network source refresh. The first run's message was lost to an output filter,
 so the cause is not established; every run from here keeps its full log.
 ### 20. The quota warning's notification kind
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 A `BackupQuotaReached` payload (the bytes used, the quota and the ceiling), a `BackupQuotaRestored`
 dismiss trigger, and a resolution recording that the folder came back under the quota. All three are
@@ -744,8 +744,41 @@ and `Quotinator:BackupQuotaPercent`.
 Tests: the ownership tests' per-kind DynamicData picks the new kind up; the trigger and the resolution
 each get the baseline and incremental-replay acceptance tests the kind has.
 
+**Done 2026-09-27.** `NotificationMetadataKind.BackupQuotaReached` with `BackupQuotaReachedMetadataDto`
+(the bytes used, the quota and the ceiling; nothing identifies it, so one warning is open at a time),
+`NotificationDismissTrigger.BackupQuotaRestored`, and `NotificationResolution.UnderQuota`, whose label
+reads *Backups back under their quota*. Data migration 25 (`NotificationBackupQuotaMigrations`) rebuilds
+`System_Notification` once, widening all three CHECKs, and the baseline matches. The title and body keys
+are in all three languages; the body takes the three sizes already formatted.
+
+**Where this migration's SQL lives follows the 26 sibling `Database/*Migrations.cs` classes, not a
+document** (raised 2026-09-27). CLAUDE.md's Schema migration policy still says migration SQL stays inside
+`DatabaseInitializer` as `private const string Migration00N_...`, which now holds none of them; the CHECK
+rebuild worked example `database-conventions.md` cites, `Migration004_ImportBatchTypeUserSeed`, no longer
+exists as a member either. **Deferred** (developer, 2026-09-27): this milestone's unreleased migrations are
+being rewritten at its close, so the placement and the two stale documentation references are settled
+there rather than here.
+
+Tests: `NotificationDismissTrigger_IsAcceptedByTheBaseline`/`..._ByTheIncrementalReplay` and
+`NotificationResolution_IsAcceptedByTheBaseline`/`..._ByTheIncrementalReplay`, enumerated from their enums
+as the kinds already were, since the hand-written resolution list could not fall behind by itself. Red
+against the members added with the CHECKs unwidened: exactly the six new-member cases failed, all 28
+existing ones passed. Three existing guards then required the kind to be declared, as they are meant to:
+its layout (no detail table), a sample payload, and a mention in `notifications-and-changelog/14`, which
+names `backup/08` as where it is produced. Api 1,144, Data 1,431, Core 1,730, 0 warnings.
+
+**The empty identity was claimed but not proved, and is now proved** (found 2026-09-27, reviewing the
+payload against `NotificationMetadataDto`'s own contract rather than against a sibling payload). The
+contract states that a payload returns an empty sequence "when the common fields already say everything",
+and excludes "detail that describes the notification without identifying it", which is what the three
+sizes are. `AboveTheQuotaOnTwoChecks_RaisesOneWarning` never varied them, so it passed either way. The
+production path does vary them: `BackupOperations.CreateAsync` writes a backup and then runs the check, so
+a size held in the identity would re-announce the warning on every backup taken from the reserve.
+`AboveTheQuotaAndGrowing_RaisesOneWarning` fills to 92%, checks, fills to 95%, checks, and expects one
+warning; run red against `IdentityComponents => [UsedBytes]`, where it failed and the older test still
+passed. Data 1,446.
 ### 21. Condition checks raise and clear the warning, on every path and on request
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 A condition-check interface in `Quotinator.Data`, and one component running every registered check. The
 quota check is the first: above the quota it raises the warning once while unresolved
@@ -766,8 +799,42 @@ application clears the warning, one pushed above raises it, and the
 response reports what each check did; every registered check runs, proven with a second, test-only
 check alongside the quota's.
 
+**Done 2026-09-27.** In `Quotinator.Data`: `INotificationConditionCheck`, `NotificationConditionChecks`
+(runs every registration in order) and `BackupQuotaCheck`, with `ByteSize` to write the three sizes, which
+used past the quota raises once while unresolved (`Warning`) and resolves as `UnderQuota` below it. The
+out-of-range quota report moved from the readiness check, which no longer uses the quota, into this one,
+where the quota takes effect. The checks run from four places:
+
+| Where | Why there |
+|---|---|
+| `Program.cs`, after a completed, healthy startup | covers the pre-migration and pre-content-load backups, once the schema is current |
+| `DatabaseInitializer.ResetAsync`, through the new `OnResetCompletedAsync` hook the Core initializer overrides | the one point every Reset passes through, the endpoint's and the notification action's alike |
+| `BackupOperations.CreateAsync` and `RemoveAsync` | the audited path both the Backups API and the reseed options use; deletion goes through it rather than through `DatabaseBackupWriter.Delete` directly |
+| `POST /api/v1/notifications/refresh` (`RefreshNotifications`) | no admin key, the `admin` rate-limit policy; answers `checks`, each `kind` and `outcome` |
+
+Tests, one statement each. `BackupQuotaCheckTests` (11) against a real database and a real folder:
+raised, reported raised, none below, one across two checks, cleared, reported cleared, recorded as
+`UnderQuota`, kept while still above, the sizes named, a configured quota consulted, and an out-of-range
+quota reported. `NotificationConditionChecksTests` (2) and `ByteSizeTests` (2). Through the real host,
+`BackupQuotaWarningTests` (10): startup in the reserve, startup under a raised quota, Reset, the on-demand
+backup, a deletion, and five for the endpoint (no admin key, cleared and raised after a change outside the
+application, the response per kind, and a second, test-only check also run). The reseed option by
+`NotificationActionExecutorTests.Reseed_BackUpThenReseed_RunsTheConditionChecks`.
+
+Red, each on its assertion. Against the stubs (a check that did nothing, a runner that ran nothing, no
+call site, no route) 13 Data and 11 Api tests failed; the two that passed there were run red against a
+check that always raised (`BelowTheQuota_RaisesNothing`) and one that always cleared
+(`StillAboveTheQuota_KeepsTheWarning`). **The first red run of the Reset, on-demand backup and deletion
+tests was void:** every admin call answered `401`, since the admin key passed with `UseSetting` never
+reaches the request-time key check. With the key passed as the other endpoint tests pass it, each was run
+red again with its own call removed, and failed.
+
+`AdminEndpointsTests.ResetDatabase_CorrectKey_CallsDismissByTriggerWithDatabaseReset` asserted exactly one
+dismissal; a Reset now also runs the quota check, which below the quota dismisses by its own trigger. Its
+statement is the one its name makes, so it now asserts the `DatabaseReset` dismissal is among the calls,
+run red against the endpoint dismissing by another trigger. Api 1,155, Data 1,445, Core 1,730, 0 warnings.
 ### 22. Render and document the warning
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 The notification table's per-kind layout for the new kind (its payload says nothing its body does not,
 so it opens no detail), and a Knowledgebase entry for the warning, linked from it. The caution from
@@ -778,6 +845,33 @@ option carries the caution at the quota; neither carries it below; an option tha
 (*Reseed without a backup*) never carries it; the response carries it at the quota and not below. The
 `no-backup-could-be-taken` entry's `BudgetExceeded` section, `BackupStorageUsage`'s quota comment, and
 any other text stating the old model are corrected to the ceiling.
+
+**Done.** Which options take a backup is stated once, `NotificationActionOptions.TakesABackup`, and both
+surfaces ask it: the page through `NotificationTable.CautionsTheBackup`, the response through
+`NotificationResponse.BackupCaution`, set when the availability reports the caution and any option the
+row offers takes a backup. The page shows the caution (`NotificationsBackupCaution`, three languages)
+under the option buttons, in the confirmation of a cautioned option, and beside a Reset row's single
+action, since a Reset takes a backup too. The quota warning links a new Knowledgebase entry,
+*Backups have reached their quota* (`KnowledgebaseLinks.BackupsHaveReachedTheirQuota`), and its layout
+opens no detail, as step 20 recorded. `docs/api-endpoints.md` documents `backupCaution`, the reserve on
+`POST /admin/backups/create`, and the checks a deletion runs.
+
+Corrected to the ceiling: the `BudgetExceeded` section of `no-backup-could-be-taken`, `BackupOutcome`'s
+summary, `BackupObstacleGuidance`'s cause and two remedies (the cause now names the ceiling, so
+`AdminEndpointsTests.ResetDatabase_WhenNoBackupCanBeTaken_DescribesTheCause` asserts "ceiling", run red
+against the old wording), the `DatabaseInitializer` comment that said the readiness check enforced the
+quota, the Backup tag description, and the `DELETE /admin/backups/{name}` row. `BackupStorageUsage`'s
+comment already stated the reserve. **`backup/05` stated the old model too:** it filled the folder to 95%
+and expected a refusal, which no longer happens. It now fills to the ceiling, and is retitled *A full
+backups folder is resolvable from inside the application*; its file name is unchanged, so no link
+breaks. It runs at step 25.
+
+Tests, one statement each. `NotificationTableTests`: each of the three options is cautioned at the quota
+and not below, *Reseed without a backup* never is, and the quota warning links its entry.
+`NotificationEndpointsTests`: the response cautions a row offering a backup at the quota, not below it,
+and not a row offering none. Red: against the stubs the four positive tests failed; the six negative ones
+passed there and were run red against a caution that was always on, in the page helper and in the
+response; the link test failed against the mapping without the new kind. Api 1,167, 0 warnings.
 
 ### 23. Automated (T2) document for the reserve, red first
 **Status:** ⬜ Not started
@@ -836,12 +930,12 @@ and the smoke set; T1 by the developer.
 | 26 | ✅ | Every test this issue adds or changes fails against its signature state, on an assertion | Unit test | Steps 7 to 15, each recording its red run |
 | 27 | ❌ | Build clean and the full suite green across three `-m:1` runs | Build | Step 25 (first passed at step 18, before the quota correction) |
 | 28 | ❌ | The application still starts | Live (T1) | The developer starts `Quotinator.Api` in Visual Studio after step 25 (first passed 2026-09-26, before the quota correction) |
-| 29 | ❌ | A backup that leaves the folder above the quota raises one warning, on every path | Unit test | Step 21: startup, Reset, the on-demand backup and a reseed option, each in the reserve; once across two startups; none below the quota |
-| 30 | ❌ | The warning clears once the folder is back under the quota, and only then | Unit test | Step 21: a deletion under the quota clears it, one leaving it above does not, a startup under a raised quota clears it |
-| 31 | ❌ | The warning kind, its trigger and its resolution are accepted by the migration and the baseline alike | Unit test | Step 20: the ownership tests per kind, trigger and resolution; the schema-drift parity test |
-| 32 | ❌ | Every option that takes a backup is cautioned when the folder is at the quota, on the page and over REST | Unit test | Step 19 and step 22: the availability, `NotificationTableTests`, `NotificationEndpointsTests` |
+| 29 | ✅ | A backup that leaves the folder above the quota raises one warning, on every path | Unit test | Step 21: startup, Reset, the on-demand backup and a reseed option, each in the reserve; once across two startups; none below the quota |
+| 30 | ✅ | The warning clears once the folder is back under the quota, and only then | Unit test | Step 21: a deletion under the quota clears it, one leaving it above does not, a startup under a raised quota clears it |
+| 31 | ✅ | The warning kind, its trigger and its resolution are accepted by the migration and the baseline alike | Unit test | `DatabaseInitializerOwnershipTests`: `NotificationMetadataKind_`, `NotificationDismissTrigger_` and `NotificationResolution_IsAcceptedByTheBaseline`/`..._ByTheIncrementalReplay`, per member; the schema-drift parity test |
+| 32 | ✅ | Every option that takes a backup is cautioned when the folder is at the quota, on the page and over REST | Unit test | Step 19 and step 22: the availability, `NotificationTableTests`, `NotificationEndpointsTests` |
 | 33 | ❌ | The reserve, end to end: a backup taken and warned, cleared by a deletion and by a refresh without a restart, refused past the ceiling | Automated (T2) | `backup/08`, red against `7f83e92a`, then green |
-| 34 | ❌ | `POST /notifications/refresh` runs every registered condition check, needs no admin key, and reports what each did | Unit test | Step 21: answered without an admin key; the quota warning cleared and raised on request; a second, test-only check also run; the response per kind |
+| 34 | ✅ | `POST /notifications/refresh` runs every registered condition check, needs no admin key, and reports what each did | Unit test | Step 21: answered without an admin key; the quota warning cleared and raised on request; a second, test-only check also run; the response per kind |
 
 ---
 
