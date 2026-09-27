@@ -770,6 +770,7 @@ Options exist for the cases that genuinely differ, and a document passes only wh
 | `--read-only-data` | `/data` itself mounted read-only — the case that degrades. On `create` the new volume has no key ring at all; on `reenter` it keeps the shared ring it was created with, mounted read-only |
 | `--tmpfs-data <size>` | `/data` as a tmpfs with a hard ceiling, for provoking a full disk mid-write. Implies `--own-keys` |
 | `--own-keys` | The container's own DataProtection key ring instead of the suite's shared one — only for a test whose subject is a cookie the running key ring cannot read |
+| `--unset <K>` | Leaves one of the profile's own settings out, so the application's default decides; repeatable. Only for a test whose subject is that default: `--env` can override a pinned value, but only this makes it absent |
 
 **Every container shares one DataProtection key ring by default**, a host folder at
 `.claude/temp/qt-keys` mounted at `/data/keys`. The browser pane keeps its cookies from one test to the
@@ -886,11 +887,12 @@ the profile. A profile's job is to be what a user actually runs; a test needing 
 where a reader can see it. `database-lifecycle/02` already works this way, running one container on the
 default and a second on `false` precisely to compare them.
 
-**Every profile pins `Quotinator__AutoUpdateSources=false` — a test downloads nothing.** Left at its
-default, every container fetches the upstream sources at startup: each run then depends on GitHub being
-reachable, a refresh can overwrite the bundled files the run is reading, and a cancelled or stalled
-download logs an exception the test never caused. A document whose subject *is* source refresh declares
-`true` as its own delta.
+**Every profile pins `Quotinator__AutoUpdateSources=false`: a test downloads nothing.** The refresh is
+off by default since #424, and the profiles pin it anyway, so each states what it runs instead of relying
+on a default that has already changed once. Turned on, every container fetches the upstream sources at
+startup: each run then depends on GitHub being reachable, a refresh can overwrite the bundled files the
+run is reading, and a cancelled or stalled download logs an exception the test never caused. A document
+whose subject *is* source refresh declares `true` as its own delta.
 
 **`--name` is mandatory**, on this and on every `docker run` in the suite. Without it, every later
 `docker cp` and `docker logs` is written against a `<container>` placeholder no reader can resolve.
@@ -1131,6 +1133,7 @@ The five this suite runs on:
 | 04 | [Migration replay under restricted write](startup-and-degradation/04-migration-replay-under-restricted-write.md) | no |
 | 05 | [Degraded pages survive a migration failure](startup-and-degradation/05-degraded-pages-survive-a-migration-failure.md) | no |
 | 06 | [A recorded schema version ahead of the build stays healthy](startup-and-degradation/06-schema-version-ahead-of-the-application.md) | no |
+| 07 | [The source refresh is off unless it is turned on, and still works when it is](startup-and-degradation/07-the-source-refresh-is-off-unless-turned-on.md) | no |
 
 ### `backup/`
 

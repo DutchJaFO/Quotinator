@@ -16,8 +16,8 @@
 //   dotnet-script scripts/testing/test-env.csx -- reenter --name <name> --port <port> [options]
 //   dotnet-script scripts/testing/test-env.csx -- destroy --name <name> [--bind <host-dir>]
 //
-// create starts from an empty volume; reenter runs the same recipe against data that is already there
-// — a second startup, or an upgrade to a different --image over a database a prior one wrote. They are
+// create starts from an empty volume; reenter runs the same recipe against data that is already there:
+// a second startup, or an upgrade to a different --image over a database a prior one wrote. They are
 // two commands rather than a flag on one because a step doing the second thing should say so, instead
 // of a reader inferring it from which mount type happens to be in use. (With --bind the distinction is
 // invisible to this script either way: a bind directory belongs to the document, and neither command
@@ -26,7 +26,7 @@
 // create and reenter options:
 //   --name  <name>        Container name; its volume is <name>-data (required)
 //   --port  <port>        Host port published to the container's 8080. Omit it for a container
-//                         nothing connects to over HTTP — one waited on by its own log line, say.
+//                         nothing connects to over HTTP, one waited on by its own log line, say.
 //                         Omitting it implies --no-wait, since there is nothing to poll.
 //   --image <ref>         Image to run (default: quotinator:local)
 //   --bind  <dir>         Bind-mount this directory at /data instead of a named volume, passed to
@@ -36,22 +36,25 @@
 //                         means. Guessing wrong binds a different filesystem and the test reads an
 //                         empty database that looks exactly like a passing check.
 //   --env   <K=V>         Extra environment variable; repeatable.
+//   --unset <K>           Leave out one of the profile's own settings below, so the application falls
+//                         back to its own default; repeatable. For a document whose subject is that
+//                         default: --env can override a pinned value, but only this can make it absent.
 //   --read-only           Run with a read-only root filesystem, leaving /data writable. Since #294 the
-//                         application survives this — migration temp files never touch disk — so it is
+//                         application survives this (migration temp files never touch disk), so it is
 //                         the flag for proving that, not for provoking a failure.
 //   --tmpfs-data <size>   Mount /data as a tmpfs with a hard size ceiling (e.g. 6m), replacing the
 //                         volume or bind entirely. For provoking a genuinely full disk mid-write; the
 //                         data does not survive the container, which is fine for that purpose only.
 //   --read-only-data      Mount /data itself read-only. This is the one that degrades: with a genuinely
 //                         pending migration the initializer cannot write, and reports 503 with
-//                         SQLite Error 14 — the original incident's own error code. Measured
+//                         SQLite Error 14, the original incident's own error code. Measured
 //                         2026-08-27 in both WAL-sidecar states, so sidecar state does not decide it.
 //   --own-keys            Give this container its own DataProtection key ring instead of the shared one
 //                         below. For a test whose subject is a cookie the running key ring cannot read;
 //                         it must restore the browser before it ends, or the next browser-driven test
 //                         reports that cookie as its own failure (see the suite index). A volume created
 //                         with it passes it on every reenter too.
-//   --no-wait             Skip the readiness poll — for a container that publishes no port, or one
+//   --no-wait             Skip the readiness poll, for a container that publishes no port, or one
 //                         expected to degrade rather than become healthy.
 //   --wait-listening      Poll for any answer rather than a healthy one, for a degraded scenario
 //                         where 503 is the expected outcome.
@@ -75,7 +78,7 @@ List<string> Values(string flag)
 }
 
 // quiet suppresses output for the pre-clean removals, where "no such container/volume" is the normal
-// case rather than a problem — printing it invites a reader to treat a clean start as an error.
+// case rather than a problem: printing it invites a reader to treat a clean start as an error.
 int Run(string arguments, bool ignoreFailure = false, bool quiet = false)
 {
     Console.WriteLine($"$ docker {arguments}");
@@ -125,7 +128,7 @@ if (command == "destroy")
 {
     Run($"rm -f {name}", ignoreFailure: true);
 
-    // A bind-mounted test never creates the named volume, so removing it would always fail — and a
+    // A bind-mounted test never creates the named volume, so removing it would always fail, and a
     // failure here would be reported as the test's, not as this script's.
     if (bind is null) Run($"volume rm {volume}", ignoreFailure: true, quiet: true);
 
@@ -137,12 +140,12 @@ if (command == "destroy")
 
 string? port = Value("--port");
 
-// No port is a legitimate shape — a container waited on by its own log line rather than by HTTP —
+// No port is a legitimate shape (a container waited on by its own log line rather than by HTTP),
 // so requiring one would force a document to invent a number it never uses, and that number would
 // then contradict its own Determinism.
 if (port is not null && (!int.TryParse(port, out int portNumber) || portNumber is < 1 or > 65535))
 {
-    Console.Error.WriteLine($"{port} is not a TCP port — the maximum is 65535.");
+    Console.Error.WriteLine($"{port} is not a TCP port; the maximum is 65535.");
     Environment.Exit(1);
     return;
 }
@@ -151,10 +154,10 @@ string image = Value("--image") ?? "quotinator:local";
 
 bool fresh = command == "create";
 
-// reenter stops the old container *cleanly* first, and that is not tidiness — it decides the result.
+// reenter stops the old container *cleanly* first, and that is not tidiness: it decides the result.
 // `docker rm -f` is a SIGKILL, so SQLite never checkpoints and the -wal/-shm sidecars survive into the
 // next run; `docker stop -t 15` gives it time to close, and the sidecars are gone. #326 measured that
-// this sidecar state, not a pending migration, is what decides whether a read-only mount degrades —
+// this sidecar state, not a pending migration, is what decides whether a read-only mount degrades,
 // so re-entering with the wrong one silently changes what the next container is even testing.
 //
 // create does not need it: it is about to discard the volume anyway.
@@ -167,7 +170,7 @@ Run($"rm -f {name}", ignoreFailure: true, quiet: true);
 // One DataProtection key ring for every test container, so a cookie the browser pane kept from an
 // earlier one still decrypts. Without it each container starts with its own keys, and the first page a
 // browser-driven test opens logs a CryptographicException/AntiforgeryValidationException pair the test
-// did not cause — 2 to 7 lines, measured 2026-09-19, against 0 when both containers read one ring.
+// did not cause: 2 to 7 lines, measured 2026-09-19, against 0 when both containers read one ring.
 //
 // The folder is never removed, by destroy or otherwise: deleting it makes the next browser-driven test
 // report that same pair once, for the same reason.
@@ -176,7 +179,7 @@ Run($"rm -f {name}", ignoreFailure: true, quiet: true);
 // would alter.
 //
 // --read-only-data depends on the command. `create` is a brand-new volume that never had keys, and an
-// unwritable /data leaves it with none — so nothing is mounted. `reenter` keeps the install it re-enters,
+// unwritable /data leaves it with none, so nothing is mounted. `reenter` keeps the install it re-enters,
 // and that install's keys are the shared ring it was created with; a read-only /data makes them
 // read-only, so the ring is mounted `:ro`. Mounting nothing there instead was measured to break
 // *Degraded-state pages survive a genuine migration failure* (2026-09-22): with no keys to read, `/` and
@@ -199,7 +202,7 @@ string dataMode = readOnlyData ? ":ro" : "";
 
 if (bind is not null)
 {
-    // Verbatim — see the --bind note in the header. Resolving or creating this path would change
+    // Verbatim: see the --bind note in the header. Resolving or creating this path would change
     // which filesystem it names.
     mount = $"-v {bind}:/data{dataMode}";
 }
@@ -218,13 +221,17 @@ List<string> settings =
     "-e Quotinator__DataDir=/data",
     "-e Quotinator__AdminApiKey=smoketest",
     "-e Quotinator__AutoPurgeBundledImportActions=true",
-    // A test downloads nothing. Left at its default (true) every container fetches the upstream sources
-    // at startup, which makes every run depend on GitHub being reachable — unpinned, so contrary to the
-    // suite's own Determinism rule — lets a refresh overwrite the bundled files the run is reading, and
-    // logs an exception whenever the connector cancels a stalled or losing connection attempt. A
-    // document whose subject *is* the refresh declares the opposite as its own delta.
+    // A test downloads nothing. The refresh is off by default since #424 and pinned anyway, so the
+    // profile states what it runs rather than relying on a default that has already changed once. On,
+    // every container fetches the upstream sources at startup, which makes every run depend on GitHub
+    // being reachable, lets a refresh overwrite the bundled files the run is reading, and logs an
+    // exception whenever the connector cancels a stalled or losing connection attempt. A document whose
+    // subject *is* the refresh declares the opposite as its own delta, or leaves the pin out with --unset.
     "-e Quotinator__AutoUpdateSources=false",
 ];
+
+foreach (string unset in Values("--unset"))
+    settings.RemoveAll(setting => setting.StartsWith($"-e {unset}=", StringComparison.Ordinal));
 
 settings.AddRange(Values("--env").Select(e => $"-e {e}"));
 
@@ -233,7 +240,7 @@ string readOnly = Flag("--read-only") ? "--read-only " : "";
 
 // #348: a data directory with a hard size ceiling, for the backup case that needs the volume to run
 // out of space *during* a write rather than before it. tmpfs because a bind mount inherits the host
-// filesystem's free space, which no test can control. It replaces the mount entirely — the data is
+// filesystem's free space, which no test can control. It replaces the mount entirely: the data is
 // gone when the container is, which is the point: this is for provoking a full disk, never for a
 // scenario that needs its database to survive a restart.
 if (tmpfsSize is not null)
@@ -243,7 +250,7 @@ Run($"run -d --name {name} {publish}{readOnly}{mount} {keysMount}{string.Join(" 
 
 if (port is null)
 {
-    Console.WriteLine($"Started {name}, publishing no port — wait on its log.");
+    Console.WriteLine($"Started {name}, publishing no port; wait on its log.");
     return;
 }
 
