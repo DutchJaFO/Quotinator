@@ -351,6 +351,9 @@ public partial class NotificationTable
     {
         NotificationMetadataKind.BackupRefused      => KnowledgebaseLinks.NoBackupCouldBeTaken,
         NotificationMetadataKind.BackupQuotaReached => KnowledgebaseLinks.BackupsHaveReachedTheirQuota,
+        // The maximum is where a backup is actually refused, so the entry explaining that refusal and
+        // its remedies is the one to read, not the quota's.
+        NotificationMetadataKind.BackupMaxExceeded  => KnowledgebaseLinks.NoBackupCouldBeTaken,
         _                                           => null,
     };
 
@@ -497,6 +500,7 @@ public partial class NotificationTable
         NotificationResolution.Reseeded     => Text.NotificationResolutionReseeded,
         NotificationResolution.Reset        => Text.NotificationResolutionReset,
         NotificationResolution.UnderQuota   => Text.NotificationResolutionUnderQuota,
+        NotificationResolution.UnderMax     => Text.NotificationResolutionUnderMax,
         _ => resolution.ToString(),
     };
 

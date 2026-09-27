@@ -31,6 +31,7 @@ public static class NotificationMetadataKinds
         [NotificationMetadataKind.ImportReviewPending]    = typeof(ImportReviewPendingMetadataDto),
         [NotificationMetadataKind.BackupRefused]          = typeof(BackupRefusedMetadataDto),
         [NotificationMetadataKind.BackupQuotaReached]     = typeof(BackupQuotaReachedMetadataDto),
+        [NotificationMetadataKind.BackupMaxExceeded]      = typeof(BackupMaxExceededMetadataDto),
     };
 
     // A null-valued property states nothing and leaves the reader to decide what it was supposed to

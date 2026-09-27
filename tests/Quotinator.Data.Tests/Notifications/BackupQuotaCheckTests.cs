@@ -118,6 +118,32 @@ public class BackupQuotaCheckTests
         Assert.AreEqual(1, await OpenWarningsAsync());
     }
 
+    /// <summary>
+    /// The warning says backups are still being taken from the reserve. Above the max they are refused,
+    /// so it is no longer valid and the generic check removes it; the error from the refused attempt is
+    /// what applies there. A warning claiming the reserve and an error claiming the max cannot both stand.
+    /// </summary>
+    [TestMethod]
+    public async Task AboveTheMax_RemovesTheWarning()
+    {
+        await SeedWarningAsync();
+        FillTo(percentOfCeiling: 110);
+
+        await CreateCheck().CheckAsync();
+
+        Assert.AreEqual(0, await OpenWarningsAsync());
+    }
+
+    [TestMethod]
+    public async Task AboveTheMax_RaisesNothing()
+    {
+        FillTo(percentOfCeiling: 110);
+
+        await CreateCheck().CheckAsync();
+
+        Assert.AreEqual(0, await OpenWarningsAsync());
+    }
+
     [TestMethod]
     public async Task BackUnderTheQuota_ClearsTheWarning()
     {

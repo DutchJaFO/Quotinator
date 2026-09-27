@@ -9,13 +9,14 @@ using Quotinator.Data.Repositories;
 namespace Quotinator.Data.Notifications;
 
 /// <summary>
-/// Raises the backup quota warning while the backups folder is at or past its operating quota, and resolves
-/// it once the folder is back under (#348, developer 2026-09-26).
+/// Raises the backup quota warning while the backups folder is inside the reserve, and removes it once it
+/// is not (#348, developer 2026-09-26).
 /// <para>
-/// Past the quota a backup is still taken, inside the reserve below the ceiling; this warning is how the user
-/// learns the folder is there, so they can delete older backups or raise the quota before the ceiling
-/// refuses one. "At or past" is the backup status reader's own <c>ReserveInUse</c>, so the warning and the
-/// published status cannot disagree about where the folder stands.
+/// Inside the reserve a backup is still taken; this warning is how the user learns the folder is there, so
+/// they can delete older backups or raise the quota before the ceiling refuses one. The reserve is the band
+/// between the quota and the ceiling, and the warning is valid only within it: below the quota there is
+/// nothing to warn about, and at or above the ceiling backups are refused rather than taken, which is what
+/// the error from that refused attempt says instead.
 /// </para>
 /// </summary>
 /// <param name="options">The database options carrying the backups folder, the budget and the quota.</param>
@@ -46,7 +47,12 @@ public sealed class BackupQuotaCheck(
         long quota   = BackupStorageBudget.QuotaBytes(options);
         long ceiling = BackupStorageBudget.CeilingBytes(options);
 
-        if (used < quota)
+        // The band this warning describes, not merely the threshold it starts at (developer, 2026-09-27).
+        // It says backups are still being taken from the reserve, which is false once the folder is at the
+        // max and every backup is refused, so above the max the warning is no longer valid and goes the
+        // same way as one below the quota. What applies there is the error from the refused attempt: a
+        // warning claiming the reserve and an error claiming the max cannot both stand from one action.
+        if (used < quota || used >= ceiling)
         {
             int resolved = await writer.DismissByTriggerAsync(NotificationDismissTrigger.BackupQuotaRestored, NotificationResolution.UnderQuota);
             return resolved > 0 ? NotificationConditionOutcome.Cleared : NotificationConditionOutcome.Unchanged;

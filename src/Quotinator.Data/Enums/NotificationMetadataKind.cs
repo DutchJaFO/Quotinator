@@ -83,5 +83,14 @@ public enum NotificationMetadataKind
     /// the folder coming back under the quota, so it carries the <c>BackupQuotaRestored</c> dismiss
     /// trigger.
     /// </summary>
-    BackupQuotaReached
+    BackupQuotaReached,
+
+    /// <summary>
+    /// The backups folder is at or above its maximum (#348): every backup is refused there, and the
+    /// payload carries the bytes in use against that maximum. However the folder arrived above it, by a
+    /// refused attempt, by a backup that exceeded the estimate it was permitted on, or by files written
+    /// from outside, exceeding the maximum always reports. Resolved by the folder coming back under it,
+    /// so it carries the <c>BackupBackUnderMax</c> dismiss trigger.
+    /// </summary>
+    BackupMaxExceeded
 }

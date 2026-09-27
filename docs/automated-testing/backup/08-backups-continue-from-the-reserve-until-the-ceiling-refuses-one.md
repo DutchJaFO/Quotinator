@@ -246,11 +246,25 @@ try {
   "status=$($resp.StatusCode.value__)"
   ($body | ConvertFrom-Json).backupObstacle
 }
+
+$null = Invoke-RestMethod -Uri "$base/notifications/refresh" -Method POST
+$errors = @((Invoke-RestMethod -Uri "$base/notifications?pageSize=0").items |
+  Where-Object { $_.metadataKind -eq 'backupmaxexceeded' -and -not $_.isDismissed })
+"open=$(@(Open-QuotaWarnings).Count) errors=$($errors.Count) type=$($errors[0].type)"
+$errors[0].body
 ```
 
-**Expected:** `409` and `BudgetExceeded`.
+**Expected:** `409` and `BudgetExceeded`, then `open=0`, `errors=1`, `type=error`, and a body naming what
+the folder holds and the maximum it has passed.
 
-**On failure:** a `200` here means nothing enforces the ceiling, and the reserve has become unbounded.
+**Three separate facts, and none implies the others.** The refusal is the attempt being stopped. The
+`open=0` is the reserve warning gone, since it says backups are still being taken and that is false here.
+The `errors=1` is the band reporting: exceeding the maximum always reports, whether or not anything
+attempted a backup.
+
+**On failure:** a `200` on the create means nothing enforces the ceiling and the reserve has become
+unbounded. An `open=1` means the warning is kept outside the band it describes. An `errors=0` means the
+state that stops every backup is showing the operator nothing.
 
 ### 10. The remedy the warning names actually works
 
@@ -260,10 +274,12 @@ Remove-Item -Force $filler
 $after = Invoke-RestMethod -Uri "$base/notifications/refresh" -Method POST
 $status = Invoke-RestMethod -Uri "$base/admin/backups/status" -Headers $key
 $final = Invoke-RestMethod -Uri "$base/admin/backups/create" -Method POST -Headers $key
-"outcome=$(($after.checks | Where-Object { $_.kind -eq 'backupquotareached' }).outcome) canBackUp=$($status.canBackUp) open=$(@(Open-QuotaWarnings).Count) created=$($final.name)"
+$cleared = @((Invoke-RestMethod -Uri "$base/notifications?pageSize=0").items |
+  Where-Object { $_.metadataKind -eq 'backupmaxexceeded' -and -not $_.isDismissed })
+"canBackUp=$($status.canBackUp) open=$(@(Open-QuotaWarnings).Count) errors=$($cleared.Count) created=$($final.name)"
 ```
 
-**Expected:** `canBackUp=True`, `open=0`, and a created file name.
+**Expected:** `canBackUp=True`, `open=0`, `errors=0`, and a created file name.
 
 **This closes the loop the warning promises.** Its body tells the operator to delete older backups or
 raise the quota, and says the notice clears itself once the folder is back under. This step performs the
@@ -293,12 +309,13 @@ answers `409 BudgetExceeded`, and removing the filler restores `canBackUp=True` 
 answered `404`. Step 3's *On failure* text was wrong before that run and is corrected: it blamed
 `canBackUp=False` on overshooting the ceiling alone, which `fits=True` disproves.
 
-**This pass found one defect, which no step asserts yet.** Past the *ceiling* the check raises the same
-body it raises inside the reserve: at 1.02 GB against a 1.00 GB ceiling, with `canBackUp=False`, the
-warning still reads *"Backups are still being taken, from the reserve below the ceiling of 1.00 GB, but
-once the folder reaches the ceiling a backup will be refused."* Both clauses are false there. One message
-covers two states, and it is accurate in only the first. Tracked on #348; a step asserting the
-past-the-ceiling wording belongs here once there is wording to assert.
+**This pass found one defect, and step 9's `open=0` is the assertion added for it.** On the day of the
+run, past the *ceiling* the check raised the same body it raises inside the reserve: at 1.02 GB against a
+1.00 GB ceiling, with `canBackUp=False`, the warning read *"Backups are still being taken, from the
+reserve below the ceiling of 1.00 GB, but once the folder reaches the ceiling a backup will be
+refused."* Both clauses are false there. The warning's condition is now the band it describes rather than
+the threshold it starts at, so above the max it is removed instead, and the body needed no change since it
+is only ever shown inside the reserve.
 
 **`Remove-Item -Force $filler` is deliberately not used** to delete the filler from the host. It is
 refused outright in at least one sandboxed runner, which stops the whole step before any of it executes;

@@ -158,6 +158,9 @@ public class DatabaseInitializer(
         // #348: the backup quota warning, a new kind, dismiss trigger and resolution. One rebuild widens
         // all three CHECKs, since they are on the same table.
         new SchemaMigration { Version = 25, Sql = NotificationBackupQuotaMigrations.WidenForBackupQuotaWarning },
+        // #348: exceeding the maximum reports as an error of its own, so its kind, trigger and
+        // resolution join the same three CHECKs. One rebuild, for the reason migration 25 gives.
+        new SchemaMigration { Version = 26, Sql = NotificationBackupMaxMigrations.WidenForBackupMaxError },
     ];
 
     // Data's own baseline fragment: creates every Data-owned table directly under its final,
@@ -349,7 +352,7 @@ public class DatabaseInitializer(
             IsDismissed       INTEGER NOT NULL DEFAULT 0,
             DismissedAt       TEXT,
             DismissTriggerKey TEXT
-                              CHECK (DismissTriggerKey IS NULL OR DismissTriggerKey IN ('DatabaseReset', 'Reseed', 'ImportReviewResolved', 'BackupQuotaRestored')),
+                              CHECK (DismissTriggerKey IS NULL OR DismissTriggerKey IN ('DatabaseReset', 'Reseed', 'ImportReviewResolved', 'BackupQuotaRestored', 'BackupBackUnderMax')),
             DateCreated       TEXT    NOT NULL,
             DateModified      TEXT,
             DateDeleted       TEXT,
@@ -357,13 +360,13 @@ public class DatabaseInitializer(
             Title             TEXT,
             Metadata          TEXT,
             MetadataKind      TEXT
-                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused', 'BackupQuotaReached')),
+                              CHECK (MetadataKind IS NULL OR MetadataKind IN ('Announcement', 'SchemaVersionOvershoot', 'WhatsNew', 'ReseedRecommended', 'ReseedFileApplied', 'ImportReviewPending', 'BackupRefused', 'BackupQuotaReached', 'BackupMaxExceeded')),
             AppVersionId      TEXT    REFERENCES System_AppVersion(Id),
             OriginalLanguage  TEXT    NOT NULL DEFAULT 'en',
             DismissReason     TEXT
                               CHECK (DismissReason IS NULL OR DismissReason IN ('Dismissed', 'Resolved', 'Obsolete')),
             Resolution        TEXT
-                              CHECK (Resolution IS NULL OR Resolution IN ('KeptExisting', 'TookIncoming', 'Reseeded', 'Reset', 'UnderQuota'))
+                              CHECK (Resolution IS NULL OR Resolution IN ('KeptExisting', 'TookIncoming', 'Reseeded', 'Reset', 'UnderQuota', 'UnderMax'))
         );
         CREATE INDEX IF NOT EXISTS IX_System_Notification_Active ON System_Notification (IsDismissed, IsDeleted, ExpiresAt);
         CREATE INDEX IF NOT EXISTS IX_System_Notification_DismissTriggerKey ON System_Notification (DismissTriggerKey);

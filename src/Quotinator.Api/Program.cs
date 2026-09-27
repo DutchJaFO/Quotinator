@@ -451,6 +451,7 @@ builder.Services.AddSingleton<BackupOperations>();
 // here, and every place that re-checks (a completed startup, a Reset, a backup taken or removed, and
 // POST /notifications/refresh) runs them all through NotificationConditionChecks.
 builder.Services.AddSingleton<Quotinator.Data.Notifications.INotificationConditionCheck, Quotinator.Data.Notifications.BackupQuotaCheck>();
+builder.Services.AddSingleton<Quotinator.Data.Notifications.INotificationConditionCheck, Quotinator.Data.Notifications.BackupMaxExceededCheck>();
 builder.Services.AddSingleton<Quotinator.Data.Notifications.NotificationConditionChecks>();
 builder.Services.AddSingleton<INotificationActionExecutor, NotificationActionExecutor>();
 builder.Services.AddSingleton<IAppVersionTracker, AppVersionTracker>();

@@ -6,9 +6,9 @@ namespace Quotinator.Data.Notifications;
 /// Payload for a <see cref="NotificationMetadataKind.BackupQuotaReached"/> notification (#348): how much
 /// the backups folder holds against its operating quota and its ceiling, when the warning was raised.
 /// <para>
-/// One condition however many bytes are in use: a folder past its quota stays the same unresolved
-/// warning as it grows or shrinks, until it comes back under. So nothing here identifies it, and one warning
-/// is open at a time.
+/// One condition however many bytes are in use: a folder inside the reserve stays the same unresolved
+/// warning as it grows or shrinks, until it leaves the reserve in either direction. So nothing here
+/// identifies it, and one warning is open at a time.
 /// </para>
 /// </summary>
 public sealed class BackupQuotaReachedMetadataDto() : NotificationMetadataDto(NotificationMetadataKind.BackupQuotaReached)

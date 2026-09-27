@@ -32,4 +32,7 @@ public enum NotificationResolution
 
     /// <summary>The backups folder came back under its operating quota (#348).</summary>
     UnderQuota,
+
+    /// <summary>The backups folder came back under its maximum (#348).</summary>
+    UnderMax,
 }

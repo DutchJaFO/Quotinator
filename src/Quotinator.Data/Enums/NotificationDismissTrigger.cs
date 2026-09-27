@@ -45,5 +45,12 @@ public enum NotificationDismissTrigger
     /// every deletion, at every completed startup and on request. A recurring condition, like
     /// <see cref="Reseed"/>: its producer raises it once while unresolved.
     /// </summary>
-    BackupQuotaRestored
+    BackupQuotaRestored,
+
+    /// <summary>
+    /// Superseded by the backups folder coming back under its maximum (#348), checked wherever the
+    /// quota is. A recurring condition, like <see cref="BackupQuotaRestored"/>, whose producer raises it
+    /// once while unresolved.
+    /// </summary>
+    BackupBackUnderMax
 }

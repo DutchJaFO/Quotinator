@@ -140,4 +140,13 @@ public static class NotificationMessageKeys
     /// <c>{1}</c> and <c>{2}</c>, each already formatted as a size for reading.
     /// </summary>
     public const string BackupQuotaReachedBody = "NotificationBackupQuotaReachedBody";
+
+    /// <summary>Title for the error that the backups folder is at or above its maximum (#348).</summary>
+    public const string BackupMaxExceededTitle = "NotificationBackupMaxExceededTitle";
+
+    /// <summary>
+    /// Body for the error that the backups folder is at or above its maximum (#348). Takes the bytes in
+    /// use as <c>{0}</c> and that maximum as <c>{1}</c>, each already formatted as a size for reading.
+    /// </summary>
+    public const string BackupMaxExceededBody = "NotificationBackupMaxExceededBody";
 }

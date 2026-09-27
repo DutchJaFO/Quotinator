@@ -453,6 +453,8 @@ public class NotificationTableTests
         [NotificationMetadataKind.BackupRefused]          = false,
         // #348: its payload holds the three sizes its body already states, so it opens nothing more.
         [NotificationMetadataKind.BackupQuotaReached]     = false,
+        // #348: the same, for the two sizes the error's body already states.
+        [NotificationMetadataKind.BackupMaxExceeded]      = false,
     };
 
     /// <summary>
@@ -751,6 +753,8 @@ public class NotificationTableTests
             """{"releaseState":"NotApplicable","step":"ContentLoad","obstacle":"BudgetExceeded"}""",
         NotificationMetadataKind.BackupQuotaReached =>
             """{"releaseState":"NotApplicable","usedBytes":1020054732,"quotaBytes":966367641,"ceilingBytes":1073741824}""",
+        NotificationMetadataKind.BackupMaxExceeded =>
+            """{"releaseState":"NotApplicable","usedBytes":1181116006,"ceilingBytes":1073741824}""",
         _ => """{"releaseState":"NotApplicable"}""",
     };
 

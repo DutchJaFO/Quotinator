@@ -20,7 +20,7 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**Execute step 24.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
+**Execute step 26.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
 issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
 of them unmet in the code; steps 7 to 18 closed them. Steps 19 to 25 correct the quota model, which the
 first pass built backwards (see *Quota: two levels* for the settled model); every design question they
@@ -910,52 +910,105 @@ itself is correctly reported on the path that asks for a backup (`409` with the 
 remedies), so no rule is broken, but a healthy startup past the ceiling attempts no backup and leaves
 this warning as the only notification an operator sees. One message covers two states and is accurate in
 one. `backup/08` records it and asserts nothing about it yet, per the suite's rule that a document states
-instructions rather than a verdict; step 24 corrects the band model it is a symptom of, and adds the
-assertions then.
-### 24. Three bands, one open notification
-**Status:** ⬜ Not started
+instructions rather than a verdict; step 24 makes the warning valid only inside the band
+it describes, and adds the assertions then.
+### 24. The warning is valid only in the band it describes
+**Status:** ✅ Done
 
-`BackupQuotaCheck` compares against one threshold today, `used < quota`, so the reserve and everything
-past the max are the same state and render the same body. That is why the text is false above the max
-(step 23), and the fix is the band model rather than the wording. Three bands, each with its own
-notification type and text, on one condition:
+`BackupQuotaCheck` tests one threshold, `used < quota`, so everything at or above the quota is one state.
+Above the max it therefore raises the reserve's own body, which says backups are still being taken and
+that a refusal will happen once the ceiling is reached. Step 23 measured both clauses false at 1.02 GB
+against a 1.00 GB ceiling.
 
-| Band | Type | What it says |
-|---|---|---|
-| below the buffer | `Information` | backups are succeeding and storage is fine |
-| buffer to max | `Warning` | still succeeding, from the reserve; clear space before the max |
-| above the max | `Error` | backups are failing |
+**The condition is the band, not the threshold:** the warning is valid while `quota <= used < max`. Above
+the max it is not valid, so the generic check removes it rather than keeping or raising it, and the
+notification the operator sees there is the error from the attempt that was refused (step 25). Below the
+buffer it is removed, which is already what happens. A warning saying storage is inside the reserve and
+an error saying the max is exceeded cannot both be open from one action (developer, 2026-09-27).
 
-**One backup-storage notification is open at a time, and the band decides which.** A notification
-carries its own verification, so a band that no longer applies is resolved and the band that does is
-raised, by the check that already runs. This needs no new mechanism: it is the existing check answering
-three ways instead of two. The band therefore belongs in `IdentityComponents`, which is empty today so
-that a folder merely changing size does not re-announce anything; the band is not a size, and without it
-a folder growing from the reserve past the max keeps the reserve text, since
-`SeedWhileUnresolvedAsync` returns early on an open match rather than rewriting it.
+No new notification kind, no rename, no band in the payload's identity, and nothing informational to
+add: a folder below the buffer has no warning open, which is the state a fresh install is already in.
 
-`BackupQuotaReached` is the wrong name for a kind that now also reports storage being fine, so the kind,
-its trigger and its resolutions are renamed to say what they cover. These migrations are unreleased and
-are being rewritten at the milestone's close, so the rename costs a CHECK widening rather than a data
-fix. Three title and body key sets in all three languages; tests red first, per band and per transition
-between bands.
+Tests, one statement each, red first: the warning is kept inside the band, removed below the buffer as
+today, and removed above the max. `backup/08` gains the step it records but does not yet assert, reading
+the notification past the ceiling rather than only the refusal.
 
-### 25. A backup refused at the write gets its own error
-**Status:** ⬜ Not started
+**Done 2026-09-27.** One comparison became the band: `used < quota || used >= ceiling` removes the
+warning, and only `quota <= used < ceiling` raises it. `WouldPassTheCeiling` is `used + backup > ceiling`,
+so from `used >= ceiling` every real backup is refused, which is exactly where the warning's claim stops
+being true.
 
-A backup from the reserve is permitted by `CheckBackupReadiness` and then re-checked by `CreateBackup`
-against the same ceiling, from a freshly read folder size. The two can disagree: the estimate is the
-database's own length and the real copy can exceed it, and the folder can grow between the two calls.
-The backup is then refused at the write, having been allowed a moment earlier.
+**The body needed no change**, which is the sign the fix was in the right place: it is now only ever shown
+inside the band it was written for. Inside the reserve a backup can still be refused when the estimate is
+close to the room left, and that is step 25's error rather than a boundary this check should move.
 
-That is a different situation from a refusal that never started, and it gets its own `Error`
-notification saying so: the attempt was permitted from the reserve and then failed for being a little
-over the max. Distinct from the band notification of step 24, which describes where storage stands
-rather than what one attempt did.
+`BackupQuotaCheckTests.AboveTheMax_RemovesTheWarning` and `AboveTheMax_RaisesNothing`, both red against
+the single threshold, where the warning was kept and raised respectively. The existing tests already
+covered kept-inside-the-band and removed-below-the-buffer. `backup/08` step 9 now asserts `open=0` beside
+the `409`, and the two summaries stating the old rule were corrected. Data 1,448, Api 1,167, 0 warnings.
 
-**Whether the two checks can actually disagree is established before the notification is built, not
-assumed.** If no reachable path produces it, that is the finding and the step reports it rather than
-adding an unreachable notification.
+**`backup/08` has not been re-run since this change**, so its Observed effect records the run that found
+the defect. Step 28 re-runs it.
+
+### 25. Exceeding the max generates an error
+**Status:** ✅ Done
+
+**The reachability question step 25 was to answer first is answered, and the answer is a flaw.** After
+`connection.BackupDatabase(dest)` succeeds, `CreateBackup` returns `Success` with no post-write budget
+check of any kind, so a backup whose real size exceeds the estimate it was permitted on leaves the folder
+above the max with nothing reporting it. The pre-write check uses the source file's length, which is an
+approximation; the max is ours rather than the hardware's, so nothing physical stops the write the way a
+full volume would (developer, 2026-09-27). Step 24 then removes the warning there, so the state that most
+needs reporting currently reports nothing at all.
+
+**Exceeding the max always generates an error.** A new `Error` notification for a folder at or above it,
+with its own kind, trigger and resolution, and the check reconciles all three bands in one place:
+
+| Band | What the check leaves open |
+|---|---|
+| below the buffer | neither |
+| buffer to max | the warning |
+| at or above the max | the error |
+
+So the error is a state rather than an event: it is raised whether the folder arrived there by a refused
+attempt, by a backup that overshot its estimate, or by files written from outside the application. A
+refused attempt therefore needs no notification of its own, which is what the earlier plan had.
+
+**The completed write is not failed retroactively, and the oversized backup is not deleted.** Both were
+considered: a hard limit would have stopped the write, but ours did not, and the file that exists is a
+complete and valid restore point. Discarding it, or reporting it as a failure to a caller that would then
+refuse to reseed, destroys the thing the reserve exists to protect in order to satisfy a soft limit. The
+end-of-series check raises the error instead, and the remedies already tell the operator to remove old
+backups.
+
+Texts in all three languages. Tests, one statement each, red first: the error raised at and above the max,
+not below it, the warning and the error never open together, and each removed when its band no longer
+applies. `backup/08` step 9 reads the error rather than only `open=0`.
+
+**Done 2026-09-28.** `BackupMaxExceededCheck` is a second `INotificationConditionCheck`, not a third
+branch of the first: each notification carries its own verification, so the error's kind owns its own
+check and the two bands cannot overlap by construction, the warning being valid only below the maximum
+and the error only at or above it. `NotificationMetadataKind.BackupMaxExceeded` with
+`BackupMaxExceededMetadataDto`, `NotificationDismissTrigger.BackupBackUnderMax` and
+`NotificationResolution.UnderMax`, migration 26 widening the same three CHECKs in one rebuild with the
+baseline to match, and title and body keys in all three languages.
+
+`BackupMaxExceededCheckTests` (12): raised at the max and above it, as an `Error`, once across two checks,
+nothing below it, cleared and recorded as `UnderMax`, kept while still above, the sizes named, and
+`EachBand_LeavesOnlyItsOwnNotificationOpen` over three bands. Red: the six enum-acceptance cases against
+migration 26 removed and the baseline un-widened, where the 56 existing cases still passed; the nine check
+tests across two mutations, six against a check that never raises and three against one that always does;
+the cross-band case against the quota check's own threshold restored, where only the above-the-max row
+failed. The four UI guards supplied their own red, each naming what was missing: the layout declaration,
+the payload sample, the notif/14 mention and the resolution's translation key.
+
+**A red run was void and nearly cost a sound test.** Removing migration 26 by a needle written with CRLF
+matched nothing in an LF file, so the migration stayed and the incremental-replay cases passed; read
+straight, that said those tests could not fail. The mutation is now verified to match before the run, and
+every case failed once it did. This is the third void red of this milestone, each one a mutation that
+silently did not apply.
+
+Data 1,466, Api 1,167, Core 1,730, 0 warnings.
 
 ### 26. The checks run once at the end of a series
 **Status:** ⬜ Not started
@@ -1023,8 +1076,8 @@ and the smoke set; T1 by the developer.
 | 32 | ✅ | Every option that takes a backup is cautioned when the folder is at the quota, on the page and over REST | Unit test | Step 19 and step 22: the availability, `NotificationTableTests`, `NotificationEndpointsTests` |
 | 33 | ✅ | The reserve, end to end: a backup taken and warned, cleared by a deletion and by a refresh without a restart, refused past the ceiling | Automated (T2) | `backup/08`, red against `7f83e92a`, then green |
 | 34 | ✅ | `POST /notifications/refresh` runs every registered condition check, needs no admin key, and reports what each did | Unit test | Step 21: answered without an admin key; the quota warning cleared and raised on request; a second, test-only check also run; the response per kind |
-| 35 | ❌ | Each band reports its own type and text, and a folder crossing a boundary ends with only the new band open | Unit test | Step 24: one test per band, one per transition, and `backup/08` extended to read all three |
-| 36 | ❌ | A backup permitted from the reserve and then refused at the write reports its own error | Unit test | Step 25, if the two checks can disagree on a reachable path; otherwise that finding is the row |
+| 35 | ✅ | The warning is kept inside its band, and removed both below the buffer and above the max | Unit test | Step 24: one test per case, and `backup/08` reading the notification past the ceiling |
+| 36 | ✅ | A folder at or above the max always has an error open, however it got there, and never alongside the warning | Unit test | Step 25: raised at and above the max, absent below it, never open with the warning, and `backup/08` step 9 |
 | 37 | ❌ | A composite action evaluates the conditions once, not once per operation inside it | Unit test | Step 26: the count of evaluations per action, not merely that one happened |
 
 ---

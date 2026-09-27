@@ -40,6 +40,10 @@ loaded. Its own trigger produces it, and both surfaces render it, in
 operating quota, which no other kind here needs and which would slow every step that takes a backup. Its
 own trigger produces it in `backup/08`, #348's document for the reserve.
 
+**`BackupMaxExceeded` is not produced here either**, for the same reason and by the same document: its
+trigger is a backups folder filled to its maximum, one band further than the warning above. `backup/08`
+produces both, and they are mutually exclusive, so no step there shows the two together.
+
 **The reset comes last, and in its own step.** Reset rebuilds every table (#156), so it takes the other
 five kinds with it, which is why it cannot share a page with them and why nothing after it may assume
 they are still there.
