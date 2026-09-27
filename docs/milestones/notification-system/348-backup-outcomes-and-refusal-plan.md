@@ -20,7 +20,7 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**Execute step 23.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
+**Execute step 24.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
 issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
 of them unmet in the code; steps 7 to 18 closed them. Steps 19 to 25 correct the quota model, which the
 first pass built backwards (see *Quota: two levels* for the settled model); every design question they
@@ -864,7 +864,7 @@ quota, the Backup tag description, and the `DELETE /admin/backups/{name}` row. `
 comment already stated the reserve. **`backup/05` stated the old model too:** it filled the folder to 95%
 and expected a refusal, which no longer happens. It now fills to the ceiling, and is retitled *A full
 backups folder is resolvable from inside the application*; its file name is unchanged, so no link
-breaks. It runs at step 25.
+breaks. It runs at step 28.
 
 Tests, one statement each. `NotificationTableTests`: each of the three options is cautioned at the quota
 and not below, *Reseed without a backup* never is, and the quota warning links its entry.
@@ -874,7 +874,7 @@ passed there and were run red against a caution that was always on, in the page 
 response; the link test failed against the mapping without the new kind. Api 1,167, 0 warnings.
 
 ### 23. Automated (T2) document for the reserve, red first
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 `backup/08`: fill the backups folder into the reserve, then prove a backup is still taken and the
 warning raised, on the on-demand path and at startup; delete a backup to bring it under and prove the
@@ -883,14 +883,101 @@ warning clears; raise it again, remove a backup file from outside the applicatio
 refused. Run red against `7f83e92a` (the
 first model) before green.
 
-### 24. Documentation
+**Done 2026-09-27.** `backup/08`, *Backups continue from the reserve, with a warning, until the ceiling
+refuses one*: Fresh with `--bind`, port 18388, eleven steps each with one expected result. Step 2 is the
+positive control, since every step below asserts a warning and a build that always raised one would
+satisfy them all. Step 3 proves the band reached rather than assuming it, and checks a backup still fits
+below the ceiling against step 2's own measured cost, so neither figure is a prediction. Step 5 reports
+the count rather than a boolean, because `0` and `2` are different failures. Step 6b captures the page,
+which is the caution's only proof outside bUnit. Step 10 is the remedy proven, per the suite's rule that
+a document provoking a fault ends by showing the remedy works.
+
+**Red against an image built from `7f83e92a` inverted all four observations the document turns on:** step
+3 answered `canBackUp=False` while `fits=True` with 81 MB below the ceiling, step 4's backup was refused
+`409 BudgetExceeded`, no `backupquotareached` row existed, and `POST /notifications/refresh` answered
+`404`. Green on `quotinator:local` through all eleven steps, screenshot included.
+
+**The red run corrected the document.** Step 3's *On failure* blamed `canBackUp=False` on overshooting
+the ceiling alone, which `fits=True` disproves, so it now separates that from a build refusing at the
+quota. `Remove-Item -Force` on the host filler is refused outright by a sandboxed runner, stopping the
+step before anything executes, so the document uses `[System.IO.File]::Delete`.
+
+**The pass found a defect, now step 24.** Past the *ceiling* the check raises
+the same body it raises inside the reserve. Measured at 1.02 GB against a 1.00 GB ceiling with
+`canBackUp=False`: *"Backups are still being taken, from the reserve below the ceiling of 1.00 GB, but
+once the folder reaches the ceiling a backup will be refused."* Both clauses are false there. The refusal
+itself is correctly reported on the path that asks for a backup (`409` with the obstacle and its
+remedies), so no rule is broken, but a healthy startup past the ceiling attempts no backup and leaves
+this warning as the only notification an operator sees. One message covers two states and is accurate in
+one. `backup/08` records it and asserts nothing about it yet, per the suite's rule that a document states
+instructions rather than a verdict; step 24 corrects the band model it is a symptom of, and adds the
+assertions then.
+### 24. Three bands, one open notification
+**Status:** ⬜ Not started
+
+`BackupQuotaCheck` compares against one threshold today, `used < quota`, so the reserve and everything
+past the max are the same state and render the same body. That is why the text is false above the max
+(step 23), and the fix is the band model rather than the wording. Three bands, each with its own
+notification type and text, on one condition:
+
+| Band | Type | What it says |
+|---|---|---|
+| below the buffer | `Information` | backups are succeeding and storage is fine |
+| buffer to max | `Warning` | still succeeding, from the reserve; clear space before the max |
+| above the max | `Error` | backups are failing |
+
+**One backup-storage notification is open at a time, and the band decides which.** A notification
+carries its own verification, so a band that no longer applies is resolved and the band that does is
+raised, by the check that already runs. This needs no new mechanism: it is the existing check answering
+three ways instead of two. The band therefore belongs in `IdentityComponents`, which is empty today so
+that a folder merely changing size does not re-announce anything; the band is not a size, and without it
+a folder growing from the reserve past the max keeps the reserve text, since
+`SeedWhileUnresolvedAsync` returns early on an open match rather than rewriting it.
+
+`BackupQuotaReached` is the wrong name for a kind that now also reports storage being fine, so the kind,
+its trigger and its resolutions are renamed to say what they cover. These migrations are unreleased and
+are being rewritten at the milestone's close, so the rename costs a CHECK widening rather than a data
+fix. Three title and body key sets in all three languages; tests red first, per band and per transition
+between bands.
+
+### 25. A backup refused at the write gets its own error
+**Status:** ⬜ Not started
+
+A backup from the reserve is permitted by `CheckBackupReadiness` and then re-checked by `CreateBackup`
+against the same ceiling, from a freshly read folder size. The two can disagree: the estimate is the
+database's own length and the real copy can exceed it, and the folder can grow between the two calls.
+The backup is then refused at the write, having been allowed a moment earlier.
+
+That is a different situation from a refusal that never started, and it gets its own `Error`
+notification saying so: the attempt was permitted from the reserve and then failed for being a little
+over the max. Distinct from the band notification of step 24, which describes where storage stands
+rather than what one attempt did.
+
+**Whether the two checks can actually disagree is established before the notification is built, not
+assumed.** If no reachable path produces it, that is the finding and the step reports it rather than
+adding an unreachable notification.
+
+### 26. The checks run once at the end of a series
+**Status:** ⬜ Not started
+
+Step 21 calls `conditionChecks.RunAsync()` inside `BackupOperations.CreateAsync` *and* `RemoveAsync`, so
+*Remove the oldest backup, then back up and reseed* re-evaluates every registered check three times in
+one action. Re-verification belongs at the end of a series of operations, once, for the cost of it
+(developer, 2026-09-27).
+
+The per-operation calls come out; each composite action runs the checks once when it finishes. The
+boundaries to cover are the notification actions, the admin endpoints that take or remove a backup, the
+Reset, and startup, with `POST /notifications/refresh` unchanged since a caller asking for a refresh is
+already asking for exactly one. Tests assert the count of evaluations per action, not only that one
+happened, since "ran at least once" is what the current wiring already satisfies.
+### 27. Documentation
 **Status:** ⬜ Not started
 
 The changelog's #348 entries in all three languages describe the warning rather than a refusal at the
 quota. The issue's requirement 8 still says the reserve is reached by override; its correction is drafted
 for the developer's approval, not edited unasked.
 
-### 25. Full verification
+### 28. Full verification
 **Status:** ⬜ Not started
 
 Build clean; the full suite green across three `-m:1` runs; every `backup/` document, notif/12 to 14,
@@ -928,14 +1015,17 @@ and the smoke set; T1 by the developer.
 | 24 | ✅ | Startup content-load refusal, end to end | Automated (T2) | `backup/06`, red against the canary build, then green |
 | 25 | ✅ | Startup migration refusal, end to end | Automated (T2) | `backup/07`, red against the canary build, then green |
 | 26 | ✅ | Every test this issue adds or changes fails against its signature state, on an assertion | Unit test | Steps 7 to 15, each recording its red run |
-| 27 | ❌ | Build clean and the full suite green across three `-m:1` runs | Build | Step 25 (first passed at step 18, before the quota correction) |
-| 28 | ❌ | The application still starts | Live (T1) | The developer starts `Quotinator.Api` in Visual Studio after step 25 (first passed 2026-09-26, before the quota correction) |
+| 27 | ❌ | Build clean and the full suite green across three `-m:1` runs | Build | Step 28 (first passed at step 18, before the quota correction) |
+| 28 | ❌ | The application still starts | Live (T1) | The developer starts `Quotinator.Api` in Visual Studio after step 28 (first passed 2026-09-26, before the quota correction) |
 | 29 | ✅ | A backup that leaves the folder above the quota raises one warning, on every path | Unit test | Step 21: startup, Reset, the on-demand backup and a reseed option, each in the reserve; once across two startups; none below the quota |
 | 30 | ✅ | The warning clears once the folder is back under the quota, and only then | Unit test | Step 21: a deletion under the quota clears it, one leaving it above does not, a startup under a raised quota clears it |
 | 31 | ✅ | The warning kind, its trigger and its resolution are accepted by the migration and the baseline alike | Unit test | `DatabaseInitializerOwnershipTests`: `NotificationMetadataKind_`, `NotificationDismissTrigger_` and `NotificationResolution_IsAcceptedByTheBaseline`/`..._ByTheIncrementalReplay`, per member; the schema-drift parity test |
 | 32 | ✅ | Every option that takes a backup is cautioned when the folder is at the quota, on the page and over REST | Unit test | Step 19 and step 22: the availability, `NotificationTableTests`, `NotificationEndpointsTests` |
-| 33 | ❌ | The reserve, end to end: a backup taken and warned, cleared by a deletion and by a refresh without a restart, refused past the ceiling | Automated (T2) | `backup/08`, red against `7f83e92a`, then green |
+| 33 | ✅ | The reserve, end to end: a backup taken and warned, cleared by a deletion and by a refresh without a restart, refused past the ceiling | Automated (T2) | `backup/08`, red against `7f83e92a`, then green |
 | 34 | ✅ | `POST /notifications/refresh` runs every registered condition check, needs no admin key, and reports what each did | Unit test | Step 21: answered without an admin key; the quota warning cleared and raised on request; a second, test-only check also run; the response per kind |
+| 35 | ❌ | Each band reports its own type and text, and a folder crossing a boundary ends with only the new band open | Unit test | Step 24: one test per band, one per transition, and `backup/08` extended to read all three |
+| 36 | ❌ | A backup permitted from the reserve and then refused at the write reports its own error | Unit test | Step 25, if the two checks can disagree on a reachable path; otherwise that finding is the row |
+| 37 | ❌ | A composite action evaluates the conditions once, not once per operation inside it | Unit test | Step 26: the count of evaluations per action, not merely that one happened |
 
 ---
 

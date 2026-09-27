@@ -388,6 +388,7 @@
     <File Path="docs/automated-testing/backup/05-a-full-quota-is-resolvable-from-inside-the-application.md" />
     <File Path="docs/automated-testing/backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md" />
     <File Path="docs/automated-testing/backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md" />
+    <File Path="docs/automated-testing/backup/08-backups-continue-from-the-reserve-until-the-ceiling-refuses-one.md" />
   </Folder>
   <Folder Name="/docs/automated-testing/startup-and-degradation/">
     <File Path="docs/automated-testing/startup-and-degradation/01-seeding-backup-degraded-startup-and-reset-recovery.md" />

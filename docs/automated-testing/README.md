@@ -1153,6 +1153,7 @@ different question in each.
 | 05 | [A full backups folder is resolvable from inside the application](backup/05-a-full-quota-is-resolvable-from-inside-the-application.md) | no |
 | 06 | [A startup that cannot take a backup loads nothing, and offers only the options that can run](backup/06-a-startup-that-cannot-take-a-backup-loads-nothing.md) | no |
 | 07 | [A migration that cannot take a backup leaves the database unmigrated, and says why](backup/07-a-migration-that-cannot-take-a-backup-leaves-the-database-unmigrated.md) | no |
+| 08 | [Backups continue from the reserve, with a warning, until the ceiling refuses one](backup/08-backups-continue-from-the-reserve-until-the-ceiling-refuses-one.md) | no |
 
 ### `notifications-and-changelog/`
 
