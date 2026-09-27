@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-09-26 15:02 UTC] — do not edit by hand.*
+##### *GENERATED FILE [2026-09-27 11:06 UTC] — do not edit by hand.*
 
 # Changelog
 
@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Quote files you add yourself no longer overwrite stored quotes silently. Previously a file that disagreed with something already stored simply replaced it, with nothing said; now the change is held for your decision instead. If you relied on the old behaviour, set `Quotinator__DefaultConflictPolicy` to `newest-wins`.
 - When a quote file brings changes that need your decision, Quotinator now tells you instead of leaving them to be discovered. A new Import review page lists every such change, and both the notification and the page let you keep what is stored or take what the file brought. Most conflicts are still best fixed by correcting the file and reloading; a fuller side-by-side review is planned.
 - Quotinator now writes every error it runs into to its log, including the ones it deals with itself, so a problem can be traced wherever Quotinator runs: each error carries a short reference that ties together every line written about it.
+- Quotinator no longer downloads updated quote sources when it starts, unless you turn that on. It uses the quotes that come with each release as they are, so a slow or unreachable download site can no longer hold up startup. If you relied on the automatic update, turn it back on in the add-on's options or in your configuration.
 
 ### Added
 - When a backup cannot be taken before startup loads content, the database is left untouched and a notification offers only the options that can run now: back up then reseed, remove the oldest backup then back up and reseed, or reseed without a backup after asking for permission. A Knowledgebase entry explains why any other option is blocked and how to resolve it (issue #348)
@@ -64,6 +65,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - `MSTest` updated from 4.4.0 to 4.4.1 (test only)
 - `Serilog` updated from 4.3.0 to 4.4.0
 - `github/codeql-action` updated from 4.37.7 to 4.37.9 (CI only)
+- `Quotinator:AutoUpdateSources` now defaults to `false`, and both add-ons' `auto_update_sources` option to off: the bundled source files are refreshed by hand and committed instead (issue #424)
+- Every automated test host now starts with the source refresh and the bundled sources off and a data directory of its own, removed when the host stops, and a test that needs a schema is given a prepared database: test maintenance with no effect on the application (issue #424)
 
 ### Fixed
 - A pending database migration ran without its safety backup when that backup could not be taken. Startup now refuses the migration, stays in a limited state, and says which obstacle stood in the way and how to resolve it (issue #348)
@@ -98,6 +101,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Fixed the changelog store quietly going out of service a few minutes after startup, after which the About page was served from the original files for the rest of the session. It is now kept on disk rather than only in memory, so it stays available for as long as Quotinator is running (issue #309)
 - Re-importing the bundled quote data no longer repeatedly flags the same already-resolved conflicts for review on every reseed: a correction that already fixed a conflict on one reseed is now correctly recognised as still fixed on the next, instead of being flagged as broken again every time (issue #374)
 - A curator's decision to keep a quote's original date when two conflicting copies of it exist now actually takes effect. Previously it could be silently overridden by whichever copy was processed last, so the quote could keep showing the wrong date even after the conflict was supposedly resolved (issue #378)
+- Stopping the application while its startup work was still running in the background left that work running against services already shut down, with its database connections still open. The application now waits for that work to finish before it reports stopped (issue #424)
 
 ### Removed
 - The `Quotinator__NotificationDefaultExpiryHours` setting has been removed. It set how long a notification stayed visible before expiring, which no longer applies now that notifications only expire when the one that created it says so: the setting had nothing left to control (issue #312)

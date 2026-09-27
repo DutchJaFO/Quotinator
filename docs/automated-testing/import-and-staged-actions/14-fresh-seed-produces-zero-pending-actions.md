@@ -3,7 +3,7 @@
 **Smoke:** yes
 **Environment:** Fresh
 **Traces to:** #181
-**Fully green after:** [#400](https://github.com/DutchJaFO/Quotinator/issues/400) — step 5 cannot run
+**Fully green after:** [#400](https://github.com/DutchJaFO/Quotinator/issues/400): step 5 cannot run
 until then: it calls a `--convert` entry point that does not exist
 
 ## Preconditions
@@ -12,7 +12,7 @@ Every bundled file runs under `review` policy with its own `ruleFile`/`sourceAli
 
 A `ConflictResolutionRule` auto-resolves a genuinely ambiguous field on an already-seen entity id
 (Modify path only). A `SourceAliasRule` corrects a misspelled or inconsistent raw `(title, type)` to
-the already-canonical Source **before** Source resolution runs — so it applies to both a first-seen Add
+the already-canonical Source **before** Source resolution runs, so it applies to both a first-seen Add
 and a re-seen Modify, and prevents a duplicate Source row being created for the wrong spelling in the
 first place.
 
@@ -25,13 +25,13 @@ Nothing beyond the Fresh profile. The seed this test inspects is the profile's o
 
 - **This is the zero-failures assertion for the bundled dataset.** Nothing staged awaiting review is
   the fact; the number of quotes seeded is not asserted, only that content exists.
-- **Copy the `-wal` and `-shm` sidecars** with the `.db` — see
+- **Copy the `-wal` and `-shm` sidecars** with the `.db`; see
   [`10-source-date-from-resolving-quote.md`](10-source-date-from-resolving-quote.md) for why a bare
   copy can silently omit committed data. Their copies are allowed to fail, because a cleanly stopped
   database has already checkpointed and removed them.
 - The duplicate-Source query groups on `LOWER(Title)`, so a case-only difference counts as a duplicate.
-  That is the point — the alias mechanism exists to prevent exactly that.
-- **The values `/version` reports are data, not an expectation** — what matters is that seeding produced
+  That is the point: the alias mechanism exists to prevent exactly that.
+- **The values `/version` reports are data, not an expectation**: what matters is that seeding produced
   content, which is why every count is checked for being non-zero rather than against a figure.
 
 ## Steps
@@ -43,7 +43,7 @@ dotnet script scripts/testing/test-env.csx -- create --name qt-import-14 --port 
 $base = "http://localhost:18614/api/v1"
 ```
 
-**Expected:** the app reports healthy — the bundled seed has finished.
+**Expected:** the app reports healthy: the bundled seed has finished.
 
 **On failure:** every step below reads this container. Stop rather than running them against an app that
 never became healthy.
@@ -82,11 +82,11 @@ docker cp qt-import-14:/data/quotinatordata.db-shm .claude/temp/inspect-181.db-s
 docker start qt-import-14
 dotnet script scripts/testing/http.csx -- --url "$base/health" --wait-for 200 --status
 
-# A: exact duplicates — the same work stored twice under the same date.
+# A: exact duplicates, the same work stored twice under the same date.
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
   --sql "SELECT Title, Type, Date, COUNT(*) AS c FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type, COALESCE(Date,'') HAVING c > 1"
 
-# B: casing-only duplicates — the alias mechanism's own job, and never legitimate.
+# B: casing-only duplicates, the alias mechanism's own job, and never legitimate.
 dotnet run --project tools/Quotinator.Tools.DbInspector -- --db ".claude/temp/inspect-181.db" `
   --sql "SELECT LOWER(Title) AS t, Type, COUNT(DISTINCT Title) AS spellings FROM Quotinator_Source WHERE IsDeleted = 0 GROUP BY LOWER(Title), Type HAVING spellings > 1"
 
@@ -113,13 +113,13 @@ $undeclared
 **Expected:** **A**, **B** and **C** all return **no rows**. `undeclared date variants = 0`.
 
 **C asserts; it does not list.** A title carrying two dates is ambiguous only while nobody has said
-which reading applies, and there are exactly two ways to say it — a dated `SourceAliasRule` when one of
+which reading applies, and there are exactly two ways to say it: a dated `SourceAliasRule` when one of
 the dates is wrong, or a pair of `sources[]` declarations when the title really does name two works.
 Once either is in place the variant is *permitted*, and C passes. Until then it fails, which is the
 point: a wrong date must not reach the database unremarked just because nothing crashed.
 
 **It was a listing until 2026-09-08, and that was the defect.** A row a human is asked to eyeball is a
-promise rather than a verification — `process.md` refuses exactly that shape — so the check passed while
+promise rather than a verification (`process.md` refuses exactly that shape), so the check passed while
 nine wrong dates sat in the database. Making it assert is what forced them to be resolved.
 
 **A** is a true duplicate: nothing legitimises the same title, type *and* date stored twice.
@@ -127,12 +127,12 @@ nine wrong dates sat in the database. Making it assert is what forced them to be
 canonical form. Neither is confounded by dates, which is what makes them assertable.
 
 **Rewritten 2026-09-08, because the previous query could not pass.** It grouped on
-`(LOWER(Title), Type)` alone and expected no rows — an assertion that
+`(LOWER(Title), Type)` alone and expected no rows: an assertion that
 [#374](https://github.com/DutchJaFO/Quotinator/issues/374) had already made unsatisfiable:
 `ImportActionPlanner`'s `ResolveSourceAsync` deliberately gives a second-or-later variant with a
 different date its own Source row, *"to avoid colliding with the first"*. The proof it was the query
 and not the data: **The Lion King** (1994 / 2019) is two genuinely distinct films, and the seed log
-*warns about it by name* asking for exactly the confirmation **C** now collects — so the test failed on
+*warns about it by name* asking for exactly the confirmation **C** now collects, so the test failed on
 behaviour the application announces as expected.
 
 Measured on a fresh container the same day: the old query returned **11 rows**, of which **0** were
@@ -141,7 +141,7 @@ true duplicates (**A** empty), **2** were casing failures (**B**: `Back to the f
 date variants. Eleven rows of mixed signal, where two of them were the real finding.
 
 **Those two were then resolved, and B now returns no rows** (re-measured 2026-09-08 against a rebuilt
-image). Not by changing how the importer behaves — by **declaring the canonical spelling**, two new
+image). Not by changing how the importer behaves, but by **declaring the canonical spelling**, two new
 entries in `nikhilnamal17-source-aliases.json`.
 
 **A code fix was written first and reverted, and the reason it was wrong is the rule this check now
@@ -161,7 +161,7 @@ legitimately-created date variant could carry a second spelling into the databas
 
 **C still lists 11 rows and is expected to**, because a wrong date is a data question, not a code one.
 `Back to the Future` (`1985,1958`) and `The Silence of the Lambs` (`1991,1998`) are one film each with
-one wrong date — now under a single spelling, visible in C rather than misreported by B.
+one wrong date, now under a single spelling, visible in C rather than misreported by B.
 
 The container is stopped for the copy, which this step did not do before: a copy taken while the app
 holds the database open can omit rows the WAL has not yet checkpointed, and a *missing* duplicate reads
@@ -179,7 +179,7 @@ our rules.* Unit tests therefore use fixtures; this step watches the real thing.
 $manifest = Get-Content data/sources/manifest.json -Raw | ConvertFrom-Json
 foreach ($entry in $manifest.sources | Where-Object { $_.converter -and $_.github }) {
   $raw = "scripts/cache/$($entry.file)"
-  if (-not (Test-Path $raw)) { "$($entry.file): no cached raw — skipped"; continue }
+  if (-not (Test-Path $raw)) { "$($entry.file): no cached raw; skipped"; continue }
 
   $out = Join-Path $env:TEMP "regen-$($entry.file)"
   dotnet run --project src/Quotinator.Api -- --convert $raw $out --converter $entry.converter 2>$null
@@ -201,24 +201,26 @@ foreach ($entry in $manifest.sources | Where-Object { $_.converter -and $_.githu
 
 **Expected:** `0 diverging date(s)` for every file.
 
-**A divergence is not a converter bug — it means a correction was put somewhere that does not survive.**
-`Quotinator:AutoUpdateSources` defaults to `true`, so a running container re-downloads the raw upstream
-file and re-runs the converter over it at startup, overwriting the checked-in copy. Anything hand-edited
-into `data/sources/` is discarded at runtime while still reading as fixed in the repository. The
+**A divergence is not a converter bug: it means a correction was put somewhere that does not survive.**
+`Quotinator:AutoUpdateSources` is off by default (#424), so a container seeds the checked-in copy. Turned
+on, it re-downloads the raw upstream file and re-runs the converter over it at startup, overwriting that
+copy, and a bundled file refreshed by hand is regenerated the same way. Either way, anything
+hand-edited into `data/sources/` is lost the next time the file is regenerated, while still reading as
+fixed in the repository until then. The
 supported mechanism is a `ConflictResolutionRule` in that file's own `ruleFile`, which survives
 regeneration.
 
-**Measured 2026-09-08 — five divergences in `NikhilNamal17_popular-movie-quotes.json`,** and in three
+**Measured 2026-09-08: five divergences in `NikhilNamal17_popular-movie-quotes.json`,** and in three
 of them the checked-in value is the *correct* year while upstream's is wrong, so the live container
 seeds worse data than the repository appears to hold:
 
 | Quote / Source | Checked in | Seeded |
 |---|---|---|
-| "Do, or do not…" — Empire Strikes Back | `null` | 1890 |
-| "Life is a banquet…" — Auntie Mame | 2005 | 1958 |
-| "Even the smallest person…" — LOTR Fellowship | 2002 | 2001 |
-| "Following's not really my style." — The Avengers | 2019 | 2012 |
-| "I have nothing to prove to you" — Captain Marvel | 2019 | 2013 |
+| "Do, or do not…" (Empire Strikes Back) | `null` | 1890 |
+| "Life is a banquet…" (Auntie Mame) | 2005 | 1958 |
+| "Even the smallest person…" (LOTR Fellowship) | 2002 | 2001 |
+| "Following's not really my style." (The Avengers) | 2019 | 2012 |
+| "I have nothing to prove to you" (Captain Marvel) | 2019 | 2013 |
 
 **Written as a unit test first, and that was the wrong place.** It lived in
 `BasicJsonArrayConverterTests` for one commit; pinned to bundled and upstream-derived data, it would go
@@ -229,14 +231,14 @@ behaviour stays covered there by fixtures.
 
 **This is the step that makes a missing rule visible.** Since [#377](https://github.com/DutchJaFO/Quotinator/issues/377)
 an import action whose resolution settles on the values already stored is classified
-`ResolvedToExisting` rather than `Modify` — so for the first time these rows are a countable
+`ResolvedToExisting` rather than `Modify`, so for the first time these rows are a countable
 population instead of being hidden inside the modified count. Each one is either a rule somebody should
 declare, or legitimately nothing; the two answers are both present in the bundled corpus today and
 neither is currently written down anywhere.
 
 **This step needs its own environment, with the batch auto-purge turned off.** The smoke profile sets
 `Quotinator__AutoPurgeBundledImportActions=true`, so a cleanly-applied batch's `Import_Action` rows are
-deleted the moment it applies — which is correct behaviour and exactly what makes these rows invisible
+deleted the moment it applies, which is correct behaviour and exactly what makes these rows invisible
 to `GET /import/actions` in the shared environment. Found by running this step as first written against
 the shared container and getting an empty list.
 
@@ -255,10 +257,10 @@ $noOps | Group-Object entityType | ForEach-Object { "  $($_.Name) = $($_.Count)"
 # Every no-op must fall into one of the two shapes we understand. Anything else is a new one, and the
 # question this step exists to ask is whether it wants a rule nobody has written yet.
 #
-#   1. A rule already covers this entity — an AlreadyApplied ConflictResolutionRule. Still doing work
+#   1. A rule already covers this entity: an AlreadyApplied ConflictResolutionRule. Still doing work
 #      (it is what stops the incoming file re-imposing the wrong value), so permanent and not
 #      retirable, per #374.
-#   2. The incoming side simply does not carry the field, and the stored value legitimately wins —
+#   2. The incoming side simply does not carry the field, and the stored value legitimately wins:
 #      vilaboim's raw format has no year where NikhilNamal17's does. No rule is wanted or needed.
 $declaredRuleIds = @{}
 Get-ChildItem data/sources/*conflict-rules.json | ForEach-Object {
@@ -291,28 +293,28 @@ dotnet script scripts/testing/test-env.csx -- destroy --name qt-import-14-noop
 
 **The control is what makes the `= 0` mean anything.** The endpoint returns `existingFields` and
 `incomingFields` as objects. A predicate that reads a property the response does not carry finds no
-differences on any row and reports `0` whatever the data holds — which is how this step was first
+differences on any row and reports `0` whatever the data holds, which is how this step was first
 written. Only a row the same predicate *does* flag separates a real pass from that.
 
 **Both halves matter and neither substitutes for the other.** The `= 0` assertion alone is satisfied by
-a build that produces no actions at all — including one where the classification broke the import
-outright — which is why the count being non-zero is asserted first. This is
+a build that produces no actions at all (including one where the classification broke the import
+outright), which is why the count being non-zero is asserted first. This is
 `docs/testing-policy.md`'s "every test proves the positive result as well as the negative", applied to
 a document rather than a unit test.
 
-**It asserts; it does not list** — the same correction step 4C needed on 2026-09-08, and for the same
+**It asserts; it does not list**: the same correction step 4C needed on 2026-09-08, and for the same
 reason. A row a human is asked to eyeball is a promise rather than a verification, and this document's
 own history records nine wrong dates sitting in the database while a listing passed.
 
 **On failure:** a new unexplained no-op after a source refresh means the outside world moved in a way
-our rules do not yet cover — read the row's `existingValue`/`incomingValue` and decide whether it wants
+our rules do not yet cover: read the row's `existingValue`/`incomingValue` and decide whether it wants
 a `ConflictResolutionRule`, a `SourceAliasRule`, or nothing at all. Deciding "nothing at all" is a
 legitimate outcome; leaving it undecided is not.
 
 ## Observed effect
 
 Not yet established as a captured record beyond the empty pending list, the two duplicate queries and
-the drift listing — which are the observations this test exists for.
+the drift listing, which are the observations this test exists for.
 
 ## Cleanup
 

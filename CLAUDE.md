@@ -1038,7 +1038,7 @@ Each source produces one file in `data/sources/`. Two MIT-licensed external sour
 | [vilaboim/movie-quotes](https://github.com/vilaboim/movie-quotes) | `vilaboim_movie-quotes.json` | MIT | `{ quote, movie }` |
 | [NikhilNamal17/popular-movie-quotes](https://github.com/NikhilNamal17/popular-movie-quotes) | `NikhilNamal17_popular-movie-quotes.json` | MIT | `{ quote, movie, type, year }` |
 
-Both are attributed in `SOURCES.md`. Each source's raw upstream format is converted to Quotinator's canonical schema by a first-party `IQuoteSourceConverter` plugin (`Quotinator.Converters.Vilaboim`, `Quotinator.Converters.NikhilNamal17`), invoked automatically by the live auto-update mechanism (`Quotinator__AutoUpdateSources`) and manually via `POST /api/v1/admin/sources/refresh` to regenerate a `data/sources/*.json` file locally. See `scripts/SOURCES.md` for the full workflow to add a new source.
+Both are attributed in `SOURCES.md`. Each source's raw upstream format is converted to Quotinator's canonical schema by a first-party `IQuoteSourceConverter` plugin (`Quotinator.Converters.Vilaboim`, `Quotinator.Converters.NikhilNamal17`). **A bundled source file is refreshed manually, not automatically:** `Quotinator__AutoUpdateSources` is off by default (#424), so the running application never refreshes one on its own; a `data/sources/*.json` file is regenerated locally through `POST /api/v1/admin/sources/refresh` with the refresh turned on for that run, reviewed, and committed like any other change. See `scripts/SOURCES.md` for that workflow and for adding a new source.
 
 Manually curated and verified entries live in `data/sources/quotinator-curated.json`. All entries must be accurately attributed and verified before adding.
 

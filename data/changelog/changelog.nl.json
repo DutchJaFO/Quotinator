@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 424],
     "highlights": [
       "Als Quotinator de back-up die nodig is voordat je database wordt bijgewerkt of gevuld niet kan maken, stopt het nu veilig en vertelt het waarom. Alleen de keuzes die kunnen werken worden aangeboden, met een handleiding die uitlegt hoe je de rest oplost.",
       "Een televisieserie kan nu worden opgedeeld in seizoenen, en een citaat kan worden gekoppeld aan de aflevering waaruit het komt als die bekend is: in plaats van dat elk citaat uit een langlopende serie één item voor de hele serie deelt.",
@@ -27,7 +27,8 @@
       "Het opnieuw laden van je citaten bevestigt nu wat er is gebeurd, met één bericht per bestand en per soort hoeveel vermeldingen zijn toegevoegd of bijgewerkt: zodat een foutloze herlaadbeurt dat ook meldt, in plaats van in stilte te eindigen.",
       "Citatenbestanden die je zelf toevoegt overschrijven opgeslagen citaten niet langer stilzwijgend. Voorheen verving een bestand dat afweek van iets wat al was opgeslagen dat zonder meer; nu wordt de wijziging aan jou voorgelegd. Vertrouwde je op het oude gedrag, zet `Quotinator__DefaultConflictPolicy` dan op `newest-wins`.",
       "Wanneer een citatenbestand wijzigingen meebrengt die jouw beslissing vragen, laat Quotinator dat nu weten in plaats van ze te laten ontdekken. Een nieuwe pagina Importbeoordeling toont al die wijzigingen, en zowel de melding als de pagina laten je behouden wat is opgeslagen of overnemen wat het bestand meebracht. De meeste conflicten los je nog steeds het beste op door het bestand te corrigeren en opnieuw te laden; een uitgebreidere vergelijking naast elkaar staat gepland.",
-      "Quotinator schrijft nu elke fout die het tegenkomt naar zijn logboek, ook de fouten die het zelf afhandelt, zodat een probleem te herleiden is waar Quotinator ook draait: elke fout krijgt een korte referentie die alle regels erover met elkaar verbindt."
+      "Quotinator schrijft nu elke fout die het tegenkomt naar zijn logboek, ook de fouten die het zelf afhandelt, zodat een probleem te herleiden is waar Quotinator ook draait: elke fout krijgt een korte referentie die alle regels erover met elkaar verbindt.",
+      "Quotinator downloadt bij het opstarten geen bijgewerkte citaatbronnen meer, tenzij u dat inschakelt. Het gebruikt de citaten die met elke release worden meegeleverd zoals ze zijn, zodat een trage of onbereikbare downloadsite het opstarten niet meer kan ophouden. Vertrouwde u op de automatische update, schakel die dan weer in via de opties van de add-on of uw configuratie."
     ],
     "audienceHighlights": {
       "notification": [
@@ -70,7 +71,9 @@
       "`Scalar.AspNetCore` bijgewerkt van 2.17.1 naar 2.17.6",
       "`MSTest` bijgewerkt van 4.4.0 naar 4.4.1 (alleen tests)",
       "`Serilog` bijgewerkt van 4.3.0 naar 4.4.0",
-      "`github/codeql-action` bijgewerkt van 4.37.7 naar 4.37.9 (alleen CI)"
+      "`github/codeql-action` bijgewerkt van 4.37.7 naar 4.37.9 (alleen CI)",
+      "`Quotinator:AutoUpdateSources` staat nu standaard op `false`, en de optie `auto_update_sources` van beide add-ons standaard uit: de meegeleverde bronbestanden worden in plaats daarvan met de hand bijgewerkt en vastgelegd (issue #424)",
+      "Elke host voor geautomatiseerde tests start nu met het bijwerken van bronnen en de meegeleverde bronnen uitgeschakeld en met een eigen gegevensmap, die wordt verwijderd wanneer de host stopt; een test die een schema nodig heeft, krijgt een voorbereide database: testonderhoud zonder gevolgen voor de applicatie (issue #424)"
     ],
     "fixed": [
       "Een openstaande databasemigratie werd uitgevoerd zonder veiligheidsback-up als die back-up niet kon worden gemaakt. Het opstarten weigert de migratie nu, blijft in een beperkte toestand en vertelt welk obstakel in de weg stond en hoe je dat oplost (issue #348)",
@@ -104,7 +107,8 @@
       "De pagina's in beperkte toestand werden niet getekend wanneer de database niet beschikbaar was: de startpagina en de meldingenpagina bevroegen die allebei tijdens het renderen, wat een foutpagina opleverde in plaats van de uitleg waarvoor ze bestaan (issue #326)",
       "De changelog-opslag viel enkele minuten na het opstarten stilzwijgend uit, waarna de Over-pagina de rest van de sessie vanuit de oorspronkelijke bestanden werd geleverd. De opslag staat nu op schijf in plaats van alleen in het geheugen, zodat deze beschikbaar blijft zolang Quotinator draait (issue #309)",
       "Het opnieuw inladen van de meegeleverde quotegegevens markeert dezelfde, al opgeloste conflicten niet langer bij elke herlaadbeurt opnieuw voor beoordeling: een correctie die een conflict bij de ene herlaadbeurt al oploste, wordt bij de volgende nu correct herkend als nog steeds opgelost, in plaats van elke keer opnieuw als kapot te worden gemarkeerd (issue #374)",
-      "De keuze van een beheerder om de oorspronkelijke datum van een quote te behouden wanneer twee tegenstrijdige kopieën ervan bestaan, heeft nu daadwerkelijk effect. Voorheen kon dit stilzwijgend worden overschreven door welke kopie het laatst werd verwerkt, waardoor de quote de verkeerde datum kon blijven tonen, ook nadat het conflict zogenaamd was opgelost (issue #378)"
+      "De keuze van een beheerder om de oorspronkelijke datum van een quote te behouden wanneer twee tegenstrijdige kopieën ervan bestaan, heeft nu daadwerkelijk effect. Voorheen kon dit stilzwijgend worden overschreven door welke kopie het laatst werd verwerkt, waardoor de quote de verkeerde datum kon blijven tonen, ook nadat het conflict zogenaamd was opgelost (issue #378)",
+      "Wanneer de applicatie stopte terwijl haar opstartwerk nog op de achtergrond liep, bleef dat werk doorlopen tegen services die al waren afgesloten, met de databaseverbindingen nog open. De applicatie wacht nu tot dat werk klaar is voordat ze meldt dat ze gestopt is (issue #424)"
     ],
     "removed": [
       "De instelling `Quotinator__NotificationDefaultExpiryHours` is verwijderd. Deze bepaalde hoe lang een melding zichtbaar bleef voordat hij verliep, wat niet meer van toepassing is nu meldingen alleen nog verlopen wanneer degene die de melding aanmaakt dat aangeeft: de instelling had niets meer om te regelen (issue #312)"

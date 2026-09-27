@@ -1,10 +1,10 @@
 # The log reports a cancelled socket or transport connection
 
 **Kind:** diagnostic
-**Entry code:** —
-**Status code:** —
+**Entry code:** none
+**Status code:** none
 **Affected versions:** 1.9.0-alpha onwards
-**GitHub issue:** [#402](https://github.com/DutchJaFO/Quotinator/issues/402) — automated tests that stop their container
+**GitHub issue:** [#402](https://github.com/DutchJaFO/Quotinator/issues/402): automated tests that stop their container
 
 ## Symptom
 
@@ -31,14 +31,14 @@ complete; everything else is unaffected, and the application stays healthy.
 
 Three causes are known, and the surrounding log lines tell them apart.
 
-**1. The application is stopping** — the bare `SocketException` form, immediately after
+**1. The application is stopping**: the bare `SocketException` form, immediately after
 `[Server] Quotinator … stopping`. On shutdown the web server closes each port it listens on, which
 cancels its wait for the next connection; the web server throws this exception and catches it itself
 (`SocketConnectionListener.AcceptAsync`, ASP.NET Core release/10.0). Exactly one per listening port:
 two in the container, which listens on 8080 and 8099. It appears on every stop and restart, with no
 client connected. Measured 2026-09-18: two lines on stopping a container that had served only requests
 from exited processes. The application follows the documented shutdown sequence, and the documentation
-neither mentions this exception nor offers a way to stop listening without it — so it is recorded
+neither mentions this exception nor offers a way to stop listening without it, so it is recorded
 here as unresolved, not as expected.
 
 **2. A client connection closed while the server was reading it.** A client disconnected mid-request,
@@ -54,8 +54,8 @@ whose frames run through `Http1UpgradeMessageBody` and `System.IO.Pipelines`: th
 closing because the page was navigated away from or closed, or because the application stopped while
 the page was open. Observed 2026-09-18 while driving the notifications page.
 
-**3. A source download whose connection was cancelled or timed out** — the `IOException` form. Source refresh
-(`Quotinator:AutoUpdateSources`, on by default) fetches each manifest-declared file through the standard
+**3. A source download whose connection was cancelled or timed out**: the `IOException` form. Source refresh
+(`Quotinator:AutoUpdateSources`, off by default since #424, so this cause needs it turned on) fetches each manifest-declared file through the standard
 HTTP handler, bounded by `Quotinator:SourceRefreshConnectTimeoutSeconds` (60 s) and the refresh's own
 timeout (90 s). A connect that is dropped, stalls past its budget, or is cut short by shutdown surfaces
 as this `IOException`. Intermittent by nature: the same host answers in ~300 ms on another run.
@@ -63,12 +63,12 @@ as this `IOException`. Intermittent by nature: the same host answers in ~300 ms 
 A connect that never completes reads differently: an `OperationCanceledException` whose frames run
 through `SslStream` and `HttpConnectionPool.ConnectAsync`, followed by a `TaskCanceledException` whose
 inner exception is `System.TimeoutException: A connection could not be established within the configured
-ConnectTimeout.` — each repeated once per frame it is rethrown through, so a single timeout produces
-about twenty lines under two ids. The `[Database - SourceRefresh] could not reach … — using local …`
+ConnectTimeout.`, each repeated once per frame it is rethrown through, so a single timeout produces
+about twenty lines under two ids. The `[Database - SourceRefresh] could not reach …; using local …`
 warning follows, and the startup banner waits for it: 95 seconds end to end. Observed 2026-09-19 in a
 Visual Studio run, with the next file's download from the same host succeeding 276 ms later.
 
-A refresh failing this way costs nothing but that wait — `SourceCacheUpdater` falls back to the local
+A refresh failing this way costs nothing but that wait: `SourceCacheUpdater` falls back to the local
 copy and the refresh runs again next cycle.
 
 **Several lines with one id are one exception, not several faults.** An id is assigned per exception
@@ -78,8 +78,8 @@ Count distinct ids, not lines.
 ## Remedy
 
 None is known for cause 1; the application stops completely regardless. For cause 2, retry the request
-if its result was wanted. For cause 3, the refresh falls back to the local copy and runs again next cycle; setting
-`Quotinator:AutoUpdateSources=false` stops source refresh entirely, and with it that form of the line.
+if its result was wanted. For cause 3, the refresh falls back to the local copy and runs again next cycle; leaving
+`Quotinator:AutoUpdateSources` off, its default, stops source refresh entirely, and with it that form of the line.
 
 ## Notes
 

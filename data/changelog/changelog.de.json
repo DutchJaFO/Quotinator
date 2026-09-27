@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 424],
     "highlights": [
       "Wenn Quotinator die Sicherung nicht erstellen kann, die vor dem Aktualisieren oder Befüllen der Datenbank nötig ist, hält es jetzt sicher an und sagt warum. Angeboten werden nur die Möglichkeiten, die funktionieren können, zusammen mit einer Anleitung, wie sich der Rest beheben lässt.",
       "Eine Fernsehserie lässt sich jetzt in Staffeln unterteilen, und ein Zitat kann der Folge zugeordnet werden, aus der es stammt, sofern diese bekannt ist: statt dass sich jedes Zitat einer langlaufenden Serie einen einzigen Eintrag für die ganze Serie teilt.",
@@ -27,7 +27,8 @@
       "Das erneute Laden Ihrer Zitate bestätigt jetzt, was geschehen ist: eine Meldung je Datei, mit der Anzahl der je Art hinzugefügten oder aktualisierten Einträge, sodass ein reibungsloser Ladevorgang dies auch mitteilt, statt still zu enden.",
       "Selbst hinzugefügte Zitatdateien überschreiben gespeicherte Zitate nicht mehr stillschweigend. Bisher ersetzte eine Datei, die von bereits Gespeichertem abwich, dieses kommentarlos; jetzt wird die Änderung Ihnen zur Entscheidung vorgelegt. Wenn Sie sich auf das alte Verhalten verlassen haben, setzen Sie `Quotinator__DefaultConflictPolicy` auf `newest-wins`.",
       "Wenn eine Zitatdatei Änderungen mitbringt, die Ihre Entscheidung brauchen, weist Quotinator jetzt darauf hin, statt sie entdecken zu lassen. Eine neue Seite Importprüfung listet alle diese Änderungen auf, und sowohl die Benachrichtigung als auch die Seite lassen Sie das Gespeicherte behalten oder das Neue übernehmen. Die meisten Konflikte behebt man weiterhin am besten, indem man die Datei korrigiert und neu lädt; eine ausführlichere Gegenüberstellung ist geplant.",
-      "Quotinator schreibt jetzt jeden Fehler, auf den es stößt, in sein Protokoll, auch die, die es selbst behandelt, damit sich ein Problem überall nachverfolgen lässt, wo Quotinator läuft: jeder Fehler trägt eine kurze Kennung, die alle Zeilen dazu miteinander verbindet."
+      "Quotinator schreibt jetzt jeden Fehler, auf den es stößt, in sein Protokoll, auch die, die es selbst behandelt, damit sich ein Problem überall nachverfolgen lässt, wo Quotinator läuft: jeder Fehler trägt eine kurze Kennung, die alle Zeilen dazu miteinander verbindet.",
+      "Quotinator lädt beim Start keine aktualisierten Zitatquellen mehr herunter, es sei denn, Sie aktivieren es. Es verwendet die mit jeder Version mitgelieferten Zitate unverändert, sodass eine langsame oder nicht erreichbare Download-Seite den Start nicht mehr aufhalten kann. Wenn Sie sich auf die automatische Aktualisierung verlassen haben, aktivieren Sie sie in den Optionen des Add-ons oder in Ihrer Konfiguration wieder."
     ],
     "audienceHighlights": {
       "notification": [
@@ -70,7 +71,9 @@
       "`Scalar.AspNetCore` von 2.17.1 auf 2.17.6 aktualisiert",
       "`MSTest` von 4.4.0 auf 4.4.1 aktualisiert (nur Tests)",
       "`Serilog` von 4.3.0 auf 4.4.0 aktualisiert",
-      "`github/codeql-action` von 4.37.7 auf 4.37.9 aktualisiert (nur CI)"
+      "`github/codeql-action` von 4.37.7 auf 4.37.9 aktualisiert (nur CI)",
+      "`Quotinator:AutoUpdateSources` ist jetzt standardmäßig `false`, und die Option `auto_update_sources` beider Add-ons standardmäßig aus: Die mitgelieferten Quelldateien werden stattdessen von Hand aktualisiert und eingecheckt (issue #424)",
+      "Jeder Host für automatisierte Tests startet jetzt mit deaktivierter Quellaktualisierung und deaktivierten mitgelieferten Quellen sowie einem eigenen Datenverzeichnis, das beim Beenden des Hosts entfernt wird; ein Test, der ein Schema benötigt, erhält eine vorbereitete Datenbank: Testwartung ohne Auswirkung auf die Anwendung (issue #424)"
     ],
     "fixed": [
       "Eine ausstehende Datenbankmigration lief ohne ihre Sicherheitssicherung, wenn diese Sicherung nicht erstellt werden konnte. Der Start verweigert die Migration jetzt, bleibt in einem eingeschränkten Zustand und nennt das Hindernis und wie es sich beheben lässt (Issue #348)",
@@ -104,7 +107,8 @@
       "Die Seiten im eingeschränkten Zustand wurden nicht dargestellt, wenn die Datenbank nicht verfügbar war: Startseite und Benachrichtigungsseite fragten sie beide während des Renderns ab, was eine Fehlerseite anstelle der Erklärung ergab, für die sie gedacht sind (issue #326)",
       "Der Changelog-Speicher fiel wenige Minuten nach dem Start unbemerkt aus, woraufhin die Über-Seite für den Rest der Sitzung aus den ursprünglichen Dateien bereitgestellt wurde. Er liegt jetzt auf der Festplatte statt nur im Arbeitsspeicher und bleibt damit verfügbar, solange Quotinator läuft (issue #309)",
       "Das erneute Einlesen der mitgelieferten Zitatdaten markiert dieselben, bereits gelösten Konflikte nicht mehr bei jedem erneuten Einlesen zur Überprüfung: eine Korrektur, die einen Konflikt beim einen Durchlauf bereits behoben hat, wird beim nächsten jetzt korrekt als weiterhin behoben erkannt, statt jedes Mal erneut als fehlerhaft markiert zu werden (issue #374)",
-      "Die Entscheidung eines Kurators, das ursprüngliche Datum eines Zitats beizubehalten, wenn zwei widersprüchliche Kopien davon existieren, wirkt sich jetzt tatsächlich aus. Zuvor konnte sie stillschweigend von der zuletzt verarbeiteten Kopie überschrieben werden, sodass das Zitat weiterhin das falsche Datum anzeigen konnte, selbst nachdem der Konflikt angeblich gelöst war (issue #378)"
+      "Die Entscheidung eines Kurators, das ursprüngliche Datum eines Zitats beizubehalten, wenn zwei widersprüchliche Kopien davon existieren, wirkt sich jetzt tatsächlich aus. Zuvor konnte sie stillschweigend von der zuletzt verarbeiteten Kopie überschrieben werden, sodass das Zitat weiterhin das falsche Datum anzeigen konnte, selbst nachdem der Konflikt angeblich gelöst war (issue #378)",
+      "Wurde die Anwendung beendet, während ihre Startarbeit noch im Hintergrund lief, lief diese Arbeit gegen bereits beendete Dienste weiter, mit noch offenen Datenbankverbindungen. Die Anwendung wartet jetzt, bis diese Arbeit abgeschlossen ist, bevor sie das Beenden meldet (issue #424)"
     ],
     "removed": [
       "Die Einstellung `Quotinator__NotificationDefaultExpiryHours` wurde entfernt. Sie legte fest, wie lange eine Benachrichtigung sichtbar blieb, bevor sie ablief: was nicht mehr zutrifft, da Benachrichtigungen nur noch ablaufen, wenn die erzeugende Stelle es angibt; die Einstellung hatte damit nichts mehr zu steuern (issue #312)"
