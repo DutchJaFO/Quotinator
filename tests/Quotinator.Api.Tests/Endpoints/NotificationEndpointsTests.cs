@@ -28,7 +28,11 @@ public class NotificationEndpointsTests
     private static WebApplicationFactory<Program> CreateFactory(
         string? adminApiKey = null, FakeNotificationReader? notificationReader = null, FakeNotificationWriter? notificationWriter = null,
         INotificationActionExecutor? actionExecutor = null) =>
-        new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
+        // The prepared database (#424): the initializer is a no-op, yet the real action executor still
+        // reads the live import batches to decide what each notification offers, so the schema has to
+        // exist. These tests passed before only because another test's startup had created it in the
+        // build output's shared data folder.
+        new QuotinatorWebApplicationFactory(preparedDatabase: true).WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {

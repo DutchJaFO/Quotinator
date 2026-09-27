@@ -237,6 +237,31 @@ Unit tests must never write to or overwrite the source data they read. Tests mus
 
 This applies to reference files, seed data, JSON fixtures, and any other file a test reads as its expected input. If a test needs a known starting state, that state is created explicitly at the start of the test (e.g. in `[TestInitialize]` or as a local temp file) and torn down at the end. It is never written to a shared file that other tests or tools also depend on.
 
+## Tests do not depend on external factors, unless that is what they test
+
+**A test's result depends only on the project and the state the test itself sets up** (developer,
+2026-09-27): never on the network, an upstream service, or state an earlier run left behind. A test that
+someone else's network can fail is not testing what it claims to.
+
+**This does not forbid tests that use external sources.** It limits them to the tests whose subject is that
+external aspect: a test of the source download, or the external-data sentinel below. Such a test turns the
+external dependency on explicitly, where a reader can see it; every other test runs with it off.
+
+**Default the dependency off where tests are built, not in each test.** `QuotinatorWebApplicationFactory`
+gives every host it builds the source refresh off, the bundled sources off, and a fresh temporary data
+directory of its own, removed when the host stops; every T2 profile pins the refresh off the same way
+(`automated-testing/README.md`). A test whose subject needs one of these otherwise sets it with its own
+`UseSetting`. Found 2026-09-27: left at its default, every real startup in `Quotinator.Api.Tests`
+refreshed the bundled sources from GitHub once the cached copy was a day old, and two downloads 69 seconds
+apart held startup past the factory's 30-second wait. The same defect had been fixed earlier in two test
+classes, each on its own, while the factory every other class uses kept it.
+
+**A test that needs a schema or content is given it, never left to find it.** The factory's
+`preparedDatabase: true` starts a host from a copy of `PreparedDatabase`, built once per run by a real
+startup with no outside sources; content a test needs beyond the schema, it adds itself. Found the same
+day: eight notification endpoint tests passed only because another test's startup had created the tables
+they read in the build output's shared data folder, and failed the first time they ran against their own.
+
 ## Tests must not depend on bundled data to stay green
 
 **A unit test must not read `data/sources/` or `scripts/cache/` at run time.** Those files change when

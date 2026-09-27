@@ -12,14 +12,14 @@ using Quotinator.Data.Paths;
 namespace Quotinator.Api.Tests.Startup;
 
 /// <summary>
-/// #326 — the application must never terminate because the data directory cannot be written. The worst
+/// #326: the application must never terminate because the data directory cannot be written. The worst
 /// acceptable outcome is a degraded state that still serves <c>/health</c>, the OpenAPI surface and the
 /// Blazor pages, so an operator can see what happened and reach the documented recovery route.
 /// <para>
 /// These deliberately do not use throwing fakes for <c>IDatabaseInitializer</c>/<c>IAppVersionTracker</c>.
 /// A hand-thrown exception would prove only that <c>Program.cs</c> tolerates whatever the fake throws;
 /// pointing the real <c>SqliteConnectionFactory</c> at an unopenable path exercises the real initializer,
-/// the real tracker and the real SQLite error code — the thing that actually failed live.
+/// the real tracker and the real SQLite error code: the thing that actually failed live.
 /// </para>
 /// <para>
 /// The sabotage techniques are the ones <c>scripts/testing/sqlite-storage-probe.csx</c> measured (2026-08-20):
@@ -54,7 +54,7 @@ public class StartupResilienceTests
 
         Assert.IsTrue(
             factory.Services.GetRequiredService<StartupPhaseState>().IsComplete,
-            "startup never completed — the process died before it could reach a degraded state, which is "
+            "startup never completed: the process died before it could reach a degraded state, which is "
             + "the failure #326 reports");
     }
 
@@ -94,7 +94,7 @@ public class StartupResilienceTests
 
     /// <summary>
     /// Every Blazor route `DatabaseHealthGateMiddleware` exempts is, by construction, reachable exactly
-    /// when the database is broken — so each one must render rather than 500. Covering only "/" would
+    /// when the database is broken, so each one must render rather than 500. Covering only "/" would
     /// have missed that the same defect reaches several pages through shared components.
     /// </summary>
     [TestMethod]
@@ -114,7 +114,7 @@ public class StartupResilienceTests
     }
 
     /// <summary>
-    /// #327 — a database file that is not a database at all. Distinct from the unopenable-path case
+    /// #327: a database file that is not a database at all. Distinct from the unopenable-path case
     /// above: there SQLite cannot reach a file, here it reaches one and rejects its contents, which is
     /// what a half-written or externally-corrupted volume actually produces.
     /// </summary>
@@ -127,7 +127,7 @@ public class StartupResilienceTests
 
         Assert.IsTrue(
             factory.Services.GetRequiredService<StartupPhaseState>().IsComplete,
-            "startup never completed — the process died rather than degrading, which is the outcome the "
+            "startup never completed: the process died rather than degrading, which is the outcome the "
             + "never-crash contract forbids");
     }
 
@@ -145,12 +145,12 @@ public class StartupResilienceTests
     }
 
     /// <summary>
-    /// #327/#289 — asserts the shipped behaviour: an overshoot runs healthy, plus a notification.
+    /// #327/#289: asserts the shipped behaviour: an overshoot runs healthy, plus a notification.
     /// <para>
     /// <strong>This contract is being reversed by #350.</strong> An overshoot means the missing
     /// migrations may have added, altered or removed things this build does not expect, so the schema's
     /// shape is unknown and serving from it is a foot gun. #350 makes it degrade, and <em>replaces</em>
-    /// this test rather than editing it — the method name states the old contract, and flipping the
+    /// this test rather than editing it: the method name states the old contract, and flipping the
     /// assertion in place would leave a name that lies about what it checks.
     /// </para>
     /// </summary>
@@ -175,7 +175,7 @@ public class StartupResilienceTests
         HttpResponseMessage health = await client.GetAsync(HealthRoute, TestContext.CancellationToken);
         Assert.AreEqual(
             HttpStatusCode.OK, health.StatusCode,
-            "an overshoot is not a fault — the schema is complete and the app works normally, so "
+            "an overshoot is not a fault: the schema is complete and the app works normally, so "
             + "degrading here would be the regression, not the safeguard");
 
         HttpResponseMessage notifications = await client.GetAsync(NotificationsRoute, TestContext.CancellationToken);
@@ -191,7 +191,7 @@ public class StartupResilienceTests
     public async Task Startup_KeysDirectoryCannotBeCreated_StartsDegradedInsteadOfCrashingBeforeKestrelBinds()
     {
         string dataDirectory = NewDataDirectory();
-        // A file where the keys/ directory belongs. Directory.CreateDirectory then throws IOException —
+        // A file where the keys/ directory belongs. Directory.CreateDirectory then throws IOException,
         // deterministically, and identically on Windows and Linux. This runs at Program.cs:233, before
         // app.StartAsync(), so an unguarded throw kills the process before Kestrel binds: no wait page,
         // no /health, no OpenAPI at all.
@@ -214,7 +214,7 @@ public class StartupResilienceTests
     {
         string dataDirectory = NewDataDirectory();
         // Bytes that are not a SQLite file: the 16-byte header check fails and SQLite reports
-        // SQLITE_NOTADB. Deliberately not a truncated real database — that reports SQLITE_CORRUPT from
+        // SQLITE_NOTADB. Deliberately not a truncated real database: that reports SQLITE_CORRUPT from
         // a different code path, and producing one in-process would mean seeding a database first only
         // to chop it, which is slower and pins less. The container scenario covers truncation.
         File.WriteAllText(
@@ -225,7 +225,7 @@ public class StartupResilienceTests
     }
 
     /// <summary>
-    /// Records one version beyond whatever this build actually migrated to, rather than a literal —
+    /// Records one version beyond whatever this build actually migrated to, rather than a literal:
     /// the suite's rule that no test asserts or depends on a specific migration number applies here
     /// too, and a literal would need editing every time a milestone adds a migration.
     /// </summary>
@@ -246,7 +246,7 @@ public class StartupResilienceTests
     {
         string dataDirectory = NewDataDirectory();
         // A directory where the database file belongs: SQLite fails to open it with SQLITE_CANTOPEN at
-        // DatabaseInitializer.EnableWal — the same throw site, and the same propagation path through
+        // DatabaseInitializer.EnableWal: the same throw site, and the same propagation path through
         // AppVersionTracker.GetLastActiveAsync, as the live read-only-mount failure.
         Directory.CreateDirectory(Path.Combine(dataDirectory, DataPaths.DatabaseFile));
 
@@ -257,14 +257,6 @@ public class StartupResilienceTests
         new QuotinatorWebApplicationFactory().WithWebHostBuilder(builder =>
         {
             builder.UseSetting("Quotinator:DataDir", dataDirectory);
-
-            // These tests are about what startup does when a directory cannot be written; nothing here
-            // concerns downloading sources. Left on, the keys/ case reaches the real refresh — its data
-            // directory is otherwise valid — and a slow or unreachable upstream then holds startup for
-            // up to the connect budget per source. That was invisible while the budget was 10 s and
-            // became a 30 s harness timeout when #323's budget was raised to 60 s. A test that can be
-            // failed by someone else's network is not testing what it claims to.
-            builder.UseSetting("Quotinator:AutoUpdateSources", "false");
         });
 
     private string NewDataDirectory()

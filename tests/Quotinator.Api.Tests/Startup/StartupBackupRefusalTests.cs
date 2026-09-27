@@ -109,9 +109,6 @@ public class StartupBackupRefusalTests
         {
             builder.UseSetting("Quotinator:DataDir", dataDirectory);
             builder.UseSetting("Quotinator:MaxBackupStorageGb", maxBackupStorageGb.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-            // Nothing here concerns downloading sources; left on, a slow upstream would hold startup.
-            builder.UseSetting("Quotinator:AutoUpdateSources", "false");
         });
 
     private string NewDataDirectory()
