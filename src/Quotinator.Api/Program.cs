@@ -667,6 +667,10 @@ builder.Services.AddSingleton<Quotinator.Api.Startup.DatabaseHealthState>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.NotificationExecutionState>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.StartupUxState>();
 builder.Services.AddSingleton<Quotinator.Api.Startup.StartupPhaseState>();
+// #424: the work startup begins in the background is waited for when the host stops, so no query is
+// still open once it reports stopped, and nothing runs on against a disposed container.
+builder.Services.AddSingleton<Quotinator.Api.Startup.StartupBackgroundWork>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Quotinator.Api.Startup.StartupBackgroundWork>());
 builder.Services.AddSingleton<DatabaseHealthGateMiddleware>();
 builder.Services.AddSingleton<StartupWaitMiddleware>();
 builder.Services.AddSingleton<IApiLocalizer>(
@@ -945,7 +949,11 @@ catch (Exception ex)
 // (IChangelogReader, once built) already tolerates the changelog database not being ready yet by falling
 // back to the JSON-backed IChangelogService, the same fallback it uses for a genuine failure. There is
 // nothing else in this process that can race the keyed changelog connection factory before this runs.
-_ = Task.Run(async () =>
+// #424: started through StartupBackgroundWork rather than a bare Task.Run, so the host's shutdown waits
+// for it.
+Quotinator.Api.Startup.StartupBackgroundWork startupBackgroundWork =
+    app.Services.GetRequiredService<Quotinator.Api.Startup.StartupBackgroundWork>();
+startupBackgroundWork.Start(async () =>
 {
     // Every exit path must report an outcome. A reader that finds the database empty waits on this
     // rather than assuming the emptiness is meaningful, so a silent return here would leave it waiting
@@ -1205,7 +1213,7 @@ if (dbHealth.IsHealthy && dbInitializer.SchemaVersionOvershootDetected)
 // non-critical.
 if (dbHealth.IsHealthy)
 {
-    _ = Task.Run(async () =>
+    startupBackgroundWork.Start(async () =>
     {
         try
         {
