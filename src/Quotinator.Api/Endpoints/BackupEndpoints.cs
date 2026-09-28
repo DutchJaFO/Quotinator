@@ -15,6 +15,7 @@ using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Models;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 
 namespace Quotinator.Api.Endpoints;
@@ -146,9 +147,13 @@ internal static class BackupEndpoints
             "so it answers while the database is degraded, which is the state it exists for. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`.");
 
-        backups.MapPost("/create", async (BackupOperations operations) =>
+        backups.MapPost("/create", async (BackupOperations operations, NotificationConditionChecks conditionChecks) =>
         {
             DatabaseBackupResult result = await operations.CreateAsync($"[Api - {CreateBackupName}]");
+
+            // #348: once, where the request ends, rather than inside the operation it called. A refusal
+            // re-checks too: it is how the folder reaching its maximum comes to be reported.
+            await conditionChecks.RunAsync();
 
             if (!result.Succeeded)
             {
@@ -238,9 +243,14 @@ internal static class BackupEndpoints
         backups.MapDelete("/{name}", async (
             string name,
             BackupOperations operations,
+            NotificationConditionChecks conditionChecks,
             IApiLocalizer localizer) =>
         {
             BackupDeleteOutcome outcome = await operations.RemoveAsync(name, $"[Api - {DeleteBackupName}]");
+
+            // #348: a removal is what brings the folder back under its quota or maximum, so this is the
+            // request whose end most often resolves one of those notifications.
+            await conditionChecks.RunAsync();
 
             // Every outcome is a stated answer. A removal the filesystem refuses is an ordinary
             // condition with a remedy (409, the same shape a refused reset uses) and never an

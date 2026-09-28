@@ -20,7 +20,7 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**Execute step 26.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
+**Execute step 27.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
 issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
 of them unmet in the code; steps 7 to 18 closed them. Steps 19 to 25 correct the quota model, which the
 first pass built backwards (see *Quota: two levels* for the settled model); every design question they
@@ -1011,7 +1011,7 @@ silently did not apply.
 Data 1,466, Api 1,167, Core 1,730, 0 warnings.
 
 ### 26. The checks run once at the end of a series
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Step 21 calls `conditionChecks.RunAsync()` inside `BackupOperations.CreateAsync` *and* `RemoveAsync`, so
 *Remove the oldest backup, then back up and reseed* re-evaluates every registered check three times in
@@ -1023,6 +1023,40 @@ boundaries to cover are the notification actions, the admin endpoints that take 
 Reset, and startup, with `POST /notifications/refresh` unchanged since a caller asking for a refresh is
 already asking for exactly one. Tests assert the count of evaluations per action, not only that one
 happened, since "ran at least once" is what the current wiring already satisfies.
+
+**Done 2026-09-28.** `BackupOperations` no longer re-checks anything and no longer takes the checks at
+all: it is one operation, and an action can be several. The call now sits at four boundaries, each the
+end of a series: `NotificationActionExecutor.ExecuteAsync` (which wraps the switch it used to be, so
+every option is covered once, whatever it did inside), the backup create and delete endpoints, and the
+admin reset endpoint. Startup and the refresh endpoint were already once each.
+
+**The `OnResetCompletedAsync` override is gone; the hook stays.** `ResetAsync` has two callers, the admin
+endpoint and the Reset action, and both do more work afterwards, so the initializer was never the end of
+the series: overriding it would have made a Reset evaluate twice, which is the defect this step removes.
+`QuotinatorDatabaseInitializer` no longer overrides it and no longer takes `NotificationConditionChecks`,
+so the initializer is back to knowing nothing about notifications.
+
+**The hook itself was removed first, and that was wrong** (developer, 2026-09-28). It is one of
+`DatabaseInitializer`'s documented `protected virtual` extension points, listed in the class summary
+beside `OnInitialisedAsync`, `OnReseedAsync` and `OnResetAsync`, most of which no-op by default and exist
+for consumers rather than for this one. Deleting it because Quotinator stopped overriding it assumed no
+other consumer would want it, in a project whose `Quotinator.Data` is required by ADR 004 to stay
+reusable. The cost had even been written down in the commit draft and shipped anyway, which is the actual
+error: naming a cost is not permission to impose it. The hook is restored with its own summary saying why
+Quotinator does not override it.
+
+`Reseed_EveryOption_EvaluatesTheConditionsOnce` counts evaluations across all three reseed options, and
+`RecordingConditionCheck` counts rather than flags, since a boolean cannot tell one evaluation from
+three. Red against a doubled call at the action boundary, where all three rows failed.
+`Reseed_BackUpThenReseed_RunsTheConditionChecks` was deleted: once it asserted a count it made the same
+statement as the parameterised test's first row.
+
+**Three existing tests supplied their own red.** Removing the per-operation calls turned
+`Reset_InsideTheReserve_RaisesTheWarning`, `OnDemandBackup_InsideTheReserve_RaisesTheWarning` and
+`Deletion_BringingTheFolderUnderTheQuota_ClearsTheWarning` red, naming exactly the three endpoint
+boundaries still to wire, and they went green as each was wired.
+
+Api 1,169, Data 1,466, Core 1,730, 0 warnings.
 ### 27. Documentation
 **Status:** ⬜ Not started
 
@@ -1078,7 +1112,7 @@ and the smoke set; T1 by the developer.
 | 34 | ✅ | `POST /notifications/refresh` runs every registered condition check, needs no admin key, and reports what each did | Unit test | Step 21: answered without an admin key; the quota warning cleared and raised on request; a second, test-only check also run; the response per kind |
 | 35 | ✅ | The warning is kept inside its band, and removed both below the buffer and above the max | Unit test | Step 24: one test per case, and `backup/08` reading the notification past the ceiling |
 | 36 | ✅ | A folder at or above the max always has an error open, however it got there, and never alongside the warning | Unit test | Step 25: raised at and above the max, absent below it, never open with the warning, and `backup/08` step 9 |
-| 37 | ❌ | A composite action evaluates the conditions once, not once per operation inside it | Unit test | Step 26: the count of evaluations per action, not merely that one happened |
+| 37 | ✅ | A composite action evaluates the conditions once, not once per operation inside it | Unit test | Step 26: the count of evaluations per action, not merely that one happened |
 
 ---
 

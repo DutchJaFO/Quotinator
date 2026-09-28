@@ -224,7 +224,7 @@ internal static class AdminEndpoints
             "Protected by a concurrency-1 limiter: a second call while one is in progress receives `429 Too Many Requests` immediately. " +
             "Requires `X-Api-Key: <key>` matching `Quotinator:AdminApiKey`. Returns `401` if the key is not configured or does not match.");
 
-        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, INotificationWriter notificationWriter, INotificationReader notificationReader, INotificationTextSource notificationTextSource, IAppVersionTracker appVersionTracker, IVersionService versionService, IAuditEntryWriter auditWriter, ICallerContext callerContext, ILogger<Program> logger, bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) =>
+        adminGroup.MapPost("/database/reset", async (IDatabaseInitializer db, Quotinator.Api.Startup.DatabaseHealthState dbHealth, INotificationWriter notificationWriter, INotificationReader notificationReader, INotificationTextSource notificationTextSource, IAppVersionTracker appVersionTracker, IVersionService versionService, IAuditEntryWriter auditWriter, ICallerContext callerContext, NotificationConditionChecks conditionChecks, ILogger<Program> logger, bool preserveSchemaVersion = false, bool forceSourceRefresh = false, bool allowNoBackup = false) =>
         {
             DatabaseOperationResult reset = await db.ResetAsync(preserveSchemaVersion, forceSourceRefresh, allowNoBackup);
 
@@ -311,6 +311,12 @@ internal static class AdminEndpoints
             {
                 logger.LogWarning(ex, "[Server] Failed to record the current app version after Reset; non-fatal, the reset itself still succeeded.");
             }
+
+            // #348: once, at the end of the request rather than inside ResetAsync. A Reset takes a backup
+            // and rebuilds every table, this endpoint writes its own notification afterwards, and the
+            // checks belong after all of it: the reset is one operation in the series, not the series.
+            await conditionChecks.RunAsync();
+
             return Results.Ok(new DatabaseSeedSummaryResponse
             {
                 Quotes          = db.QuoteCount,

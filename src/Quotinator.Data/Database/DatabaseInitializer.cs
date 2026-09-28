@@ -15,7 +15,8 @@ namespace Quotinator.Data.Database;
 /// <summary>
 /// Runs WAL setup and schema migrations. Seeding behaviour is provided by subclasses via the
 /// protected virtual hooks <see cref="OnInitialisedAsync"/>, <see cref="OnReseedAsync"/>, and
-/// <see cref="OnResetAsync"/>. The base implementations of those hooks are no-ops.
+/// <see cref="OnResetAsync"/>, and <see cref="OnResetCompletedAsync"/> runs once a Reset has finished.
+/// The base implementations of those hooks are no-ops.
 /// </summary>
 /// <remarks>Initialises the instance with connection factory, options, and ordered schema migrations.</remarks>
 /// <param name="factory">Factory used to open SQLite connections.</param>
@@ -677,13 +678,6 @@ public class DatabaseInitializer(
         return DatabaseOperationResult.Success(backupSkippedByOverride: readiness != BackupOutcome.Succeeded);
     }
 
-    /// <summary>
-    /// Called once a Reset has completed, after the rebuild and before its result is returned (#348): the
-    /// one point every Reset passes through, whoever asked for it. Override to re-check what a Reset
-    /// changes; the base does nothing.
-    /// </summary>
-    protected virtual Task OnResetCompletedAsync() => Task.CompletedTask;
-
     /// <inheritdoc/>
     public async Task<DatabaseBackupResult> CreateBackupAsync()
     {
@@ -761,6 +755,19 @@ public class DatabaseInitializer(
     /// domain-specific reset implementation. Base implementation does nothing.
     /// </summary>
     protected virtual Task OnResetAsync(SqliteConnection connection, bool preserveSchemaVersion, bool forceSourceRefresh) => Task.CompletedTask;
+
+    /// <summary>
+    /// Called once a Reset has completed, after the rebuild and before its result is returned (#348): the
+    /// one point every Reset passes through, whoever asked for it. Override to react to a database that
+    /// has just been rebuilt. The base implementation does nothing.
+    /// <para>
+    /// Quotinator itself does not override this. Its notification conditions are re-checked where each
+    /// action ends rather than inside the Reset, since a caller does more after <see cref="ResetAsync"/>
+    /// returns and the Reset is one operation in that series rather than the series. A consumer whose
+    /// series genuinely ends here is what the hook is for.
+    /// </para>
+    /// </summary>
+    protected virtual Task OnResetCompletedAsync() => Task.CompletedTask;
 
     /// <summary>
     /// Called unconditionally after a genuinely fresh database is created via the baseline path

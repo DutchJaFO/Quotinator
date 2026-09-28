@@ -27,11 +27,13 @@ namespace Quotinator.Api.Services;
 /// <param name="backupOperations">Takes and removes backups for a reseed, logged and audited as an operator's own request is (#348).</param>
 /// <param name="auditWriter">Records a reseed that ran without a backup (#348).</param>
 /// <param name="callerContext">Names who asked, for that audit entry.</param>
+/// <param name="conditionChecks">Re-checks every notification whose condition an action can change, once the action has finished (#348).</param>
 internal sealed class NotificationActionExecutor(
     IDatabaseInitializer databaseInitializer, DatabaseHealthState databaseHealth, INotificationWriter notificationWriter,
     IAppVersionTracker appVersionTracker, IVersionService versionService, ILogger<NotificationActionExecutor> logger,
         IImportActionService importActions, IImportBatchRepository importBatches, IDatabaseBackupReader backupReader,
-    BackupOperations backupOperations, IAuditEntryWriter auditWriter, ICallerContext callerContext) : INotificationActionExecutor
+    BackupOperations backupOperations, IAuditEntryWriter auditWriter, ICallerContext callerContext,
+    Quotinator.Data.Notifications.NotificationConditionChecks conditionChecks) : INotificationActionExecutor
 {
     /// <inheritdoc/>
     public bool CanExecute(NotificationDismissTrigger trigger) => trigger switch
@@ -118,6 +120,20 @@ internal sealed class NotificationActionExecutor(
     public async Task<NotificationActionResult> ExecuteAsync(
         NotificationDismissTrigger trigger, NotificationMetadataDto? metadata = null,
         FieldResolutionChoice? choice = null, NotificationActionOption? option = null)
+    {
+        NotificationActionResult result = await RunActionAsync(trigger, metadata, choice, option);
+
+        // #348: once, here, because this is where the action ends. An option can be several operations
+        // (remove the oldest backup, take one, then reseed), and re-evaluating after each would run every
+        // registered check three times for one thing the user asked for.
+        await conditionChecks.RunAsync();
+
+        return result;
+    }
+
+    private async Task<NotificationActionResult> RunActionAsync(
+        NotificationDismissTrigger trigger, NotificationMetadataDto? metadata,
+        FieldResolutionChoice? choice, NotificationActionOption? option)
     {
         switch (trigger)
         {
