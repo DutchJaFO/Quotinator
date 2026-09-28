@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -8,6 +9,7 @@ using Quotinator.Data.Database;
 using Quotinator.Data.Entities;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Import;
+using Quotinator.Data.Notifications;
 using Quotinator.Data.Repositories;
 using Quotinator.Data.Testing.NoOps;
 
@@ -51,7 +53,8 @@ internal sealed class BackupTestHarness : IDisposable
         string? adminApiKey            = TestKey,
         int maxBackupStorageGb         = 1,
         int backupQuotaPercent         = DatabaseOptions.DefaultBackupQuotaPercent,
-        IDiskSpaceProvider? diskSpace  = null)
+        IDiskSpaceProvider? diskSpace  = null,
+        INotificationConditionCheck? conditionCheck = null)
     {
         BackupsPath = Path.Combine(Path.GetTempPath(), $"quotinator-349-{Guid.NewGuid():N}");
         Directory.CreateDirectory(BackupsPath);
@@ -81,6 +84,8 @@ internal sealed class BackupTestHarness : IDisposable
                 services.AddSingleton(disk);
                 services.AddSingleton<IDatabaseBackupReader>(new DatabaseBackupReader(Options, disk));
                 services.AddSingleton<IDatabaseBackupWriter>(new DatabaseBackupWriter(Options));
+                if (conditionCheck is not null)
+                    services.AddSingleton(new NotificationConditionChecks([conditionCheck], NullLogger<NotificationConditionChecks>.Instance));
             });
 
             builder.ConfigureAppConfiguration((_, config) =>

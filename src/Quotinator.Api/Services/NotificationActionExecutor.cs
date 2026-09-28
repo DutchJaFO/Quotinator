@@ -126,7 +126,7 @@ internal sealed class NotificationActionExecutor(
         // #348: once, here, because this is where the action ends. An option can be several operations
         // (remove the oldest backup, take one, then reseed), and re-evaluating after each would run every
         // registered check three times for one thing the user asked for.
-        await conditionChecks.RunAsync();
+        await conditionChecks.RunReportingFailuresAsync();
 
         return result;
     }

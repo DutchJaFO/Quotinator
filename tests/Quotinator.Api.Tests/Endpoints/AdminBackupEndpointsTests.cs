@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using Quotinator.Data.Entities;
+using Quotinator.Data.Enums;
+using Quotinator.Data.Notifications;
 
 namespace Quotinator.Api.Tests.Endpoints;
 
@@ -79,6 +81,34 @@ public class AdminBackupEndpointsTests
 
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
         Assert.AreSequenceEqual(SurvivingFile, harness.FilesOnDisk());
+    }
+
+    /// <summary>
+    /// #348: the condition checks that follow a deletion are a re-verification of something else, not the
+    /// deletion's own outcome, so one that throws must not turn the answer into an unhandled 500. Found by
+    /// ``backup/05`` step 7 on a read-only data directory, where the checks cannot write their notification.
+    /// </summary>
+    [TestMethod]
+    public async Task DeleteBackup_WhenAConditionCheckThrows_StillAnswersTheDeletionsOwnOutcome()
+    {
+        using BackupTestHarness harness = new BackupTestHarness(conditionCheck: new ThrowingConditionCheck());
+        harness.WriteBackup("delete-me.db");
+
+        HttpResponseMessage response = await harness.AuthenticatedClient()
+            .DeleteAsync($"{List}/delete-me.db", TestContext.CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    /// <summary>A check that cannot do its work, the way a read-only data directory makes it.</summary>
+    private sealed class ThrowingConditionCheck : INotificationConditionCheck
+    {
+        /// <inheritdoc/>
+        public NotificationMetadataKind Kind => NotificationMetadataKind.BackupQuotaReached;
+
+        /// <inheritdoc/>
+        public Task<NotificationConditionOutcome> CheckAsync() =>
+            throw new InvalidOperationException("unable to open database file");
     }
 
     /// <summary>A deletion is recorded in the audit trail, naming the file, so it outlives the log.</summary>

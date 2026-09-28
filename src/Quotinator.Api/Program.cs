@@ -1251,18 +1251,11 @@ if (dbHealth.IsHealthy)
 // accounted for: the warning they may call for cannot be written at the moment of the pre-migration
 // backup, into a table the build has not migrated yet, so it is written here, once the schema is current.
 // Only while healthy: a degraded database has nothing to write a notification into.
+// Its own try/catch was the first copy of this, and the endpoints then diverged from it, which is how a
+// read-only data directory turned a handled 409 into an unhandled 500 (backup/05 step 7). One
+// implementation now, named for the kind of call site it serves.
 if (dbHealth.IsHealthy)
-{
-    try
-    {
-        await app.Services.GetRequiredService<Quotinator.Data.Notifications.NotificationConditionChecks>().RunAsync();
-    }
-    catch (Exception ex)
-    {
-        app.Services.GetRequiredService<ILogger<Program>>()
-            .LogWarning(ex, "[Server] Failed to re-check the notifications whose condition can change; non-fatal, startup continues.");
-    }
-}
+    await app.Services.GetRequiredService<Quotinator.Data.Notifications.NotificationConditionChecks>().RunReportingFailuresAsync();
 
 // #280: initialisation (successful or not) is now finished: StartupWaitMiddleware stops
 // intercepting requests from this point on. Marked complete regardless of dbHealth's outcome: a

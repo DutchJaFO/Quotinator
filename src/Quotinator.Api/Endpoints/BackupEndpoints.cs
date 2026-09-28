@@ -152,8 +152,9 @@ internal static class BackupEndpoints
             DatabaseBackupResult result = await operations.CreateAsync($"[Api - {CreateBackupName}]");
 
             // #348: once, where the request ends, rather than inside the operation it called. A refusal
-            // re-checks too: it is how the folder reaching its maximum comes to be reported.
-            await conditionChecks.RunAsync();
+            // re-checks too: it is how the folder reaching its maximum comes to be reported. Reporting
+            // rather than propagating: the backup's own answer is not the checks' to change.
+            await conditionChecks.RunReportingFailuresAsync();
 
             if (!result.Succeeded)
             {
@@ -249,8 +250,9 @@ internal static class BackupEndpoints
             BackupDeleteOutcome outcome = await operations.RemoveAsync(name, $"[Api - {DeleteBackupName}]");
 
             // #348: a removal is what brings the folder back under its quota or maximum, so this is the
-            // request whose end most often resolves one of those notifications.
-            await conditionChecks.RunAsync();
+            // request whose end most often resolves one of those notifications. Reporting rather than
+            // propagating, since a read-only data directory leaves the checks unable to write at all.
+            await conditionChecks.RunReportingFailuresAsync();
 
             // Every outcome is a stated answer. A removal the filesystem refuses is an ordinary
             // condition with a remedy (409, the same shape a refused reset uses) and never an

@@ -94,6 +94,10 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Warning, Message = "[Database - Backup] Quotinator:BackupQuotaPercent is {Configured}, which is outside 1-100, so the {Default}% default is used instead. The configured value is ignored, not adjusted; correct it to take effect")]
     public static partial void LogBackupQuotaPercentOutOfRange(this ILogger logger, int configured, int @default);
 
+    /// <summary>Logs that the notification condition checks could not run, for a caller that carries on regardless (#348).</summary>
+    [LoggerMessage(Level = LogLevel.Warning, Message = "[Notifications - Conditions] the condition checks could not run, so any notification whose condition changed still says what it said before. The action that ran before them is unaffected and its own answer stands")]
+    public static partial void LogNotificationConditionChecksFailed(this ILogger logger, Exception exception);
+
     /// <summary>Logs that the separate changelog database's schema is already fully up to date: no migration needed.</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "[Changelog - Init] schema is up to date (v{Version})")]
     public static partial void LogChangelogSchemaUpToDate(this ILogger logger, int version);

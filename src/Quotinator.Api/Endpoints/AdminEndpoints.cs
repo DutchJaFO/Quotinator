@@ -315,7 +315,7 @@ internal static class AdminEndpoints
             // #348: once, at the end of the request rather than inside ResetAsync. A Reset takes a backup
             // and rebuilds every table, this endpoint writes its own notification afterwards, and the
             // checks belong after all of it: the reset is one operation in the series, not the series.
-            await conditionChecks.RunAsync();
+            await conditionChecks.RunReportingFailuresAsync();
 
             return Results.Ok(new DatabaseSeedSummaryResponse
             {

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Quotinator.Data.Enums;
 using Quotinator.Data.Notifications;
 
@@ -16,7 +17,7 @@ public class NotificationConditionChecksTests
         RecordingCheck first = new(NotificationMetadataKind.BackupQuotaReached, NotificationConditionOutcome.Raised);
         RecordingCheck second = new(NotificationMetadataKind.BackupRefused, NotificationConditionOutcome.Unchanged);
 
-        await new NotificationConditionChecks([first, second]).RunAsync();
+        await new NotificationConditionChecks([first, second], NullLogger<NotificationConditionChecks>.Instance).RunAsync();
 
         Assert.IsTrue(first.Ran && second.Ran, $"first ran: {first.Ran}, second ran: {second.Ran}");
     }
@@ -27,7 +28,7 @@ public class NotificationConditionChecksTests
         RecordingCheck first = new(NotificationMetadataKind.BackupQuotaReached, NotificationConditionOutcome.Raised);
         RecordingCheck second = new(NotificationMetadataKind.BackupRefused, NotificationConditionOutcome.Cleared);
 
-        IReadOnlyList<NotificationConditionCheckResult> results = await new NotificationConditionChecks([first, second]).RunAsync();
+        IReadOnlyList<NotificationConditionCheckResult> results = await new NotificationConditionChecks([first, second], NullLogger<NotificationConditionChecks>.Instance).RunAsync();
 
         NotificationConditionCheckResult[] expected =
         [

@@ -20,7 +20,7 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**Execute step 27.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
+**Execute step 28.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
 issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
 of them unmet in the code; steps 7 to 18 closed them. Steps 19 to 25 correct the quota model, which the
 first pass built backwards (see *Quota: two levels* for the settled model); every design question they
@@ -1057,8 +1057,25 @@ statement as the parameterised test's first row.
 boundaries still to wire, and they went green as each was wired.
 
 Api 1,169, Data 1,466, Core 1,730, 0 warnings.
+
+**This step shipped a regression, and step 28's T2 pass caught it.** Putting the checks at the endpoint
+boundaries made them run where they had never run before, including on a read-only data directory, where
+they cannot write the notification they exist to write. `backup/05` step 7 asked for the `409` a refused
+removal gives and got an unhandled `500`: `SQLite Error 14: 'unable to open database file'`. The
+re-verification had become the answer to a request it was only following.
+
+The startup call site already had a hand-written `try`/`catch` for exactly this, and the four new call
+sites did not copy it. So the fix is one implementation rather than five:
+`NotificationConditionChecks.RunReportingFailuresAsync` runs the checks and logs a failure instead of
+propagating it, and every call site that follows something else uses it, startup included.
+`RunAsync` stays strict for `POST /notifications/refresh`, where the checks *are* the request and a
+caller who asked for a refresh and did not get one should be told.
+
+`AdminBackupEndpointsTests.DeleteBackup_WhenAConditionCheckThrows_StillAnswersTheDeletionsOwnOutcome`,
+red against the propagating call, reproduces `backup/05` step 7 as a unit test so the live document is
+not the only thing standing between this and a repeat. Api 1,170.
 ### 27. Documentation
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 The changelog's #348 entries in all three languages describe the warning rather than a refusal at the
 quota. The issue's own requirements are re-read and their correction drafted for the developer's
@@ -1085,7 +1102,13 @@ date is what steps 24 to 26 changed afterwards:
 | Requirement 9 | "the quota warning is the only kind with a check today" | two checks are registered, the quota warning and the maximum error |
 | Requirement 8 and 9 | checked after every deletion and at every completed startup | checked once where an action ends, which is what a deletion or a startup is an instance of |
 
-Awaiting the developer's decision on whether to edit the issue now or fold it into the closing comment.
+**Both** (developer, 2026-09-28): the issue body now carries the model as a requirement, and the closing
+comment will carry it too. Requirement 8 gains the ceiling row on its levels table, the three-band table
+and the paragraph on why exceeding the ceiling always reports (`CreateBackup` has no post-write budget
+check, so a folder can pass the ceiling with no attempt having failed). Requirement 9 now says two kinds
+have a check and that the checks run once where an action ends. Applied with `gh issue edit`, the body
+pasted in full for approval first, 160 lines and no em or en dashes; the Definition of done boxes stay
+unticked until `Waiting for release`.
 
 ### 28. Full verification
 **Status:** ⬜ Not started
@@ -1136,6 +1159,7 @@ and the smoke set; T1 by the developer.
 | 35 | ✅ | The warning is kept inside its band, and removed both below the buffer and above the max | Unit test | Step 24: one test per case, and `backup/08` reading the notification past the ceiling |
 | 36 | ✅ | A folder at or above the max always has an error open, however it got there, and never alongside the warning | Unit test | Step 25: raised at and above the max, absent below it, never open with the warning, and `backup/08` step 9 |
 | 37 | ✅ | A composite action evaluates the conditions once, not once per operation inside it | Unit test | Step 26: the count of evaluations per action, not merely that one happened |
+| 38 | ✅ | A condition check that cannot run does not change the answer of the action it followed | Unit test | Step 26: `AdminBackupEndpointsTests.DeleteBackup_WhenAConditionCheckThrows_StillAnswersTheDeletionsOwnOutcome`, and `backup/05` step 7 live |
 
 ---
 
