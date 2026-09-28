@@ -1111,10 +1111,44 @@ pasted in full for approval first, 160 lines and no em or en dashes; the Definit
 unticked until `Waiting for release`.
 
 ### 28. Full verification
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress
 
 Build clean; the full suite green across three `-m:1` runs; every `backup/` document, notif/12 to 14,
 and the smoke set; T1 by the developer.
+
+**Build and the three runs: done, then invalidated.** Three `-m:1` runs, 4,473 passed and 0 warnings
+each. They cover the code as it stood before the regression below, so all three are run again once the
+T2 pass finishes rather than reported as covering what ships.
+
+**`backup/` complete, 8 of 8 passing.** `01` 6/6, `02` 4/4, `03` 4/4, `04` 4/4, `05` 7/7, `06` 7/7,
+`07` 5/5 against a real 1.8.3 upgrade, `08` 11/11 on its first full green run. Two findings, both from
+documents the narrower scope would have skipped.
+
+**`backup/05` step 7 found the step 26 regression**, recorded there. It is the reason the whole scope was
+worth running: `05` is neither the new document nor in the smoke set.
+
+**`backup/03` was calibrated against the dataset, and the calibration had drifted on both sides.** Its
+ceiling was sized so a seed just fitted and a copy just did not. Both halves moved: a copy stopped being
+smaller than its source, because this database no longer carries free pages for SQLite to skip, and the
+free space swings by megabytes with the write-ahead log, reading 3,352 KB and 3,272 KB on two successive
+runs of the same image. Its other recorded claim was stale too: at 12 MB it now refuses where it recorded
+success, first succeeding at 16 MB. Everything had moved in the safe direction, so nothing was
+under-tested, and each drift surfaced only because a reader noticed a number that no longer matched.
+
+**Rewritten so no size is calibrated at all** (developer, 2026-09-28, per the suite''s own rule against
+asserting how many). The test seeds into a roomy tmpfs, reads the free space and the database''s own size,
+and fills all but half the latter, so a copy is always a whole copy short whatever the dataset grows to.
+The ceiling is now only "comfortably larger than a seed" and no assertion depends on its value. The
+positive control removes the filler from the same container, so the space is the only difference between
+the refusal and the success, where before it was a second container at a different ceiling. Re-run 5/5
+green; the database read 4,596 KB and then 4,552 KB across two runs in the same session, and the test did
+not care.
+
+**Why the pre-flight cannot catch this was established rather than assumed:** the application reads free
+space for the backups folder as roughly a terabyte on a tmpfs mount, the host drive rather than the mount,
+so `InsufficientDiskSpace` can never fire there however little room is left. Worth knowing before anyone
+tries to provoke that obstacle the same way; whether the provider should see the mount is not this
+issue''s question.
 
 ---
 

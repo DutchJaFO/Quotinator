@@ -7,19 +7,29 @@
 ## Preconditions
 
 **Beyond the profile.** The data directory is a **tmpfs with a hard size ceiling** rather than a volume
-or a bind mount, so the space available to a backup is a property of the test rather than of whatever
-the host happens to have free. `--tmpfs-data 11m` is sized so a full seed fits and a backup of the
-resulting database does not.
+or a bind mount, so the space available to a backup is a property of the test rather than of whatever the
+host happens to have free. The ceiling is deliberately roomy: the test seeds into it normally, then fills
+the space it does not want, computing that from what it measures rather than from a figure written here.
 
 **This is the one case the pre-flight cannot catch**, and that is the point of testing it. The check
 sees free space before the copy starts; the copy is what exhausts it.
 
 ## Determinism
 
-- **11 MB, measured rather than guessed.** At 12 MB the backup *succeeds* — the copy came to 2.1 MB
-  against a 4.5 MB source file, because SQLite copies pages and a file carries free ones. That is the
-  same unpredictability the operating quota exists for, and it is why this size is stated as a measured
-  value: change the bundled dataset and it must be re-measured, not adjusted by feel.
+- **No size is calibrated against the dataset.** The condition is that the volume has less room than the
+  copy needs, and the test establishes it by measuring: it reads the free space and the database's own
+  size, then writes a filler leaving half the database's size free. Whatever the dataset grows to, the
+  free space left is always half of what a copy costs. The tmpfs ceiling is only "comfortably larger than
+  a seed", not a calibrated value, and nothing below asserts a byte count.
+- **This replaces two figures that went stale twice** (2026-09-28). The ceiling had been calibrated so a
+  seed just fitted and a copy just did not, and both halves of that drifted: a copy stopped being smaller
+  than its source, because this database no longer carries free pages for SQLite to skip, and the free
+  space swung by megabytes with the size of the write-ahead log, reading 3,352 KB and 3,272 KB on two
+  successive runs of the same image. Each drift was caught only by a reader noticing a stale number, which
+  is exactly what a derived value removes.
+- **A copy costs what the database costs**, so leaving half of it free is a whole copy short. It is also
+  comfortably more than the backups folder and the backup file itself need to be created, which must
+  succeed for the copy to be the thing that fails.
 - **tmpfs, not a bind mount.** A bind mount inherits the host filesystem's free space, which no test can
   control; filling a real disk to provoke this would be both slow and hostile to the machine running it.
 - **The data does not survive the container**, which is acceptable here only because this test never
@@ -34,21 +44,42 @@ sees free space before the copy starts; the copy is what exhausts it.
 
 ```powershell
 dotnet script scripts/testing/test-env.csx -- create --name qt-backup-03 --port 18383 `
-  --image quotinator:local --tmpfs-data 11m --wait-listening
+  --image quotinator:local --tmpfs-data 64m
 
-docker exec qt-backup-03 df -h /data
 $before = (Invoke-RestMethod "http://localhost:18383/api/v1/version").database.quotes
 "quotesBefore=$before"
 ```
 
-**Expected:** the seed completes, `df` reports well under a megabyte available of 11 MB — measured
-260 KB on 2026-09-22, where the 2026-08-28 dataset left 1–2 MB — and `quotesBefore` is non-zero.
+**Expected:** the environment reports healthy and `quotesBefore` is non-zero.
 
-**On failure:** if `df` shows several MB free, the ceiling is too generous and the backup will succeed —
-the test would pass without ever reaching its own condition. If the seed itself fails, the ceiling is
-too tight. Either way, re-measure rather than proceeding.
+**The ceiling is not calibrated against the dataset**, only comfortably larger than a seed, so growth in
+the bundled content cannot silently make this step fail or the next one stop testing anything.
 
-### 2. Attempt a reset, which must refuse
+**On failure:** a seed that cannot complete is not this test's subject. If it ever outgrows the ceiling,
+raise it: no assertion below depends on its value.
+
+### 2. Leave less room than a copy needs, measured rather than assumed
+
+```powershell
+$avail = [int](((docker exec qt-backup-03 df -k /data | Select-Object -Last 1) -split '\s+')[3])
+$dbKB  = [int]((docker exec qt-backup-03 du -k /data/quotinatordata.db) -split '\s+')[0]
+$spare = [int]($dbKB / 2)
+
+docker exec qt-backup-03 dd if=/dev/zero of=/data/filler.bin bs=1024 count=$($avail - $spare) 2>$null
+$left = [int](((docker exec qt-backup-03 df -k /data | Select-Object -Last 1) -split '\s+')[3])
+"leftKB=$left dbKB=$dbKB roomForACopy=$($left -ge $dbKB)"
+```
+
+**Expected:** `roomForACopy=False`.
+
+**Nothing here is a figure this document chose.** A copy costs what the database costs, so leaving half
+of that free is always a whole copy short, whatever the dataset has grown to. The two numbers printed are
+evidence, not the gate: the gate is `roomForACopy`.
+
+**On failure:** `roomForACopy=True` means the fill did not take, and the backup below would succeed, so
+the test would pass without ever reaching its own condition.
+
+### 3. Attempt a reset, which must refuse
 
 ```powershell
 $r = dotnet script scripts/testing/http.csx -- --url "http://localhost:18383/api/v1/admin/database/reset" `
@@ -61,7 +92,7 @@ $r = dotnet script scripts/testing/http.csx -- --url "http://localhost:18383/api
 **On failure:** a `200` is the exact regression this document exists to catch — see Observed effect.
 A `500` means the failure escaped unhandled instead of being reported.
 
-### 3. Confirm the database is still there
+### 4. Confirm the database is still there
 
 ```powershell
 $after = (Invoke-RestMethod "http://localhost:18383/api/v1/version").database.quotes
@@ -74,13 +105,10 @@ $after = (Invoke-RestMethod "http://localhost:18383/api/v1/version").database.qu
 only restore point is a truncated fragment. This assertion is the substantive one; step 2's status code
 alone would not catch it.
 
-### 4. Give it room, and confirm a reset then works
+### 5. Give it room back, and confirm a reset then works
 
 ```powershell
-dotnet script scripts/testing/test-env.csx -- destroy --name qt-backup-03
-
-dotnet script scripts/testing/test-env.csx -- create --name qt-backup-03 --port 18383 `
-  --image quotinator:local --tmpfs-data 64m
+docker exec qt-backup-03 rm /data/filler.bin
 
 dotnet script scripts/testing/http.csx -- --url "http://localhost:18383/api/v1/admin/database/reset" `
   --method POST --expect 200 --status
@@ -88,15 +116,38 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18383/api/v1/a
 
 **Expected:** `200`.
 
-**The positive control, and the remedy.** Steps 2 and 3 assert a refusal and untouched data; both would
-hold against a build that refused every reset. The same image on the same kind of mount, differing only
-in how much room it has, must succeed — which is also what proves step 2's stated remedy, *"free disk
-space and retry"*, is real advice.
+**The remedy is applied to the same container**, so the only thing that changed between the refusal and
+the success is the space the filler was occupying. A second container at a different ceiling would have
+left the size of the mount as another difference, and this step exists to rule every other difference out.
 
-**On failure:** a `409` at 64 MB means the refusal is not caused by the ceiling, and this document's
-whole premise is wrong. Re-measure rather than raising the number until it passes.
+**The positive control, and the remedy.** Steps 3 and 4 assert a refusal and untouched data; both would
+hold against a build that refused every reset. Removing the filler must make the same call succeed, which
+is also what proves step 3's stated remedy, *"free disk space and retry"*, is real advice.
+
+**On failure:** a `409` with the filler gone means the refusal is not caused by the space at all, and this
+document's whole premise is wrong. Investigate rather than giving it more room until it passes.
 
 ## Observed effect
+
+**Rewritten and re-measured 2026-09-28** against `quotinator:local`. The behaviour is unchanged, the
+reset refuses with `DiskFilledDuringBackup` and the quotes are still there, but the document no longer
+calibrates anything against the dataset. It had held two figures that both went stale: a copy stopped
+being smaller than its source, because this database no longer carries free pages for SQLite to skip, and
+the free space swung by megabytes with the size of the write-ahead log. The ceiling sized to make a seed
+just fit and a copy just not fit was drifting on both sides at once, and each drift surfaced only when a
+reader noticed a number that no longer matched.
+
+The condition is now established by measurement: read the free space and the database's own size, fill
+all but half the latter, and a copy is always a whole copy short. The database read 4,596 KB and then
+4,552 KB across two runs in the same session, which is the point. Nothing asserts a byte count, and the
+positive control removes the filler from the same container, so the space is the only thing that differs
+between the refusal and the success.
+
+**Why the pre-flight does not catch this**, established while rewriting: the application reads free space
+for the backups folder as roughly a terabyte on a tmpfs mount, the host drive rather than the mount, so
+`InsufficientDiskSpace` cannot fire here however little room is left. The copy meets the real limit
+instead. That is what makes this the one case the pre-flight cannot catch, rather than a matter of
+timing, and it is worth knowing before anyone tries to provoke `InsufficientDiskSpace` the same way.
 
 **Measured 2026-08-28** against `quotinator:local`, and this document exists because the first
 measurement found something worse than the bug it was written for.
