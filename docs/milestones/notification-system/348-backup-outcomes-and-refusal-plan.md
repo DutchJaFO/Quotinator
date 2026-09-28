@@ -1061,8 +1061,31 @@ Api 1,169, Data 1,466, Core 1,730, 0 warnings.
 **Status:** ⬜ Not started
 
 The changelog's #348 entries in all three languages describe the warning rather than a refusal at the
-quota. The issue's requirement 8 still says the reserve is reached by override; its correction is drafted
-for the developer's approval, not edited unasked.
+quota. The issue's own requirements are re-read and their correction drafted for the developer's
+approval, not edited unasked.
+
+**Changelog done 2026-09-28.** Two highlights (the warning while the folder fills, the error once it is
+full), four `added` entries (the warning, the error, `POST /notifications/refresh`, and `backupCaution`
+on the response and the page), and the one stale `changed` sentence corrected: it said normal operation
+"keeps a reserve below the storage ceiling, so a backup can still be taken just before a reset", the
+override-shaped model, and now says the reserve is used by itself, warning rather than refusing, with
+only a backup that would pass the maximum refused. All three languages in lockstep, 19 highlights, 15
+added, 24 changed, 33 fixed in each; `CHANGELOG.md` regenerated, the add-on files untouched since
+`unreleased` is omitted from that format and the release workflow defers them anyway.
+
+**This step's premise about the issue was wrong, found by reading the issue rather than the plan.**
+Requirement 8 does not say the reserve is reached by override: it was corrected on 2026-09-26 and already
+reads *"Above it a backup is still taken, and a warning notification raised"*. What is actually out of
+date is what steps 24 to 26 changed afterwards:
+
+| Where | What it says now | What is true |
+|---|---|---|
+| Requirement 8 | the warning clears once back under the quota | it is also removed above the maximum, where an error describes the band instead |
+| Requirement 8 | two levels | three bands, the third being at or above the maximum |
+| Requirement 9 | "the quota warning is the only kind with a check today" | two checks are registered, the quota warning and the maximum error |
+| Requirement 8 and 9 | checked after every deletion and at every completed startup | checked once where an action ends, which is what a deletion or a startup is an instance of |
+
+Awaiting the developer's decision on whether to edit the issue now or fold it into the closing comment.
 
 ### 28. Full verification
 **Status:** ⬜ Not started
