@@ -20,7 +20,7 @@ recovery route can actually succeed, not merely whether it is reachable.
 
 ## Next action
 
-**Execute step 28.** Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
+**All 28 steps are done and all 38 verification rows are ticked. Rows 9 and 19 were left behind when step 19 closed and were ticked afterwards, on a re-run of the three test classes they name (88 green, 2026-09-29). The issue is ready for `Waiting for release`:** tick the Definition of done against what was actually verified, then post the closing comment with the verification table. Steps 1 to 6 are the first pass (reached `Waiting for release` 2026-08-28). The
 issue was reopened 2026-09-26 when a re-verification against the issue's own requirements found three
 of them unmet in the code; steps 7 to 18 closed them. Steps 19 to 25 correct the quota model, which the
 first pass built backwards (see *Quota: two levels* for the settled model); every design question they
@@ -1111,7 +1111,7 @@ pasted in full for approval first, 160 lines and no em or en dashes; the Definit
 unticked until `Waiting for release`.
 
 ### 28. Full verification
-**Status:** 🔄 In progress
+**Status:** ✅ Done
 
 Build clean; the full suite green across three `-m:1` runs; every `backup/` document, notif/12 to 14,
 and the smoke set; T1 by the developer.
@@ -1149,7 +1149,36 @@ test that reproduces `backup/05` step 7. Read with an instrument that distinguis
 the SDK's own `Failed to load prune package data` notice, which appears three times per run and matches
 a naive search for a failure.
 
-**Only T1 remains**, and it is the developer's.
+**T1 passed 2026-09-29**, run by the developer. The application reached `Quotinator ready` with both
+listeners bound, and its log carries more than startup:
+
+- **The incremental migration path ran on a real database, not a fresh one.** 23 pending Data migrations
+  applied from version 3 to 26, and 4 App migrations from 5 to 9, migrations 25 and 26 among them. That
+  is the check ADR 009 asks for and the from-empty schema-drift tests cannot give: a database that
+  actually existed, replaying every migration in order.
+- **All three backup paths took their backup first**, each logged: before the migrations at startup,
+  before the Reset, and before the reseed the notification's own option ran.
+- **No quota warning, correctly.** The backups folder holds three files against a 1 GB ceiling, so the
+  band is below the buffer and nothing is raised. The warning not appearing is the right answer here
+  rather than an absence of evidence: `backup/08` is where its presence is proven.
+- **The second reseed was fully idempotent**: every entity `unchanged`, and the staged conflict reporting
+  `alreadyReported=1` rather than staging a second time.
+
+**Two findings from that log, neither #348's and neither blocking**, recorded here because this is where
+they were found:
+
+- **A Reset labels its backup with the consumer version alone.** `DropAndRebuildAsync` calls
+  `CreateBackup(connection, SchemaVersion)` where the other three call sites pass
+  `Math.Max(DataSchemaVersion, SchemaVersion)`, so the Reset's backup read `v9` and the reseed's `v26`
+  fifteen seconds later, with no migration between them. The file name is how an operator picks a backup
+  to restore, and two files from one schema state reading differently invites the wrong choice. The
+  content is unaffected. Pre-existing: `b49980d5` changed only the return type of that call, not its
+  version argument.
+- **`ObjectDisposedException` on a `NetworkStream` is a form the transport-cancelled Knowledgebase entry
+  does not list.** It names the bare `SocketException`, the `IOException` and the
+  `OperationCanceledException` forms. One line, 44 seconds after a reseed run from the page, and the
+  application kept working, so by CLAUDE.md's triage rule it costs nothing; the entry is what needs the
+  fourth form.
 
 
 **`backup/` complete, 8 of 8 passing.** `01` 6/6, `02` 4/4, `03` 4/4, `04` 4/4, `05` 7/7, `06` 7/7,
@@ -1196,7 +1225,7 @@ issue''s question.
 | 6 | ✅ | A skipped backup is recorded in the log **and** the audit trail | Unit test | `AdminEndpointsTests.ResetDatabase_WithOverride_WritesAnAuditEntryRecordingTheSkip` (red in step 7); `DatabaseBackupQuotaTests.ResetAsync_WithTheOverride_LogsTheSkippedBackup` and `ResetAsync_WhenTheBackupSucceeds_LogsNoSkippedBackup`; a reseed without a backup by step 12's `..._RecordsTheSkippedBackupInTheAuditTrail` and `..._LogsTheSkippedBackup` |
 | 7 | ✅ | Every #348 test asserts one statement, and each is red against the state before its change | Unit test | Step 7: states A to E, every test failing on an assertion; the tests that could not fail removed |
 | 8 | ✅ | A caller can ask whether a backup is possible without attempting one, and the answer agrees with an attempt | Unit test | `DatabaseBackupPreflightTests.CheckBackupReadiness_WhenTheBudgetIsExhausted_ReportsBudgetExceeded`, `..._AgreesWithTheAttempt`, and the same pair for an unwritable destination |
-| 9 | ❌ | Every path takes a backup inside the reserve and refuses only one that would pass the ceiling | Unit test | Step 19: readiness, Reset, the on-demand backup and the executor, each inside the reserve and past the ceiling |
+| 9 | ✅ | Every path takes a backup inside the reserve and refuses only one that would pass the ceiling | Unit test | Step 19: readiness, Reset and the on-demand backup, each against the real ceiling; the executor at both readiness answers, which the readiness tests tie to that ceiling rather than driving it a fourth time |
 | 10 | ✅ | The quota percentage is configurable and defaults to 90 | Unit test | `DatabaseBackupQuotaTests.ConfiguredQuotaPercent_IsTheLimitTheCheckRefusesOn` and `...QuotaPercent_DefaultsTo90` |
 | 11 | ✅ | An out-of-range percentage is reported and the default used, never clamped, never fatal | Unit test | `DatabaseBackupQuotaTests.QuotaPercent_OutOfRange_UsesTheDefault` and `...QuotaPercent_OutOfRange_IsReported` |
 | 12 | ✅ | Each variant states cause and remedy, and names no remedy that cannot work | Unit test | `BackupObstacleGuidanceTests`: `EveryObstacle_HasACause`, `EveryObstacle_HasARemedy`, `RecognisedObstacle_IsNotDescribedAsTheUnrecognisedFallback`, `BudgetExceeded_OffersTheOverride`, `BudgetExceeded_OffersRemovingBackupsThroughTheApplication`, `SourceUnreadable_DoesNotOfferTheOverride`, `OverrideAlreadyTried_DoesNotRepeatTheOverride`, `OverrideAlreadyTried_KeepsTheOtherRemedies` |
@@ -1206,7 +1235,7 @@ issue''s question.
 | 16 | ✅ | A startup migration refusal marks the database unhealthy, naming the variant, remedies and entry, and no remedy the startup cannot use | Unit test | `StartupBackupRefusalTests.Startup_MigrationRefusedForBackup_ReportsUnhealthy`, `..._ReasonNamesTheObstacle`, `..._ReasonCarriesTheRemedies`, `..._ReasonLinksTheKnowledgebaseEntry`; `BackupObstacleGuidanceTests.MigrationRefusedReason_DoesNotOfferTheOverride` |
 | 17 | ✅ | A startup content-load refusal raises one `BackupRefused` notification that requires action, clears on reseed, and names the obstacle and the step | Unit test | `DatabaseInitializerTests.InitialiseAsync_ContentLoadWithNoBackupPossible_RaisesABackupRefusedNotification`, `..._TheNotificationRequiresAction`, `..._TheNotificationClearsOnReseed`, `..._TheNotificationNamesTheObstacle`, `..._TheNotificationNamesTheContentLoadStep`, `InitialiseAsync_ContentLoadRefusedOnTwoStarts_RaisesOneNotification` |
 | 18 | ✅ | The new payload kind is accepted by the migration and the baseline alike | Unit test | `DatabaseInitializerOwnershipTests.NotificationMetadataKind_IsAcceptedByTheBaseline` and `..._IsAcceptedByTheIncrementalReplay`, per kind; the existing `DataOwnedBaseline_And_IncrementalReplay_ProduceIdenticalSystemNotificationSchema` |
-| 19 | ❌ | Each option is offered exactly when it can run, and withheld otherwise, per obstacle | Unit test | Step 11's `NotificationActionExecutorTests`: every option offered and withheld, per obstacle; the availability's two answers, re-earned against the ceiling in step 19; `DatabaseBackupPreflightTests`' three `...FreedFirst...` tests |
+| 19 | ✅ | Each option is offered exactly when it can run, and withheld otherwise, per obstacle | Unit test | Step 11's `NotificationActionExecutorTests`: every option offered and withheld, per obstacle; the availability's two answers, re-earned against the ceiling in step 19; `DatabaseBackupPreflightTests`' three `...FreedFirst...` tests |
 | 20 | ✅ | The offered options are visible over REST | Unit test | `NotificationEndpointsTests.GetNotifications_ListsTheOptionsTheExecutorOffers` and `..._DismissedNotification_ListsNoOptions` |
 | 21 | ✅ | A reseed from the notification backs up first, and runs without one only with the user's permission | Unit test | Step 12's `NotificationActionExecutorTests`: effect and refusal for each option, including #304's reseed recommendation; a refused Reset stays unhealthy and active |
 | 22 | ✅ | The Knowledgebase entry covers every obstacle, and the rendered link resolves to it | Unit test | `RepositoryStructureTests.KnowledgebaseLink_NamesAnEntryThatExists` and `NoBackupCouldBeTaken_HasASectionForTheObstacle` |
@@ -1215,7 +1244,7 @@ issue''s question.
 | 25 | ✅ | Startup migration refusal, end to end | Automated (T2) | `backup/07`, red against the canary build, then green |
 | 26 | ✅ | Every test this issue adds or changes fails against its signature state, on an assertion | Unit test | Steps 7 to 15, each recording its red run |
 | 27 | ✅ | Build clean and the full suite green across three `-m:1` runs | Build | Step 28: 4,474 passed, 0 failures and 0 warnings on each of three runs, after the whole T2 pass |
-| 28 | ❌ | The application still starts | Live (T1) | The developer starts `Quotinator.Api` in Visual Studio after step 28 (first passed 2026-09-26, before the quota correction) |
+| 28 | ✅ | The application still starts | Live (T1) | Step 28: the developer ran it 2026-09-29, reaching `Quotinator ready` with both listeners bound |
 | 29 | ✅ | A backup that leaves the folder above the quota raises one warning, on every path | Unit test | Step 21: startup, Reset, the on-demand backup and a reseed option, each in the reserve; once across two startups; none below the quota |
 | 30 | ✅ | The warning clears once the folder is back under the quota, and only then | Unit test | Step 21: a deletion under the quota clears it, one leaving it above does not, a startup under a raised quota clears it |
 | 31 | ✅ | The warning kind, its trigger and its resolution are accepted by the migration and the baseline alike | Unit test | `DatabaseInitializerOwnershipTests`: `NotificationMetadataKind_`, `NotificationDismissTrigger_` and `NotificationResolution_IsAcceptedByTheBaseline`/`..._ByTheIncrementalReplay`, per member; the schema-drift parity test |
