@@ -1116,9 +1116,41 @@ unticked until `Waiting for release`.
 Build clean; the full suite green across three `-m:1` runs; every `backup/` document, notif/12 to 14,
 and the smoke set; T1 by the developer.
 
-**Build and the three runs: done, then invalidated.** Three `-m:1` runs, 4,473 passed and 0 warnings
-each. They cover the code as it stood before the regression below, so all three are run again once the
-T2 pass finishes rather than reported as covering what ships.
+**Build and the three runs: done, then invalidated, then redone.** The first three `-m:1` runs reported
+4,473 passed and 0 warnings each, but covered the code as it stood before the regression below, so they
+were discarded rather than reported as covering what ships. The three that count are the ones run after
+the whole T2 pass.
+
+**Notifications 12 to 14 and the smoke set: complete, all passing.** `notif/12` 4/4, including the
+restart mid-run leaving 14 quotes rather than a finished reseed, so the interruption was real. `notif/13`
+9/9, the degraded case matching its recorded `503 / 500 / 200` parity. `notif/14` 8/8, six kinds each
+from its own trigger across both surfaces, 17 images. Smoke: `api-surface/01` 9/9, `api-surface/02` 6/6,
+`database-lifecycle/03` 8/8, `import/01` 10/10, `import/19` 9/9, `notif/01` 8/8, `notif/07` 5/5,
+`startup/03` 3/3. `import/14` steps 1 to 4 pass, with `pending=0` and no undeclared date variants; its
+step 5 is the one its own header declares unrunnable until #400, and it calls the API through
+`dotnet run`, which CLAUDE.md forbids here in any case.
+
+**Two misreadings were mine, in how the pass was driven rather than in the application.** On `notif/01`
+the check for the home page's notification section was `body.includes('Notifications')`, which the
+navigation link satisfies too; re-measured against the count of `.notification-body` elements and the
+headings inside `main`, it reads correctly. On `notif/12` a snippet returned a bare number where
+`capture-page.csx` requires an object, which threw rather than answered. Both would have recorded a
+result that was never measured.
+
+**The exceptions seen are the documented benign class**, `SocketException (125): Operation canceled`,
+matching `transport-connection-cancelled-during-a-request` and #402: a headless capture session closing
+its Blazor circuit. The documents avoid them by closing the tab before reading the log; driving them
+from a script cannot, so they appear where the documents expect none. Nothing else was logged, and
+health stayed `200` throughout.
+
+**The three runs that count: 4,474 passed, 0 failures, 0 warnings, on each of three `-m:1` runs after
+the T2 pass finished.** Identical on all three. The count is one above the earlier, discarded runs: the
+test that reproduces `backup/05` step 7. Read with an instrument that distinguishes a test failure from
+the SDK's own `Failed to load prune package data` notice, which appears three times per run and matches
+a naive search for a failure.
+
+**Only T1 remains**, and it is the developer's.
+
 
 **`backup/` complete, 8 of 8 passing.** `01` 6/6, `02` 4/4, `03` 4/4, `04` 4/4, `05` 7/7, `06` 7/7,
 `07` 5/5 against a real 1.8.3 upgrade, `08` 11/11 on its first full green run. Two findings, both from
@@ -1182,7 +1214,7 @@ issue''s question.
 | 24 | ✅ | Startup content-load refusal, end to end | Automated (T2) | `backup/06`, red against the canary build, then green |
 | 25 | ✅ | Startup migration refusal, end to end | Automated (T2) | `backup/07`, red against the canary build, then green |
 | 26 | ✅ | Every test this issue adds or changes fails against its signature state, on an assertion | Unit test | Steps 7 to 15, each recording its red run |
-| 27 | ❌ | Build clean and the full suite green across three `-m:1` runs | Build | Step 28 (first passed at step 18, before the quota correction) |
+| 27 | ✅ | Build clean and the full suite green across three `-m:1` runs | Build | Step 28: 4,474 passed, 0 failures and 0 warnings on each of three runs, after the whole T2 pass |
 | 28 | ❌ | The application still starts | Live (T1) | The developer starts `Quotinator.Api` in Visual Studio after step 28 (first passed 2026-09-26, before the quota correction) |
 | 29 | ✅ | A backup that leaves the folder above the quota raises one warning, on every path | Unit test | Step 21: startup, Reset, the on-demand backup and a reseed option, each in the reserve; once across two startups; none below the quota |
 | 30 | ✅ | The warning clears once the folder is back under the quota, and only then | Unit test | Step 21: a deletion under the quota clears it, one leaving it above does not, a startup under a raised quota clears it |
