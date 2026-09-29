@@ -222,8 +222,27 @@ expanded was `744` tall, inside the viewport, its body scrolling and its footer 
 viewport size first. A fit assertion against a zero viewport is not a failure — it is no measurement at
 all.
 
+**Does the selector distinguish the thing from its navigation?** A page's own chrome contains the words
+its sections are named after. Checking `document.body.innerText.includes('Notifications')` for whether
+the home page still renders a Notifications *section* is satisfied by the sidebar link, and reads `true`
+on a page that has correctly dropped the section. Measured 2026-09-29 while re-running
+`notifications-and-changelog/01`: the empty-state assertion read as a section still present, on a page
+whose notification rows were gone. Count the thing itself, `document.querySelectorAll('.notification-body').length`,
+or scope the read to `main` and list its headings. Body text is the widest possible selector, and a
+section name is rarely unique within it.
+
+**Does the harness accept the shape the snippet returns?** `capture-page.csx` prints whatever the page
+script returns and then inspects that value for `width`/`height`, to crop to an element. A script
+returning a bare number, string, boolean or **array** makes that inspection throw
+`InvalidOperationException: The node must be of type 'JsonObject'`, after the value has already been
+printed correctly: the answer is on stdout, the call exits non-zero, and the stack trace names JSON
+rather than the snippet. Measured 2026-09-29, a snippet returning
+`document.querySelectorAll('.spinner-border').length`. Return an object, `return { spinners: n }`, until
+the harness itself tolerates the other shapes: several snippets written in this suite as browser-console
+`js` blocks return arrays and would hit the same throw if piped through it.
+
 **And the expected number itself must be derived in the same run, never predicted.** That rule is
-stated above; these four are about the instrument rather than the expectation, and a document can get
+stated above; these are about the instrument rather than the expectation, and a document can get
 the expectation right while the instrument makes it unreachable.
 
 **Stable resources are the exception, not the default.** A fixture owned by a test — created from
