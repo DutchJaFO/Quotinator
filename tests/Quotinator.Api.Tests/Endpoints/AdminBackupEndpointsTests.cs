@@ -18,11 +18,11 @@ public class AdminBackupEndpointsTests
     /// <summary>The one file a delete must leave behind, held as a field per CA1861.</summary>
     private static readonly string[] SurvivingFile = ["keep-me.db"];
 
-    /// <summary>The list reports every backup with the facts needed to choose one — name, size, when taken.</summary>
+    /// <summary>The list reports every backup with the facts needed to choose one: name, size, when taken.</summary>
     [TestMethod]
     public async Task GetBackups_ReturnsEachBackupWithItsNameSizeAndTimestamp()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
         harness.WriteBackup("quotinatordata_v5_20260101T101010101Z.db", sizeBytes: 128);
         harness.WriteBackup("quotinatordata_v5_20260102T101010101Z.db", sizeBytes: 256);
 
@@ -38,18 +38,18 @@ public class AdminBackupEndpointsTests
         Assert.IsTrue(first.TryGetProperty("sizeBytes", out JsonElement size));
         Assert.IsTrue(first.TryGetProperty("takenAtUtc", out JsonElement takenAt));
 
-        // Newest first, so the size that goes with the newest name is the one asserted — proving the
+        // Newest first, so the size that goes with the newest name is the one asserted, proving the
         // three facts belong to the same file rather than each merely being present somewhere.
         Assert.AreEqual("quotinatordata_v5_20260102T101010101Z.db", name.GetString());
         Assert.AreEqual(256, size.GetInt64());
         Assert.AreNotEqual(default, takenAt.GetDateTime());
     }
 
-    /// <summary>An empty backups folder is an empty page, not a 404 — nothing has been backed up yet.</summary>
+    /// <summary>An empty backups folder is an empty page, not a 404, since nothing has been backed up yet.</summary>
     [TestMethod]
     public async Task GetBackups_NoBackupsExist_ReturnsAnEmptyPageNotA404()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
 
         HttpResponseMessage response = await harness.AuthenticatedClient().GetAsync(List, TestContext.CancellationToken);
 
@@ -63,7 +63,7 @@ public class AdminBackupEndpointsTests
     [TestMethod]
     public async Task GetBackups_WithoutApiKey_Returns401()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
         HttpResponseMessage response = await harness.AnonymousClient().GetAsync(List, TestContext.CancellationToken);
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -72,7 +72,7 @@ public class AdminBackupEndpointsTests
     [TestMethod]
     public async Task DeleteBackup_RemovesOnlyTheNamedFile()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
         harness.WriteBackup("keep-me.db");
         harness.WriteBackup("delete-me.db");
 
@@ -91,7 +91,7 @@ public class AdminBackupEndpointsTests
     [TestMethod]
     public async Task DeleteBackup_WhenAConditionCheckThrows_StillAnswersTheDeletionsOwnOutcome()
     {
-        using BackupTestHarness harness = new BackupTestHarness(conditionCheck: new ThrowingConditionCheck());
+        using BackupTestHarness harness = new(conditionCheck: new ThrowingConditionCheck());
         harness.WriteBackup("delete-me.db");
 
         HttpResponseMessage response = await harness.AuthenticatedClient()
@@ -115,7 +115,7 @@ public class AdminBackupEndpointsTests
     [TestMethod]
     public async Task DeleteBackup_WritesAnAuditEntry()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
         harness.WriteBackup("delete-me.db");
 
         await harness.AuthenticatedClient().DeleteAsync($"{List}/delete-me.db", TestContext.CancellationToken);
@@ -125,7 +125,7 @@ public class AdminBackupEndpointsTests
         Assert.AreEqual(AuditOperation.BackupDeleted, entry.Operation);
         Assert.AreEqual("Database", entry.TableName);
 
-        // RecordId is null by documented design — docs/logging.md's audit schema reserves it for an
+        // RecordId is null by documented design: docs/logging.md's audit schema reserves it for an
         // affected row's UUID, and an admin action is database-level. Which file was removed is carried
         // by the log line instead; asserted by AdminBackupLoggingTests.
         Assert.IsNull(entry.RecordId);
@@ -135,7 +135,7 @@ public class AdminBackupEndpointsTests
     [TestMethod]
     public async Task DeleteBackup_UnknownName_Returns404()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
 
         HttpResponseMessage response = await harness.AuthenticatedClient()
             .DeleteAsync($"{List}/never-existed.db", TestContext.CancellationToken);
@@ -148,7 +148,7 @@ public class AdminBackupEndpointsTests
     [TestMethod]
     public async Task DeleteBackup_WithoutApiKey_Returns401()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
         harness.WriteBackup("delete-me.db");
 
         HttpResponseMessage response = await harness.AnonymousClient()
@@ -166,10 +166,10 @@ public class AdminBackupEndpointsTests
     [TestMethod]
     public async Task DeleteBackup_PathTraversalAttempt_IsRejectedAndDeletesNothing()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
         harness.WriteBackup("innocent.db");
 
-        // Written into the parent of the backups folder — the file a successful traversal would reach.
+        // Written into the parent of the backups folder, the file a successful traversal would reach.
         string outsidePath = Path.Combine(Directory.GetParent(harness.BackupsPath)!.FullName, $"outside-{Guid.NewGuid():N}.db");
         File.WriteAllBytes(outsidePath, [1, 2, 3]);
 
@@ -195,7 +195,7 @@ public class AdminBackupEndpointsTests
     /// <para>
     /// This exists because the encoded <c>../</c> case above does not prove the guard: ASP.NET's own
     /// routing rejects that before any handler runs, so it stays green even with the guard removed
-    /// entirely — measured by mutation, not assumed. A backslash is not a URL path separator, so it
+    /// entirely, measured by mutation, not assumed. A backslash is not a URL path separator, so it
     /// arrives intact as one route segment and is the application's own problem to refuse. On Windows
     /// it is also a real path separator, which is exactly what makes it dangerous.
     /// </para>
@@ -203,7 +203,7 @@ public class AdminBackupEndpointsTests
     [TestMethod]
     public async Task DeleteBackup_BackslashTraversalReachingTheHandler_IsRejectedAndDeletesNothing()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
         harness.WriteBackup("innocent.db");
 
         string outsidePath = Path.Combine(Directory.GetParent(harness.BackupsPath)!.FullName, $"outside-{Guid.NewGuid():N}.db");
@@ -230,7 +230,7 @@ public class AdminBackupEndpointsTests
     [TestMethod]
     public async Task DeleteBackup_AbsolutePathAttempt_IsRejectedAndDeletesNothing()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
         harness.WriteBackup("innocent.db");
 
         string outsidePath = Path.Combine(Path.GetTempPath(), $"outside-{Guid.NewGuid():N}.db");
@@ -256,14 +256,14 @@ public class AdminBackupEndpointsTests
     /// <para>
     /// Found live during this issue's own T2 pass, against a read-only data directory: the delete
     /// endpoint returned a bare `500`. That is the defect class #348 exists to remove, and the path is
-    /// the realistic one — a read-only mount is what degrades startup, and removing old backups is what
+    /// the realistic one: a read-only mount is what degrades startup, and removing old backups is what
     /// the operator is then told to do.
     /// </para>
     /// </summary>
     [TestMethod]
     public async Task DeleteBackup_FileCannotBeRemoved_Returns409NotAnUnhandled500()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
         harness.WriteBackup("locked.db");
         string path = Path.Combine(harness.BackupsPath, "locked.db");
         File.SetAttributes(path, FileAttributes.ReadOnly);
@@ -284,19 +284,19 @@ public class AdminBackupEndpointsTests
     }
 
     /// <summary>
-    /// Every route in the group reaches its handler while the database is degraded — the state they
+    /// Every route in the group reaches its handler while the database is degraded, the state they
     /// exist for. Asserted for these routes specifically rather than inferred from #326's
     /// admin-surface property.
     /// </summary>
     [TestMethod]
     public async Task AllRoutes_RemainReachableWhileDegraded()
     {
-        using BackupTestHarness harness = new BackupTestHarness();
+        using BackupTestHarness harness = new();
         harness.WriteBackup("present.db");
         harness.MarkDatabaseUnhealthy();
         HttpClient client = harness.AuthenticatedClient();
 
-        // Reaching the handler is the property under test, not what each handler then answers — so a
+        // Reaching the handler is the property under test, not what each handler then answers, so a
         // 404 from an unknown name counts, and only a health-gate answer (503) does not.
         (string Method, string Route)[] routes =
         [

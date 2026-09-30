@@ -160,7 +160,7 @@ public class BackupStorageBudgetTests
     }
 
     private static DatabaseOptions Options(int maxGb = 1, int quotaPercent = DatabaseOptions.DefaultBackupQuotaPercent) =>
-        new DatabaseOptions
+        new()
         {
             DbPath             = "unused.db",
             BackupsPath        = "unused",

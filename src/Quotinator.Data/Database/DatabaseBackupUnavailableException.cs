@@ -8,7 +8,7 @@ namespace Quotinator.Data.Database;
 /// This is a transport, not a reporting mechanism. The refusal reaches a caller as a
 /// <see cref="DatabaseOperationResult"/> like any other; an exception is used only to unwind out of
 /// <c>OnResetAsync</c>, whose signature belongs to subclasses and has no result to return. Per developer
-/// direction an exception is for what there is no other way to detect — here there is no other way to
+/// direction an exception is for what there is no other way to detect, and here there is no other way to
 /// <em>escape</em>, which is a different problem with the same answer.
 /// </para>
 /// </summary>

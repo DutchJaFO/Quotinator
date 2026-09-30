@@ -3,7 +3,7 @@ using Quotinator.Data.Enums;
 namespace Quotinator.Data.Database;
 
 /// <summary>
-/// The result of one database backup attempt (#327) — which obstacle it hit, if any, and the file it
+/// The result of one database backup attempt (#327): which obstacle it hit, if any, and the file it
 /// produced when it succeeded.
 /// <para>
 /// Replaces the <see langword="string"/>? this used to be. A null path meant "budget exceeded",
@@ -35,11 +35,13 @@ public sealed class DatabaseBackupResult
     /// <summary>A successful attempt, carrying the file it wrote.</summary>
     /// <param name="path">The backup file that was written.</param>
     public static DatabaseBackupResult Success(string path) =>
-        new DatabaseBackupResult { Outcome = BackupOutcome.Succeeded, Path = path };
+        new()
+        { Outcome = BackupOutcome.Succeeded, Path = path };
 
     /// <summary>A failed attempt, carrying why and the underlying error where there was one.</summary>
     /// <param name="outcome">Which obstacle the attempt hit.</param>
     /// <param name="error">The underlying failure, when one was thrown.</param>
     public static DatabaseBackupResult Failed(BackupOutcome outcome, Exception? error = null) =>
-        new DatabaseBackupResult { Outcome = outcome, Error = error };
+        new()
+        { Outcome = outcome, Error = error };
 }

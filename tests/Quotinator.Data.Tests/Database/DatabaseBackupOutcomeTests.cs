@@ -167,7 +167,7 @@ public class DatabaseBackupOutcomeTests
 
     private SqliteConnection SeededDatabase()
     {
-        SqliteConnection connection = new SqliteConnection($"Data Source={_dbPath}");
+        SqliteConnection connection = new($"Data Source={_dbPath}");
         connection.Open();
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "CREATE TABLE IF NOT EXISTS Probe (Id INTEGER PRIMARY KEY);";
@@ -180,7 +180,7 @@ public class DatabaseBackupOutcomeTests
         corruptPath = Path.Combine(_tempDir, "corrupt.db");
         File.WriteAllText(corruptPath, "this file is not a SQLite database");
 
-        SqliteConnection connection = new SqliteConnection($"Data Source={corruptPath}");
+        SqliteConnection connection = new($"Data Source={corruptPath}");
         connection.Open();
         return connection;
     }
@@ -193,8 +193,8 @@ public class DatabaseBackupOutcomeTests
         int maxBackupStorageGb = 1, IDiskSpaceProvider? diskSpaceProvider = null, string? dbPath = null)
     {
         string path = dbPath ?? _dbPath;
-        SqliteConnectionFactory factory = new SqliteConnectionFactory(path);
-        DatabaseOptions options = new DatabaseOptions
+        SqliteConnectionFactory factory = new(path);
+        DatabaseOptions options = new()
         {
             DbPath = path,
             BackupsPath = _backups,

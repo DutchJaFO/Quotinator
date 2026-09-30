@@ -45,11 +45,13 @@ public sealed class DatabaseOperationResult
     /// <summary>A successful operation.</summary>
     /// <param name="backupSkippedByOverride">Whether it proceeded without a backup by explicit override.</param>
     public static DatabaseOperationResult Success(bool backupSkippedByOverride = false) =>
-        new DatabaseOperationResult { Succeeded = true, BackupSkippedByOverride = backupSkippedByOverride };
+        new()
+        { Succeeded = true, BackupSkippedByOverride = backupSkippedByOverride };
 
     /// <summary>An operation refused because no backup could be taken.</summary>
     /// <param name="obstacle">Which obstacle stopped it.</param>
     /// <param name="step">Which guarded step refused.</param>
     public static DatabaseOperationResult RefusedForBackup(BackupOutcome obstacle, BackupGuardedStep step) =>
-        new DatabaseOperationResult { Succeeded = false, BackupObstacle = obstacle, RefusedStep = step };
+        new()
+        { Succeeded = false, BackupObstacle = obstacle, RefusedStep = step };
 }
