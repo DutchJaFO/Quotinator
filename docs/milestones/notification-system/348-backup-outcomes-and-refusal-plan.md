@@ -1,6 +1,6 @@
 # #348: Reset returns an unhandled 500 when no backup can be taken, and the five backup failure causes are indistinguishable
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #348
 **Tiers required:** T1, T2
 **Depends on:** #349
