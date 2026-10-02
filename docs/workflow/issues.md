@@ -12,70 +12,70 @@ Three types are used in this project:
 |---|---|
 | `bug` | Something that works today stops working, or produces incorrect output |
 | `enhancement` | New behaviour, new capability, or a deliberate change to existing behaviour |
-| `research` | A question that must be answered before implementation can be planned — findings recorded in a closing comment |
+| `research` | A question that must be answered before implementation can be planned; findings recorded in a closing comment |
 
 Every issue must have exactly one of these labels.
 
 ### Secondary labels
 
-A second, informational label may be applied **alongside** the required type label above — never
+A second, informational label may be applied **alongside** the required type label above, never
 instead of it. Only two are currently adopted:
 
 | Label | When to use |
 |---|---|
-| `.NET` | The issue is (or its work touches) a .NET/NuGet dependency-version concern — mirrors Dependabot's own PR labelling |
+| `.NET` | The issue is (or its work touches) a .NET/NuGet dependency-version concern; mirrors Dependabot's own PR labelling |
 | `code style` | The issue is about analyzer/tooling configuration, formatting, or code-style consistency rather than behaviour |
 
 **`documentation` and `question` exist as labels in the repo but are not adopted for issue
-labelling — decided 2026-07-31 (#208).** `documentation`'s only historical use (#41) was actually a
-mislabelling: it was applied *instead of* a type label, not alongside one — the exact gap this section
+labelling, decided 2026-07-31 (#208).** `documentation`'s only historical use (#41) was actually a
+mislabelling: it was applied *instead of* a type label, not alongside one: the exact gap this section
 exists to close, not a pattern worth keeping. `question` has never been applied to any issue. A
-docs-only issue still gets an ordinary type label (usually `enhancement` — see the type table above);
+docs-only issue still gets an ordinary type label (usually `enhancement`, see the type table above);
 revisit adopting `documentation` as a secondary label only if a real, consistently-alongside-a-type-
 label usage pattern emerges later.
 
 **Propose the type label (and any applicable secondary label) in the same draft as the issue's
-title/body — never as a separate follow-up question after the issue already exists.** See
+title/body, never as a separate follow-up question after the issue already exists.** See
 `checklist.md`'s "Filing a new issue" and `CLAUDE.md`'s draft-review rule.
 
 ---
 
 ## Required content by type
 
-**A `Definition of done` section is copied verbatim from the template for that issue's type below —
+**A `Definition of done` section is copied verbatim from the template for that issue's type below,
 never customized, never given extra issue-specific bullets.** The specific requirements for an issue
 belong in `What needs to be done` / `Expected behaviour` and the `Failing tests` / `Expected tests`
 table, not restated as `Definition of done` checkboxes. The `Definition of done` list is a fixed
-completion gate that looks the same on every issue of a given type — if it starts accumulating
+completion gate that looks the same on every issue of a given type; if it starts accumulating
 issue-specific content, that content belongs somewhere else in the issue, not there.
 
 **Critical, non-negotiable, and universal across Bug and Enhancement issues: tests always go red
-before the fix/feature is implemented, and green after.** This is verified by an actual red test run —
+before the fix/feature is implemented, and green after.** This is verified by an actual red test run,
 not asserted, not inferred from "the code clearly didn't have this before." See `process.md` §
 "Working on an issue" for the full red-to-green rule.
 
 **Red-first covers automated (T2) tests as well as unit tests, and an issue's test list covers both.**
 A `docs/automated-testing/` document written for an issue and then run against the finished build proves
 that something happens; it does not prove the document would have caught the absence it was written for.
-Proving that means running it against a build from the commit before the work started — see
+Proving that means running it against a build from the commit before the work started; see
 `docs/testing-policy.md` § "Bug fixes" for the canary mechanics, which apply to a new feature's document
 exactly as they do to a bug's.
 
 Unit tests remain the first choice, because they run on every build and cost nothing to repeat. But some
-aspects are only reachable live, and where that is true the automated document is the test — so it is
+aspects are only reachable live, and where that is true the automated document is the test, so it is
 listed in the issue's table alongside the unit tests, and it is held to the same red-then-green standard.
 Found live in #304: a new live document was written and run, never run red, and separately the state it
-was meant to verify turned out not to be observable outside the UI at all — which no amount of unit
+was meant to verify turned out not to be observable outside the UI at all, which no amount of unit
 testing would have surfaced.
 
 ### The live-only variant
 
 An issue whose verification is entirely live has no `Expected tests` table, so the first and third
-`Definition of done` boxes — *"All expected tests listed above start red before implementation"* and
-*"All expected tests pass (green)"* — have nothing to point at. Ticking them is dishonest and leaving
+`Definition of done` boxes, *"All expected tests listed above start red before implementation"* and
+*"All expected tests pass (green)"*, have nothing to point at. Ticking them is dishonest and leaving
 them unticked blocks the close for no reason.
 
-**Such an issue copies these two boxes verbatim instead of those two**, leaving the rest of the list
+**Such an issue copies these two boxes verbatim instead of those two**: leaving the rest of the list
 unchanged:
 
 ```
@@ -84,7 +84,7 @@ unchanged:
 ```
 
 This is a second fixed list, not a licence to customize: an issue uses the standard pair or this pair,
-never a hand-edited mixture. The rule it preserves is the same one red-to-green protects — the
+never a hand-edited mixture. The rule it preserves is the same one red-to-green protects: the
 expectation is committed to before the result is seen, so a check cannot be quietly reshaped to match
 whatever happened.
 
@@ -112,7 +112,7 @@ What actually happens. Include error messages, stack traces, or wrong output ver
 
 ## Failing tests
 
-List the test(s) that demonstrate the bug — or state that they need to be written.
+List the test(s) that demonstrate the bug, or state that they need to be written.
 These tests must be red before any fix is written (see process.md § Working on an issue).
 
 | Test class | Test method | Status before fix |
@@ -147,7 +147,7 @@ This list becomes the basis for the verification checklist in the plan doc (see 
 Tests that must be written and must start red before implementation begins.
 Use this table to make the red-to-green contract explicit.
 
-List automated (T2) documents here too, where the issue needs one — a live document is a test, is held
+List automated (T2) documents here too, where the issue needs one: a live document is a test, is held
 to the same red-then-green standard, and is as easy to forget as it is to write after the fact.
 
 | Test class / document | Test method / what it verifies | Starts |
@@ -155,9 +155,9 @@ to the same red-then-green standard, and is as easy to forget as it is to write 
 | ExampleTests | MethodName_Condition_ExpectedResult | ❌ |
 | automated-testing/category/NN-name.md | What the live run establishes that no unit test can | ❌ |
 
-Omit this section only if all verification is via live commands (rare) — and when you do, use the
+Omit this section only if all verification is via live commands (rare), and when you do, use the
 live-only `Definition of done` variant above rather than leaving two boxes pointing at a table that
-isn't there. Do not substitute a placeholder row (`| — | Live tests only | ❌ |`) to give them
+isn't there. Do not substitute a placeholder row (`| n/a | Live tests only | ❌ |`) to give them
 something to reference; that satisfies the shape and not the rule.
 
 ## Definition of done
@@ -189,12 +189,12 @@ The comment must directly answer the question and state a recommendation if appl
 
 ## Possible outcomes
 
-Research issues may conclude with any of the following — record which applies in the closing comment:
+Research issues may conclude with any of the following, record which applies in the closing comment:
 
-- **New issues in the current milestone** — if the findings reveal work that fits the current milestone scope, file the issues and update `overview.md`
-- **New milestone** — if the findings reveal a body of work that is out of scope for the current milestone, propose a new milestone and file its issues
-- **Not feasible / rejected** — if the research concludes the approach is impossible or not worth pursuing, document why and close without further action
-- **Architecture decision required** — if the findings lead to a significant technical decision, write an ADR in `docs/architecture-decisions/` and link it in the closing comment (see Architecture decisions below)
+- **New issues in the current milestone**: if the findings reveal work that fits the current milestone scope, file the issues and update `overview.md`
+- **New milestone**: if the findings reveal a body of work that is out of scope for the current milestone, propose a new milestone and file its issues
+- **Not feasible / rejected**: if the research concludes the approach is impossible or not worth pursuing, document why and close without further action
+- **Architecture decision required**: if the findings lead to a significant technical decision, write an ADR in `docs/architecture-decisions/` and link it in the closing comment (see Architecture decisions below)
 
 ## Definition of done
 
@@ -209,7 +209,7 @@ Research issues may conclude with any of the following — record which applies 
 
 ## Architecture decisions
 
-Any issue type — bug, enhancement, or research — may produce a significant technical decision that must be captured as an ADR.
+Any issue type (bug, enhancement, or research) may produce a significant technical decision that must be captured as an ADR.
 
 Write an ADR in `docs/architecture-decisions/` when:
 - A non-obvious trade-off is made between two or more viable approaches
@@ -221,7 +221,7 @@ ADR format and naming rules are in [`docs/architecture-decisions/README.md`](../
 - Fields: **Status**, **Date**, **Context**, **Decision**, **Consequences**
 - Link the GitHub issue number in the ADR header
 - Link the ADR in the GitHub issue closing comment
-- ADRs are never deleted — superseded ones are marked **Superseded** and a new ADR is written
+- ADRs are never deleted; superseded ones are marked **Superseded** and a new ADR is written
 
 Add the new ADR to the index in `docs/architecture-decisions/README.md` in the same commit.
 
@@ -232,9 +232,9 @@ Add the new ADR to the index in `docs/architecture-decisions/README.md` in the s
 When a gap, risk, or dependency is identified while working on a milestone issue:
 
 1. **File the issue immediately** using the appropriate template above. Assign it to the current milestone.
-2. **Map its dependencies** — determine which open issues it blocks and which block it.
-3. **Update `overview.md`** — add the new issue to the issue list and dependency graph; insert it in the correct position in the order of operations table.
-4. **Do not create a plan doc yet** — it is written when the issue starts (`process.md` → "Working on an issue" → Planning). Its Plan doc column in `overview.md` reads `—` until then.
+2. **Map its dependencies**: determine which open issues it blocks and which block it.
+3. **Update `overview.md`**: add the new issue to the issue list and dependency graph; insert it in the correct position in the order of operations table.
+4. **Do not create a plan doc yet**: it is written when the issue starts (`process.md` → "Working on an issue" → Planning). Its Plan doc column in `overview.md` reads `none` until then.
 5. **Do not start work on the new issue** in the same session unless it is a hard blocker for the current issue. Note it and continue with the current issue.
 
 If the new issue blocks the current issue:
@@ -247,7 +247,7 @@ If the new issue blocks the current issue:
 
 ## Splitting an issue into sub-issues
 
-GitHub tracks parent/child issue relationships natively — this is a real link, not a checklist
+GitHub tracks parent/child issue relationships natively: this is a real link, not a checklist
 convention: the parent shows completion progress, and each sub-issue remains a full issue with its own
 label, milestone, plan doc, tests, and Definition of done.
 
@@ -258,14 +258,14 @@ Limits: **100 sub-issues per parent, 8 levels of nesting**. Sub-issues may live 
 Split when an issue's requirements cannot be reviewed, verified, or delivered as one unit. Signals,
 any one of which is usually enough:
 
-- **Requirements span layers that fail independently** — e.g. a `Quotinator.Data` repository capability
+- **Requirements span layers that fail independently**: e.g. a `Quotinator.Data` repository capability
   and a `Quotinator.Api` response contract land, break, and get reviewed separately.
-- **Requirements have different dependencies** — if requirement 6 must land before requirement 4 but
+- **Requirements have different dependencies**: if requirement 6 must land before requirement 4 but
   requirement 1 depends on neither, they are not one unit of work.
-- **A pre-existing bug got folded into an enhancement** — the bug needs its own red test and its own
+- **A pre-existing bug got folded into an enhancement**: the bug needs its own red test and its own
   `bug` label; burying it inside an enhancement's requirement list hides it from the bug's own
   reporting and makes "was this fixed?" unanswerable without reading the parent.
-- **The verification checklist would not fit one plan doc coherently** — if the plan doc's Steps read
+- **The verification checklist would not fit one plan doc coherently**: if the plan doc's Steps read
   as several unrelated sequences, they are several issues.
 
 Do **not** split merely because an issue is long. A single coherent concern with ten tightly-coupled
@@ -279,16 +279,16 @@ would otherwise repeat, plus the map:
 ```
 ## Background
 
-Why this body of work exists. Shared context, findings, and measurements the sub-issues all rely on —
+Why this body of work exists. Shared context, findings, and measurements the sub-issues all rely on,
 recorded once here rather than duplicated into each.
 
 ## Sub-issues
 
 | # | Scope | Depends on |
 |---|---|---|
-| #NNN | One line: what this sub-issue delivers | — |
+| #NNN | One line: what this sub-issue delivers | n/a |
 
-State the dependency reason where one exists — "B must land before C because ..." — not just the edge.
+State the dependency reason where one exists, "B must land before C because ...", not just the edge.
 
 ## Scope boundary
 
@@ -301,7 +301,7 @@ What is deliberately NOT in this body of work, and which issue owns it instead.
 ```
 
 This is the **only** permitted deviation from the "Definition of done is copied verbatim" rule above,
-and it exists because a parent has no code of its own — the red-to-green gate lives on each sub-issue,
+and it exists because a parent has no code of its own: the red-to-green gate lives on each sub-issue,
 where the code actually is. A parent issue still carries exactly one type label, chosen for the body of
 work as a whole.
 
@@ -333,18 +333,18 @@ Requires `gh` 2.94.0 or later.
 
 ### Plan docs
 
-**Each sub-issue gets an ordinary plan doc when it starts** — numbered Steps, a Verification checklist,
-the usual header — named as usual (`{issue-number}-{safe-slug}-plan.md`) and added to `Quotinator.slnx`.
+**Each sub-issue gets an ordinary plan doc when it starts**: numbered Steps, a Verification checklist,
+the usual header, named as usual (`{issue-number}-{safe-slug}-plan.md`) and added to `Quotinator.slnx`.
 Nothing special applies to them.
 
 **A parent gets a plan doc when its first sub-issue starts, shaped like a miniature `overview.md`, not
 like an issue plan.** A
-parent has no Steps and no verification of its own — its content is the map. Mirror `overview.md`'s
+parent has no Steps and no verification of its own: its content is the map. Mirror `overview.md`'s
 structure (`checklist.md` → "Overview template") scoped to this body of work, omitting the sections
 that only make sense at milestone level (tier definitions, PR merge plan):
 
 ```
-# #NNN — <title>
+# #NNN: <title>
 
 **Status:** <Planning | In progress | Waiting for release | Released>
 **GitHub issue:** #NNN
@@ -368,7 +368,7 @@ One paragraph: what this body of work delivers and why it is one body of work.
 
 ## Dependency map
 
-#X → requires #Y; unblocks #Z — with the reason, not just the edge.
+#X → requires #Y; unblocks #Z, with the reason, not just the edge.
 
 ---
 
@@ -380,16 +380,16 @@ One paragraph: what this body of work delivers and why it is one body of work.
 ```
 
 The same rules that govern `overview.md` govern this doc: **status only, never detail**. Every
-requirement, finding, and tier-verification narrative belongs in the sub-issue's own plan doc — the
+requirement, finding, and tier-verification narrative belongs in the sub-issue's own plan doc, the
 parent plan doc never restates it. Status uses the same four-word vocabulary, and the parent's own
 Status is derived from its sub-issues: `In progress` while any is, `Waiting for release` once all are.
 
 ### overview.md
 
 - **`overview.md` lists every sub-issue individually** in the Issue List and Order-of-operations
-  tables — they are the units of work that get scheduled, verified, and closed. List the parent too,
+  tables: they are the units of work that get scheduled, verified, and closed. List the parent too,
   linking its plan doc, so the grouping is discoverable.
-- **The dependency map records the sub-issues' real dependencies**, not the parent's. A downstream
+- **The dependency map records the sub-issues' real dependencies**: not the parent's. A downstream
   issue depends on the specific sub-issue that unblocks it, not on the parent as a whole.
 
 ### Closing
@@ -402,8 +402,8 @@ as a whole rather than repeating each sub-issue's own findings.
 
 ## Relationship to the milestone workflow
 
-The verification checklist table format, red-to-green rule, and bug-must-be-red-first requirement are defined in `process.md § Working on an issue`. This document does not repeat them — it defines what goes into the GitHub issue itself before a plan doc is created.
+The verification checklist table format, red-to-green rule, and bug-must-be-red-first requirement are defined in `process.md § Working on an issue`. This document does not repeat them, it defines what goes into the GitHub issue itself before a plan doc is created.
 
 The closing comment format (verification table reproducing the plan doc results) is defined in `process.md § Completing an issue` and `checklist.md § Before closing an issue`.
 
-**A "Definition of done" section's checkboxes are not just filled in once at filing time — they get ticked as the corresponding plan doc Verification table rows turn ✅, and every box must be ticked before the issue closes.** See `process.md § Completing an issue` for the `gh issue edit` mechanics.
+**A "Definition of done" section's checkboxes are not just filled in once at filing time: they get ticked as the corresponding plan doc Verification table rows turn ✅, and every box must be ticked before the issue closes.** See `process.md § Completing an issue` for the `gh issue edit` mechanics.
