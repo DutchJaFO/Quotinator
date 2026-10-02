@@ -10,7 +10,7 @@
     "removed": "Verwijderd"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 424],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 424],
     "highlights": [
       "Als Quotinator de back-up die nodig is voordat je database wordt bijgewerkt of gevuld niet kan maken, stopt het nu veilig en vertelt het waarom. Alleen de keuzes die kunnen werken worden aangeboden, met een handleiding die uitlegt hoe je de rest oplost.",
       "Quotinator waarschuwt nu al terwijl de back-upmap volloopt en niet pas als die vol is: back-ups gaan door uit de ruimte die in reserve wordt gehouden, en de waarschuwing vertelt hoeveel ruimte er nog is en verdwijnt vanzelf zodra je ruimte hebt vrijgemaakt.",
@@ -82,6 +82,8 @@
       "Elke host voor geautomatiseerde tests start nu met het bijwerken van bronnen en de meegeleverde bronnen uitgeschakeld en met een eigen gegevensmap, die wordt verwijderd wanneer de host stopt; een test die een schema nodig heeft, krijgt een voorbereide database: testonderhoud zonder gevolgen voor de applicatie (issue #424)"
     ],
     "fixed": [
+      "De melding over twee hernoemde API-bewerkings-ID\u0027s werd als verlopen weergegeven op databases die met versie 1.8.3 of eerder zijn gemaakt, hoewel de wijziging die erin staat nog steeds geldt. De melding wordt nu als actueel weergegeven en blijft gesloten als u die al had gesloten (issue #413)",
+      "Diezelfde melding bestond uit een doorlopende alinea; die staat nu over meerdere regels, met elk hernoemd ID op een eigen regel, in alle talen (issue #413)",
       "Een openstaande databasemigratie werd uitgevoerd zonder veiligheidsback-up als die back-up niet kon worden gemaakt. Het opstarten weigert de migratie nu, blijft in een beperkte toestand en vertelt welk obstakel in de weg stond en hoe je dat oplost (issue #348)",
       "Opnieuw vullen markeerde de melding als opgelost terwijl het nog bezig was, na het eerste bestand. Een melding wordt nu pas opgelost als het opnieuw vullen klaar is (issue #348)",
       "De database opnieuw instellen vanuit een melding markeerde de database als gezond en verwijderde de melding, ook als het opnieuw instellen werd geweigerd omdat er geen back-up kon worden gemaakt (issue #348)",

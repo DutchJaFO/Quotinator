@@ -10,7 +10,7 @@
     "removed": "Entfernt"
   },
   "unreleased": {
-    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 424],
+    "issues": [81, 83, 302, 303, 304, 307, 308, 309, 312, 313, 319, 320, 323, 325, 326, 348, 349, 367, 369, 370, 372, 373, 374, 375, 376, 377, 378, 382, 383, 389, 397, 409, 410, 411, 413, 424],
     "highlights": [
       "Wenn Quotinator die Sicherung nicht erstellen kann, die vor dem Aktualisieren oder Befüllen der Datenbank nötig ist, hält es jetzt sicher an und sagt warum. Angeboten werden nur die Möglichkeiten, die funktionieren können, zusammen mit einer Anleitung, wie sich der Rest beheben lässt.",
       "Quotinator warnt jetzt schon, während sich der Sicherungsordner füllt, und nicht erst, wenn er voll ist: Sicherungen laufen aus dem in Reserve gehaltenen Platz weiter, und die Warnung nennt den verbleibenden Platz und verschwindet von selbst, sobald welcher frei geworden ist.",
@@ -82,6 +82,8 @@
       "Jeder Host für automatisierte Tests startet jetzt mit deaktivierter Quellaktualisierung und deaktivierten mitgelieferten Quellen sowie einem eigenen Datenverzeichnis, das beim Beenden des Hosts entfernt wird; ein Test, der ein Schema benötigt, erhält eine vorbereitete Datenbank: Testwartung ohne Auswirkung auf die Anwendung (issue #424)"
     ],
     "fixed": [
+      "Der Hinweis auf zwei umbenannte API-Operations-IDs wurde bei Datenbanken, die mit Version 1.8.3 oder früher erstellt wurden, als abgelaufen angezeigt, obwohl die beschriebene Änderung weiterhin gilt. Er wird nun als aktuell angezeigt und bleibt ausgeblendet, wenn Sie ihn schon ausgeblendet hatten (issue #413)",
+      "Derselbe Hinweis war ein einzelner durchgehender Absatz; er ist jetzt auf mehrere Zeilen verteilt, mit jeder umbenannten ID in einer eigenen Zeile, in allen Sprachen (issue #413)",
       "Eine ausstehende Datenbankmigration lief ohne ihre Sicherheitssicherung, wenn diese Sicherung nicht erstellt werden konnte. Der Start verweigert die Migration jetzt, bleibt in einem eingeschränkten Zustand und nennt das Hindernis und wie es sich beheben lässt (Issue #348)",
       "Das Neubefüllen markierte seine Benachrichtigung als erledigt, während es noch lief, nach der ersten Datei. Eine Benachrichtigung wird jetzt erst erledigt, wenn das Neubefüllen abgeschlossen ist (Issue #348)",
       "Das Zurücksetzen der Datenbank aus einer Benachrichtigung heraus markierte die Datenbank als gesund und entfernte die Benachrichtigung, auch wenn das Zurücksetzen mangels Sicherung verweigert wurde (Issue #348)",

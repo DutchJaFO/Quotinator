@@ -1,4 +1,4 @@
-##### *GENERATED FILE [2026-10-02 05:49 UTC]: do not edit by hand.*
+##### *GENERATED FILE [2026-10-02 22:02 UTC]: do not edit by hand.*
 
 # Changelog
 
@@ -75,6 +75,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Every automated test host now starts with the source refresh and the bundled sources off and a data directory of its own, removed when the host stops, and a test that needs a schema is given a prepared database: test maintenance with no effect on the application (issue #424)
 
 ### Fixed
+- The notice about two renamed API operation IDs showed as expired on databases created with version 1.8.3 or earlier, although the change it describes still applies. It is now shown as current, and stays dismissed if you had already dismissed it (issue #413)
+- That same notice ran as one unbroken paragraph; it is now laid out over several lines, with each renamed ID on its own line, in every language (issue #413)
 - A pending database migration ran without its safety backup when that backup could not be taken. Startup now refuses the migration, stays in a limited state, and says which obstacle stood in the way and how to resolve it (issue #348)
 - A reseed marked its notification resolved while it was still running, after its first file. A notification is now resolved only once the reseed has finished (issue #348)
 - Resetting the database from a notification, when the reset was refused for want of a backup, marked the database healthy and cleared the notification anyway (issue #348)

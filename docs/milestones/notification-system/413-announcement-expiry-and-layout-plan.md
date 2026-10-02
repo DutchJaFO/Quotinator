@@ -9,8 +9,8 @@
 
 ## Next action
 
-**Step 6: close out.** Steps 1 to 5 are done and verification rows 1 to 8 are ✅. Only T1 (row 9) is
-outstanding, and it is the developer's.
+**T1 by the developer (row 9).** Steps 1 to 5 are done, rows 1 to 8 are ✅, and step 6's boyscout pass
+and changelog entries are in. The `Waiting for release` list is all that follows T1.
 
 ---
 
@@ -165,7 +165,7 @@ documents, then remove the container, image and worktree.
 
 ### 6. Close out
 
-**Status:** ⬜ Not started
+**Status:** 🔄 Boyscout pass and changelog done; the `Waiting for release` list waits on T1
 
 Boyscout pass over the touched files (`.editorconfig` scoped sections for the `.cs` files this issue
 edits), the changelog `unreleased` entry in all three languages, and the `Waiting for release`
