@@ -9,8 +9,8 @@
 
 ## Next action
 
-**Step 5: extend the live document.** Steps 1 to 4 are done and verification rows 1 to 6 are ✅. What
-remains is the T2 document (rows 7 and 8) and then T1 (row 9).
+**Step 6: close out.** Steps 1 to 5 are done and verification rows 1 to 8 are ✅. Only T1 (row 9) is
+outstanding, and it is the developer's.
 
 ---
 
@@ -151,7 +151,7 @@ single-line body, the old hash, and `nl`/`de` translation rows.
 
 ### 5. Extend the live document
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, red then green 2026-10-02
 
 *Upgrading a v1.8.3 database enriches its notification rather than duplicating it*
 (`notifications-and-changelog/04`) already upgrades a real 1.8.3 database and asserts the count stays
@@ -183,8 +183,8 @@ checklist.
 | 4 | ✅ | The upgrade writes no second copy | Unit test | A pair, so that neither test needs a copy of the text: `Migration27_LegacyAnnouncementRow_HashDescribesTheStoredBody` (the stored hash is the hash of the stored body) with row 5 (that hash is the producer's). Both shown red by mutating migration 27 to leave the old hash |
 | 5 | ✅ | The migration's frozen hash matches the text the producer ships | Unit test | `OperationIdRenameAnnouncementTests.Migration27_WritesTheContentHashTheProducerComputes`, plus `Migration27_WritesEveryLineOfTheBodyTheProducerWrites` and `..._OfTheTranslationTheProducerWrites` per language |
 | 6 | ✅ | Every language's announcement body is multi-line | Unit test | `OperationIdRenameAnnouncementTests.EveryLanguagesBody_IsLaidOutOverSeveralLines` (`en-GB`, `nl`, `de`), beside `TheProducersBody_GivesEachRenamedOperationIdItsOwnLine`. Held here rather than in `TranslationCompletenessTests`, whose subject is key completeness rather than one key's shape |
-| 7 | ❌ | A real 1.8.3 upgrade shows one active, multi-line announcement | Live (T2) | *Upgrading a v1.8.3 database enriches its notification rather than duplicating it*, step 2: count `1`, `expiresAt` empty, body contains a line break, `metadataKind=announcement` |
-| 8 | ❌ | That document would have caught the defect | Live (T2) | The same document against `quotinator:canary413`, built from the commit before this issue's first change: step 2 fails on `expiresAt` and on the line break |
+| 7 | ✅ | A real 1.8.3 upgrade shows one active, multi-line announcement | Live (T2) | *Upgrading a v1.8.3 database enriches its notification rather than duplicating it*, green 2026-10-02: count `1`, `sameRow=True`, `cleared=True`, `bodyLines after = 4`, and `lines=4` in all three languages |
+| 8 | ✅ | That document would have caught the defect | Live (T2) | The same document against `quotinator:canary413`, built from `0924b058`: step 2 red on `cleared=False` and `bodyLines after = 1`, step 3 red on `lines=1` for every language, while count and `sameRow` stayed correct |
 | 9 | ❌ | The application starts | Live (T1) | The developer starts it in Visual Studio and it reaches `Quotinator ready` |
 
 ---
