@@ -81,7 +81,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#421](https://github.com/DutchJaFO/Quotinator/issues/421) | A quote's id depends on whether the install was upgraded or fresh, after Migration009's dedupe | Planning | T1 ⬜ T2 ⬜ | none |
 | [#422](https://github.com/DutchJaFO/Quotinator/issues/422) | A modal's 95vh height cap never applies; Bootstrap's centred min-height overrides it | Planning | T1 ⬜ T2 ⬜ | none |
 | [#423](https://github.com/DutchJaFO/Quotinator/issues/423) | Seeding fills any empty database, so a reset is undone by the next restart | Planning | T1 ⬜ T2 ⬜ | none |
-| [#424](https://github.com/DutchJaFO/Quotinator/issues/424) | Bundled sources are not auto-downloaded by default, and are refreshed by hand instead | In progress | T1 ⬜ T2 ⬜ | [424-sources-not-auto-downloaded-by-default-plan.md](424-sources-not-auto-downloaded-by-default-plan.md) |
+| [#424](https://github.com/DutchJaFO/Quotinator/issues/424) | Bundled sources are not auto-downloaded by default, and are refreshed by hand instead | Waiting for release | T1 ✅ T2 ✅ | [424-sources-not-auto-downloaded-by-default-plan.md](424-sources-not-auto-downloaded-by-default-plan.md) |
 | [#430](https://github.com/DutchJaFO/Quotinator/issues/430) | A backup's filename version is inconsistent across call sites and cannot identify the schema state it came from | Planning | T1 ⬜ T2 ⬜ | none |
 | [#431](https://github.com/DutchJaFO/Quotinator/issues/431) | Let an operator name a backup they create | Planning | T1 ⬜ T2 ⬜ | none |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
@@ -145,7 +145,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #421 ─── (none); found in #411's T2, in #374's migration: Planning
 #422 ─── (none); found in #411's T2, in #308's modal: Planning
 #423 ─── (none); found in #308's T2; #156 decided it, #277 pinned the opposite, #304 depends on it: Planning
-#424 ─── (none); moved from v1.9.0, found in #348's verification: In progress
+#424 ─── (none); moved from v1.9.0, found in #348's verification: Waiting for release
 #430 ─── (none); found in #348's T1: Planning
 #431 ─── (none); shares a sanitiser with #353: Planning
 #397 ─── (none); blocks #370: Waiting for release
@@ -182,7 +182,7 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 7 | **#309** ✅ | Waiting for release |
 | 8 | **#326** ✅ | Waiting for release |
 | 9 | **#348** ✅ | Waiting for release |
-| 10 | **#424** 🚧 | In progress; the test hosts first, taken up during #348 |
+| 10 | **#424** ✅ | Waiting for release |
 | 11 | **#349** ✅ | Waiting for release |
 | 12 | **#307** ✅ | Waiting for release |
 | 13 | **#319** ✅ | Waiting for release; gateway for the producers below |

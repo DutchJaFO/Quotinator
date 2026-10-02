@@ -1,6 +1,6 @@
 # #424: Bundled sources are not auto-downloaded by default, and are refreshed by hand instead
 
-**Status:** In progress
+**Status:** Waiting for release
 **GitHub issue:** #424
 **Tiers required:** T1, T2
 **Depends on:** none
@@ -21,7 +21,7 @@ from v1.9.0 (developer, 2026-09-27) so the test side is fixed on this branch.
 
 ## Next action
 
-**T1 by the developer (row 14).** Every other step is done and every other row is ✅.
+**T1 passed 2026-10-02**, run by the developer: the application reached `Quotinator ready` with both listeners bound, and no `[Runtime - Exception]` line appeared anywhere in the run. Every step is done and every verification row is ✅, so the issue is ready for `Waiting for release`.
 
 ---
 
@@ -177,7 +177,7 @@ Every touched file is dash-free except two left for the developer: `CLAUDE.md` (
 beyond this issue. `import-and-staged-actions/14` keeps one dash, in its quote of a Core log message this
 issue does not change.
 ### 9. Full verification
-**Status:** ✅ Done, except T1 (row 14), which is the developer's
+**Status:** ✅ Done
 
 Build clean at 0 warnings; the full suite green across three consecutive `-m:1` runs, 4,393 tests passed
 across 11 projects each time, 0 failed, 0 warnings.
@@ -216,4 +216,4 @@ PowerShell 7 `??` operator, which Windows PowerShell 5.1 cannot parse.
 | 11 | ✅ | No test relies on bundled content or an earlier run's state | Unit test | Step 5: the full Api suite green with the defaults in place, each failure it found recorded and fixed |
 | 12 | ✅ | Build clean and the full suite green across three `-m:1` runs | Build | Step 9: 4,393 passed in each of three runs |
 | 13 | ✅ | The refresh is off by default, and turned on explicitly still works end to end | Automated (T2) | `startup-and-degradation/07`, red against `29b55805`, then green |
-| 14 | ❌ | The application still starts | Live (T1) | The developer starts `Quotinator.Api` in Visual Studio after step 9 |
+| 14 | ✅ | The application still starts | Live (T1) | Step 9: the developer ran it 2026-10-02, reaching `Quotinator ready` with both listeners bound |
