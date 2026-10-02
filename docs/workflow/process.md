@@ -22,7 +22,7 @@ Two rules prevent the same fact from being written in two places, drifting out o
 
 No dates, no "See X for detail" pointers, no extra clauses of any kind. If something beyond the bare status word feels necessary, that need is itself the signal it belongs in a section of the doc, not the Status line: the reader is already looking at the document.
 
-**This "no duplication" rule applies to every header field, not just Status.** `**Tiers required:**`, `**GitHub issue:**`, `**Depends on:**`, and any other header line state the bare fact only, no parenthetical justifying *why* (e.g. which files or migrations trigger a tier). That reasoning already lives in the plan doc's own Steps section; repeating it in the header creates a second copy that can silently drift out of sync the moment a step changes and the header doesn't get updated to match. If a header field ever tempts a "— because..." or "(touches X, Y, Z)" clause, that is the same signal as with Status: the content belongs in a body section, not the header.
+**This "no duplication" rule applies to every header field, not just Status.** `**Tiers required:**`, `**GitHub issue:**`, `**Depends on:**`, and any other header line state the bare fact only, no parenthetical justifying *why* (e.g. which files or migrations trigger a tier). That reasoning already lives in the plan doc's own Steps section; repeating it in the header creates a second copy that can silently drift out of sync the moment a step changes and the header doesn't get updated to match. If a header field ever tempts a trailing "because..." explanation or a "(touches X, Y, Z)" clause, that is the same signal as with Status: the content belongs in a body section, not the header.
 
 This does not apply to an individual step section's own `**Status:**` line (e.g. `✅ Done`, `⬜ Not started`), that is a separate, per-step concept already covered above, not the document-level header.
 
@@ -151,7 +151,7 @@ Examples:
    ```
 3. Map dependencies between issues.
 4. Decide on an order of operations.
-5. Create `docs/milestones/{slug}/overview.md` (see `checklist.md` for the template), with `—` in
+5. Create `docs/milestones/{slug}/overview.md` (see `checklist.md` for the template), with `none` in
    every issue's Plan doc column. No plan doc is written here. See "A plan doc is written when its
    issue starts" under "Working on an issue".
 6. Commit the milestone folder to `main`.
@@ -237,7 +237,7 @@ At the start of every session working on a milestone:
    ```
    gh issue list --milestone "<Milestone Name>" --state open --json number,title
    ```
-3. Compare against `overview.md`. For any new issues: fetch the spec and add it to the overview, with `—` in its Plan doc column.
+3. Compare against `overview.md`. For any new issues: fetch the spec and add it to the overview, with `none` in its Plan doc column.
 4. Review the plan docs for issues being worked on today.
 
 ---
@@ -252,7 +252,7 @@ begins once the plan doc's verification checklist exists and the issue's status 
 **A plan doc is written when its issue starts, never ahead of it** (developer decision, 2026-09-16). A
 plan is built against the code and the other issues as they stand when work begins; one prepared in
 advance is invalidated by whatever resolves in between, and bringing it up to date is the same work done
-twice. Until an issue starts, the GitHub issue is its only specification and `overview.md` shows `—` in
+twice. Until an issue starts, the GitHub issue is its only specification and `overview.md` shows `none` in
 its Plan doc column. A plan doc that already exists for an issue not yet started is a draft to re-plan
 from, never a plan to execute as written.
 
