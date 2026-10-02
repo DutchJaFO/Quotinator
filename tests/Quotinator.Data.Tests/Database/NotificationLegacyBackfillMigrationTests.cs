@@ -339,6 +339,115 @@ public class NotificationLegacyBackfillMigrationTests
     /// The row v1.8.3 wrote, carried through the real chain from migration 8 to 14, then migration 24.
     /// Seeded with the text v1.8.3 wrote, so the translations migration 14 adds are the ones it really adds.
     /// </summary>
+    /// <summary>
+    /// #413: v1.8.3 gave every notification it wrote a 30-day default expiry, so the announcement reads
+    /// as <c>Expired</c> on a database older than that, although the breaking change still applies.
+    /// Migration 27 clears it.
+    /// </summary>
+    [TestMethod]
+    public async Task Migration27_LegacyAnnouncementRow_ClearsItsExpiry()
+    {
+        using SqliteConnection connection = await V183AnnouncementThroughMigration27Async();
+
+        Assert.IsNull(await connection.ExecuteScalarAsync<string>("SELECT ExpiresAt FROM System_Notification;"));
+    }
+
+    /// <summary>Clearing the expiry must not resurrect an announcement the operator already dismissed.</summary>
+    [TestMethod]
+    public async Task Migration27_DismissedLegacyRow_StaysDismissed()
+    {
+        using SqliteConnection connection = await V183AnnouncementThroughMigration27Async(dismissed: true);
+
+        Assert.AreEqual(1, await connection.ExecuteScalarAsync<long>("SELECT IsDismissed FROM System_Notification;"));
+    }
+
+    /// <summary>
+    /// The layout is the issue's second requirement. Asserted as a line count rather than against the
+    /// text: what the migration stores is held to the producer's own constant by
+    /// <c>OperationIdRenameAnnouncementTests</c>, where that constant is visible, so repeating the words
+    /// here would compare a literal that is not what this test is about.
+    /// </summary>
+    [TestMethod]
+    public async Task Migration27_LegacyAnnouncementRow_BodyCarriesItsLineBreaks()
+    {
+        using SqliteConnection connection = await V183AnnouncementThroughMigration27Async();
+
+        string body = (await connection.ExecuteScalarAsync<string>("SELECT Body FROM System_Notification;"))!;
+
+        Assert.HasCount(4, body.Split('\n'));
+    }
+
+    /// <summary>Every language is laid out, not only the original.</summary>
+    [TestMethod]
+    [DataRow("nl")]
+    [DataRow("de")]
+    public async Task Migration27_LegacyAnnouncementRow_TranslationsCarryTheirLineBreaks(string language)
+    {
+        using SqliteConnection connection = await V183AnnouncementThroughMigration27Async();
+
+        string body = (await connection.ExecuteScalarAsync<string>(
+            "SELECT Body FROM System_NotificationTranslation WHERE Language = @language;", new { language }))!;
+
+        Assert.HasCount(4, body.Split('\n'));
+    }
+
+    /// <summary>
+    /// The row's stored hash describes the row's stored body. This is what stops the producer writing a
+    /// second copy: it looks the row up by the hash of the text it ships, so a migration that rewrote the
+    /// body and left the hash describing the old one would match nothing and announce the news again.
+    /// <para>
+    /// Paired with <c>OperationIdRenameAnnouncementTests.Migration27_WritesTheContentHashTheProducerComputes</c>,
+    /// which holds that same hash to the producer's constant. Neither test needs a copy of the text:
+    /// together they establish that the stored hash is the hash of what the producer ships.
+    /// </para>
+    /// </summary>
+    [TestMethod]
+    public async Task Migration27_LegacyAnnouncementRow_HashDescribesTheStoredBody()
+    {
+        using SqliteConnection connection = await V183AnnouncementThroughMigration27Async();
+
+        string body     = (await connection.ExecuteScalarAsync<string>("SELECT Body FROM System_Notification;"))!;
+        string metadata = (await connection.ExecuteScalarAsync<string>("SELECT Metadata FROM System_Notification;"))!;
+
+        Assert.Contains($"\"contentHash\":\"{NotificationContentHash.Of(body)}\"", metadata, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The chain through migration 27, i.e. the state a v1.8.3 database reaches on this build. The row is
+    /// inserted with the expiry that release defaulted to, which is what migration 27 exists to clear.
+    /// </summary>
+    private async Task<SqliteConnection> V183AnnouncementThroughMigration27Async(bool dismissed = false)
+    {
+        TempDatabase temp = new(SchemaThroughMigration8);
+        _databases.Add(temp);
+        SqliteConnection connection = await OpenAsync(temp);
+
+        await connection.ExecuteAsync(
+            "INSERT INTO System_Notification (Id, Type, Body, DateCreated, ExpiresAt, IsDismissed, IsDeleted, Metadata, MetadataKind) " +
+            "VALUES (@id, 'Warning', @body, '2026-08-10 21:27:33', '2026-09-09 21:27:33', @dismissed, 0, @metadata, 'Announcement');",
+            new
+            {
+                id        = Guid.NewGuid().ToString(),
+                body      = V183AnnouncementBody,
+                dismissed = dismissed ? 1 : 0,
+                metadata  = LegacyAnnouncementMetadata,
+            });
+
+        foreach (string migration in (string[])
+        [
+            NotificationLegacyMetadataMigrations.BackfillCommonReleaseFields,
+            NotificationTranslationMigrations.AddOriginalLanguageColumn,
+            NotificationTranslationMigrations.CreateNotificationTranslationTable,
+            NotificationTranslationMigrations.BackfillAnnouncementTranslations,
+            NotificationAnnouncementRewordMigrations.RewordOperationIdRename,
+            NotificationAnnouncementLineBreakMigrations.BreakAnnouncementIntoLines,
+        ])
+        {
+            await connection.ExecuteAsync(migration);
+        }
+
+        return connection;
+    }
     private async Task<SqliteConnection> V183AnnouncementThroughMigration24Async()
     {
         TempDatabase temp = new(SchemaThroughMigration8);

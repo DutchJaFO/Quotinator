@@ -9,8 +9,8 @@
 
 ## Next action
 
-**Step 2: write the multi-line text in all three languages.** Step 1 is already delivered, by #348, and
-step 3 is narrower than this plan was written for. See *What the cross-check found* for both.
+**Step 5: extend the live document.** Steps 1 to 4 are done and verification rows 1 to 6 are ✅. What
+remains is the T2 document (rows 7 and 8) and then T1 (row 9).
 
 ---
 
@@ -112,7 +112,7 @@ exactly the seam this step wanted. Nothing to do here.
 
 ### 2. Write the multi-line text in all three languages
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 The statement, one line per renamed operation ID, then the scope note, in the new class for English,
 and in `i18ntext/UI.{en-GB,nl,de}.json` under the existing `NotificationOperationIdRename*` keys, whose
@@ -122,7 +122,7 @@ language for the translation rows.
 
 ### 3. Add the migration that clears the expiry and restates the body
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, as version 27 in `NotificationAnnouncementLineBreakMigrations`
 
 A new `DataOwnedMigrations` entry (version 23, `System_Notification` is Data-owned, as migrations 8,
 11 and 14 were), in `NotificationLegacyMetadataMigrations`, scoped by
@@ -142,7 +142,7 @@ text must not follow a later edit. Step 4's guard test is what keeps the literal
 
 ### 4. Write the tests, red first
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
 Every test below runs against current code before any of steps 1 to 4 land, and each must fail for the
 reason it exists. The migration tests build their fixture the way
@@ -177,12 +177,12 @@ checklist.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | An upgraded 1.8.3 row has no expiry | Unit test | `NotificationLegacyBackfillMigrationTests.Migration023_LegacyAnnouncementRow_ClearsItsExpiry`, `ExpiresAt` is `NULL` after the migration, against a fixture whose row carries one |
-| 2 | ❌ | A dismissed row stays dismissed | Unit test | `NotificationLegacyBackfillMigrationTests.Migration023_DismissedLegacyRow_StaysDismissed`, `IsDismissed` is `1` before and after |
-| 3 | ❌ | The upgraded row's body carries its line breaks, in every language | Unit test | `NotificationLegacyBackfillMigrationTests.Migration023_LegacyAnnouncementRow_RewritesBodyAndTranslations`, the row's `Body` and both translation rows each contain `\n` and the renamed operation IDs on their own lines |
-| 4 | ❌ | The upgrade writes no second copy | Unit test | `NotificationSeedingTests.SeedOnce_AgainstAMigratedAnnouncementRow_WritesNothing`, history holding the migrated row, producer payload from `OperationIdAnnouncement`, result `null` |
-| 5 | ❌ | The migration's frozen hash matches the text the producer ships | Unit test | `OperationIdAnnouncementTests.TheMigrationHash_MatchesTheShippedBody`, `NotificationContentHash.Of(OperationIdAnnouncement.Body)` equals the literal in migration 23 |
-| 6 | ❌ | Every language's announcement body is multi-line | Unit test | `TranslationCompletenessTests.OperationIdRenameBody_CarriesLineBreaksInEveryLanguage`, each of `UI.en-GB`, `UI.nl`, `UI.de` holds `\n` in that key |
+| 1 | ✅ | An upgraded 1.8.3 row has no expiry | Unit test | `NotificationLegacyBackfillMigrationTests.Migration27_LegacyAnnouncementRow_ClearsItsExpiry`, red with migration 27 absent from the fixture chain |
+| 2 | ✅ | A dismissed row stays dismissed | Unit test | `NotificationLegacyBackfillMigrationTests.Migration27_DismissedLegacyRow_StaysDismissed`. Cannot fail by removing migration 27, so shown red by mutating it to also set `IsDismissed = 0` |
+| 3 | ✅ | The upgraded row's body carries its line breaks, in every language | Unit test | `NotificationLegacyBackfillMigrationTests.Migration27_LegacyAnnouncementRow_BodyCarriesItsLineBreaks` and `..._TranslationsCarryTheirLineBreaks` (`nl`, `de`), each asserting four lines. Asserted as a line count, not against the words: the text itself is held to the producer's constant by row 5, where that constant is visible |
+| 4 | ✅ | The upgrade writes no second copy | Unit test | A pair, so that neither test needs a copy of the text: `Migration27_LegacyAnnouncementRow_HashDescribesTheStoredBody` (the stored hash is the hash of the stored body) with row 5 (that hash is the producer's). Both shown red by mutating migration 27 to leave the old hash |
+| 5 | ✅ | The migration's frozen hash matches the text the producer ships | Unit test | `OperationIdRenameAnnouncementTests.Migration27_WritesTheContentHashTheProducerComputes`, plus `Migration27_WritesEveryLineOfTheBodyTheProducerWrites` and `..._OfTheTranslationTheProducerWrites` per language |
+| 6 | ✅ | Every language's announcement body is multi-line | Unit test | `OperationIdRenameAnnouncementTests.EveryLanguagesBody_IsLaidOutOverSeveralLines` (`en-GB`, `nl`, `de`), beside `TheProducersBody_GivesEachRenamedOperationIdItsOwnLine`. Held here rather than in `TranslationCompletenessTests`, whose subject is key completeness rather than one key's shape |
 | 7 | ❌ | A real 1.8.3 upgrade shows one active, multi-line announcement | Live (T2) | *Upgrading a v1.8.3 database enriches its notification rather than duplicating it*, step 2: count `1`, `expiresAt` empty, body contains a line break, `metadataKind=announcement` |
 | 8 | ❌ | That document would have caught the defect | Live (T2) | The same document against `quotinator:canary413`, built from the commit before this issue's first change: step 2 fails on `expiresAt` and on the line break |
 | 9 | ❌ | The application starts | Live (T1) | The developer starts it in Visual Studio and it reaches `Quotinator ready` |
