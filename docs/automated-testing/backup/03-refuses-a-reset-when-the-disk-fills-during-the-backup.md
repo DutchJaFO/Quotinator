@@ -36,7 +36,7 @@ sees free space before the copy starts; the copy is what exhausts it.
   restarts: it seeds, attempts one reset, and asserts. A scenario needing its database across a restart
   must not use this flag.
 - **The quote count is read before and after.** The failure this guards against reported success while
-  destroying data, so "it refused" is not enough on its own — the data has to still be there.
+  destroying data, so "it refused" is not enough on its own: the data has to still be there.
 
 ## Steps
 
@@ -89,7 +89,7 @@ $r = dotnet script scripts/testing/http.csx -- --url "http://localhost:18383/api
 
 **Expected:** `409` with `obstacle=DiskFilledDuringBackup`.
 
-**On failure:** a `200` is the exact regression this document exists to catch — see Observed effect.
+**On failure:** a `200` is the exact regression this document exists to catch. See Observed effect.
 A `500` means the failure escaped unhandled instead of being reported.
 
 ### 4. Confirm the database is still there
@@ -101,7 +101,7 @@ $after = (Invoke-RestMethod "http://localhost:18383/api/v1/version").database.qu
 
 **Expected:** the same non-zero count as step 1.
 
-**On failure:** a count of `0` means the reset ran despite refusing — the database was destroyed and the
+**On failure:** a count of `0` means the reset ran despite refusing: the database was destroyed and the
 only restore point is a truncated fragment. This assertion is the substantive one; step 2's status code
 alone would not catch it.
 
@@ -154,7 +154,7 @@ measurement found something worse than the bug it was written for.
 
 **Before the fix**, this exact scenario returned **`200 OK`**. The log showed
 `[Database - Backup] backing up v5 → …` with no completion line, the backup file on disk was exactly the
-1,380,352 bytes that had been free — truncated — and the reset went on to drop every table and rebuild.
+1,380,352 bytes that had been free, truncated, and the reset went on to drop every table and rebuild.
 `DropAndRebuildAsync` had taken the backup result and read only its path, never whether it succeeded.
 
 So the operator would have been told their reset worked, with their data gone and the only restore point
@@ -163,12 +163,12 @@ looks like success.
 
 **After the fix**, the same call answers:
 
-> `409 Conflict` — `backupObstacle: DiskFilledDuringBackup`
+> `409 Conflict`, `backupObstacle: DiskFilledDuringBackup`
 > *"The volume ran out of space partway through writing the backup, after the pre-flight check had
 > passed."*
 > Remedies: free disk space and retry; remove the partially written backup file if one was left behind.
 
-and the quote count is unchanged — 799 before, 799 after.
+and the quote count is unchanged: 799 before, 799 after.
 
 ## Cleanup
 

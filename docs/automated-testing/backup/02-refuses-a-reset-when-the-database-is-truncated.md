@@ -7,7 +7,7 @@
 ## Preconditions
 
 **Beyond the profile.** A real, fully seeded database is cut to half its length while the container is
-stopped — a genuine SQLite file with a valid header and missing pages, which is what an interrupted
+stopped: a genuine SQLite file with a valid header and missing pages, which is what an interrupted
 write or a filled disk actually leaves behind.
 
 **Why this is its own document rather than a second case inside
@@ -23,9 +23,9 @@ would let one pass on the other's behalf.
 - **The WAL sidecars are deleted.** A surviving `-wal` can carry enough recent pages for SQLite to open
   the database anyway, which would make the outcome depend on how recently the seed checkpointed.
 - **The container is removed before the file is touched.** `destroy` is `docker rm -f`, a kill rather
-  than a clean stop, so the sidecars can survive it — which is why the bullet above deletes them rather
+  than a clean stop, so the sidecars can survive it, which is why the bullet above deletes them rather
   than relying on a checkpoint.
-- **The second start waits for *listening*, not healthy** — degrading is the expected outcome.
+- **The second start waits for *listening*, not healthy**, since degrading is the expected outcome.
 
 ## Steps
 
@@ -63,7 +63,7 @@ Remove-Item "$dataDir\quotinatordata.db-wal","$dataDir\quotinatordata.db-shm" -E
 
 **Expected:** the reported new length is half the old one, and both are megabytes rather than bytes.
 
-**On failure:** a file-in-use error means the container did not stop — re-run `destroy` and retry.
+**On failure:** a file-in-use error means the container did not stop. Re-run `destroy` and retry.
 
 ### 3. Start the current build and attempt a reset
 
@@ -85,7 +85,7 @@ $r = dotnet script scripts/testing/http.csx -- --url "http://localhost:18382/api
 
 A truncated file reports the same obstacle as an unreadable one, and that is correct rather than a
 missed distinction: SQLite cannot read either, so neither can be backed up, and the remedy is the same.
-What this document proves is that the *route* to that outcome works for truncation too — which the
+What this document proves is that the *route* to that outcome works for truncation too, which the
 unit tests, which use non-database bytes, do not exercise.
 
 **On failure:** a `200` from health means the truncation did not take. A `500` from the reset means the
@@ -109,7 +109,7 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18382/api/v1/a
 **Expected:** healthy, and `200`.
 
 **The positive control.** Step 3 asserts a refusal; on its own that would pass against a build refusing
-every reset. This shows the refusal is caused by the truncation and nothing else — and that the remedy
+every reset. This shows the refusal is caused by the truncation and nothing else, and that the remedy
 the refusal names actually resolves it.
 
 **On failure:** a `409` means the refusal is not specific to the sabotage, and step 3 proves nothing.
@@ -118,7 +118,7 @@ the refusal names actually resolves it.
 
 **Measured 2026-08-28** against `quotinator:local`: a 4,562,944-byte database cut to 2,281,472 bytes
 degrades at startup and answers a reset attempt with `409` / `SourceUnreadable`, carrying the same two
-remedies as `01` — replace the file, or restore an older backup.
+remedies as `01`: replace the file, or restore an older backup.
 
 Before #348 this same call returned an unhandled `500`.
 

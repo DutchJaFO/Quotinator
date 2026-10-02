@@ -118,69 +118,69 @@
       "version": "1.8.3",
       "date": "2026-08-12",
       "quote": {
-        "text": "Quotinator spent this release learning to fact-check its own database — fitting, for an app built entirely on verified quotes."
+        "text": "Quotinator spent this release learning to fact-check its own database. Fitting, for an app built entirely on verified quotes."
       },
       "issues": [178, 148, 150, 197, 151, 146, 208, 232, 227, 236, 222, 253, 254, 255, 256, 251, 252, 249, 156, 250, 244, 245, 263, 264, 265, 271, 272, 267, 269, 278, 279, 277, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 293, 294],
     "highlights": [
-      "If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page — an admin database Reset can fix it without needing to restart the app or container.",
-      "Quotinator now keeps a copy of every import/seed file it processes — including which conversion settings were used — so the original content can be listed, reviewed, or downloaded again later, and old versions can be pruned to reclaim space.",
+      "If the database ever fails to start up correctly, Quotinator now stays reachable and reports the problem clearly instead of crashing or showing a technical error page, an admin database Reset can fix it without needing to restart the app or container.",
+      "Quotinator now keeps a copy of every import/seed file it processes, including which conversion settings were used, so the original content can be listed, reviewed, or downloaded again later, and old versions can be pruned to reclaim space.",
       "Old conflict-resolution history from completed imports is now cleaned up automatically, and the full audit trail (what changed and when) can be exported in bulk for record-keeping.",
-      "Resetting the database is now a complete, unconditional wipe — it always rebuilds from scratch and no longer automatically re-imports the bundled quote content afterward. Nothing survives a reset any more, including the audit trail, so export it first (see above) if you want to keep it.",
-      "When something goes wrong at startup, the web interface itself now shows a clear popup explaining what happened and the database's last known-good status — not just the REST API. Home is disabled until the problem is resolved, but the REST API (clearly marked as limited), Statistics, and About pages stay reachable. Database status — quote counts and which files were used to build it — is also now always available on a new Statistics page in the navigation menu.",
+      "Resetting the database is now a complete, unconditional wipe: it always rebuilds from scratch and no longer automatically re-imports the bundled quote content afterward. Nothing survives a reset any more, including the audit trail, so export it first (see above) if you want to keep it.",
+      "When something goes wrong at startup, the web interface itself now shows a clear popup explaining what happened and the database's last known-good status, not just the REST API. Home is disabled until the problem is resolved, but the REST API (clearly marked as limited), Statistics, and About pages stay reachable. Database status, quote counts and which files were used to build it, is also now always available on a new Statistics page in the navigation menu.",
       "A new Notifications page and startup popups now surface informational, warning, error, and action-recommended messages from Quotinator, with a history you can review and dismiss at any time.",
-      "Breaking change for API clients: two REST endpoints' operation IDs were renamed for naming consistency — `GetImportBatches` is now `GetAllImportBatches`, and `GetFileResources` is now `GetAllFileResources`. This only affects a generated API client keyed by operation ID; the routes and behaviour themselves are unchanged.",
-      "Opening Quotinator while it's still setting up the database (a fresh install, or a large re-seed) no longer shows a blank, unresponsive page — a \"Quotinator is starting up\" page now appears immediately and refreshes itself automatically until the app is ready.",
+      "Breaking change for API clients: two REST endpoints' operation IDs were renamed for naming consistency: `GetImportBatches` is now `GetAllImportBatches`, and `GetFileResources` is now `GetAllFileResources`. This only affects a generated API client keyed by operation ID; the routes and behaviour themselves are unchanged.",
+      "Opening Quotinator while it's still setting up the database (a fresh install, or a large re-seed) no longer shows a blank, unresponsive page: a \"Quotinator is starting up\" page now appears immediately and refreshes itself automatically until the app is ready.",
       "Fixed a crash in the degraded-database status pages that could happen when upgrading from an older database version.",
       "Fixed an issue that could cause a Home Assistant add-on upgrade to fail partway through."
     ],
     "added": [
-      "Release entries can now carry an optional one-line `quote` (release-note flavour text, with optional `attribution`) — rendered in `CHANGELOG.md` and the Blazor changelog UI, omitted from the more concise `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)",
-      "OpenAPI/Scalar documentation now publishes real typed response schemas for the quote endpoints (`/quotes/random`, `/search`, `/{id}`, `/quotes`) and the admin endpoints (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`) — previously every one of these showed only a bare `200 OK` with no schema (issue #148)",
-      "Quote search and the character/author/source fuzzy filters can now optionally match accented and other non-ASCII characters regardless of case (e.g. é/É) — opt-in via the new `unicode_aware_search` add-on option (env var `Quotinator__UnicodeAwareSearch`), off by default until validated against real-world search traffic (issue #222)",
+      "Release entries can now carry an optional one-line `quote` (release-note flavour text, with optional `attribution`), rendered in `CHANGELOG.md` and the Blazor changelog UI, omitted from the more concise `addon/CHANGELOG.md`/`addon-beta/CHANGELOG.md` (issue #178)",
+      "OpenAPI/Scalar documentation now publishes real typed response schemas for the quote endpoints (`/quotes/random`, `/search`, `/{id}`, `/quotes`) and the admin endpoints (`/admin/database/seed/preview`, `/reseed`, `/reset`, `/admin/sources/refresh`, `/admin/audit`), previously every one of these showed only a bare `200 OK` with no schema (issue #148)",
+      "Quote search and the character/author/source fuzzy filters can now optionally match accented and other non-ASCII characters regardless of case (e.g. é/É), opt-in via the new `unicode_aware_search` add-on option (env var `Quotinator__UnicodeAwareSearch`), off by default until validated against real-world search traffic (issue #222)",
       "`GET /api/v1/health` now returns `503` with a diagnostic reason when startup database initialisation failed, instead of always reporting `200`; every endpoint except health/version/admin returns a clear `503` in that state instead of a raw exception, and the admin database Reset endpoint stays reachable so the problem can be resolved without a restart (issue #254)",
-      "New `GET /api/v1/import/file-resources` (paginated list, filterable by `fileName`/`origin`), `GET /api/v1/import/file-resources/{id}` (detail, including linked batch ids), `GET /api/v1/import/file-resources/{id}/download` (reconstruct the original file content, optionally normalizing line endings), and `POST /api/v1/import/file-resources/prune` (admin, hard-deletes old captured versions) — every seed/reseed and uploaded import file's content, and the converter settings used to interpret it, are now captured and queryable (issue #251)",
-      "New `GET /api/v1/import/batches` (paginated list, filterable by `type`/`status`) and `GET /api/v1/import/batches/{id}` — the existing import batch history is now reachable over HTTP, not just internally (issue #251)",
-      "New `GET /api/v1/admin/audit/export` (bulk-export the full audit trail — every audit entry and change-log row — for an optional date range, as a single downloaded JSON file) and `GET /api/v1/admin/audit/date-range` (the earliest/latest date that actually has data, so a caller can check before exporting) (issue #249)",
+      "New `GET /api/v1/import/file-resources` (paginated list, filterable by `fileName`/`origin`), `GET /api/v1/import/file-resources/{id}` (detail, including linked batch ids), `GET /api/v1/import/file-resources/{id}/download` (reconstruct the original file content, optionally normalizing line endings), and `POST /api/v1/import/file-resources/prune` (admin, hard-deletes old captured versions), every seed/reseed and uploaded import file's content, and the converter settings used to interpret it, are now captured and queryable (issue #251)",
+      "New `GET /api/v1/import/batches` (paginated list, filterable by `type`/`status`) and `GET /api/v1/import/batches/{id}`: the existing import batch history is now reachable over HTTP, not just internally (issue #251)",
+      "New `GET /api/v1/admin/audit/export` (bulk-export the full audit trail, every audit entry and change-log row, for an optional date range, as a single downloaded JSON file) and `GET /api/v1/admin/audit/date-range` (the earliest/latest date that actually has data, so a caller can check before exporting) (issue #249)",
       "Conflict-resolution history from a completed import (the temporary record of how each row's conflicts were resolved) is now purged automatically once nothing is left pending, controlled separately for bundled sources and user imports via new `auto_purge_bundled_import_actions`/`auto_purge_user_import_actions` add-on options (both on by default, so a specific source's history can be kept temporarily while investigating it) (issue #249)",
-      "`POST /import` and `POST /import/actions/apply` gained an opt-in `purgeOnSuccess` parameter to purge a batch's conflict-resolution history immediately once it applies fully — note this also gives up the ability to undo (`POST /import/actions/reverse`) that batch afterward, since undo depends on that same history (issue #249)",
+      "`POST /import` and `POST /import/actions/apply` gained an opt-in `purgeOnSuccess` parameter to purge a batch's conflict-resolution history immediately once it applies fully, note this also gives up the ability to undo (`POST /import/actions/reverse`) that batch afterward, since undo depends on that same history (issue #249)",
       "New Blazor `/stats` page showing current database counts (across all nine entity categories) and a per-file import history table (filename, origin, source URL, last-updated timestamp, record count), reachable from the nav menu at any time, including while the database is degraded (issue #263)",
-      "New `StartupErrorModal`/`StartupSuccessModal` popups on the Blazor Home page — a degraded-startup popup shows the failure reason and last known-good database status with a button through to the rest of the app; a one-time startup-success popup shows the same kind of status after a healthy startup (issue #263)",
+      "New `StartupErrorModal`/`StartupSuccessModal` popups on the Blazor Home page: a degraded-startup popup shows the failure reason and last known-good database status with a button through to the rest of the app; a one-time startup-success popup shows the same kind of status after a healthy startup (issue #263)",
       "`DatabaseHealthGateMiddleware`'s exempt list extended so Blazor's own page routes and fingerprinted static assets (`app.css`, `Quotinator.Api.styles.css`) stay reachable during a degraded startup, and the nav menu now shows Home as disabled and REST API as \"Limited\" in that state (issue #263)",
-      "New startup notification system: `GET /api/v1/notifications` (paginated history) and `POST /api/v1/notifications/{id}/dismiss` (admin), a new `/notifications` Blazor page reachable from the nav menu with a Status filter (Active by default, or All/Expired only), and active Information/Warning/Error/Success/Action-required notifications now shown in the startup popups — each notification carries an optional expiry (default 30 days, overridable via `Quotinator__NotificationDefaultExpiryHours`, shown in its own column) and can be automatically dismissed once a related action (e.g. a database Reset) completes. An `Action-required` notification recommending a specific fix (e.g. a database Reset) can be run directly from `/notifications` via a Run button with a confirm step, instead of only being dismissible (issue #278)",
-      "New `Quotinator__MaxBackupStorageGb` setting (default `1`) caps how large the pre-change safety-backup folder may grow — a backup that would exceed it, or that the volume doesn't have real free space for, is skipped with a warning instead of written, and startup/reset always proceed regardless (issue #277)"
+      "New startup notification system: `GET /api/v1/notifications` (paginated history) and `POST /api/v1/notifications/{id}/dismiss` (admin), a new `/notifications` Blazor page reachable from the nav menu with a Status filter (Active by default, or All/Expired only), and active Information/Warning/Error/Success/Action-required notifications now shown in the startup popups, each notification carries an optional expiry (default 30 days, overridable via `Quotinator__NotificationDefaultExpiryHours`, shown in its own column) and can be automatically dismissed once a related action (e.g. a database Reset) completes. An `Action-required` notification recommending a specific fix (e.g. a database Reset) can be run directly from `/notifications` via a Run button with a confirm step, instead of only being dismissible (issue #278)",
+      "New `Quotinator__MaxBackupStorageGb` setting (default `1`) caps how large the pre-change safety-backup folder may grow: a backup that would exceed it, or that the volume doesn't have real free space for, is skipped with a warning instead of written, and startup/reset always proceed regardless (issue #277)"
     ],
     "changed": [
-      "Documented that the database's internal audit-trail tables (event/audit history) intentionally retain their record after the entity they describe is later changed or replaced — a purely internal documentation clarification with no behaviour change (issue #151)",
-      "Migrated several project conventions that previously existed only as informal internal working notes into the project's own documentation (`CLAUDE.md`/`docs/`) — a purely internal documentation change with no behaviour change (issue #146)",
-      "Documented that a new GitHub issue's label and milestone must now be proposed together with its title and body, in the same draft, rather than as a separate follow-up step — a purely internal process documentation change with no behaviour change (issue #208)",
-      "Investigated the OS-level vulnerabilities Docker Scout reports in the container's base image; a routine rebuild resolved nearly all of them, and the remainder are tracked as accepted residual risk with no fix currently available upstream — no application change (issue #232)",
-      "Established the project's domain-prefixed table/entity naming convention, and its class-naming-suffix/enum-placement conventions, as formal architecture decision records (ADR 015, ADR 016) — the decision that the renames below (issues #253, #254, #255, #256) implement; a purely internal documentation decision with no behaviour change of its own (issue #227)",
-      "Internal database tables and their backing C# entity classes were renamed to follow a consistent domain-prefixed naming convention (e.g. `Sources` → `Quotinator_Source`, `ImportBatches` → `Import_Batch`) — no functional change, no API surface change (issues #253, #254)",
-      "Internal C# enum types were reorganised into a dedicated `Enums` folder per project, following the project's own naming/placement conventions — no functional change, no API surface change (issue #255)",
-      "Several internal C# class names were corrected to consistently reflect what boundary they cross (an HTTP response, or an on-disk JSON file) — no functional change, no API surface change (issue #256)",
+      "Documented that the database's internal audit-trail tables (event/audit history) intentionally retain their record after the entity they describe is later changed or replaced, a purely internal documentation clarification with no behaviour change (issue #151)",
+      "Migrated several project conventions that previously existed only as informal internal working notes into the project's own documentation (`CLAUDE.md`/`docs/`), a purely internal documentation change with no behaviour change (issue #146)",
+      "Documented that a new GitHub issue's label and milestone must now be proposed together with its title and body, in the same draft, rather than as a separate follow-up step, a purely internal process documentation change with no behaviour change (issue #208)",
+      "Investigated the OS-level vulnerabilities Docker Scout reports in the container's base image; a routine rebuild resolved nearly all of them, and the remainder are tracked as accepted residual risk with no fix currently available upstream, no application change (issue #232)",
+      "Established the project's domain-prefixed table/entity naming convention, and its class-naming-suffix/enum-placement conventions, as formal architecture decision records (ADR 015, ADR 016), the decision that the renames below (issues #253, #254, #255, #256) implement; a purely internal documentation decision with no behaviour change of its own (issue #227)",
+      "Internal database tables and their backing C# entity classes were renamed to follow a consistent domain-prefixed naming convention (e.g. `Sources` → `Quotinator_Source`, `ImportBatches` → `Import_Batch`), no functional change, no API surface change (issues #253, #254)",
+      "Internal C# enum types were reorganised into a dedicated `Enums` folder per project, following the project's own naming/placement conventions, no functional change, no API surface change (issue #255)",
+      "Several internal C# class names were corrected to consistently reflect what boundary they cross (an HTTP response, or an on-disk JSON file), no functional change, no API surface change (issue #256)",
       "Clearing the entire audit trail (`DELETE /admin/audit` with no `table` filter) now also clears the change log, matching the new bulk-export/date-range endpoints' treatment of both as one combined audit trail; clearing a specific table's entries leaves the change log untouched, since it has no equivalent per-table scope (issue #249)",
-      "`POST /api/v1/admin/database/reset` now drops the entire database unconditionally and rebuilds it from the baseline schema, instead of preserving certain internal tables and always re-importing bundled quote content afterward — an operator who wants old data back exports the audit trail first (`GET /admin/audit/export`) or reseeds explicitly; `preserveSchemaVersion=true` now preserves both internal migration-history counters symmetrically instead of only one (issue #156)",
-      "Added a periodic Docker base-image vulnerability re-scan to the project's own release verification checklist, so a stale vulnerability count (found live during the investigation above) doesn't go unnoticed again — a fresh scan confirmed no change since that investigation's own findings; no application change (issue #250)",
-      "Roslyn code-style and .NET analyzer diagnostics (previously invisible to the build, since neither `EnforceCodeStyleInBuild` nor `AnalysisMode` was configured) are now escalated to build-time warnings and resolved across the whole solution — around 470 occurrences, including adopting primary constructors project-wide and requiring per-parameter XML documentation on every constructor — a purely internal code-quality change with no behaviour change beyond the `?lang=` fix noted above (issue #244)",
-      "Revised ADR 016 to clarify that its `Dto` class-naming suffix also covers JSON stored in a database column (not just on-disk files), to add a rule for a bare-array HTTP response's element type, and to recommend a shared unsuffixed base class when the same shape is used at two different serialization boundaries — a purely internal documentation decision that issue #271 implements as class renames; no behaviour change of its own (issue #264)",
-      "Confirmed `GET /admin/audit`/`GET /admin/audit/export` are the only endpoints that serialize a database entity directly to JSON with no response-mapping layer, and recommended dedicated response types that keep every field but stop leaking internal serialization detail — a purely internal documentation decision that issue #272 implements; no behaviour change of its own (issue #265)",
-      "Thirteen internal C# classes were renamed to consistently reflect what boundary they cross, implementing ADR 016's revision from issue #264 — ten import-action payload classes and three converter-options classes gained a `Dto` suffix (they round-trip through a database column or a settings blob, not an HTTP request/response), and `ImportActionFieldRow` was split into an abstract shared base plus `ImportActionFieldRowResponse`/`ImportActionFieldRowDto` for its two genuinely different serialization boundaries — no functional change, no API surface change (issue #271)",
-      "`GET /admin/audit` and `GET /admin/audit/export` now return dedicated response shapes instead of serializing the database entity directly — every existing field is still present, but internal serialization plumbing that previously leaked into the JSON (a `{raw, parsed, isValid}` wrapper object on every timestamp field) is gone, and the two enum-backed fields (`initiatedByType`/`action`) now serialize as plain strings instead of that same wrapper (issue #272)",
-      "Investigated why the pre-seed startup backup is taken unconditionally on every restart even when nothing changes; confirmed the correct fix gates each action's backup on that action's own already-existing real-work signal rather than an inferred flag (which was found to miss a real gap: the startup immediately following a database Reset), and recommended a storage pre-flight check plus a startup notification mechanism for related non-fatal messages — a purely internal investigation with no behaviour change of its own; the actual fix is tracked as its own follow-up work (issue #267)",
-      "Adopted a project-wide, compiler-enforced pattern for logging calls that take arguments — every `LogInformation`/`LogDebug`/`LogCritical` call with template arguments now goes through a source-generated `[LoggerMessage]` method instead of the standard `ILogger` extensions, removing an allocation that previously happened even when the log level was disabled; a new shared `Quotinator.Logging` project holds the two message shapes reused across the whole solution, and each project keeps its own bespoke messages — no functional change, no API surface change (issue #269)",
-      "Standardised every endpoint's OpenAPI `WithName`/`WithSummary` pair onto one of three documented shapes (List, GetById, Action — see `CLAUDE.md`'s new \"Endpoint naming convention\" section): list-endpoint summaries now consistently read `\"List x\"` (`People`, `Quotes`, `Series` previously read `\"All people (paginated)\"`/`\"All quotes (paginated)\"`/`\"List Series\"`), and `GetById` summaries now consistently capitalise `ID` (`Import batches`/captured import files previously read `\"...by id\"`). Two of these renames change the published `operationId` — see the breaking-change highlight above (issue #279)",
-      "Every masterdata/Conversation/Quote `GetAll`/`GetById` handler's own request-logging tag is now derived from a single `private const string` shared with its `.WithName(...)` call, instead of a second hardcoded literal — closes the drift #269 introduced, and fixes one case (`GET /quotes/{id}`) where the literal tag had already silently drifted from the endpoint's real name; no API surface change, log line text only (issue #279)",
-      "Pre-change safety backups are now only taken when there is genuinely pending work to protect — a schema migration, or content that still needs seeding — instead of unconditionally on every restart; a first draft of this fix (gating on the same signal migrations already use) was found to leave the restart immediately after a database Reset unprotected and was corrected before shipping, closing that gap directly rather than reintroducing it (issue #277)",
-      "`GET /api/v1/health` and `GET /api/v1/version` now report a distinct `\"starting\"` status while database initialisation is still running (previously `/version` would return incomplete data and `/health` reported no distinction from a genuine failure) — the server now starts listening immediately rather than only after initialisation finishes, so these endpoints (and every other route) are reachable throughout, not just once fully ready (issue #280)",
-      "Investigated whether the eight masterdata REST endpoint files (Characters, Conversations, People, Series, SoundCues, Sources, StageDirections, Universes) should share their duplicated list/get-by-id logic via a base class; confirmed against official ASP.NET Core guidance that this isn't idiomatic for the framework, and recommended the project's existing shared-helper-method pattern instead — a purely internal investigation with no behaviour change of its own; the resulting extraction is issue #286 (issue #281)",
-      "Investigated why the project's own documented pattern for join-based database reads (`JoinQueryRepository`/`IJoinStrategy`) was never actually adopted by any real read in the codebase, despite predating every one of them; adopted it as the standard going forward even without an immediate capability gain, recorded as a new architecture decision (ADR 017) — a purely internal investigation with no behaviour change of its own; the actual adoption is issues #284/#285 (issue #282)",
-      "The three masterdata reference readers (Character↔Source, Source↔Series, Series↔Universe) now execute their SQL through the shared join-query infrastructure from ADR 017 instead of each hand-rolling its own database connection; also added the real-database integration test coverage these readers were previously missing — no functional change (issue #284)",
-      "A Conversation's quote/stage-direction/sound-cue line lookups now execute through the same shared join-query infrastructure as issue #284, resolving issue #281's remaining open question about that endpoint; a redundant duplicate database query on the quote branch, found during this work, is also gone — no functional change (issue #285)",
-      "The seven masterdata REST endpoints that share the plain repository pattern (Characters, People, Series, SoundCues, Sources, StageDirections, Universes) now share one generic implementation of their list/get-by-id logic instead of each duplicating it, the direct outcome of issue #281's investigation — no functional change, no API surface change (issue #286)",
-      "Internal quote and conversation database access (`IQuoteService` and its implementations) is now fully asynchronous throughout, a prerequisite discovered while implementing issue #285 for using the project's shared join-query infrastructure there — no functional change, no API surface change (issue #287)",
-      "Verified the full database upgrade path from the last release against a real copy of that release's database, confirming every migration since applies cleanly with no data loss — a routine internal check with no behaviour change of its own (issue #288)",
+      "`POST /api/v1/admin/database/reset` now drops the entire database unconditionally and rebuilds it from the baseline schema, instead of preserving certain internal tables and always re-importing bundled quote content afterward, an operator who wants old data back exports the audit trail first (`GET /admin/audit/export`) or reseeds explicitly; `preserveSchemaVersion=true` now preserves both internal migration-history counters symmetrically instead of only one (issue #156)",
+      "Added a periodic Docker base-image vulnerability re-scan to the project's own release verification checklist, so a stale vulnerability count (found live during the investigation above) doesn't go unnoticed again, a fresh scan confirmed no change since that investigation's own findings; no application change (issue #250)",
+      "Roslyn code-style and .NET analyzer diagnostics (previously invisible to the build, since neither `EnforceCodeStyleInBuild` nor `AnalysisMode` was configured) are now escalated to build-time warnings and resolved across the whole solution, around 470 occurrences, including adopting primary constructors project-wide and requiring per-parameter XML documentation on every constructor, a purely internal code-quality change with no behaviour change beyond the `?lang=` fix noted above (issue #244)",
+      "Revised ADR 016 to clarify that its `Dto` class-naming suffix also covers JSON stored in a database column (not just on-disk files), to add a rule for a bare-array HTTP response's element type, and to recommend a shared unsuffixed base class when the same shape is used at two different serialization boundaries, a purely internal documentation decision that issue #271 implements as class renames; no behaviour change of its own (issue #264)",
+      "Confirmed `GET /admin/audit`/`GET /admin/audit/export` are the only endpoints that serialize a database entity directly to JSON with no response-mapping layer, and recommended dedicated response types that keep every field but stop leaking internal serialization detail, a purely internal documentation decision that issue #272 implements; no behaviour change of its own (issue #265)",
+      "Thirteen internal C# classes were renamed to consistently reflect what boundary they cross, implementing ADR 016's revision from issue #264, ten import-action payload classes and three converter-options classes gained a `Dto` suffix (they round-trip through a database column or a settings blob, not an HTTP request/response), and `ImportActionFieldRow` was split into an abstract shared base plus `ImportActionFieldRowResponse`/`ImportActionFieldRowDto` for its two genuinely different serialization boundaries, no functional change, no API surface change (issue #271)",
+      "`GET /admin/audit` and `GET /admin/audit/export` now return dedicated response shapes instead of serializing the database entity directly, every existing field is still present, but internal serialization plumbing that previously leaked into the JSON (a `{raw, parsed, isValid}` wrapper object on every timestamp field) is gone, and the two enum-backed fields (`initiatedByType`/`action`) now serialize as plain strings instead of that same wrapper (issue #272)",
+      "Investigated why the pre-seed startup backup is taken unconditionally on every restart even when nothing changes; confirmed the correct fix gates each action's backup on that action's own already-existing real-work signal rather than an inferred flag (which was found to miss a real gap: the startup immediately following a database Reset), and recommended a storage pre-flight check plus a startup notification mechanism for related non-fatal messages, a purely internal investigation with no behaviour change of its own; the actual fix is tracked as its own follow-up work (issue #267)",
+      "Adopted a project-wide, compiler-enforced pattern for logging calls that take arguments: every `LogInformation`/`LogDebug`/`LogCritical` call with template arguments now goes through a source-generated `[LoggerMessage]` method instead of the standard `ILogger` extensions, removing an allocation that previously happened even when the log level was disabled; a new shared `Quotinator.Logging` project holds the two message shapes reused across the whole solution, and each project keeps its own bespoke messages, no functional change, no API surface change (issue #269)",
+      "Standardised every endpoint's OpenAPI `WithName`/`WithSummary` pair onto one of three documented shapes (List, GetById, Action, see `CLAUDE.md`'s new \"Endpoint naming convention\" section): list-endpoint summaries now consistently read `\"List x\"` (`People`, `Quotes`, `Series` previously read `\"All people (paginated)\"`/`\"All quotes (paginated)\"`/`\"List Series\"`), and `GetById` summaries now consistently capitalise `ID` (`Import batches`/captured import files previously read `\"...by id\"`). Two of these renames change the published `operationId`, see the breaking-change highlight above (issue #279)",
+      "Every masterdata/Conversation/Quote `GetAll`/`GetById` handler's own request-logging tag is now derived from a single `private const string` shared with its `.WithName(...)` call, instead of a second hardcoded literal, closes the drift #269 introduced, and fixes one case (`GET /quotes/{id}`) where the literal tag had already silently drifted from the endpoint's real name; no API surface change, log line text only (issue #279)",
+      "Pre-change safety backups are now only taken when there is genuinely pending work to protect, a schema migration, or content that still needs seeding, instead of unconditionally on every restart; a first draft of this fix (gating on the same signal migrations already use) was found to leave the restart immediately after a database Reset unprotected and was corrected before shipping, closing that gap directly rather than reintroducing it (issue #277)",
+      "`GET /api/v1/health` and `GET /api/v1/version` now report a distinct `\"starting\"` status while database initialisation is still running (previously `/version` would return incomplete data and `/health` reported no distinction from a genuine failure), the server now starts listening immediately rather than only after initialisation finishes, so these endpoints (and every other route) are reachable throughout, not just once fully ready (issue #280)",
+      "Investigated whether the eight masterdata REST endpoint files (Characters, Conversations, People, Series, SoundCues, Sources, StageDirections, Universes) should share their duplicated list/get-by-id logic via a base class; confirmed against official ASP.NET Core guidance that this isn't idiomatic for the framework, and recommended the project's existing shared-helper-method pattern instead, a purely internal investigation with no behaviour change of its own; the resulting extraction is issue #286 (issue #281)",
+      "Investigated why the project's own documented pattern for join-based database reads (`JoinQueryRepository`/`IJoinStrategy`) was never actually adopted by any real read in the codebase, despite predating every one of them; adopted it as the standard going forward even without an immediate capability gain, recorded as a new architecture decision (ADR 017), a purely internal investigation with no behaviour change of its own; the actual adoption is issues #284/#285 (issue #282)",
+      "The three masterdata reference readers (Character↔Source, Source↔Series, Series↔Universe) now execute their SQL through the shared join-query infrastructure from ADR 017 instead of each hand-rolling its own database connection; also added the real-database integration test coverage these readers were previously missing, no functional change (issue #284)",
+      "A Conversation's quote/stage-direction/sound-cue line lookups now execute through the same shared join-query infrastructure as issue #284, resolving issue #281's remaining open question about that endpoint; a redundant duplicate database query on the quote branch, found during this work, is also gone, no functional change (issue #285)",
+      "The seven masterdata REST endpoints that share the plain repository pattern (Characters, People, Series, SoundCues, Sources, StageDirections, Universes) now share one generic implementation of their list/get-by-id logic instead of each duplicating it, the direct outcome of issue #281's investigation, no functional change, no API surface change (issue #286)",
+      "Internal quote and conversation database access (`IQuoteService` and its implementations) is now fully asynchronous throughout, a prerequisite discovered while implementing issue #285 for using the project's shared join-query infrastructure there, no functional change, no API surface change (issue #287)",
+      "Verified the full database upgrade path from the last release against a real copy of that release's database, confirming every migration since applies cleanly with no data loss, a routine internal check with no behaviour change of its own (issue #288)",
       "A batch of not-yet-released internal database migrations was consolidated into a smaller number of steps before release, to keep future upgrades simpler; if a database somehow ends up recording a schema version ahead of what the app expects (only possible on a database that ran the pre-consolidation migrations before this release shipped), Quotinator now notices and shows an action-recommended notification suggesting a database Reset, instead of silently carrying on with a stale internal version number (issue #289)",
-      "SqliteConnectionFactory's temp-storage behaviour (the SQLite fix below) is now an explicit opt-in constructor parameter rather than an unconditional default, since Quotinator.Data is meant to stay reusable, domain-agnostic infrastructure independent of any one consumer's dataset-size assumptions — no functional change for Quotinator itself, which already opts in (issue #294)",
+      "SqliteConnectionFactory's temp-storage behaviour (the SQLite fix below) is now an explicit opt-in constructor parameter rather than an unconditional default, since Quotinator.Data is meant to stay reusable, domain-agnostic infrastructure independent of any one consumer's dataset-size assumptions, no functional change for Quotinator itself, which already opts in (issue #294)",
       "A non-fatal startup-notification-seeding failure now logs a clearer message explaining what happened and that it doesn't indicate database corruption, instead of a bare exception with no context (issue #293)"
     ],
     "fixed": [
@@ -188,11 +188,11 @@
       "The test suite's build now surfaces outdated MSTest assertion patterns (e.g. `CollectionAssert`/`StringAssert` instead of the modern `Assert` equivalents) as visible warnings instead of silently allowing them to accumulate; around 2,700 existing occurrences across the test suite were also modernised in the same change (issue #197)",
       "The release process no longer publishes a Home Assistant add-on version update until its matching Docker image is confirmed available, closing a window where installing or updating the add-on right after a new version appeared could fail (issue #236)",
       "A database seeding failure during startup could previously leave the database partially written with no backup taken; seeding now always backs up first (on every non-baseline startup) and restores that backup if seeding fails, matching the safety net migrations already had (issue #254)",
-      "`GET /api/v1/quotes` and `GET /api/v1/quotes/search` now correctly return translated content when `?lang=` is requested — a bug meant both endpoints always ignored the requested language and returned only the original-language text; single-quote lookup (`GET /api/v1/quotes/{id}`) and the random endpoint were unaffected (issue #244)",
-      "A Source's `date` field now populates correctly even when that Source was first created by a date-less `sources[]` entry (e.g. one that only links it to a Series) and only ever gains a date from a quote in a later-seeded file — previously it stayed permanently empty in that specific case, even though the more common case (a Source discovered purely from a quote) was already fixed (issue #245)",
-      "`GET /api/v1/masterdata/people/{id}` and `GET /api/v1/masterdata/people` could previously omit `completenessStatus` from the response entirely instead of returning `\"Incomplete\"` — the one masterdata entity behaving differently from every sibling for the same underlying condition, even though the database itself never allows a genuinely unset completeness status for any entity, People included (issue #283)",
-      "`NotificationSummary` (Home's startup popup) and the `/notifications` page previously crashed with an unhandled exception instead of showing the intended degraded-state UI when `System_Notification` doesn't exist yet (e.g. on a database only partway through a failed migration) — both now degrade gracefully, returning no active notifications instead of throwing; the Statistics page's file-history section is also now skipped while the database is degraded, instead of attempting a query that could also fail (issue #293)",
-      "A SQLite migration or seeding step that needs a temporary file (e.g. to enforce a `UNIQUE` constraint safely) could fail with `'unable to open database file'` in certain restricted container environments (confirmed: the Home Assistant add-on's own AppArmor confinement) if the OS-level temp directory wasn't both writable and lockable — SQLite connections now keep this kind of temporary data in memory instead of writing it to disk, sidestepping the problem entirely (issue #294)"
+      "`GET /api/v1/quotes` and `GET /api/v1/quotes/search` now correctly return translated content when `?lang=` is requested: a bug meant both endpoints always ignored the requested language and returned only the original-language text; single-quote lookup (`GET /api/v1/quotes/{id}`) and the random endpoint were unaffected (issue #244)",
+      "A Source's `date` field now populates correctly even when that Source was first created by a date-less `sources[]` entry (e.g. one that only links it to a Series) and only ever gains a date from a quote in a later-seeded file, previously it stayed permanently empty in that specific case, even though the more common case (a Source discovered purely from a quote) was already fixed (issue #245)",
+      "`GET /api/v1/masterdata/people/{id}` and `GET /api/v1/masterdata/people` could previously omit `completenessStatus` from the response entirely instead of returning `\"Incomplete\"`, the one masterdata entity behaving differently from every sibling for the same underlying condition, even though the database itself never allows a genuinely unset completeness status for any entity, People included (issue #283)",
+      "`NotificationSummary` (Home's startup popup) and the `/notifications` page previously crashed with an unhandled exception instead of showing the intended degraded-state UI when `System_Notification` doesn't exist yet (e.g. on a database only partway through a failed migration), both now degrade gracefully, returning no active notifications instead of throwing; the Statistics page's file-history section is also now skipped while the database is degraded, instead of attempting a query that could also fail (issue #293)",
+      "A SQLite migration or seeding step that needs a temporary file (e.g. to enforce a `UNIQUE` constraint safely) could fail with `'unable to open database file'` in certain restricted container environments (confirmed: the Home Assistant add-on's own AppArmor confinement) if the OS-level temp directory wasn't both writable and lockable, SQLite connections now keep this kind of temporary data in memory instead of writing it to disk, sidestepping the problem entirely (issue #294)"
       ]
     },
     {
@@ -212,7 +212,7 @@
       "date": "2026-07-30",
       "issues": [166],
       "highlights": [
-        "A separate Beta add-on is now available in Home Assistant, letting you try upcoming changes without affecting your stable installation — install both side by side.",
+        "A separate Beta add-on is now available in Home Assistant, letting you try upcoming changes without affecting your stable installation: install both side by side.",
         "Changelogs shown in the app and the Home Assistant add-on now list only the most recent releases, with a link to the full history on GitHub."
       ],
       "added": [
@@ -221,7 +221,7 @@
       ],
       "changed": [
         "`CHANGELOG.md`, `addon/CHANGELOG.md`, and the new `addon-beta/CHANGELOG.md` are now generated with `--max-releases 3`, showing only the 3 most recent releases instead of the full history (issue #166)",
-        "A beta tag now only bumps `addon-beta/config.yaml`'s version, and a final tag only bumps `addon/config.yaml`'s — previously one shared file toggled between the two states (issue #166)"
+        "A beta tag now only bumps `addon-beta/config.yaml`'s version, and a final tag only bumps `addon/config.yaml`'s; previously one shared file toggled between the two states (issue #166)"
       ]
     },
     {
@@ -231,80 +231,80 @@
       "cves": ["CVE-2026-49451"],
       "highlights": [
         "Security: an OpenAPI documentation library vulnerability (CVE-2026-49451) was identified and fixed; the vulnerable code path was never reachable in Quotinator, and no user data was affected.",
-        "Setting up Quotinator for the first time is now faster — a brand-new database is created directly, instead of stepping through years of internal upgrade history.",
+        "Setting up Quotinator for the first time is now faster: a brand-new database is created directly, instead of stepping through years of internal upgrade history.",
         "Quotinator can now automatically refresh its bundled and imported quote sources from their original locations, keeping data up to date without needing a new release.",
         "Duplicate quotes found during import can now be merged field by field instead of only being kept or replaced outright, and every duplicate encountered is now recorded for future review.",
-        "The default behaviour for duplicate quotes changed from keeping the first version seen to keeping the newest version — matching what most people would expect when a source file is corrected or updated.",
+        "The default behaviour for duplicate quotes changed from keeping the first version seen to keeping the newest version, matching what most people would expect when a source file is corrected or updated.",
         "Quotes can now be imported one file at a time (JSON or CSV) through a new API endpoint, with a preview mode that shows exactly what would happen before anything is written.",
-        "Duplicate quotes flagged for manual review can now be resolved field by field, choosing which side wins or supplying your own value — changes only take effect once every conflict from the same import file has been decided.",
+        "Duplicate quotes flagged for manual review can now be resolved field by field, choosing which side wins or supplying your own value; changes only take effect once every conflict from the same import file has been decided.",
         "An import that needs review can now be finished later by referencing its batch, without needing to re-upload the file.",
-        "An applied import can now be undone through a new endpoint — reversing everything it added or changed, as long as no newer import has happened since.",
-        "Adding a new quote source in CSV or JSON format usually no longer requires writing any code — a manifest entry with simple field-mapping options is now enough for most formats.",
-        "Multi-line exchanges — a back-and-forth between characters, with stage directions and sound cues in between — can now be fetched as a single ordered conversation, and a random quote that's part of one no longer shows up on its own without the rest of the exchange.",
-        "A source's title, type, or release date can now be corrected after the fact — for example fixing a typo in a film title, or filling in a missing year — without creating a duplicate entry.",
+        "An applied import can now be undone through a new endpoint, reversing everything it added or changed, as long as no newer import has happened since.",
+        "Adding a new quote source in CSV or JSON format usually no longer requires writing any code: a manifest entry with simple field-mapping options is now enough for most formats.",
+        "Multi-line exchanges (a back-and-forth between characters, with stage directions and sound cues in between) can now be fetched as a single ordered conversation, and a random quote that's part of one no longer shows up on its own without the rest of the exchange.",
+        "A source's title, type, or release date can now be corrected after the fact, for example fixing a typo in a film title, or filling in a missing year, without creating a duplicate entry.",
         "Stage directions and sound cues used in multi-line conversations can now be corrected after the fact too, the same way a source's details already could.",
         "A conversation's description can now be corrected after the fact too; the lines that make up the conversation itself are unaffected.",
         "A person's name, date of birth, and date of death can now be corrected after the fact too; date of birth and date of death can now actually be set for a person for the first time.",
         "Quotes are now correctly grouped by the film series or fictional universe they belong to, and can be filtered by series or universe when searching, listing, or requesting a random one.",
         "Sources, characters, people, series, universes, stage directions, and sound cues can now all be listed and looked up individually through new endpoints, the same way quotes already could.",
-        "Correcting a source, person, stage direction, sound cue, or conversation by re-importing it now only changes the fields the file actually mentions — a field left out is no longer silently reset to blank.",
+        "Correcting a source, person, stage direction, sound cue, or conversation by re-importing it now only changes the fields the file actually mentions, a field left out is no longer silently reset to blank.",
         "Pagination is now consistent across every list endpoint: requesting more than 500 items at once is rejected instead of silently limited, and requesting every matching item as one page (`pageSize=0`) works the same way everywhere.",
-        "Most films, shows, and other sources shown by quotes now include a release date — previously this was almost always left blank.",
+        "Most films, shows, and other sources shown by quotes now include a release date, previously this was almost always left blank.",
         "A character who appears across multiple entries in the same series (like a recurring character in a trilogy) is now recognised as the same character instead of being tracked separately for each entry, as long as they're the same type of media.",
         "A character's name can now be corrected after the fact too, the same way a source's, person's, stage direction's, sound cue's, and conversation's details already could.",
         "A series's or universe's name (and a series's linked universe) can now be corrected after the fact too, the same way a source's, person's, character's, stage direction's, sound cue's, and conversation's details already could.",
-        "Quotes waiting for review after an import can now be resolved all at once by exporting them to a file, editing the decisions, and importing the file back — instead of deciding each one individually through the API.",
+        "Quotes waiting for review after an import can now be resolved all at once by exporting them to a file, editing the decisions, and importing the file back, instead of deciding each one individually through the API.",
         "Known, recurring conflicts between bundled quote sources are now resolved automatically on import instead of requiring the same manual decision every time the data is reprocessed.",
-        "A number of duplicate entries caused by inconsistent movie titles across bundled data sources have been merged into one accurate entry each — including every Star Wars film, several Marvel films, The Godfather Part II, and Creed II, among others.",
+        "A number of duplicate entries caused by inconsistent movie titles across bundled data sources have been merged into one accurate entry each, including every Star Wars film, several Marvel films, The Godfather Part II, and Creed II, among others.",
         "James Bond has been added as a supported film franchise, alongside The Matrix.",
         "Rule files that correct recurring, known data conflicts can now be viewed, generated from a decision already made, and removed through new endpoints, instead of only being hand-edited.",
         "A few more duplicate entries (Airplane!, When Harry Met Sally, and an Avengers film) have been merged into one accurate entry each, and several quotes that were missing which character said them now have that filled in.",
-        "A data-correction feature meant to fill in a missing detail (like which character said a quote) had never actually worked the first time a quote was seen — only on a later re-check — so any such correction made so far silently had no effect; this is now fixed.",
+        "A data-correction feature meant to fill in a missing detail (like which character said a quote) had never actually worked the first time a quote was seen, only on a later re-check, so any such correction made so far silently had no effect; this is now fixed.",
         "Importing, previewing an import, and reseeding now report exactly what happened per file and per type of data (new, corrected, held for review, etc.) instead of one vague duplicates number."
       ],
       "added": [
         "A `manifest.json` is now auto-created in the user imports folder when one is missing, listing discovered files alphabetically; controlled by the `Quotinator__CreateMissingManifest` config key (default `true`)",
-        "Manifest source entries can now declare a `github` object (`owner`, `repo`, `path`, `branch`) instead of a plain `url` — the provenance link and a fetchable raw-file download link are both derived from it automatically",
-        "`Quotinator__IncludeDefaultSources` config key (default `true`) — when set to `false`, the bundled sources are skipped entirely, useful for a fully custom data setup",
-        "`Quotinator__ImportsPath` config key (default `{DataDir}/imports`) — overrides where the user imports folder is scanned from",
+        "Manifest source entries can now declare a `github` object (`owner`, `repo`, `path`, `branch`) instead of a plain `url`, the provenance link and a fetchable raw-file download link are both derived from it automatically",
+        "`Quotinator__IncludeDefaultSources` config key (default `true`), when set to `false`, the bundled sources are skipped entirely, useful for a fully custom data setup",
+        "`Quotinator__ImportsPath` config key (default `{DataDir}/imports`), overrides where the user imports folder is scanned from",
         "A startup warning is now logged when the legacy `Quotinator__DataPath` environment variable is still set, pointing users to `Quotinator__DataDir` instead",
         "`POST /api/v1/admin/database/reset` now accepts a `preserveSchemaVersion` query parameter (default `false`) to keep existing schema migration history instead of clearing and replaying it",
         "New `Quotinator__AutoUpdateSources` (default `true`) and `Quotinator__SourceUpdateIntervalHours` (default `24`) config keys control automatic refreshing of manifest-declared sources with a `downloadUrl`",
         "Manifest entries can now declare `refreshIntervalHours` and `downloadTarget` to override the global refresh interval and cache location on a per-source basis",
         "New `POST /api/v1/admin/sources/refresh` endpoint refreshes downloaded source caches on disk without touching the database",
         "`POST /api/v1/admin/database/reseed` and `.../reset` now accept a `forceSourceRefresh` query parameter to bypass the refresh interval for that call",
-        "`GET /api/v1/admin/database/seed/preview` and `POST /api/v1/admin/sources/refresh` now report each source's refresh outcome, last-refreshed time, and — for a file that failed to parse — a localised reason",
-        "Five configurable duplicate-resolution policies — `skip`, `newest-wins`, `merge-ours`, `merge-theirs`, `review` — set via `Quotinator__DefaultConflictPolicy`, with per-entity-type overrides and a per-source manifest override",
+        "`GET /api/v1/admin/database/seed/preview` and `POST /api/v1/admin/sources/refresh` now report each source's refresh outcome, last-refreshed time, and, for a file that failed to parse, a localised reason",
+        "Five configurable duplicate-resolution policies, `skip`, `newest-wins`, `merge-ours`, `merge-theirs`, `review`, set via `Quotinator__DefaultConflictPolicy`, with per-entity-type overrides and a per-source manifest override",
         "New `System_ImportActions` table records every action a staged import or seed run would take, not only genuine duplicates, so a staged batch can be reviewed, decided, and applied or discarded before anything is written",
         "`ImportBatches` now records which conflict-resolution policy was active for each import batch",
-        "New `POST /api/v1/import` endpoint imports a single source file (JSON, or CSV via a new converter plugin), reusing the same duplicate-detection engine as startup seeding — supports a per-request `duplicateResolution` override and an optional `converter` selection",
+        "New `POST /api/v1/import` endpoint imports a single source file (JSON, or CSV via a new converter plugin), reusing the same duplicate-detection engine as startup seeding, supports a per-request `duplicateResolution` override and an optional `converter` selection",
         "New `POST /api/v1/import/preview` endpoint runs the identical import pipeline but rolls back every write, so conflicts and errors can be reviewed before committing",
         "Manifest file entries (`data/sources/manifest.json` and user import manifests) can now declare their own `duplicateResolution` override, taking priority over the manifest-wide and configured defaults",
         "Quotes, sources, characters, people, conversations, stage directions, and sound cues now have a completeness status (not yet reviewed / looks complete / confirmed complete) and a `NoValueKnown` list of confirmed-empty fields in the database, laying the groundwork for future data-quality tooling; not yet exposed via the API or management UI beyond the import decide flow below, and never reset when an existing record is rewritten by a duplicate-resolution policy",
         "Deciding a staged import action can now also set the affected record's completeness status directly (most commonly confirming it's fully reviewed), applied together with the rest of that decision",
-        "A record confirmed fully reviewed can no longer be silently overwritten by a later import — any attempt is held for explicit review instead, and holds the entire import batch (not just the affected record) until resolved",
-        "Source records declared in a source file's `sources` section can now carry their own stable identifier, decoupling which row an import matches from that row's title/type/date — so a later correction updates the existing record instead of creating a duplicate",
+        "A record confirmed fully reviewed can no longer be silently overwritten by a later import, any attempt is held for explicit review instead, and holds the entire import batch (not just the affected record) until resolved",
+        "Source records declared in a source file's `sources` section can now carry their own stable identifier, decoupling which row an import matches from that row's title/type/date, so a later correction updates the existing record instead of creating a duplicate",
         "`POST /api/v1/import/actions/{id}/decide` now also accepts decisions for a staged Source correction (title, type, date), not only quotes",
-        "A new internal change log records every quote, source, and character created or modified during seeding and import, including which import batch introduced it — laying the groundwork for a future change-history view; not yet exposed via the API or management UI",
-        "New `GET /api/v1/import/actions` endpoint lists staged import actions (quotes, sources, characters, people), paginated, filterable by status, import batch, and entity type — showing which fields still need a decision and how related actions in the same batch connect to each other",
+        "A new internal change log records every quote, source, and character created or modified during seeding and import, including which import batch introduced it, laying the groundwork for a future change-history view; not yet exposed via the API or management UI",
+        "New `GET /api/v1/import/actions` endpoint lists staged import actions (quotes, sources, characters, people), paginated, filterable by status, import batch, and entity type, showing which fields still need a decision and how related actions in the same batch connect to each other",
         "New `POST /api/v1/import/actions/{id}/decide` and `.../undo` endpoints stage or revert a per-field keep/replace/custom-value decision for one staged action",
         "New `POST /api/v1/import/actions/apply` endpoint applies every decided action in a batch at once, atomically, once every one of them has a decision recorded",
         "New `POST /api/v1/import/actions/discard` endpoint discards every staged action in a batch at once, writing nothing",
         "`POST /api/v1/import` can now apply an already-staged batch directly by referencing its batch id, instead of always requiring the file to be uploaded again",
-        "New `POST /api/v1/import/actions/reverse` endpoint undoes every action in an applied import batch — reversing an Add soft-deletes the record it created, reversing a Modify restores the pre-change field values; only the most recently applied batch still live can be reversed, and a `?preview=true` mode validates without writing anything",
+        "New `POST /api/v1/import/actions/reverse` endpoint undoes every action in an applied import batch, reversing an Add soft-deletes the record it created, reversing a Modify restores the pre-change field values; only the most recently applied batch still live can be reversed, and a `?preview=true` mode validates without writing anything",
         "The OpenAPI spec now documents `type`, `field`, `status`, and `entityType` query parameters as proper enums with their allowed values, instead of unconstrained strings",
-        "New `basic-json-array` and `regex-array` converter plugins handle a flat JSON object array or a JSON array of regex-extractable strings respectively, both fully configurable via a manifest entry's `converterOptions` — most new sources no longer need a dedicated converter project",
-        "The `csv` converter plugin now supports `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) for CSV files whose header labels don't match Quotinator's own field names, or that have no header at all — previously only exact-matching header names were supported",
-        "New database tables lay the groundwork for multi-line conversations — `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues`, and their translation tables — allowing quotes, stage directions, and sound cues to be grouped into an ordered exchange; not yet populated by any source file or exposed via the API (issue #67)",
-        "Source files can now define reusable stage directions, sound cues, and conversations grouping them together with quotes in order — seeded at startup and importable via `POST /api/v1/import` (JSON only) the same way quotes are, including duplicate detection and undo; not yet exposed via a read endpoint (issue #68)",
-        "New `GET /api/v1/conversations/{id}` endpoint returns a full ordered conversation — quotes, stage directions, and sound cues in sequence, respecting `?lang=` with fallback to the original language (issue #69)",
+        "New `basic-json-array` and `regex-array` converter plugins handle a flat JSON object array or a JSON array of regex-extractable strings respectively, both fully configurable via a manifest entry's `converterOptions`, most new sources no longer need a dedicated converter project",
+        "The `csv` converter plugin now supports `converterOptions` (`columnMapping`, `hasHeader`, `defaults`) for CSV files whose header labels don't match Quotinator's own field names, or that have no header at all, previously only exact-matching header names were supported",
+        "New database tables lay the groundwork for multi-line conversations, `Conversations`, `ConversationLines`, `StageDirections`, `SoundCues`, and their translation tables, allowing quotes, stage directions, and sound cues to be grouped into an ordered exchange; not yet populated by any source file or exposed via the API (issue #67)",
+        "Source files can now define reusable stage directions, sound cues, and conversations grouping them together with quotes in order, seeded at startup and importable via `POST /api/v1/import` (JSON only) the same way quotes are, including duplicate detection and undo; not yet exposed via a read endpoint (issue #68)",
+        "New `GET /api/v1/conversations/{id}` endpoint returns a full ordered conversation, quotes, stage directions, and sound cues in sequence, respecting `?lang=` with fallback to the original language (issue #69)",
         "Quote responses now include a `conversations` field listing which conversation(s) a quote belongs to, its position, and the conversation's total line count; omitted entirely for a quote that belongs to no conversation (issue #69)",
         "`GET /api/v1/quotes/random` now embeds the full conversation when a selected quote belongs to one, and excludes every other quote from that same conversation for the rest of the request; the response now reports `requestedCount` and `returnedCount` so a shortfall caused by this deduplication is visible (issue #69)",
-        "`stageDirections[]`/`soundCues[]` entries with an id matching an existing row can now stage a `Modify` action instead of only ever being added once — the same policy-resolved diff, completeness-guard blocking, and decide/reverse workflow Source corrections already use",
-        "`conversations[]` entries with an id matching an existing row can now stage a `Modify` action for their `description` field only — `lines` are never diffed, read, or written by this path, that remains a separate, not-yet-scoped future issue",
-        "`people[]` entries with an id matching an existing row can now stage a `Modify` action instead of only ever being added once — the same policy-resolved diff and completeness-guard blocking Source/StageDirection/SoundCue/Conversation corrections already use; this is also the first path that ever writes a Person's `dateOfBirth`/`dateOfDeath` fields, previously always left `null`",
+        "`stageDirections[]`/`soundCues[]` entries with an id matching an existing row can now stage a `Modify` action instead of only ever being added once, the same policy-resolved diff, completeness-guard blocking, and decide/reverse workflow Source corrections already use",
+        "`conversations[]` entries with an id matching an existing row can now stage a `Modify` action for their `description` field only, `lines` are never diffed, read, or written by this path, that remains a separate, not-yet-scoped future issue",
+        "`people[]` entries with an id matching an existing row can now stage a `Modify` action instead of only ever being added once, the same policy-resolved diff and completeness-guard blocking Source/StageDirection/SoundCue/Conversation corrections already use; this is also the first path that ever writes a Person's `dateOfBirth`/`dateOfDeath` fields, previously always left `null`",
         "Source files can now declare `series[]`/`universe[]` sections linking related Sources into a franchise hierarchy (film → series → universe); a Source resolves its series by name",
-        "A curated overlay file links each bundled film to its correct series/universe where one is known (e.g. the Lord of the Rings trilogy) — staged for review like any other correction, not applied automatically",
+        "A curated overlay file links each bundled film to its correct series/universe where one is known (e.g. the Lord of the Rings trilogy), staged for review like any other correction, not applied automatically",
         "Quote responses, and the random/search/list endpoints' filters, now include the source's series and universe (if any), and can be filtered by `series`, `seriesId`, `universe`, or `universeId`",
         "New `GET /api/v1/masterdata/sources` and `.../sources/{id}` endpoints list and look up sources individually, including their linked series",
         "New `GET /api/v1/masterdata/characters` and `.../characters/{id}` endpoints list and look up characters individually, including every source they appear in",
@@ -314,16 +314,16 @@
         "New `GET /api/v1/conversations` endpoint lists conversations, paginated",
         "New `GET /api/v1/masterdata/stagedirections` and `.../stagedirections/{id}` endpoints list and look up stage directions individually",
         "New `GET /api/v1/masterdata/soundcues` and `.../soundcues/{id}` endpoints list and look up sound cues individually",
-        "`characters[]` entries can now stage a `Modify` action instead of only ever being added once — matched by an optional explicit id, or resolved via the same type-anchored, series-scoped matching algorithm used to recognise a character across sources, using a new `sourceTitle`/`sourceType` pair on the entry; the same policy-resolved diff and completeness-guard blocking every other correctable entity already uses (issue #175)",
-        "`series[]` and `universe[]` entries can now stage a `Modify` action instead of only ever being added once — matched by an optional explicit id, the same policy-resolved diff and completeness-guard blocking every other correctable entity already uses (issue #163)",
-        "New `GET /api/v1/import/actions/export` endpoint exports every field awaiting a decision in a staged import batch — including ones currently held for review — as a CSV or JSON file (issue #163)",
+        "`characters[]` entries can now stage a `Modify` action instead of only ever being added once, matched by an optional explicit id, or resolved via the same type-anchored, series-scoped matching algorithm used to recognise a character across sources, using a new `sourceTitle`/`sourceType` pair on the entry; the same policy-resolved diff and completeness-guard blocking every other correctable entity already uses (issue #175)",
+        "`series[]` and `universe[]` entries can now stage a `Modify` action instead of only ever being added once, matched by an optional explicit id, the same policy-resolved diff and completeness-guard blocking every other correctable entity already uses (issue #163)",
+        "New `GET /api/v1/import/actions/export` endpoint exports every field awaiting a decision in a staged import batch, including ones currently held for review, as a CSV or JSON file (issue #163)",
         "New `POST /api/v1/import/actions/bulk-decide` endpoint accepts an edited export file back and applies every decision it contains in one call, reporting any row that couldn't be applied without affecting the rest of the file (issue #163)",
         "New per-source conflict-resolution rule file (`ruleFile` manifest property) lets a known, recurring field disagreement between two occurrences of the same record auto-resolve under the `review` policy instead of always staging for manual decision (issue #181)",
-        "New per-source title-alias file (`sourceAliasFile` manifest property) corrects a misspelled or inconsistent Source title/type to its canonical form before it's matched against existing data — applies to both a brand-new record and a re-imported one, preventing a duplicate Source from ever being created for the same real film/show under a different spelling (issue #181)",
+        "New per-source title-alias file (`sourceAliasFile` manifest property) corrects a misspelled or inconsistent Source title/type to its canonical form before it's matched against existing data, applies to both a brand-new record and a re-imported one, preventing a duplicate Source from ever being created for the same real film/show under a different spelling (issue #181)",
         "New `GET`/`POST /generate`/`DELETE /api/v1/import/rules/conflict` endpoints view, generate from a decided batch, and remove a persisted override of a per-source conflict-resolution rule file, without needing to hand-edit and redeploy it (issue #153)",
-        "New `GET /api/v1/import/rules/alias` endpoint scans existing Sources for likely duplicate titles not yet covered by a title-alias file and suggests them for review — never writes an alias entry itself (issue #153)",
-        "A staged action can now be flagged `Stale` when the conflict-resolution or title-alias rule that would have auto-resolved it no longer matches current data — held for review instead of silently reapplying an outdated correction (issue #153)",
-        "`POST /api/v1/import`, `.../import/preview`, `POST /api/v1/admin/database/reseed`/`reset`, and `GET /api/v1/admin/database/seed/preview` now all return a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) instead of a single flat `duplicates` count — replaces `LastSeedDuplicates`/`SeedDuplicateRecord` entirely (issue #221)",
+        "New `GET /api/v1/import/rules/alias` endpoint scans existing Sources for likely duplicate titles not yet covered by a title-alias file and suggests them for review, never writes an alias entry itself (issue #153)",
+        "A staged action can now be flagged `Stale` when the conflict-resolution or title-alias rule that would have auto-resolved it no longer matches current data, held for review instead of silently reapplying an outdated correction (issue #153)",
+        "`POST /api/v1/import`, `.../import/preview`, `POST /api/v1/admin/database/reseed`/`reset`, and `GET /api/v1/admin/database/seed/preview` now all return a per-file, per-entity-type report (new/modified/blocked/discarded/pending/stale counts) instead of a single flat `duplicates` count, replaces `LastSeedDuplicates`/`SeedDuplicateRecord` entirely (issue #221)",
         "`IDatabaseInitializer` now also exposes `SeriesCount`/`UniverseCount`/`StageDirectionCount`/`SoundCueCount`/`ConversationCount` alongside the existing four counts, surfaced in the startup `[Database - Stats]` log line and the `reseed`/`reset` endpoint responses (issue #221)"
       ],
       "changed": [
@@ -334,63 +334,63 @@
         "Import endpoints (`POST /api/v1/import`, `.../import/preview`) moved out from under `/api/v1/quotes` into their own `/api/v1/import` route group, all under a new `Import` OpenAPI tag",
         "`POST /api/v1/import` and `.../import/preview` now return `200` when everything applies (or would apply) cleanly, or `202` when any row needs a decision, instead of always returning `200`",
         "`GET /api/v1/import/actions`'s `status` filter now also accepts `blocked`, for an action held because it would have modified a record confirmed fully reviewed",
-        "`POST /api/v1/import/preview` now stages a real, inspectable batch instead of rolling back its writes — nothing is written either way, but the staged batch can be reviewed afterward via `GET /api/v1/import/actions?batchId=`",
-        "The bundled `NikhilNamal17/popular-movie-quotes` and `vilaboim/movie-quotes` sources now use the new generic `basic-json-array`/`regex-array` converters, configured via `converterOptions` in `data/sources/manifest.json` instead of dedicated per-source code — output is unchanged, same quote ids and content",
+        "`POST /api/v1/import/preview` now stages a real, inspectable batch instead of rolling back its writes, nothing is written either way, but the staged batch can be reviewed afterward via `GET /api/v1/import/actions?batchId=`",
+        "The bundled `NikhilNamal17/popular-movie-quotes` and `vilaboim/movie-quotes` sources now use the new generic `basic-json-array`/`regex-array` converters, configured via `converterOptions` in `data/sources/manifest.json` instead of dedicated per-source code, output is unchanged, same quote ids and content",
         "Every list endpoint's pagination now follows one consistent contract: `pageSize` above 500 is rejected (422) instead of silently capped, `pageSize=0` returns every matching row as a single page, and requesting a page past the last one is a distinct 422",
         "The default page size for `GET /api/v1/admin/audit` and `GET /api/v1/import/actions` changed from 50 to 20, matching every other list endpoint",
         "Character identity is no longer scoped to a single source: two characters with the same name are now treated as the same character when their sources share both media type and a known series; existing per-source duplicates are consolidated automatically on upgrade wherever a series relationship is known (issue #174)",
         "The startup banner's database statistics are now listed one per line under a new `Statistics:` section instead of crammed onto a single line, so additional entity types stay readable as more are added (issue #221)",
-        "Formalised the project's existing C#-only tooling convention as a written architecture decision record — a purely internal documentation addition with no behaviour change (issue #159)"
+        "Formalised the project's existing C#-only tooling convention as a written architecture decision record, a purely internal documentation addition with no behaviour change (issue #159)"
       ],
       "fixed": [
         "ImportBatch rows created during seeding now record the correct `Type` (`Seed` for any bundled file, whether externally sourced with a manifest URL or internally authored) and persist the source URL; previously every seeded batch was recorded incorrectly",
-        "Seeding no longer crashes on an empty or otherwise invalid JSON source file — the file is now skipped with a logged warning instead of stopping startup",
+        "Seeding no longer crashes on an empty or otherwise invalid JSON source file, the file is now skipped with a logged warning instead of stopping startup",
         "A file placed in the user imports folder with no URL was previously misclassified the same as internally-curated data; ImportBatch provenance now has a distinct `UserSeed` type for imports-folder files, separate from `Seed` (any bundled dataset, our own or internally authored)",
-        "CVE-2026-49451: `Microsoft.OpenApi` (transitive via `Microsoft.AspNetCore.OpenApi`) had a stack-overflow vulnerability when parsing OpenAPI documents with circular schema references; Quotinator only generates its own OpenAPI document and never parses untrusted ones, so the vulnerable path was unreachable — patched to 2.7.5 via a direct package override regardless",
+        "CVE-2026-49451: `Microsoft.OpenApi` (transitive via `Microsoft.AspNetCore.OpenApi`) had a stack-overflow vulnerability when parsing OpenAPI documents with circular schema references; Quotinator only generates its own OpenAPI document and never parses untrusted ones, so the vulnerable path was unreachable, patched to 2.7.5 via a direct package override regardless",
         "A full database reset (`POST /api/v1/admin/database/reset`) no longer wipes the audit log; the audit table (now named `System_AuditEntries`) always survives a reset, matching the behaviour a normal reseed already had. Internal tables essential to the app now use a `System_` name prefix so they are automatically protected from a reset, rather than the app needing to know each protected table by name",
         "Resetting the database now takes a safety backup first and automatically restores it if the reset fails partway through, instead of potentially leaving the database in a broken, half-rebuilt state",
         "The OpenAPI spec now correctly marks every import and staged-action-review write endpoint as requiring `X-Api-Key`; previously only `Admin`-tagged endpoints showed this requirement, so these never appeared as protected in the Scalar UI",
         "`status`, `entityType`, and `batchId` query filters on `GET /api/v1/import/actions` matched case-sensitively, so a lowercase value (e.g. `?status=pending`) silently returned no results even though matching data existed",
         "`POST /api/v1/import` with no file, no settings, and no batch id returned an uninformative generic error instead of a clear message stating that either a file or a batch id is required",
-        "Re-importing or reseeding content that had previously been soft-deleted (via undo, or otherwise) silently failed to restore it — the record and its related rows are now properly resurrected instead of being permanently hidden behind the old row",
-        "`GET /api/v1/quotes`'s `yearFrom`/`yearTo`/`year`/`decade` filters were documented as `integer` in the OpenAPI spec, but the schema patch never actually applied to this specific endpoint due to a route-path mismatch — the Scalar UI showed them as plain `string`; request handling itself was unaffected, this was a documentation-accuracy bug only",
-        "The legacy in-memory `QuoteService` duplicated the source-file parser's logic instead of reusing it, and broke once a source file used the extended object format; now reuses the shared parser. This code path is not reachable in the running application — nothing has registered it since the SQLite migration — but it remains covered by its own test suite (issue #68)",
-        "Quote, source, character, and conversation SQL queries had been living inside the generic data-access library instead of the Quotinator-specific project since before that split existed — a purely internal code-organisation fix with no behaviour change (issue #157)",
-        "Import-batch tracking (which file was imported, when, and by what policy) had also ended up in the Quotinator-specific project instead of the generic data-access library it actually belongs in — another purely internal code-organisation fix with no behaviour change (issue #158)",
-        "A quote confirmed fully reviewed could still have its fields silently changed by a later import — only a Source correction was actually held for review as intended; both are now correctly held. A Source correction under a policy that keeps the existing value on conflict no longer holds unnecessarily when nothing would actually change (issue #168)",
-        "`ImportActionNotDecidableException`'s message and the `POST /import/actions/{id}/decide` API description named `Quote`/`Source` specifically and claimed other entity types were always already-decided — both were stale since Source's own correction path shipped; reworded generically so the message stays accurate as more entity types become correctable",
-        "`page`/`pageSize` query parameters were documented as `string` instead of `integer` in the OpenAPI spec for every list endpoint that has them — continuing the same fix already applied to `/quotes`'s year filters, now covering pagination everywhere it's used",
-        "An import file correcting a source, person, stage direction, sound cue, or conversation could silently reset a field to blank just by not mentioning it in the file — an omitted field now correctly leaves the existing value untouched; an explicit `null` still resets it as intended",
-        "Generic list-endpoint infrastructure (pagination, not-found handling, masterdata routing/tagging conventions, entity-scoped filter parsing) is now shared across every list endpoint instead of being reimplemented per entity — a purely internal consolidation, no behaviour change beyond the pagination contract change above (issues #193, #196)",
-        "`Quotinator.Engine` — a third internal project that sat between the API and the generic data-access library — has been merged into `Quotinator.Core`; a purely internal code-organisation change with no behaviour change (issue #206)",
-        "A source's release date was silently dropped whenever the source was only discovered from a quote instead of being explicitly declared in a source file's own `sources[]` section — the common case for almost every bundled source; the date is now correctly recorded. Sources already seeded before this fix are unaffected until a full database reset (issue #191)",
-        "A source, person, stage direction, sound cue, or conversation created with a lowercase explicit id could resolve correctly through one lookup path (for example, via a related quote) but fail to be found by that same record's own individual lookup endpoint — ids are now normalised consistently wherever they're written, fixing the inconsistency (issue #209)",
-        "A quote created with an uppercase explicit id could resolve correctly through most lookups, but `GET /api/v1/quotes/{id}` only matched when the URL's casing exactly matched the id as originally imported — ids are now normalised consistently for quotes too, closing the last remaining case of this issue (issue #210)",
-        "Batch and record ids shown in `GET /api/v1/import/actions` and `GET /api/v1/admin/audit` responses could appear in a different letter casing than every other id in the same response — they're now always shown consistently, regardless of how they were originally stored (issue #210)",
-        "A newly-created person's date of birth and date of death were silently discarded even when the import file supplied them — only a correction to an already-existing person actually saved these dates; both are now saved correctly the first time (issue #173)",
-        "Internal import-batch bookkeeping queries read every column implicitly instead of by name, the one remaining gap in the id-consistency work above — closed with no other observable change, since the affected id already displayed correctly (issue #212)",
-        "An internal import-batch bookkeeping field didn't follow the naming pattern the id-consistency work above relies on to find and protect id columns automatically — renamed for consistency; the field was not yet used anywhere, so there is no other observable change (issue #213)",
-        "The internal test suite's automatic id-consistency checks previously relied on developers remembering to list certain internal query-building methods by hand; they are now discovered and checked automatically instead — a purely internal test-coverage improvement with no user-facing or behaviour change (issue #214)",
-        "A related internal query-joining mechanism was only automatically checked for one of the three internal safety checks the rest of the codebase applies everywhere else; it is now checked for all three, closing the last remaining gap of this kind — a purely internal test-coverage improvement with no user-facing or behaviour change (issue #215)",
+        "Re-importing or reseeding content that had previously been soft-deleted (via undo, or otherwise) silently failed to restore it, the record and its related rows are now properly resurrected instead of being permanently hidden behind the old row",
+        "`GET /api/v1/quotes`'s `yearFrom`/`yearTo`/`year`/`decade` filters were documented as `integer` in the OpenAPI spec, but the schema patch never actually applied to this specific endpoint due to a route-path mismatch, the Scalar UI showed them as plain `string`; request handling itself was unaffected, this was a documentation-accuracy bug only",
+        "The legacy in-memory `QuoteService` duplicated the source-file parser's logic instead of reusing it, and broke once a source file used the extended object format; now reuses the shared parser. This code path is not reachable in the running application, nothing has registered it since the SQLite migration, but it remains covered by its own test suite (issue #68)",
+        "Quote, source, character, and conversation SQL queries had been living inside the generic data-access library instead of the Quotinator-specific project since before that split existed, a purely internal code-organisation fix with no behaviour change (issue #157)",
+        "Import-batch tracking (which file was imported, when, and by what policy) had also ended up in the Quotinator-specific project instead of the generic data-access library it actually belongs in, another purely internal code-organisation fix with no behaviour change (issue #158)",
+        "A quote confirmed fully reviewed could still have its fields silently changed by a later import, only a Source correction was actually held for review as intended; both are now correctly held. A Source correction under a policy that keeps the existing value on conflict no longer holds unnecessarily when nothing would actually change (issue #168)",
+        "`ImportActionNotDecidableException`'s message and the `POST /import/actions/{id}/decide` API description named `Quote`/`Source` specifically and claimed other entity types were always already-decided, both were stale since Source's own correction path shipped; reworded generically so the message stays accurate as more entity types become correctable",
+        "`page`/`pageSize` query parameters were documented as `string` instead of `integer` in the OpenAPI spec for every list endpoint that has them, continuing the same fix already applied to `/quotes`'s year filters, now covering pagination everywhere it's used",
+        "An import file correcting a source, person, stage direction, sound cue, or conversation could silently reset a field to blank just by not mentioning it in the file, an omitted field now correctly leaves the existing value untouched; an explicit `null` still resets it as intended",
+        "Generic list-endpoint infrastructure (pagination, not-found handling, masterdata routing/tagging conventions, entity-scoped filter parsing) is now shared across every list endpoint instead of being reimplemented per entity, a purely internal consolidation, no behaviour change beyond the pagination contract change above (issues #193, #196)",
+        "`Quotinator.Engine`, a third internal project that sat between the API and the generic data-access library, has been merged into `Quotinator.Core`; a purely internal code-organisation change with no behaviour change (issue #206)",
+        "A source's release date was silently dropped whenever the source was only discovered from a quote instead of being explicitly declared in a source file's own `sources[]` section, the common case for almost every bundled source; the date is now correctly recorded. Sources already seeded before this fix are unaffected until a full database reset (issue #191)",
+        "A source, person, stage direction, sound cue, or conversation created with a lowercase explicit id could resolve correctly through one lookup path (for example, via a related quote) but fail to be found by that same record's own individual lookup endpoint, ids are now normalised consistently wherever they're written, fixing the inconsistency (issue #209)",
+        "A quote created with an uppercase explicit id could resolve correctly through most lookups, but `GET /api/v1/quotes/{id}` only matched when the URL's casing exactly matched the id as originally imported, ids are now normalised consistently for quotes too, closing the last remaining case of this issue (issue #210)",
+        "Batch and record ids shown in `GET /api/v1/import/actions` and `GET /api/v1/admin/audit` responses could appear in a different letter casing than every other id in the same response, they're now always shown consistently, regardless of how they were originally stored (issue #210)",
+        "A newly-created person's date of birth and date of death were silently discarded even when the import file supplied them, only a correction to an already-existing person actually saved these dates; both are now saved correctly the first time (issue #173)",
+        "Internal import-batch bookkeeping queries read every column implicitly instead of by name, the one remaining gap in the id-consistency work above, closed with no other observable change, since the affected id already displayed correctly (issue #212)",
+        "An internal import-batch bookkeeping field didn't follow the naming pattern the id-consistency work above relies on to find and protect id columns automatically, renamed for consistency; the field was not yet used anywhere, so there is no other observable change (issue #213)",
+        "The internal test suite's automatic id-consistency checks previously relied on developers remembering to list certain internal query-building methods by hand; they are now discovered and checked automatically instead, a purely internal test-coverage improvement with no user-facing or behaviour change (issue #214)",
+        "A related internal query-joining mechanism was only automatically checked for one of the three internal safety checks the rest of the codebase applies everywhere else; it is now checked for all three, closing the last remaining gap of this kind, a purely internal test-coverage improvement with no user-facing or behaviour change (issue #215)",
         "Matching a source by its title and type during import was case-sensitive, so re-importing the same source with different letter casing (e.g. from a differently-formatted file) could create a duplicate instead of updating the existing one; matching is now case-insensitive, consistent with how every other identifier in the system is already matched (issue #175)",
         "An import finished through the staged review-and-decide workflow (`POST /api/v1/import/actions/apply`) was never recorded as applied, so undoing it afterwards (`POST /api/v1/import/actions/reverse`) always failed even though the import itself had succeeded; the batch is now correctly marked applied and can be undone like any other (issue #177)",
-        "Several bundled Sources existed as duplicate rows for the same real film due to inconsistent title spelling across data sources (e.g. every Star Wars episode, several Marvel films, The Godfather Part II, Creed II) — consolidated to one canonical Source each (issue #181)",
-        "A Source was resolved from a quote's raw incoming title/type before any conflict-resolution rule had a chance to run, so a rule correcting a Quote's own displayed field never actually prevented — and in one case (Zootopia) actively caused — a duplicate Source row under the uncorrected spelling; Source resolution now consults the new title-alias mechanism first (issue #181)",
+        "Several bundled Sources existed as duplicate rows for the same real film due to inconsistent title spelling across data sources (e.g. every Star Wars episode, several Marvel films, The Godfather Part II, Creed II), consolidated to one canonical Source each (issue #181)",
+        "A Source was resolved from a quote's raw incoming title/type before any conflict-resolution rule had a chance to run, so a rule correcting a Quote's own displayed field never actually prevented, and in one case (Zootopia) actively caused, a duplicate Source row under the uncorrected spelling; Source resolution now consults the new title-alias mechanism first (issue #181)",
         "`PlanSourcesAsync` (the Source-correction planning path) had never been wired to the per-source conflict-resolution rule file mechanism, so a legitimate cross-file Source enrichment (e.g. a curated quote establishing a Source, a later file assigning it to a series) had no way to auto-resolve under the `review` policy and always required manual decision (issue #181)",
-        "Filtering quotes by `series=`/`universe=` name (rather than id), matching a Series/Universe/Person by name during import, the `lang` query parameter, and `GET`/`DELETE /api/v1/admin/audit`'s `table` filter all matched case-sensitively — a lowercase or differently-cased value (e.g. `?universe=james bond` against a stored `\"James Bond\"`) silently returned no results, or in the `DELETE` case silently deleted nothing while still reporting success; all four now match case-insensitively, consistent with every other identifier in the system (issue #216)",
+        "Filtering quotes by `series=`/`universe=` name (rather than id), matching a Series/Universe/Person by name during import, the `lang` query parameter, and `GET`/`DELETE /api/v1/admin/audit`'s `table` filter all matched case-sensitively, a lowercase or differently-cased value (e.g. `?universe=james bond` against a stored `\"James Bond\"`) silently returned no results, or in the `DELETE` case silently deleted nothing while still reporting success; all four now match case-insensitively, consistent with every other identifier in the system (issue #216)",
         "Case-insensitive matching for Source titles, Series/Universe/Person names, and a few internal status filters was implemented as separate hand-written SQL in each place, and one of them (import-action status/entity-type filtering) had drifted onto the opposite letter-case convention from everywhere else; consolidated onto one shared, tested mechanism with no change to actual matching behaviour, plus an automated check that catches a future comparison of this kind if it's ever added without the same case-insensitive handling (issue #211)",
-        "A conflict-resolution rule's `Custom` value (filling in a field that's missing or wrong on both sides, e.g. which character said a quote) only ever applied the second time the same quote was encountered, never the first — so it silently never took effect for a quote appearing exactly once anywhere in the bundled data, which is the common case; it now applies from the first encounter (issue #153)",
+        "A conflict-resolution rule's `Custom` value (filling in a field that's missing or wrong on both sides, e.g. which character said a quote) only ever applied the second time the same quote was encountered, never the first, so it silently never took effect for a quote appearing exactly once anywhere in the bundled data, which is the common case; it now applies from the first encounter (issue #153)",
         "Fixing the above exposed two further issues in the same mechanism: a field already correctly resolved could be incorrectly held for review as if the rule governing it had gone stale, and a record needing no correction at all (every field already agreeing) could be held for review forever instead of resolving immediately; both are now fixed (issue #153)",
-        "Airplane!, When Harry Met Sally, and an Avengers film each existed as duplicate entries under an inconsistently-spelled title in one bundled data source — merged into their single existing, correctly-spelled entry (issue #153)",
-        "A database upgrading directly from v1.7.2 could have had some internal-table migrations silently skipped, due to a bookkeeping bug in how the old combined migration-version number was split into the newer internal counters — corrected before ever reaching a release (issue #155)",
-        "Every internal migration step added since v1.7.2 that has not yet reached a release has been consolidated into two atomic steps instead of many small ones, and verified end-to-end against a real v1.7.2 database — a purely internal simplification with no schema or behaviour change (issue #155)",
-        "A route/query-derived filename, origin, and batch id were logged in two internal rule-file code paths without stripping embedded newlines, letting a caller forge fake log lines in the plain-text log output (CWE-117) — the same defensive fix already applied to request logging in v1.7.1 was extended to both call sites and centralised into one shared helper",
-        "Several endpoints built an error-message detail via `string.Format` on a localised template — since which of the three translation files is consulted depends on the request's own `Accept-Language` header, a future translation-file placeholder-count typo could have thrown an unhandled exception; localised message substitution now uses a dedicated method that never throws instead (CWE-134)",
-        "A directory-traversal guard for internal rule-file paths relied on .NET's own filename parsing, which only recognises a backslash as a path separator on Windows — on Linux, the platform this project actually ships on, a backslash-containing filename could bypass the guard (not actually exploitable as a real traversal there, since backslash isn't a path separator on Linux either); the guard now rejects both separator characters explicitly, regardless of platform",
-        "`GET /api/v1/version`'s database stats only reported the original four entity counts (quotes, sources, characters, people) — the five newer counts added alongside them (series, universes, stage directions, sound cues, conversations), already surfaced in the startup log and the reseed/reset endpoint responses, are now included here too"
+        "Airplane!, When Harry Met Sally, and an Avengers film each existed as duplicate entries under an inconsistently-spelled title in one bundled data source, merged into their single existing, correctly-spelled entry (issue #153)",
+        "A database upgrading directly from v1.7.2 could have had some internal-table migrations silently skipped, due to a bookkeeping bug in how the old combined migration-version number was split into the newer internal counters, corrected before ever reaching a release (issue #155)",
+        "Every internal migration step added since v1.7.2 that has not yet reached a release has been consolidated into two atomic steps instead of many small ones, and verified end-to-end against a real v1.7.2 database, a purely internal simplification with no schema or behaviour change (issue #155)",
+        "A route/query-derived filename, origin, and batch id were logged in two internal rule-file code paths without stripping embedded newlines, letting a caller forge fake log lines in the plain-text log output (CWE-117), the same defensive fix already applied to request logging in v1.7.1 was extended to both call sites and centralised into one shared helper",
+        "Several endpoints built an error-message detail via `string.Format` on a localised template, since which of the three translation files is consulted depends on the request's own `Accept-Language` header, a future translation-file placeholder-count typo could have thrown an unhandled exception; localised message substitution now uses a dedicated method that never throws instead (CWE-134)",
+        "A directory-traversal guard for internal rule-file paths relied on .NET's own filename parsing, which only recognises a backslash as a path separator on Windows, on Linux, the platform this project actually ships on, a backslash-containing filename could bypass the guard (not actually exploitable as a real traversal there, since backslash isn't a path separator on Linux either); the guard now rejects both separator characters explicitly, regardless of platform",
+        "`GET /api/v1/version`'s database stats only reported the original four entity counts (quotes, sources, characters, people), the five newer counts added alongside them (series, universes, stage directions, sound cues, conversations), already surfaced in the startup log and the reseed/reset endpoint responses, are now included here too"
       ],
       "removed": [
-        "The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist — a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`"
+        "The `nikhilnamal17` and `vilaboim` converter plugin names no longer exist, a custom manifest entry referencing either by name must be updated to `basic-json-array`/`regex-array` with the equivalent `converterOptions`"
       ]
     },
     {
@@ -398,10 +398,10 @@
       "date": "2026-06-29",
       "issues": [],
       "highlights": [
-        "Internal improvements — no user-facing changes."
+        "Internal improvements, no user-facing changes."
       ],
       "changed": [
-        "Version string corrected — v1.7.1 final Docker image reported 1.7.1-beta due to a missed version bump before tagging; v1.7.2 carries the correct version string"
+        "Version string corrected, v1.7.1 final Docker image reported 1.7.1-beta due to a missed version bump before tagging; v1.7.2 carries the correct version string"
       ]
     },
     {
@@ -410,39 +410,39 @@
       "issues": [73, 74, 75, 76, 77, 121, 125, 126],
       "cves": ["CVE-2025-6965"],
       "highlights": [
-        "Endpoint requests are now logged as a matched start and end pair — a short ID links both lines, making it easy to trace overlapping calls. Web page and asset requests are separated into their own log categories so the default output shows only API activity.",
-        "Validation errors on quote endpoints now return the correct HTTP error status code — filters with invalid values return 422, structurally invalid requests return 400. Clients can now detect errors by HTTP status code alone without parsing the response body.",
-        "Every write operation is now recorded in an audit log — see who did what, on which record, and when. Administrators can view and clear the log via the API.",
-        "Security: a log injection vulnerability (CWE-117) in the request logging middleware was identified and fixed — crafted request paths and HTTP methods could no longer forge fake log entries.",
+        "Endpoint requests are now logged as a matched start and end pair, a short ID links both lines, making it easy to trace overlapping calls. Web page and asset requests are separated into their own log categories so the default output shows only API activity.",
+        "Validation errors on quote endpoints now return the correct HTTP error status code, filters with invalid values return 422, structurally invalid requests return 400. Clients can now detect errors by HTTP status code alone without parsing the response body.",
+        "Every write operation is now recorded in an audit log, see who did what, on which record, and when. Administrators can view and clear the log via the API.",
+        "Security: a log injection vulnerability (CWE-117) in the request logging middleware was identified and fixed, crafted request paths and HTTP methods could no longer forge fake log entries.",
         "Security: the existing CVE-2025-6965 mitigation (SQLite aggregate query guard) was extended to four new projects added in this release; no user data was affected."
       ],
       "added": [
         "Audit trail: every write operation (insert, update, soft-delete, restore, hard-delete, purge, bulk import, reseed, reset) is recorded in an `AuditEntries` table with the table name, record ID, operation, caller agent, and timestamp (issue #73)",
-        "`GET /api/v1/admin/audit` — paginated audit log, filterable by table and record ID; publicly accessible, no API key required (issue #73)",
-        "`DELETE /api/v1/admin/audit` — clear the entire audit log or a specific table's entries; admin API key required; a purge sentinel entry is written after the delete (issue #73)",
-        "`GET /api/v1/admin/database/seed/preview` — now publicly accessible; no API key required (non-destructive read) (issue #73)",
-        "`decade` filter now accepts two-digit shorthand — `80` means 1980–1989, `00` means 2000–2009, `20` means 2020–2029; four-digit form continues to work unchanged (issue #126)",
-        "Read-model query pattern: `SqliteReadModelRepository<TRow>` and `IJoinStrategy` — typed projection queries over joined tables with configurable column mapping (issue #74)",
-        "Master/detail repository pattern: `SqliteMasterDetailRepository<TParent, TChild>` — inserts, updates, and retrieves a parent entity together with its child rows as a single unit (issue #75)",
-        "`IOneToOneRepository<TParent, TDetail>` and `SqliteOneToOneRepository` — query and update a parent entity with its optional 1:1 detail record as a single unit (issue #76)",
-        "`ILinkRepository<TLink>` and `SqliteLinkRepository` — insert, delete, and bulk-replace rows in a many-to-many join table (issue #77)"
+        "`GET /api/v1/admin/audit`, paginated audit log, filterable by table and record ID; publicly accessible, no API key required (issue #73)",
+        "`DELETE /api/v1/admin/audit`, clear the entire audit log or a specific table's entries; admin API key required; a purge sentinel entry is written after the delete (issue #73)",
+        "`GET /api/v1/admin/database/seed/preview`, now publicly accessible; no API key required (non-destructive read) (issue #73)",
+        "`decade` filter now accepts two-digit shorthand, `80` means 1980 to 1989, `00` means 2000 to 2009, `20` means 2020 to 2029; four-digit form continues to work unchanged (issue #126)",
+        "Read-model query pattern: `SqliteReadModelRepository<TRow>` and `IJoinStrategy`, typed projection queries over joined tables with configurable column mapping (issue #74)",
+        "Master/detail repository pattern: `SqliteMasterDetailRepository<TParent, TChild>`, inserts, updates, and retrieves a parent entity together with its child rows as a single unit (issue #75)",
+        "`IOneToOneRepository<TParent, TDetail>` and `SqliteOneToOneRepository`, query and update a parent entity with its optional 1:1 detail record as a single unit (issue #76)",
+        "`ILinkRepository<TLink>` and `SqliteLinkRepository`, insert, delete, and bulk-replace rows in a many-to-many join table (issue #77)"
       ],
       "changed": [
-        "Request logging middleware extracted from `Program.cs` to `RequestLoggingMiddleware : IMiddleware` — each HTTP request produces two log lines: one on arrival (before processing) and one on completion, sharing an 8-character hex correlation ID (issue #125)",
-        "Request log now routes by path to three categories: `[Api - Request]` at Information for `/api/**` endpoints; `[Web - Request]` at Debug for Blazor pages, Scalar UI, and culture routes; `[Web - Asset]` at Debug for static files and framework assets — operators see only API traffic at the default `info` log level (issue #125)",
-        "Serilog `{:l}` literal format specifier applied to all string properties in request log templates — method, correlation ID, and URL are no longer wrapped in double-quotes in rendered output (issue #125)",
+        "Request logging middleware extracted from `Program.cs` to `RequestLoggingMiddleware : IMiddleware`, each HTTP request produces two log lines: one on arrival (before processing) and one on completion, sharing an 8-character hex correlation ID (issue #125)",
+        "Request log now routes by path to three categories: `[Api - Request]` at Information for `/api/**` endpoints; `[Web - Request]` at Debug for Blazor pages, Scalar UI, and culture routes; `[Web - Asset]` at Debug for static files and framework assets, operators see only API traffic at the default `info` log level (issue #125)",
+        "Serilog `{:l}` literal format specifier applied to all string properties in request log templates, method, correlation ID, and URL are no longer wrapped in double-quotes in rendered output (issue #125)",
         "`Scalar.AspNetCore` updated from 2.16.4 to 2.16.6",
         "`MSTest` updated from 4.0.2 to 4.2.3 in `Quotinator.Data.Tests` (test only)",
         "`Microsoft.Extensions.Logging.Abstractions` updated from 10.0.0 to 10.0.9 in `Quotinator.Data`",
-        "`Quotinator.Engine` project introduced — `SqliteQuoteService`, `QuotinatorDatabaseInitializer`, and all domain-specific DB entities moved from `Quotinator.Core` and `Quotinator.Data` into Engine; `Quotinator.Core` no longer references Dapper or SQLite (issue #121)",
-        "Dockerfile updated to include `Quotinator.Engine` and `Quotinator.Changelog` in the NuGet restore layer — all projects are now correctly cache-layered (issue #121)"
+        "`Quotinator.Engine` project introduced, `SqliteQuoteService`, `QuotinatorDatabaseInitializer`, and all domain-specific DB entities moved from `Quotinator.Core` and `Quotinator.Data` into Engine; `Quotinator.Core` no longer references Dapper or SQLite (issue #121)",
+        "Dockerfile updated to include `Quotinator.Engine` and `Quotinator.Changelog` in the NuGet restore layer, all projects are now correctly cache-layered (issue #121)"
       ],
       "fixed": [
-        "Validation errors on quote endpoints now return 4xx status codes — unrecognised genre or type returns 422, decade not divisible by 10 returns 422, impossible year range returns 422, oversized or suspicious filter values return 400; previously all returned 200 with an error envelope in the body (issue #126)",
+        "Validation errors on quote endpoints now return 4xx status codes, unrecognised genre or type returns 422, decade not divisible by 10 returns 422, impossible year range returns 422, oversized or suspicious filter values return 400; previously all returned 200 with an error envelope in the body (issue #126)",
         "Invalid values for numeric parameters (`n`, `page`, `pageSize`, `limit`, `yearFrom`, `yearTo`, `year`, `decade`) now return 422; the error detail names the specific parameter that failed (issue #126)",
         "REST API page now lists the audit log endpoints (`GET` and `DELETE /api/v1/admin/audit`) in the admin section (issue #73)",
-        "Request logging middleware now strips newline characters from HTTP method and URL before logging — prevents log forging via crafted request paths or methods (CWE-117; flagged by CodeQL)",
-        "CVE-2025-6965 mitigation extended to `Quotinator.Engine`, `Quotinator.Data.Testing`, `Quotinator.Engine.Tests`, and `Quotinator.Data.Testing.Tests` — four new projects added in this release carry the same transitive `SQLitePCLRaw.lib.e_sqlite3` dependency; the existing aggregate query guard covers all SQL in these projects"
+        "Request logging middleware now strips newline characters from HTTP method and URL before logging, prevents log forging via crafted request paths or methods (CWE-117; flagged by CodeQL)",
+        "CVE-2025-6965 mitigation extended to `Quotinator.Engine`, `Quotinator.Data.Testing`, `Quotinator.Engine.Tests`, and `Quotinator.Data.Testing.Tests`, four new projects added in this release carry the same transitive `SQLitePCLRaw.lib.e_sqlite3` dependency; the existing aggregate query guard covers all SQL in these projects"
       ]
     },
     {
@@ -453,15 +453,15 @@
         "The search endpoint now explains when no quotes match your filters, instead of returning an empty list silently."
       ],
       "added": [
-        "Session-start hook for Claude Code cloud/remote sessions now installs the .NET 10 SDK and dotnet-script automatically — build, test, and changelog regeneration can now be fully executed without a local terminal (issue #117)"
+        "Session-start hook for Claude Code cloud/remote sessions now installs the .NET 10 SDK and dotnet-script automatically, build, test, and changelog regeneration can now be fully executed without a local terminal (issue #117)"
       ],
       "changed": [
-        "All Dapper infrastructure moved from Quotinator.Core into Quotinator.Data — DatabaseInitializer is now generic and accepts any migration list; Quotinator-specific migration SQL moved to QuotinatorMigrations in Quotinator.Core (issue #115)",
-        "All test projects now default to sequential execution — parallel execution is an explicit opt-in at the class level (ADR 006); Dapper type handler registration moved to [AssemblyInitialize] to eliminate race conditions in parallel test runs (issue #111)",
-        "CI and release workflows now share a single reusable build/test workflow (_build-test.yml) — build steps are no longer duplicated; releases follow a two-stage beta/final model with explicit T1/T2/T3 verification tiers (issue #70)"
+        "All Dapper infrastructure moved from Quotinator.Core into Quotinator.Data, DatabaseInitializer is now generic and accepts any migration list; Quotinator-specific migration SQL moved to QuotinatorMigrations in Quotinator.Core (issue #115)",
+        "All test projects now default to sequential execution, parallel execution is an explicit opt-in at the class level (ADR 006); Dapper type handler registration moved to [AssemblyInitialize] to eliminate race conditions in parallel test runs (issue #111)",
+        "CI and release workflows now share a single reusable build/test workflow (_build-test.yml), build steps are no longer duplicated; releases follow a two-stage beta/final model with explicit T1/T2/T3 verification tiers (issue #70)"
       ],
       "fixed": [
-        "Search endpoint now returns a result envelope (status, items, totalMatching, message) consistent with the /random endpoint — callers can now distinguish NoResults from an empty result set (issue #109)",
+        "Search endpoint now returns a result envelope (status, items, totalMatching, message) consistent with the /random endpoint, callers can now distinguish NoResults from an empty result set (issue #109)",
         "Search endpoint now validates type and genre filter values, returning InvalidType or InvalidGenre status for unknown values (issue #109)",
         "All quote API endpoints now emit an entry-level log line with [Api - *] prefix to improve request tracing (issue #109)",
         "Added SQLite integration tests for field=author and field=character search paths, covering the NULL LIKE data-gap scenarios (issue #109)"
@@ -472,13 +472,13 @@
       "date": "2026-06-24",
       "issues": [93, 94, 104],
       "highlights": [
-        "Internal improvements — no user-facing changes."
+        "Internal improvements, no user-facing changes."
       ],
       "changed": [
-        "Workflow: issue closing checklist now requires a changelog entry (unreleased section) as part of closing — not deferred to release time",
-        "Workflow: release issue-list rule added — every release entry tracing back to an issue must carry the issue number, including hotfix releases",
-        "Workflow: new issue filing checklist added — milestone must be assigned before saving; v1.7.0 is the catch-all while open",
-        "Workflow: living milestone model defined — time-boxed cycles (~30 days); Developer Documentation milestone (#16) updated with due date and cycle description",
+        "Workflow: issue closing checklist now requires a changelog entry (unreleased section) as part of closing, not deferred to release time",
+        "Workflow: release issue-list rule added, every release entry tracing back to an issue must carry the issue number, including hotfix releases",
+        "Workflow: new issue filing checklist added, milestone must be assigned before saving; v1.7.0 is the catch-all while open",
+        "Workflow: living milestone model defined, time-boxed cycles (~30 days); Developer Documentation milestone (#16) updated with due date and cycle description",
         "Testing policy: all four test projects documented; paired test project rule added; CVE folder creation rule added; [AssemblyInitialize] global state rule generalised beyond Dapper",
         "CLAUDE.md: removed stale development phase and next-milestone sections; updated project structure and key files to reflect current codebase"
       ]
@@ -488,10 +488,10 @@
       "date": "2026-06-24",
       "issues": [100],
       "highlights": [
-        "Internal improvements — no user-facing changes."
+        "Internal improvements, no user-facing changes."
       ],
       "fixed": [
-        "HA add-on crashed at startup with UnauthorizedAccessException after upgrading to v1.6.3 — Serilog attempted to scan the /app directory for sink assemblies, which the HA supervisor container does not permit"
+        "HA add-on crashed at startup with UnauthorizedAccessException after upgrading to v1.6.3, Serilog attempted to scan the /app directory for sink assemblies, which the HA supervisor container does not permit"
       ]
     },
     {
@@ -499,13 +499,13 @@
       "date": "2026-06-23",
       "issues": [100],
       "highlights": [
-        "The startup log now shows a summary of server addresses, database statistics, and key configuration values — useful for verifying a deployment at a glance."
+        "The startup log now shows a summary of server addresses, database statistics, and key configuration values, useful for verifying a deployment at a glance."
       ],
       "changed": [
         "Startup log now displays opening and closing banners as single structured multi-line entries",
         "Closing banner includes bound server URLs, database statistics (schema version, quote/source/character/people counts), data paths, and active configuration (log level, SSL, admin key status)",
         "All startup log lines now carry [Subsystem - Phase] prefixes for easier filtering (e.g. [Database - Init], [Database - Seed], [Server])",
-        "Switched from Microsoft.Extensions.Logging console formatter to Serilog — multi-line log entries now render correctly in Docker"
+        "Switched from Microsoft.Extensions.Logging console formatter to Serilog, multi-line log entries now render correctly in Docker"
       ]
     },
     {
@@ -521,11 +521,11 @@
         ]
       },
       "fixed": [
-        "Using Reset Database in v1.5.x–v1.6.1 could leave the database in a broken state where the application failed to start with 'SQLite Error 1: duplicate column name: ImportBatchId' (issue #106)"
+        "Using Reset Database in v1.5.x to v1.6.1 could leave the database in a broken state where the application failed to start with 'SQLite Error 1: duplicate column name: ImportBatchId' (issue #106)"
       ],
       "changed": [
-        "Schema migrations now run inside transactions — a failed migration is fully rolled back and the application stops cleanly instead of crash-looping",
-        "Migration error recovery is version-scoped: only the known partial-migration state introduced in v1.5.x–v1.6.1 is self-healed; unknown errors in any other migration propagate immediately",
+        "Schema migrations now run inside transactions, a failed migration is fully rolled back and the application stops cleanly instead of crash-looping",
+        "Migration error recovery is version-scoped: only the known partial-migration state introduced in v1.5.x to v1.6.1 is self-healed; unknown errors in any other migration propagate immediately",
         "Reset Database now discovers tables dynamically from the database schema so future migrations never risk leaving orphaned tables behind"
       ]
     },
@@ -559,7 +559,7 @@
         82
       ],
       "highlights": [
-        "Changelog is now driven by a single JSON source — both markdown files are generated from it, and the Blazor changelog page reads it directly with no markdown parsing.",
+        "Changelog is now driven by a single JSON source, both markdown files are generated from it, and the Blazor changelog page reads it directly with no markdown parsing.",
         "Unreleased changes are now shown at the top of the changelog page.",
         "Each release now shows which GitHub issues and CVEs it addresses in a collapsible section."
       ],
@@ -570,9 +570,9 @@
         ]
       },
       "added": [
-        "`Quotinator.Changelog` project: `IChangelogService` / `ChangelogService` — deserialises `changelog.json`; no markdown parser",
+        "`Quotinator.Changelog` project: `IChangelogService` / `ChangelogService`, deserialises `changelog.json`; no markdown parser",
         "`ChangelogEntry` Blazor control: renders a single release entry (highlights or technical sections, GitHub release link, Issues & CVEs block)",
-        "`ChangelogUnreleasedEntry` Blazor control: renders the unreleased block — always expanded, no version or date, no GitHub release link",
+        "`ChangelogUnreleasedEntry` Blazor control: renders the unreleased block, always expanded, no version or date, no GitHub release link",
         "`ChangelogRoot`, `ChangelogUnreleased`, `ChangelogRelease`, `ChangelogReleaseTranslation`, `ChangelogTranslationItem`, `ChangelogSectionHeaders` models shaped directly by the JSON schema; `ChangelogUnreleased` is the base, `ChangelogRelease` inherits and adds `Version` and `Date`",
         "`ChangelogSchemaTests`: validates `changelog.json` structure (required fields, no null entries, CVE ID format)",
         "`schemas/changelog.schema.json`: machine-readable JSON schema for `changelog.json`",
@@ -585,7 +585,7 @@
         "`ChangelogService` now deserialises `changelog.json` directly into public models; private DTO mapping layer removed",
         "`ChangelogSection` model removed; Blazor components render the four change lists (`Added`, `Changed`, `Fixed`, `Removed`) directly",
         "Single-highlight releases now render as a paragraph instead of a bullet list",
-        "`CHANGELOG.md` and `addon/CHANGELOG.md` are now generated files — edit `changelog.json`, then run `scripts/changelog.csx` to regenerate",
+        "`CHANGELOG.md` and `addon/CHANGELOG.md` are now generated files, edit `changelog.json`, then run `scripts/changelog.csx` to regenerate",
         "`Scalar.AspNetCore` updated from 2.16.3 to 2.16.4",
         "`actions/checkout` updated from v6 to v7 (CI only)",
         "`JsonSchema.Net` updated from 8.0.0 to 9.2.2 (test only)",
@@ -595,7 +595,7 @@
       "fixed": [
         "`scripts/changelog-upgrade.csx`: versions present in root `CHANGELOG.md` but absent from `addon/CHANGELOG.md` now correctly use root highlights as generic highlights; v1.0.0 and v1.0.1 were affected",
         "`scripts/changelog.csx --fallback false`: standard highlights no longer leaked to absent-audience entries",
-        "`changelog.json` v1.0.0 and v1.0.1 were missing `highlights` — both now show user-facing summaries instead of technical section badges"
+        "`changelog.json` v1.0.0 and v1.0.1 were missing `highlights`, both now show user-facing summaries instead of technical section badges"
       ]
     },
     {
@@ -603,18 +603,18 @@
       "date": "2026-06-20",
       "highlights": [
         "Fixed: startup banner was collapsed to a single line in the supervisor log.",
-        "Fixed: admin API key and other options were not being read from the add-on config — the app now reads `/data/options.json` directly, which is the source the supervisor writes."
+        "Fixed: admin API key and other options were not being read from the add-on config, the app now reads `/data/options.json` directly, which is the source the supervisor writes."
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Internal improvements — no user-facing changes."
+          "Internal improvements, no user-facing changes."
         ]
       },
       "added": [
-        "Diagnostic log lines at startup showing which `Quotinator__*` environment variables are present (API key value is never logged — only whether it is set)."
+        "Diagnostic log lines at startup showing which `Quotinator__*` environment variables are present (API key value is never logged, only whether it is set)."
       ],
       "fixed": [
-        "Startup banner was collapsed to a single line in the HA supervisor log — restored `Console.WriteLine` so newlines are preserved.",
+        "Startup banner was collapsed to a single line in the HA supervisor log, restored `Console.WriteLine` so newlines are preserved.",
         "Admin API key and other add-on options were not being read from `/data/options.json`; the `env_vars` template mechanism is unreliable for optional options. The app now reads `/data/options.json` directly at startup."
       ]
     },
@@ -622,17 +622,17 @@
       "version": "1.5.0",
       "date": "2026-06-20",
       "highlights": [
-        "Admin endpoints (reseed, reset) now require an API key via the `X-Api-Key` request header — set `admin_api_key` in the add-on options.",
-        "The Scalar API reference shows an Authentication panel — enter your key once and it is sent automatically on all admin requests.",
+        "Admin endpoints (reseed, reset) now require an API key via the `X-Api-Key` request header, set `admin_api_key` in the add-on options.",
+        "The Scalar API reference shows an Authentication panel, enter your key once and it is sent automatically on all admin requests.",
         "The startup log now shows whether an admin API key is configured (`set` / `not set`).",
         "The REST API page in the UI shows the admin endpoints when a key is active.",
-        "Fixed: admin endpoint documentation incorrectly stated `Authorization: Bearer` — the correct header is `X-Api-Key`.",
+        "Fixed: admin endpoint documentation incorrectly stated `Authorization: Bearer`, the correct header is `X-Api-Key`.",
         "Fixed: `appsettings.local.json` was included in the Docker image, allowing a local developer override to silently take priority over the `admin_api_key` env var set by the HA supervisor."
       ],
       "audienceHighlights": {
         "ha-addon": [
           "Admin endpoints (reseed, reset) now require an API key supplied via the `X-Api-Key` request header.",
-          "The Scalar API reference now shows an Authentication panel at the top — enter your key once and it is sent automatically on all admin requests.",
+          "The Scalar API reference now shows an Authentication panel at the top, enter your key once and it is sent automatically on all admin requests.",
           "The startup log now shows whether an admin API key is configured.",
           "The REST API page in the UI shows the admin endpoints when a key is active."
         ]
@@ -640,14 +640,14 @@
       "added": [
         "`X-Api-Key` OpenAPI security scheme: admin endpoints are tagged in the spec so Scalar shows an Authentication panel pre-filled with the header name.",
         "Admin API key status (`set` / `not set`) added to the startup banner.",
-        "`appsettings.local.template.json` — committed template for local development overrides (copy to `appsettings.local.json`, gitignored).",
-        "User Secrets support enabled on `Quotinator.Api` (`UserSecretsId: quotinator-api-dev`) — use VS \"Manage User Secrets\" as an alternative to the local settings file.",
+        "`appsettings.local.template.json`, committed template for local development overrides (copy to `appsettings.local.json`, gitignored).",
+        "User Secrets support enabled on `Quotinator.Api` (`UserSecretsId: quotinator-api-dev`), use VS \"Manage User Secrets\" as an alternative to the local settings file.",
         "`docs/running-locally.md` documents both local config approaches and how to test admin endpoints in Scalar.",
         "Startup banner reformatted: each config setting on its own line for easier reading in logs."
       ],
       "fixed": [
         "Admin endpoints were documented as requiring `Authorization: Bearer <key>` but the correct header is `X-Api-Key: <key>`.",
-        "The startup banner was not visible in Visual Studio — it now goes through the logger so it appears in the Output window alongside other log messages.",
+        "The startup banner was not visible in Visual Studio, it now goes through the logger so it appears in the Output window alongside other log messages.",
         "`appsettings.local.json` was being included in the Docker image via `COPY . .`, allowing a local developer override to silently win over environment variables (including the HA `admin_api_key` env var). Added to `.dockerignore`.",
         "Intermittent test failure under parallel execution: three test classes each called `SqlMapper.AddTypeHandler` in `[ClassInitialize]`, causing a race on the global static handler dictionary. Registrations moved to `[AssemblyInitialize]` so they run once before any tests start."
       ]
@@ -666,25 +666,25 @@
       },
       "added": [
         "`ImportBatches` table tracks the origin of every seeded or imported record (`Id`, `Name`, `Type`, `Url`, `ImportedAt`, `ImportedBy`, `RecordCount`)",
-        "Nullable `ImportBatchId` foreign key added to `Quotes`, `Sources`, `Characters`, and `People` — links each record to the import batch that introduced it",
+        "Nullable `ImportBatchId` foreign key added to `Quotes`, `Sources`, `Characters`, and `People`, links each record to the import batch that introduced it",
         "`IImportBatchRepository` / `SqliteImportBatchRepository` in `Quotinator.Core` with `GetAllAsync`, `GetByTypeAsync`, `UpdateRecordCountAsync`",
         "Seeder creates one `ImportBatch` row per source file and writes `ImportBatchId` on all inserts for that file",
-        "Migration003: upgrades existing databases with the new table and columns; inserts placeholder `Seed`-type rows for the two bundled external datasets (existing records keep `NULL` ImportBatchId — provenance not captured retroactively)"
+        "Migration003: upgrades existing databases with the new table and columns; inserts placeholder `Seed`-type rows for the two bundled external datasets (existing records keep `NULL` ImportBatchId, provenance not captured retroactively)"
       ]
     },
     {
       "version": "1.4.2",
       "date": "2026-06-20",
       "highlights": [
-        "Fixed: the Docker image was incorrectly reporting version 1.0.0 — the actual version is now shown correctly.",
+        "Fixed: the Docker image was incorrectly reporting version 1.0.0, the actual version is now shown correctly.",
         "The REST API page now includes a direct link to the version endpoint.",
-        "Internal improvements — no other user-facing changes."
+        "Internal improvements, no other user-facing changes."
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Fixed: the Docker image was incorrectly reporting version 1.0.0 — the actual version is now shown correctly.",
+          "Fixed: the Docker image was incorrectly reporting version 1.0.0, the actual version is now shown correctly.",
           "The REST API page now includes a direct link to the version endpoint.",
-          "Internal improvements — no other user-facing changes."
+          "Internal improvements, no other user-facing changes."
         ]
       },
       "added": [
@@ -695,7 +695,7 @@
         "`Quotinator.Data.Data` namespace renamed to `Quotinator.Data.Connections`"
       ],
       "fixed": [
-        "Docker image embedded `1.0.0` as the API version — `Directory.Build.props` was not included in the build context; now copied before the restore layer so the correct version is embedded at publish time",
+        "Docker image embedded `1.0.0` as the API version, `Directory.Build.props` was not included in the build context; now copied before the restore layer so the correct version is embedded at publish time",
         "Docker build layer switched from per-project `COPY` statements to `COPY . .` to prevent files being silently omitted when new projects or root SDK files are added"
       ]
     },
@@ -714,11 +714,11 @@
         ]
       },
       "added": [
-        "`IUnitOfWork` and `SqliteUnitOfWork` — transaction and shared-connection support across repository operations; required by the upcoming import endpoint (#45) for atomic batch inserts",
+        "`IUnitOfWork` and `SqliteUnitOfWork`, transaction and shared-connection support across repository operations; required by the upcoming import endpoint (#45) for atomic batch inserts",
         "Repository methods (`IRepository<T>`, `IRestorableRepository<T>`) accept an optional `IUnitOfWork?` parameter; all existing callers require no changes"
       ],
       "fixed": [
-        "`### Highlights` sections for 1.4.0 and 1.3.0 were not displaying in the Blazor changelog page — 1.4.0 used prose instead of a bullet list (silently ignored by the parser); 1.3.0 contained technical terms. Both rewritten in plain user-facing English."
+        "`### Highlights` sections for 1.4.0 and 1.3.0 were not displaying in the Blazor changelog page, 1.4.0 used prose instead of a bullet list (silently ignored by the parser); 1.3.0 contained technical terms. Both rewritten in plain user-facing English."
       ]
     },
     {
@@ -738,17 +738,17 @@
       },
       "added": [
         "`seed.csx --output-dir DIR` flag redirects seed output to a custom directory, making it possible to test seeding without overwriting `data/sources/`",
-        "Generic repository infrastructure: `IRepository<T>` and `SqliteRepository<T>` (base CRUD), `IRestorableRepository<T>` and `SqliteRestorableRepository<T>` (opt-in soft-delete management — get deleted, restore, hard-delete, purge)",
-        "`GuidHandler` Dapper type handler — forces `Guid` storage as uppercase TEXT to match Microsoft.Data.Sqlite's default, fixing a case-sensitivity mismatch that silently dropped results from parameterised queries",
-        "ADR 002 documenting the RecordBase-everywhere decision — all tables carry audit columns; junction tables use a synthetic GUID primary key with a UNIQUE constraint on the natural key pair",
+        "Generic repository infrastructure: `IRepository<T>` and `SqliteRepository<T>` (base CRUD), `IRestorableRepository<T>` and `SqliteRestorableRepository<T>` (opt-in soft-delete management, get deleted, restore, hard-delete, purge)",
+        "`GuidHandler` Dapper type handler, forces `Guid` storage as uppercase TEXT to match Microsoft.Data.Sqlite's default, fixing a case-sensitivity mismatch that silently dropped results from parameterised queries",
+        "ADR 002 documenting the RecordBase-everywhere decision, all tables carry audit columns; junction tables use a synthetic GUID primary key with a UNIQUE constraint on the natural key pair",
         "`README.md` in each reserved-but-empty folder (`docs/architecture-decisions/`, `docs/milestones/`, `docs/milestones/data-import-sources/`, `docs/workflow/`, `scripts/cache/`, `src/Quotinator.Core/Configuration/`) explaining the folder's purpose and expected contents",
         "`Directory.Build.props` suppressing NU1903 (CVE-2025-6965) globally with a rationale comment",
         "`Quotinator.Core.Data.Sql` static class centralising every SQL statement as named constants or factory methods; all inline SQL removed from `DatabaseInitializer` and `SqliteQuoteService`",
-        "`SqlQueryGuardTests` — reflection-based test covering all `Sql.*` constants and all dynamic query factory methods with a full filter matrix; replaces the fragile file-scan approach",
-        "`RepositorySql` class in `Quotinator.Data.Repositories` — centralises the six `SqliteRepository`/`SqliteRestorableRepository` template queries (previously inline); `SqlAggregateGuard.HasAggregateFunction` public helper exposes the aggregate-detection regex for use in tests",
-        "`AggregateQueries_MatchDocumentedInventory` test — documents and locks the exact set of SQL constants that contain aggregate functions; fails when new aggregate queries are added without review",
-        "`AllSqlStringLiterals_AreInCentralisedFiles` scan test — enforces that no C# source file outside `Sql.cs`, `RepositorySql.cs`, and `DatabaseInitializer.cs` contains DML string literals; closes the CVE-2025-6965 DoD item 1 gate",
-        "String centralisation policy documented in `CLAUDE.md` — no inline strings for SQL, UI, or error messages; audit grep commands and test gates included"
+        "`SqlQueryGuardTests`, reflection-based test covering all `Sql.*` constants and all dynamic query factory methods with a full filter matrix; replaces the fragile file-scan approach",
+        "`RepositorySql` class in `Quotinator.Data.Repositories`, centralises the six `SqliteRepository`/`SqliteRestorableRepository` template queries (previously inline); `SqlAggregateGuard.HasAggregateFunction` public helper exposes the aggregate-detection regex for use in tests",
+        "`AggregateQueries_MatchDocumentedInventory` test, documents and locks the exact set of SQL constants that contain aggregate functions; fails when new aggregate queries are added without review",
+        "`AllSqlStringLiterals_AreInCentralisedFiles` scan test, enforces that no C# source file outside `Sql.cs`, `RepositorySql.cs`, and `DatabaseInitializer.cs` contains DML string literals; closes the CVE-2025-6965 DoD item 1 gate",
+        "String centralisation policy documented in `CLAUDE.md`, no inline strings for SQL, UI, or error messages; audit grep commands and test gates included"
       ]
     },
     {
@@ -756,28 +756,28 @@
       "date": "2026-06-17",
       "issues": [61],
       "highlights": [
-        "Quote data now loaded from multiple source files in `data/sources/` — one file per bundled dataset, plus optional user imports in the `imports/` subfolder of the data directory",
+        "Quote data now loaded from multiple source files in `data/sources/`, one file per bundled dataset, plus optional user imports in the `imports/` subfolder of the data directory",
         "New `GET /api/v1/admin/database/seed/preview` endpoint shows what would be imported without writing to the database (requires `admin_api_key`)",
-        "`Quotinator__DataDir` env var replaces `Quotinator__DataPath` — set to the data directory, not a file path"
+        "`Quotinator__DataDir` env var replaces `Quotinator__DataPath`, set to the data directory, not a file path"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Quotes can now be loaded from multiple data sources — bundled datasets and your own custom files placed in the imports folder.",
+          "Quotes can now be loaded from multiple data sources, bundled datasets and your own custom files placed in the imports folder.",
           "New preview endpoint lets you see what would be imported before committing any changes.",
-          "Configuration: the data directory is now set by pointing to a folder, not a file path — update `Quotinator__DataDir` if you have a custom setup."
+          "Configuration: the data directory is now set by pointing to a folder, not a file path, update `Quotinator__DataDir` if you have a custom setup."
         ]
       },
       "added": [
         "`data/sources/` folder with one JSON file per dataset and a `manifest.json` controlling import order and duplicate-resolution policy",
-        "`data/sources/quotinator-curated.json` — manually curated and verified quotes (Airplane! to start)",
+        "`data/sources/quotinator-curated.json`, manually curated and verified quotes (Airplane! to start)",
         "Optional user imports: place `.json` files in `{dataDir}/imports/` to seed additional quotes on startup",
         "Duplicate-resolution policy per batch: `skip` (default) or `overwrite`; configurable in `manifest.json` or via `Quotinator:DuplicateResolution:*` env vars",
-        "`GET /api/v1/admin/database/seed/preview` — dry-run scan returning file counts, quote counts, and cross-file duplicates (requires `AdminApiKey`)",
+        "`GET /api/v1/admin/database/seed/preview`, dry-run scan returning file counts, quote counts, and cross-file duplicates (requires `AdminApiKey`)",
         "Reseed and reset responses now include a `duplicates` count",
         "Six JSON schemas in `schemas/` covering all source file formats and the manifest"
       ],
       "changed": [
-        "`Quotinator__DataDir` env var replaces `Quotinator__DataPath` — value is the data directory, not a file path"
+        "`Quotinator__DataDir` env var replaces `Quotinator__DataPath`, value is the data directory, not a file path"
       ],
       "fixed": [
         "Seeder FK constraint failure on first startup caused by a Guid case mismatch between Dapper.Contrib (UPPERCASE) and raw SQL parameters (lowercase); SQLite text comparison is case-sensitive"
@@ -787,11 +787,11 @@
       "version": "1.2.2",
       "date": "2026-06-16",
       "highlights": [
-        "Fixed: the GitHub changelog link in the add-on UI opened inside the HA frame and was blocked — it now opens in a new tab correctly"
+        "Fixed: the GitHub changelog link in the add-on UI opened inside the HA frame and was blocked, it now opens in a new tab correctly"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Fixed: the GitHub changelog link in the UI opened inside the HA frame and was blocked by GitHub's security policy — it now opens in a new tab correctly"
+          "Fixed: the GitHub changelog link in the UI opened inside the HA frame and was blocked by GitHub's security policy, it now opens in a new tab correctly"
         ]
       },
       "fixed": [
@@ -802,30 +802,30 @@
       "version": "1.2.1",
       "date": "2026-06-16",
       "highlights": [
-        "Database file renamed from `quotes.db` to `quotinatordata.db` — the old file is renamed automatically on first startup after upgrade, no data loss",
+        "Database file renamed from `quotes.db` to `quotinatordata.db`, the old file is renamed automatically on first startup after upgrade, no data loss",
         "A backup of the database is created before any schema migration and stored in the `backups/` subfolder of the data directory; old backups are safe to delete",
         "New optional `backup_path` config option to store backups in a custom location",
         "DataProtection keys folder renamed from `.keys` to `keys`",
-        "Container log output now uses single-line format — easier to read in the HA log panel",
+        "Container log output now uses single-line format, easier to read in the HA log panel",
         "Startup banner shows all data paths at a glance"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "The database file is now named `quotinatordata.db` — on first startup after upgrading, the old `quotes.db` is renamed automatically with no data loss",
+          "The database file is now named `quotinatordata.db`, on first startup after upgrading, the old `quotes.db` is renamed automatically with no data loss",
           "A backup of the database is created automatically before any schema migration",
           "Container log output is now single-line and easier to read; the startup banner shows all data paths at a glance"
         ]
       },
       "added": [
-        "Pre-migration database backup using the SQLite backup API — written to `{dataDir}/backups/quotinatordata_v{N}_{timestamp}Z.db` before any schema version bump; old backups are safe to delete",
+        "Pre-migration database backup using the SQLite backup API, written to `{dataDir}/backups/quotinatordata_v{N}_{timestamp}Z.db` before any schema version bump; old backups are safe to delete",
         "Configurable backup directory via `Quotinator:BackupPath` env var (defaults to `{dataDir}/backups`)",
         "HA add-on: optional `backup_path` config option with translations in English, Dutch, and German",
-        "`DataPaths` constants class (`Quotinator.Core.Data`) for all file and folder names in the data directory — named and documented so future changes stay in one place",
+        "`DataPaths` constants class (`Quotinator.Core.Data`) for all file and folder names in the data directory, named and documented so future changes stay in one place",
         "Data directory structure documented in `README.md` and `addon/DOCS.md` with safe-to-delete guidance for each folder"
       ],
       "changed": [
         "Database file renamed from `quotes.db` to `quotinatordata.db`; the legacy file (including WAL and SHM journal files) is renamed automatically on first startup after upgrade",
-        "DataProtection keys folder renamed from `.keys` to `keys` — visible name is easier to discover and document",
+        "DataProtection keys folder renamed from `.keys` to `keys`, visible name is easier to discover and document",
         "Console log formatter switched from `simple` (two lines per entry) to `systemd` (single line per entry) for cleaner container log output",
         "Startup banner rewritten with full readable labels (`Database:`, `Backups:`, `DataProtection:`, `Config:`) aligned to a single column; no abbreviations"
       ]
@@ -834,17 +834,17 @@
       "version": "1.2.0",
       "date": "2026-06-16",
       "highlights": [
-        "Admin endpoints (reseed, reset) now require `Authorization: Bearer <key>` — they return 401 by default until `admin_api_key` is set in the add-on configuration",
+        "Admin endpoints (reseed, reset) now require `Authorization: Bearer <key>`, they return 401 by default until `admin_api_key` is set in the add-on configuration",
         "New `admin_api_key` option in the add-on configuration panel"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Admin endpoints (reseed, reset) are now protected by an API key — they return 401 by default and only accept requests with the correct `Authorization: Bearer <key>` header"
+          "Admin endpoints (reseed, reset) are now protected by an API key, they return 401 by default and only accept requests with the correct `Authorization: Bearer <key>` header"
         ]
       },
       "added": [
         "`AdminApiKeyFilter` endpoint filter guards `POST /api/v1/admin/database/reseed` and `POST /api/v1/admin/database/reset` with a static API key",
-        "`Quotinator:AdminApiKey` config key (env var `Quotinator__AdminApiKey`) — must be set explicitly to enable the endpoints; no bundled default",
+        "`Quotinator:AdminApiKey` config key (env var `Quotinator__AdminApiKey`), must be set explicitly to enable the endpoints; no bundled default",
         "Key comparison uses `CryptographicOperations.FixedTimeEquals` to prevent timing attacks",
         "HA add-on: optional `admin_api_key` config option with translations in English, Dutch, and German"
       ]
@@ -854,13 +854,13 @@
       "date": "2026-06-15",
       "highlights": [
         "Filter quotes by multiple genres or types at once (e.g. sci-fi comedies) using repeatable query parameters on `/random`, `/search`, and the paginated list",
-        "Sci-fi and non-fiction genres are now correctly matched in all endpoints — they were silently missing from results before this fix",
+        "Sci-fi and non-fiction genres are now correctly matched in all endpoints, they were silently missing from results before this fix",
         "`/random` now always returns a response envelope with status, items, total matching count, and an optional message; the shape of the response has changed",
         "New admin endpoints: `POST /api/v1/admin/database/reseed` and `POST /api/v1/admin/database/reset` for database maintenance without restarting the container"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "You can now filter quotes by more than one genre or type at once — for example, get only sci-fi comedies or drama films",
+          "You can now filter quotes by more than one genre or type at once, for example, get only sci-fi comedies or drama films",
           "Sci-fi and non-fiction quotes were missing from search and random results; both genres now work correctly",
           "Two new admin endpoints let you reseed or fully reset the quote database without restarting the container"
         ]
@@ -868,12 +868,12 @@
       "added": [
         "`/random` now accepts multi-value `type` and `genre` filters (repeatable query params, OR logic within each, AND between them), plus `character`, `author`, and `source` text-contains filters (AND logic with other params)",
         "`/search` and `/` (paginated list) now accept multi-value `type` and `genre` filters with OR logic",
-        "`FilteredQuoteResult<T>` response envelope on `/random` — always returned, includes `status` (enum), `items`, `totalMatching` (pool size before random selection), and `message` (non-null for non-Ok statuses)",
+        "`FilteredQuoteResult<T>` response envelope on `/random`, always returned, includes `status` (enum), `items`, `totalMatching` (pool size before random selection), and `message` (non-null for non-Ok statuses)",
         "`FilteredResultStatus` enum: `Ok`, `NoResults`, `InvalidType`, `InvalidGenre`, `InputTooLong`, `InvalidInput`",
         "`ValidGenres` set added to `InputValidation`; `IsSuspiciousInput` regex detects common SQL injection patterns and surfaces them as `InvalidInput` status (parameterised queries already prevent actual injection)",
         "`ValidGenres` and `IsSuspiciousInput` tests added to `InputValidationTests`",
-        "`POST /api/v1/admin/database/reseed` — clears all data and reimports from `quotes.json`; schema migration history is preserved",
-        "`POST /api/v1/admin/database/reset` — clears data and schema version history, reapplies all migrations, then reimports from `quotes.json`; equivalent to a fresh database",
+        "`POST /api/v1/admin/database/reseed`, clears all data and reimports from `quotes.json`; schema migration history is preserved",
+        "`POST /api/v1/admin/database/reset`, clears data and schema version history, reapplies all migrations, then reimports from `quotes.json`; equivalent to a fresh database",
         "`GenreApiToDb` contract tests in `InputValidationTests`: every valid genre has a mapping, every mapped value is a valid enum name, hyphenated genres (`sci-fi`, `non-fiction`) map correctly"
       ],
       "changed": [
@@ -883,14 +883,14 @@
       ],
       "fixed": [
         "`SqliteQuoteService.ToResponse` was serialising `Genre.SciFi` as `\"scifi\"` and `Genre.NonFiction` as `\"nonfiction\"`; both now return the correct API tag strings (`\"sci-fi\"`, `\"non-fiction\"`)",
-        "`DatabaseInitializer` silently dropped `sci-fi` and `non-fiction` genres during seeding because `Enum.TryParse(\"sci-fi\")` fails on hyphenated strings — `TryNormaliseGenre` now maps through `InputValidation.GenreApiToDb` before parsing; `Migration002` truncates the affected `QuoteGenres` rows so existing databases are automatically re-seeded on next startup; `GenreApiToDb` is moved from private in `SqliteQuoteService` to public in `InputValidation` so both consumers share one definition"
+        "`DatabaseInitializer` silently dropped `sci-fi` and `non-fiction` genres during seeding because `Enum.TryParse(\"sci-fi\")` fails on hyphenated strings, `TryNormaliseGenre` now maps through `InputValidation.GenreApiToDb` before parsing; `Migration002` truncates the affected `QuoteGenres` rows so existing databases are automatically re-seeded on next startup; `GenreApiToDb` is moved from private in `SqliteQuoteService` to public in `InputValidation` so both consumers share one definition"
       ]
     },
     {
       "version": "1.0.15",
       "date": "2026-06-15",
       "highlights": [
-        "Fixed: antiforgery token errors after container restart — DataProtection keys are now reliably written to the persistent volume (`/data/.keys/`) even when the supervisor serves a cached config that omits `Quotinator__DataPath`",
+        "Fixed: antiforgery token errors after container restart, DataProtection keys are now reliably written to the persistent volume (`/data/.keys/`) even when the supervisor serves a cached config that omits `Quotinator__DataPath`",
         "Fixed: the OpenAPI UI link in the sidebar opened in the system browser when tapped in the HA companion app, losing the session and causing a 404; it now navigates within the companion app's webview"
       ],
       "audienceHighlights": {
@@ -899,39 +899,39 @@
         ]
       },
       "fixed": [
-        "DataProtection keys written to ephemeral container filesystem when `Quotinator__DataPath` env var is absent in HA (e.g. due to supervisor config cache) — `Program.cs` now falls back to `/data` (the HA persistent volume mount point) before the `/app/data` default, so keys are always on a persistent volume and antiforgery tokens survive container restarts",
-        "OpenAPI UI and spec links in `Home.razor` had `target=\"_blank\"`, which the HA companion app forwarded to the system browser (no HA session) — removing `target=\"_blank\"` keeps navigation within the companion app's webview where the session is active"
+        "DataProtection keys written to ephemeral container filesystem when `Quotinator__DataPath` env var is absent in HA (e.g. due to supervisor config cache): `Program.cs` now falls back to `/data` (the HA persistent volume mount point) before the `/app/data` default, so keys are always on a persistent volume and antiforgery tokens survive container restarts",
+        "OpenAPI UI and spec links in `Home.razor` had `target=\"_blank\"`, which the HA companion app forwarded to the system browser (no HA session), removing `target=\"_blank\"` keeps navigation within the companion app's webview where the session is active"
       ]
     },
     {
       "version": "1.0.14",
       "date": "2026-06-15",
       "highlights": [
-        "Internal: endpoint tests no longer create or touch a database — no impact on add-on behaviour"
+        "Internal: endpoint tests no longer create or touch a database, no impact on add-on behaviour"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Internal improvement — no user-facing changes"
+          "Internal improvement, no user-facing changes"
         ]
       },
       "changed": [
         "`DatabaseInitializer` now implements `IDatabaseInitializer`; `Program.cs` registers and resolves via the interface",
-        "Endpoint tests register `NoOpDatabaseInitializer` alongside `FakeQuoteService` — no database is created or seeded during tests that have no intent to exercise the database layer"
+        "Endpoint tests register `NoOpDatabaseInitializer` alongside `FakeQuoteService`: no database is created or seeded during tests that have no intent to exercise the database layer"
       ]
     },
     {
       "version": "1.0.13",
       "date": "2026-06-15",
       "highlights": [
-        "Internal: fixed a race condition in database seeding that caused test failures under parallel test execution — no impact on add-on behaviour"
+        "Internal: fixed a race condition in database seeding that caused test failures under parallel test execution, no impact on add-on behaviour"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Bug fix — no user-facing changes"
+          "Bug fix, no user-facing changes"
         ]
       },
       "fixed": [
-        "Race condition in `DatabaseInitializer.SeedIfEmptyAsync`: parallel `WebApplicationFactory` instances (parallel MSTest runs with `ExecutionScope.MethodLevel`) could both observe an empty database and attempt concurrent seeding, causing a `UNIQUE constraint failed: Sources.Title, Sources.Type` error — fixed with a static `SemaphoreSlim` that serialises seed attempts within the same process"
+        "Race condition in `DatabaseInitializer.SeedIfEmptyAsync`: parallel `WebApplicationFactory` instances (parallel MSTest runs with `ExecutionScope.MethodLevel`) could both observe an empty database and attempt concurrent seeding, causing a `UNIQUE constraint failed: Sources.Title, Sources.Type` error, fixed with a static `SemaphoreSlim` that serialises seed attempts within the same process"
       ]
     },
     {
@@ -941,28 +941,28 @@
         7
       ],
       "highlights": [
-        "Quotes are now stored in a SQLite database (`quotes.db`) on the persistent volume — no action required; the database is created and seeded automatically on first run",
+        "Quotes are now stored in a SQLite database (`quotes.db`) on the persistent volume, no action required; the database is created and seeded automatically on first run",
         "Startup log now shows database status: schema version, seeding progress, and a final count of quotes, sources, characters, and people",
         "Version endpoint (`GET /api/v1/version`) now returns the database schema version and record counts alongside the API version",
         "Fixed: startup banner and version endpoint incorrectly reported version `1.0.0` instead of the actual add-on version",
-        "Fixed: Docker image build failed when `Quotinator.Data` was introduced — Dockerfile COPY layers corrected"
+        "Fixed: Docker image build failed when `Quotinator.Data` was introduced; Dockerfile COPY layers corrected"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Quotes are now stored in a local database rather than a flat file — faster, more reliable, and ready for future write support ([#7](https://github.com/DutchJaFO/Quotinator/issues/7))",
+          "Quotes are now stored in a local database rather than a flat file: faster, more reliable, and ready for future write support ([#7](https://github.com/DutchJaFO/Quotinator/issues/7))",
           "The version endpoint now also reports the database schema version and record counts"
         ]
       },
       "added": [
         "SQLite backend (v2): replaces flat-file `QuoteService` with `SqliteQuoteService` backed by Dapper + `Microsoft.Data.Sqlite` (closes [#7](https://github.com/DutchJaFO/Quotinator/issues/7))",
-        "Fully normalised schema: `Sources`, `SourceTranslations`, `Characters`, `CharacterTranslations`, `People`, `Quotes`, `QuoteTranslations`, `QuoteGenres` — all tables include `RecordBase` audit columns (`DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted`) for soft-delete support",
-        "`SchemaVersion` table with numbered migration support — pending migrations are applied automatically at startup; existing migrations are never edited",
+        "Fully normalised schema: `Sources`, `SourceTranslations`, `Characters`, `CharacterTranslations`, `People`, `Quotes`, `QuoteTranslations`, `QuoteGenres`; all tables include `RecordBase` audit columns (`DateCreated`, `DateModified`, `DateDeleted`, `IsDeleted`) for soft-delete support",
+        "`SchemaVersion` table with numbered migration support: pending migrations are applied automatically at startup; existing migrations are never edited",
         "First-run seeding: if the database is empty on startup, all 780 quotes are imported from the bundled `quotes.json` automatically; no manual migration step required",
-        "`SafeValue<T>` — diagnostic wrapper that carries both `Raw` (original DB string) and `Parsed` (converted value); corrupt or unrecognised values never crash the application and the original string is preserved for diagnosis",
-        "`SafeEnumHandler<T>` and `SafeDateHandler` — Dapper TypeHandlers; enum values stored as TEXT names (rename-safe), date fields support imprecise ISO 8601 (`\"1994\"`, `\"1994-06\"`, `\"1994-06-04\"`)",
+        "`SafeValue<T>`, a diagnostic wrapper that carries both `Raw` (original DB string) and `Parsed` (converted value); corrupt or unrecognised values never crash the application and the original string is preserved for diagnosis",
+        "`SafeEnumHandler<T>` and `SafeDateHandler`, the Dapper TypeHandlers; enum values stored as TEXT names (rename-safe), date fields support imprecise ISO 8601 (`\"1994\"`, `\"1994-06\"`, `\"1994-06-04\"`)",
         "`QuoteType` and `Genre` enums with `Unknown = 0` as a safe zero-value fallback",
         "`People` table: tracks real people (authors, public figures) with optional `DateOfBirth` / `DateOfDeath` in imprecise ISO 8601 format",
-        "Characters scoped to their source — same character name from different franchises is stored as separate rows",
+        "Characters scoped to their source: the same character name from different franchises is stored as separate rows",
         "`Quotinator.Data` project: reusable data infrastructure (`RecordBase`, `SafeValue<T>`, `IDbConnectionFactory`, `SqliteConnectionFactory`, `SafeEnumHandler<T>`, `SafeDateHandler`) extracted into its own class library",
         "Database startup logging: log lines for schema creation/update, seeding progress, and a final summary (quote / source / character / people counts)",
         "XML `<summary>` documentation on all public types and members; CS1591 enforced in `Quotinator.Core` and `Quotinator.Data`",
@@ -971,7 +971,7 @@
         "`SOURCES.md`: added attribution for Dapper, Dapper.Contrib, `Microsoft.Data.Sqlite`, `Microsoft.Extensions.Logging.Abstractions`; added DB Browser for SQLite under external tools"
       ],
       "fixed": [
-        "Version endpoint and startup banner reported `1.0.0` instead of the actual release version — `VersionService` was reading the `Quotinator.Core` assembly (no `<Version>` set) instead of the entry assembly; changed to `Assembly.GetEntryAssembly()`",
+        "Version endpoint and startup banner reported `1.0.0` instead of the actual release version: `VersionService` was reading the `Quotinator.Core` assembly (no `<Version>` set) instead of the entry assembly; changed to `Assembly.GetEntryAssembly()`",
         "Docker build failed: `Quotinator.Data` project was missing from the Dockerfile COPY layers"
       ]
     },
@@ -992,7 +992,7 @@
         "GitHub Milestones created to track upcoming work; README roadmap section replaced with a link to the milestone list"
       ],
       "changed": [
-        "Architecture: extracted `Quotinator.Constants` project (route strings, tag names, error message keys — no dependencies); moved `ApiLocalizer`, `VersionService`, and `InputValidation` to `Quotinator.Core`",
+        "Architecture: extracted `Quotinator.Constants` project (route strings, tag names, error message keys, no dependencies); moved `ApiLocalizer`, `VersionService`, and `InputValidation` to `Quotinator.Core`",
         "HA add-on documentation revised: access section now distinguishes ingress (default, no port config needed) from direct port (optional, for external tools); hardcoded `http://<ha-host>:8080/` URLs removed"
       ],
       "fixed": [
@@ -1019,27 +1019,27 @@
       "version": "1.0.9",
       "date": "2026-06-14",
       "highlights": [
-        "New `log_requests` option — logs one line per quote API request; useful for confirming calls arrive without enabling full debug logging (default: `false`)",
-        "New `log_level` option — choose log verbosity from the add-on panel (default: `info`; use `debug` when reporting issues)",
+        "New `log_requests` option, logs one line per quote API request; useful for confirming calls arrive without enabling full debug logging (default: `false`)",
+        "New `log_level` option, choose log verbosity from the add-on panel (default: `info`; use `debug` when reporting issues)",
         "UTC timestamps on all log lines",
         "Clear start and stop markers in the supervisor log (version, data path, quote count)"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "New option: log one line per API request — useful for confirming calls arrive without enabling full debug logging",
+          "New option: log one line per API request, useful for confirming calls arrive without enabling full debug logging",
           "New option: choose how much detail appears in the supervisor log",
           "All log lines now show a UTC timestamp"
         ]
       },
       "added": [
-        "`log_requests` add-on option — when enabled, logs one line per quote API request (`GET /api/v1/quotes/random?n=5 → 200 in 12ms`); default `false`; 429 responses are included, health/Blazor/static traffic is not",
-        "`log_level` add-on option — controls verbosity of the HA supervisor log; valid values: `trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`; default `info`",
+        "`log_requests` add-on option: when enabled, logs one line per quote API request (`GET /api/v1/quotes/random?n=5 → 200 in 12ms`); default `false`; 429 responses are included, health/Blazor/static traffic is not",
+        "`log_level` add-on option: controls verbosity of the HA supervisor log; valid values: `trace`, `debug`, `info`, `notice`, `warning`, `error`, `fatal`; default `info`",
         "UTC timestamps on all log lines (`yyyy-MM-dd HH:mm:ss`)",
         "Startup banner logs version, data path, quote count, and keys directory on every start",
         "Shutdown message logged when the container stops"
       ],
       "changed": [
-        "`Console.WriteLine` startup output replaced by the structured logger — all output now respects the configured log level and timestamp format"
+        "`Console.WriteLine` startup output replaced by the structured logger, all output now respects the configured log level and timestamp format"
       ]
     },
     {
@@ -1049,7 +1049,7 @@
         8
       ],
       "highlights": [
-        "Fixed: links on the home page (Scalar UI, OpenAPI spec, health check) did not resolve correctly through the Home Assistant ingress — they now use relative paths"
+        "Fixed: links on the home page (Scalar UI, OpenAPI spec, health check) did not resolve correctly through the Home Assistant ingress; they now use relative paths"
       ],
       "audienceHighlights": {
         "ha-addon": [
@@ -1057,21 +1057,21 @@
         ]
       },
       "fixed": [
-        "Scalar UI button, OpenAPI spec link, and health check link on the home page were broken under the Home Assistant ingress — absolute paths (e.g. `/scalar/v1`) ignored `<base href>` and resolved against HA's server root; changed to relative paths so they resolve correctly through the ingress proxy in all deployment scenarios (closes [#8](https://github.com/DutchJaFO/Quotinator/issues/8))"
+        "Scalar UI button, OpenAPI spec link, and health check link on the home page were broken under the Home Assistant ingress: absolute paths (e.g. `/scalar/v1`) ignored `<base href>` and resolved against HA's server root; changed to relative paths so they resolve correctly through the ingress proxy in all deployment scenarios (closes [#8](https://github.com/DutchJaFO/Quotinator/issues/8))"
       ]
     },
     {
       "version": "1.0.7",
       "date": "2026-06-14",
       "highlights": [
-        "Quotes and DataProtection keys are now stored on the supervisor-mounted persistent volume (`/data`) and survive add-on restarts and updates — no manual data migration needed on first install",
-        "Fixed: Blazor assets (CSS, `blazor.web.js`) failed to load in the Home Assistant ingress panel — the sidebar page was broken and the \"New quote\" button did not work",
-        "Fixed: antiforgery decryption failures after add-on restart — DataProtection keys now persist across restarts",
+        "Quotes and DataProtection keys are now stored on the supervisor-mounted persistent volume (`/data`) and survive add-on restarts and updates, no manual data migration needed on first install",
+        "Fixed: Blazor assets (CSS, `blazor.web.js`) failed to load in the Home Assistant ingress panel: the sidebar page was broken and the \"New quote\" button did not work",
+        "Fixed: antiforgery decryption failures after add-on restart; DataProtection keys now persist across restarts",
         "Fixed: language cookie endpoint no longer appears in the Scalar API reference"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Quotes and session data now survive container restarts and add-on updates — no data loss on update",
+          "Quotes and session data now survive container restarts and add-on updates, no data loss on update",
           "Fixed: the Blazor page (including the \"New quote\" button) did not load correctly in the Home Assistant sidebar"
         ]
       },
@@ -1079,41 +1079,41 @@
         "First-run seeding: if `Quotinator__DataPath` points to an empty directory (e.g. a fresh HA add-on data volume), the bundled `quotes.json` is automatically copied there on startup so the add-on works immediately without manual setup"
       ],
       "fixed": [
-        "Blazor assets (CSS, `blazor.web.js`) failed to load through the Home Assistant ingress panel — the hardcoded `<base href=\"/\" />` caused relative URLs to resolve against HA's own server root instead of the ingress proxy path; fixed by reading `X-Ingress-Path` from the HA supervisor and setting it as the ASP.NET Core `PathBase`, which `<base href>` now reflects dynamically",
-        "DataProtection keys were not persisted across HA add-on restarts — `Quotinator__DataPath=/data/quotes.json` points the app at the supervisor's persistent volume (`map: data:rw`) so keys survive restarts and updates; antiforgery decryption failures and Blazor circuit descriptor mismatches are resolved",
+        "Blazor assets (CSS, `blazor.web.js`) failed to load through the Home Assistant ingress panel: the hardcoded `<base href=\"/\" />` caused relative URLs to resolve against HA's own server root instead of the ingress proxy path; fixed by reading `X-Ingress-Path` from the HA supervisor and setting it as the ASP.NET Core `PathBase`, which `<base href>` now reflects dynamically",
+        "DataProtection keys were not persisted across HA add-on restarts; `Quotinator__DataPath=/data/quotes.json` points the app at the supervisor's persistent volume (`map: data:rw`) so keys survive restarts and updates; antiforgery decryption failures and Blazor circuit descriptor mismatches are resolved",
         "Kestrel double-bind warning: `ASPNETCORE_HTTP_PORTS: \"8099\"` in `addon/config.yaml` clashed with the Kestrel code that also binds port 8099; removed the environment block so port binding is owned entirely by the application",
         "DataProtection keys are now written to a `.keys/` subdirectory within the data directory",
-        "`/Culture/Set` (language cookie endpoint) no longer appears in the Scalar API reference — it is a Blazor UI helper, not a REST API endpoint"
+        "`/Culture/Set` (language cookie endpoint) no longer appears in the Scalar API reference: it is a Blazor UI helper, not a REST API endpoint"
       ]
     },
     {
       "version": "1.0.6",
       "date": "2026-06-14",
       "highlights": [
-        "SSL / HTTPS support on the direct-access port — set `ssl: true` and supply cert/key filenames (relative to `/ssl/`); defaults to disabled",
+        "SSL / HTTPS support on the direct-access port, set `ssl: true` and supply cert/key filenames (relative to `/ssl/`); defaults to disabled",
         "Ingress now correctly detects the browser's HTTPS context via `X-Forwarded-Proto`",
         "Fixed: Blazor interactive components (e.g. the \"New quote\" button) did not work in Docker or the HA add-on",
         "Language selection cookie now works in plain-HTTP direct-access deployments"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Optional HTTPS on the direct access port — enable ssl in the add-on configuration to use your Let's Encrypt certificate",
+          "Optional HTTPS on the direct access port: enable ssl in the add-on configuration to use your Let's Encrypt certificate",
           "Fixed: interactive elements such as the \"New quote\" button did not work in Docker or the HA add-on"
         ]
       },
       "added": [
         "Optional HTTPS on the direct-access port (8080) via Kestrel; configure with `Quotinator__Ssl=true`, `Quotinator__SslCertFile`, and `Quotinator__SslKeyFile` environment variables",
-        "HA add-on SSL options (`ssl`, `certfile`, `keyfile`) — defaults to `ssl: false`; when enabled, uses certs from `/ssl/` (HA Let's Encrypt add-on writes there)",
+        "HA add-on SSL options (`ssl`, `certfile`, `keyfile`), defaults to `ssl: false`; when enabled, uses certs from `/ssl/` (HA Let's Encrypt add-on writes there)",
         "`UseForwardedHeaders()` middleware reads `X-Forwarded-Proto` and `X-Forwarded-For` from upstream proxies so the app knows it is behind HTTPS even when running HTTP internally (required for HA ingress)"
       ],
       "changed": [
         "DataProtection keys are now persisted to the data directory (`/app/data`) instead of ephemeral in-memory; antiforgery tokens and Blazor circuit descriptors survive container restarts",
-        "Culture cookie `Secure` flag is now derived from `Request.IsHttps` instead of hardcoded `true` — language selection persists in plain-HTTP deployments",
-        "`UseHttpsRedirection` removed — redirect responsibility belongs to the consumer's reverse proxy, not the app",
+        "Culture cookie `Secure` flag is now derived from `Request.IsHttps` instead of hardcoded `true`: language selection persists in plain-HTTP deployments",
+        "`UseHttpsRedirection` removed: redirect responsibility belongs to the consumer's reverse proxy, not the app",
         "Dockerfile clears `ASPNETCORE_HTTP_PORTS` set by the .NET base image; port binding is now owned entirely by the application's Kestrel configuration"
       ],
       "fixed": [
-        "Blazor interactive components (e.g. the \"New quote\" button) did not work in Docker — `_framework/blazor.web.js` was missing from the Docker publish output because `--no-restore` reused an incomplete Blazor static web assets manifest generated before source files were copied; fixed by removing `--no-restore` from `dotnet publish`"
+        "Blazor interactive components (e.g. the \"New quote\" button) did not work in Docker: `_framework/blazor.web.js` was missing from the Docker publish output because `--no-restore` reused an incomplete Blazor static web assets manifest generated before source files were copied; fixed by removing `--no-restore` from `dotnet publish`"
       ]
     },
     {
@@ -1124,7 +1124,7 @@
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Dependency updates — no user-facing changes"
+          "Dependency updates, no user-facing changes"
         ]
       },
       "changed": [
@@ -1132,26 +1132,26 @@
         "`actions/checkout` updated from v5 to v6 (CI only)",
         "`Microsoft.AspNetCore.Mvc.Testing` updated from 10.0.0 to 10.0.9 (test only)",
         "`MSTest` updated from 4.0.2 to 4.2.3 (test only)",
-        "`.gitattributes` normalised to LF for all text files — prevents CRLF/LF mismatches from Dependabot merges"
+        "`.gitattributes` normalised to LF for all text files, prevents CRLF/LF mismatches from Dependabot merges"
       ]
     },
     {
       "version": "1.0.4",
       "date": "2026-06-14",
       "highlights": [
-        "Language selector in the UI navbar — overrides browser language, persists as a cookie for one year",
-        "AppArmor profile (`apparmor.txt`) — restricts container filesystem and network access; improves add-on quality score",
+        "Language selector in the UI navbar: overrides browser language, persists as a cookie for one year",
+        "AppArmor profile (`apparmor.txt`): restricts container filesystem and network access; improves add-on quality score",
         "Fixed: Home Assistant ingress now connects correctly",
         "Direct access port disabled by default (`null`); enable in add-on configuration if needed for direct LAN or tool access"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Language selector in the navigation bar — override your browser's language preference; the choice is remembered for a year",
+          "Language selector in the navigation bar: override your browser's language preference; the choice is remembered for a year",
           "AppArmor security profile added to the Home Assistant add-on"
         ]
       },
       "added": [
-        "Release workflow now gates on CI passing — `build-and-push` depends on a `test` job so a broken build cannot produce a published image",
+        "Release workflow now gates on CI passing: `build-and-push` depends on a `test` job so a broken build cannot produce a published image",
         "Dependabot configured for weekly NuGet and GitHub Actions updates (`.github/dependabot.yml`)",
         "Language selector in the navbar: overrides browser language preference, persists as a cookie for one year",
         "Open API reference button on the home page",
@@ -1178,12 +1178,12 @@
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Documentation corrections — no user-facing changes"
+          "Documentation corrections, no user-facing changes"
         ]
       },
       "fixed": [
         "Documentation corrections: CI/CD steps updated to reflect publish smoke test and GitHub Release creation; Home Assistant docs updated with GHCR visibility requirement; Docker docs corrected for `data/` build context inclusion",
-        "Add-on store listing and documentation corrected — Blazor management UI is planned for v2, not present in v1",
+        "Add-on store listing and documentation corrected: the Blazor management UI is planned for v2, not present in v1",
         "Add-on `config.yaml` version kept in sync with API version going forward"
       ]
     },
@@ -1191,11 +1191,11 @@
       "version": "1.0.2",
       "date": "2026-06-14",
       "highlights": [
-        "Fixed: Docker image tag corrected — add-on version now matches the published image tag on GHCR"
+        "Fixed: Docker image tag corrected; add-on version now matches the published image tag on GHCR"
       ],
       "audienceHighlights": {
         "ha-addon": [
-          "Bug fix — no user-facing changes"
+          "Bug fix, no user-facing changes"
         ]
       },
       "fixed": [
@@ -1206,7 +1206,7 @@
       "version": "1.0.1",
       "date": "2026-06-13",
       "highlights": [
-        "Bug fix — no user-facing changes"
+        "Bug fix, no user-facing changes"
       ],
       "fixed": [
         "Docker image build now succeeds: `data/quotes.json` was excluded from the build context via `.dockerignore`, causing `dotnet publish` to fail",

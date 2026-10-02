@@ -7,7 +7,7 @@
 ## Preconditions
 
 **Beyond the profile.** The database file is replaced with bytes that are not a SQLite database, while
-the container is stopped. The changelog database and the `keys/` directory are left alone — the fault
+the container is stopped. The changelog database and the `keys/` directory are left alone, since the fault
 under test is the quote database specifically, and damaging more would make it ambiguous which one the
 refusal is about.
 
@@ -60,7 +60,7 @@ Remove-Item "$dataDir\quotinatordata.db-wal","$dataDir\quotinatordata.db-shm" -E
 **Expected:** the file is 34 bytes.
 
 **On failure:** a file still megabytes in size means the write did not land, and every step below would
-be asserting against a healthy database — which proves nothing. Stop.
+be asserting against a healthy database, which proves nothing. Stop.
 
 ### 3. Start the current build and confirm it degrades
 
@@ -74,7 +74,7 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18381/api/v1/h
 
 **Expected:** `503`.
 
-**On failure:** a `200` means the file was not actually replaced — re-run from step 2.
+**On failure:** a `200` means the file was not actually replaced. Re-run from step 2.
 
 ### 4. Attempt a reset, and read what it says
 
@@ -89,7 +89,7 @@ $r = dotnet script scripts/testing/http.csx -- --url "http://localhost:18381/api
 **Expected:** `409`, with `obstacle=SourceUnreadable`, `remedyCount` of 2, and
 `offersOverride=False`.
 
-**This is the defect #348 exists to remove.** Before it, this exact call returned an unhandled `500` —
+**This is the defect #348 exists to remove.** Before it, this exact call returned an unhandled `500`,
 while `/health` was telling the operator to make it. `offersOverride=False` is the second half: a
 database SQLite will not open cannot be dropped table-by-table either, so offering the override would
 name a remedy that cannot work.
@@ -105,7 +105,7 @@ dotnet script scripts/testing/http.csx -- `
   --method POST --expect 409 --status
 ```
 
-**Expected:** `409` — the same refusal.
+**Expected:** `409`, the same refusal.
 
 **On failure:** a `200` would mean the reset ran against a file SQLite cannot open, which is not
 possible; investigate what actually happened rather than accepting the pass.
@@ -129,8 +129,8 @@ dotnet script scripts/testing/http.csx -- --url "http://localhost:18381/api/v1/a
 
 **Two things at once, and both are load-bearing.** It is this document's **positive control**: every step
 above asserts a refusal, so without a passing case the whole document would still pass against a build
-that refused *everything*. And it is the proof that the remedy step 4 hands the operator — *"move or
-delete the database file, and restart"* — actually resolves the condition, rather than being advice
+that refused *everything*. And it is the proof that the remedy step 4 hands the operator, *"move or
+delete the database file, and restart"*, actually resolves the condition, rather than being advice
 nobody checked.
 
 **On failure:** a `409` here means the refusal is not specific to the sabotage, and every assertion
@@ -144,9 +144,9 @@ is a defect in the guidance rather than in this test.
 `/health` reports `503` with the generic initialisation-failure reason, which names a database Reset as
 its remedy. That reset now answers:
 
-> `409 Conflict` — *"Reset refused — no backup could be taken"*
+> `409 Conflict`, *"Reset refused: no backup could be taken"*
 > `backupObstacle: SourceUnreadable`
-> *"The database file itself cannot be read — it is corrupt, truncated, or not a database. No backup of
+> *"The database file itself cannot be read: it is corrupt, truncated, or not a database. No backup of
 > it is possible by any means."*
 > Remedies: move or delete the database file and restart; or restore an older backup in its place.
 

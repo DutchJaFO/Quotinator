@@ -313,7 +313,7 @@ static List<string> GetItems(JsonElement r, string key)
 }
 
 // Format must match Quotinator.Changelog.Formatting.ChangelogQuoteFormatter.Format().
-// Deliberately keepachangelog-only — ha-addon format already strips everything down to bullet
+// Deliberately keepachangelog-only: the ha-addon format already strips everything down to bullet
 // highlights (no added/changed/fixed/removed sections either), so this editorial flavour line
 // follows the same precedent and is omitted there.
 static string? GetQuote(JsonElement r)
@@ -327,7 +327,7 @@ static string? GetQuote(JsonElement r)
     var attribution = q.TryGetProperty("attribution", out var attrEl) ? attrEl.GetString() : null;
     return string.IsNullOrWhiteSpace(attribution)
         ? $"> \"{text}\""
-        : $"> \"{text}\" — {attribution}";
+        : $"> \"{text}\" ({attribution})";
 }
 
 static List<string> GetHighlights(JsonElement r, bool fallback, string fallbackMessage)
@@ -402,7 +402,7 @@ static Dictionary<string, string>? ParseSectionHeaders(JsonElement root)
 // Format must match Quotinator.Changelog.Formatting.GeneratedFileHeader.Build()
 static string BuildGeneratedHeader(string inputPath, string regenerateCmd, bool debug)
 {
-    var firstLine = $"##### *GENERATED FILE [{DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC] — do not edit by hand.*";
+    var firstLine = $"##### *GENERATED FILE [{DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC]: do not edit by hand.*";
     if (!debug) return firstLine;
 
     var sb = new StringBuilder();
