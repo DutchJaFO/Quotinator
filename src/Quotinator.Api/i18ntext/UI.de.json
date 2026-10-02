@@ -26,7 +26,7 @@
   "NotificationSchemaOvershootTitle": "Aufgezeichnete Schemaversion ist neuer als dieser Build",
   "NotificationSchemaOvershootBody": "Die aufgezeichnete Schemaversion dieser Datenbank (Daten v{0}, App v{1}) ist neuer als das, was dieser Build anwenden kann. Setzen Sie die Datenbank über die Admin-Endpunkte zurück, um sie auf der Schemaversion dieses Builds neu aufzubauen.",
   "NotificationOperationIdRenameTitle": "Zwei API-Operations-IDs wurden umbenannt",
-  "NotificationOperationIdRenameBody": "Zwei REST-API-Operations-IDs wurden aus Gründen der Namenskonsistenz umbenannt (Issue #279): GetImportBatches → GetAllImportBatches und GetFileResources → GetAllFileResources. Betroffen ist nur ein generierter API-Client, der die Operations-ID verwendet; Routen und Verhalten bleiben unverändert.",
+  "NotificationOperationIdRenameBody": "Zwei REST-API-Operations-IDs wurden aus Gründen der Namenskonsistenz umbenannt (Issue #279):\nGetImportBatches → GetAllImportBatches\nGetFileResources → GetAllFileResources\nBetroffen ist nur ein generierter API-Client, der die Operations-ID verwendet; Routen und Verhalten bleiben unverändert.",
   "NotificationReseedContentChangedTitle": "Aktualisierte Quelldaten sind verfügbar",
   "NotificationReseedContentChangedBody": "Für {0} wurden neue Inhalte heruntergeladen, aber die Datenbank enthielt bereits Zitate, sodass sie nicht übernommen wurden. Führen Sie ein Reseed aus, um den gespeicherten Inhalt durch die aktualisierten Quellen zu ersetzen.",
   "NotificationReseedAfterResetTitle": "Die Datenbank enthält keine Zitate",

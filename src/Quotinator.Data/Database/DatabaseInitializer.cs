@@ -162,6 +162,10 @@ public class DatabaseInitializer(
         // #348: exceeding the maximum reports as an error of its own, so its kind, trigger and
         // resolution join the same three CHECKs. One rebuild, for the reason migration 25 gives.
         new SchemaMigration { Version = 26, Sql = NotificationBackupMaxMigrations.WidenForBackupMaxError },
+        // #413: the v1.8.3 announcement row keeps the 30-day expiry that release defaulted to, so a
+        // breaking change that still applies reads as Expired. Clears it, and restates the body over
+        // four lines, continuing migration 24's in-place edit of the same row.
+        new SchemaMigration { Version = 27, Sql = NotificationAnnouncementLineBreakMigrations.BreakAnnouncementIntoLines },
     ];
 
     // Data's own baseline fragment: creates every Data-owned table directly under its final,

@@ -13,7 +13,8 @@ internal static class OperationIdRenameAnnouncement
 {
     /// <summary>The announcement's body, in its original language.</summary>
     internal const string Body =
-        "Two REST API operation IDs were renamed for naming consistency (issue #279): " +
-        "GetImportBatches → GetAllImportBatches, and GetFileResources → GetAllFileResources. " +
+        "Two REST API operation IDs were renamed for naming consistency (issue #279):\n" +
+        "GetImportBatches → GetAllImportBatches\n" +
+        "GetFileResources → GetAllFileResources\n" +
         "This only affects a generated API client keyed by operation ID; routes and behaviour are unchanged.";
 }
