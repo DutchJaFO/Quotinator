@@ -22,3 +22,4 @@ per `knowledgebase.md`'s bootstrapping rule, entries come first and codes are as
 | [Content was not loaded, or a migration did not run, because no backup could be taken](no-backup-could-be-taken.md) | Yes, when a migration was refused | 1.9.0-alpha onwards |
 | [Backups have reached their quota](backups-have-reached-their-quota.md) | No | 1.9.0-alpha onwards |
 | [Every database count reads 0 after a startup problem](degraded-startup-shows-every-count-as-zero.md) | No | 1.9.0-alpha onwards |
+| [Two backups of the same database show different version numbers](two-backups-of-one-database-show-different-versions.md) | No | v1.8.0 through 1.9.0-alpha |

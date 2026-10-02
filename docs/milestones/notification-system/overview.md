@@ -82,6 +82,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | [#422](https://github.com/DutchJaFO/Quotinator/issues/422) | A modal's 95vh height cap never applies; Bootstrap's centred min-height overrides it | Planning | T1 ⬜ T2 ⬜ | none |
 | [#423](https://github.com/DutchJaFO/Quotinator/issues/423) | Seeding fills any empty database, so a reset is undone by the next restart | Planning | T1 ⬜ T2 ⬜ | none |
 | [#424](https://github.com/DutchJaFO/Quotinator/issues/424) | Bundled sources are not auto-downloaded by default, and are refreshed by hand instead | In progress | T1 ⬜ T2 ⬜ | [424-sources-not-auto-downloaded-by-default-plan.md](424-sources-not-auto-downloaded-by-default-plan.md) |
+| [#430](https://github.com/DutchJaFO/Quotinator/issues/430) | A backup's filename version is inconsistent across call sites and cannot identify the schema state it came from | Planning | T1 ⬜ T2 ⬜ | none |
+| [#431](https://github.com/DutchJaFO/Quotinator/issues/431) | Let an operator name a backup they create | Planning | T1 ⬜ T2 ⬜ | none |
 | [#397](https://github.com/DutchJaFO/Quotinator/issues/397) | Exceptions the application catches leave no trace outside Visual Studio | Waiting for release | T1 ✅ T2 ✅ | [397-exceptions-leave-no-trace-plan.md](397-exceptions-leave-no-trace-plan.md) |
 | [#371](https://github.com/DutchJaFO/Quotinator/issues/371) | Notify that the database was created, and that migrations were applied | Planning | T1 ⬜ T2 ⬜ | none |
 | [#372](https://github.com/DutchJaFO/Quotinator/issues/372) | Reseed should only import the designated files, not delete data first | Waiting for release | T1 ✅ T2 ✅ | [372-reseed-does-not-delete-plan.md](372-reseed-does-not-delete-plan.md) |
@@ -144,6 +146,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 #422 ─── (none); found in #411's T2, in #308's modal: Planning
 #423 ─── (none); found in #308's T2; #156 decided it, #277 pinned the opposite, #304 depends on it: Planning
 #424 ─── (none); moved from v1.9.0, found in #348's verification: In progress
+#430 ─── (none); found in #348's T1: Planning
+#431 ─── (none); shares a sanitiser with #353: Planning
 #397 ─── (none); blocks #370: Waiting for release
 #369 ─── depends on #303, #372, #389: Waiting for release
 #389 ─── depends on #373, #376, #377: Waiting for release
@@ -228,6 +232,8 @@ Full tier definitions and classification rules: [`docs/release-verification.md`]
 | 57 | **#390** | Planning; before #368, which depends on it |
 | 58 | **#368** | Planning; depends on #303, #304, #390 |
 | 59 | **#416** | Planning; filed 2026-09-19 during #411 and not yet sequenced; placed last until it is |
+| 60 | **#430** | Planning; filed 2026-10-01, unsequenced; before #352 and #353, which cite the convention |
+| 61 | **#431** | Planning; filed 2026-10-01, unsequenced; after #353, which builds the shared sanitiser |
 
 ---
 
