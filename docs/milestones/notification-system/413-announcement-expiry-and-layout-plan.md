@@ -1,6 +1,6 @@
 # #413: The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph
 
-**Status:** Planning
+**Status:** In progress
 **GitHub issue:** #413
 **Tiers required:** T1, T2
 **Depends on:** #312 and #319, both `Waiting for release`
