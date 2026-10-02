@@ -1,15 +1,16 @@
-# #413 — The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph
+# #413: The operation-ID announcement expires while it still applies, and its text is one unbroken paragraph
 
 **Status:** Planning
 **GitHub issue:** #413
 **Tiers required:** T1, T2
-**Depends on:** #312, #319 — both `Waiting for release`
+**Depends on:** #312 and #319, both `Waiting for release`
 
 ---
 
 ## Next action
 
-Step 1: extract the announcement producer into a seam its tests can name.
+**Step 2: write the multi-line text in all three languages.** Step 1 is already delivered, by #348, and
+step 3 is narrower than this plan was written for. See *What the cross-check found* for both.
 
 ---
 
@@ -30,7 +31,7 @@ English, Dutch and German; and neither change writes a second copy.
 
 **The dedupe identity includes the content hash.** `NotificationMetadataDto.FullIdentity` is
 `[ReleaseState, Version, ContentHash, …IdentityComponents]`, so rewriting the body changes what the
-producer is looking for, it matches nothing in history, and it writes a second copy — the third
+producer is looking for, it matches nothing in history, and it writes a second copy, the third
 requirement, broken by satisfying the second. Migration 11 states the intent behind that:
 *"If the producer's wording is ever edited, the hashes stop matching and the notification is
 re-announced, which is exactly what a content hash is for."*
@@ -41,12 +42,34 @@ with no expiry, so only the row a 1.8.3 database already holds needs repair.
 
 **`BodyIsMultiLine` drives nothing.** `LayoutFor` is referenced only by `NotificationTableTests`; no
 renderer reads it. Bodies keep their line breaks because `.notification-body` is `white-space:
-pre-line` for every kind — measured live during #411's T2 pass (`breaksHonoured: true`, `4` line boxes
+pre-line` for every kind, measured live during #411's T2 pass (`breaksHonoured: true`, `4` line boxes
 against `2`). The issue names `BodyIsMultiLine: false` as part of the cause; it is not. The cause is
 that the text has no line breaks in it.
 
 So this issue needs no rendering change whatsoever: give the body line breaks and the existing markup
-renders them. The flag, and the unread map around it, go back to #308 — see its own reopening.
+renders them. The flag, and the unread map around it, go back to #308, see its own reopening.
+
+**Re-planned 2026-10-02, against what #348 shipped since this plan was written.** Four things moved:
+
+- **Step 1 is already done.** #348 extracted the body into
+  `Quotinator.Api.Startup.OperationIdRenameAnnouncement`, which `Program.cs` reads and
+  `OperationIdRenameAnnouncementTests` holds against a migration hash. That is the seam step 1 asked for.
+- **The migration is version 27, not 23.** Versions 23 to 26 were taken by #348 and #349
+  (`NotificationBackupRefusedMigrations`, `NotificationAnnouncementRewordMigrations`,
+  `NotificationBackupQuotaMigrations`, `NotificationBackupMaxMigrations`).
+- **Migration 24 already does most of step 3.** `NotificationAnnouncementRewordMigrations.RewordOperationIdRename`
+  rewrites that row's `Body`, its `$.contentHash` (to the literal `6FC95BB0`) and its `nl`/`de`
+  translation rows, under the identical `json_extract(Metadata, $.announcement) = 'GetAllImportBatches'`
+  predicate this plan specifies. So migration 27 starts from migration 24's single-line text, not from
+  1.8.3's, and its only new column is `ExpiresAt`.
+- **A new migration, not an edit to 24.** The schema migration policy forbids editing an applied
+  migration, and migration 24 has been applied to the developer's own database (T1, 2026-10-02:
+  *applying 23 pending Data migration(s) (version 3 to 26)*). Squashing 24 and 27 belongs to the
+  milestone-close consolidation, not here.
+
+**The issue body's own quote of the current text is stale.** Its *Actual behaviour* renders the body with
+`keyed by operation ID [em dash] routes and behaviour are unchanged`; #348 reworded that to a semicolon. The defect
+it describes is unaffected: the body is still one unbroken paragraph either way.
 
 ---
 
@@ -61,17 +84,17 @@ renders them. The flag, and the unread map around it, go back to #308 — see it
 
   **The in-place edit is strictly this migration's, for this one notification** (developer direction,
   2026-09-22). It is not a pattern a later producer may reach for: every other notification keeps the
-  rule migration 11 states — edited wording is new content, and new content re-announces. A migration
+  rule migration 11 states, edited wording is new content, and new content re-announces. A migration
   that rewrites a stored notification's text again needs its own decision, made on its own merits.
 - **`BodyIsMultiLine` belongs to #308, not here** (developer direction, 2026-09-22). It is one of the
   features #308 defines, and #308 is still open: it returns to `In progress` and finishes by proving
   every feature it defines is useful and testable across both surfaces and every variant. The flag, and
-  the `LayoutFor` map it sits in, are resolved there — see that plan's steps 14–16. This issue changes
+  the `LayoutFor` map it sits in, are resolved there, see that plan's steps 14 to 16. This issue changes
   no rendering code at all.
 - **The announcement's text moves to one named place.** It is currently a `const` inside a block in
   `Program.cs`, which no test can name, and it now has to agree with a frozen hash in a migration.
-  A small `OperationIdAnnouncement` class in `Quotinator.Api.Startup` — the shape #81's
-  `WhatsNewNotification` already uses — gives the test something to hash and keeps the body written
+  A small `OperationIdAnnouncement` class in `Quotinator.Api.Startup`, the shape #81's
+  `WhatsNewNotification` already uses, gives the test something to hash and keeps the body written
   once.
 
 ---
@@ -80,37 +103,38 @@ renders them. The flag, and the unread map around it, go back to #308 — see it
 
 ### 1. Extract the announcement producer into a seam its tests can name
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done, by #348
 
-`Quotinator.Api.Startup.OperationIdAnnouncement`, holding the English body, the title, and the
-`SeedAsync` call `Program.cs` makes inline today. No behaviour change: the same payload, the same
-`SeedOnceAsync` call, the same non-fatal guard around it. `Program.cs` calls the new class.
+Delivered as `Quotinator.Api.Startup.OperationIdRenameAnnouncement` (not `OperationIdAnnouncement`, the
+name this plan proposed), holding the English body as a `const`. `Program.cs:1117` reads it, and
+`OperationIdRenameAnnouncementTests` already holds it against migration 24's frozen hash, which is
+exactly the seam this step wanted. Nothing to do here.
 
 ### 2. Write the multi-line text in all three languages
 
 **Status:** ⬜ Not started
 
-The statement, one line per renamed operation ID, then the scope note — in the new class for English,
+The statement, one line per renamed operation ID, then the scope note, in the new class for English,
 and in `i18ntext/UI.{en-GB,nl,de}.json` under the existing `NotificationOperationIdRename*` keys, whose
 current values are the single-line text. English lives in both places by the design #319 settled: the
 notification's own text is English and the hash is taken over it, while the localizer supplies every
 language for the translation rows.
 
-### 3. Add the migration that repairs an already-stored row
+### 3. Add the migration that clears the expiry and restates the body
 
 **Status:** ⬜ Not started
 
-A new `DataOwnedMigrations` entry (version 23 — `System_Notification` is Data-owned, as migrations 8,
+A new `DataOwnedMigrations` entry (version 23, `System_Notification` is Data-owned, as migrations 8,
 11 and 14 were), in `NotificationLegacyMetadataMigrations`, scoped by
 `json_extract(Metadata, '$.announcement') = 'GetAllImportBatches'` exactly as migration 14 scopes its
 own backfill. It does four things to that row: `ExpiresAt = NULL`, `Body` to the multi-line English
 text, `json_set($.contentHash)` to the new hash, and the `nl`/`de` rows in
 `System_NotificationTranslation` to their multi-line text.
 
-`IsDismissed` is untouched — a dismissed row stays dismissed, per the issue.
+`IsDismissed` is untouched, a dismissed row stays dismissed, per the issue.
 
 Data-only, so the baseline needs no counterpart: a fresh database has no legacy row to repair, and its
-producer writes the new text directly. Idempotent by construction — every statement assigns a fixed
+producer writes the new text directly. Idempotent by construction, every statement assigns a fixed
 value to a row selected by a fixed predicate, so replaying it changes nothing.
 
 The hash is a frozen literal, as migration 11's is, because SQLite cannot compute one and migration
@@ -120,7 +144,7 @@ text must not follow a later edit. Step 4's guard test is what keeps the literal
 
 **Status:** ⬜ Not started
 
-Every test below runs against current code before any of steps 1–4 land, and each must fail for the
+Every test below runs against current code before any of steps 1 to 4 land, and each must fail for the
 reason it exists. The migration tests build their fixture the way
 `NotificationLegacyBackfillMigrationTests` already does: a row in the 1.8.3 shape, with an expiry, the
 single-line body, the old hash, and `nl`/`de` translation rows.
@@ -135,8 +159,8 @@ single-line body, the old hash, and `nl`/`de` translation rows.
 the document's step 2 changes with the behaviour: `expiresAt` is now empty, `isTranslated` still works,
 the body carries line breaks in each language, and the count is still `1`.
 
-Run it red against a build from the commit before this issue's first change — `git worktree add`,
-`docker build -t quotinator:canary413` — per `docs/testing-policy.md`'s red-first rule for automated
+Run it red against a build from the commit before this issue's first change, `git worktree add`,
+`docker build -t quotinator:canary413`, per `docs/testing-policy.md`'s red-first rule for automated
 documents, then remove the container, image and worktree.
 
 ### 6. Close out
@@ -153,12 +177,12 @@ checklist.
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | An upgraded 1.8.3 row has no expiry | Unit test | `NotificationLegacyBackfillMigrationTests.Migration023_LegacyAnnouncementRow_ClearsItsExpiry` — `ExpiresAt` is `NULL` after the migration, against a fixture whose row carries one |
-| 2 | ❌ | A dismissed row stays dismissed | Unit test | `NotificationLegacyBackfillMigrationTests.Migration023_DismissedLegacyRow_StaysDismissed` — `IsDismissed` is `1` before and after |
-| 3 | ❌ | The upgraded row's body carries its line breaks, in every language | Unit test | `NotificationLegacyBackfillMigrationTests.Migration023_LegacyAnnouncementRow_RewritesBodyAndTranslations` — the row's `Body` and both translation rows each contain `\n` and the renamed operation IDs on their own lines |
-| 4 | ❌ | The upgrade writes no second copy | Unit test | `NotificationSeedingTests.SeedOnce_AgainstAMigratedAnnouncementRow_WritesNothing` — history holding the migrated row, producer payload from `OperationIdAnnouncement`, result `null` |
-| 5 | ❌ | The migration's frozen hash matches the text the producer ships | Unit test | `OperationIdAnnouncementTests.TheMigrationHash_MatchesTheShippedBody` — `NotificationContentHash.Of(OperationIdAnnouncement.Body)` equals the literal in migration 23 |
-| 6 | ❌ | Every language's announcement body is multi-line | Unit test | `TranslationCompletenessTests.OperationIdRenameBody_CarriesLineBreaksInEveryLanguage` — each of `UI.en-GB`, `UI.nl`, `UI.de` holds `\n` in that key |
+| 1 | ❌ | An upgraded 1.8.3 row has no expiry | Unit test | `NotificationLegacyBackfillMigrationTests.Migration023_LegacyAnnouncementRow_ClearsItsExpiry`, `ExpiresAt` is `NULL` after the migration, against a fixture whose row carries one |
+| 2 | ❌ | A dismissed row stays dismissed | Unit test | `NotificationLegacyBackfillMigrationTests.Migration023_DismissedLegacyRow_StaysDismissed`, `IsDismissed` is `1` before and after |
+| 3 | ❌ | The upgraded row's body carries its line breaks, in every language | Unit test | `NotificationLegacyBackfillMigrationTests.Migration023_LegacyAnnouncementRow_RewritesBodyAndTranslations`, the row's `Body` and both translation rows each contain `\n` and the renamed operation IDs on their own lines |
+| 4 | ❌ | The upgrade writes no second copy | Unit test | `NotificationSeedingTests.SeedOnce_AgainstAMigratedAnnouncementRow_WritesNothing`, history holding the migrated row, producer payload from `OperationIdAnnouncement`, result `null` |
+| 5 | ❌ | The migration's frozen hash matches the text the producer ships | Unit test | `OperationIdAnnouncementTests.TheMigrationHash_MatchesTheShippedBody`, `NotificationContentHash.Of(OperationIdAnnouncement.Body)` equals the literal in migration 23 |
+| 6 | ❌ | Every language's announcement body is multi-line | Unit test | `TranslationCompletenessTests.OperationIdRenameBody_CarriesLineBreaksInEveryLanguage`, each of `UI.en-GB`, `UI.nl`, `UI.de` holds `\n` in that key |
 | 7 | ❌ | A real 1.8.3 upgrade shows one active, multi-line announcement | Live (T2) | *Upgrading a v1.8.3 database enriches its notification rather than duplicating it*, step 2: count `1`, `expiresAt` empty, body contains a line break, `metadataKind=announcement` |
 | 8 | ❌ | That document would have caught the defect | Live (T2) | The same document against `quotinator:canary413`, built from the commit before this issue's first change: step 2 fails on `expiresAt` and on the line break |
 | 9 | ❌ | The application starts | Live (T1) | The developer starts it in Visual Studio and it reaches `Quotinator ready` |
@@ -167,4 +191,4 @@ checklist.
 
 ## Observed effect
 
-Not yet established — this section records what the fix produces once step 5 has run.
+Not yet established, this section records what the fix produces once step 5 has run.
