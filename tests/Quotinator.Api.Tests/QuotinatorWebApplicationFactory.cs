@@ -33,6 +33,8 @@ namespace Quotinator.Api.Tests;
 /// </param>
 internal sealed class QuotinatorWebApplicationFactory(bool preparedDatabase = false) : WebApplicationFactory<Program>
 {
+    private readonly List<TempDirectory> _dataDirectories = [];
+
     /// <summary>
     /// Marks every host this factory builds, so <see cref="UnguardedFactoryRuntimeGuard"/> can tell it from a
     /// host built by a factory that never waited. <c>WithWebHostBuilder</c> runs this too, before its own
@@ -52,6 +54,7 @@ internal sealed class QuotinatorWebApplicationFactory(bool preparedDatabase = fa
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         TempDirectory dataDirectory = new("quotinator-apitest-");
+        _dataDirectories.Add(dataDirectory);
 
         if (preparedDatabase)
         {
@@ -68,6 +71,34 @@ internal sealed class QuotinatorWebApplicationFactory(bool preparedDatabase = fa
             services.AddSingleton<IHostedService>(provider =>
                 new DataDirectoryRemoval(dataDirectory, provider.GetRequiredService<IHostApplicationLifetime>()));
         });
+    }
+
+    /// <summary>
+    /// Stops the host, then deletes the data directories its hosts were given.
+    /// <para>
+    /// Belt and braces with the <c>ApplicationStopped</c> registration below, deliberately. That event is
+    /// not awaited by <see cref="WebApplicationFactory{TEntryPoint}.Dispose(bool)"/>, so a test that
+    /// disposes this factory and immediately looks at the directory can win the race and see it still
+    /// there: measured 2026-10-03, intermittently, in the full-solution run only. Disposing here, after
+    /// the base has stopped the host, is a point the test controls.
+    /// </para>
+    /// <para>
+    /// The event registration stays for the case this cannot reach: a test usually disposes the factory
+    /// <c>WithWebHostBuilder</c> returned, which is not this type, so only the host-tied path runs there.
+    /// <see cref="TempDirectory.Dispose"/> is idempotent, so whichever happens first wins and the other
+    /// finds nothing to do.
+    /// </para>
+    /// </summary>
+    /// <param name="disposing">Whether managed state is being disposed.</param>
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+
+        if (!disposing)
+            return;
+
+        foreach (TempDirectory directory in _dataDirectories)
+            directory.Dispose();
     }
 
     /// <inheritdoc/>
