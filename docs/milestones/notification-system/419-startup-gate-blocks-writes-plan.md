@@ -206,27 +206,28 @@ half means anything alone. Where a row is one half of a pair, the other half is 
 
 | # | Status | Requirement | Method | Verification |
 |---|--------|-------------|--------|--------------|
-| 1 | ❌ | The gate stays closed while a startup task is still running | Unit test | `StartupBackgroundWorkTests.StartupIsNotComplete_WhileWorkIsStillRunning`, work held open by a latch the test releases |
-| 2 | ❌ | The gate opens once that work finishes | Unit test | `StartupBackgroundWorkTests.StartupCompletes_OnceWorkHasFinished`, row 1's pair: without it row 1 passes against a gate that never opens at all |
-| 3 | ❌ | A write during startup is answered `503`, never `200` | Unit test | `StartupWaitMiddlewareTests.NonGetDuringStartup_Answers503` |
-| 4 | ❌ | The same write after startup reaches its handler | Unit test | `StartupWaitMiddlewareTests.NonGetAfterStartup_ReachesTheHandler`, row 3's pair |
-| 5 | ❌ | A GET during startup is answered `503`, never `200` | Unit test | `StartupWaitMiddlewareTests.GetDuringStartup_Answers503`: a body the caller did not ask for is not a success whatever the method |
-| 6 | ❌ | The same GET after startup reaches its handler | Unit test | `StartupWaitMiddlewareTests.GetAfterStartup_ReachesTheHandler`, row 5's pair |
-| 7 | ❌ | `/api/v1/health` answers during startup | Unit test | `StartupWaitMiddlewareTests.HealthIsNotGated`: the readiness contract, and the control that stops rows 3 and 5 passing against a middleware that gates everything |
-| 8 | ❌ | `/api/v1/version` does not answer `200` during startup | Unit test | `StartupWaitMiddlewareTests.VersionIsGatedDuringStartup`, the negative half of the endpoint's own pair |
-| 9 | ❌ | `/api/v1/version` answers `200` with `environment` and `database` once ready | Unit test | `VersionEndpointTests.GetVersion_WhenReady_CarriesTheFullShape`, row 8's pair: it is what proves gating removed the reduced answer rather than the endpoint |
-| 10 | ❌ | An API caller gets problem details | Unit test | `StartupWaitMiddlewareTests.BodyIsProblemDetails_WhenJsonIsAccepted` |
-| 11 | ❌ | A browser gets the HTML wait page | Unit test | `StartupWaitMiddlewareTests.BodyIsTheWaitPage_WhenHtmlIsAccepted`, row 10's pair: one Accept header must not serve both |
+| 1 | ✅ | The gate stays closed while a startup task is still running | Unit test | `StartupBackgroundWorkTests.WhenAllCompleted_IsNotCompleted_WhileWorkIsStillRunning`, shown red by mutating the wait to complete immediately |
+| 2 | ✅ | The gate opens once that work finishes | Unit test | `StartupBackgroundWorkTests.WhenAllCompleted_Completes_OnceTheWorkHasFinished`, row 1's pair |
+| 3 | ✅ | A write during startup is answered `503`, never `200` | Unit test | `StartupWaitMiddlewareTests.NonGetDuringStartup_Answers503`, red against the current middleware before step 3 |
+| 4 | ✅ | The same write after startup reaches its handler | Unit test | `StartupWaitMiddlewareTests.NonGetAfterStartup_ReachesTheHandler`, row 3's pair |
+| 5 | ✅ | A GET during startup is answered `503`, never `200` | Unit test | `StartupWaitMiddlewareTests.GetDuringStartup_Answers503` |
+| 6 | ✅ | The same GET after startup reaches its handler | Unit test | `StartupWaitMiddlewareTests.GetAfterStartup_ReachesTheHandler`, row 5's pair |
+| 7 | ✅ | `/api/v1/health` answers during startup | Unit test | `StartupWaitMiddlewareTests.HealthIsNotGated`, green throughout: the control that stops rows 3 and 5 passing against a middleware that gates everything |
+| 8 | ✅ | `/api/v1/version` does not answer `200` during startup | Unit test | `StartupWaitMiddlewareTests.VersionIsGatedDuringStartup`, red before step 3 |
+| 9 | ✅ | `/api/v1/version` answers `200` with `environment` and `database` once ready | Live (T2) | `startup-and-degradation/03`, step 3: `status=ready`, `hasDatabase=True`, 795 quotes |
+| 10 | ✅ | An API caller gets problem details | Unit test | `StartupWaitMiddlewareTests.BodyIsProblemDetails_WhenJsonIsAccepted`, red before step 3 |
+| 11 | ✅ | A browser gets the HTML wait page | Unit test | `StartupWaitMiddlewareTests.BodyIsTheWaitPage_WhenHtmlIsAccepted`, row 10's pair |
 | 12 | ❌ | A reset arriving while the gate is closed changes nothing | Unit test | A host whose background work is held open answers the reset `503`, and the database is untouched |
 | 13 | ❌ | A reset arriving after the gate opens does reset | Unit test | Row 12's pair: without it row 12 passes against a reset endpoint that never works |
 | 14 | ❌ | The what's-new notification survives a reset that arrives at the gate | Unit test | The write completes before the gate opens, so the row it points at still exists |
-| 15 | ❌ | A real container answers `503` with JSON to a write during startup | Live (T2) | The new document, step 4 |
-| 16 | ❌ | That same container accepts the write once ready | Live (T2) | The new document's own pair for row 15, in the same run |
-| 17 | ❌ | The document would have caught the defect | Live (T2) | The same document against a canary built from the commit before step 2: `200` and HTML |
-| 18 | ❌ | The suite's duration is not materially worse | Live | Step 2's before and after measurement, recorded in Observed effect |
+| 15 | ✅ | A real container answers `503` with JSON to a write during startup | Live (T2) | `startup-and-degradation/03`, step 2, green 2026-10-03 |
+| 16 | ✅ | That same container accepts the write once ready | Live (T2) | `startup-and-degradation/03`, step 3: the same reset answered `200` after 11.5 s |
+| 17 | ✅ | The document would have caught the defect | Live (T2) | The same document against `quotinator:canary419`, built from `d05927f9`: the reset answered `200` with `text/html`, and `/version` `200` |
+| 18 | ✅ | The suite's duration is not materially worse | Live | Measured back to back on `Quotinator.Api.Tests`: 4m19s without the gate, 5m19s with it, same 1186 tests |
 | 19 | ❌ | The application starts | Live (T1) | The developer starts it in Visual Studio and it reaches `Quotinator ready` |
 
 ---
 ## Observed effect
 
 Not yet established: this section records what the fix produces once step 4 has run.
+
