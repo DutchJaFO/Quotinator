@@ -1257,6 +1257,15 @@ if (dbHealth.IsHealthy)
 if (dbHealth.IsHealthy)
     await app.Services.GetRequiredService<Quotinator.Data.Notifications.NotificationConditionChecks>().RunReportingFailuresAsync();
 
+// #419: the work started above runs in the background, so without this the gate opened while it was
+// still writing. An external write arriving in that window ran against a database startup had not
+// finished with: a reset would remove the System_AppVersion row the what's-new write was about to
+// point at, and that write then failed on a foreign key. Waiting here is the whole fix, at the one
+// place the rule is expressed, rather than a guard inside each producer.
+// Completion, not success: a piece of work that failed has logged its own failure and must not hold
+// the gate shut for ever.
+await startupBackgroundWork.WhenAllCompletedAsync();
+
 // #280: initialisation (successful or not) is now finished: StartupWaitMiddleware stops
 // intercepting requests from this point on. Marked complete regardless of dbHealth's outcome: a
 // failed startup has its own existing degraded-state UI (DatabaseHealthGateMiddleware/#263's

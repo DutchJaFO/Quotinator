@@ -9,8 +9,8 @@
 
 ## Next action
 
-Developer review of this plan, in particular the Decisions section, which reframes the issue from the
-what's-new producer to the startup gate itself.
+**Step 4: the live document.** Steps 1 to 3 are done and the full solution is green across two
+consecutive `-m:1` runs. What remains is the T2 document, the Knowledgebase entry, and the close-out.
 
 ---
 
@@ -124,30 +124,11 @@ with what it was derived from.
 
 ## Steps
 
-### 1. Hold the gate until the background work has finished
+### 1. Write the tests, and update the startup tests that assert the old behaviour
 
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 
-`StartupBackgroundWork` gains a way to await everything it started, and `Program.cs` awaits it
-immediately before `MarkComplete()`. Measure the full suite's duration before and after, per the hazard
-above.
-
-### 2. Answer a gated request with `503` and the body its caller asked for
-
-**Status:** ⬜ Not started
-
-`StartupWaitMiddleware` stops setting `200`. It sets `503`, adds `Retry-After`, and chooses its body from
-the request's `Accept`: the existing HTML wait page for a browser, problem details otherwise, carrying
-the same reason. `/api/v1/health` becomes the only exempt path.
-
-`/version`'s own handler loses its now unreachable `"starting"` branch, the `StartupPhaseState` parameter
-that selected it, and the sentence in its `WithDescription` describing the reduced shape.
-
-### 3. Write the tests, and update the startup tests that assert the old behaviour
-
-**Status:** ⬜ Not started
-
-Each new test runs against the current build before step 1 or 2 lands, and fails for its own reason.
+Each new test runs against the current build before steps 2 and 3 land, and fails for its own reason. This is first deliberately: the two behaviour changes below are what turn it green.
 
 **Existing tests that assert what this issue changes**, all of which move with it rather than being
 discovered failing:
@@ -168,12 +149,31 @@ discovered failing:
   while the database is degraded *after* startup. That gate is not this issue's, and `/version` stays
   exempt from it: an application that has started can report its version whatever the database is doing.
 
+### 2. Hold the gate until the background work has finished
+
+**Status:** ✅ Done
+
+`StartupBackgroundWork` gains a way to await everything it started, and `Program.cs` awaits it
+immediately before `MarkComplete()`. Measure the full suite's duration before and after, per the hazard
+above.
+
+### 3. Answer a gated request with `503` and the body its caller asked for
+
+**Status:** ✅ Done
+
+`StartupWaitMiddleware` stops setting `200`. It sets `503`, adds `Retry-After`, and chooses its body from
+the request's `Accept`: the existing HTML wait page for a browser, problem details otherwise, carrying
+the same reason. `/api/v1/health` becomes the only exempt path.
+
+`/version`'s own handler loses its now unreachable `"starting"` branch, the `StartupPhaseState` parameter
+that selected it, and the sentence in its `WithDescription` describing the reduced shape.
+
 ### 4. Extend the live documents
 
 **Status:** ⬜ Not started
 
 A T2 document that posts a write during the startup window and asserts `503` with a JSON body, and asks
-for a page and asserts `503` with the HTML one. Red against a build from the commit before step 1, then
+for a page and asserts `503` with the HTML one. Red against a build from the commit before step 2, then
 green.
 
 `startup-and-degradation/03-startup-wait-page.md` changes with the behaviour: it asserts today that
@@ -222,8 +222,8 @@ half means anything alone. Where a row is one half of a pair, the other half is 
 | 14 | ❌ | The what's-new notification survives a reset that arrives at the gate | Unit test | The write completes before the gate opens, so the row it points at still exists |
 | 15 | ❌ | A real container answers `503` with JSON to a write during startup | Live (T2) | The new document, step 4 |
 | 16 | ❌ | That same container accepts the write once ready | Live (T2) | The new document's own pair for row 15, in the same run |
-| 17 | ❌ | The document would have caught the defect | Live (T2) | The same document against a canary built from the commit before step 1: `200` and HTML |
-| 18 | ❌ | The suite's duration is not materially worse | Live | Step 1's before and after measurement, recorded in Observed effect |
+| 17 | ❌ | The document would have caught the defect | Live (T2) | The same document against a canary built from the commit before step 2: `200` and HTML |
+| 18 | ❌ | The suite's duration is not materially worse | Live | Step 2's before and after measurement, recorded in Observed effect |
 | 19 | ❌ | The application starts | Live (T1) | The developer starts it in Visual Studio and it reaches `Quotinator ready` |
 
 ---

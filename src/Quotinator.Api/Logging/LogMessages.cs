@@ -111,6 +111,15 @@ internal static partial class LogMessages
     public static partial void LogServerStopping(this ILogger logger, string version);
 
     /// <summary>Logs one "listening on" line per bound Kestrel address.</summary>
+    /// <summary>
+    /// Logs a piece of startup background work that failed in a way its own handling did not catch
+    /// (#419). The gate that holds external writes waits for every such piece to finish or fail, so a
+    /// fault reaching the waiter must be visible rather than swallowed, per ADR 022.
+    /// </summary>
+    /// <param name="logger">Logger the message is written to.</param>
+    /// <param name="exception">The failure that escaped the work's own handling.</param>
+    [LoggerMessage(Level = LogLevel.Error, Message = "[Server] a startup background task failed; startup continues and the application will serve")]
+    public static partial void LogStartupBackgroundWorkFailed(this ILogger logger, Exception exception);
     [LoggerMessage(Level = LogLevel.Information, Message = "[Server] listening on {Address:l}")]
     public static partial void LogListeningOn(this ILogger logger, string address);
 

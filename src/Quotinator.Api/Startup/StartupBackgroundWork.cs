@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Hosting;
+using Quotinator.Api.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace Quotinator.Api.Startup;
 
@@ -18,10 +20,11 @@ namespace Quotinator.Api.Startup;
 /// <see cref="StopAsync"/> carries.
 /// </para>
 /// </summary>
-internal sealed class StartupBackgroundWork : IHostedService
+internal sealed class StartupBackgroundWork(ILogger<StartupBackgroundWork> logger) : IHostedService
 {
     private readonly List<Task> _running = [];
     private readonly Lock _gate = new();
+    private readonly ILogger<StartupBackgroundWork> _logger = logger;
 
     /// <summary>Starts <paramref name="work"/> in the background, and keeps it to be waited for.</summary>
     /// <param name="work">The work to run. It handles its own failures; this only waits for it.</param>
@@ -30,6 +33,48 @@ internal sealed class StartupBackgroundWork : IHostedService
         Task running = Task.Run(work);
         lock (_gate)
             _running.Add(running);
+    }
+
+    /// <summary>
+    /// Completes once every piece of work started here has, whether it succeeded or failed (#419).
+    /// <para>
+    /// Startup is not finished while work it began is still running, and the gate that holds external
+    /// writes reads that. Before this, <c>MarkComplete()</c> ran the moment the work was started, so a
+    /// reset arriving immediately after could rebuild the database while the what's-new write was still
+    /// pointing at a version row it was about to remove.
+    /// </para>
+    /// <para>
+    /// A failure never holds the gate shut: this waits for each piece to finish or to fail, not to
+    /// succeed. Each piece handles and logs its own failures and startup continues regardless, which is
+    /// the existing contract: a changelog import that cannot reach its database must not stop the
+    /// application from ever serving.
+    /// </para>
+    /// <para>
+    /// A fault that still reaches here escaped that handling, so it is logged rather than discarded, per
+    /// ADR 022. Swallowing it silently would leave the one case nobody anticipated invisible, which is
+    /// the opposite of what waiting for a result is for.
+    /// </para>
+    /// </summary>
+    public Task WhenAllCompletedAsync()
+    {
+        Task[] running;
+        lock (_gate)
+            running = [.. _running];
+
+        // WhenAll faults as soon as any one of them does; this waits for all of them either way.
+        return Task.WhenAll(running.Select(ReportFaults));
+
+        async Task ReportFaults(Task work)
+        {
+            try
+            {
+                await work;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogStartupBackgroundWorkFailed(ex);
+            }
+        }
     }
 
     /// <inheritdoc/>
